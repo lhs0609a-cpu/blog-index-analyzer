@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>블로그 지수 분석기</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 400px;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+
+    .header p {
+      font-size: 12px;
+      opacity: 0.9;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 15px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .card h3 {
+      font-size: 14px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .stat-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .stat-item:last-child {
+      border-bottom: none;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      opacity: 0.9;
+    }
+
+    .stat-value {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .input-group {
+      margin-bottom: 12px;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 12px;
+      margin-bottom: 5px;
+      opacity: 0.9;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      font-size: 13px;
+    }
+
+    .input-group input::placeholder {
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.25);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin-bottom: 10px;
+    }
+
+    button:hover {
+      background: rgba(255, 255, 255, 0.35);
+      transform: translateY(-2px);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #f093fb 10%, #f5576c 110%);
+    }
+
+    .status {
+      text-align: center;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+
+    .status.success {
+      background: rgba(72, 187, 120, 0.3);
+    }
+
+    .status.error {
+      background: rgba(245, 101, 101, 0.3);
+    }
+
+    .status.info {
+      background: rgba(66, 153, 225, 0.3);
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 20px;
+    }
+
+    .spinner {
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top: 3px solid #fff;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📊 블로그 지수 분석기</h1>
+    <p>네이버 블로그 통계를 자동으로 수집합니다</p>
+  </div>
+
+  <div id="statusMessage" class="status hidden"></div>
+
+  <!-- 자동 추출 섹션 -->
+  <div class="card">
+    <h3>🔍 자동 통계 추출</h3>
+    <p style="font-size: 12px; margin-bottom: 10px; opacity: 0.8;">
+      네이버 블로그 통계 페이지에서 자동으로 데이터를 추출합니다
+    </p>
+    <button id="extractBtn">현재 페이지에서 통계 추출</button>
+  </div>
+
+  <!-- 수동 입력 섹션 -->
+  <div class="card">
+    <h3>✏️ 수동 입력</h3>
+    <div class="input-group">
+      <label>블로그 ID</label>
+      <input type="text" id="blogIdInput" placeholder="예: lhs0609c">
+    </div>
+    <div class="input-group">
+      <label>전체 포스트 수</label>
+      <input type="number" id="postsInput" placeholder="예: 50">
+    </div>
+    <div class="input-group">
+      <label>총 방문자 수</label>
+      <input type="number" id="visitorsInput" placeholder="예: 10000">
+    </div>
+    <div class="input-group">
+      <label>이웃 수</label>
+      <input type="number" id="neighborsInput" placeholder="예: 30">
+    </div>
+  </div>
+
+  <!-- 추출된 데이터 표시 -->
+  <div id="statsCard" class="card hidden">
+    <h3>📋 추출된 통계</h3>
+    <div class="stat-item">
+      <span class="stat-label">블로그 ID</span>
+      <span class="stat-value" id="displayBlogId">-</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">포스트 수</span>
+      <span class="stat-value" id="displayPosts">-</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">방문자 수</span>
+      <span class="stat-value" id="displayVisitors">-</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">이웃 수</span>
+      <span class="stat-value" id="displayNeighbors">-</span>
+    </div>
+  </div>
+
+  <!-- 전송 버튼 -->
+  <button id="sendBtn" class="btn-primary" disabled>📤 분석 서버로 전송</button>
+
+  <div id="loadingDiv" class="loading hidden">
+    <div class="spinner"></div>
+    <p style="margin-top: 10px; font-size: 13px;">처리 중...</p>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

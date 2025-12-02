@@ -1,0 +1,129 @@
+"""
+FastAPI 메인 애플리케이션 (업데이트 버전)
+"""
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+import logging
+
+from config import settings
+from routers import blogs, auth
+
+# 로깅 설정
+logging.basicConfig(
+    level=logging.INFO if settings.DEBUG else logging.WARNING,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# FastAPI 앱 생성
+app = FastAPI(
+    title=settings.APP_NAME,
+    description="네이버 블로그 지수 측정 및 분석 API",
+    version=settings.API_VERSION,
+    debug=settings.DEBUG
+)
+
+# CORS 설정
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/")
+async def root():
+    """헬스 체크"""
+    return {
+        "status": "ok",
+        "service": settings.APP_NAME,
+        "version": settings.API_VERSION,
+        "environment": settings.APP_ENV,
+        "message": "블로그 지수 측정 시스템이 정상 작동 중입니다!"
+    }
+
+
+@app.get("/health")
+async def health_check():
+    """상세 헬스 체크"""
+    health_status = {
+        "status": "healthy",
+        "checks": {}
+    }
+
+    # PostgreSQL 체크
+    try:
+        from database.postgres import get_postgres_client
+        pg_client = get_postgres_client()
+        pg_client.execute_query("SELECT 1")
+        health_status["checks"]["postgresql"] = "connected"
+    except Exception as e:
+        health_status["checks"]["postgresql"] = f"error: {str(e)}"
+        health_status["status"] = "unhealthy"
+
+    # MongoDB 체크
+    try:
+        from database.mongodb import get_mongodb
+        db = get_mongodb()
+        db.command('ping')
+        health_status["checks"]["mongodb"] = "connected"
+    except Exception as e:
+        health_status["checks"]["mongodb"] = f"error: {str(e)}"
+
+    # Redis 체크
+    try:
+        import redis
+        r = redis.from_url(settings.redis_url)
+        r.ping()
+        health_status["checks"]["redis"] = "connected"
+    except Exception as e:
+        health_status["checks"]["redis"] = f"error: {str(e)}"
+
+    return health_status
+
+
+@app.on_event("startup")
+async def startup_event():
+    """애플리케이션 시작 시 실행"""
+    logger.info(f"🚀 {settings.APP_NAME} starting up...")
+    logger.info(f"Environment: {settings.APP_ENV}")
+    logger.info(f"Debug mode: {settings.DEBUG}")
+
+    # 데이터베이스 초기화 (SQLite)
+    try:
+        from database.sqlite_db import init_db
+        init_db()
+        logger.info("✅ SQLite 데이터베이스 초기화 완료")
+    except Exception as e:
+        logger.error(f"❌ SQLite 초기화 실패: {e}")
+
+    logger.info("✅ 애플리케이션 시작 완료!")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """애플리케이션 종료 시 실행"""
+    logger.info(f"🛑 {settings.APP_NAME} shutting down...")
+
+
+# 라우터 등록
+app.include_router(auth.router)
+app.include_router(
+    blogs.router,
+    prefix="/api/blogs",
+    tags=["블로그 분석"]
+)
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(
+        "main_updated:app",
+        host=settings.HOST,
+        port=settings.PORT,
+        reload=settings.DEBUG
+    )

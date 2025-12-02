@@ -1,0 +1,194 @@
+================================================================================
+                    NAVER SMART BLOCK - QUICK REFERENCE
+================================================================================
+
+FINDING: NO SMART BLOCKS IN CURRENT HTML
+Reason: Query too long/specific
+Current query: "강남 한방병원 브랜드블로그 내원률을 되살리는 전략적 구조 설계"
+Solution: Use shorter query (2-4 words)
+
+================================================================================
+                            FILES CREATED
+================================================================================
+
+1. naver_smart_block_extractor.py
+   → Main extractor class (6 detection methods)
+   → Run: python naver_smart_block_extractor.py
+
+2. smart_block_examples.py
+   → 7 detailed code examples
+   → Run: python smart_block_examples.py
+
+3. SMART_BLOCK_ANALYSIS.md
+   → Technical analysis document
+
+4. FINDINGS_SUMMARY.md
+   → Complete findings and recommendations
+
+5. QUICK_REFERENCE.txt
+   → This file
+
+================================================================================
+                         CURRENT HTML STRUCTURE
+================================================================================
+
+CSS Selectors Found:
+    .api_subject_bx                    - Blog post container
+    .sc_new                            - Blog post wrapper
+    .spw_rerank                        - Main container (SINGLE section)
+    .sds-comps-profile-info-title      - Blog author name (NOT keyword!)
+
+Blog Posts: 28 total (in flat list, no grouping)
+
+Smart Blocks: 0 (NOT PRESENT)
+
+================================================================================
+                          WHAT WAS WRONG
+================================================================================
+
+Current code looks for:
+    class="fds-comps-header-headline"  ← DOES NOT EXIST!
+
+Actually extracts:
+    class="sds-comps-profile-info-title"  ← Blog author names!
+
+Example incorrect extractions:
+    "Dr 김영삼" - Blog author (NOT keyword)
+    "풋볼리스트" - Blog author (NOT keyword)
+    "Daum" - Blog author (NOT keyword)
+
+Why it's wrong:
+    • These are INSIDE blog posts
+    • These are author names, not grouping keywords
+    • Smart blocks would be OUTSIDE and BEFORE blog groups
+    • Smart blocks would be SHORT (3-20 chars)
+
+================================================================================
+                     HOW TO GET SMART BLOCKS
+================================================================================
+
+1. Search with SHORT query:
+   - "강남 치과"
+   - "강남 임플란트"
+   - "서울 피부과"
+
+2. Verify in browser:
+   - Look for tabs/chips with keywords
+   - Confirm blog posts grouped by keyword
+
+3. Save HTML:
+   - Right-click → Save As → Webpage, Complete
+   - Or F12 → Elements → Copy outerHTML
+
+4. Test extraction:
+   python naver_smart_block_extractor.py
+
+================================================================================
+                      EXPECTED STRUCTURE (when blocks exist)
+================================================================================
+
+Smart Block Group #1:
+    Header: "강남365치과" (SHORT keyword!)
+    Posts: 3-5 blog posts
+
+Smart Block Group #2:
+    Header: "강남 임플란트치과" (SHORT keyword!)
+    Posts: 2-4 blog posts
+
+Smart Block Group #3:
+    Header: "강남역치과" (SHORT keyword!)
+    Posts: 1-3 blog posts
+
+Key Characteristics:
+    ✓ Multiple sections (3+)
+    ✓ Short keyword headers (3-20 chars)
+    ✓ Keywords OUTSIDE blog posts
+    ✓ Each section has multiple posts
+
+================================================================================
+                         TESTING QUERIES
+================================================================================
+
+Good queries (trigger smart blocks):
+    ✅ "강남 치과"
+    ✅ "강남 임플란트"
+    ✅ "서울 피부과"
+    ✅ "부산 정형외과"
+    ✅ "강남역 한의원"
+
+Bad queries (no smart blocks):
+    ❌ Long queries (10+ words)
+    ❌ Specific phrases
+    ❌ Branded content
+    ❌ Current query (too specific)
+
+================================================================================
+                         EXTRACTION CODE
+================================================================================
+
+Quick test:
+    from bs4 import BeautifulSoup
+
+    with open('search_view_debug.html', 'r', encoding='utf-8') as f:
+        soup = BeautifulSoup(f.read(), 'html.parser')
+
+    # Check for smart blocks
+    reranks = soup.find_all('div', class_=lambda x: x and 'rerank' in str(x))
+
+    if len(reranks) <= 1:
+        print("❌ NO smart blocks")
+    else:
+        print(f"✅ {len(reranks)} sections (possible smart blocks)")
+
+Full extraction (when smart blocks exist):
+    from naver_smart_block_extractor import NaverSmartBlockExtractor
+
+    with open('html_with_smart_blocks.html', 'r', encoding='utf-8') as f:
+        html = f.read()
+
+    extractor = NaverSmartBlockExtractor(html)
+    keywords = extractor.extract_smart_blocks()
+
+    print("Smart block keywords:")
+    for kw in keywords:
+        print(f"  • {kw}")
+
+================================================================================
+                         CSS SELECTORS TO TRY
+                     (when smart blocks are present)
+================================================================================
+
+div[class*="smart-block"] .keyword
+div[class*="keyword-group"] > h3
+div[class*="intention-group"] > .title
+[data-keyword]
+.smart-block-header
+.keyword-chip
+.keyword-tab
+
+================================================================================
+                         NEXT STEPS
+================================================================================
+
+1. Search Naver: "강남 치과"
+2. Save HTML from that search
+3. Place in backend folder
+4. Run: python naver_smart_block_extractor.py
+5. Verify keywords extracted
+6. Update code if needed
+
+================================================================================
+                         CONCLUSION
+================================================================================
+
+Current status:
+    ✓ HTML analyzed
+    ✓ No smart blocks found (expected - query too specific)
+    ✓ Extraction code ready
+    ✓ Documentation complete
+
+Waiting for:
+    ⚠ New HTML from shorter query
+    ⚠ Verification with actual smart blocks
+
+================================================================================

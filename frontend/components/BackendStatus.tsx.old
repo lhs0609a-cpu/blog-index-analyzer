@@ -1,0 +1,138 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
+
+export default function BackendStatus() {
+  const [isConnected, setIsConnected] = useState<boolean | null>(null);
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
+  const [currentApiUrl, setCurrentApiUrl] = useState<string>('');
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [showActions, setShowActions] = useState(false);
+
+  useEffect(() => {
+    setCurrentApiUrl(process.env.NEXT_PUBLIC_API_URL || '');
+  }, []);
+
+  useEffect(() => {
+    const checkBackendStatus = async () => {
+      try {
+        const response = await fetch(`${currentApiUrl}/health`, {
+          method: 'GET',
+          cache: 'no-store',
+        });
+
+        if (response.ok) {
+          setIsConnected(true);
+          setLastChecked(new Date());
+        } else {
+          setIsConnected(false);
+          setLastChecked(new Date());
+        }
+      } catch (error) {
+        setIsConnected(false);
+        setLastChecked(new Date());
+      }
+    };
+
+    if (currentApiUrl) {
+      checkBackendStatus();
+      const interval = setInterval(checkBackendStatus, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [currentApiUrl]);
+
+  const findAndConnectToNewPort = async () => {
+    setIsReconnecting(true);
+    try {
+      // 여러 포트를 시도
+      const portsToTry = [8000, 8001, 8002, 8003, 8004, 8005];
+
+      for (const port of portsToTry) {
+        try {
+          const testUrl = `http://localhost:${port}`;
+          const response = await fetch(`${testUrl}/health`, {
+            method: 'GET',
+            cache: 'no-store',
+          });
+
+          if (response.ok) {
+            // 연결 성공
+            setCurrentApiUrl(testUrl);
+            toast.success(`백엔드 서버를 포트 ${port}에서 찾았습니다!`);
+            setShowActions(false);
+            return;
+          }
+        } catch (error) {
+          // 이 포트는 사용 불가, 다음 포트 시도
+          continue;
+        }
+      }
+
+      toast.error('사용 가능한 백엔드 서버를 찾을 수 없습니다.');
+    } catch (error) {
+      toast.error('재연결 중 오류가 발생했습니다.');
+    } finally {
+      setIsReconnecting(false);
+    }
+  };
+
+  const getStatusColor = () => {
+    if (isConnected === null) return 'bg-gray-400';
+    return isConnected ? 'bg-green-500' : 'bg-red-500';
+  };
+
+  const getStatusText = () => {
+    if (isConnected === null) return '확인 중...';
+    return isConnected ? '연결됨' : '연결 끊김';
+  };
+
+  return (
+    <div className="fixed top-4 right-4 z-50">
+      <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200">
+        <button
+          onClick={() => setShowActions(!showActions)}
+          className="flex items-center gap-2 px-3 py-2 w-full"
+        >
+          <div className="relative">
+            <div className={`w-3 h-3 rounded-full ${getStatusColor()}`}></div>
+            {isConnected && (
+              <div className={`absolute inset-0 w-3 h-3 rounded-full ${getStatusColor()} animate-ping opacity-75`}></div>
+            )}
+          </div>
+          <div className="text-sm flex-1">
+            <div className="font-medium text-gray-700">{getStatusText()}</div>
+            {lastChecked && (
+              <div className="text-xs text-gray-500">
+                {lastChecked.toLocaleTimeString('ko-KR')}
+              </div>
+            )}
+          </div>
+          <svg
+            className={`w-4 h-4 text-gray-500 transition-transform ${showActions ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {showActions && (
+          <div className="border-t border-gray-200 p-2">
+            <div className="text-xs text-gray-500 mb-2 px-1">
+              현재: {currentApiUrl || '없음'}
+            </div>
+            <button
+              onClick={findAndConnectToNewPort}
+              disabled={isReconnecting}
+              className="w-full px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 rounded-md transition-colors"
+            >
+              {isReconnecting ? '연결 중...' : '백엔드 자동 연결'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

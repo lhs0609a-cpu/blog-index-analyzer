@@ -1,0 +1,3 @@
+Total Score: 15.0
+Warning Level: critical
+Exposure Rate: 0.0
