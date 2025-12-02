@@ -35,6 +35,9 @@ interface BlogIndexResult {
     total_visitors: number
     neighbor_count: number
   } | null
+  blog?: {
+    blog_age_days?: number
+  }
   error?: string
 }
 
@@ -88,6 +91,8 @@ interface MyBlogAnalysis {
       dia_gap: number
       posts_gap: number
       neighbors_gap: number
+      blog_age_gap: number
+      visitors_gap: number
     }
     recommendations: string[]
   }
@@ -463,10 +468,12 @@ export default function KeywordSearchPage() {
           probability: Math.round(probability),
           rank_estimate: rankEstimate,
           gaps: {
+            score_gap: 0, // Legacy field
             c_rank_gap: cRankGap,
-            blog_age_gap: blogAgeGap,
+            dia_gap: 0, // Legacy field
             posts_gap: postsGap,
             neighbors_gap: neighborsGap,
+            blog_age_gap: blogAgeGap,
             visitors_gap: visitorsGap,
           },
           recommendations,
@@ -536,6 +543,8 @@ export default function KeywordSearchPage() {
       }, 0) / top10Blogs.length
       const avgPosts = top10Blogs.reduce((sum, b) => sum + (b.stats?.total_posts || 0), 0) / top10Blogs.length
       const avgNeighbors = top10Blogs.reduce((sum, b) => sum + (b.stats?.neighbor_count || 0), 0) / top10Blogs.length
+      const avgBlogAge = top10Blogs.reduce((sum, b) => sum + (b.blog?.blog_age_days || 0), 0) / top10Blogs.length
+      const avgVisitors = top10Blogs.reduce((sum, b) => sum + (b.stats?.total_visitors || 0), 0) / top10Blogs.length
 
       const myScore = myBlog.index.total_score
       const breakdown = myBlog.index.score_breakdown
@@ -543,6 +552,8 @@ export default function KeywordSearchPage() {
       const myDia = breakdown.dia ?? (breakdown as any).content ?? 0
       const myPosts = myBlog.stats.total_posts
       const myNeighbors = myBlog.stats.neighbor_count
+      const myBlogAge = myBlog.blog.blog_age_days || 0
+      const myVisitors = myBlog.stats.total_visitors || 0
 
       // 격차 계산
       const scoreGap = avgScore - myScore
@@ -550,6 +561,8 @@ export default function KeywordSearchPage() {
       const diaGap = avgDia - myDia
       const postsGap = avgPosts - myPosts
       const neighborsGap = avgNeighbors - myNeighbors
+      const blogAgeGap = avgBlogAge - myBlogAge
+      const visitorsGap = avgVisitors - myVisitors
 
       // 내 블로그 레벨
       const myLevel = myBlog.index.level
@@ -622,10 +635,12 @@ export default function KeywordSearchPage() {
           probability: Math.round(probability),
           rank_estimate: rankEstimate,
           gaps: {
+            score_gap: 0, // Legacy field
             c_rank_gap: cRankGap,
-            blog_age_gap: blogAgeGap,
+            dia_gap: 0, // Legacy field
             posts_gap: postsGap,
             neighbors_gap: neighborsGap,
+            blog_age_gap: blogAgeGap,
             visitors_gap: visitorsGap,
           },
           recommendations,
