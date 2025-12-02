@@ -13,15 +13,6 @@ const nextConfig = {
     domains: ['blogpfthumb-phinf.pstatic.net', 'blog.kakaocdn.net'],
     formats: ['image/avif', 'image/webp'],
   },
-
-  // 웹팩 설정
-  webpack: (config) => {
-    config.module.rules.push({
-      test: /\.svg$/,
-      use: ['@svgr/webpack'],
-    });
-    return config;
-  },
 }
 
 module.exports = nextConfig
