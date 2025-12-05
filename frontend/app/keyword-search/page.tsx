@@ -1627,6 +1627,7 @@ export default function KeywordSearchPage() {
               <KeywordInsights keyword={results.keyword} />
             </div>
 
+
             {/* Blog Table */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
               <div className="overflow-x-auto">
