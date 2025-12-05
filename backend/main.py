@@ -1,5 +1,6 @@
 """
 FastAPI 메인 애플리케이션
+Version: 1.1.0 - 키워드 인사이트 기능 추가
 """
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
