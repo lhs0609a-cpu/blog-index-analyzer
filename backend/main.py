@@ -136,12 +136,13 @@ async def health_check():
 
 
 # 라우터 등록
-from routers import auth, blogs, comprehensive_analysis, system
+from routers import auth, blogs, comprehensive_analysis, system, keywords
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(blogs.router, prefix="/api/blogs", tags=["블로그"])
 app.include_router(comprehensive_analysis.router, prefix="/api/comprehensive", tags=["종합분석"])
 app.include_router(system.router, prefix="/api/system", tags=["시스템"])
+app.include_router(keywords.router, tags=["키워드"])
 
 
 if __name__ == "__main__":

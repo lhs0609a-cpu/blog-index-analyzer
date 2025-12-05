@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ConnectionIndicator } from '@/components/ConnectionIndicator'
+import KeywordInsights from '@/components/KeywordInsights'
 import * as Tabs from '@radix-ui/react-tabs'
 import { motion } from 'framer-motion'
 import { Check, Loader2, X, TrendingUp, TrendingDown } from 'lucide-react'
@@ -1620,6 +1621,11 @@ export default function KeywordSearchPage() {
                 )}
               </div>
             )}
+
+            {/* 연관 검색어 및 검색량 */}
+            <div className="mb-6">
+              <KeywordInsights keyword={results.keyword} />
+            </div>
 
             {/* Blog Table */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
