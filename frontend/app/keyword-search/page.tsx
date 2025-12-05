@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ConnectionIndicator } from '@/components/ConnectionIndicator'
-import KeywordInsights from '@/components/KeywordInsights'
+import KeywordInsights from './KeywordInsights'
 import * as Tabs from '@radix-ui/react-tabs'
 import { motion } from 'framer-motion'
 import { Check, Loader2, X, TrendingUp, TrendingDown } from 'lucide-react'
