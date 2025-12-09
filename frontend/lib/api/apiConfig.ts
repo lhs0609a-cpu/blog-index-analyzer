@@ -29,19 +29,25 @@ export function getApiUrl(): string {
     return isProduction() ? PRODUCTION_API_URL : LOCAL_API_URL;
   }
 
+  // 프로덕션 환경에서는 항상 PRODUCTION_API_URL 사용 (localStorage 무시)
+  if (isProduction()) {
+    return PRODUCTION_API_URL;
+  }
+
+  // 개발 환경에서만 localStorage 사용
   if (currentApiUrl) {
     return currentApiUrl;
   }
 
-  // localStorage에서 복원 시도
+  // localStorage에서 복원 시도 (개발 환경만)
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) {
     currentApiUrl = saved;
     return saved;
   }
 
-  // 프로덕션이면 Fly.io, 아니면 localhost
-  return isProduction() ? PRODUCTION_API_URL : LOCAL_API_URL;
+  // 기본값: localhost
+  return LOCAL_API_URL;
 }
 
 export function setApiUrl(url: string): void {
