@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ConnectionIndicator } from '@/components/ConnectionIndicator'
+import { getApiUrl } from '@/lib/api/apiConfig'
 import * as Tabs from '@radix-ui/react-tabs'
 import { motion } from 'framer-motion'
 import { Check, Loader2, X, TrendingUp, TrendingDown } from 'lucide-react'
@@ -261,7 +262,7 @@ export default function KeywordSearchPage() {
         )
 
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(keyword)}&limit=13&analyze_content=true`,
+          `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(keyword)}&limit=13&analyze_content=true`,
           {
             method: 'POST',
             headers: {
@@ -350,7 +351,7 @@ export default function KeywordSearchPage() {
       }, 3000) // 3초마다 메시지 변경
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(keyword)}&limit=13&analyze_content=true`,
+        `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(keyword)}&limit=13&analyze_content=true`,
         {
           method: 'POST',
           headers: {
@@ -394,7 +395,7 @@ export default function KeywordSearchPage() {
     setBreakdownData(null)
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/blogs/${blogId}/score-breakdown`)
+      const response = await fetch(`${getApiUrl()}/api/blogs/${blogId}/score-breakdown`)
       if (!response.ok) {
         throw new Error('Failed to load breakdown data')
       }
@@ -428,7 +429,7 @@ export default function KeywordSearchPage() {
 
     try {
       // 내 블로그 분석
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/blogs/analyze`, {
+      const response = await fetch(`${getApiUrl()}/api/blogs/analyze`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -546,7 +547,7 @@ export default function KeywordSearchPage() {
 
     try {
       // 내 블로그 분석
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/blogs/analyze`, {
+      const response = await fetch(`${getApiUrl()}/api/blogs/analyze`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -685,7 +686,7 @@ export default function KeywordSearchPage() {
       }))
 
       // 백엔드로 전송 (비동기, 실패해도 사용자 경험에 영향 없음)
-      fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/learning/collect`, {
+      fetch(`${getApiUrl()}/api/learning/collect`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -709,7 +710,7 @@ export default function KeywordSearchPage() {
     setLoadingRelatedKeywords(true)
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/blogs/related-keywords/${encodeURIComponent(searchKeyword)}`
+        `${getApiUrl()}/api/blogs/related-keywords/${encodeURIComponent(searchKeyword)}`
       )
       if (response.ok) {
         const data = await response.json()
@@ -741,7 +742,7 @@ export default function KeywordSearchPage() {
       }, 500)
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(clickedKeyword)}&limit=13&analyze_content=true`,
+        `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(clickedKeyword)}&limit=13&analyze_content=true`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
