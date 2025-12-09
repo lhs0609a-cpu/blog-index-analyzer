@@ -1,0 +1,21 @@
+{
+  "test": "keyword_assignment_test",
+  "view_count": 7,
+  "sample_blogs": [
+    {
+      "blog_id": "sjfaithful",
+      "keyword": "‘연세대치과의원’관련 광고입니다.",
+      "has_keyword": true
+    },
+    {
+      "blog_id": "kmklawyer",
+      "keyword": "‘연세대치과의원’관련 광고입니다.",
+      "has_keyword": true
+    },
+    {
+      "blog_id": "barun_shin",
+      "keyword": "‘연세대치과의원’관련 광고입니다.",
+      "has_keyword": true
+    }
+  ]
+}

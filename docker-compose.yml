@@ -1,0 +1,155 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 데이터베이스
+  postgres:
+    image: postgres:16
+    container_name: blog-analyzer-postgres
+    environment:
+      POSTGRES_DB: blog_analyzer
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d blog_analyzer"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - blog-analyzer-network
+
+  # MongoDB
+  mongodb:
+    image: mongo:7.0
+    container_name: blog-analyzer-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_DATABASE: blog_analyzer_logs
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - blog-analyzer-network
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: blog-analyzer-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - blog-analyzer-network
+
+  # Backend API
+  api:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend.Dockerfile
+    container_name: blog-analyzer-api
+    ports:
+      - "8001:8000"
+    environment:
+      - DATABASE_URL=postgresql://admin:password@postgres:5432/blog_analyzer
+      - MONGO_URL=mongodb://admin:password@mongodb:27017/blog_analyzer_logs
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - blog-analyzer-network
+
+  # Celery Worker
+  worker:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend.Dockerfile
+    container_name: blog-analyzer-worker
+    environment:
+      - DATABASE_URL=postgresql://admin:password@postgres:5432/blog_analyzer
+      - MONGO_URL=mongodb://admin:password@mongodb:27017/blog_analyzer_logs
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    depends_on:
+      - postgres
+      - mongodb
+      - redis
+    volumes:
+      - ./backend:/app
+    command: celery -A tasks worker --loglevel=info
+    networks:
+      - blog-analyzer-network
+
+  # Celery Flower (모니터링)
+  flower:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend.Dockerfile
+    container_name: blog-analyzer-flower
+    ports:
+      - "5556:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    depends_on:
+      - redis
+      - worker
+    command: celery -A tasks flower --port=5555
+    networks:
+      - blog-analyzer-network
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/frontend.Dockerfile
+    container_name: blog-analyzer-frontend
+    ports:
+      - "3001:3000"
+    environment:
+      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8001
+    depends_on:
+      - api
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
+    networks:
+      - blog-analyzer-network
+
+volumes:
+  postgres_data:
+  mongodb_data:
+  redis_data:
+
+networks:
+  blog-analyzer-network:
+    driver: bridge
