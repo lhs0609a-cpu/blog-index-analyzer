@@ -709,15 +709,27 @@ export default function KeywordSearchPage() {
   const fetchRelatedKeywords = async (searchKeyword: string) => {
     setLoadingRelatedKeywords(true)
     try {
-      const response = await fetch(
-        `${getApiUrl()}/api/blogs/related-keywords/${encodeURIComponent(searchKeyword)}`
-      )
+      const apiUrl = getApiUrl()
+      const fullUrl = `${apiUrl}/api/blogs/related-keywords/${encodeURIComponent(searchKeyword)}`
+      console.log('[Related Keywords] Fetching from:', fullUrl)
+
+      const response = await fetch(fullUrl)
+      console.log('[Related Keywords] Response status:', response.status, response.statusText)
+
       if (response.ok) {
         const data = await response.json()
+        console.log('[Related Keywords] Data received:', data)
         setRelatedKeywords(data)
+      } else {
+        const errorText = await response.text()
+        console.error('[Related Keywords] API error:', response.status, errorText)
+        // 빈 데이터 설정하여 "연관 키워드 없음" 메시지 표시
+        setRelatedKeywords({ success: false, keyword: searchKeyword, source: '', total_count: 0, keywords: [], message: `API 오류: ${response.status}` })
       }
     } catch (err) {
-      console.error('연관 키워드 조회 실패:', err)
+      console.error('[Related Keywords] Fetch failed:', err)
+      // 빈 데이터 설정하여 "조회 실패" 메시지 표시
+      setRelatedKeywords({ success: false, keyword: searchKeyword, source: '', total_count: 0, keywords: [], message: '연관 키워드 조회 실패' })
     } finally {
       setLoadingRelatedKeywords(false)
     }
@@ -2095,8 +2107,16 @@ export default function KeywordSearchPage() {
                 )}
               </>
             ) : (
-              <div className="text-center py-8 text-gray-500">
-                연관 키워드를 조회하려면 키워드를 검색하세요
+              <div className="text-center py-8">
+                {relatedKeywords?.message ? (
+                  <div className="text-orange-600">
+                    ⚠️ {relatedKeywords.message}
+                  </div>
+                ) : (
+                  <div className="text-gray-500">
+                    연관 키워드를 조회하려면 키워드를 검색하세요
+                  </div>
+                )}
               </div>
             )}
           </div>
