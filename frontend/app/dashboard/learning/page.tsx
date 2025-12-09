@@ -1,4 +1,5 @@
 'use client'
+// Learning Dashboard Page - Auto-learning from 1 sample
 
 import { useState, useEffect } from 'react'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
