@@ -17,29 +17,30 @@ wget -q -O /app/services/learning_engine.py https://raw.githubusercontent.com/lh
 
 echo "[4/5] Updating main.py..."
 python3 << 'EOF'
-import re
-
 # Read main.py
 with open('/app/main.py', 'r') as f:
-    content = f.read()
+    lines = f.readlines()
 
-# Add learning import if not present
-if 'import routers.learning as learning' not in content:
-    content = content.replace(
-        'from routers import auth, blogs, comprehensive_analysis, system',
-        'from routers import auth, blogs, comprehensive_analysis, system\nimport routers.learning as learning'
-    )
+# Add learning import
+import_added = False
+router_added = False
 
-# Add learning router if not present
-if 'learning.router' not in content:
-    content = content.replace(
-        'app.include_router(system.router, prefix="/api/system", tags=["시스템"])',
-        'app.include_router(system.router, prefix="/api/system", tags=["시스템"])\napp.include_router(learning.router, prefix="/api/learning", tags=["학습엔진"])'
-    )
+for i, line in enumerate(lines):
+    # Add learning import after routers import
+    if 'from routers import auth, blogs, comprehensive_analysis, system' in line and not import_added:
+        if 'learning' not in line:
+            lines.insert(i+1, 'import routers.learning as learning\n')
+            import_added = True
+
+    # Add learning router after system router
+    if 'app.include_router(system.router' in line and not router_added:
+        if i+1 < len(lines) and 'learning.router' not in lines[i+1]:
+            lines.insert(i+1, 'app.include_router(learning.router, prefix="/api/learning", tags=["학습엔진"])\n')
+            router_added = True
 
 # Write back
 with open('/app/main.py', 'w') as f:
-    f.write(content)
+    f.writelines(lines)
 
 print("✓ main.py updated")
 EOF
