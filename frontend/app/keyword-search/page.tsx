@@ -851,6 +851,58 @@ export default function KeywordSearchPage() {
     return volume.toLocaleString()
   }
 
+  // 키워드 연관성 점수 계산 (추천 여부 판단)
+  const calculateRelevanceScore = (searchKeyword: string, relatedKw: string): number => {
+    const search = searchKeyword.toLowerCase().trim()
+    const related = relatedKw.toLowerCase().trim()
+
+    // 1. 완전 일치
+    if (search === related) return 100
+
+    // 2. 포함 관계 (검색어가 연관키워드에 포함되거나 그 반대)
+    if (related.includes(search)) return 90
+    if (search.includes(related)) return 85
+
+    // 3. 단어 단위 매칭
+    const searchWords = search.split(/\s+/)
+    const relatedWords = related.split(/\s+/)
+
+    let matchedWords = 0
+    for (const sw of searchWords) {
+      if (sw.length >= 2) {  // 2글자 이상만 비교
+        for (const rw of relatedWords) {
+          if (rw.includes(sw) || sw.includes(rw)) {
+            matchedWords++
+            break
+          }
+        }
+      }
+    }
+
+    if (matchedWords > 0) {
+      return 60 + (matchedWords / searchWords.length) * 30
+    }
+
+    // 4. 부분 문자열 매칭 (2글자 이상 연속)
+    for (let len = Math.min(search.length, 4); len >= 2; len--) {
+      for (let i = 0; i <= search.length - len; i++) {
+        const substr = search.substring(i, i + len)
+        if (related.includes(substr)) {
+          return 40 + len * 5
+        }
+      }
+    }
+
+    return 0
+  }
+
+  // 추천 키워드인지 확인 (연관성 점수 50 이상이면 추천)
+  const isRecommendedKeyword = (relatedKw: string): boolean => {
+    const searchKw = results?.keyword || keyword || keywordsInput.split(/[,\n]/)[0]?.trim() || ''
+    if (!searchKw) return false
+    return calculateRelevanceScore(searchKw, relatedKw) >= 50
+  }
+
   // 탭별 필터링된 결과
   const getFilteredResults = () => {
     if (!results) return []
@@ -2156,11 +2208,12 @@ export default function KeywordSearchPage() {
               <>
                 {/* 검색량 있는 키워드 테이블 */}
                 {relatedKeywords.keywords.some(kw => kw.monthly_total_search !== null) && (
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
                     <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200 bg-gray-50">
+                      <thead className="sticky top-0 bg-gray-50 z-10">
+                        <tr className="border-b border-gray-200">
                           <th className="text-left py-3 px-4 font-semibold text-gray-700">키워드</th>
+                          <th className="text-center py-3 px-4 font-semibold text-gray-700">추천</th>
                           <th className="text-right py-3 px-4 font-semibold text-gray-700">PC</th>
                           <th className="text-right py-3 px-4 font-semibold text-gray-700">모바일</th>
                           <th className="text-right py-3 px-4 font-semibold text-gray-700">총 검색량</th>
@@ -2169,56 +2222,77 @@ export default function KeywordSearchPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {relatedKeywords.keywords.slice(0, 100).map((kw, idx) => (
-                          <tr
-                            key={idx}
-                            className="border-b border-gray-100 hover:bg-purple-50 transition-colors cursor-pointer"
-                            onClick={() => handleRelatedKeywordClick(kw.keyword)}
-                          >
-                            <td className="py-3 px-4">
-                              <span className="font-medium text-gray-800 hover:text-purple-600">
-                                {kw.keyword}
-                              </span>
-                            </td>
-                            <td className="text-right py-3 px-4 text-gray-600">
-                              {formatSearchVolume(kw.monthly_pc_search)}
-                            </td>
-                            <td className="text-right py-3 px-4 text-blue-600 font-medium">
-                              {formatSearchVolume(kw.monthly_mobile_search)}
-                            </td>
-                            <td className="text-right py-3 px-4">
-                              <span className={`font-bold ${
-                                (kw.monthly_total_search || 0) >= 10000 ? 'text-pink-600' :
-                                (kw.monthly_total_search || 0) >= 1000 ? 'text-purple-600' :
-                                'text-gray-700'
-                              }`}>
-                                {formatSearchVolume(kw.monthly_total_search)}
-                              </span>
-                            </td>
-                            <td className="text-center py-3 px-4">
-                              {kw.competition && (
-                                <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                  kw.competition === '높음' ? 'bg-red-100 text-red-700' :
-                                  kw.competition === '중간' ? 'bg-yellow-100 text-yellow-700' :
-                                  'bg-green-100 text-green-700'
+                        {relatedKeywords.keywords.slice(0, 100).map((kw, idx) => {
+                          const isRecommended = isRecommendedKeyword(kw.keyword)
+                          return (
+                            <tr
+                              key={idx}
+                              className={`border-b border-gray-100 hover:bg-purple-50 transition-colors cursor-pointer ${
+                                isRecommended ? 'bg-orange-50' : ''
+                              }`}
+                              onClick={() => handleRelatedKeywordClick(kw.keyword)}
+                            >
+                              <td className="py-3 px-4">
+                                <span className={`font-medium hover:text-purple-600 ${
+                                  isRecommended ? 'text-orange-700' : 'text-gray-800'
                                 }`}>
-                                  {kw.competition}
+                                  {kw.keyword}
                                 </span>
-                              )}
-                            </td>
-                            <td className="text-center py-3 px-4">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleRelatedKeywordClick(kw.keyword)
-                                }}
-                                className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium hover:bg-purple-200 transition-colors"
-                              >
-                                분석
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                              </td>
+                              <td className="text-center py-3 px-4">
+                                {isRecommended && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-orange-400 to-pink-500 text-white rounded-full text-xs font-bold shadow-sm">
+                                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                    </svg>
+                                    추천
+                                  </span>
+                                )}
+                              </td>
+                              <td className="text-right py-3 px-4 text-gray-600">
+                                {formatSearchVolume(kw.monthly_pc_search)}
+                              </td>
+                              <td className="text-right py-3 px-4 text-blue-600 font-medium">
+                                {formatSearchVolume(kw.monthly_mobile_search)}
+                              </td>
+                              <td className="text-right py-3 px-4">
+                                <span className={`font-bold ${
+                                  (kw.monthly_total_search || 0) >= 10000 ? 'text-pink-600' :
+                                  (kw.monthly_total_search || 0) >= 1000 ? 'text-purple-600' :
+                                  'text-gray-700'
+                                }`}>
+                                  {formatSearchVolume(kw.monthly_total_search)}
+                                </span>
+                              </td>
+                              <td className="text-center py-3 px-4">
+                                {kw.competition && (
+                                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                    kw.competition === '높음' ? 'bg-red-100 text-red-700' :
+                                    kw.competition === '중간' ? 'bg-yellow-100 text-yellow-700' :
+                                    'bg-green-100 text-green-700'
+                                  }`}>
+                                    {kw.competition}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="text-center py-3 px-4">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleRelatedKeywordClick(kw.keyword)
+                                  }}
+                                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                                    isRecommended
+                                      ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                                      : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                                  }`}
+                                >
+                                  분석
+                                </button>
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
