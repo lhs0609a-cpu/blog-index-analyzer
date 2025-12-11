@@ -6,7 +6,7 @@ import { ConnectionIndicator } from '@/components/ConnectionIndicator'
 import { getApiUrl } from '@/lib/api/apiConfig'
 import * as Tabs from '@radix-ui/react-tabs'
 import { motion } from 'framer-motion'
-import { Check, Loader2, X, TrendingUp, TrendingDown } from 'lucide-react'
+import { Check, Loader2, X, TrendingUp, TrendingDown, ArrowLeft } from 'lucide-react'
 
 interface BlogIndexResult {
   rank: number
@@ -946,9 +946,10 @@ export default function KeywordSearchPage() {
           <div className="flex items-center justify-between">
             <button
               onClick={() => router.back()}
-              className="text-2xl hover:opacity-60 transition-opacity"
+              className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all"
             >
-              ←
+              <ArrowLeft className="w-5 h-5" />
+              <span className="text-sm font-medium">뒤로</span>
             </button>
             <div className="text-center">
               <h1 className="text-lg font-semibold">키워드 검색</h1>

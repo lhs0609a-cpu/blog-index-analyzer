@@ -2,9 +2,10 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, Loader2, Sparkles, TrendingUp, Award, Zap, AlertCircle, BarChart3 } from 'lucide-react'
+import { Search, Loader2, Sparkles, TrendingUp, Award, Zap, AlertCircle, BarChart3, ArrowLeft } from 'lucide-react'
 import Confetti from 'react-confetti'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useWindowSize } from '@/lib/hooks/useWindowSize'
 import { analyzeBlog, saveBlogToList } from '@/lib/api/blog'
 import type { BlogIndexResult } from '@/lib/types/api'
@@ -12,6 +13,7 @@ import toast from 'react-hot-toast'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 export default function AnalyzePage() {
+  const router = useRouter()
   const [blogId, setBlogId] = useState('')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [result, setResult] = useState<BlogIndexResult | null>(null)
@@ -83,6 +85,17 @@ export default function AnalyzePage() {
       {showConfetti && <Confetti width={width} height={height} recycle={false} numberOfPieces={200} />}
 
       <div className="container mx-auto px-4">
+        {/* Back Button */}
+        <motion.button
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          onClick={() => router.back()}
+          className="mb-6 flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-white/50 rounded-lg transition-all"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          <span className="font-medium">뒤로가기</span>
+        </motion.button>
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

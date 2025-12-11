@@ -2,8 +2,9 @@
 // Learning Dashboard Page - Auto-learning from 1 sample
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { TrendingUp, Zap, Target, Activity, Award, ArrowUp, ArrowDown } from 'lucide-react'
+import { TrendingUp, Zap, Target, Activity, Award, ArrowUp, ArrowDown, ArrowLeft } from 'lucide-react'
 import { getApiUrl } from '@/lib/api/apiConfig'
 
 interface LearningStats {
@@ -51,6 +52,7 @@ interface TrainingSession {
 }
 
 export default function LearningEnginePage() {
+  const router = useRouter()
   const [stats, setStats] = useState<LearningStats>({
     total_samples: 0,
     current_accuracy: 0,
@@ -181,6 +183,15 @@ export default function LearningEnginePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
+        {/* 뒤로가기 버튼 */}
+        <button
+          onClick={() => router.back()}
+          className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-white/50 rounded-lg transition-all"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          <span className="font-medium">뒤로가기</span>
+        </button>
+
         {/* 헤더 */}
         <div className="bg-white rounded-2xl shadow-lg p-6">
           <div className="flex items-center justify-between">
