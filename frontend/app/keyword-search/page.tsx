@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ConnectionIndicator } from '@/components/ConnectionIndicator'
 import { getApiUrl } from '@/lib/api/apiConfig'
@@ -181,6 +181,18 @@ interface LearningData {
   factor_correlations: { [key: string]: FactorCorrelation }
 }
 
+// 학습 엔진 상태 인터페이스
+interface LearningStatus {
+  current_weights: LearningWeights
+  statistics: {
+    total_samples: number
+    current_accuracy: number
+    accuracy_within_3: number
+    last_training: string
+    training_count: number
+  }
+}
+
 export default function KeywordSearchPage() {
   // 멀티 키워드 검색 관련
   const [keywordsInput, setKeywordsInput] = useState('')
@@ -214,7 +226,35 @@ export default function KeywordSearchPage() {
   const [relatedKeywords, setRelatedKeywords] = useState<RelatedKeywordsResponse | null>(null)
   const [loadingRelatedKeywords, setLoadingRelatedKeywords] = useState(false)
 
+  // 학습 엔진 상태
+  const [learningStatus, setLearningStatus] = useState<LearningStatus | null>(null)
+  const [loadingLearningStatus, setLoadingLearningStatus] = useState(false)
+
   const router = useRouter()
+
+  // 학습 엔진 상태 조회
+  const fetchLearningStatus = async () => {
+    setLoadingLearningStatus(true)
+    try {
+      const response = await fetch(`${getApiUrl()}/api/learning/status`)
+      if (response.ok) {
+        const data = await response.json()
+        setLearningStatus(data)
+        console.log('[Learning Status] Loaded:', data)
+      } else {
+        console.log('[Learning Status] API not available')
+      }
+    } catch (err) {
+      console.log('[Learning Status] Failed to fetch:', err)
+    } finally {
+      setLoadingLearningStatus(false)
+    }
+  }
+
+  // 페이지 로드 시 학습 엔진 상태 조회
+  useEffect(() => {
+    fetchLearningStatus()
+  }, [])
 
   // 멀티 키워드 검색 핸들러
   const handleMultiKeywordSearch = async (e: React.FormEvent) => {
@@ -305,13 +345,26 @@ export default function KeywordSearchPage() {
     await Promise.all(searchPromises)
     setIsAnalyzing(false)
 
-    // 첫 번째 완료된 키워드로 탭 전환
-    const firstCompleted = keywords.find((_, i) =>
-      keywordStatuses[i]?.status === 'completed'
-    )
-    if (firstCompleted) {
-      setActiveTab(firstCompleted)
+    // 첫 번째 키워드에 대해 연관 키워드 조회 및 학습 데이터 수집
+    const firstKeyword = keywords[0]
+    if (firstKeyword) {
+      // 연관 키워드 조회
+      fetchRelatedKeywords(firstKeyword)
+
+      // 학습 데이터 수집을 위해 상태 업데이트 후 처리
+      setTimeout(() => {
+        setKeywordStatuses(currentStatuses => {
+          const firstStatus = currentStatuses.find(s => s.keyword === firstKeyword && s.status === 'completed')
+          if (firstStatus?.result) {
+            collectLearningData(firstKeyword, firstStatus.result)
+          }
+          return currentStatuses
+        })
+      }, 100)
     }
+
+    // 첫 번째 키워드로 탭 전환
+    setActiveTab(firstKeyword || 'input')
   }
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -695,6 +748,16 @@ export default function KeywordSearchPage() {
           keyword: searchKeyword,
           search_results: samples
         })
+      }).then(async (response) => {
+        if (response.ok) {
+          const data = await response.json()
+          console.log('[Learning] 데이터 수집 완료:', data)
+          // 학습이 트리거되었으면 상태 새로고침
+          if (data.learning_triggered) {
+            console.log('[Learning] 학습 완료, 상태 업데이트')
+            fetchLearningStatus()
+          }
+        }
       }).catch(err => {
         // 실패해도 무시 (백그라운드 작업)
         console.log('학습 데이터 수집 실패 (무시됨):', err)
@@ -860,6 +923,77 @@ export default function KeywordSearchPage() {
                 일부 통계(포스트 수, 방문자 수)는 네이버의 접근 제한으로 인해 수집이 제한될 수 있습니다.
                 이웃 수와 블로그 지수는 정상적으로 분석되며, 경쟁 분석에는 영향이 없습니다.
               </p>
+            </div>
+          </div>
+        </div>
+
+        {/* AI Learning Engine Status */}
+        <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg p-4 mb-6">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-purple-900">AI 학습 엔진 상태</h3>
+                {loadingLearningStatus ? (
+                  <span className="text-xs text-purple-500 flex items-center gap-1">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    로딩중...
+                  </span>
+                ) : learningStatus ? (
+                  <span className="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+                    활성화
+                  </span>
+                ) : (
+                  <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">비활성화</span>
+                )}
+              </div>
+
+              {learningStatus ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+                  <div className="bg-white rounded-lg p-2 border border-purple-100">
+                    <div className="text-xs text-gray-500">학습 샘플</div>
+                    <div className="text-lg font-bold text-purple-700">
+                      {learningStatus.statistics.total_samples.toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-lg p-2 border border-purple-100">
+                    <div className="text-xs text-gray-500">예측 정확도</div>
+                    <div className="text-lg font-bold text-pink-600">
+                      {learningStatus.statistics.current_accuracy.toFixed(1)}%
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-lg p-2 border border-purple-100">
+                    <div className="text-xs text-gray-500">C-Rank 가중치</div>
+                    <div className="text-lg font-bold text-blue-600">
+                      {((learningStatus.current_weights?.c_rank?.weight || 0.5) * 100).toFixed(0)}%
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-lg p-2 border border-purple-100">
+                    <div className="text-xs text-gray-500">D.I.A. 가중치</div>
+                    <div className="text-lg font-bold text-orange-600">
+                      {((learningStatus.current_weights?.dia?.weight || 0.5) * 100).toFixed(0)}%
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-purple-700 mt-1">
+                  검색 데이터를 수집하여 AI가 순위 예측 정확도를 개선합니다.
+                </p>
+              )}
+
+              {learningStatus && learningStatus.statistics.training_count > 0 && (
+                <p className="text-xs text-purple-600 mt-2">
+                  총 {learningStatus.statistics.training_count}회 학습 완료 |
+                  마지막 학습: {learningStatus.statistics.last_training !== '-'
+                    ? new Date(learningStatus.statistics.last_training).toLocaleString('ko-KR')
+                    : '-'}
+                </p>
+              )}
             </div>
           </div>
         </div>

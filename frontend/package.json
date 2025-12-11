@@ -1,6 +1,6 @@
 {
   "name": "blog-index-analyzer-frontend",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "블로그 지수 측정 시스템 프론트엔드",
   "private": true,
   "scripts": {

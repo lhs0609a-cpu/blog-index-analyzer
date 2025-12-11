@@ -119,6 +119,7 @@ export default function Home() {
             >
               <Sparkles className="w-4 h-4 text-purple-600" />
               <span className="text-sm font-medium">플라톤 마케팅에서 개발한 AI 기반 블로그 분석 플랫폼</span>
+              <span className="text-xs text-purple-500 bg-purple-100 px-2 py-0.5 rounded-full font-semibold">v1.2.0</span>
             </motion.div>
 
             {/* Main Title */}
@@ -336,6 +337,26 @@ export default function Home() {
           </motion.div>
         </div>
       </section>
+
+      {/* Footer */}
+      <footer className="bg-gray-900 text-white py-8">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-bold gradient-text">Blog Index Analyzer</span>
+              <span className="text-xs text-gray-400 bg-gray-800 px-2 py-0.5 rounded">v1.2.0</span>
+            </div>
+            <div className="text-sm text-gray-400">
+              © 2024 플라톤 마케팅. All rights reserved.
+            </div>
+            <div className="flex items-center gap-4 text-sm text-gray-400">
+              <span>AI 학습 엔진 탑재</span>
+              <span>•</span>
+              <span>실시간 분석</span>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }
