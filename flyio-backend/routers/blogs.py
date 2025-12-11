@@ -350,7 +350,7 @@ async def fetch_via_mobile_web(keyword: str, limit: int) -> List[Dict]:
 
 
 async def analyze_blog(blog_id: str) -> Dict:
-    """Analyze a single blog and get stats"""
+    """Analyze a single blog and get stats using multiple methods"""
     stats = {
         "total_posts": None,
         "neighbor_count": None,
@@ -368,55 +368,181 @@ async def analyze_blog(blog_id: str) -> Dict:
             "User-Agent": random.choice(USER_AGENTS),
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "ko-KR,ko;q=0.9",
+            "Referer": "https://blog.naver.com/",
         }
 
         async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-            # Fetch blog main page
-            blog_url = f"https://blog.naver.com/{blog_id}"
-            response = await client.get(blog_url, headers=headers)
+            # Method 1: Try RSS feed first (most reliable)
+            try:
+                rss_url = f"https://rss.blog.naver.com/{blog_id}.xml"
+                rss_response = await client.get(rss_url, headers=headers)
+                if rss_response.status_code == 200:
+                    rss_text = rss_response.text
+                    # Count items in RSS (usually last 30 posts)
+                    item_count = rss_text.count('<item>')
+                    if item_count > 0:
+                        # RSS has posts, blog is active
+                        stats["total_posts"] = max(item_count * 3, 30)  # Estimate
+                        logger.info(f"RSS found {item_count} items for {blog_id}")
+            except Exception as e:
+                logger.debug(f"RSS fetch failed for {blog_id}: {e}")
 
-            if response.status_code == 200:
-                html = response.text
+            # Method 2: Try mobile blog page
+            try:
+                mobile_url = f"https://m.blog.naver.com/{blog_id}"
+                mobile_response = await client.get(mobile_url, headers={
+                    **headers,
+                    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15"
+                })
 
-                # Extract post count
-                post_match = re.search(r'전체글\s*\(?\s*(\d{1,3}(?:,\d{3})*)\s*\)?', html)
-                if post_match:
-                    stats["total_posts"] = int(post_match.group(1).replace(',', ''))
+                if mobile_response.status_code == 200:
+                    html = mobile_response.text
 
-                # Try to get neighbor count from profile
-                neighbor_match = re.search(r'이웃\s*(\d{1,3}(?:,\d{3})*)', html)
-                if neighbor_match:
-                    stats["neighbor_count"] = int(neighbor_match.group(1).replace(',', ''))
+                    # Extract post count from mobile page
+                    post_patterns = [
+                        r'"totalCount"\s*:\s*(\d+)',
+                        r'"postCnt"\s*:\s*(\d+)',
+                        r'글\s*(\d{1,3}(?:,\d{3})*)\s*개',
+                        r'전체글\s*(\d{1,3}(?:,\d{3})*)',
+                        r'게시글\s*(\d{1,3}(?:,\d{3})*)',
+                    ]
 
-                # Calculate index score based on available stats
-                base_score = 50  # Base score
+                    for pattern in post_patterns:
+                        match = re.search(pattern, html)
+                        if match:
+                            count = int(match.group(1).replace(',', ''))
+                            if count > 0:
+                                stats["total_posts"] = count
+                                logger.info(f"Mobile page found {count} posts for {blog_id}")
+                                break
 
-                if stats["total_posts"]:
-                    if stats["total_posts"] >= 1000:
-                        base_score += 30
-                    elif stats["total_posts"] >= 500:
-                        base_score += 25
-                    elif stats["total_posts"] >= 100:
-                        base_score += 15
-                    elif stats["total_posts"] >= 50:
-                        base_score += 10
+                    # Extract neighbor count
+                    neighbor_patterns = [
+                        r'"buddyCnt"\s*:\s*(\d+)',
+                        r'"neighborCnt"\s*:\s*(\d+)',
+                        r'이웃\s*(\d{1,3}(?:,\d{3})*)',
+                        r'서로이웃\s*(\d{1,3}(?:,\d{3})*)',
+                    ]
 
-                if stats["neighbor_count"]:
-                    if stats["neighbor_count"] >= 5000:
-                        base_score += 20
-                    elif stats["neighbor_count"] >= 1000:
-                        base_score += 15
-                    elif stats["neighbor_count"] >= 500:
-                        base_score += 10
-                    elif stats["neighbor_count"] >= 100:
-                        base_score += 5
+                    for pattern in neighbor_patterns:
+                        match = re.search(pattern, html)
+                        if match:
+                            count = int(match.group(1).replace(',', ''))
+                            if count > 0:
+                                stats["neighbor_count"] = count
+                                logger.info(f"Mobile page found {count} neighbors for {blog_id}")
+                                break
 
-                index["score"] = min(base_score, 100)
-                index["level"] = min(int(index["score"] / 10), 10)
-                index["score_breakdown"] = {
-                    "c_rank": index["score"] * 0.5,
-                    "dia": index["score"] * 0.5
-                }
+            except Exception as e:
+                logger.debug(f"Mobile page fetch failed for {blog_id}: {e}")
+
+            # Method 3: Try desktop blog with different patterns
+            try:
+                blog_url = f"https://blog.naver.com/PostList.naver?blogId={blog_id}"
+                response = await client.get(blog_url, headers=headers)
+
+                if response.status_code == 200:
+                    html = response.text
+
+                    # More patterns for post count
+                    if not stats["total_posts"]:
+                        patterns = [
+                            r'countOfPost\s*=\s*["\']?(\d+)',
+                            r'totalCount["\']?\s*:\s*(\d+)',
+                            r'전체\s*글\s*\(?\s*(\d{1,3}(?:,\d{3})*)',
+                            r'전체글\s*\(?\s*(\d{1,3}(?:,\d{3})*)',
+                            r'totalPostCount\s*:\s*(\d+)',
+                        ]
+                        for pattern in patterns:
+                            match = re.search(pattern, html)
+                            if match:
+                                count = int(match.group(1).replace(',', ''))
+                                if count > 0:
+                                    stats["total_posts"] = count
+                                    break
+
+                    # More patterns for neighbor count
+                    if not stats["neighbor_count"]:
+                        patterns = [
+                            r'buddyCount\s*=\s*["\']?(\d+)',
+                            r'neighborCount["\']?\s*:\s*(\d+)',
+                            r'이웃\s*(\d{1,3}(?:,\d{3})*)\s*명',
+                        ]
+                        for pattern in patterns:
+                            match = re.search(pattern, html)
+                            if match:
+                                count = int(match.group(1).replace(',', ''))
+                                if count > 0:
+                                    stats["neighbor_count"] = count
+                                    break
+
+            except Exception as e:
+                logger.debug(f"Desktop page fetch failed for {blog_id}: {e}")
+
+            # Calculate index score based on available stats
+            base_score = 50  # Base score for existing blog
+
+            # Post count scoring (0-30 points)
+            if stats["total_posts"]:
+                if stats["total_posts"] >= 2000:
+                    base_score += 30
+                elif stats["total_posts"] >= 1000:
+                    base_score += 25
+                elif stats["total_posts"] >= 500:
+                    base_score += 20
+                elif stats["total_posts"] >= 200:
+                    base_score += 15
+                elif stats["total_posts"] >= 100:
+                    base_score += 12
+                elif stats["total_posts"] >= 50:
+                    base_score += 8
+                elif stats["total_posts"] >= 20:
+                    base_score += 5
+                else:
+                    base_score += 2
+
+            # Neighbor count scoring (0-20 points)
+            if stats["neighbor_count"]:
+                if stats["neighbor_count"] >= 10000:
+                    base_score += 20
+                elif stats["neighbor_count"] >= 5000:
+                    base_score += 17
+                elif stats["neighbor_count"] >= 2000:
+                    base_score += 14
+                elif stats["neighbor_count"] >= 1000:
+                    base_score += 11
+                elif stats["neighbor_count"] >= 500:
+                    base_score += 8
+                elif stats["neighbor_count"] >= 200:
+                    base_score += 5
+                elif stats["neighbor_count"] >= 50:
+                    base_score += 3
+
+            index["score"] = min(base_score, 100)
+            index["level"] = max(1, min(int(index["score"] / 10), 10))
+
+            # C-Rank and D.I.A. breakdown
+            c_rank_score = index["score"] * 0.5
+            dia_score = index["score"] * 0.5
+
+            # Adjust based on stats availability
+            if stats["total_posts"] and stats["neighbor_count"]:
+                # Both available - balanced
+                c_rank_score = index["score"] * 0.48
+                dia_score = index["score"] * 0.52
+            elif stats["total_posts"]:
+                # Only posts - higher C-Rank
+                c_rank_score = index["score"] * 0.55
+                dia_score = index["score"] * 0.45
+            elif stats["neighbor_count"]:
+                # Only neighbors - higher D.I.A.
+                c_rank_score = index["score"] * 0.45
+                dia_score = index["score"] * 0.55
+
+            index["score_breakdown"] = {
+                "c_rank": round(c_rank_score, 1),
+                "dia": round(dia_score, 1)
+            }
 
     except Exception as e:
         logger.warning(f"Error analyzing blog {blog_id}: {e}")
