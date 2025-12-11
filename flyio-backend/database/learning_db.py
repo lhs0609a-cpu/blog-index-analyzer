@@ -69,10 +69,23 @@ def init_learning_tables():
                 epochs INTEGER,
                 learning_rate REAL,
 
+                keywords TEXT,
+                weight_changes TEXT,
+
                 started_at TIMESTAMP,
                 completed_at TIMESTAMP
             )
         """)
+
+        # Add columns if they don't exist (for existing databases)
+        try:
+            cursor.execute("ALTER TABLE learning_sessions ADD COLUMN keywords TEXT")
+        except:
+            pass
+        try:
+            cursor.execute("ALTER TABLE learning_sessions ADD COLUMN weight_changes TEXT")
+        except:
+            pass
 
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_started_at ON learning_sessions(started_at)")
 
@@ -207,7 +220,9 @@ def save_training_session(
     epochs: int,
     learning_rate: float,
     started_at: str,
-    completed_at: str
+    completed_at: str,
+    keywords: List[str] = None,
+    weight_changes: Dict = None
 ):
     """Save training session"""
     with get_db() as conn:
@@ -216,12 +231,14 @@ def save_training_session(
             INSERT INTO learning_sessions (
                 session_id, samples_used, accuracy_before, accuracy_after,
                 improvement, duration_seconds, epochs, learning_rate,
-                started_at, completed_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                started_at, completed_at, keywords, weight_changes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             session_id, samples_used, accuracy_before, accuracy_after,
             improvement, duration_seconds, epochs, learning_rate,
-            started_at, completed_at
+            started_at, completed_at,
+            json.dumps(keywords) if keywords else None,
+            json.dumps(weight_changes) if weight_changes else None
         ))
 
 def save_weight_history(session_id: str, weights: Dict, accuracy: float, total_samples: int):
@@ -242,7 +259,26 @@ def get_training_history(limit: int = 50) -> List[Dict]:
             ORDER BY started_at DESC
             LIMIT ?
         """, (limit,))
-        return [dict(row) for row in cursor.fetchall()]
+        results = []
+        for row in cursor.fetchall():
+            session = dict(row)
+            # Parse JSON fields
+            if session.get('keywords'):
+                try:
+                    session['keywords'] = json.loads(session['keywords'])
+                except:
+                    session['keywords'] = []
+            else:
+                session['keywords'] = []
+            if session.get('weight_changes'):
+                try:
+                    session['weight_changes'] = json.loads(session['weight_changes'])
+                except:
+                    session['weight_changes'] = {}
+            else:
+                session['weight_changes'] = {}
+            results.append(session)
+        return results
 
 def get_learning_statistics() -> Dict:
     """Get learning statistics"""

@@ -27,14 +27,27 @@ interface AccuracyHistory {
   samples: number
 }
 
+interface WeightChange {
+  before: number
+  after: number
+  change: number
+}
+
 interface TrainingSession {
   session_id: string
-  timestamp: string
+  timestamp?: string
+  started_at?: string
+  completed_at?: string
   samples_used: number
   accuracy_before: number
   accuracy_after: number
   improvement: number
   duration_seconds: number
+  keywords?: string[]
+  weight_changes?: {
+    'c_rank.weight'?: WeightChange
+    'dia.weight'?: WeightChange
+  }
 }
 
 export default function LearningEnginePage() {
@@ -296,17 +309,34 @@ export default function LearningEnginePage() {
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50">
                     <th className="text-left py-3 px-4 font-semibold text-gray-700">시간</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-700">학습 키워드</th>
                     <th className="text-center py-3 px-4 font-semibold text-gray-700">샘플수</th>
                     <th className="text-center py-3 px-4 font-semibold text-gray-700">정확도 변화</th>
+                    <th className="text-center py-3 px-4 font-semibold text-gray-700">가중치 변화</th>
                     <th className="text-center py-3 px-4 font-semibold text-gray-700">향상도</th>
-                    <th className="text-center py-3 px-4 font-semibold text-gray-700">소요시간</th>
                   </tr>
                 </thead>
                 <tbody>
                   {trainingSessions.map((session, idx) => (
                     <tr key={idx} className="border-b border-gray-100 hover:bg-purple-50 transition-colors">
                       <td className="py-3 px-4 text-gray-600">
-                        {new Date(session.timestamp).toLocaleString('ko-KR')}
+                        {new Date(session.started_at || session.timestamp || '').toLocaleString('ko-KR')}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex flex-wrap gap-1 max-w-[200px]">
+                          {session.keywords && session.keywords.length > 0 ? (
+                            session.keywords.slice(0, 5).map((kw, i) => (
+                              <span key={i} className="inline-block px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full">
+                                {kw}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-gray-400 text-xs">-</span>
+                          )}
+                          {session.keywords && session.keywords.length > 5 && (
+                            <span className="text-gray-400 text-xs">+{session.keywords.length - 5}개</span>
+                          )}
+                        </div>
                       </td>
                       <td className="text-center py-3 px-4 text-gray-700">
                         {session.samples_used}
@@ -320,15 +350,44 @@ export default function LearningEnginePage() {
                           {session.accuracy_after.toFixed(1)}%
                         </span>
                       </td>
+                      <td className="py-3 px-4">
+                        {session.weight_changes && Object.keys(session.weight_changes).length > 0 ? (
+                          <div className="text-xs space-y-1">
+                            {session.weight_changes['c_rank.weight'] && (
+                              <div className="flex items-center justify-center gap-1">
+                                <span className="text-gray-500">C-Rank:</span>
+                                <span className="text-gray-600">
+                                  {(session.weight_changes['c_rank.weight'].before * 100).toFixed(1)}%
+                                </span>
+                                <span>→</span>
+                                <span className={session.weight_changes['c_rank.weight'].change > 0 ? 'text-green-600' : session.weight_changes['c_rank.weight'].change < 0 ? 'text-red-600' : 'text-gray-600'}>
+                                  {(session.weight_changes['c_rank.weight'].after * 100).toFixed(1)}%
+                                </span>
+                              </div>
+                            )}
+                            {session.weight_changes['dia.weight'] && (
+                              <div className="flex items-center justify-center gap-1">
+                                <span className="text-gray-500">D.I.A.:</span>
+                                <span className="text-gray-600">
+                                  {(session.weight_changes['dia.weight'].before * 100).toFixed(1)}%
+                                </span>
+                                <span>→</span>
+                                <span className={session.weight_changes['dia.weight'].change > 0 ? 'text-green-600' : session.weight_changes['dia.weight'].change < 0 ? 'text-red-600' : 'text-gray-600'}>
+                                  {(session.weight_changes['dia.weight'].after * 100).toFixed(1)}%
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-xs">-</span>
+                        )}
+                      </td>
                       <td className="text-center py-3 px-4">
                         <span className={`font-bold ${
                           session.improvement > 0 ? 'text-green-600' : 'text-gray-500'
                         }`}>
                           {session.improvement > 0 ? '+' : ''}{session.improvement.toFixed(1)}%
                         </span>
-                      </td>
-                      <td className="text-center py-3 px-4 text-gray-600">
-                        {session.duration_seconds.toFixed(1)}초
                       </td>
                     </tr>
                   ))}

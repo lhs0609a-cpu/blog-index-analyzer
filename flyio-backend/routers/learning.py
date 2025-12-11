@@ -90,6 +90,8 @@ async def collect_learning_data(request: CollectRequest):
 
             if trained:
                 save_current_weights(new_weights)
+                # 사용된 키워드 목록 추출
+                unique_keywords = list(set([s.get('keyword', '') for s in all_samples if s.get('keyword')]))
                 save_training_session(
                     session_id=training_info['session_id'],
                     samples_used=training_info['samples_used'],
@@ -100,7 +102,9 @@ async def collect_learning_data(request: CollectRequest):
                     epochs=training_info['epochs'],
                     learning_rate=training_info['learning_rate'],
                     started_at=datetime.now().isoformat(),
-                    completed_at=datetime.now().isoformat()
+                    completed_at=datetime.now().isoformat(),
+                    keywords=unique_keywords[:10],  # 최대 10개 키워드 저장
+                    weight_changes=training_info.get('weight_changes', {})
                 )
                 save_weight_history(
                     session_id=training_info['session_id'],
@@ -145,6 +149,8 @@ async def manual_train(request: TrainRequest):
         )
 
         save_current_weights(new_weights)
+        # 사용된 키워드 목록 추출
+        unique_keywords = list(set([s.get('keyword', '') for s in samples if s.get('keyword')]))
         save_training_session(
             session_id=training_info['session_id'],
             samples_used=training_info['samples_used'],
@@ -155,7 +161,9 @@ async def manual_train(request: TrainRequest):
             epochs=training_info['epochs'],
             learning_rate=request.learning_rate,
             started_at=datetime.now().isoformat(),
-            completed_at=datetime.now().isoformat()
+            completed_at=datetime.now().isoformat(),
+            keywords=unique_keywords[:10],  # 최대 10개 키워드 저장
+            weight_changes=training_info.get('weight_changes', {})
         )
         save_weight_history(
             session_id=training_info['session_id'],
@@ -172,7 +180,8 @@ async def manual_train(request: TrainRequest):
             "improvement": training_info['improvement'],
             "iterations": training_info['epochs'],
             "duration_seconds": training_info['duration_seconds'],
-            "weight_updates": training_info['weight_changes']
+            "weight_updates": training_info['weight_changes'],
+            "keywords": unique_keywords[:10]
         }
 
     except HTTPException:
