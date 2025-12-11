@@ -1011,13 +1011,13 @@ export default function KeywordSearchPage() {
                   <div className="bg-white rounded-lg p-2 border border-purple-100">
                     <div className="text-xs text-gray-500">학습 샘플</div>
                     <div className="text-lg font-bold text-purple-700">
-                      {learningStatus.statistics.total_samples.toLocaleString()}
+                      {(learningStatus.statistics?.total_samples || 0).toLocaleString()}
                     </div>
                   </div>
                   <div className="bg-white rounded-lg p-2 border border-purple-100">
                     <div className="text-xs text-gray-500">예측 정확도</div>
                     <div className="text-lg font-bold text-pink-600">
-                      {learningStatus.statistics.current_accuracy.toFixed(1)}%
+                      {(learningStatus.statistics?.current_accuracy || 0).toFixed(1)}%
                     </div>
                   </div>
                   <div className="bg-white rounded-lg p-2 border border-purple-100">
@@ -1039,10 +1039,10 @@ export default function KeywordSearchPage() {
                 </p>
               )}
 
-              {learningStatus && learningStatus.statistics.training_count > 0 && (
+              {learningStatus && learningStatus.statistics?.training_count > 0 && (
                 <p className="text-xs text-purple-600 mt-2">
                   총 {learningStatus.statistics.training_count}회 학습 완료 |
-                  마지막 학습: {learningStatus.statistics.last_training !== '-'
+                  마지막 학습: {learningStatus.statistics?.last_training && learningStatus.statistics.last_training !== '-'
                     ? new Date(learningStatus.statistics.last_training).toLocaleString('ko-KR')
                     : '-'}
                 </p>
