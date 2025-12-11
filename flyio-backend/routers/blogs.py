@@ -121,88 +121,230 @@ def extract_blog_id(url: str) -> str:
 
 
 async def fetch_naver_search_results(keyword: str, limit: int = 13) -> List[Dict]:
-    """Fetch search results from Naver VIEW tab"""
+    """Fetch search results from Naver Open API (Blog Search)"""
+    results = []
+
+    try:
+        # Use Naver Open API for blog search
+        # Check if API credentials are configured
+        client_id = getattr(settings, 'NAVER_CLIENT_ID', None)
+        client_secret = getattr(settings, 'NAVER_CLIENT_SECRET', None)
+
+        if client_id and client_secret:
+            # Use Naver Open API
+            logger.info(f"Using Naver Open API for keyword: {keyword}")
+            results = await fetch_via_naver_api(keyword, limit, client_id, client_secret)
+            if results:
+                return results
+
+        # Fallback: Try to use RSS feed
+        logger.info(f"Trying RSS method for keyword: {keyword}")
+        results = await fetch_via_rss(keyword, limit)
+        if results:
+            return results
+
+        # Final fallback: Use mobile web scraping
+        logger.info(f"Trying mobile web scraping for keyword: {keyword}")
+        results = await fetch_via_mobile_web(keyword, limit)
+
+    except Exception as e:
+        logger.error(f"Error fetching Naver search: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+
+    return results
+
+
+async def fetch_via_naver_api(keyword: str, limit: int, client_id: str, client_secret: str) -> List[Dict]:
+    """Fetch blog results using Naver Open API"""
+    results = []
+
+    try:
+        headers = {
+            "X-Naver-Client-Id": client_id,
+            "X-Naver-Client-Secret": client_secret,
+        }
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(
+                "https://openapi.naver.com/v1/search/blog.json",
+                headers=headers,
+                params={
+                    "query": keyword,
+                    "display": min(limit, 100),
+                    "sort": "sim"  # relevance
+                }
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                items = data.get("items", [])
+
+                for idx, item in enumerate(items[:limit]):
+                    # Extract blog ID from link
+                    link = item.get("link", "")
+                    blog_id = extract_blog_id(link)
+
+                    if not blog_id:
+                        # Try to extract from blogger link
+                        blogger_link = item.get("bloggerlink", "")
+                        blog_id = extract_blog_id(blogger_link)
+
+                    if not blog_id:
+                        continue
+
+                    # Clean title (remove HTML tags)
+                    title = re.sub(r'<[^>]+>', '', item.get("title", ""))
+                    title = title.replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+
+                    results.append({
+                        "rank": idx + 1,
+                        "blog_id": blog_id,
+                        "blog_name": item.get("bloggername", blog_id),
+                        "blog_url": f"https://blog.naver.com/{blog_id}",
+                        "post_title": title,
+                        "post_url": link,
+                        "post_date": item.get("postdate"),
+                        "thumbnail": None,
+                        "tab_type": "VIEW",
+                        "smart_block_keyword": keyword,
+                    })
+
+                logger.info(f"Naver API returned {len(results)} results for: {keyword}")
+            else:
+                logger.error(f"Naver API error: {response.status_code} - {response.text}")
+
+    except Exception as e:
+        logger.error(f"Error with Naver API: {e}")
+
+    return results
+
+
+async def fetch_via_rss(keyword: str, limit: int) -> List[Dict]:
+    """Fetch blog results using Naver RSS search (fallback)"""
     results = []
 
     try:
         headers = {
             "User-Agent": random.choice(USER_AGENTS),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "keep-alive",
-            "Referer": "https://search.naver.com/",
+            "Accept": "application/rss+xml, application/xml, text/xml",
         }
 
-        # Search Naver VIEW tab
-        search_url = f"https://search.naver.com/search.naver?where=view&query={keyword}&sm=tab_opt&nso=so:r,p:all"
-
+        # Try Naver view RSS
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-            response = await client.get(search_url, headers=headers)
+            response = await client.get(
+                f"https://rss.blog.naver.com/search.xml?query={keyword}",
+                headers=headers
+            )
 
-            if response.status_code != 200:
-                logger.error(f"Naver search failed: {response.status_code}")
-                return results
+            if response.status_code == 200 and response.text:
+                soup = BeautifulSoup(response.text, 'xml')
+                items = soup.find_all('item')
 
-            soup = BeautifulSoup(response.text, 'html.parser')
+                for idx, item in enumerate(items[:limit]):
+                    link = item.find('link')
+                    link_url = link.get_text(strip=True) if link else ""
 
-            # Find blog posts in VIEW tab
-            # Try multiple selectors for different Naver layouts
-            post_items = soup.select('li.bx') or soup.select('div.view_wrap') or soup.select('ul.lst_view li')
-
-            if not post_items:
-                # Try alternative selector
-                post_items = soup.select('div.api_subject_bx')
-
-            logger.info(f"Found {len(post_items)} items for keyword: {keyword}")
-
-            for idx, item in enumerate(post_items[:limit]):
-                try:
-                    # Extract title and link
-                    title_elem = item.select_one('a.title_link') or item.select_one('a.api_txt_lines') or item.select_one('.title_area a')
-                    if not title_elem:
-                        continue
-
-                    post_title = title_elem.get_text(strip=True)
-                    post_url = title_elem.get('href', '')
-
-                    # Extract blog name
-                    name_elem = item.select_one('a.sub_txt') or item.select_one('.user_info a') or item.select_one('.source_box a')
-                    blog_name = name_elem.get_text(strip=True) if name_elem else "Unknown"
-                    blog_url = name_elem.get('href', '') if name_elem else ""
-
-                    # Extract blog ID
-                    blog_id = extract_blog_id(blog_url) or extract_blog_id(post_url)
+                    blog_id = extract_blog_id(link_url)
                     if not blog_id:
                         continue
 
-                    # Extract date
-                    date_elem = item.select_one('.sub_time') or item.select_one('.date')
-                    post_date = date_elem.get_text(strip=True) if date_elem else None
+                    title_elem = item.find('title')
+                    title = title_elem.get_text(strip=True) if title_elem else ""
 
-                    # Extract thumbnail
-                    thumb_elem = item.select_one('img.thumb') or item.select_one('.thumb_area img')
-                    thumbnail = thumb_elem.get('src') if thumb_elem else None
+                    pub_date = item.find('pubDate')
+                    post_date = pub_date.get_text(strip=True) if pub_date else None
 
                     results.append({
                         "rank": idx + 1,
                         "blog_id": blog_id,
-                        "blog_name": blog_name,
+                        "blog_name": blog_id,
                         "blog_url": f"https://blog.naver.com/{blog_id}",
-                        "post_title": post_title,
-                        "post_url": post_url,
+                        "post_title": title,
+                        "post_url": link_url,
                         "post_date": post_date,
-                        "thumbnail": thumbnail,
+                        "thumbnail": None,
                         "tab_type": "VIEW",
                         "smart_block_keyword": keyword,
                     })
 
-                except Exception as e:
-                    logger.warning(f"Error parsing item {idx}: {e}")
-                    continue
+                logger.info(f"RSS returned {len(results)} results for: {keyword}")
 
     except Exception as e:
-        logger.error(f"Error fetching Naver search: {e}")
+        logger.error(f"Error with RSS: {e}")
+
+    return results
+
+
+async def fetch_via_mobile_web(keyword: str, limit: int) -> List[Dict]:
+    """Fetch blog results by scraping Naver mobile web (final fallback)"""
+    results = []
+
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "ko-KR,ko;q=0.9",
+            "Referer": "https://m.search.naver.com/",
+        }
+
+        # Mobile Naver search
+        search_url = f"https://m.search.naver.com/search.naver?where=m_blog&query={keyword}"
+
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            response = await client.get(search_url, headers=headers)
+
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, 'html.parser')
+
+                # Mobile layout selectors
+                # Try to find blog post links
+                blog_links = soup.find_all('a', href=re.compile(r'blog\.naver\.com/[^/]+/\d+'))
+
+                logger.info(f"Mobile scraping found {len(blog_links)} raw blog links")
+
+                seen_urls = set()
+                rank = 0
+
+                for a_tag in blog_links:
+                    post_url = a_tag.get('href', '')
+
+                    if post_url in seen_urls:
+                        continue
+                    seen_urls.add(post_url)
+
+                    blog_id = extract_blog_id(post_url)
+                    if not blog_id:
+                        continue
+
+                    # Get title from link text or parent
+                    title = a_tag.get_text(strip=True)
+                    if not title or len(title) < 5:
+                        parent = a_tag.parent
+                        if parent:
+                            title = parent.get_text(strip=True)[:100]
+
+                    rank += 1
+                    results.append({
+                        "rank": rank,
+                        "blog_id": blog_id,
+                        "blog_name": blog_id,
+                        "blog_url": f"https://blog.naver.com/{blog_id}",
+                        "post_title": title if title else f"Post by {blog_id}",
+                        "post_url": post_url,
+                        "post_date": None,
+                        "thumbnail": None,
+                        "tab_type": "VIEW",
+                        "smart_block_keyword": keyword,
+                    })
+
+                    if rank >= limit:
+                        break
+
+                logger.info(f"Mobile web returned {len(results)} results for: {keyword}")
+
+    except Exception as e:
+        logger.error(f"Error with mobile web: {e}")
 
     return results
 

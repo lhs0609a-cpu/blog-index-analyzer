@@ -124,15 +124,16 @@ export default function LearningEnginePage() {
 
       if (response.ok) {
         const result = await response.json()
-        alert(`학습 완료!\n정확도: ${result.initial_accuracy}% → ${result.final_accuracy}%\n향상도: ${result.improvement}%`)
+        alert(`학습 완료!\n정확도: ${result.initial_accuracy?.toFixed(1)}% → ${result.final_accuracy?.toFixed(1)}%\n향상도: ${result.improvement?.toFixed(1)}%`)
         fetchLearningStatus()
         fetchTrainingHistory()
       } else {
-        alert('학습 실행 실패')
+        const error = await response.json()
+        alert(error.detail || '학습 실행 실패')
       }
     } catch (err) {
       console.error('학습 실행 오류:', err)
-      alert('학습 실행 중 오류가 발생했습니다')
+      alert('학습 실행 중 오류가 발생했습니다. 네트워크 연결을 확인해주세요.')
     } finally {
       setLoading(false)
     }

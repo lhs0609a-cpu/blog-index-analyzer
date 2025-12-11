@@ -131,7 +131,10 @@ async def manual_train(request: TrainRequest):
         samples = get_learning_samples(limit=request.batch_size)
 
         if len(samples) < 1:
-            raise HTTPException(status_code=400, detail="학습 데이터 부족 (최소 1개 필요)")
+            raise HTTPException(
+                status_code=400,
+                detail="학습 데이터가 없습니다. 먼저 '키워드 검색' 페이지에서 검색을 수행하여 데이터를 수집해주세요."
+            )
 
         new_weights, training_info = train_model(
             samples=samples,
@@ -172,7 +175,12 @@ async def manual_train(request: TrainRequest):
             "weight_updates": training_info['weight_changes']
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Training error: {error_trace}")
         raise HTTPException(status_code=500, detail=f"학습 실행 실패: {str(e)}")
 
 
