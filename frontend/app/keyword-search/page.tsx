@@ -1189,32 +1189,32 @@ export default function KeywordSearchPage() {
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                               <div className="bg-white rounded-lg p-4 text-center">
                                 <div className="text-2xl font-bold text-purple-600">
-                                  {status.result.insights.average_score}
+                                  {status.result?.insights?.average_score || 0}
                                 </div>
                                 <div className="text-xs text-gray-600 mt-1">평균 점수</div>
                               </div>
                               <div className="bg-white rounded-lg p-4 text-center">
                                 <div className="text-2xl font-bold text-pink-600">
-                                  Lv.{status.result.insights.average_level}
+                                  Lv.{status.result?.insights?.average_level || 0}
                                 </div>
                                 <div className="text-xs text-gray-600 mt-1">평균 레벨</div>
                               </div>
                               <div className="bg-white rounded-lg p-4 text-center">
                                 <div className="text-2xl font-bold text-blue-600">
-                                  {status.result.insights.average_posts}
+                                  {status.result?.insights?.average_posts || 0}
                                 </div>
                                 <div className="text-xs text-gray-600 mt-1">평균 포스트</div>
                               </div>
                               <div className="bg-white rounded-lg p-4 text-center">
                                 <div className="text-2xl font-bold text-green-600">
-                                  {status.result.insights.average_neighbors}
+                                  {status.result?.insights?.average_neighbors || 0}
                                 </div>
                                 <div className="text-xs text-gray-600 mt-1">평균 이웃</div>
                               </div>
                             </div>
                             <div className="mt-4 text-sm text-gray-700">
-                              <strong>{status.result.total_found}개</strong> 블로그 발견,{' '}
-                              <strong>{status.result.successful_count}개</strong> 분석 완료
+                              <strong>{status.result?.total_found || 0}개</strong> 블로그 발견,{' '}
+                              <strong>{status.result?.successful_count || 0}개</strong> 분석 완료
                             </div>
                           </div>
                         )}
@@ -1233,32 +1233,32 @@ export default function KeywordSearchPage() {
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                               <div className="bg-white rounded-lg p-4 text-center">
                                 <div className="text-2xl font-bold text-amber-600">
-                                  {status.result.learning.accuracy?.toFixed(1) || 0}%
+                                  {(status.result?.learning?.accuracy || 0).toFixed(1)}%
                                 </div>
                                 <div className="text-xs text-gray-600 mt-1">예측 정확도 (±3위)</div>
                               </div>
                               <div className="bg-white rounded-lg p-4 text-center">
                                 <div className="text-2xl font-bold text-orange-600">
-                                  {status.result.learning.rank_analysis?.average_difference?.toFixed(1) || 0}
+                                  {(status.result?.learning?.rank_analysis?.average_difference || 0).toFixed(1)}
                                 </div>
                                 <div className="text-xs text-gray-600 mt-1">평균 순위 오차</div>
                               </div>
                               <div className="bg-white rounded-lg p-4 text-center">
                                 <div className="text-2xl font-bold text-rose-600">
-                                  {status.result.learning.current_weights?.c_rank?.weight || 50}%
+                                  {status.result?.learning?.current_weights?.c_rank?.weight || 50}%
                                 </div>
                                 <div className="text-xs text-gray-600 mt-1">C-Rank 가중치</div>
                               </div>
                               <div className="bg-white rounded-lg p-4 text-center">
                                 <div className="text-2xl font-bold text-pink-600">
-                                  {status.result.learning.current_weights?.dia?.weight || 50}%
+                                  {status.result?.learning?.current_weights?.dia?.weight || 50}%
                                 </div>
                                 <div className="text-xs text-gray-600 mt-1">D.I.A 가중치</div>
                               </div>
                             </div>
 
                             {/* Factor Correlations */}
-                            {status.result.learning.factor_correlations && Object.keys(status.result.learning.factor_correlations).length > 0 && (
+                            {status.result?.learning?.factor_correlations && Object.keys(status.result.learning.factor_correlations).length > 0 && (
                               <div className="mt-4">
                                 <h5 className="text-sm font-semibold text-gray-700 mb-2">순위에 영향을 주는 요소 분석</h5>
                                 <div className="flex flex-wrap gap-2">
@@ -1543,8 +1543,8 @@ export default function KeywordSearchPage() {
                                           </span>
                                         </td>
                                         <td className="px-3 py-3 text-center">
-                                          <span className={`text-lg font-bold ${getScoreColor(blog.index.total_score)}`}>
-                                            {blog.index.total_score.toFixed(1)}
+                                          <span className={`text-lg font-bold ${getScoreColor(blog.index?.total_score || 0)}`}>
+                                            {(blog.index?.total_score || 0).toFixed(1)}
                                           </span>
                                         </td>
                                         <td className="px-3 py-3 text-center">
