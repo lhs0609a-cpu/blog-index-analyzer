@@ -2169,7 +2169,7 @@ export default function KeywordSearchPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {relatedKeywords.keywords.slice(0, 20).map((kw, idx) => (
+                        {relatedKeywords.keywords.slice(0, 100).map((kw, idx) => (
                           <tr
                             key={idx}
                             className="border-b border-gray-100 hover:bg-purple-50 transition-colors cursor-pointer"

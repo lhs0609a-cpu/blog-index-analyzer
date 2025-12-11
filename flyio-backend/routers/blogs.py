@@ -98,7 +98,7 @@ async def get_related_keywords_from_searchad(keyword: str) -> RelatedKeywordsRes
                 keywords_data = data.get("keywordList", [])
 
                 related_keywords = []
-                for kw in keywords_data[:30]:  # Limit to 30 keywords
+                for kw in keywords_data[:100]:  # Limit to 100 keywords
                     pc_search = kw.get("monthlyPcQcCnt", 0)
                     mobile_search = kw.get("monthlyMobileQcCnt", 0)
 
