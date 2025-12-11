@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { TrendingUp, Zap, Target, Activity, Award, ArrowUp, ArrowDown } from 'lucide-react'
+import { getApiUrl } from '@/lib/api/apiConfig'
 
 interface LearningStats {
   total_samples: number
@@ -67,7 +68,7 @@ export default function LearningEnginePage() {
   // API에서 데이터 가져오기
   const fetchLearningStatus = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/learning/status`)
+      const response = await fetch(`${getApiUrl()}/api/learning/status`)
       if (response.ok) {
         const data = await response.json()
         setStats(data.statistics)
@@ -96,7 +97,7 @@ export default function LearningEnginePage() {
 
   const fetchTrainingHistory = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/learning/history?limit=10`)
+      const response = await fetch(`${getApiUrl()}/api/learning/history?limit=10`)
       if (response.ok) {
         const data = await response.json()
         setTrainingSessions(data.sessions || [])
@@ -110,7 +111,7 @@ export default function LearningEnginePage() {
   const runTraining = async () => {
     setLoading(true)
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/learning/train`, {
+      const response = await fetch(`${getApiUrl()}/api/learning/train`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
