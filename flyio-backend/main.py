@@ -172,7 +172,7 @@ async def health_check():
 
 # 라우터 등록
 from routers import auth, blogs, comprehensive_analysis, system
-from routers import learning, backup, supabase_sync
+from routers import learning, backup, supabase_sync, batch_learning
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(blogs.router, prefix="/api/blogs", tags=["블로그"])
@@ -181,6 +181,7 @@ app.include_router(system.router, prefix="/api/system", tags=["시스템"])
 app.include_router(learning.router, prefix="/api/learning", tags=["학습엔진"])
 app.include_router(backup.router, prefix="/api/backup", tags=["백업관리"])
 app.include_router(supabase_sync.router, prefix="/api/supabase", tags=["Supabase동기화"])
+app.include_router(batch_learning.router, prefix="/api/batch-learning", tags=["대량학습"])
 
 
 if __name__ == "__main__":

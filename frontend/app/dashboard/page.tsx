@@ -112,7 +112,14 @@ export default function Dashboard() {
             <p className="text-gray-600">내 블로그 지수를 한눈에 확인하세요</p>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
+            <Link
+              href="/dashboard/batch-learning"
+              className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold hover:shadow-lg transition-all duration-300"
+            >
+              <Sparkles className="w-5 h-5" />
+              대량 학습
+            </Link>
             <Link
               href="/dashboard/learning"
               className="flex items-center gap-2 px-6 py-3 rounded-full bg-white border-2 border-green-500 text-green-600 font-semibold hover:shadow-lg transition-all duration-300"
