@@ -8,8 +8,8 @@ from typing import Dict, List, Optional
 import json
 import os
 
-# Use absolute path to the app's database
-DATABASE_PATH = "/app/blog_analyzer.db"
+# Use persistent volume path for database
+DATABASE_PATH = "/app/data/blog_analyzer.db"
 
 @contextmanager
 def get_db():

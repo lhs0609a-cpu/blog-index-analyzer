@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { TrendingUp, Zap, Target, Activity, Award, ArrowUp, ArrowDown, ArrowLeft } from 'lucide-react'
+import { TrendingUp, Zap, Target, Activity, Award, ArrowUp, ArrowDown, ArrowLeft, AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
 import { getApiUrl } from '@/lib/api/apiConfig'
 
 interface LearningStats {
@@ -51,6 +51,45 @@ interface TrainingSession {
   }
 }
 
+interface DeviationAnalysis {
+  total_samples: number
+  analyzed_samples: number
+  overall_deviation: number
+  spearman_correlation: number
+  rank_accuracy: {
+    within_1_rank: number
+    within_3_ranks: number
+    within_5_ranks: number
+    perfect_match: number
+  }
+  deviation_by_rank: Record<string, {
+    count: number
+    avg_predicted_rank: number
+    avg_deviation: number
+    accuracy: number
+  }>
+  worst_predictions: Array<{
+    keyword: string
+    blog_id: string
+    actual_rank: number
+    predicted_rank: number
+    deviation: number
+    predicted_score: number
+  }>
+  weight_impact: Record<string, {
+    top_avg: number
+    bottom_avg: number
+    current_weight: number
+  }>
+  recommendations: string[]
+  keyword_analysis: Array<{
+    keyword: string
+    sample_count: number
+    avg_deviation: number
+    accuracy: number
+  }>
+}
+
 export default function LearningEnginePage() {
   const router = useRouter()
   const [stats, setStats] = useState<LearningStats>({
@@ -78,7 +117,9 @@ export default function LearningEnginePage() {
   ])
 
   const [trainingSessions, setTrainingSessions] = useState<TrainingSession[]>([])
+  const [deviationAnalysis, setDeviationAnalysis] = useState<DeviationAnalysis | null>(null)
   const [loading, setLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState<'overview' | 'deviation' | 'tuning'>('overview')
 
   // API에서 데이터 가져오기
   const fetchLearningStatus = async () => {
@@ -122,6 +163,18 @@ export default function LearningEnginePage() {
     }
   }
 
+  const fetchDeviationAnalysis = async () => {
+    try {
+      const response = await fetch(`${getApiUrl()}/api/learning/deviation-analysis`)
+      if (response.ok) {
+        const data = await response.json()
+        setDeviationAnalysis(data)
+      }
+    } catch (err) {
+      console.error('괴리율 분석 조회 실패:', err)
+    }
+  }
+
   // 수동 학습 실행
   const runTraining = async () => {
     setLoading(true)
@@ -158,10 +211,12 @@ export default function LearningEnginePage() {
   useEffect(() => {
     fetchLearningStatus()
     fetchTrainingHistory()
+    fetchDeviationAnalysis()
 
     // 30초마다 자동 갱신
     const interval = setInterval(() => {
       fetchLearningStatus()
+      fetchDeviationAnalysis()
     }, 30000)
 
     return () => clearInterval(interval)
@@ -216,9 +271,43 @@ export default function LearningEnginePage() {
               {loading ? '학습 중...' : '수동 학습 실행'}
             </button>
           </div>
+
+          {/* 탭 네비게이션 */}
+          <div className="flex gap-2 mt-6">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                activeTab === 'overview'
+                  ? 'bg-purple-500 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              개요
+            </button>
+            <button
+              onClick={() => setActiveTab('deviation')}
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                activeTab === 'deviation'
+                  ? 'bg-purple-500 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              괴리율 분석
+            </button>
+            <button
+              onClick={() => setActiveTab('tuning')}
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                activeTab === 'tuning'
+                  ? 'bg-purple-500 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              실시간 조율
+            </button>
+          </div>
         </div>
 
-        {/* 실시간 통계 카드 */}
+        {/* 실시간 통계 카드 - 항상 표시 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             icon={<Target className="w-6 h-6" />}
@@ -234,50 +323,279 @@ export default function LearningEnginePage() {
           />
           <StatCard
             icon={<Activity className="w-6 h-6" />}
-            label="±3 순위 이내"
-            value={`${stats.accuracy_within_3.toFixed(1)}%`}
+            label="평균 괴리"
+            value={deviationAnalysis?.overall_deviation ? `±${deviationAnalysis.overall_deviation.toFixed(1)}순위` : '-'}
             color="from-green-500 to-teal-500"
           />
           <StatCard
             icon={<TrendingUp className="w-6 h-6" />}
-            label="학습 횟수"
-            value={`${stats.training_count}회`}
+            label="순위 상관계수"
+            value={deviationAnalysis?.spearman_correlation ? `${(deviationAnalysis.spearman_correlation * 100).toFixed(1)}%` : '-'}
             color="from-orange-500 to-red-500"
           />
         </div>
 
-        {/* 정확도 향상 그래프 */}
-        <div className="bg-white rounded-2xl shadow-lg p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <TrendingUp className="w-6 h-6 text-purple-500" />
-            정확도 향상 추이
-          </h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={accuracyHistory}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="timestamp" stroke="#6b7280" />
-              <YAxis domain={[0, 100]} stroke="#6b7280" />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#fff',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '8px'
-                }}
-              />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="accuracy"
-                stroke="#8b5cf6"
-                strokeWidth={3}
-                name="정확도 (%)"
-                dot={{ fill: '#8b5cf6', r: 5 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+        {/* 개요 탭 */}
+        {activeTab === 'overview' && (
+          <>
+            {/* 정확도 향상 그래프 */}
+            <div className="bg-white rounded-2xl shadow-lg p-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <TrendingUp className="w-6 h-6 text-purple-500" />
+                정확도 향상 추이
+              </h2>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={accuracyHistory}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="timestamp" stroke="#6b7280" />
+                  <YAxis domain={[0, 100]} stroke="#6b7280" />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#fff',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px'
+                    }}
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="accuracy"
+                    stroke="#8b5cf6"
+                    strokeWidth={3}
+                    name="정확도 (%)"
+                    dot={{ fill: '#8b5cf6', r: 5 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </>
+        )}
 
-        {/* 가중치 분포 */}
+        {/* 괴리율 분석 탭 */}
+        {activeTab === 'deviation' && deviationAnalysis && (
+          <>
+            {/* 순위 예측 정확도 */}
+            <div className="bg-white rounded-2xl shadow-lg p-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <Target className="w-6 h-6 text-purple-500" />
+                순위 예측 정확도
+              </h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center p-4 bg-green-50 rounded-xl">
+                  <p className="text-3xl font-bold text-green-600">
+                    {deviationAnalysis.rank_accuracy?.perfect_match?.toFixed(1) || 0}%
+                  </p>
+                  <p className="text-sm text-gray-600 mt-1">정확히 일치</p>
+                </div>
+                <div className="text-center p-4 bg-blue-50 rounded-xl">
+                  <p className="text-3xl font-bold text-blue-600">
+                    {deviationAnalysis.rank_accuracy?.within_1_rank?.toFixed(1) || 0}%
+                  </p>
+                  <p className="text-sm text-gray-600 mt-1">±1 순위 이내</p>
+                </div>
+                <div className="text-center p-4 bg-purple-50 rounded-xl">
+                  <p className="text-3xl font-bold text-purple-600">
+                    {deviationAnalysis.rank_accuracy?.within_3_ranks?.toFixed(1) || 0}%
+                  </p>
+                  <p className="text-sm text-gray-600 mt-1">±3 순위 이내</p>
+                </div>
+                <div className="text-center p-4 bg-orange-50 rounded-xl">
+                  <p className="text-3xl font-bold text-orange-600">
+                    {deviationAnalysis.rank_accuracy?.within_5_ranks?.toFixed(1) || 0}%
+                  </p>
+                  <p className="text-sm text-gray-600 mt-1">±5 순위 이내</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 순위별 괴리율 차트 */}
+            <div className="bg-white rounded-2xl shadow-lg p-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-4">순위별 예측 정확도</h2>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={Object.entries(deviationAnalysis.deviation_by_rank || {}).map(([rank, data]) => ({
+                  rank: `${rank}위`,
+                  accuracy: data.accuracy,
+                  deviation: data.avg_deviation,
+                  count: data.count
+                }))}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="rank" stroke="#6b7280" />
+                  <YAxis domain={[0, 100]} stroke="#6b7280" />
+                  <Tooltip />
+                  <Bar dataKey="accuracy" fill="#8b5cf6" name="정확도 (%)" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* 가중치 영향 분석 */}
+            <div className="bg-white rounded-2xl shadow-lg p-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <Activity className="w-6 h-6 text-purple-500" />
+                가중치 영향 분석 (상위권 vs 하위권)
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {deviationAnalysis.weight_impact && Object.entries(deviationAnalysis.weight_impact).map(([factor, data]) => (
+                  <div key={factor} className="border rounded-xl p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="font-semibold text-gray-700 capitalize">{factor.replace('_', ' ')}</span>
+                      <span className="text-sm text-gray-500">가중치: {(data.current_weight * 100).toFixed(0)}%</span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500 mb-1">상위권 (1-3위)</p>
+                        <div className="flex items-center gap-2">
+                          <div className="h-6 bg-green-200 rounded" style={{ width: `${Math.min(data.top_avg, 100)}%` }} />
+                          <span className="text-sm font-medium">{data.top_avg}</span>
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500 mb-1">하위권 (10-13위)</p>
+                        <div className="flex items-center gap-2">
+                          <div className="h-6 bg-red-200 rounded" style={{ width: `${Math.min(data.bottom_avg, 100)}%` }} />
+                          <span className="text-sm font-medium">{data.bottom_avg}</span>
+                        </div>
+                      </div>
+                    </div>
+                    {data.top_avg > data.bottom_avg * 1.2 && (
+                      <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" /> 상위권에서 높음 - 정상
+                      </p>
+                    )}
+                    {data.bottom_avg > data.top_avg * 1.2 && (
+                      <p className="text-xs text-red-600 mt-2 flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" /> 하위권에서 더 높음 - 가중치 조정 필요
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 가장 큰 괴리 예측 */}
+            {deviationAnalysis.worst_predictions && deviationAnalysis.worst_predictions.length > 0 && (
+              <div className="bg-white rounded-2xl shadow-lg p-6">
+                <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                  <AlertTriangle className="w-6 h-6 text-orange-500" />
+                  가장 큰 괴리 예측 (개선 필요)
+                </h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="text-left py-2 px-3">키워드</th>
+                        <th className="text-left py-2 px-3">블로그</th>
+                        <th className="text-center py-2 px-3">실제 순위</th>
+                        <th className="text-center py-2 px-3">예측 순위</th>
+                        <th className="text-center py-2 px-3">괴리</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deviationAnalysis.worst_predictions.map((pred, idx) => (
+                        <tr key={idx} className="border-b hover:bg-red-50">
+                          <td className="py-2 px-3">{pred.keyword}</td>
+                          <td className="py-2 px-3 text-gray-600">{pred.blog_id}</td>
+                          <td className="text-center py-2 px-3 font-semibold text-green-600">{pred.actual_rank}위</td>
+                          <td className="text-center py-2 px-3 font-semibold text-purple-600">{pred.predicted_rank}위</td>
+                          <td className="text-center py-2 px-3">
+                            <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold">
+                              ±{pred.deviation}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* AI 권장사항 */}
+            {deviationAnalysis.recommendations && deviationAnalysis.recommendations.length > 0 && (
+              <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl shadow-lg p-6 text-white">
+                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <Zap className="w-6 h-6" />
+                  AI 학습 권장사항
+                </h2>
+                <ul className="space-y-2">
+                  {deviationAnalysis.recommendations.map((rec, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <CheckCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                      <span>{rec}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
+
+        {activeTab === 'deviation' && !deviationAnalysis && (
+          <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
+            <AlertTriangle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-600 mb-2">분석 데이터 부족</h3>
+            <p className="text-gray-500">키워드 검색을 통해 데이터를 수집하면 괴리율 분석이 시작됩니다.</p>
+          </div>
+        )}
+
+        {/* 실시간 조율 탭 */}
+        {activeTab === 'tuning' && (
+          <>
+            {/* 현재 가중치 상세 */}
+            <div className="bg-white rounded-2xl shadow-lg p-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-4">현재 학습된 가중치</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="border rounded-xl p-4">
+                  <h3 className="font-semibold text-purple-600 mb-3">C-Rank 세부 가중치</h3>
+                  <div className="space-y-2">
+                    {['context', 'content', 'chain'].map((sub) => (
+                      <div key={sub} className="flex items-center justify-between">
+                        <span className="text-gray-600 capitalize">{sub}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-purple-500 rounded-full"
+                              style={{ width: `${(weights.find(w => w.name === 'C-Rank')?.value || 0.5) * 100}%` }}
+                            />
+                          </div>
+                          <span className="text-sm font-medium">33%</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="border rounded-xl p-4">
+                  <h3 className="font-semibold text-pink-600 mb-3">D.I.A. 세부 가중치</h3>
+                  <div className="space-y-2">
+                    {['depth', 'information', 'accuracy'].map((sub) => (
+                      <div key={sub} className="flex items-center justify-between">
+                        <span className="text-gray-600 capitalize">{sub}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-pink-500 rounded-full"
+                              style={{ width: `${(weights.find(w => w.name === 'D.I.A.')?.value || 0.5) * 100}%` }}
+                            />
+                          </div>
+                          <span className="text-sm font-medium">33%</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <p className="text-blue-700 text-sm">
+                <strong>자동 학습 활성화:</strong> 키워드 검색 시 자동으로 네이버 실제 순위와 비교하여 가중치를 조정합니다.
+                검색 횟수가 늘어날수록 예측 정확도가 향상됩니다.
+              </p>
+            </div>
+          </>
+        )}
+
+        {/* 가중치 분포 - 개요 탭에서만 표시 */}
+        {activeTab === 'overview' && (
         <div className="bg-white rounded-2xl shadow-lg p-6">
           <h2 className="text-xl font-bold text-gray-800 mb-4">현재 가중치 분포</h2>
           <div className="space-y-4">
@@ -310,8 +628,10 @@ export default function LearningEnginePage() {
             ))}
           </div>
         </div>
+        )}
 
-        {/* 최근 학습 이력 */}
+        {/* 최근 학습 이력 - 개요 탭에서만 표시 */}
+        {activeTab === 'overview' && (
         <div className="bg-white rounded-2xl shadow-lg p-6">
           <h2 className="text-xl font-bold text-gray-800 mb-4">최근 학습 이력</h2>
           {trainingSessions.length > 0 ? (
@@ -411,6 +731,7 @@ export default function LearningEnginePage() {
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   )

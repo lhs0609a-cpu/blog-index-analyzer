@@ -41,6 +41,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Learning tables initialization failed: {e}")
 
+    # 자동 백업 스케줄러 시작
+    try:
+        from services.backup_service import backup_scheduler
+        backup_scheduler.start()
+        logger.info("✅ Backup scheduler started (hourly backups)")
+    except Exception as e:
+        logger.warning(f"⚠️ Backup scheduler failed to start: {e}")
+
     # Redis 연결 초기화 (선택적)
     if settings.REDIS_URL:
         try:
@@ -62,6 +70,15 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info(f"🛑 {settings.APP_NAME} shutting down...")
+
+    # 백업 스케줄러 중지 및 마지막 백업 생성
+    try:
+        from services.backup_service import backup_scheduler, create_backup
+        backup_scheduler.stop()
+        create_backup()  # 종료 전 마지막 백업
+        logger.info("✅ Backup scheduler stopped, final backup created")
+    except Exception as e:
+        logger.warning(f"⚠️ Backup scheduler shutdown issue: {e}")
 
     # 데이터베이스 연결 종료
     try:
@@ -87,13 +104,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS 설정
+# CORS 설정 - 모든 도메인 허용
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=["*"],  # 모든 도메인 허용
+    allow_credentials=False,  # credentials와 "*"는 함께 사용 불가
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,  # preflight 캐시 1시간
 )
 
 
@@ -153,13 +172,15 @@ async def health_check():
 
 # 라우터 등록
 from routers import auth, blogs, comprehensive_analysis, system
-from routers import learning
+from routers import learning, backup, supabase_sync
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(blogs.router, prefix="/api/blogs", tags=["블로그"])
 app.include_router(comprehensive_analysis.router, prefix="/api/comprehensive", tags=["종합분석"])
 app.include_router(system.router, prefix="/api/system", tags=["시스템"])
 app.include_router(learning.router, prefix="/api/learning", tags=["학습엔진"])
+app.include_router(backup.router, prefix="/api/backup", tags=["백업관리"])
+app.include_router(supabase_sync.router, prefix="/api/supabase", tags=["Supabase동기화"])
 
 
 if __name__ == "__main__":

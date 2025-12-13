@@ -159,6 +159,11 @@ class Settings(BaseSettings):
     NAVER_AD_API_KEY: str = ""
     NAVER_AD_SECRET_KEY: str = ""
 
+    # Supabase (External backup & persistent storage)
+    SUPABASE_URL: str = ""
+    SUPABASE_KEY: str = ""  # anon key (public)
+    SUPABASE_SERVICE_KEY: str = ""  # service role key (private)
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

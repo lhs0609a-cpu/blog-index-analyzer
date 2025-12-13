@@ -9,8 +9,8 @@ import os
 
 logger = logging.getLogger(__name__)
 
-# Database path
-DATABASE_PATH = os.environ.get("DATABASE_PATH", "/app/blog_analyzer.db")
+# Database path - use persistent volume
+DATABASE_PATH = os.environ.get("DATABASE_PATH", "/app/data/blog_analyzer.db")
 
 
 class SQLiteClient:
