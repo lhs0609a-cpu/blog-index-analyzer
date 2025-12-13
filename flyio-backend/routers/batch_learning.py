@@ -984,8 +984,8 @@ async def run_batch_learning(
 
             logger.info(f"Completed {keyword}: {blogs_analyzed} blogs analyzed")
 
-            # 50개 키워드마다 모델 학습 실행
-            if learning_state["completed_keywords"] % 50 == 0:
+            # 10개 키워드마다 모델 학습 실행
+            if learning_state["completed_keywords"] % 10 == 0:
                 await run_model_training()
 
             # 키워드 간 딜레이 (네이버 차단 방지)
