@@ -433,33 +433,75 @@ def get_keywords_from_pool(count: int, categories: List[str] = None, exclude_ana
     return all_keywords[:count]
 
 
-async def expand_keywords_with_related(base_keywords: List[str], target_count: int) -> List[str]:
-    """네이버 연관 검색어를 활용하여 키워드 확장"""
+async def expand_keywords_with_related(base_keywords: List[str], target_count: int, exclude_analyzed: bool = True) -> List[str]:
+    """
+    네이버 연관 검색어를 활용하여 키워드를 대량 확장
+    - 기본 키워드에서 자동완성 API로 연관 키워드 추출
+    - 연관 키워드에서 다시 연관 키워드 추출 (2단계 확장)
+    - 이미 분석한 키워드 제외
+    """
     import httpx
+    global analyzed_keywords_history
 
     expanded = set(base_keywords)
+    processed = set()  # 이미 확장 처리한 키워드
+
+    logger.info(f"Starting keyword expansion: {len(base_keywords)} base -> target {target_count}")
 
     async with httpx.AsyncClient() as client:
-        for keyword in base_keywords[:50]:  # 기본 키워드 50개에서 연관어 추출
-            if len(expanded) >= target_count:
+        # 1단계: 기본 키워드에서 연관어 추출
+        keywords_to_expand = list(base_keywords)
+        round_num = 1
+
+        while len(expanded) < target_count and keywords_to_expand:
+            logger.info(f"Expansion round {round_num}: {len(expanded)} keywords, processing {len(keywords_to_expand)} seeds")
+            new_keywords = []
+
+            for keyword in keywords_to_expand:
+                if keyword in processed:
+                    continue
+                if len(expanded) >= target_count:
+                    break
+
+                processed.add(keyword)
+
+                try:
+                    # 네이버 검색 자동완성 API
+                    url = f"https://ac.search.naver.com/nx/ac?q={keyword}&con=1&frm=nv&ans=2&r_format=json&r_enc=UTF-8&r_unicode=0&t_koreng=1&run=2&rev=4&q_enc=UTF-8"
+                    resp = await client.get(url, timeout=3.0)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        items = data.get("items", [[]])
+                        if items and len(items) > 0:
+                            for item in items[0][:10]:  # 각 키워드당 최대 10개 연관어
+                                if isinstance(item, list) and len(item) > 0:
+                                    new_kw = item[0]
+                                    if new_kw not in expanded and new_kw not in processed:
+                                        expanded.add(new_kw)
+                                        new_keywords.append(new_kw)
+
+                    await asyncio.sleep(0.05)  # 요청 간 딜레이 (50ms)
+
+                except Exception as e:
+                    logger.warning(f"Failed to get related keywords for {keyword}: {e}")
+
+            # 다음 라운드를 위해 새로 발견한 키워드를 시드로 사용
+            keywords_to_expand = new_keywords[:200]  # 다음 라운드에 사용할 키워드 수 제한
+            round_num += 1
+
+            # 최대 5라운드까지만
+            if round_num > 5:
                 break
-            try:
-                # 네이버 검색 자동완성 API 활용
-                url = f"https://ac.search.naver.com/nx/ac?q={keyword}&con=1&frm=nv&ans=2&r_format=json&r_enc=UTF-8&r_unicode=0&t_koreng=1&run=2&rev=4&q_enc=UTF-8"
-                resp = await client.get(url, timeout=3.0)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    items = data.get("items", [[]])
-                    if items and len(items) > 0:
-                        for item in items[0][:5]:  # 각 키워드당 최대 5개 연관어
-                            if isinstance(item, list) and len(item) > 0:
-                                expanded.add(item[0])
-                await asyncio.sleep(0.1)  # 요청 간 딜레이
-            except Exception as e:
-                logger.warning(f"Failed to get related keywords for {keyword}: {e}")
+
+    # 이미 분석한 키워드 제외
+    if exclude_analyzed and analyzed_keywords_history:
+        before_count = len(expanded)
+        expanded = expanded - analyzed_keywords_history
+        logger.info(f"Excluded {before_count - len(expanded)} already analyzed keywords")
 
     result = list(expanded)
     random.shuffle(result)
+    logger.info(f"Keyword expansion complete: {len(result)} keywords available")
     return result[:target_count]
 
 
@@ -472,6 +514,7 @@ class BatchLearningRequest(BaseModel):
     categories: Optional[List[str]] = None
     delay_between_keywords: float = 3.0  # 키워드 간 대기 시간 (초)
     delay_between_blogs: float = 0.5  # 블로그 간 대기 시간 (초)
+    expand_keywords: bool = True  # 연관 키워드 자동 확장 여부
 
 
 class BatchLearningStatus(BaseModel):
@@ -500,11 +543,29 @@ async def start_batch_learning(
     if learning_state["is_running"]:
         raise HTTPException(status_code=400, detail="학습이 이미 진행 중입니다")
 
-    # 키워드 선택
-    keywords = get_keywords_from_pool(request.keyword_count, request.categories)
+    # 기본 키워드 선택 (시드)
+    base_keywords = get_keywords_from_pool(
+        min(request.keyword_count, 500),  # 시드는 최대 500개
+        request.categories,
+        exclude_analyzed=True
+    )
+
+    if not base_keywords:
+        raise HTTPException(status_code=400, detail="선택된 카테고리에 가용 키워드가 없습니다 (이미 모두 분석됨)")
+
+    # 키워드 확장이 필요하면 연관 키워드로 확장
+    if request.expand_keywords and request.keyword_count > len(base_keywords):
+        logger.info(f"Expanding keywords: {len(base_keywords)} -> {request.keyword_count}")
+        keywords = await expand_keywords_with_related(
+            base_keywords,
+            request.keyword_count,
+            exclude_analyzed=True
+        )
+    else:
+        keywords = base_keywords[:request.keyword_count]
 
     if not keywords:
-        raise HTTPException(status_code=400, detail="선택된 카테고리에 키워드가 없습니다")
+        raise HTTPException(status_code=400, detail="키워드 확장 후에도 가용 키워드가 없습니다")
 
     # 현재 정확도 기록
     try:
