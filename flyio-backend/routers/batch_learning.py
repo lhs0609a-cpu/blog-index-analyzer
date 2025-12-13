@@ -437,61 +437,81 @@ async def expand_keywords_with_related(base_keywords: List[str], target_count: i
     """
     네이버 연관 검색어를 활용하여 키워드를 대량 확장
     - 기본 키워드에서 자동완성 API로 연관 키워드 추출
-    - 연관 키워드에서 다시 연관 키워드 추출 (2단계 확장)
+    - 키워드 조합으로 추가 확장 (예: "강남" + "맛집" → "강남역맛집", "강남점심맛집" 등)
     - 이미 분석한 키워드 제외
     """
     import httpx
+    import urllib.parse
     global analyzed_keywords_history
 
     expanded = set(base_keywords)
-    processed = set()  # 이미 확장 처리한 키워드
+    processed = set()
 
     logger.info(f"Starting keyword expansion: {len(base_keywords)} base -> target {target_count}")
 
-    async with httpx.AsyncClient() as client:
-        # 1단계: 기본 키워드에서 연관어 추출
-        keywords_to_expand = list(base_keywords)
-        round_num = 1
+    # 1단계: 키워드 조합으로 먼저 확장 (API 호출 없이)
+    suffixes = ["추천", "맛집", "병원", "치과", "피부과", "학원", "가격", "비용", "후기", "리뷰",
+                "순위", "비교", "TOP10", "인기", "유명", "좋은", "괜찮은", "저렴한", "싼", "최고",
+                "강남", "홍대", "신촌", "이태원", "부산", "대구", "인천", "수원", "분당", "판교"]
+    prefixes = ["강남", "홍대", "신촌", "서울", "부산", "대구", "인천", "경기", "수원", "분당",
+                "최고의", "인기", "유명", "추천", "2024", "2025"]
 
-        while len(expanded) < target_count and keywords_to_expand:
-            logger.info(f"Expansion round {round_num}: {len(expanded)} keywords, processing {len(keywords_to_expand)} seeds")
-            new_keywords = []
+    for base in list(base_keywords)[:100]:  # 처음 100개 키워드만 조합
+        if len(expanded) >= target_count:
+            break
+        for suffix in suffixes[:10]:
+            combined = f"{base}{suffix}"
+            if combined not in expanded:
+                expanded.add(combined)
+        for prefix in prefixes[:5]:
+            combined = f"{prefix}{base}"
+            if combined not in expanded:
+                expanded.add(combined)
 
-            for keyword in keywords_to_expand:
-                if keyword in processed:
-                    continue
-                if len(expanded) >= target_count:
-                    break
+    logger.info(f"After combination expansion: {len(expanded)} keywords")
 
-                processed.add(keyword)
+    # 2단계: 네이버 자동완성 API로 추가 확장
+    if len(expanded) < target_count:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            keywords_to_expand = list(base_keywords)[:200]
+            round_num = 1
 
-                try:
-                    # 네이버 검색 자동완성 API
-                    url = f"https://ac.search.naver.com/nx/ac?q={keyword}&con=1&frm=nv&ans=2&r_format=json&r_enc=UTF-8&r_unicode=0&t_koreng=1&run=2&rev=4&q_enc=UTF-8"
-                    resp = await client.get(url, timeout=3.0)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        items = data.get("items", [[]])
-                        if items and len(items) > 0:
-                            for item in items[0][:10]:  # 각 키워드당 최대 10개 연관어
-                                if isinstance(item, list) and len(item) > 0:
-                                    new_kw = item[0]
-                                    if new_kw not in expanded and new_kw not in processed:
-                                        expanded.add(new_kw)
-                                        new_keywords.append(new_kw)
+            while len(expanded) < target_count and keywords_to_expand and round_num <= 10:
+                logger.info(f"API expansion round {round_num}: {len(expanded)} keywords")
+                new_keywords = []
 
-                    await asyncio.sleep(0.05)  # 요청 간 딜레이 (50ms)
+                for keyword in keywords_to_expand:
+                    if keyword in processed:
+                        continue
+                    if len(expanded) >= target_count:
+                        break
 
-                except Exception as e:
-                    logger.warning(f"Failed to get related keywords for {keyword}: {e}")
+                    processed.add(keyword)
 
-            # 다음 라운드를 위해 새로 발견한 키워드를 시드로 사용
-            keywords_to_expand = new_keywords[:200]  # 다음 라운드에 사용할 키워드 수 제한
-            round_num += 1
+                    try:
+                        encoded_kw = urllib.parse.quote(keyword)
+                        url = f"https://ac.search.naver.com/nx/ac?q={encoded_kw}&con=1&frm=nv&ans=2&r_format=json&r_enc=UTF-8&r_unicode=0&t_koreng=1&run=2&rev=4&q_enc=UTF-8"
+                        resp = await client.get(url)
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            items = data.get("items", [[]])
+                            if items and len(items) > 0:
+                                for item in items[0][:10]:
+                                    if isinstance(item, list) and len(item) > 0:
+                                        new_kw = item[0]
+                                        if new_kw not in expanded and new_kw not in processed:
+                                            expanded.add(new_kw)
+                                            new_keywords.append(new_kw)
 
-            # 최대 5라운드까지만
-            if round_num > 5:
-                break
+                        await asyncio.sleep(0.02)  # 20ms 딜레이
+
+                    except Exception as e:
+                        logger.warning(f"API error for {keyword}: {e}")
+
+                keywords_to_expand = new_keywords[:300]
+                round_num += 1
+
+    logger.info(f"After API expansion: {len(expanded)} keywords")
 
     # 이미 분석한 키워드 제외
     if exclude_analyzed and analyzed_keywords_history:
