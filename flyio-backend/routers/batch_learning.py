@@ -825,7 +825,7 @@ async def run_batch_learning(
     global learning_state, learning_logs
 
     # 필요한 모듈 임포트
-    from routers.blogs import fetch_naver_search_results, analyze_blog
+    from routers.blogs import fetch_naver_search_results, analyze_blog, analyze_post
 
     logger.info(f"Starting batch learning: {len(keywords)} keywords")
 
@@ -868,20 +868,46 @@ async def run_batch_learning(
                 try:
                     blog_id = result["blog_id"]
                     actual_rank = result["rank"]
-                    post_title = result.get("title", "")
+                    post_title = result.get("post_title", result.get("title", ""))
                     blog_name = result.get("blog_name", blog_id)
+                    post_url = result.get("post_url", "")
 
-                    # 블로그 분석
+                    # 1. 블로그 분석 (전체 블로그 품질)
                     analysis = await analyze_blog(blog_id)
                     stats = analysis.get("stats", {})
                     index = analysis.get("index", {})
 
-                    # 학습 샘플 저장
+                    # 2. 개별 글 분석 (상위 노출된 해당 글의 특성)
+                    post_features = {}
+                    if post_url:
+                        try:
+                            post_analysis = await analyze_post(post_url, keyword)
+                            post_features = {
+                                "title_has_keyword": post_analysis.get("title_has_keyword", False),
+                                "title_keyword_position": post_analysis.get("title_keyword_position", -1),
+                                "content_length": post_analysis.get("content_length", 0),
+                                "image_count": post_analysis.get("image_count", 0),
+                                "video_count": post_analysis.get("video_count", 0),
+                                "keyword_count": post_analysis.get("keyword_count", 0),
+                                "keyword_density": post_analysis.get("keyword_density", 0),
+                                "heading_count": post_analysis.get("heading_count", 0),
+                                "paragraph_count": post_analysis.get("paragraph_count", 0),
+                                "has_map": post_analysis.get("has_map", False),
+                                "has_link": post_analysis.get("has_link", False),
+                                "like_count": post_analysis.get("like_count", 0),
+                                "comment_count": post_analysis.get("comment_count", 0),
+                                "post_age_days": post_analysis.get("post_age_days"),
+                            }
+                        except Exception as e:
+                            logger.warning(f"Post analysis failed for {post_url}: {e}")
+
+                    # 학습 샘플 저장 (블로그 + 글 특성 통합)
                     breakdown = index.get("score_breakdown", {})
                     c_rank_detail = breakdown.get("c_rank_detail", {})
                     dia_detail = breakdown.get("dia_detail", {})
 
                     blog_features = {
+                        # 블로그 전체 특성
                         "c_rank_score": breakdown.get("c_rank", 0),
                         "dia_score": breakdown.get("dia", 0),
                         "context_score": c_rank_detail.get("context", 50),
@@ -892,7 +918,9 @@ async def run_batch_learning(
                         "accuracy_score": dia_detail.get("accuracy", 50),
                         "post_count": stats.get("total_posts", 0),
                         "neighbor_count": stats.get("neighbor_count", 0),
-                        "visitor_count": stats.get("total_visitors", 0)
+                        "visitor_count": stats.get("total_visitors", 0),
+                        # 개별 글 특성 추가
+                        **post_features
                     }
 
                     add_learning_sample(
@@ -903,17 +931,29 @@ async def run_batch_learning(
                         blog_features=blog_features
                     )
 
-                    # 블로그 로그 저장
+                    # 블로그 + 글 로그 저장
                     keyword_log["blogs"].append({
                         "blog_id": blog_id,
                         "blog_name": blog_name,
                         "post_title": post_title,
+                        "post_url": post_url,
                         "actual_rank": actual_rank,
                         "predicted_score": round(index.get("total_score", 0), 1),
                         "c_rank": round(breakdown.get("c_rank", 0), 1),
                         "dia": round(breakdown.get("dia", 0), 1),
                         "post_count": stats.get("total_posts", 0),
-                        "blog_url": f"https://blog.naver.com/{blog_id}"
+                        "blog_url": f"https://blog.naver.com/{blog_id}",
+                        # 글 분석 결과 추가
+                        "post_analysis": {
+                            "content_length": post_features.get("content_length", 0),
+                            "image_count": post_features.get("image_count", 0),
+                            "video_count": post_features.get("video_count", 0),
+                            "keyword_count": post_features.get("keyword_count", 0),
+                            "keyword_density": post_features.get("keyword_density", 0),
+                            "title_has_keyword": post_features.get("title_has_keyword", False),
+                            "heading_count": post_features.get("heading_count", 0),
+                            "has_map": post_features.get("has_map", False),
+                        } if post_features else None
                     })
 
                     blogs_analyzed += 1

@@ -87,6 +87,29 @@ def init_learning_tables():
         except:
             pass
 
+        # Add post analysis columns to learning_samples (for existing databases)
+        post_columns = [
+            ("title_has_keyword", "INTEGER DEFAULT 0"),
+            ("title_keyword_position", "INTEGER DEFAULT -1"),
+            ("content_length", "INTEGER DEFAULT 0"),
+            ("image_count", "INTEGER DEFAULT 0"),
+            ("video_count", "INTEGER DEFAULT 0"),
+            ("keyword_count", "INTEGER DEFAULT 0"),
+            ("keyword_density", "REAL DEFAULT 0"),
+            ("heading_count", "INTEGER DEFAULT 0"),
+            ("paragraph_count", "INTEGER DEFAULT 0"),
+            ("has_map", "INTEGER DEFAULT 0"),
+            ("has_link", "INTEGER DEFAULT 0"),
+            ("like_count", "INTEGER DEFAULT 0"),
+            ("comment_count", "INTEGER DEFAULT 0"),
+            ("post_age_days", "INTEGER"),
+        ]
+        for col_name, col_type in post_columns:
+            try:
+                cursor.execute(f"ALTER TABLE learning_samples ADD COLUMN {col_name} {col_type}")
+            except:
+                pass
+
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_started_at ON learning_sessions(started_at)")
 
         # 3. weight_history table
@@ -175,27 +198,47 @@ def add_learning_sample(
     predicted_score: float,
     blog_features: Dict
 ) -> int:
-    """Add a learning sample"""
+    """Add a learning sample with blog + post features"""
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO learning_samples (
                 keyword, blog_id, actual_rank, predicted_score,
                 c_rank_score, dia_score, post_count, neighbor_count,
-                blog_age_days, recent_posts_30d, visitor_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                blog_age_days, recent_posts_30d, visitor_count,
+                title_has_keyword, title_keyword_position, content_length,
+                image_count, video_count, keyword_count, keyword_density,
+                heading_count, paragraph_count, has_map, has_link,
+                like_count, comment_count, post_age_days
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             keyword,
             blog_id,
             actual_rank,
             predicted_score,
+            # 블로그 전체 특성
             blog_features.get('c_rank_score'),
             blog_features.get('dia_score'),
             blog_features.get('post_count'),
             blog_features.get('neighbor_count'),
             blog_features.get('blog_age_days'),
             blog_features.get('recent_posts_30d'),
-            blog_features.get('visitor_count')
+            blog_features.get('visitor_count'),
+            # 개별 글 특성
+            1 if blog_features.get('title_has_keyword') else 0,
+            blog_features.get('title_keyword_position', -1),
+            blog_features.get('content_length', 0),
+            blog_features.get('image_count', 0),
+            blog_features.get('video_count', 0),
+            blog_features.get('keyword_count', 0),
+            blog_features.get('keyword_density', 0),
+            blog_features.get('heading_count', 0),
+            blog_features.get('paragraph_count', 0),
+            1 if blog_features.get('has_map') else 0,
+            1 if blog_features.get('has_link') else 0,
+            blog_features.get('like_count', 0),
+            blog_features.get('comment_count', 0),
+            blog_features.get('post_age_days'),
         ))
         return cursor.lastrowid
 

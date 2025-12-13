@@ -26,16 +26,29 @@ interface Category {
   count: number;
 }
 
+interface PostAnalysis {
+  content_length: number;
+  image_count: number;
+  video_count: number;
+  keyword_count: number;
+  keyword_density: number;
+  title_has_keyword: boolean;
+  heading_count: number;
+  has_map: boolean;
+}
+
 interface BlogLog {
   blog_id: string;
   blog_name: string;
   post_title: string;
+  post_url: string;
   actual_rank: number;
   predicted_score: number;
   c_rank: number;
   dia: number;
   post_count: number;
   blog_url: string;
+  post_analysis?: PostAnalysis | null;
 }
 
 interface KeywordLog {
@@ -510,12 +523,13 @@ export default function BatchLearningPage() {
                         </p>
                       </div>
 
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         {keywordDetail.blogs.map((blog, idx) => (
                           <div
                             key={idx}
                             className="p-3 bg-gray-50 rounded-lg border border-gray-100"
                           >
+                            {/* 블로그 정보 헤더 */}
                             <div className="flex items-center gap-2 mb-1">
                               <span className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
                                 {blog.actual_rank}
@@ -529,8 +543,19 @@ export default function BatchLearningPage() {
                                 {blog.blog_name}
                               </a>
                             </div>
-                            <p className="text-sm text-gray-600 truncate mb-2">{blog.post_title || '(제목 없음)'}</p>
-                            <div className="flex gap-2 text-xs">
+
+                            {/* 글 제목 (클릭 가능) */}
+                            <a
+                              href={blog.post_url || blog.blog_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-blue-600 hover:text-blue-800 hover:underline truncate block mb-2"
+                            >
+                              📄 {blog.post_title || '(제목 없음)'}
+                            </a>
+
+                            {/* 블로그 점수 */}
+                            <div className="flex flex-wrap gap-2 text-xs mb-2">
                               <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">
                                 점수: {blog.predicted_score}
                               </span>
@@ -541,9 +566,47 @@ export default function BatchLearningPage() {
                                 D.I.A: {blog.dia}
                               </span>
                               <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded">
-                                글: {blog.post_count}개
+                                전체글: {blog.post_count}개
                               </span>
                             </div>
+
+                            {/* 글 분석 결과 */}
+                            {blog.post_analysis && (
+                              <div className="mt-2 pt-2 border-t border-gray-200">
+                                <p className="text-xs text-gray-500 mb-1.5 font-medium">📊 글 분석</p>
+                                <div className="flex flex-wrap gap-1.5 text-xs">
+                                  {blog.post_analysis.title_has_keyword && (
+                                    <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full">
+                                      ✓ 제목에 키워드
+                                    </span>
+                                  )}
+                                  <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full">
+                                    📝 {blog.post_analysis.content_length.toLocaleString()}자
+                                  </span>
+                                  <span className="px-2 py-0.5 bg-pink-100 text-pink-700 rounded-full">
+                                    🖼️ {blog.post_analysis.image_count}장
+                                  </span>
+                                  {blog.post_analysis.video_count > 0 && (
+                                    <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full">
+                                      🎬 {blog.post_analysis.video_count}개
+                                    </span>
+                                  )}
+                                  <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full">
+                                    🔑 키워드 {blog.post_analysis.keyword_count}회
+                                  </span>
+                                  {blog.post_analysis.heading_count > 0 && (
+                                    <span className="px-2 py-0.5 bg-cyan-100 text-cyan-700 rounded-full">
+                                      📑 소제목 {blog.post_analysis.heading_count}개
+                                    </span>
+                                  )}
+                                  {blog.post_analysis.has_map && (
+                                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full">
+                                      🗺️ 지도
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
