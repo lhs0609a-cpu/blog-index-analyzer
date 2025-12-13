@@ -201,7 +201,8 @@
       "Bash(powershell -ExecutionPolicy Bypass -Command \"flyctl logs -a naverpay-delivery-tracker -n 100 2>&1\")",
       "Bash(Select-Object -First 100)",
       "Bash(powershell -ExecutionPolicy Bypass -Command \"flyctl deploy 2>&1\")",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "Bash(start https://blog-index-analyzer.vercel.app/dashboard/batch-learning)"
     ],
     "deny": [],
     "ask": []
