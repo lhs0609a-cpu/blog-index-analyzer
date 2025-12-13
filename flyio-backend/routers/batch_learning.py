@@ -816,6 +816,65 @@ async def reset_analyzed_history():
     }
 
 
+@router.post("/reset-weights")
+async def reset_weights_to_default():
+    """가중치를 초기값으로 리셋"""
+    from services.learning_engine import DEFAULT_WEIGHTS
+    import json
+
+    default_weights = json.loads(json.dumps(DEFAULT_WEIGHTS))
+    save_current_weights(default_weights)
+
+    return {
+        "success": True,
+        "message": "가중치가 초기값으로 리셋되었습니다",
+        "weights": default_weights
+    }
+
+
+@router.post("/clear-learning-data")
+async def clear_learning_data():
+    """학습 데이터 전체 초기화 (가중치 + 샘플 + 히스토리)"""
+    global analyzed_keywords_history, learning_logs, learning_state
+    from services.learning_engine import DEFAULT_WEIGHTS
+    from database.learning_db import clear_all_samples
+    import json
+
+    # 1. 가중치 초기화
+    default_weights = json.loads(json.dumps(DEFAULT_WEIGHTS))
+    save_current_weights(default_weights)
+
+    # 2. 학습 샘플 삭제
+    try:
+        clear_all_samples()
+    except:
+        pass
+
+    # 3. 히스토리 초기화
+    history_count = len(analyzed_keywords_history)
+    analyzed_keywords_history = set()
+
+    # 4. 로그 초기화
+    learning_logs = {
+        "keywords": [],
+        "keyword_details": {}
+    }
+
+    # 5. 상태 초기화
+    learning_state["accuracy_before"] = 0
+    learning_state["accuracy_after"] = 0
+
+    return {
+        "success": True,
+        "message": "모든 학습 데이터가 초기화되었습니다",
+        "cleared": {
+            "weights": "reset to default",
+            "history_count": history_count,
+            "samples": "cleared"
+        }
+    }
+
+
 # ========================================
 # 백그라운드 학습 함수
 # ========================================
@@ -1011,7 +1070,7 @@ async def run_batch_learning(
 
 
 async def run_model_training():
-    """수집된 데이터로 모델 학습"""
+    """수집된 데이터로 모델 학습 - 정확도가 향상될 때만 가중치 저장"""
     global learning_state
 
     try:
@@ -1029,8 +1088,18 @@ async def run_model_training():
                     learning_rate=0.03,
                     momentum=0.9
                 )
-                save_current_weights(new_weights)
-                learning_state["accuracy_after"] = info.get("final_accuracy", 0)
-                logger.info(f"Model trained: accuracy {info.get('initial_accuracy', 0):.1f}% -> {info.get('final_accuracy', 0):.1f}%")
+
+                initial_accuracy = info.get("initial_accuracy", 0)
+                final_accuracy = info.get("final_accuracy", 0)
+
+                # 정확도가 향상되었을 때만 가중치 저장
+                if final_accuracy >= initial_accuracy:
+                    save_current_weights(new_weights)
+                    learning_state["accuracy_after"] = final_accuracy
+                    logger.info(f"Model improved: accuracy {initial_accuracy:.1f}% -> {final_accuracy:.1f}% (saved)")
+                else:
+                    # 정확도가 낮아지면 가중치 롤백 (저장 안 함)
+                    learning_state["accuracy_after"] = initial_accuracy
+                    logger.warning(f"Model accuracy decreased: {initial_accuracy:.1f}% -> {final_accuracy:.1f}% (rollback)")
     except Exception as e:
         logger.error(f"Model training failed: {e}")

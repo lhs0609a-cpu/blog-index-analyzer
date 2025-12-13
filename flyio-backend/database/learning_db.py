@@ -354,6 +354,19 @@ def get_learning_statistics() -> Dict:
             "training_count": training_count
         }
 
+
+def clear_all_samples():
+    """Delete all learning samples and sessions - for complete reset"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM learning_samples")
+        cursor.execute("DELETE FROM learning_sessions")
+        cursor.execute("DELETE FROM weight_history")
+        return {
+            "samples_deleted": cursor.rowcount
+        }
+
+
 # Initialize tables on import
 try:
     init_learning_tables()
