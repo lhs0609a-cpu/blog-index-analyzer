@@ -11,6 +11,7 @@ interface LearningStatus {
   total_keywords: number;
   completed_keywords: number;
   total_blogs_analyzed: number;
+  total_posts_analyzed: number;
   progress_percent: number;
   start_time: string | null;
   estimated_remaining_minutes: number;
@@ -388,7 +389,7 @@ export default function BatchLearningPage() {
                 </div>
 
                 {/* 통계 그리드 */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
                   <div className="p-4 bg-gray-50 rounded-xl text-center">
                     <div className="text-2xl font-bold text-gray-800">
                       {status.completed_keywords}
@@ -400,6 +401,12 @@ export default function BatchLearningPage() {
                       {status.total_blogs_analyzed}
                     </div>
                     <div className="text-sm text-gray-600">분석된 블로그</div>
+                  </div>
+                  <div className="p-4 bg-purple-50 rounded-xl text-center">
+                    <div className="text-2xl font-bold text-purple-600">
+                      {status.total_posts_analyzed || 0}
+                    </div>
+                    <div className="text-sm text-gray-600">분석된 포스팅</div>
                   </div>
                   <div className="p-4 bg-gray-50 rounded-xl text-center">
                     <div className="text-2xl font-bold text-blue-600">

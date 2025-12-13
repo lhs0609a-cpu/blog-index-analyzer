@@ -28,6 +28,7 @@ learning_state = {
     "total_keywords": 0,
     "completed_keywords": 0,
     "total_blogs_analyzed": 0,
+    "total_posts_analyzed": 0,  # 글 분석 완료 수
     "start_time": None,
     "estimated_end_time": None,
     "errors": [],
@@ -543,6 +544,7 @@ class BatchLearningStatus(BaseModel):
     total_keywords: int
     completed_keywords: int
     total_blogs_analyzed: int
+    total_posts_analyzed: int  # 글 분석 완료 수
     progress_percent: float
     start_time: Optional[str]
     estimated_remaining_minutes: float
@@ -601,6 +603,7 @@ async def start_batch_learning(
         "total_keywords": len(keywords),
         "completed_keywords": 0,
         "total_blogs_analyzed": 0,
+        "total_posts_analyzed": 0,
         "start_time": datetime.now().isoformat(),
         "estimated_end_time": None,
         "errors": [],
@@ -678,6 +681,7 @@ async def get_learning_status():
         total_keywords=learning_state["total_keywords"],
         completed_keywords=learning_state["completed_keywords"],
         total_blogs_analyzed=learning_state["total_blogs_analyzed"],
+        total_posts_analyzed=learning_state.get("total_posts_analyzed", 0),
         progress_percent=round(progress, 1),
         start_time=learning_state["start_time"],
         estimated_remaining_minutes=round(remaining_minutes, 1),
@@ -958,6 +962,10 @@ async def run_batch_learning(
 
                     blogs_analyzed += 1
                     learning_state["total_blogs_analyzed"] += 1
+
+                    # 글 분석이 성공했으면 카운트 증가
+                    if post_features and post_features.get("content_length", 0) > 0:
+                        learning_state["total_posts_analyzed"] += 1
 
                     # 블로그 간 딜레이 (네이버 차단 방지)
                     await asyncio.sleep(delay_between_blogs)

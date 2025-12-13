@@ -202,7 +202,8 @@
       "Bash(Select-Object -First 100)",
       "Bash(powershell -ExecutionPolicy Bypass -Command \"flyctl deploy 2>&1\")",
       "Bash(powershell:*)",
-      "Bash(start https://blog-index-analyzer.vercel.app/dashboard/batch-learning)"
+      "Bash(start https://blog-index-analyzer.vercel.app/dashboard/batch-learning)",
+      "Bash(start cmd /k \"cd /d G:\\내 드라이브\\developer\\blog-index-analyzer\\frontend && npm run dev -- -p 3006\")"
     ],
     "deny": [],
     "ask": []
