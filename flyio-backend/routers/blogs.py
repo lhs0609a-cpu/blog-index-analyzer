@@ -13,6 +13,7 @@ import json
 import logging
 import re
 import random
+import asyncio
 from bs4 import BeautifulSoup
 
 from config import settings
@@ -355,7 +356,7 @@ async def fetch_via_mobile_web(keyword: str, limit: int) -> List[Dict]:
 
 
 async def analyze_blog(blog_id: str) -> Dict:
-    """Analyze a single blog and get stats using Playwright + API fallback"""
+    """Analyze a single blog - FAST version using API only (no Playwright)"""
     stats = {
         "total_posts": None,
         "neighbor_count": None,
@@ -384,43 +385,7 @@ async def analyze_blog(blog_id: str) -> Dict:
     }
 
     try:
-        # ==============================================
-        # METHOD 1: Try Playwright scraper first (most accurate)
-        # ==============================================
-        try:
-            from services.blog_scraper import get_full_blog_analysis
-            scraped_data = await get_full_blog_analysis(blog_id)
-
-            if scraped_data.get("total_posts"):
-                stats["total_posts"] = scraped_data["total_posts"]
-                analysis_data["data_sources"].extend(scraped_data.get("data_sources", []))
-
-            if scraped_data.get("neighbor_count"):
-                stats["neighbor_count"] = scraped_data["neighbor_count"]
-
-            if scraped_data.get("total_visitors"):
-                stats["total_visitors"] = scraped_data["total_visitors"]
-
-            if scraped_data.get("category_count"):
-                analysis_data["category_count"] = scraped_data["category_count"]
-
-            if scraped_data.get("avg_post_length"):
-                analysis_data["avg_post_length"] = scraped_data["avg_post_length"]
-
-            if scraped_data.get("recent_activity") is not None:
-                analysis_data["recent_activity"] = scraped_data["recent_activity"]
-
-            if scraped_data.get("has_profile_image"):
-                analysis_data["has_profile_image"] = True
-
-            logger.info(f"Playwright scraping for {blog_id}: posts={stats['total_posts']}, neighbors={stats['neighbor_count']}, visitors={stats['total_visitors']}")
-
-        except Exception as e:
-            logger.warning(f"Playwright scraping failed for {blog_id}: {e}")
-
-        # ==============================================
-        # METHOD 2: API fallback if Playwright didn't get all data
-        # ==============================================
+        # ===== 모든 API를 병렬로 호출 (속도 개선) =====
         headers = {
             "User-Agent": random.choice(USER_AGENTS),
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -428,104 +393,109 @@ async def analyze_blog(blog_id: str) -> Dict:
             "Referer": "https://blog.naver.com/",
         }
 
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-            # Try API methods if Playwright didn't get data
-            if not stats["total_visitors"]:
+        async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+            # 모든 API 요청을 동시에 실행
+            async def fetch_visitors():
                 try:
-                    blog_info_url = f"https://blog.naver.com/NVisitorg498Ajax.naver?blogId={blog_id}"
-                    info_response = await client.get(blog_info_url, headers=headers)
-                    if info_response.status_code == 200:
-                        info_text = info_response.text
-                        visitor_match = re.search(r'"visitorcnt"\s*:\s*"?(\d+)"?', info_text)
-                        if visitor_match:
-                            stats["total_visitors"] = int(visitor_match.group(1))
-                            analysis_data["data_sources"].append("visitor_api")
-                            logger.info(f"API fallback: {blog_id} visitors: {stats['total_visitors']}")
-                except Exception as e:
-                    logger.debug(f"Visitor API failed for {blog_id}: {e}")
+                    url = f"https://blog.naver.com/NVisitorg498Ajax.naver?blogId={blog_id}"
+                    resp = await client.get(url, headers=headers)
+                    if resp.status_code == 200:
+                        match = re.search(r'"visitorcnt"\s*:\s*"?(\d+)"?', resp.text)
+                        if match:
+                            return int(match.group(1))
+                except:
+                    pass
+                return None
 
-            if not stats["total_posts"]:
+            async def fetch_posts_and_categories():
                 try:
-                    category_url = f"https://blog.naver.com/NBlogCategoryListAjax.naver?blogId={blog_id}"
-                    cat_response = await client.get(category_url, headers=headers)
-                    if cat_response.status_code == 200:
-                        cat_text = cat_response.text
+                    url = f"https://blog.naver.com/NBlogCategoryListAjax.naver?blogId={blog_id}"
+                    resp = await client.get(url, headers=headers)
+                    if resp.status_code == 200:
+                        cat_count = resp.text.count('"categoryNo"')
+                        post_counts = re.findall(r'"postCnt"\s*:\s*(\d+)', resp.text)
+                        total_posts = sum(int(c) for c in post_counts) if post_counts else None
+                        return total_posts, cat_count
+                except:
+                    pass
+                return None, 0
 
-                        category_count = cat_text.count('"categoryNo"')
-                        if category_count > 0:
-                            analysis_data["category_count"] = category_count
-
-                        post_counts = re.findall(r'"postCnt"\s*:\s*(\d+)', cat_text)
-                        if post_counts:
-                            total = sum(int(c) for c in post_counts)
-                            if total > 0:
-                                stats["total_posts"] = total
-                                analysis_data["data_sources"].append("category_api")
-                                logger.info(f"API fallback: {blog_id} posts: {total}")
-                except Exception as e:
-                    logger.debug(f"Category API failed for {blog_id}: {e}")
-
-            if not stats["neighbor_count"]:
+            async def fetch_neighbors():
                 try:
-                    buddy_url = f"https://blog.naver.com/NBlogBuddyListAjax.naver?blogId={blog_id}&currentPage=1"
-                    buddy_response = await client.get(buddy_url, headers=headers)
-                    if buddy_response.status_code == 200:
-                        buddy_text = buddy_response.text
-                        buddy_match = re.search(r'"buddyCnt"\s*:\s*(\d+)', buddy_text)
-                        if buddy_match:
-                            stats["neighbor_count"] = int(buddy_match.group(1))
-                            analysis_data["data_sources"].append("buddy_api")
-                            logger.info(f"API fallback: {blog_id} neighbors: {stats['neighbor_count']}")
-                except Exception as e:
-                    logger.debug(f"Buddy API failed for {blog_id}: {e}")
+                    url = f"https://blog.naver.com/NBlogBuddyListAjax.naver?blogId={blog_id}&currentPage=1"
+                    resp = await client.get(url, headers=headers)
+                    if resp.status_code == 200:
+                        match = re.search(r'"buddyCnt"\s*:\s*(\d+)', resp.text)
+                        if match:
+                            return int(match.group(1))
+                except:
+                    pass
+                return None
 
-            # RSS for content analysis if not done yet
-            if not analysis_data["avg_post_length"] or analysis_data["recent_activity"] is None:
+            async def fetch_rss():
                 try:
-                    rss_url = f"https://rss.blog.naver.com/{blog_id}.xml"
-                    rss_response = await client.get(rss_url, headers=headers)
-                    if rss_response.status_code == 200:
-                        rss_text = rss_response.text
-                        soup = BeautifulSoup(rss_text, 'xml')
+                    url = f"https://rss.blog.naver.com/{blog_id}.xml"
+                    resp = await client.get(url, headers=headers)
+                    if resp.status_code == 200:
+                        soup = BeautifulSoup(resp.text, 'xml')
                         items = soup.find_all('item')
-
                         if items:
-                            analysis_data["data_sources"].append("rss")
+                            # 평균 글 길이 (처음 10개만 - 속도)
+                            total_len = sum(len(item.find('description').get_text(strip=True))
+                                          for item in items[:10] if item.find('description'))
+                            avg_len = total_len // min(len(items), 10) if items else 0
 
-                            # Calculate average post length
-                            total_length = 0
-                            for item in items[:20]:
-                                desc = item.find('description')
-                                if desc:
-                                    content = desc.get_text(strip=True)
-                                    total_length += len(content)
-
-                            if len(items) > 0:
-                                analysis_data["avg_post_length"] = total_length // min(len(items), 20)
-
-                            # Check recent activity
-                            pub_date = items[0].find('pubDate')
-                            if pub_date:
+                            # 최근 활동
+                            days_since = 30
+                            pub = items[0].find('pubDate')
+                            if pub:
                                 try:
                                     from email.utils import parsedate_to_datetime
                                     from datetime import datetime, timezone
-                                    last_post_date = parsedate_to_datetime(pub_date.get_text())
-                                    now = datetime.now(timezone.utc)
-                                    days_since = (now - last_post_date).days
-                                    analysis_data["recent_activity"] = days_since
+                                    last = parsedate_to_datetime(pub.get_text())
+                                    days_since = (datetime.now(timezone.utc) - last).days
                                 except:
                                     pass
 
-                            # Estimate post count from RSS if not available
-                            if not stats["total_posts"]:
-                                item_count = len(items)
-                                if item_count >= 48:
-                                    stats["total_posts"] = 100  # Estimate for blogs with many posts
-                                else:
-                                    stats["total_posts"] = item_count
-                                logger.info(f"RSS fallback: {blog_id} posts: {stats['total_posts']}")
-                except Exception as e:
-                    logger.debug(f"RSS fetch failed for {blog_id}: {e}")
+                            return avg_len, days_since, len(items)
+                except:
+                    pass
+                return None, None, None
+
+            # 병렬 실행
+            visitors_task = fetch_visitors()
+            posts_task = fetch_posts_and_categories()
+            neighbors_task = fetch_neighbors()
+            rss_task = fetch_rss()
+
+            visitors, (posts, cat_count), neighbors, (avg_len, recent, rss_count) = await asyncio.gather(
+                visitors_task, posts_task, neighbors_task, rss_task
+            )
+
+            # 결과 저장
+            if visitors:
+                stats["total_visitors"] = visitors
+                analysis_data["data_sources"].append("visitor_api")
+
+            if posts:
+                stats["total_posts"] = posts
+                analysis_data["data_sources"].append("category_api")
+            elif rss_count:
+                stats["total_posts"] = 100 if rss_count >= 48 else rss_count
+
+            if cat_count:
+                analysis_data["category_count"] = cat_count
+
+            if neighbors:
+                stats["neighbor_count"] = neighbors
+                analysis_data["data_sources"].append("buddy_api")
+
+            if avg_len:
+                analysis_data["avg_post_length"] = avg_len
+                analysis_data["data_sources"].append("rss")
+
+            if recent is not None:
+                analysis_data["recent_activity"] = recent
 
             # ============================================
             # SCORE CALCULATION - Using learned weights
@@ -1052,7 +1022,7 @@ async def search_keyword_with_tabs(
             timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         )
 
-    # Analyze each blog
+    # ===== 병렬 처리로 블로그 분석 (속도 개선) =====
     results = []
     total_score = 0
     total_level = 0
@@ -1060,45 +1030,78 @@ async def search_keyword_with_tabs(
     total_neighbors = 0
     analyzed_count = 0
 
-    for item in search_results:
-        blog_id = item["blog_id"]
+    if analyze_content:
+        # 모든 블로그를 동시에 분석 (병렬 처리)
+        async def analyze_single(item):
+            try:
+                analysis = await analyze_blog(item["blog_id"])
+                return item, analysis
+            except Exception as e:
+                logger.warning(f"Failed to analyze {item['blog_id']}: {e}")
+                return item, {"stats": {}, "index": {}}
 
-        if analyze_content:
-            analysis = await analyze_blog(blog_id)
-            stats = analysis["stats"]
-            index = analysis["index"]
-        else:
-            stats = {"total_posts": None, "neighbor_count": None, "total_visitors": None}
-            index = {"score": 0, "level": 0, "score_breakdown": None}
+        # 동시에 최대 5개씩 분석 (서버 부하 방지)
+        semaphore = asyncio.Semaphore(5)
 
-        blog_result = BlogResult(
-            rank=item["rank"],
-            blog_id=blog_id,
-            blog_name=item["blog_name"],
-            blog_url=item["blog_url"],
-            post_title=item["post_title"],
-            post_url=item["post_url"],
-            post_date=item.get("post_date"),
-            thumbnail=item.get("thumbnail"),
-            tab_type=item["tab_type"],
-            smart_block_keyword=item.get("smart_block_keyword"),
-            stats=BlogStats(**stats) if stats else None,
-            index=BlogIndex(**index) if index else None
-        )
+        async def analyze_with_limit(item):
+            async with semaphore:
+                return await analyze_single(item)
 
-        results.append(blog_result)
+        # 병렬 실행
+        analysis_tasks = [analyze_with_limit(item) for item in search_results]
+        analysis_results = await asyncio.gather(*analysis_tasks)
 
-        # Aggregate stats
-        if index:
-            total_score += index.get("score", 0)
-            total_level += index.get("level", 0)
-            analyzed_count += 1
+        for item, analysis in analysis_results:
+            stats = analysis.get("stats", {})
+            index = analysis.get("index", {})
 
-        if stats:
-            if stats.get("total_posts"):
-                total_posts += stats["total_posts"]
-            if stats.get("neighbor_count"):
-                total_neighbors += stats["neighbor_count"]
+            blog_result = BlogResult(
+                rank=item["rank"],
+                blog_id=item["blog_id"],
+                blog_name=item["blog_name"],
+                blog_url=item["blog_url"],
+                post_title=item["post_title"],
+                post_url=item["post_url"],
+                post_date=item.get("post_date"),
+                thumbnail=item.get("thumbnail"),
+                tab_type=item["tab_type"],
+                smart_block_keyword=item.get("smart_block_keyword"),
+                stats=BlogStats(**stats) if stats else None,
+                index=BlogIndex(**index) if index else None
+            )
+            results.append(blog_result)
+
+            if index:
+                total_score += index.get("total_score", 0)
+                total_level += index.get("level", 0)
+                analyzed_count += 1
+
+            if stats:
+                if stats.get("total_posts"):
+                    total_posts += stats["total_posts"]
+                if stats.get("neighbor_count"):
+                    total_neighbors += stats["neighbor_count"]
+
+        # 순위 순서대로 정렬
+        results.sort(key=lambda x: x.rank)
+    else:
+        # 분석 없이 빠르게 결과 반환
+        for item in search_results:
+            blog_result = BlogResult(
+                rank=item["rank"],
+                blog_id=item["blog_id"],
+                blog_name=item["blog_name"],
+                blog_url=item["blog_url"],
+                post_title=item["post_title"],
+                post_url=item["post_url"],
+                post_date=item.get("post_date"),
+                thumbnail=item.get("thumbnail"),
+                tab_type=item["tab_type"],
+                smart_block_keyword=item.get("smart_block_keyword"),
+                stats=None,
+                index=None
+            )
+            results.append(blog_result)
 
     # Calculate insights
     count = len(results)
@@ -1154,26 +1157,27 @@ async def search_keyword_with_tabs(
 
     logger.info(f"Collected {samples_collected} learning samples for keyword: {keyword}")
 
-    # ===== AUTO-LEARNING: 검색할 때마다 학습하여 진화 =====
-    # 충분한 샘플이 모이면 자동으로 학습 실행
-    try:
-        all_samples = get_learning_samples(limit=500)
-        if len(all_samples) >= 10:  # 최소 10개 샘플 필요
-            current_weights = get_current_weights()
-            if current_weights:
-                # 학습 실행
-                new_weights, training_info = train_model(
-                    samples=all_samples,
-                    initial_weights=current_weights,
-                    learning_rate=0.005,  # 천천히 학습
-                    epochs=30,
-                    min_samples=10
-                )
-                # 학습된 가중치 저장
-                save_current_weights(new_weights)
-                logger.info(f"Auto-learning completed: accuracy {training_info.get('initial_accuracy', 0):.1f}% -> {training_info.get('final_accuracy', 0):.1f}%")
-    except Exception as e:
-        logger.warning(f"Auto-learning failed: {e}")
+    # ===== AUTO-LEARNING: 백그라운드에서 학습 (응답 속도에 영향 없음) =====
+    async def background_learning():
+        try:
+            all_samples = get_learning_samples(limit=200)  # 샘플 수 제한
+            if len(all_samples) >= 10:
+                current_weights = get_current_weights()
+                if current_weights:
+                    new_weights, training_info = train_model(
+                        samples=all_samples,
+                        initial_weights=current_weights,
+                        learning_rate=0.01,
+                        epochs=15,  # 에폭 수 줄임
+                        min_samples=10
+                    )
+                    save_current_weights(new_weights)
+                    logger.info(f"Background learning: {training_info.get('initial_accuracy', 0):.1f}% -> {training_info.get('final_accuracy', 0):.1f}%")
+        except Exception as e:
+            logger.warning(f"Background learning failed: {e}")
+
+    # 백그라운드 태스크로 실행 (응답을 기다리지 않음)
+    asyncio.create_task(background_learning())
 
     return KeywordSearchResponse(
         keyword=keyword,
