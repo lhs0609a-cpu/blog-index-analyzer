@@ -38,6 +38,14 @@ learning_state = {
 }
 
 # ========================================
+# 학습 로그 저장소 (메모리 기반)
+# ========================================
+learning_logs = {
+    "keywords": [],  # 분석된 키워드 목록
+    "keyword_details": {}  # 키워드별 상세 정보 {keyword: {blogs: [...], timestamp: ...}}
+}
+
+# ========================================
 # 키워드 풀 - 다양한 카테고리별 인기 키워드
 # ========================================
 KEYWORD_POOL = {
@@ -218,6 +226,15 @@ async def start_batch_learning(
         "session_id": f"batch_{int(time.time())}"
     }
 
+    # 학습 로그 초기화
+    global learning_logs
+    learning_logs = {
+        "keywords": [],
+        "keyword_details": {},
+        "session_id": learning_state["session_id"],
+        "start_time": learning_state["start_time"]
+    }
+
     # 백그라운드에서 학습 실행
     background_tasks.add_task(
         run_batch_learning,
@@ -314,6 +331,61 @@ async def preview_keywords(
     }
 
 
+@router.get("/logs")
+async def get_learning_logs(
+    limit: int = Query(default=50, le=200, description="최근 키워드 개수")
+):
+    """학습 로그 조회 - 분석된 키워드와 블로그 목록"""
+    global learning_logs
+
+    # 최근 키워드 목록 (역순으로)
+    recent_keywords = learning_logs.get("keywords", [])[-limit:][::-1]
+
+    return {
+        "session_id": learning_logs.get("session_id"),
+        "start_time": learning_logs.get("start_time"),
+        "total_keywords_analyzed": len(learning_logs.get("keywords", [])),
+        "keywords": recent_keywords
+    }
+
+
+@router.get("/logs/{keyword}")
+async def get_keyword_log_detail(keyword: str):
+    """특정 키워드의 상세 학습 로그 조회"""
+    global learning_logs
+
+    if keyword not in learning_logs.get("keyword_details", {}):
+        raise HTTPException(status_code=404, detail=f"'{keyword}' 키워드의 로그를 찾을 수 없습니다")
+
+    return learning_logs["keyword_details"][keyword]
+
+
+@router.get("/logs-summary")
+async def get_logs_summary():
+    """학습 로그 요약 정보"""
+    global learning_logs
+
+    total_blogs = 0
+    keyword_stats = []
+
+    for kw, detail in learning_logs.get("keyword_details", {}).items():
+        blogs = detail.get("blogs", [])
+        total_blogs += len(blogs)
+        keyword_stats.append({
+            "keyword": kw,
+            "blog_count": len(blogs),
+            "timestamp": detail.get("timestamp")
+        })
+
+    return {
+        "session_id": learning_logs.get("session_id"),
+        "start_time": learning_logs.get("start_time"),
+        "total_keywords": len(learning_logs.get("keywords", [])),
+        "total_blogs": total_blogs,
+        "keyword_stats": sorted(keyword_stats, key=lambda x: x.get("timestamp", ""), reverse=True)[:50]
+    }
+
+
 # ========================================
 # 백그라운드 학습 함수
 # ========================================
@@ -324,7 +396,7 @@ async def run_batch_learning(
     delay_between_blogs: float
 ):
     """백그라운드에서 대량 키워드 학습 실행"""
-    global learning_state
+    global learning_state, learning_logs
 
     # 필요한 모듈 임포트
     from routers.blogs import fetch_naver_search_results, analyze_blog
@@ -338,13 +410,28 @@ async def run_batch_learning(
 
         learning_state["current_keyword"] = keyword
 
+        # 이 키워드에 대한 로그 초기화
+        keyword_log = {
+            "keyword": keyword,
+            "timestamp": datetime.now().isoformat(),
+            "blogs": [],
+            "search_results_count": 0,
+            "analyzed_count": 0,
+            "errors": []
+        }
+
         try:
             # 1. 네이버 검색 결과 가져오기
             search_results = await fetch_naver_search_results(keyword, limit=13)
 
             if not search_results:
                 learning_state["errors"].append(f"{keyword}: 검색 결과 없음")
+                keyword_log["errors"].append("검색 결과 없음")
+                learning_logs["keywords"].append(keyword)
+                learning_logs["keyword_details"][keyword] = keyword_log
                 continue
+
+            keyword_log["search_results_count"] = len(search_results)
 
             # 2. 각 블로그 분석 및 학습 데이터 수집
             blogs_analyzed = 0
@@ -355,6 +442,8 @@ async def run_batch_learning(
                 try:
                     blog_id = result["blog_id"]
                     actual_rank = result["rank"]
+                    post_title = result.get("title", "")
+                    blog_name = result.get("blog_name", blog_id)
 
                     # 블로그 분석
                     analysis = await analyze_blog(blog_id)
@@ -366,25 +455,40 @@ async def run_batch_learning(
                     c_rank_detail = breakdown.get("c_rank_detail", {})
                     dia_detail = breakdown.get("dia_detail", {})
 
+                    blog_features = {
+                        "c_rank_score": breakdown.get("c_rank", 0),
+                        "dia_score": breakdown.get("dia", 0),
+                        "context_score": c_rank_detail.get("context", 50),
+                        "content_score": c_rank_detail.get("content", 50),
+                        "chain_score": c_rank_detail.get("chain", 50),
+                        "depth_score": dia_detail.get("depth", 50),
+                        "information_score": dia_detail.get("information", 50),
+                        "accuracy_score": dia_detail.get("accuracy", 50),
+                        "post_count": stats.get("total_posts", 0),
+                        "neighbor_count": stats.get("neighbor_count", 0),
+                        "visitor_count": stats.get("total_visitors", 0)
+                    }
+
                     add_learning_sample(
                         keyword=keyword,
                         blog_id=blog_id,
                         actual_rank=actual_rank,
                         predicted_score=index.get("total_score", 0),
-                        blog_features={
-                            "c_rank_score": breakdown.get("c_rank", 0),
-                            "dia_score": breakdown.get("dia", 0),
-                            "context_score": c_rank_detail.get("context", 50),
-                            "content_score": c_rank_detail.get("content", 50),
-                            "chain_score": c_rank_detail.get("chain", 50),
-                            "depth_score": dia_detail.get("depth", 50),
-                            "information_score": dia_detail.get("information", 50),
-                            "accuracy_score": dia_detail.get("accuracy", 50),
-                            "post_count": stats.get("total_posts", 0),
-                            "neighbor_count": stats.get("neighbor_count", 0),
-                            "visitor_count": stats.get("total_visitors", 0)
-                        }
+                        blog_features=blog_features
                     )
+
+                    # 블로그 로그 저장
+                    keyword_log["blogs"].append({
+                        "blog_id": blog_id,
+                        "blog_name": blog_name,
+                        "post_title": post_title,
+                        "actual_rank": actual_rank,
+                        "predicted_score": round(index.get("total_score", 0), 1),
+                        "c_rank": round(breakdown.get("c_rank", 0), 1),
+                        "dia": round(breakdown.get("dia", 0), 1),
+                        "post_count": stats.get("total_posts", 0),
+                        "blog_url": f"https://blog.naver.com/{blog_id}"
+                    })
 
                     blogs_analyzed += 1
                     learning_state["total_blogs_analyzed"] += 1
@@ -394,6 +498,12 @@ async def run_batch_learning(
 
                 except Exception as e:
                     logger.warning(f"Error analyzing blog in {keyword}: {e}")
+                    keyword_log["errors"].append(f"블로그 분석 오류: {str(e)[:50]}")
+
+            # 키워드 로그 완료
+            keyword_log["analyzed_count"] = blogs_analyzed
+            learning_logs["keywords"].append(keyword)
+            learning_logs["keyword_details"][keyword] = keyword_log
 
             # 키워드 완료
             learning_state["completed_keywords"] += 1

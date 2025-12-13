@@ -26,6 +26,27 @@ interface Category {
   count: number;
 }
 
+interface BlogLog {
+  blog_id: string;
+  blog_name: string;
+  post_title: string;
+  actual_rank: number;
+  predicted_score: number;
+  c_rank: number;
+  dia: number;
+  post_count: number;
+  blog_url: string;
+}
+
+interface KeywordLog {
+  keyword: string;
+  timestamp: string;
+  blogs: BlogLog[];
+  search_results_count: number;
+  analyzed_count: number;
+  errors: string[];
+}
+
 export default function BatchLearningPage() {
   const [status, setStatus] = useState<LearningStatus | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -35,6 +56,11 @@ export default function BatchLearningPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewKeywords, setPreviewKeywords] = useState<string[]>([]);
+  const [showLogs, setShowLogs] = useState(false);
+  const [logKeywords, setLogKeywords] = useState<string[]>([]);
+  const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
+  const [keywordDetail, setKeywordDetail] = useState<KeywordLog | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
 
   // 상태 폴링
   const fetchStatus = useCallback(async () => {
@@ -76,17 +102,52 @@ export default function BatchLearningPage() {
     }
   }, [keywordCount, selectedCategories]);
 
+  // 학습 로그 가져오기
+  const fetchLogs = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/batch-learning/logs?limit=100`);
+      if (res.ok) {
+        const data = await res.json();
+        setLogKeywords(data.keywords || []);
+      }
+    } catch (e) {
+      console.error('Failed to fetch logs:', e);
+    }
+  }, []);
+
+  // 특정 키워드 상세 로그 가져오기
+  const fetchKeywordDetail = async (keyword: string) => {
+    setLoadingDetail(true);
+    setSelectedKeyword(keyword);
+    try {
+      const res = await fetch(`${API_BASE}/api/batch-learning/logs/${encodeURIComponent(keyword)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setKeywordDetail(data);
+      } else {
+        setKeywordDetail(null);
+      }
+    } catch (e) {
+      console.error('Failed to fetch keyword detail:', e);
+      setKeywordDetail(null);
+    } finally {
+      setLoadingDetail(false);
+    }
+  };
+
   useEffect(() => {
     fetchStatus();
     fetchCategories();
+    fetchLogs();
 
     // 학습 중이면 3초마다 상태 업데이트
     const interval = setInterval(() => {
       fetchStatus();
+      fetchLogs();
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [fetchStatus, fetchCategories]);
+  }, [fetchStatus, fetchCategories, fetchLogs]);
 
   useEffect(() => {
     fetchPreview();
@@ -369,25 +430,142 @@ export default function BatchLearningPage() {
             )}
           </div>
 
-          {/* 최근 완료된 키워드 */}
-          {status?.recent_keywords && status.recent_keywords.length > 0 && (
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">✅ 최근 완료된 키워드</h2>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {status.recent_keywords.slice().reverse().map((kw, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg"
-                  >
-                    <span className="w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center text-xs">
-                      ✓
-                    </span>
-                    <span className="text-gray-700">{kw}</span>
-                  </div>
-                ))}
-              </div>
+          {/* 분석 로그 */}
+          <div className="bg-white rounded-2xl shadow-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-800">📜 분석 로그</h2>
+              <button
+                onClick={() => setShowLogs(!showLogs)}
+                className="px-4 py-2 text-sm bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg transition-colors"
+              >
+                {showLogs ? '간단히 보기' : '상세 로그 보기'}
+              </button>
             </div>
-          )}
+
+            {!showLogs ? (
+              // 간단 뷰 - 최근 완료된 키워드만 표시
+              status?.recent_keywords && status.recent_keywords.length > 0 ? (
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {status.recent_keywords.slice().reverse().map((kw, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100"
+                      onClick={() => {
+                        const keyword = kw.split(' (')[0];
+                        fetchKeywordDetail(keyword);
+                        setShowLogs(true);
+                      }}
+                    >
+                      <span className="w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center text-xs">
+                        ✓
+                      </span>
+                      <span className="text-gray-700">{kw}</span>
+                      <span className="ml-auto text-gray-400 text-sm">클릭하여 상세 보기 →</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <p>아직 분석된 키워드가 없습니다</p>
+                </div>
+              )
+            ) : (
+              // 상세 뷰 - 키워드 목록과 블로그 상세 정보
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* 왼쪽: 키워드 목록 */}
+                <div className="border border-gray-200 rounded-xl p-4 max-h-96 overflow-y-auto">
+                  <h3 className="font-semibold text-gray-700 mb-3">분석된 키워드 ({logKeywords.length}개)</h3>
+                  <div className="space-y-1">
+                    {logKeywords.map((kw, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => fetchKeywordDetail(kw)}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                          selectedKeyword === kw
+                            ? 'bg-purple-100 text-purple-700 font-medium'
+                            : 'hover:bg-gray-100 text-gray-700'
+                        }`}
+                      >
+                        {kw}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 오른쪽: 선택된 키워드의 블로그 상세 */}
+                <div className="border border-gray-200 rounded-xl p-4 max-h-96 overflow-y-auto">
+                  {loadingDetail ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="animate-spin w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full"></div>
+                    </div>
+                  ) : keywordDetail ? (
+                    <>
+                      <div className="mb-4">
+                        <h3 className="font-semibold text-purple-700 text-lg">{keywordDetail.keyword}</h3>
+                        <p className="text-sm text-gray-500">
+                          분석 시간: {new Date(keywordDetail.timestamp).toLocaleString('ko-KR')}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          검색 결과: {keywordDetail.search_results_count}개 / 분석 완료: {keywordDetail.analyzed_count}개
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        {keywordDetail.blogs.map((blog, idx) => (
+                          <div
+                            key={idx}
+                            className="p-3 bg-gray-50 rounded-lg border border-gray-100"
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                                {blog.actual_rank}
+                              </span>
+                              <a
+                                href={blog.blog_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-medium text-gray-800 hover:text-purple-600 truncate flex-1"
+                              >
+                                {blog.blog_name}
+                              </a>
+                            </div>
+                            <p className="text-sm text-gray-600 truncate mb-2">{blog.post_title || '(제목 없음)'}</p>
+                            <div className="flex gap-2 text-xs">
+                              <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">
+                                점수: {blog.predicted_score}
+                              </span>
+                              <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                                C-Rank: {blog.c_rank}
+                              </span>
+                              <span className="px-2 py-1 bg-green-100 text-green-700 rounded">
+                                D.I.A: {blog.dia}
+                              </span>
+                              <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded">
+                                글: {blog.post_count}개
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {keywordDetail.errors.length > 0 && (
+                        <div className="mt-4 p-3 bg-red-50 rounded-lg">
+                          <p className="text-sm font-medium text-red-700 mb-1">오류 발생:</p>
+                          {keywordDetail.errors.map((err, idx) => (
+                            <p key={idx} className="text-xs text-red-600">{err}</p>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-500">
+                      <p>왼쪽에서 키워드를 선택하세요</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* 학습 효과 안내 */}
           <div className="bg-gradient-to-r from-purple-100 to-blue-100 rounded-2xl p-6">
