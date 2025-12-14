@@ -364,7 +364,7 @@ def instant_adjust_weights(
     # Initial metrics
     initial_scores = calculate_predicted_scores(samples, weights)
     initial_metrics = calculate_exact_match_rate(actual_ranks, initial_scores)
-    initial_accuracy = initial_metrics['within_1']  # ±1 accuracy as main metric
+    initial_accuracy = initial_metrics['within_3']  # ±3 accuracy as main metric (더 현실적)
 
     # Momentum storage
     velocity = {}
@@ -378,7 +378,7 @@ def instant_adjust_weights(
         # Calculate current metrics
         predicted_scores = calculate_predicted_scores(samples, weights)
         metrics = calculate_exact_match_rate(actual_ranks, predicted_scores)
-        current_accuracy = metrics['within_1']
+        current_accuracy = metrics['within_3']
 
         # Check if target reached
         if current_accuracy >= target_accuracy:
@@ -450,13 +450,15 @@ def instant_adjust_weights(
         'iterations': len(history),
         'duration_seconds': float(duration),
         'initial_accuracy': float(initial_accuracy),
-        'final_accuracy': float(final_metrics['within_1']),
-        'improvement': float(final_metrics['within_1'] - initial_accuracy),
+        'final_accuracy': float(final_metrics['within_3']),
+        'improvement': float(final_metrics['within_3'] - initial_accuracy),
         'exact_match_rate': float(final_metrics['exact_match']),
+        'within_1': float(final_metrics['within_1']),
+        'within_3': float(final_metrics['within_3']),
         'avg_deviation': float(final_metrics['avg_deviation']),
         'spearman_correlation': float(final_spearman),
         'kendall_tau': float(final_kendall),
-        'target_reached': final_metrics['within_1'] >= target_accuracy,
+        'target_reached': final_metrics['within_3'] >= target_accuracy,
         'weight_changes': calculate_weight_changes(current_weights, weights)
     }
 
@@ -695,6 +697,238 @@ def auto_train_if_needed(samples: List[Dict], current_weights: Dict, min_samples
         import traceback
         traceback.print_exc()
         return False, current_weights, {'error': str(e)}
+
+
+# ==============================================
+# FEATURE CORRELATION ANALYSIS (네이버 순위와 특성별 상관관계)
+# ==============================================
+def analyze_feature_correlations(samples: List[Dict]) -> Dict:
+    """
+    각 특성이 네이버 순위와 얼마나 상관관계가 있는지 분석
+
+    Returns: 각 특성별 순위 상관계수 (높을수록 순위에 영향이 큼)
+    """
+    if len(samples) < 10:
+        return {'error': 'Need at least 10 samples for correlation analysis'}
+
+    # 실제 순위 (낮을수록 좋음: 1위 > 13위)
+    actual_ranks = np.array([s.get('actual_rank', 0) for s in samples])
+
+    # 분석할 특성들
+    features_to_analyze = {
+        # 블로그 전체 특성
+        'c_rank_score': 'C-Rank 점수',
+        'dia_score': 'D.I.A. 점수',
+        'post_count': '총 포스팅 수',
+        'neighbor_count': '이웃 수',
+        'visitor_count': '방문자 수',
+        'context_score': 'C-Rank: 주제집중도',
+        'content_score': 'C-Rank: 콘텐츠품질',
+        'chain_score': 'C-Rank: 연결성',
+        'depth_score': 'D.I.A: 깊이',
+        'information_score': 'D.I.A: 정보성',
+        'accuracy_score': 'D.I.A: 정확성',
+        # 개별 글 특성
+        'title_has_keyword': '제목에 키워드 포함',
+        'title_keyword_position': '제목 키워드 위치',
+        'content_length': '본문 길이',
+        'image_count': '이미지 수',
+        'video_count': '동영상 수',
+        'keyword_count': '키워드 언급 횟수',
+        'keyword_density': '키워드 밀도',
+        'heading_count': '소제목 수',
+        'paragraph_count': '문단 수',
+        'has_map': '지도 포함',
+        'has_link': '링크 포함',
+        'like_count': '공감 수',
+        'comment_count': '댓글 수',
+        'post_age_days': '글 작성 후 경과일',
+    }
+
+    correlations = {}
+
+    for feature_key, feature_name in features_to_analyze.items():
+        feature_values = []
+        valid_ranks = []
+
+        for i, sample in enumerate(samples):
+            value = sample.get(feature_key)
+            if value is not None and value != -1:  # -1은 "없음" 표시
+                feature_values.append(float(value))
+                valid_ranks.append(actual_ranks[i])
+
+        if len(feature_values) >= 10:
+            feature_arr = np.array(feature_values)
+            rank_arr = np.array(valid_ranks)
+
+            # Spearman 순위 상관계수 계산
+            corr, p_value = spearmanr(feature_arr, rank_arr)
+
+            if not np.isnan(corr):
+                # 음수 상관관계 = 특성값이 높을수록 순위가 좋음 (1위에 가까움)
+                correlations[feature_key] = {
+                    'name': feature_name,
+                    'correlation': float(corr),
+                    'abs_correlation': abs(float(corr)),
+                    'direction': '높을수록 순위 좋음' if corr < 0 else '높을수록 순위 나쁨',
+                    'p_value': float(p_value),
+                    'significant': bool(p_value < 0.05),  # numpy.bool -> Python bool
+                    'sample_count': int(len(feature_values))
+                }
+
+    # 상관관계 절대값 기준 정렬 (영향력 큰 순서)
+    sorted_features = sorted(
+        correlations.items(),
+        key=lambda x: x[1]['abs_correlation'],
+        reverse=True
+    )
+
+    return {
+        'correlations': dict(sorted_features),
+        'top_positive_factors': [
+            {'feature': k, **v} for k, v in sorted_features
+            if v['correlation'] < 0  # 음수 = 순위에 긍정적
+        ][:10],
+        'top_negative_factors': [
+            {'feature': k, **v} for k, v in sorted_features
+            if v['correlation'] > 0  # 양수 = 순위에 부정적
+        ][:5],
+        'total_samples': len(samples),
+        'features_analyzed': len(correlations)
+    }
+
+
+def analyze_top_vs_bottom(samples: List[Dict]) -> Dict:
+    """
+    상위권(1-3위) vs 하위권(10-13위) 블로그/글의 특성 차이 분석
+
+    이를 통해 "상위 노출되려면 어떤 특성이 필요한지" 파악
+    """
+    if len(samples) < 20:
+        return {'error': 'Need at least 20 samples for top vs bottom analysis'}
+
+    # 상위권/하위권 분리
+    top_samples = [s for s in samples if s.get('actual_rank', 99) <= 3]
+    bottom_samples = [s for s in samples if s.get('actual_rank', 0) >= 10]
+
+    if len(top_samples) < 5 or len(bottom_samples) < 5:
+        return {'error': 'Not enough samples in top or bottom groups'}
+
+    # 분석할 특성들
+    features = [
+        'c_rank_score', 'dia_score', 'post_count', 'neighbor_count', 'visitor_count',
+        'content_length', 'image_count', 'video_count', 'keyword_count', 'keyword_density',
+        'heading_count', 'paragraph_count', 'like_count', 'comment_count', 'post_age_days',
+        'title_has_keyword'
+    ]
+
+    feature_names = {
+        'c_rank_score': 'C-Rank 점수',
+        'dia_score': 'D.I.A. 점수',
+        'post_count': '총 포스팅 수',
+        'neighbor_count': '이웃 수',
+        'visitor_count': '방문자 수',
+        'content_length': '본문 길이 (자)',
+        'image_count': '이미지 수',
+        'video_count': '동영상 수',
+        'keyword_count': '키워드 언급 횟수',
+        'keyword_density': '키워드 밀도 (%)',
+        'heading_count': '소제목 수',
+        'paragraph_count': '문단 수',
+        'like_count': '공감 수',
+        'comment_count': '댓글 수',
+        'post_age_days': '글 경과일',
+        'title_has_keyword': '제목 키워드 포함률 (%)'
+    }
+
+    def avg_feature(samples_list, key):
+        values = [s.get(key, 0) or 0 for s in samples_list]
+        return sum(values) / len(values) if values else 0
+
+    comparison = {}
+    insights = []
+
+    for feature in features:
+        top_avg = avg_feature(top_samples, feature)
+        bottom_avg = avg_feature(bottom_samples, feature)
+
+        if bottom_avg > 0:
+            ratio = top_avg / bottom_avg
+        elif top_avg > 0:
+            ratio = float('inf')
+        else:
+            ratio = 1.0
+
+        diff_percent = ((top_avg - bottom_avg) / max(bottom_avg, 0.001)) * 100
+
+        comparison[feature] = {
+            'name': feature_names.get(feature, feature),
+            'top_3_avg': round(top_avg, 2),
+            'bottom_avg': round(bottom_avg, 2),
+            'ratio': round(ratio, 2) if ratio != float('inf') else '∞',
+            'diff_percent': round(diff_percent, 1),
+            'insight': ''
+        }
+
+        # 인사이트 생성
+        if abs(diff_percent) >= 30:
+            if diff_percent > 0:
+                insight = f"✅ {feature_names.get(feature, feature)}: 상위권이 {abs(diff_percent):.0f}% 더 높음"
+            else:
+                insight = f"⚠️ {feature_names.get(feature, feature)}: 상위권이 {abs(diff_percent):.0f}% 더 낮음"
+            insights.append(insight)
+            comparison[feature]['insight'] = insight
+
+    # 가장 큰 차이를 보이는 특성 정렬
+    sorted_comparison = sorted(
+        comparison.items(),
+        key=lambda x: abs(x[1]['diff_percent']),
+        reverse=True
+    )
+
+    return {
+        'comparison': dict(sorted_comparison),
+        'top_count': len(top_samples),
+        'bottom_count': len(bottom_samples),
+        'key_insights': insights[:10],
+        'recommendation': generate_optimization_tips(comparison)
+    }
+
+
+def generate_optimization_tips(comparison: Dict) -> List[str]:
+    """상위 노출을 위한 최적화 팁 생성"""
+    tips = []
+
+    # 본문 길이
+    if comparison.get('content_length', {}).get('diff_percent', 0) > 30:
+        top_len = comparison['content_length']['top_3_avg']
+        tips.append(f"📝 본문 길이를 {int(top_len)}자 이상으로 작성하세요")
+
+    # 이미지 수
+    if comparison.get('image_count', {}).get('diff_percent', 0) > 20:
+        top_img = comparison['image_count']['top_3_avg']
+        tips.append(f"🖼️ 이미지를 {int(top_img)}개 이상 포함하세요")
+
+    # 키워드 밀도
+    if comparison.get('keyword_density', {}).get('top_3_avg', 0) > 0:
+        top_density = comparison['keyword_density']['top_3_avg']
+        tips.append(f"🔑 키워드 밀도를 {top_density:.1f}% 정도로 유지하세요")
+
+    # 소제목
+    if comparison.get('heading_count', {}).get('diff_percent', 0) > 20:
+        top_heading = comparison['heading_count']['top_3_avg']
+        tips.append(f"📌 소제목을 {int(top_heading)}개 이상 사용하세요")
+
+    # 제목 키워드
+    if comparison.get('title_has_keyword', {}).get('top_3_avg', 0) > 0.7:
+        tips.append("🏷️ 제목에 반드시 핵심 키워드를 포함하세요")
+
+    # 글 최신성
+    post_age = comparison.get('post_age_days', {})
+    if post_age.get('top_3_avg', 999) < post_age.get('bottom_avg', 0):
+        tips.append("🕐 최신 글이 유리합니다 - 주기적으로 업데이트하세요")
+
+    return tips if tips else ["충분한 데이터가 쌓이면 구체적인 팁을 제공합니다"]
 
 
 # ==============================================

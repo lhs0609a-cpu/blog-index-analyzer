@@ -245,7 +245,7 @@ export default function Home() {
                 className="px-8 py-4 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300 flex items-center gap-2"
               >
                 <Mic className="w-5 h-5" />
-                닥터보이스 바로가기
+                AI 자동 글쓰기
               </a>
             </motion.div>
 
@@ -646,7 +646,7 @@ export default function Home() {
                 <li>
                   <a href="https://doctor-voice-pro-ghwi.vercel.app/" target="_blank" rel="noopener noreferrer" className="hover:text-cyan-400 transition-colors flex items-center gap-2">
                     <Mic className="w-4 h-4" />
-                    닥터보이스
+                    AI 자동 글쓰기
                   </a>
                 </li>
               </ul>

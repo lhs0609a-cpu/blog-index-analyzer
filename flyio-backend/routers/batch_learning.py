@@ -13,8 +13,8 @@ import time
 import logging
 from datetime import datetime
 
-from database.learning_db import add_learning_sample, get_current_weights, save_current_weights, get_learning_statistics
-from services.learning_engine import train_model, instant_adjust_weights
+from database.learning_db import add_learning_sample, get_current_weights, save_current_weights, get_learning_statistics, get_learning_samples
+from services.learning_engine import train_model, instant_adjust_weights, analyze_feature_correlations, analyze_top_vs_bottom
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -816,6 +816,123 @@ async def reset_analyzed_history():
     }
 
 
+@router.get("/analysis/correlations")
+async def get_feature_correlations():
+    """
+    각 특성이 네이버 순위와 얼마나 상관관계가 있는지 분석
+
+    - 높을수록 순위 좋음: 해당 특성 값이 높으면 상위 노출에 유리
+    - 높을수록 순위 나쁨: 해당 특성 값이 높으면 상위 노출에 불리
+    """
+    samples = get_learning_samples(limit=5000)
+
+    if len(samples) < 10:
+        raise HTTPException(
+            status_code=400,
+            detail=f"분석에 최소 10개 샘플이 필요합니다. 현재: {len(samples)}개"
+        )
+
+    result = analyze_feature_correlations(samples)
+
+    if 'error' in result:
+        raise HTTPException(status_code=400, detail=result['error'])
+
+    return result
+
+
+@router.get("/analysis/top-vs-bottom")
+async def get_top_vs_bottom_analysis():
+    """
+    상위권(1-3위) vs 하위권(10-13위) 블로그/글의 특성 차이 분석
+
+    어떤 특성이 상위 노출에 필요한지 파악할 수 있습니다.
+    """
+    samples = get_learning_samples(limit=5000)
+
+    if len(samples) < 20:
+        raise HTTPException(
+            status_code=400,
+            detail=f"분석에 최소 20개 샘플이 필요합니다. 현재: {len(samples)}개"
+        )
+
+    result = analyze_top_vs_bottom(samples)
+
+    if 'error' in result:
+        raise HTTPException(status_code=400, detail=result['error'])
+
+    return result
+
+
+@router.get("/analysis/insights")
+async def get_ranking_insights():
+    """
+    종합 분석 인사이트 - 상위 노출을 위한 최적화 팁 제공
+    """
+    samples = get_learning_samples(limit=5000)
+
+    if len(samples) < 20:
+        raise HTTPException(
+            status_code=400,
+            detail=f"분석에 최소 20개 샘플이 필요합니다. 현재: {len(samples)}개"
+        )
+
+    # 두 가지 분석 실행
+    correlations = analyze_feature_correlations(samples)
+    top_vs_bottom = analyze_top_vs_bottom(samples)
+
+    # 통합 인사이트 생성
+    insights = {
+        'total_samples': len(samples),
+        'summary': {
+            'features_analyzed': correlations.get('features_analyzed', 0),
+            'top_samples': top_vs_bottom.get('top_count', 0),
+            'bottom_samples': top_vs_bottom.get('bottom_count', 0),
+        },
+        'top_positive_factors': correlations.get('top_positive_factors', [])[:5],
+        'key_differences': top_vs_bottom.get('key_insights', [])[:7],
+        'optimization_tips': top_vs_bottom.get('recommendation', []),
+        'detailed_correlations': correlations.get('correlations', {}),
+        'detailed_comparison': top_vs_bottom.get('comparison', {}),
+    }
+
+    return insights
+
+
+@router.post("/train-now")
+async def train_with_existing_samples():
+    """기존 샘플로 즉시 학습 실행 (수동 트리거)"""
+    from database.learning_db import get_learning_samples, get_learning_statistics
+
+    # 현재 샘플 수 확인
+    stats = get_learning_statistics()
+    total_samples = stats.get("total_samples", 0)
+
+    if total_samples < 20:
+        raise HTTPException(
+            status_code=400,
+            detail=f"학습에 최소 20개 샘플이 필요합니다. 현재: {total_samples}개"
+        )
+
+    # 학습 실행
+    await run_model_training()
+
+    # 업데이트된 통계 반환
+    new_stats = get_learning_statistics()
+
+    return {
+        "success": True,
+        "message": f"{total_samples}개 샘플로 학습을 완료했습니다",
+        "before": {
+            "accuracy": stats.get("current_accuracy", 0),
+            "samples": total_samples
+        },
+        "after": {
+            "accuracy": new_stats.get("current_accuracy", 0),
+            "samples": new_stats.get("total_samples", 0)
+        }
+    }
+
+
 @router.post("/reset-weights")
 async def reset_weights_to_default():
     """가중치를 초기값으로 리셋"""
@@ -1074,12 +1191,15 @@ async def run_model_training():
     global learning_state
 
     try:
-        from database.learning_db import get_learning_samples
+        from database.learning_db import get_learning_samples, save_training_session, save_weight_history
+        import uuid
 
         samples = get_learning_samples(limit=1000)
         if len(samples) >= 20:
             current_weights = get_current_weights()
             if current_weights:
+                training_start = datetime.now()
+
                 new_weights, info = instant_adjust_weights(
                     samples=samples,
                     current_weights=current_weights,
@@ -1089,17 +1209,49 @@ async def run_model_training():
                     momentum=0.9
                 )
 
+                training_end = datetime.now()
                 initial_accuracy = info.get("initial_accuracy", 0)
                 final_accuracy = info.get("final_accuracy", 0)
+
+                # 세션 ID 생성
+                session_id = info.get("session_id", f"batch_{uuid.uuid4().hex[:8]}")
 
                 # 정확도가 향상되었을 때만 가중치 저장
                 if final_accuracy >= initial_accuracy:
                     save_current_weights(new_weights)
                     learning_state["accuracy_after"] = final_accuracy
                     logger.info(f"Model improved: accuracy {initial_accuracy:.1f}% -> {final_accuracy:.1f}% (saved)")
+
+                    # 학습 세션을 DB에 저장
+                    save_training_session(
+                        session_id=session_id,
+                        samples_used=len(samples),
+                        accuracy_before=initial_accuracy,
+                        accuracy_after=final_accuracy,
+                        improvement=final_accuracy - initial_accuracy,
+                        duration_seconds=info.get("duration_seconds", (training_end - training_start).total_seconds()),
+                        epochs=info.get("iterations", 50),
+                        learning_rate=0.03,
+                        started_at=training_start.isoformat(),
+                        completed_at=training_end.isoformat(),
+                        keywords=learning_state.get("recent_keywords", [])[-10:],
+                        weight_changes=info.get("weight_changes", {})
+                    )
+
+                    # 가중치 히스토리 저장
+                    save_weight_history(
+                        session_id=session_id,
+                        weights=new_weights,
+                        accuracy=final_accuracy,
+                        total_samples=len(samples)
+                    )
+
+                    logger.info(f"Training session saved to DB: {session_id}")
                 else:
                     # 정확도가 낮아지면 가중치 롤백 (저장 안 함)
                     learning_state["accuracy_after"] = initial_accuracy
                     logger.warning(f"Model accuracy decreased: {initial_accuracy:.1f}% -> {final_accuracy:.1f}% (rollback)")
     except Exception as e:
         logger.error(f"Model training failed: {e}")
+        import traceback
+        traceback.print_exc()
