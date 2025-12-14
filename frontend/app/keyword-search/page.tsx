@@ -225,6 +225,7 @@ export default function KeywordSearchPage() {
   // 연관 키워드 관련
   const [relatedKeywords, setRelatedKeywords] = useState<RelatedKeywordsResponse | null>(null)
   const [loadingRelatedKeywords, setLoadingRelatedKeywords] = useState(false)
+  const [showAllRelatedKeywords, setShowAllRelatedKeywords] = useState(false)
 
   // 학습 엔진 상태
   const [learningStatus, setLearningStatus] = useState<LearningStatus | null>(null)
@@ -771,6 +772,7 @@ export default function KeywordSearchPage() {
   // 연관 키워드 조회
   const fetchRelatedKeywords = async (searchKeyword: string) => {
     setLoadingRelatedKeywords(true)
+    setShowAllRelatedKeywords(false)  // 새 검색 시 펼치기 상태 초기화
     try {
       const apiUrl = getApiUrl()
       const fullUrl = `${apiUrl}/api/blogs/related-keywords/${encodeURIComponent(searchKeyword)}`
@@ -2192,12 +2194,19 @@ export default function KeywordSearchPage() {
               <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                 <span>🔍</span>
                 연관 키워드 & 검색량
+                {relatedKeywords && relatedKeywords.keywords.length > 0 && (
+                  <span className="text-sm font-normal text-gray-500">
+                    (총 {relatedKeywords.keywords.length}개)
+                  </span>
+                )}
               </h2>
-              {relatedKeywords?.source && (
-                <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
-                  {relatedKeywords.source === 'searchad' ? '네이버 검색광고 API' : '네이버 자동완성'}
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {relatedKeywords?.source && (
+                  <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
+                    {relatedKeywords.source === 'searchad' ? '네이버 검색광고 API' : '네이버 자동완성'}
+                  </span>
+                )}
+              </div>
             </div>
 
             {loadingRelatedKeywords ? (
@@ -2209,110 +2218,176 @@ export default function KeywordSearchPage() {
               <>
                 {/* 검색량 있는 키워드 테이블 */}
                 {relatedKeywords.keywords.some(kw => kw.monthly_total_search !== null) && (
-                  <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-                    <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-gray-50 z-10">
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-4 font-semibold text-gray-700">키워드</th>
-                          <th className="text-center py-3 px-4 font-semibold text-gray-700">추천</th>
-                          <th className="text-right py-3 px-4 font-semibold text-gray-700">PC</th>
-                          <th className="text-right py-3 px-4 font-semibold text-gray-700">모바일</th>
-                          <th className="text-right py-3 px-4 font-semibold text-gray-700">총 검색량</th>
-                          <th className="text-center py-3 px-4 font-semibold text-gray-700">경쟁도</th>
-                          <th className="text-center py-3 px-4 font-semibold text-gray-700"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {relatedKeywords.keywords.slice(0, 100).map((kw, idx) => {
-                          const isRecommended = isRecommendedKeyword(kw.keyword)
-                          return (
-                            <tr
-                              key={idx}
-                              className={`border-b border-gray-100 hover:bg-purple-50 transition-colors cursor-pointer ${
-                                isRecommended ? 'bg-orange-50' : ''
-                              }`}
-                              onClick={() => handleRelatedKeywordClick(kw.keyword)}
-                            >
-                              <td className="py-3 px-4">
-                                <span className={`font-medium hover:text-purple-600 ${
-                                  isRecommended ? 'text-orange-700' : 'text-gray-800'
-                                }`}>
-                                  {kw.keyword}
-                                </span>
-                              </td>
-                              <td className="text-center py-3 px-4">
-                                {isRecommended && (
-                                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-orange-400 to-pink-500 text-white rounded-full text-xs font-bold shadow-sm">
-                                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                    </svg>
-                                    추천
-                                  </span>
-                                )}
-                              </td>
-                              <td className="text-right py-3 px-4 text-gray-600">
-                                {formatSearchVolume(kw.monthly_pc_search)}
-                              </td>
-                              <td className="text-right py-3 px-4 text-blue-600 font-medium">
-                                {formatSearchVolume(kw.monthly_mobile_search)}
-                              </td>
-                              <td className="text-right py-3 px-4">
-                                <span className={`font-bold ${
-                                  (kw.monthly_total_search || 0) >= 10000 ? 'text-pink-600' :
-                                  (kw.monthly_total_search || 0) >= 1000 ? 'text-purple-600' :
-                                  'text-gray-700'
-                                }`}>
-                                  {formatSearchVolume(kw.monthly_total_search)}
-                                </span>
-                              </td>
-                              <td className="text-center py-3 px-4">
-                                {kw.competition && (
-                                  <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                    kw.competition === '높음' ? 'bg-red-100 text-red-700' :
-                                    kw.competition === '중간' ? 'bg-yellow-100 text-yellow-700' :
-                                    'bg-green-100 text-green-700'
+                  <>
+                    <div className={`overflow-x-auto ${showAllRelatedKeywords ? 'max-h-[800px]' : 'max-h-[400px]'} overflow-y-auto transition-all duration-300`}>
+                      <table className="w-full text-sm">
+                        <thead className="sticky top-0 bg-gray-50 z-10">
+                          <tr className="border-b border-gray-200">
+                            <th className="text-left py-3 px-4 font-semibold text-gray-700 w-8">#</th>
+                            <th className="text-left py-3 px-4 font-semibold text-gray-700">키워드</th>
+                            <th className="text-center py-3 px-4 font-semibold text-gray-700">추천</th>
+                            <th className="text-right py-3 px-4 font-semibold text-gray-700">PC</th>
+                            <th className="text-right py-3 px-4 font-semibold text-gray-700">
+                              <span className="text-blue-600">📱 모바일</span>
+                            </th>
+                            <th className="text-right py-3 px-4 font-semibold text-gray-700">총 검색량</th>
+                            <th className="text-center py-3 px-4 font-semibold text-gray-700">경쟁도</th>
+                            <th className="text-center py-3 px-4 font-semibold text-gray-700"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {relatedKeywords.keywords.slice(0, showAllRelatedKeywords ? 100 : 20).map((kw, idx) => {
+                            const isRecommended = isRecommendedKeyword(kw.keyword)
+                            return (
+                              <tr
+                                key={idx}
+                                className={`border-b border-gray-100 hover:bg-purple-50 transition-colors cursor-pointer ${
+                                  isRecommended ? 'bg-orange-50' : ''
+                                }`}
+                                onClick={() => handleRelatedKeywordClick(kw.keyword)}
+                              >
+                                <td className="py-3 px-4 text-gray-400 text-xs">{idx + 1}</td>
+                                <td className="py-3 px-4">
+                                  <span className={`font-medium hover:text-purple-600 ${
+                                    isRecommended ? 'text-orange-700' : 'text-gray-800'
                                   }`}>
-                                    {kw.competition}
+                                    {kw.keyword}
                                   </span>
-                                )}
-                              </td>
-                              <td className="text-center py-3 px-4">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleRelatedKeywordClick(kw.keyword)
-                                  }}
-                                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                                    isRecommended
-                                      ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
-                                      : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-                                  }`}
-                                >
-                                  분석
-                                </button>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                                </td>
+                                <td className="text-center py-3 px-4">
+                                  {isRecommended && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-orange-400 to-pink-500 text-white rounded-full text-xs font-bold shadow-sm">
+                                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                      </svg>
+                                      추천
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="text-right py-3 px-4 text-gray-600">
+                                  {formatSearchVolume(kw.monthly_pc_search)}
+                                </td>
+                                <td className="text-right py-3 px-4">
+                                  <span className="text-blue-600 font-bold">
+                                    {formatSearchVolume(kw.monthly_mobile_search)}
+                                  </span>
+                                </td>
+                                <td className="text-right py-3 px-4">
+                                  <span className={`font-bold ${
+                                    (kw.monthly_total_search || 0) >= 10000 ? 'text-pink-600' :
+                                    (kw.monthly_total_search || 0) >= 1000 ? 'text-purple-600' :
+                                    'text-gray-700'
+                                  }`}>
+                                    {formatSearchVolume(kw.monthly_total_search)}
+                                  </span>
+                                </td>
+                                <td className="text-center py-3 px-4">
+                                  {kw.competition && (
+                                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                      kw.competition === '높음' ? 'bg-red-100 text-red-700' :
+                                      kw.competition === '중간' ? 'bg-yellow-100 text-yellow-700' :
+                                      'bg-green-100 text-green-700'
+                                    }`}>
+                                      {kw.competition}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="text-center py-3 px-4">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleRelatedKeywordClick(kw.keyword)
+                                    }}
+                                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                                      isRecommended
+                                        ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                                        : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                                    }`}
+                                  >
+                                    분석
+                                  </button>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* 펼치기/접기 버튼 */}
+                    {relatedKeywords.keywords.length > 20 && (
+                      <div className="mt-4 text-center">
+                        <button
+                          onClick={() => setShowAllRelatedKeywords(!showAllRelatedKeywords)}
+                          className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-full font-medium hover:from-purple-600 hover:to-blue-600 transition-all shadow-md hover:shadow-lg"
+                        >
+                          {showAllRelatedKeywords ? (
+                            <>
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                              </svg>
+                              접기 (20개만 보기)
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                              {relatedKeywords.keywords.length}개 모두 보기 (모바일 검색량 포함)
+                            </>
+                          )}
+                        </button>
+                        {!showAllRelatedKeywords && (
+                          <p className="mt-2 text-sm text-gray-500">
+                            현재 상위 20개만 표시 중 • 펼치면 {relatedKeywords.keywords.length}개 연관검색어와 모바일 검색량을 확인할 수 있습니다
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
 
                 {/* 검색량 없는 경우 (자동완성) - 칩 형태 */}
                 {!relatedKeywords.keywords.some(kw => kw.monthly_total_search !== null) && (
-                  <div className="flex flex-wrap gap-2">
-                    {relatedKeywords.keywords.map((kw, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => handleRelatedKeywordClick(kw.keyword)}
-                        className="px-4 py-2 bg-gray-100 hover:bg-purple-100 text-gray-700 hover:text-purple-700 rounded-full text-sm font-medium transition-colors flex items-center gap-1"
-                      >
-                        {kw.keyword}
-                        <span className="text-purple-500">→</span>
-                      </button>
-                    ))}
-                  </div>
+                  <>
+                    <div className="flex flex-wrap gap-2">
+                      {relatedKeywords.keywords.slice(0, showAllRelatedKeywords ? 100 : 20).map((kw, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => handleRelatedKeywordClick(kw.keyword)}
+                          className="px-4 py-2 bg-gray-100 hover:bg-purple-100 text-gray-700 hover:text-purple-700 rounded-full text-sm font-medium transition-colors flex items-center gap-1"
+                        >
+                          {kw.keyword}
+                          <span className="text-purple-500">→</span>
+                        </button>
+                      ))}
+                    </div>
+                    {/* 펼치기/접기 버튼 */}
+                    {relatedKeywords.keywords.length > 20 && (
+                      <div className="mt-4 text-center">
+                        <button
+                          onClick={() => setShowAllRelatedKeywords(!showAllRelatedKeywords)}
+                          className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-full font-medium hover:from-purple-600 hover:to-blue-600 transition-all shadow-md hover:shadow-lg"
+                        >
+                          {showAllRelatedKeywords ? (
+                            <>
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                              </svg>
+                              접기 (20개만 보기)
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                              {relatedKeywords.keywords.length}개 모두 보기
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
               </>
             ) : (
