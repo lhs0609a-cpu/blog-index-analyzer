@@ -357,20 +357,12 @@ async def fetch_via_mobile_web(keyword: str, limit: int) -> List[Dict]:
 
 async def analyze_post(post_url: str, keyword: str) -> Dict:
     """
-    개별 블로그 글 분석 - 상위 노출 글의 특성 파악
+    개별 블로그 글 분석 - 상위 노출 글의 특성 파악 (강화 버전)
 
-    네이버 블로그는 iframe 구조로 되어 있어서:
-    1. 먼저 모바일 버전 시도 (더 간단한 HTML)
-    2. PostView.naver URL로 직접 접근 시도
-    3. 실패시 기본값 반환
-
-    분석 항목:
-    - 제목에 키워드 포함 여부 및 위치
-    - 글 길이 (본문 글자수)
-    - 이미지/동영상 개수
-    - 키워드 밀도 (본문 내 키워드 등장 빈도)
-    - 글 작성일 (신선도)
-    - 공감/댓글 수
+    여러 방법으로 콘텐츠 추출 시도:
+    1. PostView API (JSON 데이터)
+    2. 모바일 버전 HTML 파싱
+    3. OpenGraph 메타데이터 추출
     """
     post_analysis = {
         "post_url": post_url,
@@ -389,7 +381,8 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
         "has_link": False,  # 외부 링크 포함 여부
         "heading_count": 0,  # 소제목 개수
         "paragraph_count": 0,  # 문단 개수
-        "data_fetched": False
+        "data_fetched": False,
+        "fetch_method": None  # 어떤 방법으로 추출했는지 기록
     }
 
     try:
@@ -412,33 +405,86 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
             logger.warning(f"Could not extract blog_id/post_no from: {post_url}")
             return post_analysis
 
-        headers = {
-            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "ko-KR,ko;q=0.9",
-            "Referer": "https://m.search.naver.com/",
-        }
+        # 다양한 User-Agent로 시도
+        user_agents = [
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+            "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+        ]
 
-        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
-            # 모바일 버전으로 시도 (iframe 없이 직접 콘텐츠 제공)
-            mobile_url = f"https://m.blog.naver.com/{blog_id}/{post_no}"
-            resp = await client.get(mobile_url, headers=headers)
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            content_text = ""
+            title_text = ""
+
+            # ===== 방법 1: PostView API로 직접 접근 =====
+            try:
+                postview_url = f"https://blog.naver.com/PostView.naver?blogId={blog_id}&logNo={post_no}&redirect=Dlog"
+                headers1 = {
+                    "User-Agent": user_agents[0],
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+                    "Referer": "https://search.naver.com/",
+                }
+                resp = await client.get(postview_url, headers=headers1)
+
+                if resp.status_code == 200:
+                    html = resp.text
+
+                    # JSON 데이터 추출 시도 (네이버 블로그 내부 데이터)
+                    json_match = re.search(r'__PRELOADED_STATE__\s*=\s*(\{.+?\});?\s*</script>', html, re.DOTALL)
+                    if json_match:
+                        try:
+                            import json
+                            json_data = json.loads(json_match.group(1))
+                            post_data = json_data.get('post', {}).get('post', {})
+
+                            if post_data:
+                                title_text = post_data.get('title', '')
+                                content_text = post_data.get('content', '') or post_data.get('text', '')
+
+                                # HTML 태그 제거
+                                if content_text:
+                                    content_text = re.sub(r'<[^>]+>', ' ', content_text)
+                                    content_text = re.sub(r'\s+', ' ', content_text).strip()
+
+                                post_analysis["image_count"] = post_data.get('imageCount', 0) or len(re.findall(r'<img[^>]+>', post_data.get('content', '')))
+                                post_analysis["video_count"] = post_data.get('videoCount', 0)
+                                post_analysis["like_count"] = post_data.get('sympathyCount', 0)
+                                post_analysis["comment_count"] = post_data.get('commentCount', 0)
+                                post_analysis["fetch_method"] = "json_preload"
+
+                                logger.info(f"Post data from JSON: {blog_id}/{post_no}")
+                        except Exception as je:
+                            logger.debug(f"JSON parse failed: {je}")
+
+            except Exception as e1:
+                logger.debug(f"PostView method failed: {e1}")
+
+            # ===== 방법 2: 모바일 버전 (기존 방식 개선) =====
+            if not content_text or len(content_text) < 100:
+                mobile_url = f"https://m.blog.naver.com/{blog_id}/{post_no}"
+                headers = {
+                    "User-Agent": user_agents[1],
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language": "ko-KR,ko;q=0.9",
+                    "Referer": "https://m.search.naver.com/",
+                }
+                resp = await client.get(mobile_url, headers=headers)
 
             if resp.status_code == 200:
                 html = resp.text
                 soup = BeautifulSoup(html, 'html.parser')
 
                 # 모바일 버전 셀렉터들
-                # 제목
-                title_elem = soup.select_one('.se-title-text, .tit_h3, ._postTitleText, .post_tit, h3.se_textarea, .tit_view')
-                title_text = ""
-                if title_elem:
-                    title_text = title_elem.get_text(strip=True)
-                else:
-                    # og:title에서 추출
-                    og_title = soup.select_one('meta[property="og:title"]')
-                    if og_title:
-                        title_text = og_title.get('content', '')
+                # 제목 (JSON에서 이미 추출한 경우 스킵)
+                if not title_text:
+                    title_elem = soup.select_one('.se-title-text, .tit_h3, ._postTitleText, .post_tit, h3.se_textarea, .tit_view')
+                    if title_elem:
+                        title_text = title_elem.get_text(strip=True)
+                    else:
+                        # og:title에서 추출
+                        og_title = soup.select_one('meta[property="og:title"]')
+                        if og_title:
+                            title_text = og_title.get('content', '')
 
                 if title_text:
                     keyword_lower = keyword.lower().replace(" ", "")
@@ -455,15 +501,33 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
                         else:
                             post_analysis["title_keyword_position"] = 1
 
-                # 본문 - 모바일 버전 셀렉터들
-                content_elem = soup.select_one('.se-main-container, ._postView, .post_ct, #postViewArea, .se_component_wrap, .__viewer_container')
-                if not content_elem:
-                    # 전체 article 영역에서 시도
-                    content_elem = soup.select_one('article, .post_article, .blog_view_content')
+                # 본문 - 모바일 버전 셀렉터들 (JSON에서 이미 추출한 경우 스킵)
+                if not content_text or len(content_text) < 100:
+                    content_elem = soup.select_one('.se-main-container, ._postView, .post_ct, #postViewArea, .se_component_wrap, .__viewer_container')
+                    if not content_elem:
+                        # 전체 article 영역에서 시도
+                        content_elem = soup.select_one('article, .post_article, .blog_view_content')
 
-                if content_elem:
-                    content_text = content_elem.get_text(strip=True)
-                    post_analysis["content_length"] = len(content_text)
+                    if content_elem:
+                        content_text = content_elem.get_text(strip=True)
+                        if not post_analysis["fetch_method"]:
+                            post_analysis["fetch_method"] = "mobile_html"
+                    else:
+                        # 본문을 못 찾았으면 og:description에서 길이 추정
+                        og_desc = soup.select_one('meta[property="og:description"]')
+                        if og_desc:
+                            desc = og_desc.get('content', '')
+                            if len(desc) > len(content_text):
+                                # 보통 설명은 200자 정도, 실제 본문은 5~10배 추정
+                                content_text = desc
+                                post_analysis["content_length"] = len(desc) * 8
+                                post_analysis["fetch_method"] = "og_fallback"
+                                post_analysis["data_fetched"] = True
+
+                # 콘텐츠 분석 (content_text가 있으면)
+                if content_text:
+                    if post_analysis["content_length"] == 0:
+                        post_analysis["content_length"] = len(content_text)
                     post_analysis["data_fetched"] = True
 
                     # 키워드 등장 횟수
@@ -477,32 +541,21 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
                             (post_analysis["keyword_count"] * 1000) / post_analysis["content_length"], 2
                         )
 
-                    # 문단 수
-                    paragraphs = content_elem.find_all(['p', 'div'], class_=lambda x: x and ('text' in str(x).lower() or 'paragraph' in str(x).lower()))
-                    post_analysis["paragraph_count"] = max(len(paragraphs), 1)
-                else:
-                    # 본문을 못 찾았으면 og:description에서 길이 추정
-                    og_desc = soup.select_one('meta[property="og:description"]')
-                    if og_desc:
-                        desc = og_desc.get('content', '')
-                        # 보통 설명은 200자 정도, 실제 본문은 5~10배 추정
-                        post_analysis["content_length"] = len(desc) * 7
-                        post_analysis["keyword_count"] = desc.lower().count(keyword.lower())
-                        post_analysis["data_fetched"] = True
-
-                # 이미지 개수 - 다양한 셀렉터
-                images = soup.select('.se-image-resource, img.se_mediaImage, ._postView img, .post_ct img, img[src*="blogfiles"], img[src*="postfiles"]')
-                post_analysis["image_count"] = len(images)
-
-                # og:image 카운트 (최소 1개는 있음)
+                # 이미지 개수 - 다양한 셀렉터 (JSON에서 이미 추출된 경우 스킵)
                 if post_analysis["image_count"] == 0:
-                    og_images = soup.select('meta[property="og:image"]')
-                    if og_images:
-                        post_analysis["image_count"] = len(og_images)
+                    images = soup.select('.se-image-resource, img.se_mediaImage, ._postView img, .post_ct img, img[src*="blogfiles"], img[src*="postfiles"]')
+                    post_analysis["image_count"] = len(images)
 
-                # 동영상 개수
-                videos = soup.select('.se-video, iframe[src*="video"], iframe[src*="youtube"], iframe[src*="tv.naver"], .video_player')
-                post_analysis["video_count"] = len(videos)
+                    # og:image 카운트 폴백
+                    if post_analysis["image_count"] == 0:
+                        og_images = soup.select('meta[property="og:image"]')
+                        if og_images:
+                            post_analysis["image_count"] = len(og_images)
+
+                # 동영상 개수 (JSON에서 이미 추출된 경우 스킵)
+                if post_analysis["video_count"] == 0:
+                    videos = soup.select('.se-video, iframe[src*="video"], iframe[src*="youtube"], iframe[src*="tv.naver"], .video_player')
+                    post_analysis["video_count"] = len(videos)
 
                 # 소제목 개수
                 headings = soup.select('.se-section-title, .se-text-paragraph-align-center, h2, h3, h4, .se-title')
@@ -552,9 +605,9 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
                     except:
                         pass
 
-                logger.info(f"Post analyzed (mobile): {blog_id}/{post_no} - {post_analysis['content_length']} chars, {post_analysis['image_count']} images, kw={post_analysis['keyword_count']}")
+                logger.info(f"Post analyzed [{post_analysis.get('fetch_method', 'unknown')}]: {blog_id}/{post_no} - {post_analysis['content_length']} chars, {post_analysis['image_count']} imgs, kw={post_analysis['keyword_count']}")
             else:
-                logger.warning(f"Failed to fetch mobile post: {mobile_url} - status {resp.status_code}")
+                logger.warning(f"Failed to fetch post: {blog_id}/{post_no} - status {resp.status_code}")
 
     except Exception as e:
         logger.error(f"Error analyzing post {post_url}: {e}")
