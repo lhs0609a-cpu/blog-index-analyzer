@@ -2188,7 +2188,7 @@ export default function KeywordSearchPage() {
         )}
 
         {/* Related Keywords Section */}
-        {results && !loading && (
+        {((results && !loading) || (!isAnalyzing && keywordStatuses.length > 0 && keywordStatuses.some(s => s.status === 'completed'))) && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
