@@ -369,7 +369,7 @@ export default function Home() {
                 <div>
                   <div className="text-sm text-purple-600 font-medium">병원마케팅 No.1</div>
                   <div className="text-2xl font-bold text-gray-900">플라톤마케팅과 함께 성장하세요</div>
-                  <div className="text-gray-600 mt-1">10년 이상의 병원마케팅 노하우로 성공을 이끕니다</div>
+                  <div className="text-gray-600 mt-1">누적고객사 70+ 병원마케팅 전문 에이전시</div>
                 </div>
               </div>
               <div className="px-6 py-3 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold hover:shadow-lg transition-all">
@@ -504,8 +504,7 @@ export default function Home() {
               <span className="group-hover:translate-x-2 transition-transform">→</span>
             </div>
             <div className="flex items-center justify-center gap-8 mt-8 text-gray-500 text-sm">
-              <span>✓ 10년+ 병원마케팅 경력</span>
-              <span>✓ 500+ 병원 파트너</span>
+              <span>✓ 누적고객사 70+</span>
               <span>✓ 맞춤형 마케팅 전략</span>
             </div>
           </motion.a>
