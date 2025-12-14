@@ -101,6 +101,76 @@ class KeywordSearchResponse(BaseModel):
     timestamp: str
 
 
+# ===== Blog Analysis Request/Response Models =====
+class BlogAnalysisRequest(BaseModel):
+    blog_id: str
+    post_limit: Optional[int] = 10
+    quick_mode: Optional[bool] = False
+
+
+class BlogInfoResponse(BaseModel):
+    blog_id: str
+    blog_name: str
+    blog_url: str
+    description: Optional[str] = None
+
+
+class BlogStatsResponse(BaseModel):
+    total_posts: Optional[int] = 0
+    total_visitors: Optional[int] = 0
+    neighbor_count: Optional[int] = 0
+    is_influencer: bool = False
+    avg_likes: Optional[float] = None
+    avg_comments: Optional[float] = None
+    posting_frequency: Optional[float] = None
+
+
+class SimpleScoreBreakdown(BaseModel):
+    c_rank: float = 0
+    dia: float = 0
+
+
+class BlogIndexResponse(BaseModel):
+    level: int = 0
+    grade: str = ""
+    level_category: str = ""
+    total_score: float = 0
+    percentile: float = 0
+    score_breakdown: SimpleScoreBreakdown = SimpleScoreBreakdown()
+
+
+class WarningResponse(BaseModel):
+    type: str
+    severity: str = "low"
+    message: str
+
+
+class RecommendationResponse(BaseModel):
+    type: Optional[str] = None
+    priority: str = "medium"
+    category: str
+    message: str
+    actions: Optional[List[str]] = None
+    impact: Optional[str] = None
+
+
+class BlogIndexResultResponse(BaseModel):
+    blog: BlogInfoResponse
+    stats: BlogStatsResponse
+    index: BlogIndexResponse
+    warnings: List[WarningResponse] = []
+    recommendations: List[RecommendationResponse] = []
+    last_analyzed_at: Optional[str] = None
+
+
+class BlogAnalysisResponse(BaseModel):
+    job_id: str
+    status: str  # 'processing', 'completed', 'failed'
+    message: Optional[str] = None
+    estimated_time_seconds: Optional[int] = None
+    result: Optional[BlogIndexResultResponse] = None
+
+
 def generate_signature(timestamp: str, method: str, uri: str, secret_key: str) -> str:
     """Generate HMAC signature for Naver Search Ad API"""
     message = f"{timestamp}.{method}.{uri}"
@@ -1226,6 +1296,119 @@ async def get_related_keywords_from_autocomplete(keyword: str) -> RelatedKeyword
             total_count=0,
             keywords=[],
             message=str(e)
+        )
+
+
+# ===== Blog Analysis Endpoint =====
+@router.post("/analyze", response_model=BlogAnalysisResponse)
+async def analyze_blog_endpoint(request: BlogAnalysisRequest):
+    """
+    Analyze a Naver blog and return its index score.
+
+    This is a synchronous endpoint that returns results immediately.
+    """
+    import uuid
+    from datetime import datetime
+
+    blog_id = request.blog_id.strip()
+    job_id = str(uuid.uuid4())
+
+    logger.info(f"Starting blog analysis for: {blog_id}")
+
+    try:
+        # Run blog analysis
+        result = await analyze_blog(blog_id)
+
+        stats = result.get("stats", {})
+        index = result.get("index", {})
+
+        # Get score breakdown
+        score_breakdown = index.get("score_breakdown", {})
+        c_rank = score_breakdown.get("c_rank", 0)
+        dia = score_breakdown.get("dia", 0)
+
+        # Build response
+        blog_info = BlogInfoResponse(
+            blog_id=blog_id,
+            blog_name=f"{blog_id}의 블로그",
+            blog_url=f"https://blog.naver.com/{blog_id}",
+            description=None
+        )
+
+        stats_response = BlogStatsResponse(
+            total_posts=stats.get("total_posts") or 0,
+            total_visitors=stats.get("total_visitors") or 0,
+            neighbor_count=stats.get("neighbor_count") or 0,
+            is_influencer=False
+        )
+
+        index_response = BlogIndexResponse(
+            level=index.get("level", 0),
+            grade=index.get("grade", ""),
+            level_category=index.get("level_category", ""),
+            total_score=index.get("total_score", 0),
+            percentile=index.get("percentile", 0),
+            score_breakdown=SimpleScoreBreakdown(
+                c_rank=c_rank,
+                dia=dia
+            )
+        )
+
+        # Generate warnings and recommendations based on analysis
+        warnings = []
+        recommendations = []
+
+        # Add warnings based on score
+        if index.get("total_score", 0) < 30:
+            warnings.append(WarningResponse(
+                type="low_score",
+                severity="high",
+                message="블로그 지수가 낮습니다. 콘텐츠 품질 개선이 필요합니다."
+            ))
+
+        # Add recommendations based on stats
+        if (stats.get("total_posts") or 0) < 50:
+            recommendations.append(RecommendationResponse(
+                priority="high",
+                category="content",
+                message="포스팅 수를 늘려보세요. 꾸준한 포스팅이 블로그 지수 향상에 도움됩니다.",
+                actions=["주 2-3회 이상 포스팅", "양질의 콘텐츠 작성"]
+            ))
+
+        if (stats.get("neighbor_count") or 0) < 100:
+            recommendations.append(RecommendationResponse(
+                priority="medium",
+                category="engagement",
+                message="이웃 수를 늘려보세요. 활발한 소통이 블로그 성장에 도움됩니다.",
+                actions=["이웃 블로그 방문 및 댓글", "서로이웃 신청"]
+            ))
+
+        blog_result = BlogIndexResultResponse(
+            blog=blog_info,
+            stats=stats_response,
+            index=index_response,
+            warnings=warnings,
+            recommendations=recommendations,
+            last_analyzed_at=datetime.now().isoformat()
+        )
+
+        return BlogAnalysisResponse(
+            job_id=job_id,
+            status="completed",
+            message="분석이 완료되었습니다.",
+            result=blog_result
+        )
+
+    except Exception as e:
+        logger.error(f"Error analyzing blog {blog_id}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+
+        return BlogAnalysisResponse(
+            job_id=job_id,
+            status="failed",
+            message=f"분석 중 오류가 발생했습니다: {str(e)}",
+            result=None
         )
 
 

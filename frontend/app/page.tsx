@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Sparkles, TrendingUp, Zap, Award, Users, BarChart3, LogOut } from 'lucide-react'
+import { Sparkles, TrendingUp, Zap, Award, Users, BarChart3, LogOut, Search } from 'lucide-react'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import toast from 'react-hot-toast'
@@ -12,10 +12,22 @@ export default function Home() {
   const { isAuthenticated, user, logout } = useAuthStore()
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
+  const [searchKeyword, setSearchKeyword] = useState('')
+  const [isSearching, setIsSearching] = useState(false)
 
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  const handleKeywordSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!searchKeyword.trim()) {
+      toast.error('키워드를 입력해주세요')
+      return
+    }
+    setIsSearching(true)
+    router.push(`/keyword-search?keyword=${encodeURIComponent(searchKeyword.trim())}`)
+  }
 
   const handleLogout = () => {
     logout()
@@ -139,12 +151,68 @@ export default function Home() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className="text-xl text-gray-600 mb-12 max-w-2xl mx-auto"
+              className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto"
             >
               40+ 지표를 분석하여 블로그 품질을 정확하게 측정합니다.
               <br />
               인플루언서들이 선택한 #1 블로그 분석 도구
             </motion.p>
+
+            {/* Keyword Search Bar */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.25 }}
+              className="max-w-2xl mx-auto mb-8"
+            >
+              <form onSubmit={handleKeywordSearch} className="relative">
+                <div className="relative flex items-center">
+                  <div className="absolute left-5 text-gray-400">
+                    <Search className="w-5 h-5" />
+                  </div>
+                  <input
+                    type="text"
+                    value={searchKeyword}
+                    onChange={(e) => setSearchKeyword(e.target.value)}
+                    placeholder="키워드를 입력하세요 (예: 맛집, 여행, 육아)"
+                    className="w-full pl-14 pr-36 py-5 rounded-full glass border-2 border-transparent focus:border-purple-400 focus:outline-none text-lg transition-all duration-300 shadow-lg hover:shadow-xl"
+                    disabled={isSearching}
+                  />
+                  <button
+                    type="submit"
+                    disabled={isSearching}
+                    className="absolute right-2 px-6 py-3 rounded-full instagram-gradient text-white font-semibold hover:opacity-90 transition-all duration-300 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isSearching ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        검색중...
+                      </>
+                    ) : (
+                      <>
+                        <Search className="w-4 h-4" />
+                        키워드 검색
+                      </>
+                    )}
+                  </button>
+                </div>
+                <p className="text-sm text-gray-500 mt-3">
+                  💡 키워드로 검색하면 네이버 VIEW 탭 상위 블로그들의 지수를 한눈에 분석할 수 있어요
+                </p>
+              </form>
+            </motion.div>
+
+            {/* Divider */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5, delay: 0.28 }}
+              className="flex items-center justify-center gap-4 mb-8"
+            >
+              <div className="h-px w-16 bg-gray-300"></div>
+              <span className="text-sm text-gray-400">또는</span>
+              <div className="h-px w-16 bg-gray-300"></div>
+            </motion.div>
 
             {/* CTA Buttons */}
             <motion.div
@@ -155,13 +223,12 @@ export default function Home() {
             >
               <Link
                 href="/analyze"
-                className="group relative px-8 py-4 rounded-full instagram-gradient text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden"
+                className="group relative px-8 py-4 rounded-full glass border-2 border-purple-300 font-semibold hover:bg-purple-50 transition-all duration-300 overflow-hidden"
               >
-                <span className="relative z-10 flex items-center gap-2">
+                <span className="relative z-10 flex items-center gap-2 text-purple-600">
                   <Zap className="w-5 h-5" />
-                  무료로 시작하기
+                  블로그 ID로 분석하기
                 </span>
-                <div className="absolute inset-0 bg-white/20 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-300" />
               </Link>
 
               <Link

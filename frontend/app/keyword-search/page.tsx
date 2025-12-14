@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { ConnectionIndicator } from '@/components/ConnectionIndicator'
 import { getApiUrl } from '@/lib/api/apiConfig'
 import * as Tabs from '@radix-ui/react-tabs'
@@ -232,6 +232,80 @@ export default function KeywordSearchPage() {
   const [loadingLearningStatus, setLoadingLearningStatus] = useState(false)
 
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  // URL에서 키워드 파라미터 가져와서 자동 검색
+  useEffect(() => {
+    const keywordParam = searchParams.get('keyword')
+    if (keywordParam && !keyword && !loading && !results) {
+      setKeyword(keywordParam)
+      // 약간의 딜레이 후 자동 검색 실행
+      const timer = setTimeout(() => {
+        performSearch(keywordParam)
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [searchParams])
+
+  // 검색 로직 (분리된 함수)
+  const performSearch = useCallback(async (searchKeyword: string) => {
+    if (!searchKeyword.trim()) return
+
+    setLoading(true)
+    setError('')
+    setResults(null)
+    setMyBlogResult(null)
+    setProgress(0)
+    setProgressMessage('블로그 검색 중...')
+
+    try {
+      const progressInterval = setInterval(() => {
+        setProgress(prev => {
+          if (prev >= 90) return 90
+          return prev + 2
+        })
+      }, 1000)
+
+      const messageInterval = setInterval(() => {
+        setProgress(prev => {
+          if (prev < 20) setProgressMessage('블로그 검색 중...')
+          else if (prev < 40) setProgressMessage('블로그 목록 수집 중...')
+          else if (prev < 60) setProgressMessage('블로그 분석 준비 중...')
+          else if (prev < 80) setProgressMessage('블로그 상세 분석 중...')
+          else setProgressMessage('결과 정리 중...')
+          return prev
+        })
+      }, 3000)
+
+      const response = await fetch(
+        `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(searchKeyword)}&limit=13&analyze_content=true`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+
+      clearInterval(progressInterval)
+      clearInterval(messageInterval)
+      setProgress(100)
+      setProgressMessage('완료!')
+
+      if (!response.ok) throw new Error('검색 실패')
+
+      const data: KeywordSearchResponse = await response.json()
+      setResults(data)
+      fetchRelatedKeywords(searchKeyword)
+      collectLearningData(searchKeyword, data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '검색 중 오류가 발생했습니다')
+    } finally {
+      setLoading(false)
+      setTimeout(() => {
+        setProgress(0)
+        setProgressMessage('')
+      }, 1000)
+    }
+  }, [])
 
   // 학습 엔진 상태 조회
   const fetchLearningStatus = async () => {
@@ -370,76 +444,11 @@ export default function KeywordSearchPage() {
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
-
     if (!keyword.trim()) {
       setError('키워드를 입력하세요')
       return
     }
-
-    setLoading(true)
-    setError('')
-    setResults(null)
-    setMyBlogResult(null) // 새 검색 시 내 블로그 결과 초기화
-    setProgress(0)
-    setProgressMessage('블로그 검색 중...')
-
-    try {
-      // 진행률 시뮬레이션 (실제 백엔드 응답 전까지)
-      const progressInterval = setInterval(() => {
-        setProgress(prev => {
-          if (prev >= 90) return 90 // 90%에서 대기
-          return prev + 2
-        })
-      }, 1000) // 1초마다 2% 증가
-
-      // 단계별 메시지 업데이트
-      const messageInterval = setInterval(() => {
-        setProgress(prev => {
-          if (prev < 20) setProgressMessage('블로그 검색 중...')
-          else if (prev < 40) setProgressMessage('블로그 목록 수집 중...')
-          else if (prev < 60) setProgressMessage('블로그 분석 준비 중...')
-          else if (prev < 80) setProgressMessage('블로그 상세 분석 중...')
-          else setProgressMessage('결과 정리 중...')
-          return prev
-        })
-      }, 3000) // 3초마다 메시지 변경
-
-      const response = await fetch(
-        `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(keyword)}&limit=13&analyze_content=true`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      )
-
-      clearInterval(progressInterval)
-      clearInterval(messageInterval)
-      setProgress(100)
-      setProgressMessage('완료!')
-
-      if (!response.ok) {
-        throw new Error('검색 실패')
-      }
-
-      const data: KeywordSearchResponse = await response.json()
-      setResults(data)
-
-      // 연관 키워드 조회
-      fetchRelatedKeywords(keyword)
-
-      // 학습 데이터 수집 (백그라운드)
-      collectLearningData(keyword, data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '검색 중 오류가 발생했습니다')
-    } finally {
-      setLoading(false)
-      setTimeout(() => {
-        setProgress(0)
-        setProgressMessage('')
-      }, 1000)
-    }
+    performSearch(keyword)
   }
 
   const openBreakdownModal = async (blogId: string) => {
