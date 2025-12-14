@@ -246,49 +246,58 @@ export default function AnalyzePage() {
                       </div>
                       <div className="mt-4">
                         <div className="text-6xl font-black gradient-text mb-4">
-                          Level {result.index.level}
+                          {(() => {
+                            const level = result.index.level
+                            if (level <= 2) return 'Iron'
+                            if (level <= 4) return 'Bronze'
+                            if (level <= 6) return 'Silver'
+                            if (level <= 9) return 'Gold'
+                            if (level <= 11) return 'Platinum'
+                            if (level <= 13) return 'Diamond'
+                            return 'Challenger'
+                          })()}
                         </div>
                         <div className="text-3xl font-bold text-gray-900 mb-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-purple-100 to-pink-100">
                           {result.index.grade}
                         </div>
                         <div className="text-lg text-gray-600 mt-3 font-medium">{result.index.level_category}</div>
 
-                        {/* 티어 프로그레스 시각화 - 롤 스타일 */}
+                        {/* 레벨 프로그레스 시각화 - 확대 버전 */}
                         <div className="mt-10 px-4">
-                          {/* 티어 카드 - 롤 스타일 */}
-                          <div className="grid grid-cols-7 gap-2 mb-10">
+                          {/* 레벨 구간 설명 - 대형 티어 카드 */}
+                          <div className="grid grid-cols-4 gap-4 mb-10">
                             {[
-                              { range: [1, 2], label: 'Iron', labelKr: '아이언', color: 'bg-gradient-to-b from-gray-500 to-gray-700', textColor: 'text-gray-700', bgActive: 'bg-gray-100', ringColor: 'ring-gray-400' },
-                              { range: [3, 4], label: 'Bronze', labelKr: '브론즈', color: 'bg-gradient-to-b from-amber-600 to-amber-800', textColor: 'text-amber-700', bgActive: 'bg-amber-50', ringColor: 'ring-amber-400' },
-                              { range: [5, 6], label: 'Silver', labelKr: '실버', color: 'bg-gradient-to-b from-slate-300 to-slate-500', textColor: 'text-slate-600', bgActive: 'bg-slate-50', ringColor: 'ring-slate-400' },
-                              { range: [7, 9], label: 'Gold', labelKr: '골드', color: 'bg-gradient-to-b from-yellow-400 to-yellow-600', textColor: 'text-yellow-700', bgActive: 'bg-yellow-50', ringColor: 'ring-yellow-400' },
-                              { range: [10, 11], label: 'Platinum', labelKr: '플래티넘', color: 'bg-gradient-to-b from-teal-400 to-teal-600', textColor: 'text-teal-700', bgActive: 'bg-teal-50', ringColor: 'ring-teal-400' },
-                              { range: [12, 13], label: 'Diamond', labelKr: '다이아', color: 'bg-gradient-to-b from-blue-400 to-purple-600', textColor: 'text-blue-700', bgActive: 'bg-blue-50', ringColor: 'ring-blue-400' },
-                              { range: [14, 15], label: 'Challenger', labelKr: '챌린저', color: 'bg-gradient-to-b from-yellow-300 via-amber-400 to-orange-500', textColor: 'text-orange-700', bgActive: 'bg-orange-50', ringColor: 'ring-orange-400' },
+                              { range: '1', label: '일반', color: 'bg-gray-400', textColor: 'text-gray-700', bgActive: 'bg-gray-50' },
+                              { range: '2-8', label: '준최적화', color: 'bg-blue-500', textColor: 'text-blue-600', bgActive: 'bg-blue-50' },
+                              { range: '9-11', label: '최적화', color: 'bg-purple-500', textColor: 'text-purple-600', bgActive: 'bg-purple-50' },
+                              { range: '12-15', label: '찐최적화', color: 'bg-gradient-to-r from-pink-500 to-rose-500', textColor: 'text-pink-600', bgActive: 'bg-pink-50' },
                             ].map((tier) => {
                               const currentLevel = result.index.level
-                              const isActive = currentLevel >= tier.range[0] && currentLevel <= tier.range[1]
+                              const isActive = (tier.range === '1' && currentLevel === 1) ||
+                                (tier.range === '2-8' && currentLevel >= 2 && currentLevel <= 8) ||
+                                (tier.range === '9-11' && currentLevel >= 9 && currentLevel <= 11) ||
+                                (tier.range === '12-15' && currentLevel >= 12 && currentLevel <= 15)
 
                               return (
                                 <div
-                                  key={tier.label}
-                                  className={`text-center py-4 px-2 rounded-2xl transition-all duration-300 ${
+                                  key={tier.range}
+                                  className={`text-center py-6 px-3 rounded-3xl transition-all duration-300 ${
                                     isActive
-                                      ? `${tier.bgActive} shadow-2xl scale-110 ring-3 ${tier.ringColor} border-2 border-opacity-50`
-                                      : 'bg-gray-100/60 opacity-50'
+                                      ? `${tier.bgActive} shadow-2xl scale-110 ring-3 ring-purple-400 border-2 border-purple-200`
+                                      : 'bg-gray-100/60 opacity-60'
                                   }`}
                                 >
-                                  <div className={`w-10 h-10 rounded-full ${tier.color} mx-auto mb-2 ${isActive ? 'shadow-lg animate-pulse' : ''}`} />
-                                  <div className={`text-sm font-bold ${isActive ? tier.textColor : 'text-gray-400'}`}>
+                                  <div className={`w-8 h-8 rounded-full ${tier.color} mx-auto mb-3 ${isActive ? 'shadow-lg' : ''}`} />
+                                  <div className={`text-xl font-bold ${isActive ? tier.textColor : 'text-gray-400'}`}>
                                     {tier.label}
                                   </div>
-                                  <div className={`text-xs mt-1 ${isActive ? 'text-gray-600' : 'text-gray-400'}`}>
-                                    {tier.labelKr}
+                                  <div className={`text-base mt-2 font-medium ${isActive ? 'text-gray-600' : 'text-gray-400'}`}>
+                                    Lv.{tier.range}
                                   </div>
                                   {isActive && (
-                                    <div className="mt-2">
-                                      <span className="text-[10px] font-bold text-white bg-gradient-to-r from-purple-500 to-pink-500 px-2 py-0.5 rounded-full">
-                                        현재
+                                    <div className="mt-3">
+                                      <span className="text-xs font-bold text-white bg-purple-500 px-3 py-1 rounded-full">
+                                        현재 티어
                                       </span>
                                     </div>
                                   )}
@@ -297,17 +306,14 @@ export default function AnalyzePage() {
                             })}
                           </div>
 
-                          {/* 프로그레스 바 - 롤 스타일 */}
+                          {/* 프로그레스 바 - 크게 */}
                           <div className="relative py-6">
                             {/* 배경 바 */}
                             <div className="h-5 bg-gray-200 rounded-full overflow-hidden flex shadow-inner">
-                              <div className="w-[13.3%] bg-gradient-to-r from-gray-500 to-gray-600" /> {/* Iron 1-2 */}
-                              <div className="w-[13.3%] bg-gradient-to-r from-amber-600 to-amber-700" /> {/* Bronze 3-4 */}
-                              <div className="w-[13.3%] bg-gradient-to-r from-slate-400 to-slate-500" /> {/* Silver 5-6 */}
-                              <div className="w-[20%] bg-gradient-to-r from-yellow-400 to-yellow-500" /> {/* Gold 7-9 */}
-                              <div className="w-[13.3%] bg-gradient-to-r from-teal-400 to-teal-500" /> {/* Platinum 10-11 */}
-                              <div className="w-[13.3%] bg-gradient-to-r from-blue-400 to-purple-500" /> {/* Diamond 12-13 */}
-                              <div className="w-[13.5%] bg-gradient-to-r from-yellow-400 via-amber-500 to-orange-500" /> {/* Challenger 14-15 */}
+                              <div className="w-[6.67%] bg-gray-400" /> {/* Lv.1 */}
+                              <div className="w-[46.67%] bg-gradient-to-r from-blue-400 to-blue-500" /> {/* Lv.2-8 */}
+                              <div className="w-[20%] bg-gradient-to-r from-purple-400 to-purple-500" /> {/* Lv.9-11 */}
+                              <div className="w-[26.67%] bg-gradient-to-r from-pink-400 via-pink-500 to-rose-500" /> {/* Lv.12-15 */}
                             </div>
 
                             {/* 현재 레벨 마커 */}
@@ -316,44 +322,42 @@ export default function AnalyzePage() {
                               style={{ left: `${((result.index.level - 1) / 14) * 100}%` }}
                             >
                               <div className="relative">
-                                {/* 마커 */}
+                                {/* 마커 - 더 크게 */}
                                 <div className="w-12 h-12 -ml-6 bg-white rounded-full shadow-2xl border-4 border-yellow-400 flex items-center justify-center ring-4 ring-yellow-200">
                                   <span className="text-lg font-bold text-gray-800">{result.index.level}</span>
                                 </div>
                                 {/* 라벨 */}
                                 <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 text-center">
                                   <div className="text-sm font-bold text-yellow-600 whitespace-nowrap bg-yellow-100 px-4 py-1.5 rounded-full shadow-md border border-yellow-200">
-                                    현재
+                                    현재 레벨
                                   </div>
                                 </div>
                               </div>
                             </div>
                           </div>
 
-                          {/* 티어 눈금 */}
-                          <div className="flex justify-between mt-12 px-2 text-xs text-gray-500 font-medium">
-                            <span>Iron</span>
-                            <span>Bronze</span>
-                            <span>Silver</span>
-                            <span>Gold</span>
-                            <span>Platinum</span>
-                            <span>Diamond</span>
-                            <span>Challenger</span>
+                          {/* 레벨 눈금 - 더 크게 */}
+                          <div className="flex justify-between mt-12 px-2">
+                            <span className="text-sm text-gray-500 font-semibold">1</span>
+                            <span className="text-sm text-gray-500 font-semibold">5</span>
+                            <span className="text-sm text-gray-500 font-semibold">8</span>
+                            <span className="text-sm text-gray-500 font-semibold">11</span>
+                            <span className="text-sm text-gray-500 font-semibold">15</span>
                           </div>
 
-                          {/* 다음 티어 안내 */}
+                          {/* 다음 티어 안내 - 롤 스타일 */}
                           {result.index.level < 15 && (
                             <div className="mt-8 text-center">
                               {(() => {
-                                const nextTierInfo = [
-                                  { maxLevel: 2, nextTier: 'Bronze', nextTierKr: '브론즈', color: 'text-amber-700', bg: 'bg-amber-100' },
-                                  { maxLevel: 4, nextTier: 'Silver', nextTierKr: '실버', color: 'text-slate-700', bg: 'bg-slate-100' },
-                                  { maxLevel: 6, nextTier: 'Gold', nextTierKr: '골드', color: 'text-yellow-700', bg: 'bg-yellow-100' },
-                                  { maxLevel: 9, nextTier: 'Platinum', nextTierKr: '플래티넘', color: 'text-teal-700', bg: 'bg-teal-100' },
-                                  { maxLevel: 11, nextTier: 'Diamond', nextTierKr: '다이아', color: 'text-blue-700', bg: 'bg-blue-100' },
-                                  { maxLevel: 13, nextTier: 'Challenger', nextTierKr: '챌린저', color: 'text-orange-700', bg: 'bg-orange-100' },
-                                  { maxLevel: 15, nextTier: 'MAX', nextTierKr: '최고', color: 'text-purple-700', bg: 'bg-purple-100' },
-                                ].find(t => result.index.level <= t.maxLevel)!
+                                const level = result.index.level
+                                const nextTierInfo =
+                                  level <= 2 ? { nextTier: 'Bronze', color: 'text-amber-700', bg: 'bg-amber-100' } :
+                                  level <= 4 ? { nextTier: 'Silver', color: 'text-slate-700', bg: 'bg-slate-100' } :
+                                  level <= 6 ? { nextTier: 'Gold', color: 'text-yellow-700', bg: 'bg-yellow-100' } :
+                                  level <= 9 ? { nextTier: 'Platinum', color: 'text-teal-700', bg: 'bg-teal-100' } :
+                                  level <= 11 ? { nextTier: 'Diamond', color: 'text-blue-700', bg: 'bg-blue-100' } :
+                                  level <= 13 ? { nextTier: 'Challenger', color: 'text-orange-700', bg: 'bg-orange-100' } :
+                                  { nextTier: 'MAX', color: 'text-purple-700', bg: 'bg-purple-100' }
 
                                 const pointsNeeded = Math.ceil((result.index.level + 1) * 6.67 - result.index.total_score)
 
