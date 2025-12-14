@@ -41,6 +41,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Learning tables initialization failed: {e}")
 
+    # Top Posts Analysis DB 초기화
+    try:
+        from database.top_posts_db import init_top_posts_tables
+        init_top_posts_tables()
+        logger.info("✅ Top posts analysis tables initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ Top posts tables initialization failed: {e}")
+
     # 자동 백업 스케줄러 시작
     try:
         from services.backup_service import backup_scheduler
@@ -172,7 +180,7 @@ async def health_check():
 
 # 라우터 등록
 from routers import auth, blogs, comprehensive_analysis, system
-from routers import learning, backup, supabase_sync, batch_learning
+from routers import learning, backup, supabase_sync, batch_learning, top_posts
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(blogs.router, prefix="/api/blogs", tags=["블로그"])
@@ -182,6 +190,7 @@ app.include_router(learning.router, prefix="/api/learning", tags=["학습엔진"
 app.include_router(backup.router, prefix="/api/backup", tags=["백업관리"])
 app.include_router(supabase_sync.router, prefix="/api/supabase", tags=["Supabase동기화"])
 app.include_router(batch_learning.router, prefix="/api/batch-learning", tags=["대량학습"])
+app.include_router(top_posts.router, prefix="/api/top-posts", tags=["상위글분석"])
 
 
 if __name__ == "__main__":

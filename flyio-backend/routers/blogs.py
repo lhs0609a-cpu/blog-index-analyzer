@@ -1678,6 +1678,17 @@ async def search_keyword_with_tabs(
     # 백그라운드 태스크로 실행 (응답을 기다리지 않음)
     asyncio.create_task(background_learning())
 
+    # ===== AUTO TOP-POST ANALYSIS: 상위 글 패턴 자동 분석 =====
+    async def background_top_post_analysis():
+        try:
+            from routers.top_posts import auto_analyze_top_posts
+            await auto_analyze_top_posts(keyword, search_results, top_n=3)
+        except Exception as e:
+            logger.warning(f"Top post analysis failed: {e}")
+
+    # 백그라운드 태스크로 실행 (응답을 기다리지 않음)
+    asyncio.create_task(background_top_post_analysis())
+
     return KeywordSearchResponse(
         keyword=keyword,
         total_found=count,

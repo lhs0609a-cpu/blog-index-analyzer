@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Sparkles, TrendingUp, Zap, Award, Users, BarChart3, LogOut, Search } from 'lucide-react'
+import { Sparkles, TrendingUp, Zap, Award, Users, BarChart3, LogOut, Search, BookOpen } from 'lucide-react'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import toast from 'react-hot-toast'
@@ -311,42 +311,59 @@ export default function Home() {
             <p className="text-gray-600 text-lg">블로그 성장에 필요한 모든 것</p>
           </motion.div>
 
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-4 gap-6">
             {[
               {
                 icon: <TrendingUp className="w-10 h-10" />,
                 title: '실시간 지수 측정',
                 description: '11단계 레벨 시스템으로 블로그 등급을 정확하게 평가합니다.',
-                gradient: 'from-purple-500 to-pink-500'
+                gradient: 'from-purple-500 to-pink-500',
+                link: '/analyze'
               },
               {
                 icon: <BarChart3 className="w-10 h-10" />,
                 title: '상세한 분석',
                 description: '신뢰도, 콘텐츠, 참여도, SEO, 트래픽을 종합 분석합니다.',
-                gradient: 'from-pink-500 to-orange-500'
+                gradient: 'from-pink-500 to-orange-500',
+                link: '/keyword-search'
               },
               {
                 icon: <Award className="w-10 h-10" />,
                 title: '맞춤 개선안',
                 description: 'AI가 분석한 맞춤형 권장사항으로 블로그를 성장시키세요.',
-                gradient: 'from-orange-500 to-yellow-500'
+                gradient: 'from-orange-500 to-yellow-500',
+                link: '/dashboard'
+              },
+              {
+                icon: <BookOpen className="w-10 h-10" />,
+                title: '글쓰기 가이드',
+                description: '상위 글 분석 데이터 기반 실시간 최적화 가이드를 제공합니다.',
+                gradient: 'from-green-500 to-teal-500',
+                link: '/writing-guide',
+                isNew: true
               },
             ].map((feature, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.1 }}
-                whileHover={{ y: -10 }}
-                className="group relative glass rounded-3xl p-8 hover:shadow-2xl transition-all duration-300"
-              >
-                <div className={`inline-flex p-3 rounded-2xl bg-gradient-to-br ${feature.gradient} text-white mb-6 group-hover:scale-110 transition-transform duration-300`}>
-                  {feature.icon}
-                </div>
-                <h3 className="text-2xl font-bold mb-3">{feature.title}</h3>
-                <p className="text-gray-600">{feature.description}</p>
-              </motion.div>
+              <Link key={index} href={feature.link || '#'}>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.1 }}
+                  whileHover={{ y: -10 }}
+                  className="group relative glass rounded-3xl p-6 hover:shadow-2xl transition-all duration-300 cursor-pointer h-full"
+                >
+                  {feature.isNew && (
+                    <span className="absolute top-4 right-4 px-2 py-1 text-xs font-bold bg-green-500 text-white rounded-full">
+                      NEW
+                    </span>
+                  )}
+                  <div className={`inline-flex p-3 rounded-2xl bg-gradient-to-br ${feature.gradient} text-white mb-4 group-hover:scale-110 transition-transform duration-300`}>
+                    {feature.icon}
+                  </div>
+                  <h3 className="text-xl font-bold mb-2">{feature.title}</h3>
+                  <p className="text-gray-600 text-sm">{feature.description}</p>
+                </motion.div>
+              </Link>
             ))}
           </div>
 
