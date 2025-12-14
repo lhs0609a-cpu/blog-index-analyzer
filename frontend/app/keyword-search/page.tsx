@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ConnectionIndicator } from '@/components/ConnectionIndicator'
 import { getApiUrl } from '@/lib/api/apiConfig'
@@ -193,7 +193,7 @@ interface LearningStatus {
   }
 }
 
-export default function KeywordSearchPage() {
+function KeywordSearchContent() {
   // 멀티 키워드 검색 관련
   const [keywordsInput, setKeywordsInput] = useState('')
   const [keywordStatuses, setKeywordStatuses] = useState<KeywordSearchStatus[]>([])
@@ -2887,5 +2887,26 @@ export default function KeywordSearchPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// Loading fallback component
+function KeywordSearchLoading() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-gray-600">로딩 중...</p>
+      </div>
+    </div>
+  )
+}
+
+// Default export with Suspense boundary
+export default function KeywordSearchPage() {
+  return (
+    <Suspense fallback={<KeywordSearchLoading />}>
+      <KeywordSearchContent />
+    </Suspense>
   )
 }
