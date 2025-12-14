@@ -1412,6 +1412,66 @@ async def analyze_blog_endpoint(request: BlogAnalysisRequest):
         )
 
 
+# ===== Blog Index Endpoint (GET) =====
+@router.get("/{blog_id}/index")
+async def get_blog_index(blog_id: str):
+    """
+    Get blog index by blog_id.
+    Returns blog information and index score.
+    """
+    from datetime import datetime
+
+    logger.info(f"Getting blog index for: {blog_id}")
+
+    try:
+        # Run blog analysis
+        result = await analyze_blog(blog_id)
+
+        stats = result.get("stats", {})
+        index = result.get("index", {})
+
+        # Get score breakdown
+        score_breakdown = index.get("score_breakdown", {})
+
+        return {
+            "blog": {
+                "blog_id": blog_id,
+                "blog_name": f"{blog_id}의 블로그",
+                "blog_url": f"https://blog.naver.com/{blog_id}",
+                "description": None
+            },
+            "stats": {
+                "total_posts": stats.get("total_posts") or 0,
+                "total_visitors": stats.get("total_visitors") or 0,
+                "neighbor_count": stats.get("neighbor_count") or 0,
+                "is_influencer": False,
+                "avg_likes": None,
+                "avg_comments": None,
+                "posting_frequency": None
+            },
+            "index": {
+                "level": index.get("level", 0),
+                "grade": index.get("grade", ""),
+                "level_category": index.get("level_category", ""),
+                "total_score": index.get("total_score", 0),
+                "percentile": index.get("percentile", 0),
+                "score_breakdown": {
+                    "c_rank": score_breakdown.get("c_rank", 0),
+                    "dia": score_breakdown.get("dia", 0)
+                }
+            },
+            "warnings": [],
+            "recommendations": [],
+            "last_analyzed_at": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting blog index for {blog_id}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=404, detail=f"블로그를 찾을 수 없습니다: {blog_id}")
+
+
 @router.get("/related-keywords/{keyword}", response_model=RelatedKeywordsResponse)
 async def get_related_keywords(keyword: str):
     """
