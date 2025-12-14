@@ -267,6 +267,31 @@ export default function Home() {
                 </div>
               ))}
             </motion.div>
+
+            {/* Platon Marketing Ad Banner 1 */}
+            <motion.a
+              href="https://www.brandplaton.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.5 }}
+              whileHover={{ scale: 1.02 }}
+              className="block mt-12 p-6 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white shadow-xl hover:shadow-2xl transition-all duration-300 cursor-pointer"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-medium text-white/70 mb-1">병원마케팅 전문회사</div>
+                  <div className="text-xl font-bold">플라톤마케팅</div>
+                  <div className="text-sm text-white/80 mt-1">병원 블로그 마케팅의 새로운 기준을 제시합니다</div>
+                </div>
+                <div className="text-3xl">🏥</div>
+              </div>
+              <div className="mt-3 text-xs text-white/60 flex items-center gap-1">
+                <span>자세히 알아보기</span>
+                <span>→</span>
+              </div>
+            </motion.a>
           </div>
         </div>
       </section>
@@ -324,6 +349,34 @@ export default function Home() {
               </motion.div>
             ))}
           </div>
+
+          {/* Platon Marketing Ad Banner 2 */}
+          <motion.a
+            href="https://www.brandplaton.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            whileHover={{ scale: 1.01 }}
+            className="block mt-16 p-8 rounded-3xl glass border-2 border-purple-200 hover:border-purple-400 transition-all duration-300 cursor-pointer"
+          >
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-3xl">
+                  🏥
+                </div>
+                <div>
+                  <div className="text-sm text-purple-600 font-medium">병원마케팅 No.1</div>
+                  <div className="text-2xl font-bold text-gray-900">플라톤마케팅과 함께 성장하세요</div>
+                  <div className="text-gray-600 mt-1">10년 이상의 병원마케팅 노하우로 성공을 이끕니다</div>
+                </div>
+              </div>
+              <div className="px-6 py-3 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold hover:shadow-lg transition-all">
+                무료 상담 받기 →
+              </div>
+            </div>
+          </motion.a>
         </div>
       </section>
 
@@ -404,32 +457,116 @@ export default function Home() {
               <br />
               성장 전략을 받아보세요
             </p>
-            <Link
-              href="/analyze"
-              className="inline-flex items-center gap-2 px-10 py-5 bg-white text-purple-600 rounded-full font-bold text-lg hover:scale-105 transition-transform duration-300 shadow-2xl"
-            >
-              <Sparkles className="w-6 h-6" />
-              무료 분석 시작
-            </Link>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Link
+                href="/analyze"
+                className="inline-flex items-center gap-2 px-10 py-5 bg-white text-purple-600 rounded-full font-bold text-lg hover:scale-105 transition-transform duration-300 shadow-2xl"
+              >
+                <Sparkles className="w-6 h-6" />
+                무료 분석 시작
+              </Link>
+              <a
+                href="https://www.brandplaton.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-10 py-5 bg-white/20 backdrop-blur-sm text-white border-2 border-white/50 rounded-full font-bold text-lg hover:bg-white/30 hover:scale-105 transition-all duration-300"
+              >
+                <span>🏥</span>
+                플라톤마케팅 상담
+              </a>
+            </div>
           </motion.div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-gray-900 text-white py-8">
+      {/* Platon Marketing Full Banner */}
+      <section className="py-16 bg-gradient-to-r from-gray-900 via-purple-900 to-gray-900">
         <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-lg font-bold gradient-text">Blog Index Analyzer</span>
-              <span className="text-xs text-gray-400 bg-gray-800 px-2 py-0.5 rounded">v1.2.0</span>
+          <motion.a
+            href="https://www.brandplaton.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            className="block text-center cursor-pointer group"
+          >
+            <div className="text-purple-400 text-sm font-medium mb-2">병원마케팅 전문회사</div>
+            <h3 className="text-4xl md:text-5xl font-bold text-white mb-4 group-hover:text-purple-300 transition-colors">
+              플라톤마케팅
+            </h3>
+            <p className="text-gray-400 text-lg mb-6 max-w-2xl mx-auto">
+              블로그 마케팅, SNS 마케팅, 키워드 광고까지<br />
+              병원 성장의 모든 것을 책임집니다
+            </p>
+            <div className="inline-flex items-center gap-2 text-purple-400 font-semibold group-hover:text-purple-300 transition-colors">
+              <span>지금 무료 상담 받기</span>
+              <span className="group-hover:translate-x-2 transition-transform">→</span>
             </div>
+            <div className="flex items-center justify-center gap-8 mt-8 text-gray-500 text-sm">
+              <span>✓ 10년+ 병원마케팅 경력</span>
+              <span>✓ 500+ 병원 파트너</span>
+              <span>✓ 맞춤형 마케팅 전략</span>
+            </div>
+          </motion.a>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-gray-900 text-white py-12">
+        <div className="container mx-auto px-4">
+          <div className="grid md:grid-cols-3 gap-8 mb-8">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-lg font-bold gradient-text">Blog Index Analyzer</span>
+                <span className="text-xs text-gray-400 bg-gray-800 px-2 py-0.5 rounded">v1.2.0</span>
+              </div>
+              <p className="text-sm text-gray-400">
+                AI 기반 블로그 분석 플랫폼으로<br />
+                블로그 성장을 도와드립니다.
+              </p>
+            </div>
+            <div>
+              <h4 className="font-semibold mb-4">서비스</h4>
+              <ul className="space-y-2 text-sm text-gray-400">
+                <li><Link href="/analyze" className="hover:text-white transition-colors">블로그 분석</Link></li>
+                <li><Link href="/keyword-search" className="hover:text-white transition-colors">키워드 검색</Link></li>
+                <li><Link href="/dashboard" className="hover:text-white transition-colors">대시보드</Link></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-semibold mb-4">플라톤마케팅</h4>
+              <ul className="space-y-2 text-sm text-gray-400">
+                <li>
+                  <a href="https://www.brandplaton.com/" target="_blank" rel="noopener noreferrer" className="hover:text-purple-400 transition-colors flex items-center gap-1">
+                    🏥 병원마케팅 전문
+                  </a>
+                </li>
+                <li>
+                  <a href="https://www.brandplaton.com/" target="_blank" rel="noopener noreferrer" className="hover:text-purple-400 transition-colors">
+                    무료 상담 신청
+                  </a>
+                </li>
+                <li>
+                  <a href="https://doctor-voice-pro-ghwi.vercel.app/" target="_blank" rel="noopener noreferrer" className="hover:text-cyan-400 transition-colors flex items-center gap-1">
+                    🎙️ 닥터보이스
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="text-sm text-gray-400">
-              © 2024 플라톤 마케팅. All rights reserved.
+              © 2024 <a href="https://www.brandplaton.com/" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 transition-colors font-medium">플라톤마케팅</a>. All rights reserved.
             </div>
             <div className="flex items-center gap-4 text-sm text-gray-400">
               <span>AI 학습 엔진 탑재</span>
               <span>•</span>
               <span>실시간 분석</span>
+              <span>•</span>
+              <a href="https://www.brandplaton.com/" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 transition-colors">
+                병원마케팅 문의
+              </a>
             </div>
           </div>
         </div>
