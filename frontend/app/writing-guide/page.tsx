@@ -329,7 +329,7 @@ export default function WritingGuidePage() {
                       </div>
                     )}
 
-                    {guide.rules.title.keyword_placement && (
+                    {guide.rules.title?.keyword_placement && (
                       <div>
                         <div className="text-sm text-gray-500 mb-2">키워드 배치</div>
                         <div className="grid grid-cols-3 gap-2">
@@ -337,14 +337,14 @@ export default function WritingGuidePage() {
                             <div
                               key={pos}
                               className={`p-2 rounded-lg text-center ${
-                                guide.rules.title.keyword_placement?.best_position === pos
+                                guide.rules.title?.keyword_placement?.best_position === pos
                                   ? 'bg-blue-100 border-2 border-blue-400'
                                   : 'bg-gray-50'
                               }`}
                             >
                               <div className="text-sm font-medium">{getPositionLabel(pos)}</div>
                               <div className="text-lg font-bold">
-                                {guide.rules.title.keyword_placement?.position_distribution[pos as keyof typeof guide.rules.title.keyword_placement.position_distribution]?.toFixed(0)}%
+                                {guide.rules.title?.keyword_placement?.position_distribution?.[pos as 'front' | 'middle' | 'end']?.toFixed(0)}%
                               </div>
                             </div>
                           ))}
