@@ -253,58 +253,93 @@ export default function AnalyzePage() {
                         </div>
                         <div className="text-lg text-gray-600 mt-3 font-medium">{result.index.level_category}</div>
 
-                        {/* 15단계 레벨 시각화 */}
-                        <div className="mt-6 px-4">
-                          <div className="text-sm text-gray-500 mb-3 font-medium">레벨 위치</div>
-                          <div className="flex items-center gap-1 justify-center">
-                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map((level) => {
-                              const isCurrentLevel = level === result.index.level
-                              let bgColor = 'bg-gray-300'
-                              let label = ''
-
-                              if (level === 1) {
-                                bgColor = 'bg-gray-400'
-                                label = '일반'
-                              } else if (level >= 2 && level <= 8) {
-                                bgColor = 'bg-blue-400'
-                                if (level === 2) label = '준최적'
-                              } else if (level >= 9 && level <= 11) {
-                                bgColor = 'bg-purple-400'
-                                if (level === 9) label = '엔비최적'
-                              } else if (level >= 12 && level <= 15) {
-                                bgColor = 'bg-pink-500'
-                                if (level === 12) label = '찐최적'
-                              }
+                        {/* 레벨 프로그레스 시각화 */}
+                        <div className="mt-8 px-2">
+                          {/* 레벨 구간 설명 */}
+                          <div className="grid grid-cols-4 gap-2 mb-4">
+                            {[
+                              { range: '1', label: '일반', color: 'bg-gray-400', textColor: 'text-gray-600' },
+                              { range: '2-8', label: '준최적화', color: 'bg-blue-500', textColor: 'text-blue-600' },
+                              { range: '9-11', label: '최적화', color: 'bg-purple-500', textColor: 'text-purple-600' },
+                              { range: '12-15', label: '찐최적화', color: 'bg-gradient-to-r from-pink-500 to-rose-500', textColor: 'text-pink-600' },
+                            ].map((tier) => {
+                              const currentLevel = result.index.level
+                              const isActive = (tier.range === '1' && currentLevel === 1) ||
+                                (tier.range === '2-8' && currentLevel >= 2 && currentLevel <= 8) ||
+                                (tier.range === '9-11' && currentLevel >= 9 && currentLevel <= 11) ||
+                                (tier.range === '12-15' && currentLevel >= 12 && currentLevel <= 15)
 
                               return (
-                                <div key={level} className="flex flex-col items-center">
-                                  <div
-                                    className={`
-                                      w-8 h-8 rounded-lg transition-all duration-300
-                                      ${isCurrentLevel
-                                        ? 'ring-4 ring-yellow-400 scale-125 shadow-lg ' + bgColor
-                                        : bgColor + ' opacity-60'
-                                      }
-                                      flex items-center justify-center
-                                    `}
-                                  >
-                                    {isCurrentLevel && (
-                                      <span className="text-white font-bold text-xs">{level}</span>
-                                    )}
+                                <div
+                                  key={tier.range}
+                                  className={`text-center p-2 rounded-xl transition-all duration-300 ${
+                                    isActive ? 'bg-white shadow-lg scale-105 ring-2 ring-purple-300' : 'bg-gray-50'
+                                  }`}
+                                >
+                                  <div className={`w-3 h-3 rounded-full ${tier.color} mx-auto mb-1`} />
+                                  <div className={`text-xs font-bold ${isActive ? tier.textColor : 'text-gray-400'}`}>
+                                    {tier.label}
                                   </div>
-                                  {label && (
-                                    <div className="text-xs text-gray-600 mt-1 whitespace-nowrap font-medium">
-                                      {label}
-                                    </div>
-                                  )}
+                                  <div className={`text-[10px] ${isActive ? 'text-gray-600' : 'text-gray-400'}`}>
+                                    Lv.{tier.range}
+                                  </div>
                                 </div>
                               )
                             })}
                           </div>
-                          <div className="flex justify-between mt-2 px-1">
-                            <span className="text-xs text-gray-500">Lv.1</span>
-                            <span className="text-xs text-gray-500">Lv.15</span>
+
+                          {/* 프로그레스 바 */}
+                          <div className="relative">
+                            {/* 배경 바 */}
+                            <div className="h-3 bg-gray-200 rounded-full overflow-hidden flex">
+                              <div className="w-[6.67%] bg-gray-400" /> {/* Lv.1 */}
+                              <div className="w-[46.67%] bg-blue-400" /> {/* Lv.2-8 */}
+                              <div className="w-[20%] bg-purple-400" /> {/* Lv.9-11 */}
+                              <div className="w-[26.67%] bg-gradient-to-r from-pink-400 to-rose-500" /> {/* Lv.12-15 */}
+                            </div>
+
+                            {/* 현재 레벨 마커 */}
+                            <div
+                              className="absolute top-1/2 -translate-y-1/2 transition-all duration-500"
+                              style={{ left: `${((result.index.level - 1) / 14) * 100}%` }}
+                            >
+                              <div className="relative">
+                                {/* 마커 */}
+                                <div className="w-7 h-7 -ml-3.5 bg-white rounded-full shadow-lg border-4 border-yellow-400 flex items-center justify-center">
+                                  <span className="text-xs font-bold text-gray-800">{result.index.level}</span>
+                                </div>
+                                {/* 화살표 */}
+                                <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-center">
+                                  <div className="w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-yellow-400 mx-auto" />
+                                  <div className="text-xs font-bold text-yellow-600 mt-1 whitespace-nowrap bg-yellow-100 px-2 py-0.5 rounded-full">
+                                    현재 레벨
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
                           </div>
+
+                          {/* 레벨 눈금 */}
+                          <div className="flex justify-between mt-10 px-1">
+                            <span className="text-xs text-gray-400 font-medium">1</span>
+                            <span className="text-xs text-gray-400 font-medium">5</span>
+                            <span className="text-xs text-gray-400 font-medium">8</span>
+                            <span className="text-xs text-gray-400 font-medium">11</span>
+                            <span className="text-xs text-gray-400 font-medium">15</span>
+                          </div>
+
+                          {/* 다음 레벨 안내 */}
+                          {result.index.level < 15 && (
+                            <div className="mt-4 text-center">
+                              <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-50 rounded-full">
+                                <span className="text-sm text-purple-600">
+                                  다음 레벨까지 <span className="font-bold">{Math.ceil((result.index.level + 1) * 6.67 - result.index.total_score)}점</span> 필요
+                                </span>
+                                <span className="text-purple-400">→</span>
+                                <span className="text-sm font-bold text-purple-700">Lv.{result.index.level + 1}</span>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </motion.div>
