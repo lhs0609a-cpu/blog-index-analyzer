@@ -219,7 +219,7 @@ export default function Home() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.3 }}
-              className="flex flex-col sm:flex-row items-center justify-center gap-4"
+              className="flex flex-col sm:flex-row items-center justify-center gap-4 flex-wrap"
             >
               <Link
                 href="/analyze"
@@ -237,6 +237,16 @@ export default function Home() {
               >
                 대시보드 보기
               </Link>
+
+              <a
+                href="https://doctor-voice-pro-ghwi.vercel.app/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-8 py-4 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300 flex items-center gap-2"
+              >
+                <span className="text-lg">🎙️</span>
+                닥터보이스 바로가기
+              </a>
             </motion.div>
 
             {/* Stats */}
