@@ -13,13 +13,17 @@ import {
   Timer, RotateCcw, Link2, GraduationCap, UserCheck, Flame,
   Brain, MessageSquare, History, Network, Rocket, DollarSign,
   Map, Lock, Trophy, Coins, ChevronRight, Medal, Gem, Key,
-  Crosshair, Radio, Wallet, PiggyBank, CreditCard, Receipt
+  Crosshair, Radio, Wallet, PiggyBank, CreditCard, Receipt,
+  TrendingUp as DataChart, ShoppingCart, MapPin, Newspaper,
+  Coffee, Video, UserCircle, Globe, HelpCircle, Store,
+  Percent, Package, Navigation, Megaphone, BookOpen, Film,
+  Award as Badge, Layers, MessageSquareText, ShoppingBag
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 
-type TabType = 'title' | 'blueocean' | 'writing' | 'insight' | 'prediction' | 'report' | 'hashtag' | 'timing' | 'youtube' | 'lowquality' | 'backup' | 'campaign' | 'ranktrack' | 'clone' | 'comment' | 'algorithm' | 'lifespan' | 'refresh' | 'related' | 'mentor' | 'trend' | 'revenue' | 'roadmap' | 'secretkw'
+type TabType = 'title' | 'blueocean' | 'writing' | 'insight' | 'prediction' | 'report' | 'hashtag' | 'timing' | 'youtube' | 'lowquality' | 'backup' | 'campaign' | 'ranktrack' | 'clone' | 'comment' | 'algorithm' | 'lifespan' | 'refresh' | 'related' | 'mentor' | 'trend' | 'revenue' | 'roadmap' | 'secretkw' | 'datalab' | 'shopping' | 'place' | 'news' | 'cafe' | 'naverView' | 'influencer' | 'searchAnalysis' | 'kin' | 'smartstore'
 
 // AI 제목 생성 결과 타입
 interface TitleResult {
@@ -379,6 +383,279 @@ interface SecretKeywordResult {
   nextRefresh: string
 }
 
+// 네이버 데이터랩 결과 타입
+interface DataLabResult {
+  keywords: string[]
+  trendData: {
+    period: string
+    values: { keyword: string; value: number }[]
+  }[]
+  demographics: {
+    keyword: string
+    age: { group: string; ratio: number }[]
+    gender: { type: string; ratio: number }[]
+  }[]
+  regions: {
+    keyword: string
+    data: { region: string; ratio: number }[]
+  }[]
+  seasonalTip: string
+}
+
+// 네이버 쇼핑 결과 타입
+interface ShoppingResult {
+  keyword: string
+  products: {
+    name: string
+    price: number
+    mall: string
+    reviewCount: number
+    rating: number
+    commission: number
+    affiliateLink: string
+    trend: 'hot' | 'rising' | 'stable'
+  }[]
+  shoppingKeywords: {
+    keyword: string
+    searchVolume: number
+    competition: string
+    cpc: number
+    purchaseIntent: number
+  }[]
+  priceAlerts: { productName: string; currentPrice: number; targetPrice: number; changePercent: number }[]
+}
+
+// 네이버 플레이스 결과 타입
+interface PlaceResult {
+  area: string
+  places: {
+    name: string
+    category: string
+    rating: number
+    reviewCount: number
+    rank: number
+    blogReviewCount: number
+    keywords: string[]
+    competitionLevel: 'low' | 'medium' | 'high'
+  }[]
+  areaAnalysis: {
+    totalPlaces: number
+    avgRating: number
+    avgReviewCount: number
+    topCategory: string
+    competitionScore: number
+  }
+  reviewKeywords: { keyword: string; count: number; sentiment: 'positive' | 'negative' | 'neutral' }[]
+  myPlaceRank?: { placeName: string; keyword: string; rank: number; change: number }[]
+}
+
+// 네이버 뉴스/실시간 결과 타입
+interface NewsResult {
+  realTimeKeywords: {
+    rank: number
+    keyword: string
+    category: string
+    changeType: 'new' | 'up' | 'down' | 'stable'
+    changeRank: number
+    relatedNews: string
+  }[]
+  issueKeywords: {
+    keyword: string
+    newsCount: number
+    blogPotential: number
+    goldenTime: string
+    suggestedAngle: string
+  }[]
+  myTopicNews: {
+    title: string
+    source: string
+    time: string
+    summary: string
+    relatedKeywords: string[]
+  }[]
+}
+
+// 네이버 카페 결과 타입
+interface CafeResult {
+  popularTopics: {
+    topic: string
+    cafeName: string
+    postCount: number
+    engagement: number
+    category: string
+  }[]
+  questions: {
+    question: string
+    cafeName: string
+    answers: number
+    views: number
+    suggestedKeyword: string
+  }[]
+  recommendedCafes: {
+    name: string
+    members: number
+    category: string
+    matchScore: number
+    postingRule: string
+  }[]
+  trafficSource: { cafeName: string; visitors: number; percentage: number }[]
+}
+
+// 네이버 VIEW 결과 타입
+interface NaverViewResult {
+  videoKeywords: {
+    keyword: string
+    videoCount: number
+    avgViews: number
+    competition: string
+    opportunity: number
+  }[]
+  topVideos: {
+    title: string
+    creator: string
+    views: number
+    likes: number
+    duration: string
+    thumbnail: string
+  }[]
+  thumbnailPatterns: {
+    pattern: string
+    ctr: number
+    example: string
+  }[]
+  scriptFromVideo: {
+    videoTitle: string
+    sections: { timestamp: string; content: string }[]
+    blogPost: string
+  } | null
+}
+
+// 네이버 인플루언서 결과 타입
+interface InfluencerResult {
+  myRanking: {
+    category: string
+    rank: number
+    totalInfluencers: number
+    score: number
+    change: number
+  }
+  topInfluencers: {
+    rank: number
+    name: string
+    category: string
+    followers: number
+    avgViews: number
+    engagement: number
+    strategy: string
+  }[]
+  benchmarkStats: {
+    metric: string
+    myValue: number
+    avgValue: number
+    topValue: number
+  }[]
+  roadmapToInfluencer: {
+    step: number
+    title: string
+    requirement: string
+    currentProgress: number
+    tip: string
+  }[]
+}
+
+// 네이버 통합검색 분석 결과 타입
+interface SearchAnalysisResult {
+  keyword: string
+  searchResultComposition: {
+    section: string
+    count: number
+    percentage: number
+    recommendation: string
+  }[]
+  tabPriority: {
+    tab: string
+    position: number
+    visibility: number
+    myPresence: boolean
+  }[]
+  mobileVsPc: {
+    platform: string
+    topSections: string[]
+    recommendation: string
+  }[]
+  optimalContentType: {
+    type: string
+    reason: string
+    example: string
+  }
+}
+
+// 네이버 지식인 결과 타입
+interface KinResult {
+  popularQuestions: {
+    question: string
+    category: string
+    answers: number
+    views: number
+    hasAcceptedAnswer: boolean
+    keyword: string
+  }[]
+  questionTrends: {
+    topic: string
+    questionCount: number
+    trend: 'rising' | 'stable' | 'declining'
+    suggestedPost: string
+  }[]
+  answerTemplates: {
+    questionType: string
+    template: string
+    blogLinkTip: string
+  }[]
+  myLinkTracking: {
+    question: string
+    myAnswer: string
+    views: number
+    clicks: number
+  }[]
+}
+
+// 네이버 스마트스토어 결과 타입
+interface SmartstoreResult {
+  storeInfo: {
+    storeName: string
+    category: string
+    productCount: number
+    totalSales: number
+    rating: number
+  }
+  productKeywords: {
+    keyword: string
+    searchVolume: number
+    conversionRate: number
+    competition: string
+    myRank: number | null
+  }[]
+  reviewAnalysis: {
+    sentiment: 'positive' | 'negative' | 'neutral'
+    count: number
+    keywords: string[]
+    improvement: string
+  }
+  competitors: {
+    storeName: string
+    productCount: number
+    avgPrice: number
+    rating: number
+    strength: string
+  }[]
+  blogSynergy: {
+    product: string
+    suggestedKeyword: string
+    expectedTraffic: number
+    contentIdea: string
+  }[]
+}
+
 export default function ToolsPage() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<TabType>('title')
@@ -512,6 +789,58 @@ export default function ToolsPage() {
   const [secretLoading, setSecretLoading] = useState(false)
   const [secretResult, setSecretResult] = useState<SecretKeywordResult | null>(null)
 
+  // 네이버 데이터랩 상태
+  const [datalabKeywords, setDatalabKeywords] = useState<string[]>([''])
+  const [datalabLoading, setDatalabLoading] = useState(false)
+  const [datalabResult, setDatalabResult] = useState<DataLabResult | null>(null)
+
+  // 네이버 쇼핑 상태
+  const [shoppingKeyword, setShoppingKeyword] = useState('')
+  const [shoppingLoading, setShoppingLoading] = useState(false)
+  const [shoppingResult, setShoppingResult] = useState<ShoppingResult | null>(null)
+
+  // 네이버 플레이스 상태
+  const [placeArea, setPlaceArea] = useState('')
+  const [placeCategory, setPlaceCategory] = useState('맛집')
+  const [placeLoading, setPlaceLoading] = useState(false)
+  const [placeResult, setPlaceResult] = useState<PlaceResult | null>(null)
+
+  // 네이버 뉴스 상태
+  const [newsCategory, setNewsCategory] = useState('all')
+  const [newsLoading, setNewsLoading] = useState(false)
+  const [newsResult, setNewsResult] = useState<NewsResult | null>(null)
+
+  // 네이버 카페 상태
+  const [cafeCategory, setCafeCategory] = useState('all')
+  const [cafeLoading, setCafeLoading] = useState(false)
+  const [cafeResult, setCafeResult] = useState<CafeResult | null>(null)
+
+  // 네이버 VIEW 상태
+  const [viewKeyword, setViewKeyword] = useState('')
+  const [viewLoading, setViewLoading] = useState(false)
+  const [viewResult, setViewResult] = useState<NaverViewResult | null>(null)
+
+  // 네이버 인플루언서 상태
+  const [influencerBlogId, setInfluencerBlogId] = useState('')
+  const [influencerCategory, setInfluencerCategory] = useState('all')
+  const [influencerLoading, setInfluencerLoading] = useState(false)
+  const [influencerResult, setInfluencerResult] = useState<InfluencerResult | null>(null)
+
+  // 네이버 통합검색 분석 상태
+  const [searchAnalysisKeyword, setSearchAnalysisKeyword] = useState('')
+  const [searchAnalysisLoading, setSearchAnalysisLoading] = useState(false)
+  const [searchAnalysisResult, setSearchAnalysisResult] = useState<SearchAnalysisResult | null>(null)
+
+  // 네이버 지식인 상태
+  const [kinCategory, setKinCategory] = useState('all')
+  const [kinLoading, setKinLoading] = useState(false)
+  const [kinResult, setKinResult] = useState<KinResult | null>(null)
+
+  // 네이버 스마트스토어 상태
+  const [smartstoreId, setSmartstoreId] = useState('')
+  const [smartstoreLoading, setSmartstoreLoading] = useState(false)
+  const [smartstoreResult, setSmartstoreResult] = useState<SmartstoreResult | null>(null)
+
   const tabs = [
     { id: 'title' as TabType, label: 'AI 제목', icon: PenTool, color: 'from-violet-500 to-purple-500' },
     { id: 'blueocean' as TabType, label: '키워드 발굴', icon: Compass, color: 'from-cyan-500 to-blue-500' },
@@ -537,6 +866,16 @@ export default function ToolsPage() {
     { id: 'revenue' as TabType, label: '수익', icon: Wallet, color: 'from-green-500 to-emerald-600' },
     { id: 'roadmap' as TabType, label: '로드맵', icon: Map, color: 'from-blue-500 to-purple-500' },
     { id: 'secretkw' as TabType, label: '비밀 키워드', icon: Key, color: 'from-yellow-500 to-red-500' },
+    { id: 'datalab' as TabType, label: '데이터랩', icon: DataChart, color: 'from-green-500 to-teal-500' },
+    { id: 'shopping' as TabType, label: '쇼핑', icon: ShoppingCart, color: 'from-orange-500 to-amber-500' },
+    { id: 'place' as TabType, label: '플레이스', icon: MapPin, color: 'from-red-500 to-pink-500' },
+    { id: 'news' as TabType, label: '뉴스/실검', icon: Newspaper, color: 'from-blue-600 to-indigo-600' },
+    { id: 'cafe' as TabType, label: '카페', icon: Coffee, color: 'from-amber-600 to-yellow-500' },
+    { id: 'naverView' as TabType, label: 'VIEW', icon: Video, color: 'from-purple-500 to-violet-600' },
+    { id: 'influencer' as TabType, label: '인플루언서', icon: UserCircle, color: 'from-pink-500 to-rose-600' },
+    { id: 'searchAnalysis' as TabType, label: '통합검색', icon: Globe, color: 'from-cyan-500 to-blue-600' },
+    { id: 'kin' as TabType, label: '지식인', icon: HelpCircle, color: 'from-green-600 to-emerald-500' },
+    { id: 'smartstore' as TabType, label: '스마트스토어', icon: Store, color: 'from-lime-500 to-green-600' },
   ]
 
   // AI 제목 생성
@@ -1673,6 +2012,479 @@ export default function ToolsPage() {
     }
   }
 
+  // 네이버 데이터랩 분석
+  const handleDatalab = async () => {
+    const validKeywords = datalabKeywords.filter(k => k.trim())
+    if (validKeywords.length === 0) {
+      toast.error('키워드를 1개 이상 입력해주세요')
+      return
+    }
+
+    setDatalabLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2500))
+
+      const periods = ['2024-09', '2024-10', '2024-11', '2024-12']
+      const ageGroups = ['10대', '20대', '30대', '40대', '50대+']
+      const regions = ['서울', '경기', '부산', '인천', '대구', '대전', '광주']
+
+      setDatalabResult({
+        keywords: validKeywords,
+        trendData: periods.map(period => ({
+          period,
+          values: validKeywords.map(kw => ({
+            keyword: kw,
+            value: Math.floor(Math.random() * 100)
+          }))
+        })),
+        demographics: validKeywords.map(kw => ({
+          keyword: kw,
+          age: ageGroups.map(group => ({ group, ratio: Math.floor(Math.random() * 40) + 5 })),
+          gender: [
+            { type: '남성', ratio: Math.floor(Math.random() * 60) + 20 },
+            { type: '여성', ratio: Math.floor(Math.random() * 60) + 20 }
+          ]
+        })),
+        regions: validKeywords.map(kw => ({
+          keyword: kw,
+          data: regions.map(region => ({ region, ratio: Math.floor(Math.random() * 30) + 5 }))
+        })),
+        seasonalTip: `"${validKeywords[0]}" 키워드는 다음 달에 검색량이 20% 상승할 것으로 예상됩니다. 지금 글을 작성하면 최적의 타이밍입니다!`
+      })
+
+      toast.success('데이터랩 분석 완료!')
+    } catch (error) {
+      toast.error('분석 중 오류가 발생했습니다')
+    } finally {
+      setDatalabLoading(false)
+    }
+  }
+
+  // 네이버 쇼핑 분석
+  const handleShopping = async () => {
+    if (!shoppingKeyword.trim()) {
+      toast.error('키워드를 입력해주세요')
+      return
+    }
+
+    setShoppingLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      const products = [
+        { name: `${shoppingKeyword} 베스트 상품 A`, mall: '스마트스토어', price: 29900 },
+        { name: `${shoppingKeyword} 인기 상품 B`, mall: '쿠팡', price: 35000 },
+        { name: `${shoppingKeyword} 추천 상품 C`, mall: '11번가', price: 42000 },
+        { name: `${shoppingKeyword} HOT 상품 D`, mall: 'G마켓', price: 28500 },
+        { name: `${shoppingKeyword} NEW 상품 E`, mall: '위메프', price: 31900 },
+      ]
+
+      setShoppingResult({
+        keyword: shoppingKeyword,
+        products: products.map(p => ({
+          ...p,
+          reviewCount: Math.floor(Math.random() * 5000) + 100,
+          rating: 4 + Math.random(),
+          commission: Math.floor(Math.random() * 3000) + 500,
+          affiliateLink: `https://affiliate.example.com/${p.name}`,
+          trend: ['hot', 'rising', 'stable'][Math.floor(Math.random() * 3)] as 'hot' | 'rising' | 'stable'
+        })),
+        shoppingKeywords: [
+          { keyword: `${shoppingKeyword} 추천`, searchVolume: 15000, competition: '중', cpc: 350, purchaseIntent: 85 },
+          { keyword: `${shoppingKeyword} 가격`, searchVolume: 12000, competition: '높음', cpc: 420, purchaseIntent: 90 },
+          { keyword: `${shoppingKeyword} 후기`, searchVolume: 8000, competition: '낮음', cpc: 280, purchaseIntent: 75 },
+          { keyword: `${shoppingKeyword} 비교`, searchVolume: 6000, competition: '중', cpc: 380, purchaseIntent: 88 },
+        ],
+        priceAlerts: [
+          { productName: products[0].name, currentPrice: 29900, targetPrice: 25000, changePercent: -5 },
+          { productName: products[1].name, currentPrice: 35000, targetPrice: 30000, changePercent: +3 },
+        ]
+      })
+
+      toast.success('쇼핑 분석 완료!')
+    } catch (error) {
+      toast.error('분석 중 오류가 발생했습니다')
+    } finally {
+      setShoppingLoading(false)
+    }
+  }
+
+  // 네이버 플레이스 분석
+  const handlePlace = async () => {
+    if (!placeArea.trim()) {
+      toast.error('지역을 입력해주세요')
+      return
+    }
+
+    setPlaceLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      const placeNames = ['맛있는 식당', '분위기 좋은 카페', '유명 맛집', '로컬 맛집', '숨은 맛집']
+
+      setPlaceResult({
+        area: placeArea,
+        places: placeNames.map((name, i) => ({
+          name: `${placeArea} ${name}`,
+          category: placeCategory,
+          rating: 4 + Math.random(),
+          reviewCount: Math.floor(Math.random() * 500) + 50,
+          rank: i + 1,
+          blogReviewCount: Math.floor(Math.random() * 100) + 10,
+          keywords: ['분위기', '맛있는', '가성비', '데이트', '모임'][Math.floor(Math.random() * 5)].split(','),
+          competitionLevel: ['low', 'medium', 'high'][Math.floor(Math.random() * 3)] as 'low' | 'medium' | 'high'
+        })),
+        areaAnalysis: {
+          totalPlaces: Math.floor(Math.random() * 200) + 50,
+          avgRating: 4 + Math.random() * 0.5,
+          avgReviewCount: Math.floor(Math.random() * 200) + 100,
+          topCategory: placeCategory,
+          competitionScore: Math.floor(Math.random() * 100)
+        },
+        reviewKeywords: [
+          { keyword: '분위기', count: 150, sentiment: 'positive' },
+          { keyword: '맛있어요', count: 120, sentiment: 'positive' },
+          { keyword: '친절해요', count: 80, sentiment: 'positive' },
+          { keyword: '웨이팅', count: 60, sentiment: 'negative' },
+          { keyword: '주차', count: 45, sentiment: 'neutral' },
+        ],
+        myPlaceRank: [
+          { placeName: `${placeArea} 내 가게`, keyword: `${placeArea} ${placeCategory}`, rank: Math.floor(Math.random() * 20) + 1, change: Math.floor(Math.random() * 10) - 5 }
+        ]
+      })
+
+      toast.success('플레이스 분석 완료!')
+    } catch (error) {
+      toast.error('분석 중 오류가 발생했습니다')
+    } finally {
+      setPlaceLoading(false)
+    }
+  }
+
+  // 네이버 뉴스/실시간 검색
+  const handleNews = async () => {
+    setNewsLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      const realTimeKeywords = [
+        { keyword: '연말정산', category: '경제' },
+        { keyword: '크리스마스 선물', category: '쇼핑' },
+        { keyword: '겨울 여행지', category: '여행' },
+        { keyword: '연말 파티', category: '라이프' },
+        { keyword: '신년 다이어트', category: '건강' },
+        { keyword: '2025 운세', category: '라이프' },
+        { keyword: '눈 오는 날', category: '날씨' },
+        { keyword: '송년회 장소', category: '맛집' },
+      ]
+
+      setNewsResult({
+        realTimeKeywords: realTimeKeywords.map((kw, i) => ({
+          rank: i + 1,
+          keyword: kw.keyword,
+          category: kw.category,
+          changeType: ['new', 'up', 'down', 'stable'][Math.floor(Math.random() * 4)] as 'new' | 'up' | 'down' | 'stable',
+          changeRank: Math.floor(Math.random() * 10),
+          relatedNews: `${kw.keyword} 관련 최신 뉴스 제목...`
+        })),
+        issueKeywords: realTimeKeywords.slice(0, 5).map(kw => ({
+          keyword: kw.keyword,
+          newsCount: Math.floor(Math.random() * 50) + 10,
+          blogPotential: Math.floor(Math.random() * 40) + 60,
+          goldenTime: Math.random() > 0.5 ? '2시간 내' : '6시간 내',
+          suggestedAngle: `${kw.keyword} 완벽 가이드 | 알아야 할 모든 것`
+        })),
+        myTopicNews: [
+          {
+            title: '올해 가장 핫했던 키워드 TOP 10',
+            source: '네이버 뉴스',
+            time: '1시간 전',
+            summary: '2024년을 대표하는 키워드들을 정리했습니다...',
+            relatedKeywords: ['트렌드', '인기', '베스트']
+          },
+          {
+            title: '블로그 마케팅 트렌드 변화',
+            source: '매경 이코노미',
+            time: '3시간 전',
+            summary: '2025년 블로그 마케팅은 어떻게 변화할까...',
+            relatedKeywords: ['블로그', '마케팅', 'SNS']
+          }
+        ]
+      })
+
+      toast.success('뉴스/실검 분석 완료!')
+    } catch (error) {
+      toast.error('분석 중 오류가 발생했습니다')
+    } finally {
+      setNewsLoading(false)
+    }
+  }
+
+  // 네이버 카페 분석
+  const handleCafe = async () => {
+    setCafeLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      setCafeResult({
+        popularTopics: [
+          { topic: '연말 선물 추천해주세요', cafeName: '맘스홀릭', postCount: 150, engagement: 2500, category: '쇼핑' },
+          { topic: '겨울 여행지 어디가 좋을까요', cafeName: '여행 매니아', postCount: 120, engagement: 1800, category: '여행' },
+          { topic: '다이어트 식단 공유', cafeName: '다이어트 카페', postCount: 200, engagement: 3200, category: '건강' },
+          { topic: '인테리어 조언 구합니다', cafeName: '집꾸미기', postCount: 80, engagement: 1200, category: '인테리어' },
+        ],
+        questions: [
+          { question: '강남역 근처 맛집 추천해주세요', cafeName: '맛집탐방', answers: 45, views: 1200, suggestedKeyword: '강남역 맛집 추천' },
+          { question: '신혼여행 어디로 가면 좋을까요?', cafeName: '신혼여행 카페', answers: 78, views: 2500, suggestedKeyword: '신혼여행 추천' },
+          { question: '아이와 갈만한 곳 추천', cafeName: '육아맘', answers: 56, views: 1800, suggestedKeyword: '아이와 가볼만한곳' },
+        ],
+        recommendedCafes: [
+          { name: '파워블로거 모임', members: 50000, category: '블로그', matchScore: 95, postingRule: '홍보글 1일 1회' },
+          { name: '맛집탐방단', members: 120000, category: '맛집', matchScore: 88, postingRule: '후기글 가능' },
+          { name: '여행자 클럽', members: 80000, category: '여행', matchScore: 82, postingRule: '정보글 자유' },
+        ],
+        trafficSource: [
+          { cafeName: '맘스홀릭', visitors: 500, percentage: 35 },
+          { cafeName: '맛집탐방', visitors: 300, percentage: 21 },
+          { cafeName: '블로그 연구소', visitors: 250, percentage: 18 },
+        ]
+      })
+
+      toast.success('카페 분석 완료!')
+    } catch (error) {
+      toast.error('분석 중 오류가 발생했습니다')
+    } finally {
+      setCafeLoading(false)
+    }
+  }
+
+  // 네이버 VIEW 분석
+  const handleNaverView = async () => {
+    if (!viewKeyword.trim()) {
+      toast.error('키워드를 입력해주세요')
+      return
+    }
+
+    setViewLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      setViewResult({
+        videoKeywords: [
+          { keyword: `${viewKeyword} 리뷰`, videoCount: 150, avgViews: 25000, competition: '중', opportunity: 75 },
+          { keyword: `${viewKeyword} 추천`, videoCount: 80, avgViews: 35000, competition: '높음', opportunity: 60 },
+          { keyword: `${viewKeyword} 브이로그`, videoCount: 200, avgViews: 18000, competition: '낮음', opportunity: 85 },
+          { keyword: `${viewKeyword} 하울`, videoCount: 120, avgViews: 42000, competition: '중', opportunity: 70 },
+        ],
+        topVideos: [
+          { title: `${viewKeyword} 솔직 리뷰 | 한달 사용 후기`, creator: '리뷰왕', views: 125000, likes: 3500, duration: '12:34', thumbnail: '' },
+          { title: `${viewKeyword} 완벽 가이드`, creator: '정보통', views: 98000, likes: 2800, duration: '15:20', thumbnail: '' },
+          { title: `${viewKeyword} 브이로그`, creator: '일상러', views: 75000, likes: 2100, duration: '8:45', thumbnail: '' },
+        ],
+        thumbnailPatterns: [
+          { pattern: '얼굴 클로즈업 + 텍스트', ctr: 8.5, example: '놀란 표정 + 큰 글씨' },
+          { pattern: '제품 전면 샷', ctr: 6.2, example: '깔끔한 배경 + 상품' },
+          { pattern: 'Before/After', ctr: 9.1, example: '좌우 비교 이미지' },
+        ],
+        scriptFromVideo: null
+      })
+
+      toast.success('VIEW 분석 완료!')
+    } catch (error) {
+      toast.error('분석 중 오류가 발생했습니다')
+    } finally {
+      setViewLoading(false)
+    }
+  }
+
+  // 네이버 인플루언서 분석
+  const handleInfluencer = async () => {
+    if (!influencerBlogId.trim()) {
+      toast.error('블로그 ID를 입력해주세요')
+      return
+    }
+
+    setInfluencerLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      setInfluencerResult({
+        myRanking: {
+          category: influencerCategory === 'all' ? '맛집' : influencerCategory,
+          rank: Math.floor(Math.random() * 500) + 50,
+          totalInfluencers: 2500,
+          score: Math.floor(Math.random() * 300) + 200,
+          change: Math.floor(Math.random() * 20) - 10
+        },
+        topInfluencers: [
+          { rank: 1, name: '맛집킹', category: '맛집', followers: 125000, avgViews: 50000, engagement: 8.5, strategy: '매일 포스팅 + 쇼츠 활용' },
+          { rank: 2, name: '여행러', category: '여행', followers: 98000, avgViews: 42000, engagement: 7.2, strategy: '시리즈 콘텐츠 + 협찬' },
+          { rank: 3, name: '뷰티퀸', category: '뷰티', followers: 87000, avgViews: 38000, engagement: 9.1, strategy: '리뷰 + 비교 콘텐츠' },
+          { rank: 4, name: '육아대디', category: '육아', followers: 76000, avgViews: 35000, engagement: 6.8, strategy: '공감 콘텐츠 + 정보형' },
+        ],
+        benchmarkStats: [
+          { metric: '팔로워 수', myValue: Math.floor(Math.random() * 5000) + 1000, avgValue: 15000, topValue: 125000 },
+          { metric: '평균 조회수', myValue: Math.floor(Math.random() * 3000) + 500, avgValue: 8000, topValue: 50000 },
+          { metric: '참여율', myValue: Math.random() * 3 + 2, avgValue: 5.5, topValue: 9.1 },
+          { metric: '월 포스팅', myValue: Math.floor(Math.random() * 10) + 5, avgValue: 20, topValue: 45 },
+        ],
+        roadmapToInfluencer: [
+          { step: 1, title: '기초 다지기', requirement: '팔로워 1,000명', currentProgress: 75, tip: '매일 양질의 콘텐츠 발행' },
+          { step: 2, title: '성장기', requirement: '팔로워 5,000명', currentProgress: 30, tip: '니치 키워드 공략' },
+          { step: 3, title: '도약기', requirement: '팔로워 10,000명', currentProgress: 10, tip: '협찬 및 협업 시작' },
+          { step: 4, title: '인플루언서', requirement: '공식 선정', currentProgress: 0, tip: '꾸준함이 핵심' },
+        ]
+      })
+
+      toast.success('인플루언서 분석 완료!')
+    } catch (error) {
+      toast.error('분석 중 오류가 발생했습니다')
+    } finally {
+      setInfluencerLoading(false)
+    }
+  }
+
+  // 네이버 통합검색 분석
+  const handleSearchAnalysis = async () => {
+    if (!searchAnalysisKeyword.trim()) {
+      toast.error('키워드를 입력해주세요')
+      return
+    }
+
+    setSearchAnalysisLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      setSearchAnalysisResult({
+        keyword: searchAnalysisKeyword,
+        searchResultComposition: [
+          { section: '파워링크(광고)', count: 5, percentage: 15, recommendation: '광고 예산이 있다면 고려' },
+          { section: 'VIEW', count: 8, percentage: 25, recommendation: '영상 콘텐츠 제작 추천' },
+          { section: '블로그', count: 10, percentage: 30, recommendation: '블로그 공략 최적' },
+          { section: '지식인', count: 5, percentage: 15, recommendation: '질문 답변으로 유입 가능' },
+          { section: '뉴스', count: 3, percentage: 10, recommendation: '이슈성 키워드에 적합' },
+          { section: '기타', count: 2, percentage: 5, recommendation: '부가 채널 활용' },
+        ],
+        tabPriority: [
+          { tab: 'VIEW', position: 1, visibility: 95, myPresence: false },
+          { tab: '블로그', position: 2, visibility: 90, myPresence: true },
+          { tab: '지식인', position: 3, visibility: 75, myPresence: false },
+          { tab: '카페', position: 4, visibility: 60, myPresence: false },
+        ],
+        mobileVsPc: [
+          { platform: '모바일', topSections: ['VIEW', '블로그', '지식인'], recommendation: '모바일 최적화 필수' },
+          { platform: 'PC', topSections: ['블로그', 'VIEW', '뉴스'], recommendation: '상세 정보형 콘텐츠' },
+        ],
+        optimalContentType: {
+          type: '정보형 블로그 + 짧은 영상',
+          reason: 'VIEW와 블로그 탭이 모두 상위 노출되어 시너지 효과',
+          example: `"${searchAnalysisKeyword} 완벽 가이드" 블로그 + 3분 요약 영상`
+        }
+      })
+
+      toast.success('통합검색 분석 완료!')
+    } catch (error) {
+      toast.error('분석 중 오류가 발생했습니다')
+    } finally {
+      setSearchAnalysisLoading(false)
+    }
+  }
+
+  // 네이버 지식인 분석
+  const handleKin = async () => {
+    setKinLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      setKinResult({
+        popularQuestions: [
+          { question: '맛집 추천해주세요', category: '맛집', answers: 45, views: 12000, hasAcceptedAnswer: true, keyword: '맛집 추천' },
+          { question: '여행 코스 짜주세요', category: '여행', answers: 32, views: 8500, hasAcceptedAnswer: false, keyword: '여행 코스' },
+          { question: '다이어트 방법 알려주세요', category: '건강', answers: 78, views: 25000, hasAcceptedAnswer: true, keyword: '다이어트 방법' },
+          { question: '자격증 공부법', category: '교육', answers: 56, views: 15000, hasAcceptedAnswer: true, keyword: '자격증 공부' },
+          { question: '취업 준비 어떻게 해야하나요', category: '취업', answers: 89, views: 32000, hasAcceptedAnswer: false, keyword: '취업 준비' },
+        ],
+        questionTrends: [
+          { topic: '연말정산', questionCount: 500, trend: 'rising', suggestedPost: '연말정산 완벽 가이드 | 초보자도 쉽게' },
+          { topic: '신년 계획', questionCount: 320, trend: 'rising', suggestedPost: '2025년 신년 계획 세우는 법' },
+          { topic: '다이어트', questionCount: 1200, trend: 'stable', suggestedPost: '효과적인 다이어트 방법 TOP 5' },
+        ],
+        answerTemplates: [
+          {
+            questionType: '추천 요청',
+            template: '안녕하세요! [주제]에 관심이 있으시군요. 제가 직접 경험한 [추천 내용]을 알려드릴게요...',
+            blogLinkTip: '답변 마지막에 "자세한 내용은 블로그에 정리해뒀어요" 추가'
+          },
+          {
+            questionType: '방법 질문',
+            template: '[주제] 방법에 대해 답변드릴게요. 1단계: ... 2단계: ... 자세한 내용은...',
+            blogLinkTip: '단계별 가이드 블로그 링크 첨부'
+          },
+        ],
+        myLinkTracking: [
+          { question: '서울 데이트 코스 추천', myAnswer: '한강 피크닉 코스 추천드려요...', views: 500, clicks: 45 },
+          { question: '아이패드 추천', myAnswer: '용도별 아이패드 추천...', views: 320, clicks: 28 },
+        ]
+      })
+
+      toast.success('지식인 분석 완료!')
+    } catch (error) {
+      toast.error('분석 중 오류가 발생했습니다')
+    } finally {
+      setKinLoading(false)
+    }
+  }
+
+  // 네이버 스마트스토어 분석
+  const handleSmartstore = async () => {
+    if (!smartstoreId.trim()) {
+      toast.error('스토어 ID를 입력해주세요')
+      return
+    }
+
+    setSmartstoreLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      setSmartstoreResult({
+        storeInfo: {
+          storeName: `${smartstoreId}의 스토어`,
+          category: '생활/건강',
+          productCount: Math.floor(Math.random() * 50) + 10,
+          totalSales: Math.floor(Math.random() * 10000000) + 1000000,
+          rating: 4 + Math.random()
+        },
+        productKeywords: [
+          { keyword: '건강식품', searchVolume: 25000, conversionRate: 3.5, competition: '높음', myRank: 15 },
+          { keyword: '다이어트 보조제', searchVolume: 18000, conversionRate: 4.2, competition: '중', myRank: 8 },
+          { keyword: '비타민 추천', searchVolume: 32000, conversionRate: 2.8, competition: '높음', myRank: null },
+          { keyword: '프로바이오틱스', searchVolume: 15000, conversionRate: 5.1, competition: '낮음', myRank: 3 },
+        ],
+        reviewAnalysis: {
+          sentiment: 'positive',
+          count: 450,
+          keywords: ['빠른 배송', '효과 좋아요', '재구매 의사', '가격 대비 만족'],
+          improvement: '포장 관련 불만이 일부 있습니다. 포장 개선을 고려해보세요.'
+        },
+        competitors: [
+          { storeName: '건강마켓', productCount: 120, avgPrice: 25000, rating: 4.7, strength: '다양한 상품군' },
+          { storeName: '헬스케어샵', productCount: 80, avgPrice: 32000, rating: 4.5, strength: '프리미엄 이미지' },
+          { storeName: '웰빙스토어', productCount: 95, avgPrice: 28000, rating: 4.6, strength: '빠른 배송' },
+        ],
+        blogSynergy: [
+          { product: '프로바이오틱스', suggestedKeyword: '프로바이오틱스 추천', expectedTraffic: 500, contentIdea: '프로바이오틱스 효능 및 추천 제품 TOP 5' },
+          { product: '다이어트 보조제', suggestedKeyword: '다이어트 보조제 후기', expectedTraffic: 800, contentIdea: '한달 다이어트 보조제 복용 후기' },
+        ]
+      })
+
+      toast.success('스마트스토어 분석 완료!')
+    } catch (error) {
+      toast.error('분석 중 오류가 발생했습니다')
+    } finally {
+      setSmartstoreLoading(false)
+    }
+  }
+
   const getDifficultyColor = (difficulty: number) => {
     if (difficulty < 40) return 'text-green-500'
     if (difficulty < 70) return 'text-yellow-500'
@@ -1731,15 +2543,15 @@ export default function ToolsPage() {
           <p className="text-gray-600">AI 기반 분석으로 블로그를 성장시키세요</p>
         </motion.div>
 
-        {/* Tabs - 5줄로 변경 (24개 탭) */}
+        {/* Tabs - 7줄로 변경 (34개 탭) */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="glass rounded-2xl p-3 mb-6"
         >
-          {[0, 5, 10, 15, 20].map((startIdx, rowIdx) => (
-            <div key={rowIdx} className={`grid grid-cols-5 gap-2 ${rowIdx < 4 ? 'mb-2' : ''}`}>
+          {[0, 5, 10, 15, 20, 25, 30].map((startIdx, rowIdx) => (
+            <div key={rowIdx} className={`grid grid-cols-5 gap-2 ${rowIdx < 6 ? 'mb-2' : ''}`}>
               {tabs.slice(startIdx, startIdx + 5).map((tab) => (
                 <button
                   key={tab.id}
@@ -5039,6 +5851,1012 @@ export default function ToolsPage() {
                     <div className="p-4 bg-gray-50 rounded-xl text-sm text-gray-600 text-center">
                       <Lock className="w-4 h-4 inline-block mr-1" />
                       이 키워드는 프리미엄 회원 전용입니다. 독점 기간 내 작성 시 상위 노출 확률이 높아집니다.
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* 네이버 데이터랩 */}
+          {activeTab === 'datalab' && (
+            <motion.div
+              key="datalab"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <div className="glass rounded-3xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-green-500 to-teal-500">
+                    <DataChart className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">네이버 데이터랩</h2>
+                    <p className="text-gray-600">검색 트렌드와 인구통계 분석</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4 mb-6">
+                  <label className="block text-sm font-medium text-gray-700">비교할 키워드 (최대 5개)</label>
+                  {datalabKeywords.map((kw, i) => (
+                    <div key={i} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={kw}
+                        onChange={(e) => {
+                          const newKeywords = [...datalabKeywords]
+                          newKeywords[i] = e.target.value
+                          setDatalabKeywords(newKeywords)
+                        }}
+                        placeholder={`키워드 ${i + 1}`}
+                        className="flex-1 px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-green-500 focus:outline-none"
+                      />
+                      {datalabKeywords.length > 1 && (
+                        <button
+                          onClick={() => setDatalabKeywords(datalabKeywords.filter((_, idx) => idx !== i))}
+                          className="px-3 text-red-500 hover:bg-red-50 rounded-lg"
+                        >
+                          삭제
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {datalabKeywords.length < 5 && (
+                    <button
+                      onClick={() => setDatalabKeywords([...datalabKeywords, ''])}
+                      className="text-green-600 hover:text-green-700 font-medium"
+                    >
+                      + 키워드 추가
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  onClick={handleDatalab}
+                  disabled={datalabLoading}
+                  className="w-full px-8 py-4 rounded-xl bg-gradient-to-r from-green-500 to-teal-500 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {datalabLoading ? <><Loader2 className="w-5 h-5 animate-spin" />분석 중...</> : <><DataChart className="w-5 h-5" />트렌드 분석</>}
+                </button>
+
+                {datalabResult && (
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-6 space-y-6">
+                    {/* 트렌드 차트 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">검색량 트렌드</h3>
+                      <div className="flex items-end gap-2 h-40">
+                        {datalabResult.trendData.map((period, i) => (
+                          <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                            {period.values.map((v, j) => (
+                              <div
+                                key={j}
+                                className={`w-full rounded-t ${['bg-green-400', 'bg-blue-400', 'bg-purple-400', 'bg-orange-400', 'bg-pink-400'][j]}`}
+                                style={{ height: `${v.value}%` }}
+                                title={`${v.keyword}: ${v.value}`}
+                              />
+                            ))}
+                            <span className="text-xs text-gray-500 mt-1">{period.period}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap gap-3 mt-4">
+                        {datalabResult.keywords.map((kw, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <div className={`w-3 h-3 rounded ${['bg-green-400', 'bg-blue-400', 'bg-purple-400', 'bg-orange-400', 'bg-pink-400'][i]}`} />
+                            <span className="text-sm">{kw}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 연령/성별 분석 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">인구통계 분석</h3>
+                      {datalabResult.demographics.map((demo, i) => (
+                        <div key={i} className="mb-4 p-4 bg-gray-50 rounded-xl">
+                          <div className="font-medium text-gray-800 mb-2">{demo.keyword}</div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <div className="text-sm text-gray-500 mb-2">연령대</div>
+                              {demo.age.map((a, j) => (
+                                <div key={j} className="flex items-center gap-2 mb-1">
+                                  <span className="text-xs w-12">{a.group}</span>
+                                  <div className="flex-1 h-3 bg-gray-200 rounded-full">
+                                    <div className="h-full bg-green-500 rounded-full" style={{ width: `${a.ratio}%` }} />
+                                  </div>
+                                  <span className="text-xs w-8">{a.ratio}%</span>
+                                </div>
+                              ))}
+                            </div>
+                            <div>
+                              <div className="text-sm text-gray-500 mb-2">성별</div>
+                              {demo.gender.map((g, j) => (
+                                <div key={j} className="flex items-center gap-2 mb-1">
+                                  <span className="text-xs w-12">{g.type}</span>
+                                  <div className="flex-1 h-3 bg-gray-200 rounded-full">
+                                    <div className={`h-full rounded-full ${g.type === '남성' ? 'bg-blue-500' : 'bg-pink-500'}`} style={{ width: `${g.ratio}%` }} />
+                                  </div>
+                                  <span className="text-xs w-8">{g.ratio}%</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* 시즌 팁 */}
+                    <div className="bg-gradient-to-r from-green-50 to-teal-50 rounded-2xl p-6 border border-green-200">
+                      <div className="flex items-start gap-3">
+                        <Lightbulb className="w-6 h-6 text-green-600 mt-0.5" />
+                        <div>
+                          <div className="font-bold text-gray-800 mb-1">시즌 분석 팁</div>
+                          <p className="text-gray-600">{datalabResult.seasonalTip}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* 네이버 쇼핑 */}
+          {activeTab === 'shopping' && (
+            <motion.div
+              key="shopping"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <div className="glass rounded-3xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500">
+                    <ShoppingCart className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">네이버 쇼핑 연동</h2>
+                    <p className="text-gray-600">쇼핑 키워드와 제휴 상품 분석</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 mb-6">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      value={shoppingKeyword}
+                      onChange={(e) => setShoppingKeyword(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleShopping()}
+                      placeholder="상품 키워드 입력 (예: 무선청소기, 에어프라이어)"
+                      className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    onClick={handleShopping}
+                    disabled={shoppingLoading}
+                    className="px-8 py-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {shoppingLoading ? <><Loader2 className="w-5 h-5 animate-spin" />분석 중...</> : <><ShoppingCart className="w-5 h-5" />쇼핑 분석</>}
+                  </button>
+                </div>
+
+                {shoppingResult && (
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                    {/* 쇼핑 키워드 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">구매 의도 높은 키워드</h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        {shoppingResult.shoppingKeywords.map((kw, i) => (
+                          <div key={i} className="p-4 bg-orange-50 rounded-xl">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-medium">{kw.keyword}</span>
+                              <span className={`text-sm px-2 py-0.5 rounded ${kw.competition === '낮음' ? 'bg-green-100 text-green-700' : kw.competition === '중' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
+                                경쟁 {kw.competition}
+                              </span>
+                            </div>
+                            <div className="text-sm text-gray-500">검색량: {kw.searchVolume.toLocaleString()}</div>
+                            <div className="flex items-center justify-between mt-2">
+                              <span className="text-sm text-orange-600">구매의도 {kw.purchaseIntent}%</span>
+                              <span className="text-sm text-gray-500">CPC {kw.cpc}원</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 추천 상품 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">제휴 추천 상품</h3>
+                      <div className="space-y-3">
+                        {shoppingResult.products.map((product, i) => (
+                          <div key={i} className="p-4 bg-gray-50 rounded-xl flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{product.name}</span>
+                                {product.trend === 'hot' && <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded text-xs">HOT</span>}
+                              </div>
+                              <div className="text-sm text-gray-500 mt-1">{product.mall} • 리뷰 {product.reviewCount.toLocaleString()}개 • ★{product.rating.toFixed(1)}</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-bold text-lg">{product.price.toLocaleString()}원</div>
+                              <div className="text-sm text-orange-600">예상 수수료 {product.commission.toLocaleString()}원</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* 네이버 플레이스 */}
+          {activeTab === 'place' && (
+            <motion.div
+              key="place"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <div className="glass rounded-3xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-red-500 to-pink-500">
+                    <MapPin className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">네이버 플레이스</h2>
+                    <p className="text-gray-600">지역별 상권 분석 및 리뷰 키워드</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 mb-6">
+                  <input
+                    type="text"
+                    value={placeArea}
+                    onChange={(e) => setPlaceArea(e.target.value)}
+                    placeholder="지역 입력 (예: 강남역, 홍대, 이태원)"
+                    className="flex-1 px-4 py-4 rounded-xl border-2 border-gray-200 focus:border-red-500 focus:outline-none"
+                  />
+                  <select
+                    value={placeCategory}
+                    onChange={(e) => setPlaceCategory(e.target.value)}
+                    className="px-4 py-4 rounded-xl border-2 border-gray-200 focus:border-red-500 focus:outline-none"
+                  >
+                    <option value="맛집">맛집</option>
+                    <option value="카페">카페</option>
+                    <option value="술집">술집</option>
+                    <option value="뷰티">뷰티</option>
+                  </select>
+                  <button
+                    onClick={handlePlace}
+                    disabled={placeLoading}
+                    className="px-8 py-4 rounded-xl bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {placeLoading ? <><Loader2 className="w-5 h-5 animate-spin" />분석 중...</> : <><MapPin className="w-5 h-5" />상권 분석</>}
+                  </button>
+                </div>
+
+                {placeResult && (
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                    {/* 상권 개요 */}
+                    <div className="grid grid-cols-4 gap-4">
+                      <div className="bg-white rounded-xl p-4 border border-gray-200 text-center">
+                        <div className="text-2xl font-bold text-gray-800">{placeResult.areaAnalysis.totalPlaces}</div>
+                        <div className="text-sm text-gray-500">총 업체수</div>
+                      </div>
+                      <div className="bg-white rounded-xl p-4 border border-gray-200 text-center">
+                        <div className="text-2xl font-bold text-gray-800">★{placeResult.areaAnalysis.avgRating.toFixed(1)}</div>
+                        <div className="text-sm text-gray-500">평균 평점</div>
+                      </div>
+                      <div className="bg-white rounded-xl p-4 border border-gray-200 text-center">
+                        <div className="text-2xl font-bold text-gray-800">{placeResult.areaAnalysis.avgReviewCount}</div>
+                        <div className="text-sm text-gray-500">평균 리뷰수</div>
+                      </div>
+                      <div className="bg-white rounded-xl p-4 border border-gray-200 text-center">
+                        <div className="text-2xl font-bold text-red-600">{placeResult.areaAnalysis.competitionScore}점</div>
+                        <div className="text-sm text-gray-500">경쟁 강도</div>
+                      </div>
+                    </div>
+
+                    {/* 인기 장소 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">상위 노출 장소</h3>
+                      <div className="space-y-3">
+                        {placeResult.places.map((place, i) => (
+                          <div key={i} className="p-4 bg-gray-50 rounded-xl flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${i < 3 ? 'bg-red-500' : 'bg-gray-400'}`}>{place.rank}</div>
+                              <div>
+                                <div className="font-medium">{place.name}</div>
+                                <div className="text-sm text-gray-500">★{place.rating.toFixed(1)} • 리뷰 {place.reviewCount}개 • 블로그 {place.blogReviewCount}개</div>
+                              </div>
+                            </div>
+                            <span className={`px-3 py-1 rounded-full text-sm ${place.competitionLevel === 'low' ? 'bg-green-100 text-green-700' : place.competitionLevel === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
+                              경쟁 {place.competitionLevel === 'low' ? '낮음' : place.competitionLevel === 'medium' ? '보통' : '높음'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 리뷰 키워드 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">리뷰 키워드 분석</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {placeResult.reviewKeywords.map((kw, i) => (
+                          <span
+                            key={i}
+                            className={`px-4 py-2 rounded-full text-sm ${kw.sentiment === 'positive' ? 'bg-green-100 text-green-700' : kw.sentiment === 'negative' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}
+                          >
+                            {kw.keyword} ({kw.count})
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* 네이버 뉴스/실검 */}
+          {activeTab === 'news' && (
+            <motion.div
+              key="news"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <div className="glass rounded-3xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600">
+                    <Newspaper className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">뉴스/실시간 검색</h2>
+                    <p className="text-gray-600">실시간 이슈와 블로그 기회 발굴</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleNews}
+                  disabled={newsLoading}
+                  className="w-full px-8 py-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2 mb-6"
+                >
+                  {newsLoading ? <><Loader2 className="w-5 h-5 animate-spin" />분석 중...</> : <><Newspaper className="w-5 h-5" />실시간 분석</>}
+                </button>
+
+                {newsResult && (
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                    {/* 실시간 검색어 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">실시간 급상승 키워드</h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        {newsResult.realTimeKeywords.map((kw, i) => (
+                          <div key={i} className="p-4 bg-blue-50 rounded-xl flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${kw.rank <= 3 ? 'bg-blue-600' : 'bg-gray-400'}`}>{kw.rank}</div>
+                              <div>
+                                <div className="font-medium">{kw.keyword}</div>
+                                <div className="text-xs text-gray-500">{kw.category}</div>
+                              </div>
+                            </div>
+                            <span className={`text-sm ${kw.changeType === 'new' ? 'text-red-500' : kw.changeType === 'up' ? 'text-green-500' : kw.changeType === 'down' ? 'text-blue-500' : 'text-gray-500'}`}>
+                              {kw.changeType === 'new' ? 'NEW' : kw.changeType === 'up' ? `↑${kw.changeRank}` : kw.changeType === 'down' ? `↓${kw.changeRank}` : '-'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 블로그 기회 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">블로그 기회 키워드</h3>
+                      <div className="space-y-3">
+                        {newsResult.issueKeywords.map((kw, i) => (
+                          <div key={i} className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-bold text-gray-800">{kw.keyword}</span>
+                              <span className="px-3 py-1 bg-yellow-400 text-yellow-900 rounded-full text-xs font-bold">{kw.goldenTime}</span>
+                            </div>
+                            <div className="text-sm text-gray-600 mb-2">{kw.suggestedAngle}</div>
+                            <div className="flex items-center gap-4 text-xs text-gray-500">
+                              <span>관련 뉴스 {kw.newsCount}건</span>
+                              <span>블로그 적합도 {kw.blogPotential}%</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* 네이버 카페 */}
+          {activeTab === 'cafe' && (
+            <motion.div
+              key="cafe"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <div className="glass rounded-3xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-500">
+                    <Coffee className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">네이버 카페</h2>
+                    <p className="text-gray-600">인기 토픽과 질문 키워드 발굴</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleCafe}
+                  disabled={cafeLoading}
+                  className="w-full px-8 py-4 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-500 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2 mb-6"
+                >
+                  {cafeLoading ? <><Loader2 className="w-5 h-5 animate-spin" />분석 중...</> : <><Coffee className="w-5 h-5" />카페 분석</>}
+                </button>
+
+                {cafeResult && (
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                    {/* 인기 토픽 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">지금 뜨는 카페 토픽</h3>
+                      <div className="space-y-3">
+                        {cafeResult.popularTopics.map((topic, i) => (
+                          <div key={i} className="p-4 bg-amber-50 rounded-xl">
+                            <div className="font-medium text-gray-800 mb-1">{topic.topic}</div>
+                            <div className="flex items-center gap-4 text-sm text-gray-500">
+                              <span>{topic.cafeName}</span>
+                              <span>글 {topic.postCount}개</span>
+                              <span>참여 {topic.engagement}건</span>
+                              <span className="px-2 py-0.5 bg-amber-200 text-amber-800 rounded">{topic.category}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 질문 키워드 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">블로그 소재용 질문</h3>
+                      <div className="space-y-3">
+                        {cafeResult.questions.map((q, i) => (
+                          <div key={i} className="p-4 bg-gray-50 rounded-xl flex items-center justify-between">
+                            <div>
+                              <div className="font-medium text-gray-800">{q.question}</div>
+                              <div className="text-sm text-gray-500 mt-1">추천 키워드: {q.suggestedKeyword}</div>
+                            </div>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(q.suggestedKeyword)
+                                toast.success('키워드가 복사되었습니다!')
+                              }}
+                              className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg text-sm hover:bg-amber-200"
+                            >
+                              복사
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 추천 카페 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">홍보 추천 카페</h3>
+                      <div className="grid grid-cols-3 gap-4">
+                        {cafeResult.recommendedCafes.map((cafe, i) => (
+                          <div key={i} className="p-4 bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl text-center">
+                            <div className="font-bold text-gray-800">{cafe.name}</div>
+                            <div className="text-sm text-gray-500 mt-1">회원 {cafe.members.toLocaleString()}명</div>
+                            <div className="text-lg font-bold text-amber-600 mt-2">적합도 {cafe.matchScore}%</div>
+                            <div className="text-xs text-gray-400 mt-1">{cafe.postingRule}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* 네이버 VIEW */}
+          {activeTab === 'naverView' && (
+            <motion.div
+              key="naverView"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <div className="glass rounded-3xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-purple-500 to-violet-600">
+                    <Video className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">네이버 VIEW</h2>
+                    <p className="text-gray-600">영상 키워드 분석 및 SEO</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 mb-6">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      value={viewKeyword}
+                      onChange={(e) => setViewKeyword(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleNaverView()}
+                      placeholder="영상 키워드 입력"
+                      className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    onClick={handleNaverView}
+                    disabled={viewLoading}
+                    className="px-8 py-4 rounded-xl bg-gradient-to-r from-purple-500 to-violet-600 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {viewLoading ? <><Loader2 className="w-5 h-5 animate-spin" />분석 중...</> : <><Video className="w-5 h-5" />VIEW 분석</>}
+                  </button>
+                </div>
+
+                {viewResult && (
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                    {/* 영상 키워드 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">영상 키워드 기회</h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        {viewResult.videoKeywords.map((kw, i) => (
+                          <div key={i} className="p-4 bg-purple-50 rounded-xl">
+                            <div className="font-medium text-gray-800">{kw.keyword}</div>
+                            <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
+                              <div><span className="text-gray-500">영상수:</span> {kw.videoCount}</div>
+                              <div><span className="text-gray-500">평균조회:</span> {kw.avgViews.toLocaleString()}</div>
+                            </div>
+                            <div className="flex items-center justify-between mt-2">
+                              <span className={`text-sm ${kw.competition === '낮음' ? 'text-green-600' : kw.competition === '중' ? 'text-yellow-600' : 'text-red-600'}`}>경쟁 {kw.competition}</span>
+                              <span className="text-purple-600 font-bold">기회 {kw.opportunity}점</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 인기 영상 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">TOP 영상</h3>
+                      <div className="space-y-3">
+                        {viewResult.topVideos.map((video, i) => (
+                          <div key={i} className="p-4 bg-gray-50 rounded-xl flex items-center gap-4">
+                            <div className="w-12 h-12 bg-purple-200 rounded-lg flex items-center justify-center">
+                              <Play className="w-6 h-6 text-purple-600" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="font-medium text-gray-800">{video.title}</div>
+                              <div className="text-sm text-gray-500">{video.creator} • {video.duration}</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-bold">{video.views.toLocaleString()}</div>
+                              <div className="text-sm text-gray-500">조회수</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 썸네일 패턴 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">클릭률 높은 썸네일 패턴</h3>
+                      <div className="grid grid-cols-3 gap-4">
+                        {viewResult.thumbnailPatterns.map((pattern, i) => (
+                          <div key={i} className="p-4 bg-gradient-to-br from-purple-50 to-violet-50 rounded-xl text-center">
+                            <div className="font-medium text-gray-800">{pattern.pattern}</div>
+                            <div className="text-2xl font-bold text-purple-600 my-2">{pattern.ctr}%</div>
+                            <div className="text-xs text-gray-500">CTR</div>
+                            <div className="text-sm text-gray-600 mt-2">{pattern.example}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* 네이버 인플루언서 */}
+          {activeTab === 'influencer' && (
+            <motion.div
+              key="influencer"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <div className="glass rounded-3xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-pink-500 to-rose-600">
+                    <UserCircle className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">인플루언서 검색</h2>
+                    <p className="text-gray-600">내 순위 추적 및 TOP 인플루언서 분석</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 mb-6">
+                  <input
+                    type="text"
+                    value={influencerBlogId}
+                    onChange={(e) => setInfluencerBlogId(e.target.value)}
+                    placeholder="블로그 ID 입력"
+                    className="flex-1 px-4 py-4 rounded-xl border-2 border-gray-200 focus:border-pink-500 focus:outline-none"
+                  />
+                  <select
+                    value={influencerCategory}
+                    onChange={(e) => setInfluencerCategory(e.target.value)}
+                    className="px-4 py-4 rounded-xl border-2 border-gray-200 focus:border-pink-500 focus:outline-none"
+                  >
+                    <option value="all">전체</option>
+                    <option value="맛집">맛집</option>
+                    <option value="여행">여행</option>
+                    <option value="뷰티">뷰티</option>
+                    <option value="육아">육아</option>
+                  </select>
+                  <button
+                    onClick={handleInfluencer}
+                    disabled={influencerLoading}
+                    className="px-8 py-4 rounded-xl bg-gradient-to-r from-pink-500 to-rose-600 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {influencerLoading ? <><Loader2 className="w-5 h-5 animate-spin" />분석 중...</> : <><UserCircle className="w-5 h-5" />분석</>}
+                  </button>
+                </div>
+
+                {influencerResult && (
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                    {/* 내 순위 */}
+                    <div className="bg-gradient-to-r from-pink-500 to-rose-600 rounded-2xl p-6 text-white">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-sm opacity-80">내 인플루언서 순위</div>
+                          <div className="text-4xl font-bold">{influencerResult.myRanking.rank}위</div>
+                          <div className="text-sm opacity-80">/ {influencerResult.myRanking.totalInfluencers}명 중 ({influencerResult.myRanking.category})</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-3xl font-bold">{influencerResult.myRanking.score}점</div>
+                          <div className={`text-sm ${influencerResult.myRanking.change > 0 ? 'text-green-300' : 'text-red-300'}`}>
+                            {influencerResult.myRanking.change > 0 ? `↑${influencerResult.myRanking.change}` : `↓${Math.abs(influencerResult.myRanking.change)}`}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* TOP 인플루언서 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">TOP 인플루언서 전략</h3>
+                      <div className="space-y-3">
+                        {influencerResult.topInfluencers.map((inf, i) => (
+                          <div key={i} className="p-4 bg-pink-50 rounded-xl">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-sm ${i === 0 ? 'bg-yellow-500' : i === 1 ? 'bg-gray-400' : i === 2 ? 'bg-amber-600' : 'bg-gray-300'}`}>{inf.rank}</span>
+                                <span className="font-bold">{inf.name}</span>
+                                <span className="text-sm text-gray-500">{inf.category}</span>
+                              </div>
+                              <span className="text-pink-600 font-bold">참여율 {inf.engagement}%</span>
+                            </div>
+                            <div className="text-sm text-gray-600">전략: {inf.strategy}</div>
+                            <div className="flex gap-4 mt-2 text-xs text-gray-500">
+                              <span>팔로워 {inf.followers.toLocaleString()}</span>
+                              <span>평균 조회 {inf.avgViews.toLocaleString()}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 인플루언서 로드맵 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">인플루언서 되기 로드맵</h3>
+                      <div className="space-y-4">
+                        {influencerResult.roadmapToInfluencer.map((step, i) => (
+                          <div key={i} className="flex items-center gap-4">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${step.currentProgress >= 100 ? 'bg-green-500' : 'bg-pink-500'}`}>{step.step}</div>
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-medium">{step.title}</span>
+                                <span className="text-sm text-gray-500">{step.requirement}</span>
+                              </div>
+                              <div className="w-full h-2 bg-gray-200 rounded-full">
+                                <div className="h-full bg-pink-500 rounded-full" style={{ width: `${step.currentProgress}%` }} />
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">{step.tip}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* 네이버 통합검색 */}
+          {activeTab === 'searchAnalysis' && (
+            <motion.div
+              key="searchAnalysis"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <div className="glass rounded-3xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600">
+                    <Globe className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">통합검색 분석</h2>
+                    <p className="text-gray-600">검색결과 구성 및 탭별 전략</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 mb-6">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      value={searchAnalysisKeyword}
+                      onChange={(e) => setSearchAnalysisKeyword(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleSearchAnalysis()}
+                      placeholder="분석할 키워드 입력"
+                      className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-cyan-500 focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    onClick={handleSearchAnalysis}
+                    disabled={searchAnalysisLoading}
+                    className="px-8 py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {searchAnalysisLoading ? <><Loader2 className="w-5 h-5 animate-spin" />분석 중...</> : <><Globe className="w-5 h-5" />검색 분석</>}
+                  </button>
+                </div>
+
+                {searchAnalysisResult && (
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                    {/* 검색결과 구성 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">"{searchAnalysisResult.keyword}" 검색결과 구성</h3>
+                      <div className="space-y-3">
+                        {searchAnalysisResult.searchResultComposition.map((section, i) => (
+                          <div key={i} className="flex items-center gap-4">
+                            <div className="w-24 text-sm font-medium text-gray-700">{section.section}</div>
+                            <div className="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full" style={{ width: `${section.percentage}%` }} />
+                            </div>
+                            <div className="w-12 text-sm text-right">{section.percentage}%</div>
+                            <div className="w-40 text-xs text-gray-500">{section.recommendation}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 탭 우선순위 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">탭별 노출 우선순위</h3>
+                      <div className="grid grid-cols-4 gap-4">
+                        {searchAnalysisResult.tabPriority.map((tab, i) => (
+                          <div key={i} className={`p-4 rounded-xl text-center ${tab.myPresence ? 'bg-green-50 border-2 border-green-300' : 'bg-gray-50'}`}>
+                            <div className="text-2xl font-bold text-gray-800">{tab.position}위</div>
+                            <div className="font-medium">{tab.tab}</div>
+                            <div className="text-sm text-gray-500">노출 가능성 {tab.visibility}%</div>
+                            {tab.myPresence && <div className="text-xs text-green-600 mt-1">내 글 노출 중</div>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 최적 콘텐츠 */}
+                    <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-2xl p-6 border border-cyan-200">
+                      <h3 className="font-bold text-lg mb-3">최적 콘텐츠 전략</h3>
+                      <div className="text-xl font-bold text-cyan-600 mb-2">{searchAnalysisResult.optimalContentType.type}</div>
+                      <p className="text-gray-600 mb-2">{searchAnalysisResult.optimalContentType.reason}</p>
+                      <div className="text-sm text-gray-500">예시: {searchAnalysisResult.optimalContentType.example}</div>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* 네이버 지식인 */}
+          {activeTab === 'kin' && (
+            <motion.div
+              key="kin"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <div className="glass rounded-3xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-green-600 to-emerald-500">
+                    <HelpCircle className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">네이버 지식인</h2>
+                    <p className="text-gray-600">인기 질문 수집 및 답변 템플릿</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleKin}
+                  disabled={kinLoading}
+                  className="w-full px-8 py-4 rounded-xl bg-gradient-to-r from-green-600 to-emerald-500 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2 mb-6"
+                >
+                  {kinLoading ? <><Loader2 className="w-5 h-5 animate-spin" />분석 중...</> : <><HelpCircle className="w-5 h-5" />질문 분석</>}
+                </button>
+
+                {kinResult && (
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                    {/* 인기 질문 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">블로그 소재용 인기 질문</h3>
+                      <div className="space-y-3">
+                        {kinResult.popularQuestions.map((q, i) => (
+                          <div key={i} className="p-4 bg-green-50 rounded-xl">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="font-medium text-gray-800">{q.question}</div>
+                                <div className="flex items-center gap-3 mt-2 text-sm text-gray-500">
+                                  <span>답변 {q.answers}개</span>
+                                  <span>조회 {q.views.toLocaleString()}</span>
+                                  <span className="px-2 py-0.5 bg-green-200 text-green-800 rounded">{q.category}</span>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(q.keyword)
+                                  toast.success('키워드가 복사되었습니다!')
+                                }}
+                                className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm hover:bg-green-200"
+                              >
+                                {q.keyword}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 답변 템플릿 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">답변 템플릿</h3>
+                      {kinResult.answerTemplates.map((template, i) => (
+                        <div key={i} className="p-4 bg-gray-50 rounded-xl mb-3">
+                          <div className="font-medium text-gray-800 mb-2">{template.questionType}</div>
+                          <div className="text-sm text-gray-600 mb-2 p-3 bg-white rounded-lg">{template.template}</div>
+                          <div className="text-xs text-green-600 flex items-center gap-1">
+                            <Lightbulb className="w-3 h-3" />
+                            {template.blogLinkTip}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* 네이버 스마트스토어 */}
+          {activeTab === 'smartstore' && (
+            <motion.div
+              key="smartstore"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <div className="glass rounded-3xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-lime-500 to-green-600">
+                    <Store className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">스마트스토어 연동</h2>
+                    <p className="text-gray-600">스토어와 블로그 시너지 분석</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 mb-6">
+                  <div className="relative flex-1">
+                    <Store className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      value={smartstoreId}
+                      onChange={(e) => setSmartstoreId(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleSmartstore()}
+                      placeholder="스마트스토어 ID 입력"
+                      className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-lime-500 focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    onClick={handleSmartstore}
+                    disabled={smartstoreLoading}
+                    className="px-8 py-4 rounded-xl bg-gradient-to-r from-lime-500 to-green-600 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {smartstoreLoading ? <><Loader2 className="w-5 h-5 animate-spin" />분석 중...</> : <><Store className="w-5 h-5" />스토어 분석</>}
+                  </button>
+                </div>
+
+                {smartstoreResult && (
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                    {/* 스토어 정보 */}
+                    <div className="bg-gradient-to-r from-lime-500 to-green-600 rounded-2xl p-6 text-white">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-sm opacity-80">스토어</div>
+                          <div className="text-2xl font-bold">{smartstoreResult.storeInfo.storeName}</div>
+                          <div className="text-sm opacity-80">{smartstoreResult.storeInfo.category} • 상품 {smartstoreResult.storeInfo.productCount}개</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-3xl font-bold">★{smartstoreResult.storeInfo.rating.toFixed(1)}</div>
+                          <div className="text-sm opacity-80">총 매출 {(smartstoreResult.storeInfo.totalSales / 10000).toFixed(0)}만원</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 상품 키워드 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">상품 키워드 분석</h3>
+                      <div className="space-y-3">
+                        {smartstoreResult.productKeywords.map((kw, i) => (
+                          <div key={i} className="p-4 bg-lime-50 rounded-xl flex items-center justify-between">
+                            <div>
+                              <div className="font-medium">{kw.keyword}</div>
+                              <div className="text-sm text-gray-500">검색량 {kw.searchVolume.toLocaleString()} • 전환율 {kw.conversionRate}%</div>
+                            </div>
+                            <div className="text-right">
+                              {kw.myRank ? (
+                                <div className="text-lime-600 font-bold">{kw.myRank}위</div>
+                              ) : (
+                                <div className="text-gray-400">순위 없음</div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 블로그 시너지 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">블로그 콘텐츠 아이디어</h3>
+                      {smartstoreResult.blogSynergy.map((item, i) => (
+                        <div key={i} className="p-4 bg-gradient-to-r from-lime-50 to-green-50 rounded-xl mb-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-bold text-gray-800">{item.product}</span>
+                            <span className="text-lime-600">예상 유입 +{item.expectedTraffic}</span>
+                          </div>
+                          <div className="text-sm text-gray-600">추천 키워드: {item.suggestedKeyword}</div>
+                          <div className="text-sm text-gray-500 mt-1">콘텐츠 아이디어: {item.contentIdea}</div>
+                        </div>
+                      ))}
                     </div>
                   </motion.div>
                 )}
