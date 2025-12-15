@@ -2856,31 +2856,109 @@ export default function ToolsPage() {
           </span>
         </motion.button>
 
-        {/* Tabs - 7줄로 변경 (34개 탭) */}
+        {/* 카테고리별 도구 목록 */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="glass rounded-2xl p-3 mb-6"
+          className="space-y-4 mb-8"
         >
-          {[0, 5, 10, 15, 20, 25, 30].map((startIdx, rowIdx) => (
-            <div key={rowIdx} className={`grid grid-cols-5 gap-2 ${rowIdx < 6 ? 'mb-2' : ''}`}>
-              {tabs.slice(startIdx, startIdx + 5).map((tab) => (
+          {/* 콘텐츠 제작 */}
+          <div className="glass rounded-2xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-2 h-2 rounded-full bg-purple-500" />
+              <span className="text-sm font-bold text-gray-700">콘텐츠 제작</span>
+            </div>
+            <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+              {tabs.slice(0, 8).map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center justify-center gap-1 py-2 px-1.5 rounded-xl font-semibold transition-all text-xs ${
+                  className={`group flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all ${
                     activeTab === tab.id
-                      ? `bg-gradient-to-r ${tab.color} text-white shadow-lg`
-                      : 'text-gray-600 hover:bg-white/50'
+                      ? `bg-gradient-to-br ${tab.color} text-white shadow-lg shadow-purple-500/20 scale-105`
+                      : 'bg-white/60 hover:bg-white hover:shadow-md text-gray-600 hover:scale-105'
                   }`}
                 >
-                  <tab.icon className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline truncate">{tab.label}</span>
+                  <tab.icon className={`w-5 h-5 ${activeTab === tab.id ? '' : 'group-hover:text-purple-500'}`} />
+                  <span className="text-[10px] font-medium truncate w-full text-center">{tab.label}</span>
                 </button>
               ))}
             </div>
-          ))}
+          </div>
+
+          {/* 분석 & 최적화 */}
+          <div className="glass rounded-2xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-2 h-2 rounded-full bg-blue-500" />
+              <span className="text-sm font-bold text-gray-700">분석 & 최적화</span>
+            </div>
+            <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+              {tabs.slice(8, 16).map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`group flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all ${
+                    activeTab === tab.id
+                      ? `bg-gradient-to-br ${tab.color} text-white shadow-lg shadow-blue-500/20 scale-105`
+                      : 'bg-white/60 hover:bg-white hover:shadow-md text-gray-600 hover:scale-105'
+                  }`}
+                >
+                  <tab.icon className={`w-5 h-5 ${activeTab === tab.id ? '' : 'group-hover:text-blue-500'}`} />
+                  <span className="text-[10px] font-medium truncate w-full text-center">{tab.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 성장 전략 */}
+          <div className="glass rounded-2xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-2 h-2 rounded-full bg-green-500" />
+              <span className="text-sm font-bold text-gray-700">성장 전략</span>
+            </div>
+            <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+              {tabs.slice(16, 24).map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`group flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all ${
+                    activeTab === tab.id
+                      ? `bg-gradient-to-br ${tab.color} text-white shadow-lg shadow-green-500/20 scale-105`
+                      : 'bg-white/60 hover:bg-white hover:shadow-md text-gray-600 hover:scale-105'
+                  }`}
+                >
+                  <tab.icon className={`w-5 h-5 ${activeTab === tab.id ? '' : 'group-hover:text-green-500'}`} />
+                  <span className="text-[10px] font-medium truncate w-full text-center">{tab.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 네이버 생태계 */}
+          <div className="glass rounded-2xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="text-sm font-bold text-gray-700">네이버 생태계</span>
+              <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-700 rounded-full">NEW</span>
+            </div>
+            <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-10 gap-2">
+              {tabs.slice(24).map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`group flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all ${
+                    activeTab === tab.id
+                      ? `bg-gradient-to-br ${tab.color} text-white shadow-lg shadow-emerald-500/20 scale-105`
+                      : 'bg-white/60 hover:bg-white hover:shadow-md text-gray-600 hover:scale-105'
+                  }`}
+                >
+                  <tab.icon className={`w-5 h-5 ${activeTab === tab.id ? '' : 'group-hover:text-emerald-500'}`} />
+                  <span className="text-[10px] font-medium truncate w-full text-center">{tab.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </motion.div>
 
         {/* Tab Content */}
