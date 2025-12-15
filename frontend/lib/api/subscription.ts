@@ -101,7 +101,7 @@ export async function getPlanInfo(planType: PlanType): Promise<PlanInfo> {
 
 // ============ 구독 API ============
 
-export async function getMySubscription(userId: number): Promise<Subscription> {
+export async function getMySubscription(userId: number | string): Promise<Subscription> {
   const response = await apiClient.get('/api/subscription/me', {
     params: { user_id: userId }
   })
@@ -109,7 +109,7 @@ export async function getMySubscription(userId: number): Promise<Subscription> {
 }
 
 export async function upgradeSubscription(
-  userId: number,
+  userId: number | string,
   planType: PlanType,
   billingCycle: 'monthly' | 'yearly' = 'monthly'
 ): Promise<{ success: boolean; message: string; subscription: Subscription }> {
@@ -122,7 +122,7 @@ export async function upgradeSubscription(
   return response.data
 }
 
-export async function cancelSubscription(userId: number): Promise<{ success: boolean; message: string }> {
+export async function cancelSubscription(userId: number | string): Promise<{ success: boolean; message: string }> {
   const response = await apiClient.post('/api/subscription/cancel', null, {
     params: { user_id: userId }
   })
@@ -131,7 +131,7 @@ export async function cancelSubscription(userId: number): Promise<{ success: boo
 
 // ============ 사용량 API ============
 
-export async function getUsage(userId: number): Promise<UsageInfo> {
+export async function getUsage(userId: number | string): Promise<UsageInfo> {
   const response = await apiClient.get('/api/subscription/usage', {
     params: { user_id: userId }
   })
@@ -139,7 +139,7 @@ export async function getUsage(userId: number): Promise<UsageInfo> {
 }
 
 export async function checkUsageLimit(
-  userId: number,
+  userId: number | string,
   usageType: 'keyword_search' | 'blog_analysis'
 ): Promise<UsageLimitCheck> {
   const response = await apiClient.get('/api/subscription/usage/check', {
@@ -149,7 +149,7 @@ export async function checkUsageLimit(
 }
 
 export async function incrementUsage(
-  userId: number,
+  userId: number | string,
   usageType: 'keyword_search' | 'blog_analysis'
 ): Promise<{ success: boolean; usage?: any; used_extra_credit?: boolean }> {
   const response = await apiClient.post('/api/subscription/usage/increment', null, {
@@ -161,7 +161,7 @@ export async function incrementUsage(
 // ============ 결제 API ============
 
 export async function preparePayment(
-  userId: number,
+  userId: number | string,
   planType: PlanType,
   billingCycle: 'monthly' | 'yearly' = 'monthly'
 ): Promise<PaymentPrepareInfo> {
@@ -175,7 +175,7 @@ export async function preparePayment(
 }
 
 export async function confirmPayment(
-  userId: number,
+  userId: number | string,
   paymentKey: string,
   orderId: string,
   amount: number
@@ -191,7 +191,7 @@ export async function confirmPayment(
 }
 
 export async function completeSubscriptionPayment(
-  userId: number,
+  userId: number | string,
   paymentKey: string,
   orderId: string,
   planType: PlanType,
@@ -210,7 +210,7 @@ export async function completeSubscriptionPayment(
 }
 
 export async function getPaymentHistory(
-  userId: number,
+  userId: number | string,
   limit: number = 10
 ): Promise<{ payments: PaymentHistory[]; count: number }> {
   const response = await apiClient.get('/api/subscription/payments', {
@@ -221,7 +221,7 @@ export async function getPaymentHistory(
 
 // ============ 추가 크레딧 API ============
 
-export async function getExtraCredits(userId: number): Promise<{ credits: any[] }> {
+export async function getExtraCredits(userId: number | string): Promise<{ credits: any[] }> {
   const response = await apiClient.get('/api/subscription/credits', {
     params: { user_id: userId }
   })
@@ -229,7 +229,7 @@ export async function getExtraCredits(userId: number): Promise<{ credits: any[] 
 }
 
 export async function prepareCreditsPayment(
-  userId: number,
+  userId: number | string,
   creditType: 'keyword' | 'analysis',
   amount: 100 | 500 | 1000
 ): Promise<{
@@ -247,7 +247,7 @@ export async function prepareCreditsPayment(
 }
 
 export async function completeCreditsPayment(
-  userId: number,
+  userId: number | string,
   paymentKey: string,
   orderId: string,
   creditType: 'keyword' | 'analysis',
