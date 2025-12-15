@@ -50,7 +50,7 @@ export function ConnectionIndicator() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-40">
+    <div className="fixed bottom-4 left-4 z-40">
       <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-sm border border-gray-200/50 overflow-hidden opacity-60 hover:opacity-100 transition-opacity">
         {/* 접힌 상태 - 작은 표시등 */}
         <button
