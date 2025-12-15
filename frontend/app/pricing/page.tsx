@@ -23,6 +23,78 @@ const planColors: Record<PlanType, string> = {
   business: 'from-orange-500 to-red-500'
 }
 
+// 기본 플랜 데이터 (API 실패 시 fallback)
+const DEFAULT_PLANS: PlanInfo[] = [
+  {
+    type: 'free',
+    name: '무료',
+    price_monthly: 0,
+    price_yearly: 0,
+    features: {
+      keyword_search_daily: 5,
+      blog_analysis_daily: 3,
+      search_results_count: 10,
+      history_days: 0,
+      competitor_compare: 0,
+      rank_alert: false,
+      excel_export: false,
+      api_access: false,
+      team_members: 1
+    }
+  },
+  {
+    type: 'basic',
+    name: '베이직',
+    price_monthly: 9900,
+    price_yearly: 95000,
+    features: {
+      keyword_search_daily: 50,
+      blog_analysis_daily: 20,
+      search_results_count: 30,
+      history_days: 30,
+      competitor_compare: 3,
+      rank_alert: false,
+      excel_export: true,
+      api_access: false,
+      team_members: 1
+    }
+  },
+  {
+    type: 'pro',
+    name: '프로',
+    price_monthly: 29900,
+    price_yearly: 287000,
+    features: {
+      keyword_search_daily: 200,
+      blog_analysis_daily: 100,
+      search_results_count: 50,
+      history_days: 90,
+      competitor_compare: 10,
+      rank_alert: true,
+      excel_export: true,
+      api_access: false,
+      team_members: 3
+    }
+  },
+  {
+    type: 'business',
+    name: '비즈니스',
+    price_monthly: 99900,
+    price_yearly: 959000,
+    features: {
+      keyword_search_daily: -1,
+      blog_analysis_daily: -1,
+      search_results_count: 100,
+      history_days: -1,
+      competitor_compare: -1,
+      rank_alert: true,
+      excel_export: true,
+      api_access: true,
+      team_members: 10
+    }
+  }
+]
+
 export default function PricingPage() {
   const router = useRouter()
   const { isAuthenticated, user } = useAuthStore()
@@ -39,14 +111,20 @@ export default function PricingPage() {
   const loadData = async () => {
     try {
       const plansData = await getAllPlans()
-      setPlans(plansData)
+      setPlans(plansData && plansData.length > 0 ? plansData : DEFAULT_PLANS)
 
       if (isAuthenticated && user?.id) {
-        const subscription = await getMySubscription(user.id)
-        setCurrentPlan(subscription.plan_type)
+        try {
+          const subscription = await getMySubscription(user.id)
+          setCurrentPlan(subscription.plan_type)
+        } catch (subError) {
+          console.error('Failed to load subscription:', subError)
+        }
       }
     } catch (error) {
       console.error('Failed to load plans:', error)
+      // API 실패 시 기본 플랜 데이터 사용
+      setPlans(DEFAULT_PLANS)
     } finally {
       setIsLoading(false)
     }
