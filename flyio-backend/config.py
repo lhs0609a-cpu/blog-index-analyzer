@@ -164,6 +164,10 @@ class Settings(BaseSettings):
     SUPABASE_KEY: str = ""  # anon key (public)
     SUPABASE_SERVICE_KEY: str = ""  # service role key (private)
 
+    # 토스페이먼츠 결제
+    TOSS_CLIENT_KEY: str = ""  # 클라이언트 키 (프론트엔드용)
+    TOSS_SECRET_KEY: str = ""  # 시크릿 키 (백엔드용)
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

@@ -1,12 +1,13 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Sparkles, TrendingUp, Zap, Award, Users, BarChart3, LogOut, Search, BookOpen, ArrowRight, Building2, Mic } from 'lucide-react'
+import { Sparkles, TrendingUp, Zap, Award, Users, BarChart3, LogOut, Search, BookOpen, ArrowRight, Building2, Mic, CreditCard } from 'lucide-react'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import UsageIndicator from '@/components/UsageIndicator'
 
 export default function Home() {
   const { isAuthenticated, user, logout } = useAuthStore()
@@ -45,6 +46,7 @@ export default function Home() {
           </div>
         ) : isAuthenticated ? (
           <div className="flex items-center gap-4">
+            <UsageIndicator />
             <span className="text-gray-700 font-medium">안녕하세요, {user?.name}님</span>
             <Link href="/dashboard">
               <motion.button
@@ -66,6 +68,16 @@ export default function Home() {
           </div>
         ) : (
           <div className="flex items-center gap-4">
+            <Link href="/pricing">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="px-6 py-3 rounded-full glass hover:bg-white/90 transition-all font-semibold flex items-center gap-2"
+              >
+                <CreditCard className="w-4 h-4" />
+                요금제
+              </motion.button>
+            </Link>
             <Link href="/login">
               <motion.button
                 whileHover={{ scale: 1.05 }}

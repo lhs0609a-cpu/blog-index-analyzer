@@ -49,6 +49,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Top posts tables initialization failed: {e}")
 
+    # Subscription DB 초기화
+    try:
+        from database.subscription_db import init_subscription_tables
+        init_subscription_tables()
+        logger.info("✅ Subscription tables initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ Subscription tables initialization failed: {e}")
+
     # 자동 백업 스케줄러 시작
     try:
         from services.backup_service import backup_scheduler
@@ -181,6 +189,7 @@ async def health_check():
 # 라우터 등록
 from routers import auth, blogs, comprehensive_analysis, system
 from routers import learning, backup, supabase_sync, batch_learning, top_posts
+from routers import subscription, payment
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(blogs.router, prefix="/api/blogs", tags=["블로그"])
@@ -191,6 +200,8 @@ app.include_router(backup.router, prefix="/api/backup", tags=["백업관리"])
 app.include_router(supabase_sync.router, prefix="/api/supabase", tags=["Supabase동기화"])
 app.include_router(batch_learning.router, prefix="/api/batch-learning", tags=["대량학습"])
 app.include_router(top_posts.router, prefix="/api/top-posts", tags=["상위글분석"])
+app.include_router(subscription.router, prefix="/api/subscription", tags=["구독관리"])
+app.include_router(payment.router, prefix="/api/payment", tags=["결제"])
 
 
 if __name__ == "__main__":
