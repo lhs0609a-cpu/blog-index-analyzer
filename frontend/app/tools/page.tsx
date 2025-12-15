@@ -11,13 +11,15 @@ import {
   Shield, Database, Gift, Activity, Play, AlertTriangle, Archive,
   Upload, Trash2, CheckSquare, ExternalLink, Scan, Bot, Bell,
   Timer, RotateCcw, Link2, GraduationCap, UserCheck, Flame,
-  Brain, MessageSquare, History, Network
+  Brain, MessageSquare, History, Network, Rocket, DollarSign,
+  Map, Lock, Trophy, Coins, ChevronRight, Medal, Gem, Key,
+  Crosshair, Radio, Wallet, PiggyBank, CreditCard, Receipt
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 
-type TabType = 'title' | 'blueocean' | 'writing' | 'insight' | 'prediction' | 'report' | 'hashtag' | 'timing' | 'youtube' | 'lowquality' | 'backup' | 'campaign' | 'ranktrack' | 'clone' | 'comment' | 'algorithm' | 'lifespan' | 'refresh' | 'related' | 'mentor'
+type TabType = 'title' | 'blueocean' | 'writing' | 'insight' | 'prediction' | 'report' | 'hashtag' | 'timing' | 'youtube' | 'lowquality' | 'backup' | 'campaign' | 'ranktrack' | 'clone' | 'comment' | 'algorithm' | 'lifespan' | 'refresh' | 'related' | 'mentor' | 'trend' | 'revenue' | 'roadmap' | 'secretkw'
 
 // AI 제목 생성 결과 타입
 interface TitleResult {
@@ -271,6 +273,112 @@ interface MentorMatchResult {
   }[]
 }
 
+// 실시간 트렌드 스나이퍼 결과 타입
+interface TrendSniperResult {
+  trends: {
+    rank: number
+    keyword: string
+    category: string
+    searchVolume: number
+    competition: 'low' | 'medium' | 'high'
+    matchScore: number
+    goldenTime: boolean
+    reason: string
+    suggestedTitle: string
+    deadline: string
+  }[]
+  myCategories: string[]
+  lastUpdate: string
+}
+
+// 수익 대시보드 결과 타입
+interface RevenueDashboardResult {
+  summary: {
+    totalRevenue: number
+    monthlyGrowth: number
+    avgPerPost: number
+    topSource: string
+  }
+  adpost: {
+    monthlyRevenue: number
+    clicks: number
+    ctr: number
+    topPosts: { title: string; revenue: number; clicks: number }[]
+  }
+  sponsorship: {
+    completed: number
+    totalEarned: number
+    avgPerCampaign: number
+    pending: { brand: string; amount: number; status: string }[]
+  }
+  affiliate: {
+    totalCommission: number
+    clicks: number
+    conversions: number
+    topProducts: { name: string; commission: number; sales: number }[]
+  }
+  monthlyData: { month: string; adpost: number; sponsorship: number; affiliate: number }[]
+}
+
+// 블로그 성장 로드맵 결과 타입
+interface RoadmapResult {
+  currentLevel: {
+    level: number
+    name: string
+    icon: string
+    progress: number
+    nextLevel: string
+  }
+  stats: {
+    totalPosts: number
+    totalVisitors: number
+    avgDaily: number
+    blogScore: number
+  }
+  dailyQuests: {
+    id: string
+    title: string
+    description: string
+    reward: number
+    completed: boolean
+    type: 'post' | 'keyword' | 'engage' | 'optimize'
+  }[]
+  weeklyMissions: {
+    id: string
+    title: string
+    progress: number
+    target: number
+    reward: number
+    deadline: string
+  }[]
+  milestones: {
+    name: string
+    requirement: string
+    achieved: boolean
+    badge: string
+    reward: string
+  }[]
+  recommendedActions: string[]
+}
+
+// 비공개 키워드 DB 결과 타입
+interface SecretKeywordResult {
+  category: string
+  keywords: {
+    keyword: string
+    searchVolume: number
+    competition: number
+    cpc: number
+    opportunity: number
+    trend: 'hot' | 'rising' | 'stable'
+    lastUpdate: string
+    exclusiveUntil: string
+  }[]
+  accessLevel: 'basic' | 'pro' | 'enterprise'
+  remainingAccess: number
+  nextRefresh: string
+}
+
 export default function ToolsPage() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<TabType>('title')
@@ -382,6 +490,28 @@ export default function ToolsPage() {
   const [mentorLoading, setMentorLoading] = useState(false)
   const [mentorResult, setMentorResult] = useState<MentorMatchResult | null>(null)
 
+  // 실시간 트렌드 스나이퍼 상태
+  const [trendCategories, setTrendCategories] = useState<string[]>(['맛집', '여행', '뷰티'])
+  const [trendLoading, setTrendLoading] = useState(false)
+  const [trendResult, setTrendResult] = useState<TrendSniperResult | null>(null)
+  const [trendAutoRefresh, setTrendAutoRefresh] = useState(false)
+
+  // 수익 대시보드 상태
+  const [revenueBlogId, setRevenueBlogId] = useState('')
+  const [revenueLoading, setRevenueLoading] = useState(false)
+  const [revenueResult, setRevenueResult] = useState<RevenueDashboardResult | null>(null)
+  const [revenuePeriod, setRevenuePeriod] = useState<'month' | 'quarter' | 'year'>('month')
+
+  // 블로그 성장 로드맵 상태
+  const [roadmapBlogId, setRoadmapBlogId] = useState('')
+  const [roadmapLoading, setRoadmapLoading] = useState(false)
+  const [roadmapResult, setRoadmapResult] = useState<RoadmapResult | null>(null)
+
+  // 비공개 키워드 DB 상태
+  const [secretCategory, setSecretCategory] = useState('all')
+  const [secretLoading, setSecretLoading] = useState(false)
+  const [secretResult, setSecretResult] = useState<SecretKeywordResult | null>(null)
+
   const tabs = [
     { id: 'title' as TabType, label: 'AI 제목', icon: PenTool, color: 'from-violet-500 to-purple-500' },
     { id: 'blueocean' as TabType, label: '키워드 발굴', icon: Compass, color: 'from-cyan-500 to-blue-500' },
@@ -403,6 +533,10 @@ export default function ToolsPage() {
     { id: 'refresh' as TabType, label: '리프레시', icon: RotateCcw, color: 'from-yellow-500 to-amber-500' },
     { id: 'related' as TabType, label: '연관 글', icon: Link2, color: 'from-violet-500 to-indigo-500' },
     { id: 'mentor' as TabType, label: '멘토링', icon: GraduationCap, color: 'from-emerald-500 to-cyan-500' },
+    { id: 'trend' as TabType, label: '트렌드', icon: Radio, color: 'from-red-500 to-orange-500' },
+    { id: 'revenue' as TabType, label: '수익', icon: Wallet, color: 'from-green-500 to-emerald-600' },
+    { id: 'roadmap' as TabType, label: '로드맵', icon: Map, color: 'from-blue-500 to-purple-500' },
+    { id: 'secretkw' as TabType, label: '비밀 키워드', icon: Key, color: 'from-yellow-500 to-red-500' },
   ]
 
   // AI 제목 생성
@@ -1321,6 +1455,224 @@ export default function ToolsPage() {
     }
   }
 
+  // 실시간 트렌드 스나이퍼
+  const handleTrendSniper = async () => {
+    setTrendLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2500))
+
+      const trendKeywords = [
+        { keyword: '크리스마스 선물 추천', category: '쇼핑', searchVolume: 125000 },
+        { keyword: '연말 파티 레시피', category: '맛집', searchVolume: 85000 },
+        { keyword: '송년회 장소', category: '여행', searchVolume: 65000 },
+        { keyword: '새해 다이어트', category: '뷰티', searchVolume: 95000 },
+        { keyword: '겨울 코트 코디', category: '패션', searchVolume: 72000 },
+        { keyword: '연말정산 꿀팁', category: '재테크', searchVolume: 110000 },
+        { keyword: '신년 운세 2025', category: '라이프', searchVolume: 150000 },
+        { keyword: '눈 오는날 데이트', category: '여행', searchVolume: 45000 },
+      ]
+
+      setTrendResult({
+        trends: trendKeywords
+          .filter(t => trendCategories.includes('전체') || trendCategories.some(c => t.category.includes(c) || c === '전체'))
+          .map((t, i) => ({
+            rank: i + 1,
+            keyword: t.keyword,
+            category: t.category,
+            searchVolume: t.searchVolume,
+            competition: ['low', 'medium', 'high'][Math.floor(Math.random() * 3)] as 'low' | 'medium' | 'high',
+            matchScore: Math.floor(Math.random() * 40) + 60,
+            goldenTime: Math.random() > 0.6,
+            reason: ['급상승 트렌드', '시즌 키워드', '바이럴 예상', '검색량 급증'][Math.floor(Math.random() * 4)],
+            suggestedTitle: `${t.keyword} 완벽 가이드 | 이것만 알면 끝!`,
+            deadline: Math.random() > 0.5 ? '2시간 내' : '6시간 내'
+          })),
+        myCategories: trendCategories,
+        lastUpdate: new Date().toLocaleTimeString('ko-KR')
+      })
+
+      toast.success('트렌드 분석 완료!')
+    } catch (error) {
+      toast.error('분석 중 오류가 발생했습니다')
+    } finally {
+      setTrendLoading(false)
+    }
+  }
+
+  // 수익 대시보드 분석
+  const handleRevenueDashboard = async () => {
+    if (!revenueBlogId.trim()) {
+      toast.error('블로그 ID를 입력해주세요')
+      return
+    }
+
+    setRevenueLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      setRevenueResult({
+        summary: {
+          totalRevenue: Math.floor(Math.random() * 500000) + 100000,
+          monthlyGrowth: Math.floor(Math.random() * 30) + 5,
+          avgPerPost: Math.floor(Math.random() * 5000) + 1000,
+          topSource: ['애드포스트', '체험단', '제휴마케팅'][Math.floor(Math.random() * 3)]
+        },
+        adpost: {
+          monthlyRevenue: Math.floor(Math.random() * 200000) + 30000,
+          clicks: Math.floor(Math.random() * 5000) + 500,
+          ctr: Math.random() * 3 + 0.5,
+          topPosts: [
+            { title: '제주도 3박4일 여행 코스', revenue: 25000, clicks: 320 },
+            { title: '에어프라이어 추천 TOP 5', revenue: 18000, clicks: 250 },
+            { title: '홈카페 레시피 모음', revenue: 12000, clicks: 180 },
+          ]
+        },
+        sponsorship: {
+          completed: Math.floor(Math.random() * 10) + 2,
+          totalEarned: Math.floor(Math.random() * 300000) + 50000,
+          avgPerCampaign: Math.floor(Math.random() * 50000) + 20000,
+          pending: [
+            { brand: '스킨케어 브랜드', amount: 50000, status: '진행중' },
+            { brand: '식품 업체', amount: 30000, status: '검토중' },
+          ]
+        },
+        affiliate: {
+          totalCommission: Math.floor(Math.random() * 100000) + 10000,
+          clicks: Math.floor(Math.random() * 2000) + 200,
+          conversions: Math.floor(Math.random() * 100) + 10,
+          topProducts: [
+            { name: '무선 청소기', commission: 15000, sales: 5 },
+            { name: '블루투스 이어폰', commission: 8000, sales: 8 },
+            { name: '텀블러', commission: 3000, sales: 12 },
+          ]
+        },
+        monthlyData: [
+          { month: '9월', adpost: 45000, sponsorship: 100000, affiliate: 20000 },
+          { month: '10월', adpost: 52000, sponsorship: 80000, affiliate: 35000 },
+          { month: '11월', adpost: 68000, sponsorship: 150000, affiliate: 42000 },
+          { month: '12월', adpost: 75000, sponsorship: 120000, affiliate: 55000 },
+        ]
+      })
+
+      toast.success('수익 분석 완료!')
+    } catch (error) {
+      toast.error('분석 중 오류가 발생했습니다')
+    } finally {
+      setRevenueLoading(false)
+    }
+  }
+
+  // 블로그 성장 로드맵
+  const handleRoadmap = async () => {
+    if (!roadmapBlogId.trim()) {
+      toast.error('블로그 ID를 입력해주세요')
+      return
+    }
+
+    setRoadmapLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      const levels = [
+        { level: 1, name: '새싹 블로거', icon: '🌱', nextLevel: '성장 블로거' },
+        { level: 2, name: '성장 블로거', icon: '🌿', nextLevel: '프로 블로거' },
+        { level: 3, name: '프로 블로거', icon: '🌳', nextLevel: '인플루언서' },
+        { level: 4, name: '인플루언서', icon: '⭐', nextLevel: '마스터' },
+        { level: 5, name: '마스터', icon: '👑', nextLevel: '레전드' },
+      ]
+      const currentLevelIdx = Math.floor(Math.random() * 4)
+      const currentLevel = levels[currentLevelIdx]
+
+      setRoadmapResult({
+        currentLevel: {
+          ...currentLevel,
+          progress: Math.floor(Math.random() * 80) + 10
+        },
+        stats: {
+          totalPosts: Math.floor(Math.random() * 200) + 50,
+          totalVisitors: Math.floor(Math.random() * 100000) + 10000,
+          avgDaily: Math.floor(Math.random() * 500) + 100,
+          blogScore: Math.floor(Math.random() * 300) + 200
+        },
+        dailyQuests: [
+          { id: 'q1', title: '블로그 글 1개 작성', description: '오늘의 포스팅을 완료하세요', reward: 50, completed: Math.random() > 0.5, type: 'post' },
+          { id: 'q2', title: '키워드 분석 3회', description: '새로운 키워드를 발굴하세요', reward: 30, completed: Math.random() > 0.5, type: 'keyword' },
+          { id: 'q3', title: '댓글 5개 달기', description: '이웃 블로그에 소통하세요', reward: 20, completed: Math.random() > 0.5, type: 'engage' },
+          { id: 'q4', title: '기존 글 최적화', description: '오래된 글을 업데이트하세요', reward: 40, completed: Math.random() > 0.5, type: 'optimize' },
+        ],
+        weeklyMissions: [
+          { id: 'm1', title: '주간 포스팅 5개', progress: Math.floor(Math.random() * 5), target: 5, reward: 200, deadline: '3일 남음' },
+          { id: 'm2', title: '방문자 1000명 달성', progress: Math.floor(Math.random() * 1000), target: 1000, reward: 300, deadline: '5일 남음' },
+          { id: 'm3', title: '상위노출 키워드 2개', progress: Math.floor(Math.random() * 2), target: 2, reward: 500, deadline: '6일 남음' },
+        ],
+        milestones: [
+          { name: '첫 글 작성', requirement: '첫 번째 포스팅', achieved: true, badge: '🎉', reward: '100 포인트' },
+          { name: '100 포스팅', requirement: '총 100개의 글', achieved: Math.random() > 0.3, badge: '📝', reward: '1,000 포인트' },
+          { name: '만 방문자', requirement: '누적 10,000 방문자', achieved: Math.random() > 0.5, badge: '🎯', reward: '2,000 포인트' },
+          { name: '상위노출 달성', requirement: '키워드 1페이지 진입', achieved: Math.random() > 0.4, badge: '🏆', reward: '5,000 포인트' },
+          { name: '수익화 성공', requirement: '첫 광고 수익 발생', achieved: Math.random() > 0.6, badge: '💰', reward: '10,000 포인트' },
+        ],
+        recommendedActions: [
+          '이번 주 3개의 시즌 키워드로 글 작성하기',
+          '오래된 인기 글 5개 업데이트하기',
+          '이웃 블로그 20개 방문하고 댓글 달기',
+          '해시태그 최적화로 검색 노출 높이기',
+        ]
+      })
+
+      toast.success('로드맵 분석 완료!')
+    } catch (error) {
+      toast.error('분석 중 오류가 발생했습니다')
+    } finally {
+      setRoadmapLoading(false)
+    }
+  }
+
+  // 비공개 키워드 DB 접근
+  const handleSecretKeyword = async () => {
+    setSecretLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      const categoryKeywords: { [key: string]: string[] } = {
+        '맛집': ['숨은 맛집 발견', '로컬 맛집 추천', '가성비 맛집 리스트', '혼밥 맛집 추천', '데이트 맛집 코스'],
+        '여행': ['숨겨진 여행지', '로컬 관광지', '가성비 숙소 추천', '당일치기 여행', '언택트 여행지'],
+        '뷰티': ['숨은 뷰티템', '가성비 화장품', '피부 관리법', '홈케어 추천', '뷰티 꿀팁'],
+        '육아': ['육아 꿀템 추천', '아이와 가볼만한 곳', '육아 스트레스 해소', '아기 용품 리뷰', '키즈카페 추천'],
+        '재테크': ['소액 투자 방법', '짠테크 꿀팁', '부업 추천', '절약 노하우', '재테크 초보 가이드'],
+      }
+
+      const selectedCategory = secretCategory === 'all'
+        ? Object.keys(categoryKeywords)[Math.floor(Math.random() * Object.keys(categoryKeywords).length)]
+        : secretCategory
+
+      const keywords = (categoryKeywords[selectedCategory] || categoryKeywords['맛집']).map((kw, i) => ({
+        keyword: kw,
+        searchVolume: Math.floor(Math.random() * 10000) + 2000,
+        competition: Math.floor(Math.random() * 30) + 5,
+        cpc: Math.floor(Math.random() * 500) + 100,
+        opportunity: Math.floor(Math.random() * 40) + 60,
+        trend: ['hot', 'rising', 'stable'][Math.floor(Math.random() * 3)] as 'hot' | 'rising' | 'stable',
+        lastUpdate: '1시간 전',
+        exclusiveUntil: `${Math.floor(Math.random() * 24) + 1}시간 후`
+      }))
+
+      setSecretResult({
+        category: selectedCategory,
+        keywords,
+        accessLevel: 'pro',
+        remainingAccess: Math.floor(Math.random() * 10) + 5,
+        nextRefresh: '매주 월요일 오전 9시'
+      })
+
+      toast.success('비공개 키워드 로딩 완료!')
+    } catch (error) {
+      toast.error('로딩 중 오류가 발생했습니다')
+    } finally {
+      setSecretLoading(false)
+    }
+  }
+
   const getDifficultyColor = (difficulty: number) => {
     if (difficulty < 40) return 'text-green-500'
     if (difficulty < 70) return 'text-yellow-500'
@@ -1379,15 +1731,15 @@ export default function ToolsPage() {
           <p className="text-gray-600">AI 기반 분석으로 블로그를 성장시키세요</p>
         </motion.div>
 
-        {/* Tabs - 4줄로 변경 (20개 탭) */}
+        {/* Tabs - 5줄로 변경 (24개 탭) */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="glass rounded-2xl p-3 mb-6"
         >
-          {[0, 5, 10, 15].map((startIdx, rowIdx) => (
-            <div key={rowIdx} className={`grid grid-cols-5 gap-2 ${rowIdx < 3 ? 'mb-2' : ''}`}>
+          {[0, 5, 10, 15, 20].map((startIdx, rowIdx) => (
+            <div key={rowIdx} className={`grid grid-cols-5 gap-2 ${rowIdx < 4 ? 'mb-2' : ''}`}>
               {tabs.slice(startIdx, startIdx + 5).map((tab) => (
                 <button
                   key={tab.id}
@@ -3894,6 +4246,799 @@ export default function ToolsPage() {
                           </div>
                         </motion.div>
                       ))}
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* 실시간 트렌드 스나이퍼 */}
+          {activeTab === 'trend' && (
+            <motion.div
+              key="trend"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <div className="glass rounded-3xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-red-500 to-orange-500">
+                    <Radio className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">실시간 트렌드 스나이퍼</h2>
+                    <p className="text-gray-600">지금 뜨는 키워드를 잡아 1페이지 선점하세요</p>
+                  </div>
+                </div>
+
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">내 블로그 카테고리 선택</label>
+                  <div className="flex flex-wrap gap-2">
+                    {['전체', '맛집', '여행', '뷰티', '패션', '육아', '재테크', '라이프'].map(cat => (
+                      <button
+                        key={cat}
+                        onClick={() => {
+                          if (cat === '전체') {
+                            setTrendCategories(['전체'])
+                          } else {
+                            setTrendCategories(prev =>
+                              prev.includes(cat)
+                                ? prev.filter(c => c !== cat)
+                                : [...prev.filter(c => c !== '전체'), cat]
+                            )
+                          }
+                        }}
+                        className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                          trendCategories.includes(cat)
+                            ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleTrendSniper}
+                      disabled={trendLoading}
+                      className="px-6 py-3 rounded-xl bg-gradient-to-r from-red-500 to-orange-500 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {trendLoading ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          분석 중...
+                        </>
+                      ) : (
+                        <>
+                          <Crosshair className="w-5 h-5" />
+                          트렌드 스나이핑
+                        </>
+                      )}
+                    </button>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={trendAutoRefresh}
+                        onChange={(e) => setTrendAutoRefresh(e.target.checked)}
+                        className="w-4 h-4 rounded"
+                      />
+                      <span className="text-sm text-gray-600">10분마다 자동 갱신</span>
+                    </label>
+                  </div>
+                  {trendResult && (
+                    <div className="text-sm text-gray-500">
+                      마지막 업데이트: {trendResult.lastUpdate}
+                    </div>
+                  )}
+                </div>
+
+                {trendResult && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-4"
+                  >
+                    {trendResult.trends.map((trend, i) => (
+                      <motion.div
+                        key={i}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.05 }}
+                        className={`p-5 rounded-2xl ${
+                          trend.goldenTime
+                            ? 'bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-300'
+                            : 'bg-white border border-gray-200'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${
+                              trend.rank <= 3 ? 'bg-gradient-to-r from-red-500 to-orange-500' : 'bg-gray-400'
+                            }`}>
+                              {trend.rank}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-lg">{trend.keyword}</span>
+                                {trend.goldenTime && (
+                                  <span className="px-2 py-0.5 bg-yellow-400 text-yellow-900 rounded-full text-xs font-bold animate-pulse">
+                                    골든타임
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 text-sm text-gray-500">
+                                <span className="px-2 py-0.5 bg-gray-100 rounded">{trend.category}</span>
+                                <span>{trend.reason}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xl font-bold text-orange-600">{trend.matchScore}점</div>
+                            <div className="text-xs text-gray-500">적합도</div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-4 mb-3 text-sm">
+                          <div className="text-center p-2 bg-gray-50 rounded-lg">
+                            <div className="text-gray-500">검색량</div>
+                            <div className="font-bold text-gray-800">{trend.searchVolume.toLocaleString()}</div>
+                          </div>
+                          <div className="text-center p-2 bg-gray-50 rounded-lg">
+                            <div className="text-gray-500">경쟁도</div>
+                            <div className={`font-bold ${
+                              trend.competition === 'low' ? 'text-green-600' :
+                              trend.competition === 'medium' ? 'text-yellow-600' :
+                              'text-red-600'
+                            }`}>
+                              {trend.competition === 'low' ? '낮음' : trend.competition === 'medium' ? '보통' : '높음'}
+                            </div>
+                          </div>
+                          <div className="text-center p-2 bg-gray-50 rounded-lg">
+                            <div className="text-gray-500">마감</div>
+                            <div className="font-bold text-red-600">{trend.deadline}</div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm text-gray-600 flex-1 mr-4">
+                            <span className="text-orange-600">추천 제목:</span> {trend.suggestedTitle}
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(trend.suggestedTitle)
+                                toast.success('제목이 복사되었습니다!')
+                              }}
+                              className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200"
+                            >
+                              <Copy className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => toast.success('글쓰기 페이지로 이동합니다!')}
+                              className="px-4 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600"
+                            >
+                              바로 쓰기
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* 수익 대시보드 */}
+          {activeTab === 'revenue' && (
+            <motion.div
+              key="revenue"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <div className="glass rounded-3xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600">
+                    <Wallet className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">수익 대시보드</h2>
+                    <p className="text-gray-600">모든 수익을 한눈에 통합 관리하세요</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 mb-6">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      value={revenueBlogId}
+                      onChange={(e) => setRevenueBlogId(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleRevenueDashboard()}
+                      placeholder="블로그 ID 입력"
+                      className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-green-500 focus:outline-none"
+                      disabled={revenueLoading}
+                    />
+                  </div>
+                  <select
+                    value={revenuePeriod}
+                    onChange={(e) => setRevenuePeriod(e.target.value as 'month' | 'quarter' | 'year')}
+                    className="px-4 py-4 rounded-xl border-2 border-gray-200 focus:border-green-500 focus:outline-none"
+                  >
+                    <option value="month">이번 달</option>
+                    <option value="quarter">분기</option>
+                    <option value="year">올해</option>
+                  </select>
+                  <button
+                    onClick={handleRevenueDashboard}
+                    disabled={revenueLoading}
+                    className="px-8 py-4 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {revenueLoading ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        분석 중...
+                      </>
+                    ) : (
+                      <>
+                        <DollarSign className="w-5 h-5" />
+                        수익 분석
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {revenueResult && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-6"
+                  >
+                    {/* 요약 카드 */}
+                    <div className="grid grid-cols-4 gap-4">
+                      <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-5 text-white">
+                        <div className="text-sm opacity-80">총 수익</div>
+                        <div className="text-3xl font-bold">{revenueResult.summary.totalRevenue.toLocaleString()}원</div>
+                        <div className="text-sm mt-2 flex items-center gap-1">
+                          <TrendingUp className="w-4 h-4" />
+                          +{revenueResult.summary.monthlyGrowth}% 증가
+                        </div>
+                      </div>
+                      <div className="bg-white rounded-2xl p-5 border border-gray-200">
+                        <div className="text-sm text-gray-500">글당 평균 수익</div>
+                        <div className="text-2xl font-bold text-gray-800">{revenueResult.summary.avgPerPost.toLocaleString()}원</div>
+                        <div className="text-sm text-green-600">효율 양호</div>
+                      </div>
+                      <div className="bg-white rounded-2xl p-5 border border-gray-200">
+                        <div className="text-sm text-gray-500">최고 수익원</div>
+                        <div className="text-2xl font-bold text-gray-800">{revenueResult.summary.topSource}</div>
+                        <div className="text-sm text-gray-500">집중 추천</div>
+                      </div>
+                      <div className="bg-white rounded-2xl p-5 border border-gray-200">
+                        <div className="text-sm text-gray-500">이번 달 예상</div>
+                        <div className="text-2xl font-bold text-gray-800">{Math.floor(revenueResult.summary.totalRevenue * 1.1).toLocaleString()}원</div>
+                        <div className="text-sm text-green-600">목표 달성 예상</div>
+                      </div>
+                    </div>
+
+                    {/* 수익원별 상세 */}
+                    <div className="grid grid-cols-3 gap-4">
+                      {/* 애드포스트 */}
+                      <div className="bg-white rounded-2xl p-5 border border-gray-200">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="font-bold text-lg">애드포스트</h3>
+                          <Receipt className="w-5 h-5 text-blue-500" />
+                        </div>
+                        <div className="text-2xl font-bold text-blue-600 mb-2">
+                          {revenueResult.adpost.monthlyRevenue.toLocaleString()}원
+                        </div>
+                        <div className="text-sm text-gray-500 space-y-1">
+                          <div>클릭수: {revenueResult.adpost.clicks.toLocaleString()}</div>
+                          <div>CTR: {revenueResult.adpost.ctr.toFixed(2)}%</div>
+                        </div>
+                        <div className="mt-3 pt-3 border-t">
+                          <div className="text-xs text-gray-500 mb-2">TOP 수익 글</div>
+                          {revenueResult.adpost.topPosts.slice(0, 2).map((post, i) => (
+                            <div key={i} className="text-sm truncate text-gray-700">{post.title}</div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* 체험단/협찬 */}
+                      <div className="bg-white rounded-2xl p-5 border border-gray-200">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="font-bold text-lg">체험단/협찬</h3>
+                          <Gift className="w-5 h-5 text-pink-500" />
+                        </div>
+                        <div className="text-2xl font-bold text-pink-600 mb-2">
+                          {revenueResult.sponsorship.totalEarned.toLocaleString()}원
+                        </div>
+                        <div className="text-sm text-gray-500 space-y-1">
+                          <div>완료: {revenueResult.sponsorship.completed}건</div>
+                          <div>평균: {revenueResult.sponsorship.avgPerCampaign.toLocaleString()}원/건</div>
+                        </div>
+                        <div className="mt-3 pt-3 border-t">
+                          <div className="text-xs text-gray-500 mb-2">진행 중</div>
+                          {revenueResult.sponsorship.pending.map((item, i) => (
+                            <div key={i} className="flex justify-between text-sm">
+                              <span className="text-gray-700">{item.brand}</span>
+                              <span className="text-pink-600">{item.amount.toLocaleString()}원</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* 제휴마케팅 */}
+                      <div className="bg-white rounded-2xl p-5 border border-gray-200">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="font-bold text-lg">제휴마케팅</h3>
+                          <Coins className="w-5 h-5 text-yellow-500" />
+                        </div>
+                        <div className="text-2xl font-bold text-yellow-600 mb-2">
+                          {revenueResult.affiliate.totalCommission.toLocaleString()}원
+                        </div>
+                        <div className="text-sm text-gray-500 space-y-1">
+                          <div>클릭: {revenueResult.affiliate.clicks.toLocaleString()}</div>
+                          <div>전환: {revenueResult.affiliate.conversions}건</div>
+                        </div>
+                        <div className="mt-3 pt-3 border-t">
+                          <div className="text-xs text-gray-500 mb-2">TOP 상품</div>
+                          {revenueResult.affiliate.topProducts.slice(0, 2).map((product, i) => (
+                            <div key={i} className="flex justify-between text-sm">
+                              <span className="text-gray-700">{product.name}</span>
+                              <span className="text-yellow-600">{product.commission.toLocaleString()}원</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 월별 트렌드 */}
+                    <div className="bg-white rounded-2xl p-5 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4">월별 수익 트렌드</h3>
+                      <div className="flex items-end gap-4 h-40">
+                        {revenueResult.monthlyData.map((data, i) => {
+                          const total = data.adpost + data.sponsorship + data.affiliate
+                          const maxTotal = Math.max(...revenueResult.monthlyData.map(d => d.adpost + d.sponsorship + d.affiliate))
+                          const height = (total / maxTotal) * 100
+                          return (
+                            <div key={i} className="flex-1 flex flex-col items-center">
+                              <div className="w-full flex flex-col" style={{ height: `${height}%` }}>
+                                <div className="bg-blue-400 flex-grow rounded-t" style={{ flex: data.adpost / total }} />
+                                <div className="bg-pink-400" style={{ flex: data.sponsorship / total }} />
+                                <div className="bg-yellow-400 rounded-b" style={{ flex: data.affiliate / total }} />
+                              </div>
+                              <div className="text-sm text-gray-600 mt-2">{data.month}</div>
+                              <div className="text-xs text-gray-400">{total.toLocaleString()}</div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <div className="flex justify-center gap-6 mt-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 bg-blue-400 rounded" />
+                          <span className="text-sm text-gray-600">애드포스트</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 bg-pink-400 rounded" />
+                          <span className="text-sm text-gray-600">협찬</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 bg-yellow-400 rounded" />
+                          <span className="text-sm text-gray-600">제휴</span>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* 블로그 성장 로드맵 */}
+          {activeTab === 'roadmap' && (
+            <motion.div
+              key="roadmap"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <div className="glass rounded-3xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500">
+                    <Map className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">블로그 성장 로드맵</h2>
+                    <p className="text-gray-600">단계별 미션으로 블로그를 성장시키세요</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 mb-6">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      value={roadmapBlogId}
+                      onChange={(e) => setRoadmapBlogId(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleRoadmap()}
+                      placeholder="블로그 ID 입력"
+                      className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
+                      disabled={roadmapLoading}
+                    />
+                  </div>
+                  <button
+                    onClick={handleRoadmap}
+                    disabled={roadmapLoading}
+                    className="px-8 py-4 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {roadmapLoading ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        분석 중...
+                      </>
+                    ) : (
+                      <>
+                        <Rocket className="w-5 h-5" />
+                        로드맵 분석
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {roadmapResult && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-6"
+                  >
+                    {/* 현재 레벨 */}
+                    <div className="bg-gradient-to-r from-blue-500 to-purple-500 rounded-2xl p-6 text-white">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="text-5xl">{roadmapResult.currentLevel.icon}</div>
+                          <div>
+                            <div className="text-sm opacity-80">현재 레벨</div>
+                            <div className="text-2xl font-bold">{roadmapResult.currentLevel.name}</div>
+                            <div className="text-sm opacity-80">다음: {roadmapResult.currentLevel.nextLevel}</div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-4xl font-bold">Lv.{roadmapResult.currentLevel.level}</div>
+                          <div className="w-32 h-2 bg-white/30 rounded-full mt-2">
+                            <div
+                              className="h-full bg-white rounded-full"
+                              style={{ width: `${roadmapResult.currentLevel.progress}%` }}
+                            />
+                          </div>
+                          <div className="text-sm mt-1">{roadmapResult.currentLevel.progress}%</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 통계 */}
+                    <div className="grid grid-cols-4 gap-4">
+                      <div className="bg-white rounded-xl p-4 border border-gray-200 text-center">
+                        <div className="text-2xl font-bold text-gray-800">{roadmapResult.stats.totalPosts}</div>
+                        <div className="text-sm text-gray-500">총 포스팅</div>
+                      </div>
+                      <div className="bg-white rounded-xl p-4 border border-gray-200 text-center">
+                        <div className="text-2xl font-bold text-gray-800">{roadmapResult.stats.totalVisitors.toLocaleString()}</div>
+                        <div className="text-sm text-gray-500">누적 방문자</div>
+                      </div>
+                      <div className="bg-white rounded-xl p-4 border border-gray-200 text-center">
+                        <div className="text-2xl font-bold text-gray-800">{roadmapResult.stats.avgDaily}</div>
+                        <div className="text-sm text-gray-500">일평균 방문</div>
+                      </div>
+                      <div className="bg-white rounded-xl p-4 border border-gray-200 text-center">
+                        <div className="text-2xl font-bold text-purple-600">{roadmapResult.stats.blogScore}</div>
+                        <div className="text-sm text-gray-500">블로그 점수</div>
+                      </div>
+                    </div>
+
+                    {/* 일일 퀘스트 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                        <Target className="w-5 h-5 text-purple-500" />
+                        오늘의 퀘스트
+                      </h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        {roadmapResult.dailyQuests.map((quest) => (
+                          <div
+                            key={quest.id}
+                            className={`p-4 rounded-xl flex items-center justify-between ${
+                              quest.completed ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                quest.completed ? 'bg-green-500 text-white' : 'bg-gray-300 text-gray-600'
+                              }`}>
+                                {quest.completed ? <CheckCircle className="w-5 h-5" /> :
+                                  quest.type === 'post' ? <FileText className="w-4 h-4" /> :
+                                  quest.type === 'keyword' ? <Search className="w-4 h-4" /> :
+                                  quest.type === 'engage' ? <MessageCircle className="w-4 h-4" /> :
+                                  <RefreshCw className="w-4 h-4" />
+                                }
+                              </div>
+                              <div>
+                                <div className={`font-medium ${quest.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                                  {quest.title}
+                                </div>
+                                <div className="text-xs text-gray-500">{quest.description}</div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="flex items-center gap-1 text-yellow-600 font-bold">
+                                <Star className="w-4 h-4 fill-yellow-500" />
+                                {quest.reward}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 주간 미션 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                        <Trophy className="w-5 h-5 text-yellow-500" />
+                        주간 미션
+                      </h3>
+                      <div className="space-y-4">
+                        {roadmapResult.weeklyMissions.map((mission) => (
+                          <div key={mission.id} className="p-4 bg-gray-50 rounded-xl">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-medium text-gray-800">{mission.title}</span>
+                              <span className="text-sm text-gray-500">{mission.deadline}</span>
+                            </div>
+                            <div className="w-full h-3 bg-gray-200 rounded-full mb-2">
+                              <div
+                                className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"
+                                style={{ width: `${(mission.progress / mission.target) * 100}%` }}
+                              />
+                            </div>
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-gray-500">{mission.progress} / {mission.target}</span>
+                              <span className="text-yellow-600 font-bold flex items-center gap-1">
+                                <Star className="w-3 h-3 fill-yellow-500" />
+                                {mission.reward}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 마일스톤 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                        <Medal className="w-5 h-5 text-purple-500" />
+                        마일스톤 & 뱃지
+                      </h3>
+                      <div className="flex gap-4 overflow-x-auto pb-2">
+                        {roadmapResult.milestones.map((milestone, i) => (
+                          <div
+                            key={i}
+                            className={`flex-shrink-0 w-40 p-4 rounded-xl text-center ${
+                              milestone.achieved
+                                ? 'bg-gradient-to-br from-purple-50 to-blue-50 border-2 border-purple-300'
+                                : 'bg-gray-50 border border-gray-200 opacity-60'
+                            }`}
+                          >
+                            <div className="text-3xl mb-2">{milestone.badge}</div>
+                            <div className="font-bold text-gray-800">{milestone.name}</div>
+                            <div className="text-xs text-gray-500 mb-2">{milestone.requirement}</div>
+                            <div className="text-xs text-purple-600">{milestone.reward}</div>
+                            {milestone.achieved && (
+                              <div className="mt-2 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs">달성</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 추천 액션 */}
+                    <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-2xl p-6">
+                      <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                        <Lightbulb className="w-5 h-5 text-yellow-500" />
+                        이번 주 추천 액션
+                      </h3>
+                      <div className="space-y-2">
+                        {roadmapResult.recommendedActions.map((action, i) => (
+                          <div key={i} className="flex items-center gap-3 p-3 bg-white rounded-lg">
+                            <ChevronRight className="w-5 h-5 text-purple-500" />
+                            <span className="text-gray-700">{action}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* 비공개 키워드 DB */}
+          {activeTab === 'secretkw' && (
+            <motion.div
+              key="secretkw"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <div className="glass rounded-3xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-yellow-500 to-red-500">
+                    <Key className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">비공개 키워드 DB</h2>
+                    <p className="text-gray-600">경쟁 낮고 검색량 높은 숨겨진 보석 키워드</p>
+                  </div>
+                  <div className="ml-auto flex items-center gap-2 px-3 py-1.5 bg-yellow-100 rounded-full">
+                    <Lock className="w-4 h-4 text-yellow-600" />
+                    <span className="text-sm font-medium text-yellow-700">프리미엄 전용</span>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 mb-6">
+                  <select
+                    value={secretCategory}
+                    onChange={(e) => setSecretCategory(e.target.value)}
+                    className="px-4 py-4 rounded-xl border-2 border-gray-200 focus:border-yellow-500 focus:outline-none flex-1"
+                  >
+                    <option value="all">전체 카테고리</option>
+                    <option value="맛집">맛집</option>
+                    <option value="여행">여행</option>
+                    <option value="뷰티">뷰티</option>
+                    <option value="육아">육아</option>
+                    <option value="재테크">재테크</option>
+                  </select>
+                  <button
+                    onClick={handleSecretKeyword}
+                    disabled={secretLoading}
+                    className="px-8 py-4 rounded-xl bg-gradient-to-r from-yellow-500 to-red-500 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {secretLoading ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        로딩 중...
+                      </>
+                    ) : (
+                      <>
+                        <Gem className="w-5 h-5" />
+                        키워드 열기
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {secretResult && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-6"
+                  >
+                    {/* 접근 정보 */}
+                    <div className="flex items-center justify-between p-4 bg-yellow-50 rounded-xl">
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                          <Gem className="w-5 h-5 text-yellow-600" />
+                          <span className="font-medium text-gray-700">등급: {secretResult.accessLevel.toUpperCase()}</span>
+                        </div>
+                        <div className="text-sm text-gray-500">|</div>
+                        <div className="text-sm text-gray-600">
+                          남은 조회: <span className="font-bold text-yellow-600">{secretResult.remainingAccess}회</span>
+                        </div>
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        다음 업데이트: {secretResult.nextRefresh}
+                      </div>
+                    </div>
+
+                    {/* 키워드 카테고리 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-bold text-lg flex items-center gap-2">
+                          <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded">{secretResult.category}</span>
+                          골든 키워드
+                        </h3>
+                        <span className="text-sm text-gray-500">
+                          총 {secretResult.keywords.length}개
+                        </span>
+                      </div>
+
+                      <div className="space-y-3">
+                        {secretResult.keywords.map((kw, i) => (
+                          <motion.div
+                            key={i}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: i * 0.05 }}
+                            className="p-4 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl border border-yellow-200"
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-400 to-red-400 flex items-center justify-center text-white font-bold">
+                                  {i + 1}
+                                </div>
+                                <div>
+                                  <div className="font-bold text-gray-800 flex items-center gap-2">
+                                    {kw.keyword}
+                                    {kw.trend === 'hot' && (
+                                      <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded-full text-xs animate-pulse">HOT</span>
+                                    )}
+                                    {kw.trend === 'rising' && (
+                                      <span className="px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full text-xs">상승중</span>
+                                    )}
+                                  </div>
+                                  <div className="text-xs text-gray-500">독점 기간: {kw.exclusiveUntil}</div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-xl font-bold text-yellow-600">{kw.opportunity}점</div>
+                                <div className="text-xs text-gray-500">기회 점수</div>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-4 gap-3 text-sm">
+                              <div className="text-center p-2 bg-white rounded-lg">
+                                <div className="text-gray-500">월 검색량</div>
+                                <div className="font-bold text-gray-800">{kw.searchVolume.toLocaleString()}</div>
+                              </div>
+                              <div className="text-center p-2 bg-white rounded-lg">
+                                <div className="text-gray-500">경쟁도</div>
+                                <div className="font-bold text-green-600">{kw.competition}%</div>
+                              </div>
+                              <div className="text-center p-2 bg-white rounded-lg">
+                                <div className="text-gray-500">예상 CPC</div>
+                                <div className="font-bold text-blue-600">{kw.cpc}원</div>
+                              </div>
+                              <div className="text-center p-2 bg-white rounded-lg">
+                                <div className="text-gray-500">업데이트</div>
+                                <div className="font-bold text-gray-600">{kw.lastUpdate}</div>
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2 mt-3">
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(kw.keyword)
+                                  toast.success('키워드가 복사되었습니다!')
+                                }}
+                                className="flex-1 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-1"
+                              >
+                                <Copy className="w-4 h-4" />
+                                키워드 복사
+                              </button>
+                              <button
+                                onClick={() => toast.success('키워드 분석 페이지로 이동합니다!')}
+                                className="flex-1 py-2 bg-gradient-to-r from-yellow-500 to-red-500 rounded-lg text-sm font-medium text-white hover:shadow-lg flex items-center justify-center gap-1"
+                              >
+                                <Search className="w-4 h-4" />
+                                상세 분석
+                              </button>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 안내 */}
+                    <div className="p-4 bg-gray-50 rounded-xl text-sm text-gray-600 text-center">
+                      <Lock className="w-4 h-4 inline-block mr-1" />
+                      이 키워드는 프리미엄 회원 전용입니다. 독점 기간 내 작성 시 상위 노출 확률이 높아집니다.
                     </div>
                   </motion.div>
                 )}
