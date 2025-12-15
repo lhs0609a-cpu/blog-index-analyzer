@@ -50,23 +50,23 @@ export function ConnectionIndicator() {
   }
 
   return (
-    <div className="fixed top-20 right-4 z-50">
-      <div className="bg-white rounded-lg shadow-lg border-2 border-gray-200 overflow-hidden">
-        {/* 접힌 상태 - 표시등만 */}
+    <div className="fixed bottom-4 right-4 z-40">
+      <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-sm border border-gray-200/50 overflow-hidden opacity-60 hover:opacity-100 transition-opacity">
+        {/* 접힌 상태 - 작은 표시등 */}
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-3 px-4 py-3 w-full hover:bg-gray-50 transition-colors"
+          className="flex items-center gap-2 px-3 py-2 w-full hover:bg-gray-50/50 transition-colors"
         >
-          <div className="flex items-center gap-2">
-            <div className={`w-3 h-3 rounded-full ${getOverallStatusColor()} shadow-lg`}></div>
-            <span className="text-sm font-medium text-gray-700">
-              {overallStatus === 'connected' ? '시스템 정상' :
-               overallStatus === 'partial' ? '일부 연결 불가' :
-               '연결 불가'}
+          <div className="flex items-center gap-1.5">
+            <div className={`w-2 h-2 rounded-full ${getOverallStatusColor()}`}></div>
+            <span className="text-xs text-gray-500">
+              {overallStatus === 'connected' ? '연결됨' :
+               overallStatus === 'partial' ? '일부 오류' :
+               '연결 끊김'}
             </span>
           </div>
           <svg
-            className={`w-4 h-4 text-gray-500 transition-transform ${
+            className={`w-3 h-3 text-gray-400 transition-transform ${
               isExpanded ? 'rotate-180' : ''
             }`}
             fill="none"
@@ -77,7 +77,7 @@ export function ConnectionIndicator() {
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth={2}
-              d="M19 9l-7 7-7-7"
+              d="M5 15l7-7 7 7"
             />
           </svg>
         </button>
