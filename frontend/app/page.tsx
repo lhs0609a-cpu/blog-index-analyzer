@@ -290,7 +290,7 @@ export default function Home() {
                     <PenTool className="w-6 h-6 text-white" />
                   </div>
                   <span className="font-bold text-white text-sm">AI 글쓰기</span>
-                  <span className="text-xs text-white/80">음성으로 작성</span>
+                  <span className="text-xs text-white/80">AI 자동 작성</span>
                 </div>
               </a>
             </motion.div>
