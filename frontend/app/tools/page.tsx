@@ -9,13 +9,15 @@ import {
   PenTool, Compass, LineChart, CheckCircle, XCircle, AlertCircle,
   Copy, RefreshCw, Zap, Star, TrendingDown, Award, Youtube,
   Shield, Database, Gift, Activity, Play, AlertTriangle, Archive,
-  Upload, Trash2, CheckSquare, ExternalLink
+  Upload, Trash2, CheckSquare, ExternalLink, Scan, Bot, Bell,
+  Timer, RotateCcw, Link2, GraduationCap, UserCheck, Flame,
+  Brain, MessageSquare, History, Network
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 
-type TabType = 'title' | 'blueocean' | 'writing' | 'insight' | 'prediction' | 'report' | 'hashtag' | 'timing' | 'youtube' | 'lowquality' | 'backup' | 'campaign' | 'ranktrack'
+type TabType = 'title' | 'blueocean' | 'writing' | 'insight' | 'prediction' | 'report' | 'hashtag' | 'timing' | 'youtube' | 'lowquality' | 'backup' | 'campaign' | 'ranktrack' | 'clone' | 'comment' | 'algorithm' | 'lifespan' | 'refresh' | 'related' | 'mentor'
 
 // AI 제목 생성 결과 타입
 interface TitleResult {
@@ -154,6 +156,121 @@ interface RankTrackResult {
   competitors: { blogId: string; rank: number; title: string }[]
 }
 
+// 경쟁 블로그 클론 분석 결과 타입
+interface CloneAnalysisResult {
+  targetBlog: string
+  overview: {
+    totalPosts: number
+    avgPostLength: number
+    postingFrequency: string
+    mainCategories: string[]
+    blogScore: number
+  }
+  strategy: {
+    category: string
+    insight: string
+    actionItem: string
+  }[]
+  topKeywords: { keyword: string; count: number; avgRank: number }[]
+  contentPattern: {
+    pattern: string
+    percentage: number
+    example: string
+  }[]
+  successFactors: string[]
+}
+
+// AI 댓글 답변 결과 타입
+interface CommentReplyResult {
+  original: string
+  replies: {
+    tone: string
+    reply: string
+    emoji: boolean
+  }[]
+}
+
+// 알고리즘 변화 감지 결과 타입
+interface AlgorithmChangeResult {
+  status: 'stable' | 'minor_change' | 'major_change'
+  lastUpdate: string
+  changes: {
+    date: string
+    type: string
+    description: string
+    impact: 'low' | 'medium' | 'high'
+    recommendation: string
+  }[]
+  affectedKeywords: { keyword: string; before: number; after: number }[]
+}
+
+// 콘텐츠 수명 분석 결과 타입
+interface LifespanResult {
+  blogId: string
+  posts: {
+    title: string
+    date: string
+    type: 'evergreen' | 'seasonal' | 'trending' | 'declining'
+    currentViews: number
+    peakViews: number
+    lifespan: string
+    suggestion: string
+  }[]
+  summary: {
+    evergreen: number
+    seasonal: number
+    trending: number
+    declining: number
+  }
+}
+
+// 오래된 글 리프레시 결과 타입
+interface RefreshResult {
+  blogId: string
+  postsToRefresh: {
+    title: string
+    publishDate: string
+    lastViews: number
+    potentialViews: number
+    priority: 'high' | 'medium' | 'low'
+    reasons: string[]
+    suggestions: string[]
+  }[]
+}
+
+// 연관 글 추천 결과 타입
+interface RelatedPostResult {
+  currentTopic: string
+  relatedTopics: {
+    topic: string
+    relevance: number
+    searchVolume: number
+    competition: string
+    suggestedTitle: string
+  }[]
+  seriesIdea: {
+    title: string
+    posts: string[]
+  }
+}
+
+// 멘토-멘티 매칭 결과 타입
+interface MentorMatchResult {
+  userType: 'mentor' | 'mentee'
+  matches: {
+    id: string
+    name: string
+    blogId: string
+    specialty: string[]
+    score: number
+    experience: string
+    rate: string
+    rating: number
+    reviews: number
+    available: boolean
+  }[]
+}
+
 export default function ToolsPage() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<TabType>('title')
@@ -229,20 +346,63 @@ export default function ToolsPage() {
   const [trackResult, setTrackResult] = useState<RankTrackResult | null>(null)
   const [trackedKeywords, setTrackedKeywords] = useState<{ keyword: string; currentRank: number | null; change: number }[]>([])
 
+  // 경쟁 블로그 클론 분석 상태
+  const [cloneBlogUrl, setCloneBlogUrl] = useState('')
+  const [cloneLoading, setCloneLoading] = useState(false)
+  const [cloneResult, setCloneResult] = useState<CloneAnalysisResult | null>(null)
+
+  // AI 댓글 답변 생성기 상태
+  const [commentText, setCommentText] = useState('')
+  const [commentLoading, setCommentLoading] = useState(false)
+  const [commentResult, setCommentResult] = useState<CommentReplyResult | null>(null)
+
+  // 네이버 알고리즘 변화 감지 상태
+  const [algorithmLoading, setAlgorithmLoading] = useState(false)
+  const [algorithmResult, setAlgorithmResult] = useState<AlgorithmChangeResult | null>(null)
+
+  // 콘텐츠 수명 분석 상태
+  const [lifespanBlogId, setLifespanBlogId] = useState('')
+  const [lifespanLoading, setLifespanLoading] = useState(false)
+  const [lifespanResult, setLifespanResult] = useState<LifespanResult | null>(null)
+
+  // 오래된 글 리프레시 상태
+  const [refreshBlogId, setRefreshBlogId] = useState('')
+  const [refreshLoading, setRefreshLoading] = useState(false)
+  const [refreshResult, setRefreshResult] = useState<RefreshResult | null>(null)
+
+  // 연관 글 추천 상태
+  const [relatedTopic, setRelatedTopic] = useState('')
+  const [relatedLoading, setRelatedLoading] = useState(false)
+  const [relatedResult, setRelatedResult] = useState<RelatedPostResult | null>(null)
+
+  // 멘토-멘티 매칭 상태
+  const [mentorBlogId, setMentorBlogId] = useState('')
+  const [mentorUserType, setMentorUserType] = useState<'mentor' | 'mentee'>('mentee')
+  const [mentorCategory, setMentorCategory] = useState('all')
+  const [mentorLoading, setMentorLoading] = useState(false)
+  const [mentorResult, setMentorResult] = useState<MentorMatchResult | null>(null)
+
   const tabs = [
     { id: 'title' as TabType, label: 'AI 제목', icon: PenTool, color: 'from-violet-500 to-purple-500' },
     { id: 'blueocean' as TabType, label: '키워드 발굴', icon: Compass, color: 'from-cyan-500 to-blue-500' },
-    { id: 'writing' as TabType, label: '글쓰기 가이드', icon: FileText, color: 'from-emerald-500 to-teal-500' },
-    { id: 'insight' as TabType, label: '성과 인사이트', icon: LineChart, color: 'from-amber-500 to-orange-500' },
+    { id: 'writing' as TabType, label: '글쓰기', icon: FileText, color: 'from-emerald-500 to-teal-500' },
+    { id: 'insight' as TabType, label: '인사이트', icon: LineChart, color: 'from-amber-500 to-orange-500' },
     { id: 'prediction' as TabType, label: '노출 예측', icon: Target, color: 'from-purple-500 to-pink-500' },
     { id: 'hashtag' as TabType, label: '해시태그', icon: Hash, color: 'from-green-500 to-emerald-500' },
     { id: 'timing' as TabType, label: '발행 시간', icon: Clock, color: 'from-orange-500 to-red-500' },
     { id: 'report' as TabType, label: '리포트', icon: BarChart3, color: 'from-blue-500 to-cyan-500' },
-    { id: 'youtube' as TabType, label: '유튜브 변환', icon: Youtube, color: 'from-red-500 to-rose-500' },
-    { id: 'lowquality' as TabType, label: '저품질 감지', icon: Shield, color: 'from-slate-500 to-gray-600' },
-    { id: 'backup' as TabType, label: '백업/복원', icon: Database, color: 'from-indigo-500 to-violet-500' },
-    { id: 'campaign' as TabType, label: '체험단 매칭', icon: Gift, color: 'from-pink-500 to-rose-500' },
+    { id: 'youtube' as TabType, label: '유튜브', icon: Youtube, color: 'from-red-500 to-rose-500' },
+    { id: 'lowquality' as TabType, label: '저품질', icon: Shield, color: 'from-slate-500 to-gray-600' },
+    { id: 'backup' as TabType, label: '백업', icon: Database, color: 'from-indigo-500 to-violet-500' },
+    { id: 'campaign' as TabType, label: '체험단', icon: Gift, color: 'from-pink-500 to-rose-500' },
     { id: 'ranktrack' as TabType, label: '순위 추적', icon: Activity, color: 'from-teal-500 to-cyan-500' },
+    { id: 'clone' as TabType, label: '클론 분석', icon: Scan, color: 'from-fuchsia-500 to-purple-600' },
+    { id: 'comment' as TabType, label: '댓글 AI', icon: MessageSquare, color: 'from-sky-500 to-blue-500' },
+    { id: 'algorithm' as TabType, label: '알고리즘', icon: Brain, color: 'from-rose-500 to-pink-600' },
+    { id: 'lifespan' as TabType, label: '콘텐츠 수명', icon: Timer, color: 'from-lime-500 to-green-500' },
+    { id: 'refresh' as TabType, label: '리프레시', icon: RotateCcw, color: 'from-yellow-500 to-amber-500' },
+    { id: 'related' as TabType, label: '연관 글', icon: Link2, color: 'from-violet-500 to-indigo-500' },
+    { id: 'mentor' as TabType, label: '멘토링', icon: GraduationCap, color: 'from-emerald-500 to-cyan-500' },
   ]
 
   // AI 제목 생성
@@ -823,6 +983,344 @@ export default function ToolsPage() {
     }
   }
 
+  // 경쟁 블로그 클론 분석
+  const handleCloneAnalysis = async () => {
+    if (!cloneBlogUrl.trim()) {
+      toast.error('블로그 URL 또는 ID를 입력해주세요')
+      return
+    }
+
+    setCloneLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 3000))
+
+      const categories = ['맛집/카페', '여행', '육아', '뷰티', '일상', '정보']
+      const patterns = ['리뷰형', '리스트형', '가이드형', '일상형', '비교형']
+
+      setCloneResult({
+        targetBlog: cloneBlogUrl,
+        overview: {
+          totalPosts: Math.floor(Math.random() * 500) + 100,
+          avgPostLength: Math.floor(Math.random() * 2000) + 1500,
+          postingFrequency: ['주 2-3회', '주 4-5회', '매일'][Math.floor(Math.random() * 3)],
+          mainCategories: categories.slice(0, 3),
+          blogScore: Math.floor(Math.random() * 30) + 50
+        },
+        strategy: [
+          { category: '콘텐츠 전략', insight: '리뷰 + 정보 조합형 글이 주력', actionItem: '단순 후기보다 정보를 함께 제공하세요' },
+          { category: '키워드 전략', insight: '롱테일 키워드 집중 공략', actionItem: '3-4어절 조합 키워드를 타겟하세요' },
+          { category: '발행 패턴', insight: '화~목 오전 발행 집중', actionItem: '주중 오전 9-11시 발행을 권장합니다' },
+          { category: '이미지 활용', insight: '글당 평균 12장, 고품질 직촬', actionItem: '직접 촬영한 이미지 10장 이상 사용하세요' },
+          { category: '소통 전략', insight: '댓글 답변율 95% 이상', actionItem: '모든 댓글에 24시간 내 답변하세요' },
+        ],
+        topKeywords: [
+          { keyword: '강남 맛집', count: 15, avgRank: 3 },
+          { keyword: '서울 카페', count: 12, avgRank: 5 },
+          { keyword: '데이트 코스', count: 10, avgRank: 7 },
+          { keyword: '브런치 맛집', count: 8, avgRank: 4 },
+          { keyword: '분위기 좋은 카페', count: 7, avgRank: 6 },
+        ],
+        contentPattern: [
+          { pattern: '리뷰형', percentage: 45, example: '솔직 후기, 장단점 비교' },
+          { pattern: '리스트형', percentage: 25, example: 'TOP 5, BEST 10' },
+          { pattern: '가이드형', percentage: 20, example: '방법, 꿀팁, 총정리' },
+          { pattern: '일상형', percentage: 10, example: '데일리, 브이로그' },
+        ],
+        successFactors: [
+          '꾸준한 발행 (주 3회 이상)',
+          '키워드 당 3개 이상 시리즈 글',
+          '댓글 소통 적극적',
+          '썸네일 통일성 유지',
+          '2000자 이상 깊이있는 콘텐츠',
+        ]
+      })
+
+      toast.success('클론 분석 완료!')
+    } catch (error) {
+      toast.error('분석 중 오류가 발생했습니다')
+    } finally {
+      setCloneLoading(false)
+    }
+  }
+
+  // AI 댓글 답변 생성
+  const handleCommentReply = async () => {
+    if (!commentText.trim()) {
+      toast.error('댓글 내용을 입력해주세요')
+      return
+    }
+
+    setCommentLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1500))
+
+      setCommentResult({
+        original: commentText,
+        replies: [
+          {
+            tone: '친근한',
+            reply: `안녕하세요! 방문해주셔서 감사합니다 😊 ${commentText.includes('?') ? '궁금하신 부분 답변드릴게요! ' : ''}좋게 봐주셔서 정말 기쁘네요. 앞으로도 유익한 정보 많이 올릴게요!`,
+            emoji: true
+          },
+          {
+            tone: '전문적인',
+            reply: `안녕하세요, 방문 감사드립니다. ${commentText.includes('?') ? '문의하신 내용에 대해 답변드리자면, ' : ''}해당 글이 도움이 되셨다니 기쁩니다. 추가 궁금하신 사항 있으시면 편하게 댓글 남겨주세요.`,
+            emoji: false
+          },
+          {
+            tone: '짧고 간단한',
+            reply: `감사합니다! ${commentText.includes('?') ? '답변 드렸어요~' : '자주 놀러와주세요!'} 🙏`,
+            emoji: true
+          },
+          {
+            tone: '정중한',
+            reply: `안녕하세요, 귀한 댓글 남겨주셔서 진심으로 감사드립니다. ${commentText.includes('?') ? '질문에 대한 답변을 드리자면, 말씀하신 부분은 포스팅 내용을 참고해주시면 좋을 것 같습니다. ' : ''}앞으로도 양질의 콘텐츠로 찾아뵙겠습니다.`,
+            emoji: false
+          },
+        ]
+      })
+
+      toast.success('답변 생성 완료!')
+    } catch (error) {
+      toast.error('생성 중 오류가 발생했습니다')
+    } finally {
+      setCommentLoading(false)
+    }
+  }
+
+  // 네이버 알고리즘 변화 감지
+  const handleAlgorithmCheck = async () => {
+    setAlgorithmLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      const statuses = ['stable', 'minor_change', 'major_change'] as const
+      const status = statuses[Math.floor(Math.random() * 3)]
+
+      setAlgorithmResult({
+        status,
+        lastUpdate: new Date().toLocaleDateString('ko-KR'),
+        changes: [
+          {
+            date: '2024.12.10',
+            type: '품질 평가',
+            description: '체류 시간 가중치 상향 조정',
+            impact: 'high',
+            recommendation: '글 길이보다 가독성과 유용성에 집중하세요'
+          },
+          {
+            date: '2024.12.05',
+            type: '스팸 필터',
+            description: '키워드 반복 사용 페널티 강화',
+            impact: 'medium',
+            recommendation: '같은 키워드 5회 이상 반복 자제'
+          },
+          {
+            date: '2024.11.28',
+            type: '신선도',
+            description: '최신 콘텐츠 우대 정책 변경',
+            impact: 'low',
+            recommendation: '오래된 글도 업데이트하면 재평가됨'
+          },
+        ],
+        affectedKeywords: [
+          { keyword: '맛집', before: 5, after: 8 },
+          { keyword: '후기', before: 3, after: 3 },
+          { keyword: '추천', before: 10, after: 6 },
+        ]
+      })
+
+      toast.success('알고리즘 분석 완료!')
+    } catch (error) {
+      toast.error('분석 중 오류가 발생했습니다')
+    } finally {
+      setAlgorithmLoading(false)
+    }
+  }
+
+  // 콘텐츠 수명 분석
+  const handleLifespanAnalysis = async () => {
+    if (!lifespanBlogId.trim()) {
+      toast.error('블로그 ID를 입력해주세요')
+      return
+    }
+
+    setLifespanLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2500))
+
+      const types = ['evergreen', 'seasonal', 'trending', 'declining'] as const
+      const titles = [
+        '강남역 맛집 추천 TOP 10',
+        '크리스마스 선물 추천',
+        '아이폰16 사전예약 방법',
+        '여름휴가 제주도 여행',
+        '다이어트 식단 꿀팁',
+        '부모님 생신 선물 추천',
+      ]
+
+      setLifespanResult({
+        blogId: lifespanBlogId,
+        posts: titles.map((title, i) => ({
+          title,
+          date: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toLocaleDateString('ko-KR'),
+          type: types[Math.floor(Math.random() * 4)],
+          currentViews: Math.floor(Math.random() * 1000) + 100,
+          peakViews: Math.floor(Math.random() * 5000) + 1000,
+          lifespan: ['1개월', '3개월', '6개월', '1년 이상'][Math.floor(Math.random() * 4)],
+          suggestion: ['업데이트 권장', '시즌 전 재발행', '현상 유지', '신규 글로 대체'][Math.floor(Math.random() * 4)]
+        })),
+        summary: {
+          evergreen: Math.floor(Math.random() * 10) + 5,
+          seasonal: Math.floor(Math.random() * 8) + 3,
+          trending: Math.floor(Math.random() * 5) + 2,
+          declining: Math.floor(Math.random() * 10) + 5
+        }
+      })
+
+      toast.success('콘텐츠 수명 분석 완료!')
+    } catch (error) {
+      toast.error('분석 중 오류가 발생했습니다')
+    } finally {
+      setLifespanLoading(false)
+    }
+  }
+
+  // 오래된 글 리프레시 분석
+  const handleRefreshAnalysis = async () => {
+    if (!refreshBlogId.trim()) {
+      toast.error('블로그 ID를 입력해주세요')
+      return
+    }
+
+    setRefreshLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      const priorities = ['high', 'medium', 'low'] as const
+
+      setRefreshResult({
+        blogId: refreshBlogId,
+        postsToRefresh: [
+          {
+            title: '2023년 강남 맛집 총정리',
+            publishDate: '2023.03.15',
+            lastViews: 50,
+            potentialViews: 500,
+            priority: 'high',
+            reasons: ['발행 후 1년 이상 경과', '키워드 검색량 여전히 높음', '정보가 outdated'],
+            suggestions: ['연도를 2024로 변경', '폐업/신규 맛집 업데이트', '사진 추가']
+          },
+          {
+            title: '다이어트 식단 추천',
+            publishDate: '2023.06.20',
+            lastViews: 120,
+            potentialViews: 400,
+            priority: 'high',
+            reasons: ['에버그린 콘텐츠', '최근 조회수 급감'],
+            suggestions: ['최신 트렌드 반영', '새로운 레시피 추가']
+          },
+          {
+            title: '제주도 여행 코스',
+            publishDate: '2023.08.10',
+            lastViews: 80,
+            potentialViews: 300,
+            priority: 'medium',
+            reasons: ['시즌 도래 전 업데이트 필요'],
+            suggestions: ['신상 카페/맛집 추가', '입장료 정보 갱신']
+          },
+        ]
+      })
+
+      toast.success('리프레시 대상 분석 완료!')
+    } catch (error) {
+      toast.error('분석 중 오류가 발생했습니다')
+    } finally {
+      setRefreshLoading(false)
+    }
+  }
+
+  // 연관 글 추천
+  const handleRelatedPost = async () => {
+    if (!relatedTopic.trim()) {
+      toast.error('주제를 입력해주세요')
+      return
+    }
+
+    setRelatedLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      setRelatedResult({
+        currentTopic: relatedTopic,
+        relatedTopics: [
+          { topic: `${relatedTopic} 추천`, relevance: 95, searchVolume: 5000, competition: '중', suggestedTitle: `${relatedTopic} 추천 TOP 10 (2024년 최신)` },
+          { topic: `${relatedTopic} 후기`, relevance: 90, searchVolume: 3000, competition: '중', suggestedTitle: `${relatedTopic} 솔직 후기 | 장단점 총정리` },
+          { topic: `${relatedTopic} 가격`, relevance: 85, searchVolume: 4000, competition: '높음', suggestedTitle: `${relatedTopic} 가격 비교 | 어디가 제일 저렴할까?` },
+          { topic: `${relatedTopic} 비교`, relevance: 80, searchVolume: 2500, competition: '낮음', suggestedTitle: `${relatedTopic} A vs B 비교 | 뭐가 더 좋을까?` },
+          { topic: `${relatedTopic} 꿀팁`, relevance: 75, searchVolume: 2000, competition: '낮음', suggestedTitle: `${relatedTopic} 꿀팁 5가지 | 이것만 알면 끝!` },
+        ],
+        seriesIdea: {
+          title: `${relatedTopic} 완벽 가이드 시리즈`,
+          posts: [
+            `${relatedTopic} 입문자 가이드 (1편)`,
+            `${relatedTopic} 선택 기준 총정리 (2편)`,
+            `${relatedTopic} 실제 사용 후기 (3편)`,
+            `${relatedTopic} FAQ 모음 (4편)`,
+          ]
+        }
+      })
+
+      toast.success('연관 글 추천 완료!')
+    } catch (error) {
+      toast.error('분석 중 오류가 발생했습니다')
+    } finally {
+      setRelatedLoading(false)
+    }
+  }
+
+  // 멘토-멘티 매칭
+  const handleMentorMatch = async () => {
+    if (!mentorBlogId.trim()) {
+      toast.error('블로그 ID를 입력해주세요')
+      return
+    }
+
+    setMentorLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      const specialties = ['맛집', '뷰티', '육아', '여행', '리빙', '테크', '재테크', '자기계발']
+      const names = ['블로그마스터', '글쓰기요정', '콘텐츠킹', '키워드헌터', '상위노출러', '블로그코치']
+
+      setMentorResult({
+        userType: mentorUserType,
+        matches: Array.from({ length: 5 }, (_, i) => ({
+          id: `mentor_${i}`,
+          name: names[Math.floor(Math.random() * names.length)] + (i + 1),
+          blogId: `blog_user_${Math.floor(Math.random() * 1000)}`,
+          specialty: specialties.slice(0, Math.floor(Math.random() * 3) + 1),
+          score: Math.floor(Math.random() * 30) + 60,
+          experience: mentorUserType === 'mentee'
+            ? ['5년 이상', '3년 이상', '2년 이상'][Math.floor(Math.random() * 3)]
+            : ['6개월', '1년', '신규'][Math.floor(Math.random() * 3)],
+          rate: mentorUserType === 'mentee'
+            ? ['30,000원/회', '50,000원/회', '100,000원/회'][Math.floor(Math.random() * 3)]
+            : '무료',
+          rating: 4 + Math.random(),
+          reviews: Math.floor(Math.random() * 50) + 5,
+          available: Math.random() > 0.3
+        }))
+      })
+
+      toast.success('매칭 완료!')
+    } catch (error) {
+      toast.error('매칭 중 오류가 발생했습니다')
+    } finally {
+      setMentorLoading(false)
+    }
+  }
+
   const getDifficultyColor = (difficulty: number) => {
     if (difficulty < 40) return 'text-green-500'
     if (difficulty < 70) return 'text-yellow-500'
@@ -881,61 +1379,31 @@ export default function ToolsPage() {
           <p className="text-gray-600">AI 기반 분석으로 블로그를 성장시키세요</p>
         </motion.div>
 
-        {/* Tabs - 3줄로 변경 */}
+        {/* Tabs - 4줄로 변경 (20개 탭) */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="glass rounded-2xl p-3 mb-6"
         >
-          <div className="grid grid-cols-5 gap-2 mb-2">
-            {tabs.slice(0, 5).map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl font-semibold transition-all text-xs ${
-                  activeTab === tab.id
-                    ? `bg-gradient-to-r ${tab.color} text-white shadow-lg`
-                    : 'text-gray-600 hover:bg-white/50'
-                }`}
-              >
-                <tab.icon className="w-4 h-4" />
-                <span className="hidden sm:inline">{tab.label}</span>
-              </button>
-            ))}
-          </div>
-          <div className="grid grid-cols-5 gap-2 mb-2">
-            {tabs.slice(5, 10).map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl font-semibold transition-all text-xs ${
-                  activeTab === tab.id
-                    ? `bg-gradient-to-r ${tab.color} text-white shadow-lg`
-                    : 'text-gray-600 hover:bg-white/50'
-                }`}
-              >
-                <tab.icon className="w-4 h-4" />
-                <span className="hidden sm:inline">{tab.label}</span>
-              </button>
-            ))}
-          </div>
-          <div className="grid grid-cols-5 gap-2">
-            {tabs.slice(10).map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl font-semibold transition-all text-xs ${
-                  activeTab === tab.id
-                    ? `bg-gradient-to-r ${tab.color} text-white shadow-lg`
-                    : 'text-gray-600 hover:bg-white/50'
-                }`}
-              >
-                <tab.icon className="w-4 h-4" />
-                <span className="hidden sm:inline">{tab.label}</span>
-              </button>
-            ))}
-          </div>
+          {[0, 5, 10, 15].map((startIdx, rowIdx) => (
+            <div key={rowIdx} className={`grid grid-cols-5 gap-2 ${rowIdx < 3 ? 'mb-2' : ''}`}>
+              {tabs.slice(startIdx, startIdx + 5).map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center justify-center gap-1 py-2 px-1.5 rounded-xl font-semibold transition-all text-xs ${
+                    activeTab === tab.id
+                      ? `bg-gradient-to-r ${tab.color} text-white shadow-lg`
+                      : 'text-gray-600 hover:bg-white/50'
+                  }`}
+                >
+                  <tab.icon className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline truncate">{tab.label}</span>
+                </button>
+              ))}
+            </div>
+          ))}
         </motion.div>
 
         {/* Tab Content */}
@@ -2504,6 +2972,928 @@ export default function ToolsPage() {
                           </div>
                         ))}
                       </div>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* 경쟁 블로그 클론 분석 */}
+          {activeTab === 'clone' && (
+            <motion.div
+              key="clone"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <div className="glass rounded-3xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-fuchsia-500 to-purple-600">
+                    <Scan className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">경쟁 블로그 클론 분석</h2>
+                    <p className="text-gray-600">잘나가는 블로그의 성공 전략을 역분석합니다</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 mb-6">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      value={cloneBlogUrl}
+                      onChange={(e) => setCloneBlogUrl(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleCloneAnalysis()}
+                      placeholder="분석할 블로그 URL 또는 ID 입력"
+                      className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-fuchsia-500 focus:outline-none"
+                      disabled={cloneLoading}
+                    />
+                  </div>
+                  <button
+                    onClick={handleCloneAnalysis}
+                    disabled={cloneLoading}
+                    className="px-8 py-4 rounded-xl bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {cloneLoading ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <>
+                        <Scan className="w-5 h-5" />
+                        분석하기
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {cloneResult && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-6"
+                  >
+                    {/* 블로그 개요 */}
+                    <div className="bg-gradient-to-r from-fuchsia-50 to-purple-50 rounded-2xl p-6">
+                      <h3 className="font-bold text-lg mb-4">블로그 개요</h3>
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                        <div className="text-center p-3 bg-white rounded-xl">
+                          <div className="text-2xl font-bold text-fuchsia-600">{cloneResult.overview.totalPosts}</div>
+                          <div className="text-xs text-gray-500">총 게시글</div>
+                        </div>
+                        <div className="text-center p-3 bg-white rounded-xl">
+                          <div className="text-2xl font-bold text-fuchsia-600">{cloneResult.overview.avgPostLength}</div>
+                          <div className="text-xs text-gray-500">평균 글자수</div>
+                        </div>
+                        <div className="text-center p-3 bg-white rounded-xl">
+                          <div className="text-2xl font-bold text-fuchsia-600">{cloneResult.overview.postingFrequency}</div>
+                          <div className="text-xs text-gray-500">발행 빈도</div>
+                        </div>
+                        <div className="text-center p-3 bg-white rounded-xl">
+                          <div className="text-2xl font-bold text-fuchsia-600">{cloneResult.overview.blogScore}점</div>
+                          <div className="text-xs text-gray-500">블로그 지수</div>
+                        </div>
+                        <div className="text-center p-3 bg-white rounded-xl">
+                          <div className="flex flex-wrap justify-center gap-1">
+                            {cloneResult.overview.mainCategories.map((cat, i) => (
+                              <span key={i} className="text-xs px-2 py-0.5 bg-fuchsia-100 text-fuchsia-700 rounded">{cat}</span>
+                            ))}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1">주요 카테고리</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 성공 전략 분석 */}
+                    <div className="bg-white rounded-2xl p-6">
+                      <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                        <Lightbulb className="w-5 h-5 text-fuchsia-500" />
+                        성공 전략 분석
+                      </h3>
+                      <div className="space-y-4">
+                        {cloneResult.strategy.map((item, i) => (
+                          <div key={i} className="p-4 bg-gray-50 rounded-xl">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="px-2 py-0.5 bg-fuchsia-100 text-fuchsia-700 rounded text-sm font-medium">{item.category}</span>
+                            </div>
+                            <div className="font-medium text-gray-800 mb-1">{item.insight}</div>
+                            <div className="text-sm text-fuchsia-600 flex items-center gap-1">
+                              <Zap className="w-4 h-4" />
+                              {item.actionItem}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 상위 노출 키워드 */}
+                    <div className="bg-white rounded-2xl p-6">
+                      <h3 className="font-bold text-lg mb-4">상위 노출 키워드</h3>
+                      <div className="space-y-3">
+                        {cloneResult.topKeywords.map((kw, i) => (
+                          <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                            <div className="flex items-center gap-3">
+                              <span className="w-6 h-6 rounded-full bg-fuchsia-500 text-white flex items-center justify-center text-sm font-bold">{i + 1}</span>
+                              <span className="font-medium">{kw.keyword}</span>
+                            </div>
+                            <div className="flex items-center gap-4 text-sm">
+                              <span className="text-gray-500">{kw.count}개 글</span>
+                              <span className="text-fuchsia-600 font-bold">평균 {kw.avgRank}위</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 콘텐츠 패턴 */}
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div className="bg-white rounded-2xl p-6">
+                        <h3 className="font-bold text-lg mb-4">콘텐츠 유형 비율</h3>
+                        <div className="space-y-3">
+                          {cloneResult.contentPattern.map((pattern, i) => (
+                            <div key={i}>
+                              <div className="flex justify-between text-sm mb-1">
+                                <span>{pattern.pattern}</span>
+                                <span className="font-bold">{pattern.percentage}%</span>
+                              </div>
+                              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-gradient-to-r from-fuchsia-500 to-purple-500 rounded-full"
+                                  style={{ width: `${pattern.percentage}%` }}
+                                />
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">{pattern.example}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-2xl p-6">
+                        <h3 className="font-bold text-lg mb-4">성공 요인 체크리스트</h3>
+                        <div className="space-y-3">
+                          {cloneResult.successFactors.map((factor, i) => (
+                            <div key={i} className="flex items-center gap-3 p-3 bg-green-50 rounded-xl">
+                              <CheckCircle className="w-5 h-5 text-green-500" />
+                              <span className="text-gray-800">{factor}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* AI 댓글 답변 생성기 */}
+          {activeTab === 'comment' && (
+            <motion.div
+              key="comment"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <div className="glass rounded-3xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-sky-500 to-blue-500">
+                    <MessageSquare className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">AI 댓글 답변 생성기</h2>
+                    <p className="text-gray-600">댓글에 맞는 친절한 답변을 AI가 생성합니다</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">받은 댓글 내용</label>
+                    <textarea
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      placeholder="답변할 댓글을 붙여넣기하세요... (예: 정보 감사합니다! 혹시 주차 가능한가요?)"
+                      rows={4}
+                      className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-sky-500 focus:outline-none resize-none"
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleCommentReply}
+                    disabled={commentLoading}
+                    className="w-full py-4 rounded-xl bg-gradient-to-r from-sky-500 to-blue-500 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {commentLoading ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        생성 중...
+                      </>
+                    ) : (
+                      <>
+                        <Bot className="w-5 h-5" />
+                        답변 생성하기
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {commentResult && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-4"
+                  >
+                    <div className="p-4 bg-gray-100 rounded-xl">
+                      <div className="text-sm text-gray-500 mb-1">원본 댓글</div>
+                      <div className="text-gray-800">"{commentResult.original}"</div>
+                    </div>
+
+                    <h3 className="font-bold text-lg">추천 답변</h3>
+                    <div className="space-y-3">
+                      {commentResult.replies.map((reply, i) => (
+                        <motion.div
+                          key={i}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: i * 0.1 }}
+                          className="p-4 bg-white rounded-xl border border-gray-200 hover:border-sky-300 transition-colors cursor-pointer group"
+                          onClick={() => {
+                            navigator.clipboard.writeText(reply.reply)
+                            toast.success('답변이 복사되었습니다!')
+                          }}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className={`px-2 py-0.5 rounded text-sm font-medium ${
+                              reply.tone === '친근한' ? 'bg-pink-100 text-pink-700' :
+                              reply.tone === '전문적인' ? 'bg-blue-100 text-blue-700' :
+                              reply.tone === '짧고 간단한' ? 'bg-green-100 text-green-700' :
+                              'bg-purple-100 text-purple-700'
+                            }`}>
+                              {reply.tone}
+                            </span>
+                            <Copy className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                          <p className="text-gray-800">{reply.reply}</p>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* 네이버 알고리즘 변화 감지 */}
+          {activeTab === 'algorithm' && (
+            <motion.div
+              key="algorithm"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <div className="glass rounded-3xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-rose-500 to-pink-600">
+                    <Brain className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">네이버 알고리즘 변화 감지</h2>
+                    <p className="text-gray-600">검색 알고리즘 변화를 실시간으로 모니터링합니다</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleAlgorithmCheck}
+                  disabled={algorithmLoading}
+                  className="w-full py-4 rounded-xl bg-gradient-to-r from-rose-500 to-pink-600 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2 mb-6"
+                >
+                  {algorithmLoading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      분석 중...
+                    </>
+                  ) : (
+                    <>
+                      <Bell className="w-5 h-5" />
+                      알고리즘 변화 확인
+                    </>
+                  )}
+                </button>
+
+                {algorithmResult && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-6"
+                  >
+                    {/* 상태 표시 */}
+                    <div className={`rounded-2xl p-8 text-center ${
+                      algorithmResult.status === 'stable' ? 'bg-gradient-to-br from-green-50 to-emerald-50' :
+                      algorithmResult.status === 'minor_change' ? 'bg-gradient-to-br from-yellow-50 to-amber-50' :
+                      'bg-gradient-to-br from-red-50 to-rose-50'
+                    }`}>
+                      <div className={`text-5xl font-bold mb-2 ${
+                        algorithmResult.status === 'stable' ? 'text-green-600' :
+                        algorithmResult.status === 'minor_change' ? 'text-yellow-600' :
+                        'text-red-600'
+                      }`}>
+                        {algorithmResult.status === 'stable' ? '안정' :
+                         algorithmResult.status === 'minor_change' ? '소폭 변화' : '대규모 변화'}
+                      </div>
+                      <div className="text-gray-600">마지막 확인: {algorithmResult.lastUpdate}</div>
+                    </div>
+
+                    {/* 변화 내역 */}
+                    <div className="bg-white rounded-2xl p-6">
+                      <h3 className="font-bold text-lg mb-4">최근 알고리즘 변화</h3>
+                      <div className="space-y-4">
+                        {algorithmResult.changes.map((change, i) => (
+                          <div key={i} className={`p-4 rounded-xl border-l-4 ${
+                            change.impact === 'high' ? 'border-red-500 bg-red-50' :
+                            change.impact === 'medium' ? 'border-yellow-500 bg-yellow-50' :
+                            'border-green-500 bg-green-50'
+                          }`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="px-2 py-0.5 bg-white rounded text-sm font-medium">{change.type}</span>
+                                <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                                  change.impact === 'high' ? 'bg-red-200 text-red-700' :
+                                  change.impact === 'medium' ? 'bg-yellow-200 text-yellow-700' :
+                                  'bg-green-200 text-green-700'
+                                }`}>
+                                  {change.impact === 'high' ? '높음' : change.impact === 'medium' ? '보통' : '낮음'}
+                                </span>
+                              </div>
+                              <span className="text-sm text-gray-500">{change.date}</span>
+                            </div>
+                            <div className="font-medium text-gray-800 mb-1">{change.description}</div>
+                            <div className="text-sm text-blue-600 flex items-center gap-1">
+                              <Lightbulb className="w-4 h-4" />
+                              {change.recommendation}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 영향받는 키워드 */}
+                    <div className="bg-white rounded-2xl p-6">
+                      <h3 className="font-bold text-lg mb-4">순위 변동 키워드</h3>
+                      <div className="space-y-3">
+                        {algorithmResult.affectedKeywords.map((kw, i) => (
+                          <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                            <span className="font-medium">{kw.keyword}</span>
+                            <div className="flex items-center gap-4">
+                              <span className="text-gray-500">{kw.before}위</span>
+                              <span className="text-gray-400">→</span>
+                              <span className={`font-bold ${kw.after < kw.before ? 'text-green-600' : kw.after > kw.before ? 'text-red-600' : 'text-gray-600'}`}>
+                                {kw.after}위
+                              </span>
+                              {kw.after !== kw.before && (
+                                <span className={`text-sm ${kw.after < kw.before ? 'text-green-600' : 'text-red-600'}`}>
+                                  {kw.after < kw.before ? `▲${kw.before - kw.after}` : `▼${kw.after - kw.before}`}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* 콘텐츠 수명 분석 */}
+          {activeTab === 'lifespan' && (
+            <motion.div
+              key="lifespan"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <div className="glass rounded-3xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-lime-500 to-green-500">
+                    <Timer className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">콘텐츠 수명 분석</h2>
+                    <p className="text-gray-600">내 글들의 유통기한과 유형을 분석합니다</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 mb-6">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      value={lifespanBlogId}
+                      onChange={(e) => setLifespanBlogId(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleLifespanAnalysis()}
+                      placeholder="블로그 ID 입력"
+                      className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-lime-500 focus:outline-none"
+                      disabled={lifespanLoading}
+                    />
+                  </div>
+                  <button
+                    onClick={handleLifespanAnalysis}
+                    disabled={lifespanLoading}
+                    className="px-8 py-4 rounded-xl bg-gradient-to-r from-lime-500 to-green-500 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {lifespanLoading ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <>
+                        <Timer className="w-5 h-5" />
+                        분석하기
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {lifespanResult && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-6"
+                  >
+                    {/* 요약 */}
+                    <div className="grid grid-cols-4 gap-4">
+                      <div className="text-center p-4 bg-green-50 rounded-xl">
+                        <div className="text-3xl font-bold text-green-600">{lifespanResult.summary.evergreen}</div>
+                        <div className="text-sm text-gray-600">에버그린</div>
+                        <div className="text-xs text-gray-500">영구적 가치</div>
+                      </div>
+                      <div className="text-center p-4 bg-blue-50 rounded-xl">
+                        <div className="text-3xl font-bold text-blue-600">{lifespanResult.summary.seasonal}</div>
+                        <div className="text-sm text-gray-600">시즌성</div>
+                        <div className="text-xs text-gray-500">계절마다 부활</div>
+                      </div>
+                      <div className="text-center p-4 bg-orange-50 rounded-xl">
+                        <div className="text-3xl font-bold text-orange-600">{lifespanResult.summary.trending}</div>
+                        <div className="text-sm text-gray-600">트렌딩</div>
+                        <div className="text-xs text-gray-500">일시적 인기</div>
+                      </div>
+                      <div className="text-center p-4 bg-gray-50 rounded-xl">
+                        <div className="text-3xl font-bold text-gray-600">{lifespanResult.summary.declining}</div>
+                        <div className="text-sm text-gray-600">하락중</div>
+                        <div className="text-xs text-gray-500">업데이트 필요</div>
+                      </div>
+                    </div>
+
+                    {/* 글 목록 */}
+                    <div className="bg-white rounded-2xl p-6">
+                      <h3 className="font-bold text-lg mb-4">콘텐츠별 수명 분석</h3>
+                      <div className="space-y-3">
+                        {lifespanResult.posts.map((post, i) => (
+                          <div key={i} className="p-4 bg-gray-50 rounded-xl">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="font-medium text-gray-800">{post.title}</div>
+                              <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                                post.type === 'evergreen' ? 'bg-green-100 text-green-700' :
+                                post.type === 'seasonal' ? 'bg-blue-100 text-blue-700' :
+                                post.type === 'trending' ? 'bg-orange-100 text-orange-700' :
+                                'bg-gray-200 text-gray-700'
+                              }`}>
+                                {post.type === 'evergreen' ? '에버그린' :
+                                 post.type === 'seasonal' ? '시즌성' :
+                                 post.type === 'trending' ? '트렌딩' : '하락중'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-4 text-sm text-gray-500">
+                              <span>발행: {post.date}</span>
+                              <span>현재 조회: {post.currentViews}</span>
+                              <span>최고 조회: {post.peakViews}</span>
+                              <span>예상 수명: {post.lifespan}</span>
+                            </div>
+                            <div className="mt-2 text-sm text-lime-600 flex items-center gap-1">
+                              <Lightbulb className="w-4 h-4" />
+                              {post.suggestion}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* 오래된 글 리프레시 */}
+          {activeTab === 'refresh' && (
+            <motion.div
+              key="refresh"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <div className="glass rounded-3xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-500">
+                    <RotateCcw className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">오래된 글 리프레시</h2>
+                    <p className="text-gray-600">업데이트하면 부활할 수 있는 글을 추천합니다</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 mb-6">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      value={refreshBlogId}
+                      onChange={(e) => setRefreshBlogId(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleRefreshAnalysis()}
+                      placeholder="블로그 ID 입력"
+                      className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-yellow-500 focus:outline-none"
+                      disabled={refreshLoading}
+                    />
+                  </div>
+                  <button
+                    onClick={handleRefreshAnalysis}
+                    disabled={refreshLoading}
+                    className="px-8 py-4 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-500 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {refreshLoading ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <>
+                        <RotateCcw className="w-5 h-5" />
+                        분석하기
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {refreshResult && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-4"
+                  >
+                    <h3 className="font-bold text-lg">리프레시 추천 글 ({refreshResult.postsToRefresh.length}개)</h3>
+
+                    {refreshResult.postsToRefresh.map((post, i) => (
+                      <motion.div
+                        key={i}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.1 }}
+                        className={`p-5 rounded-2xl border-2 ${
+                          post.priority === 'high' ? 'bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-300' :
+                          post.priority === 'medium' ? 'bg-white border-yellow-200' :
+                          'bg-white border-gray-200'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              {post.priority === 'high' && <Flame className="w-4 h-4 text-orange-500" />}
+                              <h4 className="font-bold text-lg text-gray-800">{post.title}</h4>
+                            </div>
+                            <div className="text-sm text-gray-500">발행일: {post.publishDate}</div>
+                          </div>
+                          <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+                            post.priority === 'high' ? 'bg-red-100 text-red-700' :
+                            post.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-gray-100 text-gray-700'
+                          }`}>
+                            {post.priority === 'high' ? '긴급' : post.priority === 'medium' ? '권장' : '선택'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-6 mb-3 text-sm">
+                          <div>
+                            <span className="text-gray-500">현재 조회수: </span>
+                            <span className="font-bold text-gray-700">{post.lastViews}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">예상 조회수: </span>
+                            <span className="font-bold text-yellow-600">{post.potentialViews}</span>
+                          </div>
+                          <div className="text-green-600 font-bold">
+                            +{Math.round((post.potentialViews / post.lastViews - 1) * 100)}% 예상
+                          </div>
+                        </div>
+
+                        <div className="mb-3">
+                          <div className="text-sm text-gray-600 mb-1">리프레시 필요 이유:</div>
+                          <div className="flex flex-wrap gap-2">
+                            {post.reasons.map((reason, j) => (
+                              <span key={j} className="px-2 py-1 bg-gray-100 rounded text-xs text-gray-700">{reason}</span>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-yellow-50 rounded-xl">
+                          <div className="text-sm font-medium text-yellow-800 mb-1">추천 수정 사항:</div>
+                          <ul className="space-y-1">
+                            {post.suggestions.map((sug, j) => (
+                              <li key={j} className="text-sm text-yellow-700 flex items-center gap-1">
+                                <CheckCircle className="w-3 h-3" /> {sug}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* 연관 글 추천 */}
+          {activeTab === 'related' && (
+            <motion.div
+              key="related"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <div className="glass rounded-3xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-violet-500 to-indigo-500">
+                    <Link2 className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">연관 글 자동 추천</h2>
+                    <p className="text-gray-600">이 주제로 글을 썼다면 다음에 쓸 글을 추천합니다</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 mb-6">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      type="text"
+                      value={relatedTopic}
+                      onChange={(e) => setRelatedTopic(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleRelatedPost()}
+                      placeholder="작성한 글의 주제 입력 (예: 강남 맛집, 다이어트)"
+                      className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-violet-500 focus:outline-none"
+                      disabled={relatedLoading}
+                    />
+                  </div>
+                  <button
+                    onClick={handleRelatedPost}
+                    disabled={relatedLoading}
+                    className="px-8 py-4 rounded-xl bg-gradient-to-r from-violet-500 to-indigo-500 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {relatedLoading ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <>
+                        <Link2 className="w-5 h-5" />
+                        추천받기
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {relatedResult && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-6"
+                  >
+                    {/* 연관 주제 */}
+                    <div className="bg-white rounded-2xl p-6">
+                      <h3 className="font-bold text-lg mb-4">"{relatedResult.currentTopic}" 연관 주제</h3>
+                      <div className="space-y-3">
+                        {relatedResult.relatedTopics.map((topic, i) => (
+                          <motion.div
+                            key={i}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: i * 0.05 }}
+                            className="p-4 bg-gray-50 rounded-xl hover:bg-violet-50 transition-colors cursor-pointer"
+                            onClick={() => {
+                              navigator.clipboard.writeText(topic.suggestedTitle)
+                              toast.success('제목이 복사되었습니다!')
+                            }}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-full bg-violet-500 text-white flex items-center justify-center text-sm font-bold">{i + 1}</span>
+                                <span className="font-medium text-gray-800">{topic.topic}</span>
+                              </div>
+                              <div className="flex items-center gap-3 text-sm">
+                                <span className="text-violet-600 font-bold">관련도 {topic.relevance}%</span>
+                                <span className={`px-2 py-0.5 rounded ${
+                                  topic.competition === '낮음' ? 'bg-green-100 text-green-700' :
+                                  topic.competition === '중' ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-red-100 text-red-700'
+                                }`}>
+                                  경쟁 {topic.competition}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-sm text-gray-500 mb-1">월간 검색량: {topic.searchVolume.toLocaleString()}</div>
+                            <div className="text-sm text-violet-600 flex items-center gap-1">
+                              <Sparkles className="w-4 h-4" />
+                              추천 제목: {topic.suggestedTitle}
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 시리즈 아이디어 */}
+                    <div className="bg-gradient-to-r from-violet-50 to-indigo-50 rounded-2xl p-6">
+                      <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                        <Network className="w-5 h-5 text-violet-600" />
+                        시리즈 아이디어
+                      </h3>
+                      <div className="bg-white rounded-xl p-4 mb-4">
+                        <div className="font-bold text-violet-700 mb-3">{relatedResult.seriesIdea.title}</div>
+                        <div className="space-y-2">
+                          {relatedResult.seriesIdea.posts.map((post, i) => (
+                            <div key={i} className="flex items-center gap-2 text-gray-700">
+                              <span className="w-5 h-5 rounded bg-violet-100 text-violet-600 flex items-center justify-center text-xs font-bold">{i + 1}</span>
+                              {post}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <p className="text-sm text-violet-700">
+                        💡 시리즈로 작성하면 내부 링크가 연결되어 체류 시간이 증가합니다!
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* 멘토-멘티 매칭 */}
+          {activeTab === 'mentor' && (
+            <motion.div
+              key="mentor"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <div className="glass rounded-3xl p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500">
+                    <GraduationCap className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">멘토-멘티 매칭</h2>
+                    <p className="text-gray-600">블로그 고수에게 배우거나, 초보자를 가르치세요</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4 mb-6">
+                  <div className="flex gap-4">
+                    <button
+                      onClick={() => setMentorUserType('mentee')}
+                      className={`flex-1 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
+                        mentorUserType === 'mentee' ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      <UserCheck className="w-5 h-5" />
+                      멘토 찾기 (배우고 싶어요)
+                    </button>
+                    <button
+                      onClick={() => setMentorUserType('mentor')}
+                      className={`flex-1 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
+                        mentorUserType === 'mentor' ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      <GraduationCap className="w-5 h-5" />
+                      멘티 찾기 (가르치고 싶어요)
+                    </button>
+                  </div>
+
+                  <div className="flex gap-4">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <input
+                        type="text"
+                        value={mentorBlogId}
+                        onChange={(e) => setMentorBlogId(e.target.value)}
+                        placeholder="내 블로그 ID 입력"
+                        className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-emerald-500 focus:outline-none"
+                        disabled={mentorLoading}
+                      />
+                    </div>
+                    <select
+                      value={mentorCategory}
+                      onChange={(e) => setMentorCategory(e.target.value)}
+                      className="px-4 py-4 rounded-xl border-2 border-gray-200 focus:border-emerald-500 focus:outline-none bg-white"
+                    >
+                      <option value="all">전체 분야</option>
+                      <option value="food">맛집</option>
+                      <option value="beauty">뷰티</option>
+                      <option value="travel">여행</option>
+                      <option value="parenting">육아</option>
+                      <option value="it">IT/테크</option>
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={handleMentorMatch}
+                    disabled={mentorLoading}
+                    className="w-full py-4 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {mentorLoading ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        매칭 중...
+                      </>
+                    ) : (
+                      <>
+                        <Users className="w-5 h-5" />
+                        {mentorUserType === 'mentee' ? '멘토 찾기' : '멘티 찾기'}
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {mentorResult && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-4"
+                  >
+                    <h3 className="font-bold text-lg">
+                      {mentorResult.userType === 'mentee' ? '추천 멘토' : '추천 멘티'} ({mentorResult.matches.length}명)
+                    </h3>
+
+                    <div className="space-y-4">
+                      {mentorResult.matches.map((match, i) => (
+                        <motion.div
+                          key={match.id}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: i * 0.1 }}
+                          className={`p-5 rounded-2xl border-2 ${
+                            match.available ? 'bg-white border-emerald-200' : 'bg-gray-50 border-gray-200'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-400 flex items-center justify-center text-white font-bold text-lg">
+                                {match.name.charAt(0)}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-lg">{match.name}</span>
+                                  {!match.available && (
+                                    <span className="px-2 py-0.5 bg-gray-200 text-gray-600 rounded text-xs">예약 마감</span>
+                                  )}
+                                </div>
+                                <div className="text-sm text-gray-500">@{match.blogId} • 경력 {match.experience}</div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-xl font-bold text-emerald-600">{match.score}점</div>
+                              <div className="text-xs text-gray-500">매칭 점수</div>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2 mb-3">
+                            {match.specialty.map((spec, j) => (
+                              <span key={j} className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded text-sm">{spec}</span>
+                            ))}
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4 text-sm">
+                              <div className="flex items-center gap-1">
+                                <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                                <span className="font-medium">{match.rating.toFixed(1)}</span>
+                                <span className="text-gray-500">({match.reviews})</span>
+                              </div>
+                              <div className="text-emerald-600 font-medium">{match.rate}</div>
+                            </div>
+                            <button
+                              onClick={() => toast.success('매칭 요청이 전송되었습니다!')}
+                              disabled={!match.available}
+                              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                                match.available
+                                  ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                                  : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                              }`}
+                            >
+                              {match.available ? '매칭 신청' : '마감'}
+                            </button>
+                          </div>
+                        </motion.div>
+                      ))}
                     </div>
                   </motion.div>
                 )}
