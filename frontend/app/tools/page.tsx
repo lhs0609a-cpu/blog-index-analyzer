@@ -1397,7 +1397,7 @@ export default function ToolsPage() {
             minNeighbors: Math.floor(Math.random() * 500) + 100
           },
           matchScore: Math.floor(Math.random() * 40) + 60,
-          status: Math.random() > 0.7 ? 'closing_soon' : 'open'
+          status: (Math.random() > 0.7 ? 'closing_soon' : 'open') as 'open' | 'closing_soon'
         })).sort((a, b) => b.matchScore - a.matchScore)
       })
 
