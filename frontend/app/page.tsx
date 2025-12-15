@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Sparkles, TrendingUp, Zap, Award, Users, BarChart3, LogOut, Search, BookOpen, ArrowRight, Building2, Mic, CreditCard, X } from 'lucide-react'
+import { Sparkles, TrendingUp, Zap, Award, Users, BarChart3, LogOut, Search, BookOpen, ArrowRight, Building2, Mic, CreditCard, X, PenTool } from 'lucide-react'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import toast from 'react-hot-toast'
@@ -258,6 +258,16 @@ export default function Home() {
                 <Sparkles className="w-5 h-5" />
                 프리미엄 도구
               </Link>
+
+              <a
+                href="https://doctor-voice-pro-ghwi.vercel.app/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-8 py-4 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300 flex items-center gap-2"
+              >
+                <PenTool className="w-5 h-5" />
+                AI 글쓰기
+              </a>
             </motion.div>
 
             {/* Stats */}
