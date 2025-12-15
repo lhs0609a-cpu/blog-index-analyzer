@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Sparkles, TrendingUp, Zap, Award, Users, BarChart3, LogOut, Search, BookOpen, ArrowRight, Building2, Mic, CreditCard } from 'lucide-react'
+import { Sparkles, TrendingUp, Zap, Award, Users, BarChart3, LogOut, Search, BookOpen, ArrowRight, Building2, Mic, CreditCard, X } from 'lucide-react'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import toast from 'react-hot-toast'
@@ -15,6 +15,7 @@ export default function Home() {
   const [mounted, setMounted] = useState(false)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [isSearching, setIsSearching] = useState(false)
+  const [showAdPopup, setShowAdPopup] = useState(true)
 
   useEffect(() => {
     setMounted(true)
@@ -250,15 +251,13 @@ export default function Home() {
                 대시보드 보기
               </Link>
 
-              <a
-                href="https://doctor-voice-pro-ghwi.vercel.app/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-8 py-4 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300 flex items-center gap-2"
+              <Link
+                href="/tools"
+                className="px-8 py-4 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300 flex items-center gap-2"
               >
-                <Mic className="w-5 h-5" />
-                AI 자동 글쓰기
-              </a>
+                <Sparkles className="w-5 h-5" />
+                프리미엄 도구
+              </Link>
             </motion.div>
 
             {/* Stats */}
@@ -280,42 +279,6 @@ export default function Home() {
               ))}
             </motion.div>
 
-            {/* Platon Marketing Premium Banner */}
-            <motion.a
-              href="https://www.brandplaton.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.5 }}
-              whileHover={{ scale: 1.02 }}
-              className="group block mt-12 relative overflow-hidden rounded-2xl bg-black text-white shadow-2xl hover:shadow-purple-500/25 transition-all duration-500 cursor-pointer"
-            >
-              {/* Animated gradient border */}
-              <div className="absolute inset-0 bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-              <div className="absolute inset-[2px] bg-black rounded-2xl" />
-
-              {/* Content */}
-              <div className="relative p-6 flex items-center justify-between">
-                <div className="flex items-center gap-5">
-                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                    <Building2 className="w-7 h-7 text-white" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-semibold text-purple-400 tracking-wider uppercase">Premium Partner</span>
-                      <span className="px-2 py-0.5 text-[10px] bg-gradient-to-r from-purple-500 to-pink-500 rounded-full font-bold">HOT</span>
-                    </div>
-                    <div className="text-xl font-bold">병원 매출, 3개월 만에 2배 성장시킨 비결</div>
-                    <div className="text-sm text-gray-400 mt-1">플라톤마케팅 | 70+ 병원이 선택한 마케팅 파트너</div>
-                  </div>
-                </div>
-                <div className="hidden md:flex items-center gap-2 px-5 py-2.5 rounded-full bg-white text-black font-semibold group-hover:bg-gradient-to-r group-hover:from-purple-500 group-hover:to-pink-500 group-hover:text-white transition-all duration-300">
-                  <span>성공 사례 보기</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </div>
-              </div>
-            </motion.a>
           </div>
         </div>
       </section>
@@ -680,6 +643,55 @@ export default function Home() {
           </div>
         </div>
       </footer>
+      {/* Fixed Bottom Ad Popup */}
+      {showAdPopup && (
+        <motion.div
+          initial={{ y: 100, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 100, opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-[480px] z-50"
+        >
+          <div className="relative bg-black text-white rounded-2xl shadow-2xl overflow-hidden">
+            {/* Close Button */}
+            <button
+              onClick={() => setShowAdPopup(false)}
+              className="absolute top-3 right-3 p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors z-10"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Gradient border effect */}
+            <div className="absolute inset-0 bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 opacity-20" />
+
+            {/* Content */}
+            <a
+              href="https://www.brandplaton.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="relative block p-4 hover:bg-white/5 transition-colors"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
+                  <Building2 className="w-6 h-6 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[10px] font-semibold text-purple-400 uppercase">AD</span>
+                    <span className="px-1.5 py-0.5 text-[9px] bg-gradient-to-r from-purple-500 to-pink-500 rounded font-bold">HOT</span>
+                  </div>
+                  <div className="text-sm font-bold truncate">병원 매출, 3개월 만에 2배 성장시킨 비결</div>
+                  <div className="text-xs text-gray-400">플라톤마케팅 | 70+ 병원 선택</div>
+                </div>
+                <div className="hidden sm:flex items-center gap-1 px-3 py-1.5 rounded-full bg-white text-black text-xs font-semibold flex-shrink-0">
+                  <span>보기</span>
+                  <ArrowRight className="w-3 h-3" />
+                </div>
+              </div>
+            </a>
+          </div>
+        </motion.div>
+      )}
     </div>
   )
 }
