@@ -17,7 +17,7 @@ import {
   TrendingUp as DataChart, ShoppingCart, MapPin, Newspaper,
   Coffee, Video, UserCircle, Globe, HelpCircle, Store,
   Percent, Package, Navigation, Megaphone, BookOpen, Film,
-  Award as Badge, Layers, MessageSquareText, ShoppingBag
+  Award as Badge, Layers, MessageSquareText, ShoppingBag, Info, X
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -840,6 +840,217 @@ export default function ToolsPage() {
   const [smartstoreId, setSmartstoreId] = useState('')
   const [smartstoreLoading, setSmartstoreLoading] = useState(false)
   const [smartstoreResult, setSmartstoreResult] = useState<SmartstoreResult | null>(null)
+
+  // 가이드 표시 상태
+  const [showGuide, setShowGuide] = useState(false)
+
+  // 도구별 가이드 데이터
+  const toolGuides: Record<TabType, { title: string; description: string; steps: string[]; tips: string[] }> = {
+    title: {
+      title: 'AI 제목 생성기',
+      description: 'AI가 클릭률 높은 블로그 제목을 자동으로 생성해드립니다.',
+      steps: ['1. 키워드 입력란에 글의 주제 키워드를 입력하세요', '2. "제목 생성" 버튼을 클릭하세요', '3. AI가 생성한 10개의 제목 중 마음에 드는 것을 선택하세요', '4. 복사 버튼으로 제목을 복사해 사용하세요'],
+      tips: ['구체적인 키워드일수록 좋은 제목이 나옵니다', 'CTR(클릭률) 수치가 높을수록 효과적인 제목입니다', '감정 유형을 참고해 글 톤앤매너를 맞춰보세요']
+    },
+    blueocean: {
+      title: '블루오션 키워드 발굴',
+      description: '경쟁이 적고 검색량이 많은 숨은 키워드를 찾아드립니다.',
+      steps: ['1. 메인 키워드를 입력하세요', '2. "키워드 발굴" 버튼을 클릭하세요', '3. 기회 점수가 높은 키워드를 확인하세요', '4. 트렌드 상승 중인 키워드를 우선 공략하세요'],
+      tips: ['기회 점수 = 검색량 ÷ 경쟁도', '상승 트렌드(↑) 키워드가 가장 유망합니다', '롱테일 키워드로 틈새시장을 노려보세요']
+    },
+    writing: {
+      title: 'AI 글쓰기 가이드',
+      description: '작성 중인 글을 실시간으로 분석해 개선점을 알려드립니다.',
+      steps: ['1. 제목, 키워드, 본문을 입력하세요', '2. "분석하기" 버튼을 클릭하세요', '3. 각 항목별 점수와 개선 제안을 확인하세요', '4. 제안에 따라 글을 수정하세요'],
+      tips: ['본문은 1500자 이상이 좋습니다', '키워드는 자연스럽게 3-5회 포함하세요', '소제목을 활용해 가독성을 높이세요']
+    },
+    insight: {
+      title: '성과 인사이트',
+      description: '블로그 성과 데이터를 분석해 인사이트를 제공합니다.',
+      steps: ['1. 블로그 ID를 입력하세요', '2. "분석하기" 버튼을 클릭하세요', '3. 카테고리별 인사이트를 확인하세요', '4. 추천 액션을 따라 개선하세요'],
+      tips: ['정기적으로 분석해 트렌드를 파악하세요', '영향도가 "높음"인 항목을 우선 개선하세요']
+    },
+    prediction: {
+      title: '상위 노출 예측',
+      description: '특정 키워드로 상위 노출될 확률을 예측해드립니다.',
+      steps: ['1. 목표 키워드를 입력하세요', '2. "예측하기" 버튼을 클릭하세요', '3. 난이도와 성공률을 확인하세요', '4. 제안된 팁을 참고해 글을 작성하세요'],
+      tips: ['성공률 70% 이상인 키워드를 공략하세요', '난이도가 낮을수록 상위 노출이 쉽습니다']
+    },
+    hashtag: {
+      title: '해시태그 추천',
+      description: '키워드에 맞는 효과적인 해시태그를 추천해드립니다.',
+      steps: ['1. 글의 주제 키워드를 입력하세요', '2. "추천받기" 버튼을 클릭하세요', '3. 추천된 해시태그 목록을 확인하세요', '4. 관련도가 높은 태그를 선택해 사용하세요'],
+      tips: ['해시태그는 10-15개가 적당합니다', '빈도가 높은 태그는 노출에 유리합니다']
+    },
+    timing: {
+      title: '최적 발행 시간',
+      description: '방문자 패턴을 분석해 최적의 발행 시간을 추천합니다.',
+      steps: ['1. 블로그 ID를 입력하세요', '2. "분석하기" 버튼을 클릭하세요', '3. 요일별/시간별 점수를 확인하세요', '4. 가장 높은 점수의 시간대에 발행하세요'],
+      tips: ['일반적으로 아침 7-9시, 점심 12-13시가 좋습니다', '주말보다 평일이 더 효과적인 경우가 많습니다']
+    },
+    report: {
+      title: '분석 리포트',
+      description: '블로그 성과를 종합 리포트로 생성합니다.',
+      steps: ['1. 블로그 ID를 입력하세요', '2. 기간(주간/월간)을 선택하세요', '3. "리포트 생성" 버튼을 클릭하세요', '4. PDF로 다운로드해 보관하세요'],
+      tips: ['월간 리포트로 장기 트렌드를 파악하세요', '리포트를 저장해 성장 기록을 남기세요']
+    },
+    youtube: {
+      title: '유튜브 스크립트 변환',
+      description: '블로그 글을 유튜브 영상 스크립트로 변환합니다.',
+      steps: ['1. 제목과 본문을 입력하세요', '2. "변환하기" 버튼을 클릭하세요', '3. 생성된 스크립트를 확인하세요', '4. 복사해서 영상 제작에 활용하세요'],
+      tips: ['1500자 이상의 글이 좋은 스크립트가 됩니다', '예상 영상 길이를 참고해 분량을 조절하세요']
+    },
+    lowquality: {
+      title: '저품질 위험 감지',
+      description: '블로그가 저품질 판정을 받을 위험을 분석합니다.',
+      steps: ['1. 블로그 ID를 입력하세요', '2. "검사하기" 버튼을 클릭하세요', '3. 위험도와 체크 항목을 확인하세요', '4. 문제 항목을 개선하세요'],
+      tips: ['주 1회 정기 검사를 권장합니다', '"위험" 항목은 즉시 개선이 필요합니다']
+    },
+    backup: {
+      title: '블로그 백업',
+      description: '블로그 글을 안전하게 백업합니다.',
+      steps: ['1. 블로그 ID를 입력하세요', '2. "백업 생성" 버튼을 클릭하세요', '3. 백업이 완료되면 목록에서 확인하세요', '4. 필요시 복원 기능을 사용하세요'],
+      tips: ['월 1회 정기 백업을 권장합니다', '중요한 글 수정 전에 백업해두세요']
+    },
+    campaign: {
+      title: '체험단 매칭',
+      description: '블로그에 맞는 체험단 캠페인을 찾아드립니다.',
+      steps: ['1. 블로그 ID를 입력하세요', '2. 관심 카테고리를 선택하세요', '3. "매칭하기" 버튼을 클릭하세요', '4. 매칭 점수가 높은 캠페인에 신청하세요'],
+      tips: ['매칭 점수 80% 이상이면 선정 확률이 높습니다', '마감 임박 캠페인을 우선 확인하세요']
+    },
+    ranktrack: {
+      title: '키워드 순위 추적',
+      description: '특정 키워드에서 내 글의 순위를 추적합니다.',
+      steps: ['1. 추적할 키워드를 입력하세요', '2. 블로그 ID를 입력하세요', '3. "추적 시작" 버튼을 클릭하세요', '4. 순위 변화를 모니터링하세요'],
+      tips: ['주요 키워드 5-10개를 추적하세요', '순위 하락시 글을 업데이트하세요']
+    },
+    clone: {
+      title: '경쟁 블로그 클론 분석',
+      description: '경쟁 블로그의 전략을 분석합니다.',
+      steps: ['1. 분석할 블로그 URL을 입력하세요', '2. "분석하기" 버튼을 클릭하세요', '3. 콘텐츠 전략과 패턴을 확인하세요', '4. 성공 요인을 벤치마킹하세요'],
+      tips: ['상위 노출되는 블로그를 분석하세요', '포스팅 빈도와 키워드 전략을 참고하세요']
+    },
+    comment: {
+      title: 'AI 댓글 답변',
+      description: 'AI가 댓글에 대한 답변을 생성해드립니다.',
+      steps: ['1. 답변할 댓글을 입력하세요', '2. "답변 생성" 버튼을 클릭하세요', '3. 톤별로 생성된 답변을 확인하세요', '4. 마음에 드는 답변을 복사해 사용하세요'],
+      tips: ['친근한 톤이 소통에 효과적입니다', '이모지 포함 답변으로 친밀감을 높이세요']
+    },
+    algorithm: {
+      title: '알고리즘 변화 감지',
+      description: '네이버 알고리즘 변화를 실시간으로 감지합니다.',
+      steps: ['1. "감지하기" 버튼을 클릭하세요', '2. 최근 알고리즘 변화를 확인하세요', '3. 영향을 받는 영역을 파악하세요', '4. 권장 대응을 따라 조치하세요'],
+      tips: ['주 1회 체크를 권장합니다', '변화 감지시 빠른 대응이 중요합니다']
+    },
+    lifespan: {
+      title: '콘텐츠 수명 분석',
+      description: '글별 유효 수명과 트래픽 패턴을 분석합니다.',
+      steps: ['1. 블로그 ID를 입력하세요', '2. "분석하기" 버튼을 클릭하세요', '3. 글별 수명과 트래픽을 확인하세요', '4. 수명이 다한 글은 업데이트하세요'],
+      tips: ['에버그린 콘텐츠를 늘리세요', '수명이 짧은 글은 주기적으로 리프레시하세요']
+    },
+    refresh: {
+      title: '오래된 글 리프레시',
+      description: '업데이트가 필요한 오래된 글을 찾아 개선점을 알려드립니다.',
+      steps: ['1. 블로그 ID를 입력하세요', '2. "분석하기" 버튼을 클릭하세요', '3. 리프레시 필요한 글 목록을 확인하세요', '4. 우선순위가 높은 글부터 업데이트하세요'],
+      tips: ['3개월 이상 된 글을 점검하세요', '제목과 본문을 함께 업데이트하세요']
+    },
+    related: {
+      title: '연관 글 추천',
+      description: '현재 글과 연결할 관련 글 주제를 추천합니다.',
+      steps: ['1. 현재 글의 주제를 입력하세요', '2. "추천받기" 버튼을 클릭하세요', '3. 연관 글 아이디어를 확인하세요', '4. 시리즈로 작성해 체류시간을 늘리세요'],
+      tips: ['3-5개의 연관 글을 시리즈로 작성하세요', '내부 링크로 연결해 SEO를 높이세요']
+    },
+    mentor: {
+      title: '멘토-멘티 매칭',
+      description: '블로그 멘토링을 위한 매칭 서비스입니다.',
+      steps: ['1. 블로그 ID를 입력하세요', '2. 역할(멘토/멘티)을 선택하세요', '3. 관심 카테고리를 선택하세요', '4. 매칭 결과를 확인하고 연결하세요'],
+      tips: ['비슷한 카테고리의 멘토를 찾으세요', '정기적인 피드백이 성장에 도움됩니다']
+    },
+    trend: {
+      title: '실시간 트렌드 스나이퍼',
+      description: '실시간 트렌드를 분석해 글감을 추천합니다.',
+      steps: ['1. 관심 카테고리를 선택하세요', '2. "트렌드 분석" 버튼을 클릭하세요', '3. 급상승 트렌드를 확인하세요', '4. 골든타임 내에 글을 작성하세요'],
+      tips: ['골든타임 내 발행이 가장 효과적입니다', '자동 새로고침으로 실시간 모니터링하세요']
+    },
+    revenue: {
+      title: '수익 대시보드',
+      description: '블로그 수익을 분석하고 최적화 방안을 제시합니다.',
+      steps: ['1. 블로그 ID를 입력하세요', '2. 분석 기간을 선택하세요', '3. "분석하기" 버튼을 클릭하세요', '4. 수익 최적화 팁을 확인하세요'],
+      tips: ['광고 위치 최적화로 수익을 높이세요', 'CPM이 높은 카테고리를 공략하세요']
+    },
+    roadmap: {
+      title: '블로그 성장 로드맵',
+      description: 'AI가 맞춤형 성장 로드맵을 설계해드립니다.',
+      steps: ['1. 블로그 ID를 입력하세요', '2. "로드맵 생성" 버튼을 클릭하세요', '3. 현재 상태와 목표를 확인하세요', '4. 단계별 미션을 수행하세요'],
+      tips: ['매일 체크리스트를 확인하세요', '마일스톤을 달성할 때마다 보상하세요']
+    },
+    secretkw: {
+      title: '비밀 키워드 DB',
+      description: '숨겨진 고수익 키워드를 제공합니다.',
+      steps: ['1. 카테고리를 선택하세요', '2. "키워드 보기" 버튼을 클릭하세요', '3. 기회 점수가 높은 키워드를 확인하세요', '4. 경쟁이 적은 키워드로 글을 작성하세요'],
+      tips: ['매주 새로운 키워드가 업데이트됩니다', '기회 점수 80+ 키워드를 우선 공략하세요']
+    },
+    datalab: {
+      title: '네이버 데이터랩',
+      description: '검색 트렌드와 인구통계를 분석합니다.',
+      steps: ['1. 비교할 키워드를 입력하세요 (최대 5개)', '2. "트렌드 분석" 버튼을 클릭하세요', '3. 검색량 추이를 확인하세요', '4. 타겟 인구통계를 파악하세요'],
+      tips: ['계절 트렌드를 미리 파악하세요', '연령대별 인기 키워드가 다릅니다']
+    },
+    shopping: {
+      title: '네이버 쇼핑 분석',
+      description: '쇼핑 키워드와 상품 트렌드를 분석합니다.',
+      steps: ['1. 상품 키워드를 입력하세요', '2. "분석하기" 버튼을 클릭하세요', '3. 인기 상품과 키워드를 확인하세요', '4. 구매 의도가 높은 키워드로 글을 작성하세요'],
+      tips: ['구매 의도 80% 이상 키워드가 수익에 유리합니다', '리뷰 많은 상품을 우선 다루세요']
+    },
+    place: {
+      title: '네이버 플레이스 분석',
+      description: '지역별 플레이스 경쟁 현황을 분석합니다.',
+      steps: ['1. 지역명을 입력하세요', '2. 카테고리를 선택하세요', '3. "분석하기" 버튼을 클릭하세요', '4. 경쟁 현황과 키워드를 확인하세요'],
+      tips: ['경쟁도가 낮은 지역을 공략하세요', '리뷰 키워드를 글에 활용하세요']
+    },
+    news: {
+      title: '뉴스/실시간 검색어',
+      description: '실시간 뉴스와 검색어 트렌드를 분석합니다.',
+      steps: ['1. 카테고리를 선택하세요', '2. "분석하기" 버튼을 클릭하세요', '3. 실시간 검색어와 뉴스를 확인하세요', '4. 골든타임 내에 글을 작성하세요'],
+      tips: ['NEW 키워드는 빠른 대응이 필요합니다', '뉴스 앵글을 참고해 차별화된 글을 쓰세요']
+    },
+    cafe: {
+      title: '네이버 카페 분석',
+      description: '카페 인기 주제와 질문을 분석합니다.',
+      steps: ['1. 카테고리를 선택하세요', '2. "분석하기" 버튼을 클릭하세요', '3. 인기 주제와 질문을 확인하세요', '4. 질문에 답하는 글을 작성하세요'],
+      tips: ['자주 묻는 질문을 글 주제로 삼으세요', '추천 카페에 가입해 홍보하세요']
+    },
+    naverView: {
+      title: '네이버 VIEW 분석',
+      description: 'VIEW 탭의 영상 트렌드를 분석합니다.',
+      steps: ['1. 키워드를 입력하세요', '2. "분석하기" 버튼을 클릭하세요', '3. 인기 영상과 패턴을 확인하세요', '4. 썸네일 패턴을 참고하세요'],
+      tips: ['CTR 높은 썸네일 패턴을 벤치마킹하세요', '영상 스크립트를 블로그 글로 재가공하세요']
+    },
+    influencer: {
+      title: '인플루언서 분석',
+      description: '인플루언서 랭킹과 벤치마크를 제공합니다.',
+      steps: ['1. 블로그 ID를 입력하세요', '2. 카테고리를 선택하세요', '3. "분석하기" 버튼을 클릭하세요', '4. 순위와 로드맵을 확인하세요'],
+      tips: ['인플루언서 조건을 단계별로 달성하세요', '상위 인플루언서 전략을 벤치마킹하세요']
+    },
+    searchAnalysis: {
+      title: '통합검색 분석',
+      description: '키워드별 검색결과 구성을 분석합니다.',
+      steps: ['1. 분석할 키워드를 입력하세요', '2. "분석하기" 버튼을 클릭하세요', '3. 검색결과 구성을 확인하세요', '4. 최적의 콘텐츠 유형을 파악하세요'],
+      tips: ['블로그 노출 비중이 높은 키워드를 공략하세요', 'PC와 모바일 결과가 다를 수 있습니다']
+    },
+    kin: {
+      title: '지식인 분석',
+      description: '지식인 인기 질문과 트렌드를 분석합니다.',
+      steps: ['1. 카테고리를 선택하세요', '2. "분석하기" 버튼을 클릭하세요', '3. 인기 질문을 확인하세요', '4. 질문에 답하며 블로그를 홍보하세요'],
+      tips: ['미채택 질문에 답변하면 효과적입니다', '답변에 자연스럽게 블로그 링크를 포함하세요']
+    },
+    smartstore: {
+      title: '스마트스토어 연동',
+      description: '스마트스토어와 블로그 시너지를 분석합니다.',
+      steps: ['1. 스마트스토어 ID를 입력하세요', '2. "분석하기" 버튼을 클릭하세요', '3. 상품 키워드를 확인하세요', '4. 블로그 콘텐츠 아이디어를 활용하세요'],
+      tips: ['상품과 연관된 블로그 글을 작성하세요', '전환율 높은 키워드를 우선 공략하세요']
+    }
+  }
 
   const tabs = [
     { id: 'title' as TabType, label: 'AI 제목', icon: PenTool, color: 'from-violet-500 to-purple-500' },
@@ -2543,6 +2754,108 @@ export default function ToolsPage() {
           <p className="text-gray-600">AI 기반 분석으로 블로그를 성장시키세요</p>
         </motion.div>
 
+        {/* 가이드 모달 */}
+        <AnimatePresence>
+          {showGuide && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              onClick={() => setShowGuide(false)}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* 모달 헤더 */}
+                <div className={`bg-gradient-to-r ${tabs.find(t => t.id === activeTab)?.color} p-6 text-white`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {(() => {
+                        const TabIcon = tabs.find(t => t.id === activeTab)?.icon || Info
+                        return <TabIcon className="w-8 h-8" />
+                      })()}
+                      <div>
+                        <h2 className="text-xl font-bold">{toolGuides[activeTab].title}</h2>
+                        <p className="text-white/80 text-sm">{toolGuides[activeTab].description}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShowGuide(false)}
+                      className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* 모달 내용 */}
+                <div className="p-6 overflow-y-auto max-h-[50vh]">
+                  {/* 사용 방법 */}
+                  <div className="mb-6">
+                    <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-sm">1</span>
+                      사용 방법
+                    </h3>
+                    <div className="space-y-2">
+                      {toolGuides[activeTab].steps.map((step, i) => (
+                        <div key={i} className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
+                          <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                          <span className="text-gray-700 text-sm">{step}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 꿀팁 */}
+                  <div>
+                    <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-yellow-100 text-yellow-600 flex items-center justify-center text-sm">2</span>
+                      꿀팁
+                    </h3>
+                    <div className="space-y-2">
+                      {toolGuides[activeTab].tips.map((tip, i) => (
+                        <div key={i} className="flex items-start gap-3 p-3 bg-yellow-50 rounded-xl border border-yellow-100">
+                          <Lightbulb className="w-5 h-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                          <span className="text-gray-700 text-sm">{tip}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 모달 푸터 */}
+                <div className="p-4 border-t border-gray-100 bg-gray-50">
+                  <button
+                    onClick={() => setShowGuide(false)}
+                    className={`w-full py-3 rounded-xl bg-gradient-to-r ${tabs.find(t => t.id === activeTab)?.color} text-white font-semibold hover:shadow-lg transition-all`}
+                  >
+                    시작하기
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* 플로팅 도움말 버튼 */}
+        <motion.button
+          initial={{ opacity: 0, scale: 0 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.5 }}
+          onClick={() => setShowGuide(true)}
+          className="fixed bottom-24 right-6 z-40 w-14 h-14 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg hover:shadow-xl hover:scale-110 transition-all flex items-center justify-center group"
+        >
+          <Info className="w-6 h-6" />
+          <span className="absolute right-full mr-3 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
+            사용법 보기
+          </span>
+        </motion.button>
+
         {/* Tabs - 7줄로 변경 (34개 탭) */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -2582,14 +2895,23 @@ export default function ToolsPage() {
               className="space-y-6"
             >
               <div className="glass rounded-3xl p-8">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-3 rounded-xl bg-gradient-to-r from-violet-500 to-purple-500">
-                    <PenTool className="w-6 h-6 text-white" />
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 rounded-xl bg-gradient-to-r from-violet-500 to-purple-500">
+                      <PenTool className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold">AI 제목 생성기</h2>
+                      <p className="text-gray-600">클릭율 높은 제목을 AI가 자동 생성합니다</p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="text-2xl font-bold">AI 제목 생성기</h2>
-                    <p className="text-gray-600">클릭율 높은 제목을 AI가 자동 생성합니다</p>
-                  </div>
+                  <button
+                    onClick={() => setShowGuide(true)}
+                    className="flex items-center gap-2 px-4 py-2 text-purple-600 hover:bg-purple-50 rounded-xl transition-colors"
+                  >
+                    <Info className="w-5 h-5" />
+                    <span className="text-sm font-medium">사용법</span>
+                  </button>
                 </div>
 
                 <div className="flex gap-4 mb-6">
