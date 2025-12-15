@@ -109,7 +109,7 @@ export default function Dashboard() {
             <h1 className="text-4xl font-bold mb-2">
               <span className="gradient-text">대시보드</span>
             </h1>
-            <p className="text-gray-600">내 블로그 지수를 한눈에 확인하세요</p>
+            <p className="text-gray-600">블랭크에서 내 블로그를 한눈에 확인하세요</p>
           </div>
 
           <div className="flex gap-3 flex-wrap">

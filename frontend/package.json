@@ -1,7 +1,7 @@
 {
-  "name": "blog-index-analyzer-frontend",
+  "name": "blank-frontend",
   "version": "1.2.0",
-  "description": "블로그 지수 측정 시스템 프론트엔드",
+  "description": "블랭크 - AI 블로그 분석 플랫폼 프론트엔드",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3006",

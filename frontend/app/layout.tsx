@@ -7,8 +7,8 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: '블로그 지수 측정 시스템',
-  description: '네이버 블로그의 품질 지수를 정확하게 측정하고 분석합니다',
+  title: '블랭크 - AI 블로그 분석 플랫폼',
+  description: '블랭크에서 네이버 블로그의 품질 지수를 정확하게 측정하고 분석합니다',
 }
 
 export default function RootLayout({

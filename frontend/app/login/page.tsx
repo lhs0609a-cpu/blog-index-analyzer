@@ -73,7 +73,7 @@ export default function LoginPage() {
             <span className="gradient-text">로그인</span>
           </h1>
           <p className="text-gray-600">
-            블로그 지수를 관리하고 분석하세요
+            블랭크에서 블로그를 관리하고 분석하세요
           </p>
         </motion.div>
 

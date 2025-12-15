@@ -130,7 +130,7 @@ export default function Home() {
               className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass mb-8"
             >
               <Sparkles className="w-4 h-4 text-purple-600" />
-              <span className="text-sm font-medium">플라톤 마케팅에서 개발한 AI 기반 블로그 분석 플랫폼</span>
+              <span className="text-sm font-medium">블랭크 - AI 기반 블로그 분석 플랫폼</span>
               <span className="text-xs text-purple-500 bg-purple-100 px-2 py-0.5 rounded-full font-semibold">v1.2.0</span>
             </motion.div>
 
@@ -141,9 +141,9 @@ export default function Home() {
               transition={{ duration: 0.5, delay: 0.1 }}
               className="text-6xl md:text-7xl font-bold mb-6"
             >
-              <span className="gradient-text">블로그 지수,</span>
+              <span className="gradient-text">블랭크</span>
               <br />
-              <span className="text-gray-900">한눈에 확인하세요</span>
+              <span className="text-gray-900">블로그 지수 분석</span>
             </motion.h1>
 
             {/* Subtitle */}
@@ -612,7 +612,7 @@ export default function Home() {
           <div className="grid md:grid-cols-3 gap-8 mb-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <span className="text-lg font-bold gradient-text">Blog Index Analyzer</span>
+                <span className="text-lg font-bold gradient-text">블랭크</span>
                 <span className="text-xs text-gray-400 bg-gray-800 px-2 py-0.5 rounded">v1.2.0</span>
               </div>
               <p className="text-sm text-gray-400">
