@@ -227,46 +227,71 @@ export default function Home() {
               <div className="h-px w-16 bg-gray-300"></div>
             </motion.div>
 
-            {/* CTA Buttons */}
+            {/* CTA Buttons - 트렌디한 카드 스타일 */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.3 }}
-              className="flex flex-col sm:flex-row items-center justify-center gap-4 flex-wrap"
+              className="grid grid-cols-2 md:grid-cols-4 gap-3 max-w-4xl mx-auto"
             >
               <Link
                 href="/analyze"
-                className="group relative px-8 py-4 rounded-full glass border-2 border-purple-300 font-semibold hover:bg-purple-50 transition-all duration-300 overflow-hidden"
+                className="group relative p-4 rounded-2xl bg-white/70 backdrop-blur-sm border border-purple-200 hover:border-purple-400 hover:shadow-xl hover:shadow-purple-500/10 transition-all duration-300 hover:-translate-y-1"
               >
-                <span className="relative z-10 flex items-center gap-2 text-purple-600">
-                  <Zap className="w-5 h-5" />
-                  블로그 ID로 분석하기
-                </span>
+                <div className="flex flex-col items-center text-center gap-2">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <Zap className="w-6 h-6 text-white" />
+                  </div>
+                  <span className="font-bold text-gray-800 text-sm">블로그 분석</span>
+                  <span className="text-xs text-gray-500">ID로 지수 측정</span>
+                </div>
               </Link>
 
               <Link
                 href="/dashboard"
-                className="px-8 py-4 rounded-full glass font-semibold hover:bg-white/90 transition-all duration-300"
+                className="group relative p-4 rounded-2xl bg-white/70 backdrop-blur-sm border border-gray-200 hover:border-gray-400 hover:shadow-xl hover:shadow-gray-500/10 transition-all duration-300 hover:-translate-y-1"
               >
-                대시보드 보기
+                <div className="flex flex-col items-center text-center gap-2">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gray-600 to-gray-800 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <BarChart3 className="w-6 h-6 text-white" />
+                  </div>
+                  <span className="font-bold text-gray-800 text-sm">대시보드</span>
+                  <span className="text-xs text-gray-500">내 분석 현황</span>
+                </div>
               </Link>
 
               <Link
                 href="/tools"
-                className="px-8 py-4 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300 flex items-center gap-2"
+                className="group relative p-4 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 hover:shadow-xl hover:shadow-purple-500/30 transition-all duration-300 hover:-translate-y-1"
               >
-                <Sparkles className="w-5 h-5" />
-                프리미엄 도구
+                <div className="absolute top-2 right-2">
+                  <span className="px-1.5 py-0.5 text-[10px] font-bold bg-yellow-400 text-yellow-900 rounded-full">HOT</span>
+                </div>
+                <div className="flex flex-col items-center text-center gap-2">
+                  <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <Sparkles className="w-6 h-6 text-white" />
+                  </div>
+                  <span className="font-bold text-white text-sm">프리미엄 도구</span>
+                  <span className="text-xs text-white/80">34개 AI 도구</span>
+                </div>
               </Link>
 
               <a
                 href="https://doctor-voice-pro-ghwi.vercel.app/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-8 py-4 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300 flex items-center gap-2"
+                className="group relative p-4 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 hover:shadow-xl hover:shadow-cyan-500/30 transition-all duration-300 hover:-translate-y-1"
               >
-                <PenTool className="w-5 h-5" />
-                AI 글쓰기
+                <div className="absolute top-2 right-2">
+                  <span className="px-1.5 py-0.5 text-[10px] font-bold bg-white text-cyan-600 rounded-full">NEW</span>
+                </div>
+                <div className="flex flex-col items-center text-center gap-2">
+                  <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <PenTool className="w-6 h-6 text-white" />
+                  </div>
+                  <span className="font-bold text-white text-sm">AI 글쓰기</span>
+                  <span className="text-xs text-white/80">음성으로 작성</span>
+                </div>
               </a>
             </motion.div>
 
