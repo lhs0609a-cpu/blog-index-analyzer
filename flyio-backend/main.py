@@ -65,6 +65,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ User tables initialization failed: {e}")
 
+    # Usage tracking DB 초기화
+    try:
+        from database.usage_db import get_usage_db
+        get_usage_db()  # 초기화 시 자동으로 테이블 생성
+        logger.info("✅ Usage tracking tables initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ Usage tracking tables initialization failed: {e}")
+
     # Naver Ad Optimization DB 초기화
     try:
         from database.naver_ad_db import init_naver_ad_tables
@@ -205,9 +213,10 @@ async def health_check():
 # 라우터 등록
 from routers import auth, blogs, comprehensive_analysis, system
 from routers import learning, backup, supabase_sync, batch_learning, top_posts
-from routers import subscription, payment, naver_ad, content_lifespan
+from routers import subscription, payment, naver_ad, content_lifespan, admin
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
+app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
 app.include_router(blogs.router, prefix="/api/blogs", tags=["블로그"])
 app.include_router(comprehensive_analysis.router, prefix="/api/comprehensive", tags=["종합분석"])
 app.include_router(system.router, prefix="/api/system", tags=["시스템"])

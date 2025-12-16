@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { getApiUrl, checkHealth } from '@/lib/api/apiConfig';
+import { getApiUrl } from '@/lib/api/apiConfig';
 
 interface HealthStatus {
   status: string;
@@ -14,26 +14,65 @@ interface HealthStatus {
   };
 }
 
-interface SystemStats {
-  totalUsers?: number;
-  totalAnalysis?: number;
-  todayAnalysis?: number;
+interface User {
+  id: number;
+  email: string;
+  name: string | null;
+  plan: string;
+  is_admin: boolean;
+  is_premium_granted: boolean;
+  granted_at: string | null;
+  memo: string | null;
+  created_at: string;
+}
+
+interface UsageStats {
+  today: {
+    unique_guests: number;
+    guest_requests: number;
+    unique_users: number;
+    user_requests: number;
+  };
+  limits: Record<string, number>;
 }
 
 export default function AdminPage() {
   const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
-  const [systemStats, setSystemStats] = useState<SystemStats | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [premiumUsers, setPremiumUsers] = useState<User[]>([]);
+  const [usageStats, setUsageStats] = useState<UsageStats | null>(null);
+  const [totalUsers, setTotalUsers] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [apiUrl, setApiUrlState] = useState('');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'premium'>('overview');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<User[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+
+  // Grant premium modal
+  const [showGrantModal, setShowGrantModal] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [grantPlan, setGrantPlan] = useState('unlimited');
+  const [grantMemo, setGrantMemo] = useState('');
 
   useEffect(() => {
     const url = getApiUrl();
     setApiUrlState(url);
-    fetchHealthStatus(url);
+
+    // Get token from localStorage
+    const savedToken = localStorage.getItem('auth_token');
+    setToken(savedToken);
+
+    if (savedToken) {
+      fetchHealthStatus(url);
+      fetchAdminData(url, savedToken);
+    } else {
+      setIsLoading(false);
+    }
   }, []);
 
   const fetchHealthStatus = async (url: string) => {
-    setIsLoading(true);
     try {
       const response = await fetch(`${url}/health`);
       if (response.ok) {
@@ -42,8 +81,124 @@ export default function AdminPage() {
       }
     } catch (error) {
       console.error('Health check failed:', error);
+    }
+  };
+
+  const fetchAdminData = async (url: string, authToken: string) => {
+    setIsLoading(true);
+    try {
+      const headers = {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json'
+      };
+
+      // Fetch all data in parallel
+      const [usersRes, premiumRes, statsRes] = await Promise.all([
+        fetch(`${url}/api/admin/users?limit=50`, { headers }),
+        fetch(`${url}/api/admin/users/premium`, { headers }),
+        fetch(`${url}/api/admin/usage/stats`, { headers })
+      ]);
+
+      if (usersRes.ok) {
+        const data = await usersRes.json();
+        setUsers(data.users);
+        setTotalUsers(data.total);
+      }
+
+      if (premiumRes.ok) {
+        const data = await premiumRes.json();
+        setPremiumUsers(data.users);
+      }
+
+      if (statsRes.ok) {
+        const data = await statsRes.json();
+        setUsageStats(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch admin data:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const searchUsers = async () => {
+    if (!searchQuery.trim() || !token) return;
+
+    setIsSearching(true);
+    try {
+      const response = await fetch(
+        `${apiUrl}/api/admin/users/search?q=${encodeURIComponent(searchQuery)}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setSearchResults(data.users);
+      }
+    } catch (error) {
+      console.error('Search failed:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const grantPremium = async () => {
+    if (!selectedUserId || !token) return;
+
+    try {
+      const response = await fetch(`${apiUrl}/api/admin/users/grant-premium`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          user_id: selectedUserId,
+          plan: grantPlan,
+          memo: grantMemo || null
+        })
+      });
+
+      if (response.ok) {
+        alert('프리미엄 권한이 부여되었습니다.');
+        setShowGrantModal(false);
+        setSelectedUserId(null);
+        setGrantMemo('');
+        fetchAdminData(apiUrl, token);
+      } else {
+        const error = await response.json();
+        alert(`오류: ${error.detail}`);
+      }
+    } catch (error) {
+      console.error('Grant premium failed:', error);
+      alert('권한 부여에 실패했습니다.');
+    }
+  };
+
+  const revokePremium = async (userId: number) => {
+    if (!token || !confirm('정말 프리미엄 권한을 해제하시겠습니까?')) return;
+
+    try {
+      const response = await fetch(`${apiUrl}/api/admin/users/revoke-premium`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ user_id: userId })
+      });
+
+      if (response.ok) {
+        alert('프리미엄 권한이 해제되었습니다.');
+        fetchAdminData(apiUrl, token);
+      }
+    } catch (error) {
+      console.error('Revoke premium failed:', error);
     }
   };
 
@@ -61,6 +216,41 @@ export default function AdminPage() {
       return <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">{status}</span>;
     }
   };
+
+  const getPlanBadge = (plan: string, isGranted: boolean) => {
+    const colors: Record<string, string> = {
+      free: 'bg-gray-100 text-gray-700',
+      basic: 'bg-blue-100 text-blue-700',
+      pro: 'bg-purple-100 text-purple-700',
+      unlimited: 'bg-gradient-to-r from-orange-400 to-pink-500 text-white'
+    };
+
+    return (
+      <span className={`px-2 py-1 text-xs rounded-full ${colors[plan] || colors.free}`}>
+        {plan.toUpperCase()}
+        {isGranted && ' (부여됨)'}
+      </span>
+    );
+  };
+
+  if (!token) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md text-center">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H9m3-7V7a4 4 0 10-8 0v4h8z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">로그인이 필요합니다</h2>
+          <p className="text-gray-600 mb-6">관리자 페이지에 접근하려면 로그인해주세요.</p>
+          <Link href="/login" className="inline-block px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+            로그인하기
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -83,173 +273,304 @@ export default function AdminPage() {
         </div>
       </header>
 
+      {/* Tabs */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <nav className="flex gap-8">
+            {[
+              { id: 'overview', label: '개요' },
+              { id: 'users', label: '전체 사용자' },
+              { id: 'premium', label: '프리미엄 사용자' }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === tab.id
+                    ? 'border-purple-500 text-purple-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+      </div>
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Server Status Section */}
-        <section className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">서버 상태</h2>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <p className="text-sm text-gray-500">API 엔드포인트</p>
-                  <p className="font-mono text-sm text-gray-900">{apiUrl || '연결되지 않음'}</p>
-                </div>
-                <button
-                  onClick={() => fetchHealthStatus(apiUrl)}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-                >
-                  새로고침
-                </button>
-              </div>
-
-              {isLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                </div>
-              ) : healthStatus ? (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between py-3 border-b border-gray-100">
-                    <span className="text-gray-600">전체 상태</span>
-                    {getStatusBadge(healthStatus.status)}
-                  </div>
-                  <div className="flex items-center justify-between py-3 border-b border-gray-100">
-                    <span className="text-gray-600">데이터베이스</span>
-                    {getStatusBadge(healthStatus.checks?.database)}
-                  </div>
-                  <div className="flex items-center justify-between py-3 border-b border-gray-100">
-                    <span className="text-gray-600">학습 엔진 DB</span>
-                    {getStatusBadge(healthStatus.checks?.learning_db)}
-                  </div>
-                  <div className="flex items-center justify-between py-3 border-b border-gray-100">
-                    <span className="text-gray-600">Redis</span>
-                    {getStatusBadge(healthStatus.checks?.redis)}
-                  </div>
-                  <div className="flex items-center justify-between py-3">
-                    <span className="text-gray-600">MongoDB</span>
-                    {getStatusBadge(healthStatus.checks?.mongodb)}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  서버에 연결할 수 없습니다
-                </div>
-              )}
-            </div>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
           </div>
-        </section>
-
-        {/* Quick Links */}
-        <section className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">관리 메뉴</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Link
-              href="/dashboard"
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
+        ) : (
+          <>
+            {/* Overview Tab */}
+            {activeTab === 'overview' && (
+              <div className="space-y-8">
+                {/* Stats Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div className="text-sm text-gray-500 mb-1">전체 사용자</div>
+                    <div className="text-3xl font-bold text-gray-900">{totalUsers}</div>
+                  </div>
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div className="text-sm text-gray-500 mb-1">프리미엄 사용자</div>
+                    <div className="text-3xl font-bold text-purple-600">{premiumUsers.length}</div>
+                  </div>
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div className="text-sm text-gray-500 mb-1">오늘 게스트 요청</div>
+                    <div className="text-3xl font-bold text-blue-600">{usageStats?.today.guest_requests || 0}</div>
+                  </div>
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div className="text-sm text-gray-500 mb-1">오늘 회원 요청</div>
+                    <div className="text-3xl font-bold text-green-600">{usageStats?.today.user_requests || 0}</div>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">대시보드</h3>
-                  <p className="text-sm text-gray-500">분석 현황 확인</p>
+
+                {/* Server Status */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="p-6 border-b border-gray-200">
+                    <h2 className="text-lg font-semibold text-gray-900">서버 상태</h2>
+                  </div>
+                  <div className="p-6">
+                    <div className="text-sm text-gray-500 mb-4">
+                      API: <span className="font-mono">{apiUrl}</span>
+                    </div>
+                    {healthStatus && (
+                      <div className="space-y-3">
+                        <div className="flex justify-between py-2 border-b border-gray-100">
+                          <span className="text-gray-600">전체 상태</span>
+                          {getStatusBadge(healthStatus.status)}
+                        </div>
+                        <div className="flex justify-between py-2 border-b border-gray-100">
+                          <span className="text-gray-600">데이터베이스</span>
+                          {getStatusBadge(healthStatus.checks?.database)}
+                        </div>
+                        <div className="flex justify-between py-2 border-b border-gray-100">
+                          <span className="text-gray-600">학습 엔진</span>
+                          {getStatusBadge(healthStatus.checks?.learning_db)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Daily Limits Info */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-4">일일 검색 한도</h2>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    {usageStats?.limits && Object.entries(usageStats.limits).map(([plan, limit]) => (
+                      <div key={plan} className="text-center p-4 bg-gray-50 rounded-lg">
+                        <div className="text-sm text-gray-500 mb-1">{plan.toUpperCase()}</div>
+                        <div className="text-2xl font-bold text-gray-900">
+                          {limit === -1 ? '무제한' : `${limit}회`}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </Link>
+            )}
 
-            <Link
-              href="/dashboard/learning"
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
+            {/* Users Tab */}
+            {activeTab === 'users' && (
+              <div className="space-y-6">
+                {/* Search */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                  <div className="flex gap-4">
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && searchUsers()}
+                      placeholder="이메일 또는 이름으로 검색"
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                    <button
+                      onClick={searchUsers}
+                      disabled={isSearching}
+                      className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 transition-colors"
+                    >
+                      {isSearching ? '검색 중...' : '검색'}
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">학습 엔진</h3>
-                  <p className="text-sm text-gray-500">AI 모델 관리</p>
+
+                {/* Search Results or User List */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="p-4 border-b border-gray-200">
+                    <h2 className="font-semibold text-gray-900">
+                      {searchResults.length > 0 ? `검색 결과 (${searchResults.length})` : `전체 사용자 (${totalUsers})`}
+                    </h2>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">이메일</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">이름</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">플랜</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">가입일</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">액션</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {(searchResults.length > 0 ? searchResults : users).map((user) => (
+                          <tr key={user.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 text-sm text-gray-900">{user.id}</td>
+                            <td className="px-4 py-3 text-sm text-gray-900">
+                              {user.email}
+                              {user.is_admin && (
+                                <span className="ml-2 px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded-full">관리자</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{user.name || '-'}</td>
+                            <td className="px-4 py-3">{getPlanBadge(user.plan, user.is_premium_granted)}</td>
+                            <td className="px-4 py-3 text-sm text-gray-500">
+                              {new Date(user.created_at).toLocaleDateString('ko-KR')}
+                            </td>
+                            <td className="px-4 py-3">
+                              {!user.is_premium_granted && user.plan === 'free' ? (
+                                <button
+                                  onClick={() => {
+                                    setSelectedUserId(user.id);
+                                    setShowGrantModal(true);
+                                  }}
+                                  className="text-sm text-purple-600 hover:text-purple-800"
+                                >
+                                  권한 부여
+                                </button>
+                              ) : user.is_premium_granted ? (
+                                <button
+                                  onClick={() => revokePremium(user.id)}
+                                  className="text-sm text-red-600 hover:text-red-800"
+                                >
+                                  권한 해제
+                                </button>
+                              ) : null}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
-            </Link>
+            )}
 
-            <Link
-              href="/dashboard/batch-learning"
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
-                  </svg>
+            {/* Premium Users Tab */}
+            {activeTab === 'premium' && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="p-4 border-b border-gray-200">
+                  <h2 className="font-semibold text-gray-900">프리미엄 사용자 ({premiumUsers.length})</h2>
                 </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">대량 학습</h3>
-                  <p className="text-sm text-gray-500">배치 데이터 처리</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">이메일</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">이름</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">플랜</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">부여일</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">메모</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">액션</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {premiumUsers.map((user) => (
+                        <tr key={user.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm text-gray-900">{user.id}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900">{user.email}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{user.name || '-'}</td>
+                          <td className="px-4 py-3">{getPlanBadge(user.plan, user.is_premium_granted)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-500">
+                            {user.granted_at ? new Date(user.granted_at).toLocaleDateString('ko-KR') : '-'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-500">{user.memo || '-'}</td>
+                          <td className="px-4 py-3">
+                            {user.is_premium_granted && (
+                              <button
+                                onClick={() => revokePremium(user.id)}
+                                className="text-sm text-red-600 hover:text-red-800"
+                              >
+                                권한 해제
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {premiumUsers.length === 0 && (
+                        <tr>
+                          <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                            프리미엄 사용자가 없습니다.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-            </Link>
-
-            <a
-              href={`${apiUrl}/docs`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">API 문서</h3>
-                  <p className="text-sm text-gray-500">Swagger UI</p>
-                </div>
-              </div>
-            </a>
-
-            <Link
-              href="/tools"
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-pink-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-6 h-6 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">프리미엄 도구</h3>
-                  <p className="text-sm text-gray-500">34개 AI 도구</p>
-                </div>
-              </div>
-            </Link>
-          </div>
-        </section>
-
-        {/* Info Box */}
-        <section>
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
-            <div className="flex items-start gap-3">
-              <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div>
-                <h3 className="font-semibold text-blue-900">관리자 페이지 안내</h3>
-                <p className="text-sm text-blue-700 mt-1">
-                  이 페이지는 관리자 전용입니다. 서버 상태, 백엔드 연결 상태 등 시스템 관련 정보는
-                  이 페이지에서만 확인할 수 있습니다. 일반 사용자에게는 이 정보가 표시되지 않습니다.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
+            )}
+          </>
+        )}
       </main>
+
+      {/* Grant Premium Modal */}
+      {showGrantModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">프리미엄 권한 부여</h3>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">플랜 선택</label>
+                <select
+                  value={grantPlan}
+                  onChange={(e) => setGrantPlan(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="basic">Basic (일일 50회)</option>
+                  <option value="pro">Pro (일일 200회)</option>
+                  <option value="unlimited">Unlimited (무제한)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">메모 (선택)</label>
+                <input
+                  type="text"
+                  value={grantMemo}
+                  onChange={(e) => setGrantMemo(e.target.value)}
+                  placeholder="예: 베타 테스터, 협찬 등"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowGrantModal(false);
+                  setSelectedUserId(null);
+                  setGrantMemo('');
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={grantPremium}
+                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+              >
+                권한 부여
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
