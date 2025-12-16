@@ -727,6 +727,22 @@ export default function Home() {
           </div>
         </motion.div>
       )}
+
+      {/* Footer */}
+      <footer className="absolute bottom-0 left-0 right-0 py-4 text-center text-xs text-gray-400 bg-white/30 backdrop-blur-sm">
+        <div className="flex items-center justify-center gap-4">
+          <Link href="/terms" className="hover:text-gray-600 transition-colors">
+            이용약관
+          </Link>
+          <span>|</span>
+          <Link href="/terms" className="hover:text-gray-600 transition-colors">
+            개인정보처리방침
+          </Link>
+          <span>|</span>
+          <span>support@bloganalyzer.com</span>
+        </div>
+        <p className="mt-2">Copyright 2024. All rights reserved.</p>
+      </footer>
     </div>
   )
 }
