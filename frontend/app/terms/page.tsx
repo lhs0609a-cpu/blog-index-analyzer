@@ -100,7 +100,7 @@ export default function TermsPage() {
           <p className="text-sm text-gray-600">
             본 약관에 대한 문의사항이 있으시면 아래로 연락해 주세요.
           </p>
-          <p className="text-sm text-blue-600 mt-2">support@bloganalyzer.com</p>
+          <p className="text-sm text-blue-600 mt-2">lhs0609c@naver.com</p>
         </div>
       </div>
     </div>
@@ -237,7 +237,7 @@ function PrivacyContent() {
 
       <section>
         <h4 className="font-bold text-gray-900 mb-3">6. 개인정보 보호책임자</h4>
-        <p>개인정보 처리에 관한 문의사항은 support@bloganalyzer.com으로 연락주시기 바랍니다.</p>
+        <p>개인정보 처리에 관한 문의사항은 lhs0609c@naver.com으로 연락주시기 바랍니다.</p>
       </section>
     </div>
   )
@@ -458,7 +458,7 @@ function IPContent() {
       <section>
         <h4 className="font-bold text-gray-900 mb-3">5. 저작권 침해 신고</h4>
         <p>
-          저작권 침해가 의심되는 경우 support@bloganalyzer.com으로 신고해 주시기 바랍니다.
+          저작권 침해가 의심되는 경우 lhs0609c@naver.com으로 신고해 주시기 바랍니다.
           신고 시 침해 사실을 입증할 수 있는 자료를 함께 제출해 주세요.
         </p>
       </section>

@@ -676,6 +676,20 @@ export default function Home() {
               </a>
             </div>
           </div>
+          {/* 이용약관 및 개인정보처리방침 */}
+          <div className="border-t border-gray-800 mt-8 pt-6 text-center">
+            <div className="flex items-center justify-center gap-4 text-sm text-gray-500">
+              <Link href="/terms" className="hover:text-gray-300 transition-colors">
+                이용약관
+              </Link>
+              <span>|</span>
+              <Link href="/terms" className="hover:text-gray-300 transition-colors">
+                개인정보처리방침
+              </Link>
+              <span>|</span>
+              <span>lhs0609c@naver.com</span>
+            </div>
+          </div>
         </div>
       </footer>
       {/* Fixed Bottom Ad Popup */}
@@ -727,22 +741,6 @@ export default function Home() {
           </div>
         </motion.div>
       )}
-
-      {/* Footer */}
-      <footer className="absolute bottom-0 left-0 right-0 py-4 text-center text-xs text-gray-400 bg-white/30 backdrop-blur-sm">
-        <div className="flex items-center justify-center gap-4">
-          <Link href="/terms" className="hover:text-gray-600 transition-colors">
-            이용약관
-          </Link>
-          <span>|</span>
-          <Link href="/terms" className="hover:text-gray-600 transition-colors">
-            개인정보처리방침
-          </Link>
-          <span>|</span>
-          <span>support@bloganalyzer.com</span>
-        </div>
-        <p className="mt-2">Copyright 2024. All rights reserved.</p>
-      </footer>
     </div>
   )
 }
