@@ -7,7 +7,7 @@ import { motion } from 'framer-motion'
 import {
   Rocket, Calendar, Trophy, Flame, Target, BookOpen,
   ChevronRight, CheckCircle, Lock, Star, Users, Clock,
-  Award, Sparkles, ArrowRight, Play, Zap
+  Award, Sparkles, ArrowRight, ArrowLeft, Play, Zap
 } from 'lucide-react'
 import { useAuthStore } from '@/lib/stores/auth'
 import toast from 'react-hot-toast'
@@ -126,6 +126,12 @@ export default function ChallengePage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 py-12 px-4">
         <div className="max-w-4xl mx-auto">
+          {/* 뒤로가기 버튼 */}
+          <Link href="/" className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6">
+            <ArrowLeft className="w-5 h-5" />
+            <span className="font-medium">홈으로</span>
+          </Link>
+
           {/* 진행 중인 챌린지 카드 */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -215,6 +221,14 @@ export default function ChallengePage() {
   // 챌린지 시작 전 - 소개 페이지
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50">
+      {/* 뒤로가기 버튼 */}
+      <div className="max-w-5xl mx-auto px-4 pt-6">
+        <Link href="/" className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900">
+          <ArrowLeft className="w-5 h-5" />
+          <span className="font-medium">홈으로</span>
+        </Link>
+      </div>
+
       {/* Hero Section */}
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-purple-600/10 to-pink-600/10"></div>
