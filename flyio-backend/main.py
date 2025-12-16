@@ -57,6 +57,22 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Subscription tables initialization failed: {e}")
 
+    # User DB 초기화
+    try:
+        from database.user_db import get_user_db
+        get_user_db()  # 초기화 시 자동으로 테이블 생성
+        logger.info("✅ User authentication tables initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ User tables initialization failed: {e}")
+
+    # Naver Ad Optimization DB 초기화
+    try:
+        from database.naver_ad_db import init_naver_ad_tables
+        init_naver_ad_tables()
+        logger.info("✅ Naver Ad optimization tables initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ Naver Ad tables initialization failed: {e}")
+
     # 자동 백업 스케줄러 시작
     try:
         from services.backup_service import backup_scheduler
@@ -189,7 +205,7 @@ async def health_check():
 # 라우터 등록
 from routers import auth, blogs, comprehensive_analysis, system
 from routers import learning, backup, supabase_sync, batch_learning, top_posts
-from routers import subscription, payment
+from routers import subscription, payment, naver_ad, content_lifespan
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(blogs.router, prefix="/api/blogs", tags=["블로그"])
@@ -202,6 +218,8 @@ app.include_router(batch_learning.router, prefix="/api/batch-learning", tags=["�
 app.include_router(top_posts.router, prefix="/api/top-posts", tags=["상위글분석"])
 app.include_router(subscription.router, prefix="/api/subscription", tags=["구독관리"])
 app.include_router(payment.router, prefix="/api/payment", tags=["결제"])
+app.include_router(naver_ad.router, prefix="/api/naver-ad", tags=["네이버광고최적화"])
+app.include_router(content_lifespan.router, prefix="/api/content-lifespan", tags=["콘텐츠수명분석"])
 
 
 if __name__ == "__main__":

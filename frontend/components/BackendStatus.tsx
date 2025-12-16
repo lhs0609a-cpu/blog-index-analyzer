@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { getApiUrl, setApiUrl, autoDiscoverBackend, checkHealth, subscribeToApiUrl, isProduction } from '@/lib/api/apiConfig';
 
 export default function BackendStatus() {
+  const pathname = usePathname();
   const [isConnected, setIsConnected] = useState<boolean | null>(null);
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
   const [currentApiUrl, setCurrentApiUrl] = useState<string>('');
@@ -14,7 +16,10 @@ export default function BackendStatus() {
   const [isAutoDiscovering, setIsAutoDiscovering] = useState(true);
   const hasAutoDiscovered = useRef(false);
 
-  // 초기 자동 발견
+  // 관리자 페이지 여부 확인
+  const isAdminPage = pathname?.startsWith('/admin');
+
+  // 초기 자동 발견 (백그라운드에서 항상 실행, 알림은 관리자 페이지에서만)
   useEffect(() => {
     if (hasAutoDiscovered.current) return;
     hasAutoDiscovered.current = true;
@@ -25,7 +30,10 @@ export default function BackendStatus() {
       if (foundUrl) {
         setCurrentApiUrl(foundUrl);
         setIsConnected(true);
-        toast.success('백엔드 연결됨: ' + foundUrl);
+        // 관리자 페이지에서만 toast 표시
+        if (pathname?.startsWith('/admin')) {
+          toast.success('백엔드 연결됨: ' + foundUrl);
+        }
       } else {
         setCurrentApiUrl(getApiUrl());
         setIsConnected(false);
@@ -35,7 +43,7 @@ export default function BackendStatus() {
     };
 
     discover();
-  }, []);
+  }, [pathname]);
 
   // API URL 변경 구독
   useEffect(() => {
@@ -45,12 +53,11 @@ export default function BackendStatus() {
     return () => unsubscribe();
   }, []);
 
-  // 주기적 연결 상태 확인
+  // 주기적 연결 상태 확인 (백그라운드에서 항상 실행)
   useEffect(() => {
     if (!currentApiUrl || isAutoDiscovering) return;
 
     const checkStatus = async () => {
-      // 프로덕션에서는 더 긴 타임아웃 사용
       const timeout = isProduction() ? 15000 : 5000;
       const ok = await checkHealth(currentApiUrl, timeout);
       setIsConnected(ok);
@@ -62,15 +69,17 @@ export default function BackendStatus() {
         if (foundUrl && foundUrl !== currentApiUrl) {
           setCurrentApiUrl(foundUrl);
           setIsConnected(true);
-          toast.success('백엔드 재연결: ' + foundUrl);
+          // 관리자 페이지에서만 toast 표시
+          if (pathname?.startsWith('/admin')) {
+            toast.success('백엔드 재연결: ' + foundUrl);
+          }
         }
       }
     };
 
-    // 프로덕션에서는 30초, 로컬에서는 10초 간격
     const interval = setInterval(checkStatus, isProduction() ? 30000 : 10000);
     return () => clearInterval(interval);
-  }, [currentApiUrl, isAutoDiscovering, isReconnecting]);
+  }, [currentApiUrl, isAutoDiscovering, isReconnecting, pathname]);
 
   const findAndConnectToNewPort = async () => {
     setIsReconnecting(true);
@@ -125,6 +134,11 @@ export default function BackendStatus() {
     if (isConnected === null) return '확인 중...';
     return isConnected ? '연결됨' : '연결 끊김';
   };
+
+  // 관리자 페이지가 아니면 UI를 렌더링하지 않음
+  if (!isAdminPage) {
+    return null;
+  }
 
   return (
     <div className="fixed bottom-4 right-4 z-50">
