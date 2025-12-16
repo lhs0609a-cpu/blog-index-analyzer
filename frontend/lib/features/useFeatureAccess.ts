@@ -39,17 +39,17 @@ interface UseFeatureAccessReturn {
 }
 
 export function useFeatureAccess(): UseFeatureAccessReturn {
-  const { user, isLoggedIn } = useAuthStore()
+  const { user, isAuthenticated } = useAuthStore()
   const [isLoading, setIsLoading] = useState(false)
   const [backendPlan, setBackendPlan] = useState<Plan | null>(null)
 
   // Determine current plan
-  const plan: Plan = backendPlan || (user?.plan as Plan) || (isLoggedIn ? 'free' : 'guest')
+  const plan: Plan = backendPlan || (user?.plan as Plan) || (isAuthenticated ? 'free' : 'guest')
   const planInfo = PLAN_INFO[plan]
 
   // Fetch user's plan from backend
   const refresh = useCallback(async () => {
-    if (!isLoggedIn) {
+    if (!isAuthenticated) {
       setBackendPlan('guest')
       return
     }
@@ -70,7 +70,7 @@ export function useFeatureAccess(): UseFeatureAccessReturn {
     } finally {
       setIsLoading(false)
     }
-  }, [isLoggedIn])
+  }, [isAuthenticated])
 
   // Fetch on mount and when login status changes
   useEffect(() => {
