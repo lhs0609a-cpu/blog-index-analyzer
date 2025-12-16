@@ -22,6 +22,10 @@ import {
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
+import { useFeatureAccess } from '@/lib/features/useFeatureAccess'
+import { PLAN_INFO } from '@/lib/features/featureAccess'
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev'
 
 type TabType = 'title' | 'blueocean' | 'writing' | 'insight' | 'prediction' | 'report' | 'hashtag' | 'timing' | 'youtube' | 'lowquality' | 'backup' | 'campaign' | 'ranktrack' | 'clone' | 'comment' | 'algorithm' | 'lifespan' | 'refresh' | 'related' | 'mentor' | 'trend' | 'revenue' | 'roadmap' | 'secretkw' | 'datalab' | 'shopping' | 'place' | 'news' | 'cafe' | 'naverView' | 'influencer' | 'searchAnalysis' | 'kin' | 'smartstore'
 
@@ -659,6 +663,9 @@ interface SmartstoreResult {
 export default function ToolsPage() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<TabType>('title')
+
+  // Feature access hook
+  const { plan, canAccess, getFeatureBadge } = useFeatureAccess()
 
   // AI 제목 생성기 상태
   const [titleKeyword, setTitleKeyword] = useState('')
@@ -1831,40 +1838,38 @@ export default function ToolsPage() {
 
     setLifespanLoading(true)
     try {
-      await new Promise(resolve => setTimeout(resolve, 2500))
+      const response = await fetch(`${API_BASE}/api/content-lifespan/analyze/${encodeURIComponent(lifespanBlogId.trim())}?limit=20`)
 
-      const types = ['evergreen', 'seasonal', 'trending', 'declining'] as const
-      const titles = [
-        '강남역 맛집 추천 TOP 10',
-        '크리스마스 선물 추천',
-        '아이폰16 사전예약 방법',
-        '여름휴가 제주도 여행',
-        '다이어트 식단 꿀팁',
-        '부모님 생신 선물 추천',
-      ]
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || '분석 중 오류가 발생했습니다')
+      }
+
+      const data = await response.json()
 
       setLifespanResult({
-        blogId: lifespanBlogId,
-        posts: titles.map((title, i) => ({
-          title,
-          date: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toLocaleDateString('ko-KR'),
-          type: types[Math.floor(Math.random() * 4)],
-          currentViews: Math.floor(Math.random() * 1000) + 100,
-          peakViews: Math.floor(Math.random() * 5000) + 1000,
-          lifespan: ['1개월', '3개월', '6개월', '1년 이상'][Math.floor(Math.random() * 4)],
-          suggestion: ['업데이트 권장', '시즌 전 재발행', '현상 유지', '신규 글로 대체'][Math.floor(Math.random() * 4)]
+        blogId: data.blogId,
+        posts: data.posts.map((post: any) => ({
+          title: post.title,
+          date: post.date,
+          type: post.type,
+          currentViews: post.currentViews,
+          peakViews: post.peakViews,
+          lifespan: post.lifespan,
+          suggestion: post.suggestion
         })),
         summary: {
-          evergreen: Math.floor(Math.random() * 10) + 5,
-          seasonal: Math.floor(Math.random() * 8) + 3,
-          trending: Math.floor(Math.random() * 5) + 2,
-          declining: Math.floor(Math.random() * 10) + 5
+          evergreen: data.summary.evergreen,
+          seasonal: data.summary.seasonal,
+          trending: data.summary.trending,
+          declining: data.summary.declining
         }
       })
 
-      toast.success('콘텐츠 수명 분석 완료!')
-    } catch (error) {
-      toast.error('분석 중 오류가 발생했습니다')
+      toast.success(`${data.analyzedPosts}개 글 분석 완료!`)
+    } catch (error: any) {
+      console.error('콘텐츠 수명 분석 오류:', error)
+      toast.error(error.message || '분석 중 오류가 발생했습니다')
     } finally {
       setLifespanLoading(false)
     }
@@ -2870,20 +2875,36 @@ export default function ToolsPage() {
               <span className="text-sm font-bold text-gray-700">콘텐츠 제작</span>
             </div>
             <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
-              {tabs.slice(0, 8).map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`group flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all ${
-                    activeTab === tab.id
-                      ? `bg-gradient-to-br ${tab.color} text-white shadow-lg shadow-purple-500/20 scale-105`
-                      : 'bg-white/60 hover:bg-white hover:shadow-md text-gray-600 hover:scale-105'
-                  }`}
-                >
-                  <tab.icon className={`w-5 h-5 ${activeTab === tab.id ? '' : 'group-hover:text-purple-500'}`} />
-                  <span className="text-[10px] font-medium truncate w-full text-center">{tab.label}</span>
-                </button>
-              ))}
+              {tabs.slice(0, 8).map((tab) => {
+                const badge = getFeatureBadge(tab.id)
+                const isLocked = !canAccess(tab.id)
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => !isLocked && setActiveTab(tab.id)}
+                    className={`group relative flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all ${
+                      isLocked
+                        ? 'bg-gray-100/80 text-gray-400 cursor-not-allowed'
+                        : activeTab === tab.id
+                        ? `bg-gradient-to-br ${tab.color} text-white shadow-lg shadow-purple-500/20 scale-105`
+                        : 'bg-white/60 hover:bg-white hover:shadow-md text-gray-600 hover:scale-105'
+                    }`}
+                  >
+                    {isLocked && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-gray-500 rounded-full flex items-center justify-center">
+                        <Lock className="w-2.5 h-2.5 text-white" />
+                      </div>
+                    )}
+                    {badge && !isLocked && (
+                      <div className={`absolute -top-1 -right-1 px-1 py-0.5 text-[8px] font-bold rounded ${badge.color}`}>
+                        {badge.label}
+                      </div>
+                    )}
+                    <tab.icon className={`w-5 h-5 ${isLocked ? 'opacity-50' : activeTab === tab.id ? '' : 'group-hover:text-purple-500'}`} />
+                    <span className="text-[10px] font-medium truncate w-full text-center">{tab.label}</span>
+                  </button>
+                )
+              })}
             </div>
           </div>
 
@@ -2894,20 +2915,36 @@ export default function ToolsPage() {
               <span className="text-sm font-bold text-gray-700">분석 & 최적화</span>
             </div>
             <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
-              {tabs.slice(8, 16).map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`group flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all ${
-                    activeTab === tab.id
-                      ? `bg-gradient-to-br ${tab.color} text-white shadow-lg shadow-blue-500/20 scale-105`
-                      : 'bg-white/60 hover:bg-white hover:shadow-md text-gray-600 hover:scale-105'
-                  }`}
-                >
-                  <tab.icon className={`w-5 h-5 ${activeTab === tab.id ? '' : 'group-hover:text-blue-500'}`} />
-                  <span className="text-[10px] font-medium truncate w-full text-center">{tab.label}</span>
-                </button>
-              ))}
+              {tabs.slice(8, 16).map((tab) => {
+                const badge = getFeatureBadge(tab.id)
+                const isLocked = !canAccess(tab.id)
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => !isLocked && setActiveTab(tab.id)}
+                    className={`group relative flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all ${
+                      isLocked
+                        ? 'bg-gray-100/80 text-gray-400 cursor-not-allowed'
+                        : activeTab === tab.id
+                        ? `bg-gradient-to-br ${tab.color} text-white shadow-lg shadow-blue-500/20 scale-105`
+                        : 'bg-white/60 hover:bg-white hover:shadow-md text-gray-600 hover:scale-105'
+                    }`}
+                  >
+                    {isLocked && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-gray-500 rounded-full flex items-center justify-center">
+                        <Lock className="w-2.5 h-2.5 text-white" />
+                      </div>
+                    )}
+                    {badge && !isLocked && (
+                      <div className={`absolute -top-1 -right-1 px-1 py-0.5 text-[8px] font-bold rounded ${badge.color}`}>
+                        {badge.label}
+                      </div>
+                    )}
+                    <tab.icon className={`w-5 h-5 ${isLocked ? 'opacity-50' : activeTab === tab.id ? '' : 'group-hover:text-blue-500'}`} />
+                    <span className="text-[10px] font-medium truncate w-full text-center">{tab.label}</span>
+                  </button>
+                )
+              })}
             </div>
           </div>
 
@@ -2918,20 +2955,36 @@ export default function ToolsPage() {
               <span className="text-sm font-bold text-gray-700">성장 전략</span>
             </div>
             <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
-              {tabs.slice(16, 24).map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`group flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all ${
-                    activeTab === tab.id
-                      ? `bg-gradient-to-br ${tab.color} text-white shadow-lg shadow-green-500/20 scale-105`
-                      : 'bg-white/60 hover:bg-white hover:shadow-md text-gray-600 hover:scale-105'
-                  }`}
-                >
-                  <tab.icon className={`w-5 h-5 ${activeTab === tab.id ? '' : 'group-hover:text-green-500'}`} />
-                  <span className="text-[10px] font-medium truncate w-full text-center">{tab.label}</span>
-                </button>
-              ))}
+              {tabs.slice(16, 24).map((tab) => {
+                const badge = getFeatureBadge(tab.id)
+                const isLocked = !canAccess(tab.id)
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => !isLocked && setActiveTab(tab.id)}
+                    className={`group relative flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all ${
+                      isLocked
+                        ? 'bg-gray-100/80 text-gray-400 cursor-not-allowed'
+                        : activeTab === tab.id
+                        ? `bg-gradient-to-br ${tab.color} text-white shadow-lg shadow-green-500/20 scale-105`
+                        : 'bg-white/60 hover:bg-white hover:shadow-md text-gray-600 hover:scale-105'
+                    }`}
+                  >
+                    {isLocked && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-gray-500 rounded-full flex items-center justify-center">
+                        <Lock className="w-2.5 h-2.5 text-white" />
+                      </div>
+                    )}
+                    {badge && !isLocked && (
+                      <div className={`absolute -top-1 -right-1 px-1 py-0.5 text-[8px] font-bold rounded ${badge.color}`}>
+                        {badge.label}
+                      </div>
+                    )}
+                    <tab.icon className={`w-5 h-5 ${isLocked ? 'opacity-50' : activeTab === tab.id ? '' : 'group-hover:text-green-500'}`} />
+                    <span className="text-[10px] font-medium truncate w-full text-center">{tab.label}</span>
+                  </button>
+                )
+              })}
             </div>
           </div>
 
@@ -2943,22 +2996,61 @@ export default function ToolsPage() {
               <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-700 rounded-full">NEW</span>
             </div>
             <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-10 gap-2">
-              {tabs.slice(24).map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`group flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all ${
-                    activeTab === tab.id
-                      ? `bg-gradient-to-br ${tab.color} text-white shadow-lg shadow-emerald-500/20 scale-105`
-                      : 'bg-white/60 hover:bg-white hover:shadow-md text-gray-600 hover:scale-105'
-                  }`}
-                >
-                  <tab.icon className={`w-5 h-5 ${activeTab === tab.id ? '' : 'group-hover:text-emerald-500'}`} />
-                  <span className="text-[10px] font-medium truncate w-full text-center">{tab.label}</span>
-                </button>
-              ))}
+              {tabs.slice(24).map((tab) => {
+                const badge = getFeatureBadge(tab.id)
+                const isLocked = !canAccess(tab.id)
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => !isLocked && setActiveTab(tab.id)}
+                    className={`group relative flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all ${
+                      isLocked
+                        ? 'bg-gray-100/80 text-gray-400 cursor-not-allowed'
+                        : activeTab === tab.id
+                        ? `bg-gradient-to-br ${tab.color} text-white shadow-lg shadow-emerald-500/20 scale-105`
+                        : 'bg-white/60 hover:bg-white hover:shadow-md text-gray-600 hover:scale-105'
+                    }`}
+                  >
+                    {isLocked && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-gray-500 rounded-full flex items-center justify-center">
+                        <Lock className="w-2.5 h-2.5 text-white" />
+                      </div>
+                    )}
+                    {badge && !isLocked && (
+                      <div className={`absolute -top-1 -right-1 px-1 py-0.5 text-[8px] font-bold rounded ${badge.color}`}>
+                        {badge.label}
+                      </div>
+                    )}
+                    <tab.icon className={`w-5 h-5 ${isLocked ? 'opacity-50' : activeTab === tab.id ? '' : 'group-hover:text-emerald-500'}`} />
+                    <span className="text-[10px] font-medium truncate w-full text-center">{tab.label}</span>
+                  </button>
+                )
+              })}
             </div>
           </div>
+
+          {/* 현재 플랜 안내 */}
+          {plan !== 'unlimited' && (
+            <div className="glass rounded-2xl p-4 bg-gradient-to-r from-purple-50 to-pink-50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Crown className="w-5 h-5 text-purple-500" />
+                  <div>
+                    <p className="text-sm text-gray-600">
+                      현재 <span className="font-bold text-purple-600">{PLAN_INFO[plan].name}</span> 플랜 이용 중
+                    </p>
+                    <p className="text-xs text-gray-500">잠금된 기능은 업그레이드 후 이용할 수 있습니다</p>
+                  </div>
+                </div>
+                <Link
+                  href="/pricing"
+                  className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm font-bold rounded-xl hover:shadow-lg transition-all"
+                >
+                  업그레이드
+                </Link>
+              </div>
+            </div>
+          )}
         </motion.div>
 
         {/* Tab Content */}

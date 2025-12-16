@@ -203,7 +203,14 @@
       "Bash(powershell -ExecutionPolicy Bypass -Command \"flyctl deploy 2>&1\")",
       "Bash(powershell:*)",
       "Bash(start https://blog-index-analyzer.vercel.app/dashboard/batch-learning)",
-      "Bash(start cmd /k \"cd /d G:\\내 드라이브\\developer\\blog-index-analyzer\\frontend && npm run dev -- -p 3006\")"
+      "Bash(start cmd /k \"cd /d G:\\내 드라이브\\developer\\blog-index-analyzer\\frontend && npm run dev -- -p 3006\")",
+      "WebFetch(domain:vercel.com)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run lint)",
+      "Bash(npm install)",
+      "Bash(\"C:\\Users\\이아랑\\.fly\\bin\\flyctl.exe\" deploy)",
+      "Bash(\"C:\\Users\\이아랑\\.fly\\bin\\flyctl.exe\" logs:*)",
+      "Bash(\"C:\\Users\\이아랑\\.fly\\bin\\flyctl.exe\" logs -a naverpay-delivery-tracker -n)"
     ],
     "deny": [],
     "ask": []

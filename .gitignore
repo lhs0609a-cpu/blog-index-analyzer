@@ -108,3 +108,4 @@ next-env.d.ts
 .cache/
 temp/
 tmp/
+nul

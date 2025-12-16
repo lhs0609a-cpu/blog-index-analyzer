@@ -20,7 +20,7 @@ class UsageDB:
 
     # Daily limits by plan
     DAILY_LIMITS = {
-        'guest': 3,           # 비회원: 하루 3회
+        'guest': 5,           # 비회원: 하루 5회
         'free': 10,           # 무료회원: 하루 10회
         'basic': 50,          # 기본 구독: 하루 50회
         'pro': 200,           # 프로 구독: 하루 200회
