@@ -81,6 +81,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Naver Ad tables initialization failed: {e}")
 
+    # Legal Compliance DB 초기화
+    try:
+        from database.compliance_db import init_compliance_tables
+        init_compliance_tables()
+        logger.info("✅ Legal compliance tables initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ Legal compliance tables initialization failed: {e}")
+
     # 자동 백업 스케줄러 시작
     try:
         from services.backup_service import backup_scheduler
@@ -189,10 +197,11 @@ async def health_check():
 # 라우터 등록
 from routers import auth, blogs, comprehensive_analysis, system
 from routers import learning, backup, supabase_sync, batch_learning, top_posts
-from routers import subscription, payment, naver_ad, content_lifespan, admin
+from routers import subscription, payment, naver_ad, content_lifespan, admin, compliance
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
+app.include_router(compliance.router, prefix="/api/compliance", tags=["법적준수"])
 app.include_router(blogs.router, prefix="/api/blogs", tags=["블로그"])
 app.include_router(comprehensive_analysis.router, prefix="/api/comprehensive", tags=["종합분석"])
 app.include_router(system.router, prefix="/api/system", tags=["시스템"])
