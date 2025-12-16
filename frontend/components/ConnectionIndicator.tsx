@@ -2,10 +2,18 @@
 
 import { useApiStatus } from '@/lib/hooks/useApiStatus'
 import { useState } from 'react'
+import { usePathname } from 'next/navigation'
 
 export function ConnectionIndicator() {
+  const pathname = usePathname()
   const { services, overallStatus, refresh } = useApiStatus()
   const [isExpanded, setIsExpanded] = useState(false)
+
+  // 관리자 페이지에서만 표시
+  const isAdminPage = pathname?.startsWith('/admin')
+  if (!isAdminPage) {
+    return null
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {

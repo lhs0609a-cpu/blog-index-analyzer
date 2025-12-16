@@ -3,8 +3,6 @@ System router for health checks and system info
 """
 from fastapi import APIRouter, Depends, Request
 from typing import Dict, Optional
-import platform
-import sys
 
 from config import settings
 from feature_config.feature_access import (
@@ -21,31 +19,8 @@ from routers.auth import get_current_user_optional
 router = APIRouter()
 
 
-@router.get("/info")
-async def get_system_info() -> Dict:
-    """Get system information"""
-    return {
-        "app_name": settings.APP_NAME,
-        "version": settings.API_VERSION,
-        "environment": settings.APP_ENV,
-        "python_version": sys.version,
-        "platform": platform.platform()
-    }
-
-
-@router.get("/config")
-async def get_public_config() -> Dict:
-    """Get public configuration (non-sensitive)"""
-    return {
-        "app_name": settings.APP_NAME,
-        "api_version": settings.API_VERSION,
-        "environment": settings.APP_ENV,
-        "features": {
-            "learning_engine": True,
-            "related_keywords": True,
-            "blog_analysis": True
-        }
-    }
+# Note: /info and /config endpoints moved to /api/admin for security
+# Only admin users can access detailed system information
 
 
 @router.get("/features")

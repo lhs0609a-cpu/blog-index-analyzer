@@ -240,3 +240,80 @@ async def check_usage(request: Request, current_user: dict = Depends(get_current
         "plan": effective_plan,
         "usage": usage
     }
+
+
+@router.get("/health")
+async def detailed_health_check(admin: dict = Depends(require_admin)):
+    """상세 헬스 체크 (admin only)"""
+    from config import settings
+
+    health_status = {
+        "status": "healthy",
+        "checks": {}
+    }
+
+    # 실제 DB 연결 체크
+    try:
+        from database.sqlite_db import get_sqlite_client
+        client = get_sqlite_client()
+        client.execute_query("SELECT 1")
+        health_status["checks"]["database"] = "connected"
+    except Exception as e:
+        health_status["checks"]["database"] = f"error: {str(e)}"
+        health_status["status"] = "degraded"
+
+    # Learning DB 체크
+    try:
+        from database.learning_db import get_learning_statistics
+        stats = get_learning_statistics()
+        health_status["checks"]["learning_db"] = f"connected (samples: {stats['total_samples']})"
+    except Exception as e:
+        health_status["checks"]["learning_db"] = f"error: {str(e)}"
+
+    # Redis 체크 (선택적)
+    if settings.REDIS_URL:
+        try:
+            health_status["checks"]["redis"] = "not_configured"
+        except Exception as e:
+            health_status["checks"]["redis"] = f"error: {str(e)}"
+    else:
+        health_status["checks"]["redis"] = "not_configured"
+
+    # MongoDB 체크 (선택적)
+    health_status["checks"]["mongodb"] = "not_configured"
+
+    return health_status
+
+
+@router.get("/system/info")
+async def get_system_info(admin: dict = Depends(require_admin)):
+    """시스템 정보 (admin only)"""
+    import platform
+    import sys
+    from config import settings
+
+    return {
+        "app_name": settings.APP_NAME,
+        "version": settings.API_VERSION,
+        "environment": settings.APP_ENV,
+        "python_version": sys.version,
+        "platform": platform.platform()
+    }
+
+
+@router.get("/system/config")
+async def get_system_config(admin: dict = Depends(require_admin)):
+    """시스템 설정 (admin only)"""
+    from config import settings
+
+    return {
+        "app_name": settings.APP_NAME,
+        "api_version": settings.API_VERSION,
+        "environment": settings.APP_ENV,
+        "debug_mode": settings.DEBUG,
+        "features": {
+            "learning_engine": True,
+            "related_keywords": True,
+            "blog_analysis": True
+        }
+    }

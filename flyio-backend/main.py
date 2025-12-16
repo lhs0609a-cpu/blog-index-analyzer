@@ -169,45 +169,21 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """상세 헬스 체크"""
-    health_status = {
-        "status": "healthy",
-        "checks": {}
-    }
-
-    # 실제 DB 연결 체크
+    """헬스 체크 - 기본 상태만 반환 (상세 정보는 /api/admin/health에서)"""
+    # 기본 상태 체크
+    is_healthy = True
     try:
         from database.sqlite_db import get_sqlite_client
         client = get_sqlite_client()
-        # 간단한 쿼리로 연결 확인
         client.execute_query("SELECT 1")
-        health_status["checks"]["database"] = "connected"
-    except Exception as e:
-        health_status["checks"]["database"] = f"error: {str(e)}"
-        health_status["status"] = "degraded"
+    except Exception:
+        is_healthy = False
 
-    # Learning DB 체크
-    try:
-        from database.learning_db import get_learning_statistics
-        stats = get_learning_statistics()
-        health_status["checks"]["learning_db"] = f"connected (samples: {stats['total_samples']})"
-    except Exception as e:
-        health_status["checks"]["learning_db"] = f"error: {str(e)}"
-
-    # Redis 체크 (선택적)
-    if settings.REDIS_URL:
-        try:
-            # Redis 연결 체크 (필요 시 구현)
-            health_status["checks"]["redis"] = "not_configured"
-        except Exception as e:
-            health_status["checks"]["redis"] = f"error: {str(e)}"
-    else:
-        health_status["checks"]["redis"] = "not_configured"
-
-    # MongoDB 체크 (선택적)
-    health_status["checks"]["mongodb"] = "not_configured"
-
-    return health_status
+    return {
+        "status": "healthy" if is_healthy else "degraded",
+        "service": settings.APP_NAME,
+        "version": settings.API_VERSION
+    }
 
 
 # 라우터 등록
