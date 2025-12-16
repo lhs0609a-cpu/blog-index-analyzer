@@ -89,6 +89,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Legal compliance tables initialization failed: {e}")
 
+    # Challenge DB 초기화
+    try:
+        from database.challenge_db import init_challenge_tables
+        init_challenge_tables()
+        logger.info("✅ Challenge tables initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ Challenge tables initialization failed: {e}")
+
     # 자동 백업 스케줄러 시작
     try:
         from services.backup_service import backup_scheduler
@@ -198,6 +206,7 @@ async def health_check():
 from routers import auth, blogs, comprehensive_analysis, system
 from routers import learning, backup, supabase_sync, batch_learning, top_posts
 from routers import subscription, payment, naver_ad, content_lifespan, admin, compliance
+from routers import challenge
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
@@ -214,6 +223,7 @@ app.include_router(subscription.router, prefix="/api/subscription", tags=["구�
 app.include_router(payment.router, prefix="/api/payment", tags=["결제"])
 app.include_router(naver_ad.router, prefix="/api/naver-ad", tags=["네이버광고최적화"])
 app.include_router(content_lifespan.router, prefix="/api/content-lifespan", tags=["콘텐츠수명분석"])
+app.include_router(challenge.router, prefix="/api/challenge", tags=["블로그챌린지"])
 
 
 if __name__ == "__main__":

@@ -293,6 +293,15 @@ export const FEATURES: Record<string, FeatureConfig> = {
     description: '스마트스토어와 연동 분석',
     category: 'premium',
     access: { guest: 'none', free: 'none', basic: 'none', pro: 'none', unlimited: 'full' }
+  },
+
+  // Challenge System (Free for all logged-in users)
+  challenge: {
+    name: 'challenge',
+    displayName: '30일 챌린지',
+    description: '블로그 습관을 기르는 30일 성장 프로그램',
+    category: 'content',
+    access: { guest: 'none', free: 'full', basic: 'full', pro: 'full', unlimited: 'full' }
   }
 }
 

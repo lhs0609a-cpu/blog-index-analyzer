@@ -460,6 +460,77 @@ export default function Home() {
         </div>
       </section>
 
+      {/* 30일 챌린지 배너 */}
+      <section className="py-16 relative overflow-hidden">
+        <div className="container mx-auto px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            <Link href="/challenge" className="group block">
+              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-purple-600 via-pink-500 to-orange-500 p-8 md:p-12">
+                {/* Animated background elements */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl" />
+                <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full blur-3xl" />
+
+                <div className="relative flex flex-col md:flex-row items-center justify-between gap-8">
+                  <div className="text-center md:text-left">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm mb-4">
+                      <span className="text-xl">🚀</span>
+                      <span className="text-sm font-medium text-white">무료 회원도 참여 가능</span>
+                    </div>
+
+                    <h3 className="text-3xl md:text-4xl font-bold text-white mb-3">
+                      30일 블로그 챌린지
+                    </h3>
+
+                    <p className="text-white/90 text-lg mb-4 max-w-lg">
+                      매일 10분! 블로그 초보자도 30일 후에는 전문가가 됩니다.
+                      <br />
+                      미션 완료하고 배지도 획득하세요!
+                    </p>
+
+                    <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-sm text-white/80">
+                      <div className="flex items-center gap-2">
+                        <span>📅</span>
+                        <span>30일 커리큘럼</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span>🏆</span>
+                        <span>배지 & XP 시스템</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span>🔥</span>
+                        <span>연속 기록 도전</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="grid grid-cols-3 gap-2">
+                      {['🌱', '📝', '⭐', '🔥', '🏆', '👑'].map((emoji, i) => (
+                        <div
+                          key={i}
+                          className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-2xl group-hover:scale-110 transition-transform"
+                          style={{ transitionDelay: `${i * 50}ms` }}
+                        >
+                          {emoji}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="px-8 py-4 rounded-full bg-white text-purple-600 font-bold text-lg group-hover:scale-105 transition-transform shadow-xl flex items-center gap-2">
+                      지금 시작하기
+                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Link>
+          </motion.div>
+        </div>
+      </section>
+
       {/* Social Proof */}
       <section className="py-20 bg-gradient-to-br from-purple-100 via-pink-100 to-orange-100">
         <div className="container mx-auto px-4">

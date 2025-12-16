@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  swcMinify: true,
 
   // 환경 변수
   env: {
@@ -9,20 +8,29 @@ const nextConfig = {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev',
   },
 
-  // 이미지 최적화
+  // 이미지 최적화 (remotePatterns 사용)
   images: {
-    domains: ['blogpfthumb-phinf.pstatic.net', 'blog.kakaocdn.net'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'blogpfthumb-phinf.pstatic.net',
+      },
+      {
+        protocol: 'https',
+        hostname: 'blog.kakaocdn.net',
+      },
+    ],
     formats: ['image/avif', 'image/webp'],
-  },
-
-  // ESLint 설정 - 빌드 시 무시 (임시)
-  eslint: {
-    ignoreDuringBuilds: true,
   },
 
   // TypeScript 설정 - 빌드 시 무시 (임시)
   typescript: {
     ignoreBuildErrors: true,
+  },
+
+  // Turbopack 설정
+  turbopack: {
+    root: process.cwd(),
   },
 }
 
