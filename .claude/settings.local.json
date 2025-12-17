@@ -213,7 +213,9 @@
       "Bash(\"C:\\Users\\이아랑\\.fly\\bin\\flyctl.exe\" logs -a naverpay-delivery-tracker -n)",
       "Bash(npx next build)",
       "Bash(npx --yes next@14 build:*)",
-      "Bash(start https://blog-index-analyzer.vercel.app)"
+      "Bash(start https://blog-index-analyzer.vercel.app)",
+      "Bash(npx next build:*)",
+      "Bash(npx next --help:*)"
     ],
     "deny": [],
     "ask": []

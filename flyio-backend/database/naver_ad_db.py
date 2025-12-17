@@ -4,19 +4,21 @@
 import sqlite3
 import json
 import logging
+import os
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# 데이터베이스 파일 경로
-DB_PATH = Path(__file__).parent / "data" / "naver_ad.db"
+# 데이터베이스 파일 경로 - /app/data 볼륨에 저장 (영속적)
+DATA_DIR = os.environ.get("DATA_DIR", "/app/data")
+os.makedirs(DATA_DIR, exist_ok=True)
+DB_PATH = Path(DATA_DIR) / "naver_ad.db"
 
 
 def get_connection() -> sqlite3.Connection:
     """데이터베이스 연결"""
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
     return conn

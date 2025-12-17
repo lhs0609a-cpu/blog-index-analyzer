@@ -1,34 +1,79 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { TrendingUp, TrendingDown, Heart, MessageCircle, Eye, Sparkles, Plus, Search, Brain, ArrowLeft } from 'lucide-react'
+import { TrendingUp, TrendingDown, Heart, MessageCircle, Eye, Sparkles, Plus, Search, Brain, ArrowLeft, Target, RefreshCw, Trash2 } from 'lucide-react'
 import Link from 'next/link'
-import { getUserBlogs } from '@/lib/api/blog'
+import { getUserBlogs, deleteBlogFromList } from '@/lib/api/blog'
+import { refreshBlogAnalysis } from '@/lib/api/userBlogs'
+import { useAuthStore } from '@/lib/stores/auth'
 import type { BlogListItem } from '@/lib/types/api'
 import toast from 'react-hot-toast'
 
 export default function Dashboard() {
   const router = useRouter()
+  const { isAuthenticated, user } = useAuthStore()
   const [myBlogs, setMyBlogs] = useState<BlogListItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+  const [refreshingBlogId, setRefreshingBlogId] = useState<string | null>(null)
 
-  useEffect(() => {
-    loadBlogs()
-  }, [])
-
-  const loadBlogs = async () => {
+  const loadBlogs = useCallback(async () => {
     setIsLoading(true)
     try {
-      const blogs = await getUserBlogs()
+      // 로그인한 사용자는 user.id 전달, 비로그인은 undefined
+      const blogs = await getUserBlogs(user?.id)
       setMyBlogs(blogs)
     } catch (error) {
       console.error('Failed to load blogs:', error)
       toast.error('블로그 목록을 불러오는데 실패했습니다')
     } finally {
       setIsLoading(false)
+    }
+  }, [user?.id])
+
+  useEffect(() => {
+    loadBlogs()
+  }, [loadBlogs])
+
+  const handleRefreshBlog = async (blogId: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (!user?.id) {
+      toast.error('로그인이 필요합니다')
+      return
+    }
+
+    setRefreshingBlogId(blogId)
+    try {
+      await refreshBlogAnalysis(user.id, blogId)
+      toast.success('블로그 재분석이 완료되었습니다')
+      loadBlogs()
+    } catch (error) {
+      console.error('Failed to refresh blog:', error)
+      toast.error('블로그 재분석에 실패했습니다')
+    } finally {
+      setRefreshingBlogId(null)
+    }
+  }
+
+  const handleDeleteBlog = async (blogId: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (!confirm('이 블로그를 목록에서 삭제하시겠습니까?')) {
+      return
+    }
+
+    try {
+      await deleteBlogFromList(blogId, user?.id)
+      toast.success('블로그가 삭제되었습니다')
+      loadBlogs()
+    } catch (error) {
+      console.error('Failed to delete blog:', error)
+      toast.error('블로그 삭제에 실패했습니다')
     }
   }
 
@@ -37,57 +82,8 @@ export default function Dashboard() {
     blog.blog_id.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  // Mock data for initial demo
-  const demoBlogs: BlogListItem[] = [
-    {
-      id: 1,
-      blog_id: 'food_blog',
-      name: '맛집 탐방 블로그',
-      avatar: '🍽️',
-      level: 7,
-      grade: '준최적화7',
-      score: 72.5,
-      change: +2.5,
-      stats: {
-        posts: 150,
-        visitors: 2450,
-        engagement: 145
-      }
-    },
-    {
-      id: 2,
-      blog_id: 'travel_blog',
-      name: '여행 일기',
-      avatar: '✈️',
-      level: 5,
-      grade: '준최적화5',
-      score: 62.0,
-      change: +1.2,
-      stats: {
-        posts: 89,
-        visitors: 1200,
-        engagement: 78
-      }
-    },
-    {
-      id: 3,
-      blog_id: 'tech_blog',
-      name: '테크 리뷰',
-      avatar: '💻',
-      level: 9,
-      grade: '최적화2',
-      score: 86.5,
-      change: -0.5,
-      stats: {
-        posts: 234,
-        visitors: 5600,
-        engagement: 412
-      }
-    },
-  ]
-
-  // Combine actual blogs with demo blogs if no blogs exist
-  const displayBlogs = myBlogs.length > 0 ? filteredBlogs : demoBlogs
+  // 실제 블로그만 표시 (데모 데이터 제거)
+  const displayBlogs = filteredBlogs
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50">
@@ -113,6 +109,13 @@ export default function Dashboard() {
           </div>
 
           <div className="flex gap-3 flex-wrap">
+            <Link
+              href="/dashboard/rank-tracker"
+              className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold hover:shadow-lg transition-all duration-300"
+            >
+              <Target className="w-5 h-5" />
+              순위 추적
+            </Link>
             <Link
               href="/dashboard/batch-learning"
               className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold hover:shadow-lg transition-all duration-300"
@@ -208,11 +211,76 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        {/* 학습 대시보드 섹션 */}
+        {/* 순위 추적 섹션 */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
+          className="glass rounded-3xl p-8 mb-8 bg-gradient-to-br from-purple-50 to-pink-50"
+        >
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
+                <Target className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-purple-700">순위 추적</h2>
+                <p className="text-sm text-gray-600">내 블로그 포스팅의 검색 순위를 실시간 추적하세요</p>
+              </div>
+            </div>
+            <Link
+              href="/dashboard/rank-tracker"
+              className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold hover:shadow-lg transition-all duration-300"
+            >
+              <Target className="w-5 h-5" />
+              순위 추적 시작
+            </Link>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-4">
+            <div className="bg-white rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                  <Search className="w-4 h-4 text-purple-600" />
+                </div>
+                <span className="font-semibold text-gray-700">키워드 자동 추출</span>
+              </div>
+              <p className="text-sm text-gray-500">
+                포스트 제목에서 핵심 키워드를 자동으로 추출합니다
+              </p>
+            </div>
+
+            <div className="bg-white rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-pink-100 flex items-center justify-center">
+                  <TrendingUp className="w-4 h-4 text-pink-600" />
+                </div>
+                <span className="font-semibold text-gray-700">블로그탭 & VIEW탭</span>
+              </div>
+              <p className="text-sm text-gray-500">
+                블로그탭과 VIEW탭에서의 순위를 모두 확인합니다
+              </p>
+            </div>
+
+            <div className="bg-white rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
+                  <Eye className="w-4 h-4 text-orange-600" />
+                </div>
+                <span className="font-semibold text-gray-700">히스토리 분석</span>
+              </div>
+              <p className="text-sm text-gray-500">
+                순위 변동 추이를 그래프로 확인하고 분석합니다
+              </p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* 학습 대시보드 섹션 */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
           className="glass rounded-3xl p-8 mb-8 bg-gradient-to-br from-green-50 to-emerald-50"
         >
           <div className="flex items-center justify-between mb-6">
@@ -306,11 +374,26 @@ export default function Dashboard() {
             </div>
           </div>
         ) : displayBlogs.length === 0 ? (
-          <div className="col-span-full text-center py-20">
-            <div className="text-6xl mb-4">🔍</div>
-            <h3 className="text-2xl font-bold mb-2">검색 결과가 없습니다</h3>
-            <p className="text-gray-600">다른 키워드로 검색해보세요</p>
-          </div>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white rounded-3xl shadow-lg p-12 text-center"
+          >
+            <div className="w-24 h-24 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Plus className="w-12 h-12 text-purple-600" />
+            </div>
+            <h3 className="text-2xl font-bold mb-3">등록된 블로그가 없습니다</h3>
+            <p className="text-gray-600 mb-6">
+              {searchQuery ? '검색 결과가 없습니다. 다른 키워드로 검색해보세요.' : '블로그를 추가하고 지수를 확인해보세요!'}
+            </p>
+            <Link
+              href="/analyze"
+              className="inline-flex items-center gap-2 px-8 py-4 rounded-full instagram-gradient text-white font-semibold hover:shadow-lg transition-all"
+            >
+              <Plus className="w-5 h-5" />
+              첫 번째 블로그 추가하기
+            </Link>
+          </motion.div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {displayBlogs.map((blog, index) => (
@@ -396,12 +479,30 @@ export default function Dashboard() {
               </div>
 
               {/* Action Buttons */}
-              <div className="grid grid-cols-2 gap-3 mt-4">
-                <button className="py-2 px-4 rounded-xl bg-purple-100 text-purple-700 font-semibold hover:bg-purple-200 transition-colors">
+              <div className="grid grid-cols-3 gap-2 mt-4">
+                <button className="py-2 px-3 rounded-xl bg-purple-100 text-purple-700 font-semibold hover:bg-purple-200 transition-colors text-sm">
                   상세보기
                 </button>
-                <button className="py-2 px-4 rounded-xl instagram-gradient text-white font-semibold hover:shadow-lg transition-all">
-                  재분석
+                <button
+                  onClick={(e) => handleRefreshBlog(blog.blog_id, e)}
+                  disabled={refreshingBlogId === blog.blog_id}
+                  className="py-2 px-3 rounded-xl instagram-gradient text-white font-semibold hover:shadow-lg transition-all text-sm flex items-center justify-center gap-1 disabled:opacity-50"
+                >
+                  {refreshingBlogId === blog.blog_id ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <RefreshCw className="w-3 h-3" />
+                      재분석
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={(e) => handleDeleteBlog(blog.blog_id, e)}
+                  className="py-2 px-3 rounded-xl bg-red-100 text-red-600 font-semibold hover:bg-red-200 transition-colors text-sm flex items-center justify-center gap-1"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  삭제
                 </button>
               </div>
             </motion.div>

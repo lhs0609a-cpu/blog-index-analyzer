@@ -60,11 +60,32 @@ export async function pollJobStatus(
 }
 
 /**
- * Get list of user's blogs (mock for now, will need auth)
+ * Get list of user's blogs
+ * Uses real API if user is authenticated, falls back to localStorage for guests
  */
-export async function getUserBlogs(): Promise<BlogListItem[]> {
-  // This will be implemented when auth is added
-  // For now, return empty array or use localStorage
+export async function getUserBlogs(userId?: number | string): Promise<BlogListItem[]> {
+  // 로그인한 사용자는 실제 API 사용
+  if (userId) {
+    try {
+      const { getSavedBlogs } = await import('./userBlogs')
+      const response = await getSavedBlogs(userId)
+      return response.blogs.map(blog => ({
+        blog_id: blog.blog_id,
+        name: blog.blog_name || blog.blog_id,
+        avatar: blog.avatar || '📝',
+        level: blog.level,
+        score: blog.score,
+        change: blog.change,
+        stats: blog.stats,
+        lastUpdated: blog.last_analyzed || new Date().toISOString()
+      }))
+    } catch (error) {
+      console.error('Failed to fetch saved blogs:', error)
+      // API 실패 시 localStorage 폴백
+    }
+  }
+
+  // 비로그인 또는 API 실패 시 localStorage 사용
   const cachedBlogs = typeof window !== 'undefined'
     ? localStorage.getItem('cached_blogs')
     : null
@@ -77,12 +98,53 @@ export async function getUserBlogs(): Promise<BlogListItem[]> {
 }
 
 /**
- * Save blog to user's list (mock for now)
+ * Save blog to user's list
+ * Uses real API if user is authenticated, falls back to localStorage for guests
  */
-export async function saveBlogToList(blog: BlogListItem): Promise<void> {
+export async function saveBlogToList(blog: BlogListItem, userId?: number | string): Promise<void> {
+  // 로그인한 사용자는 실제 API 사용
+  if (userId) {
+    try {
+      const { saveBlog } = await import('./userBlogs')
+      await saveBlog(userId, {
+        blog_id: blog.blog_id,
+        blog_name: blog.name,
+        avatar: blog.avatar
+      })
+      return
+    } catch (error) {
+      console.error('Failed to save blog to server:', error)
+      // API 실패 시 localStorage에도 저장
+    }
+  }
+
+  // 비로그인 또는 API 실패 시 localStorage 사용
   if (typeof window !== 'undefined') {
     const existingBlogs = await getUserBlogs()
     const updatedBlogs = [...existingBlogs.filter(b => b.blog_id !== blog.blog_id), blog]
+    localStorage.setItem('cached_blogs', JSON.stringify(updatedBlogs))
+  }
+}
+
+/**
+ * Delete blog from user's list
+ */
+export async function deleteBlogFromList(blogId: string, userId?: number | string): Promise<void> {
+  // 로그인한 사용자는 실제 API 사용
+  if (userId) {
+    try {
+      const { deleteSavedBlog } = await import('./userBlogs')
+      await deleteSavedBlog(userId, blogId)
+      return
+    } catch (error) {
+      console.error('Failed to delete blog from server:', error)
+    }
+  }
+
+  // 비로그인 또는 API 실패 시 localStorage에서 삭제
+  if (typeof window !== 'undefined') {
+    const existingBlogs = await getUserBlogs()
+    const updatedBlogs = existingBlogs.filter(b => b.blog_id !== blogId)
     localStorage.setItem('cached_blogs', JSON.stringify(updatedBlogs))
   }
 }

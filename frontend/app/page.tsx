@@ -303,9 +303,9 @@ export default function Home() {
               className="grid grid-cols-3 gap-8 mt-16 max-w-2xl mx-auto"
             >
               {[
-                { value: '10K+', label: '분석된 블로그' },
-                { value: '98%', label: '정확도' },
-                { value: '24/7', label: '실시간 추적' },
+                { value: '40+', label: '분석 지표' },
+                { value: '11단계', label: '레벨 시스템' },
+                { value: '실시간', label: '분석 제공' },
               ].map((stat, index) => (
                 <div key={index} className="text-center">
                   <div className="text-3xl font-bold gradient-text">{stat.value}</div>
@@ -531,7 +531,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Social Proof */}
+      {/* Service Features */}
       <section className="py-20 bg-gradient-to-br from-purple-100 via-pink-100 to-orange-100">
         <div className="container mx-auto px-4">
           <motion.div
@@ -541,35 +541,32 @@ export default function Home() {
             className="max-w-4xl mx-auto text-center"
           >
             <div className="inline-flex items-center gap-2 mb-6">
-              <Users className="w-6 h-6 text-purple-600" />
-              <span className="text-purple-600 font-semibold">10,000+ 블로거가 사용중</span>
+              <Sparkles className="w-6 h-6 text-purple-600" />
+              <span className="text-purple-600 font-semibold">블랭크가 제공하는 가치</span>
             </div>
 
             <h2 className="text-4xl font-bold mb-12">
-              성공한 블로거들의 선택
+              왜 블랭크인가요?
             </h2>
 
             <div className="grid md:grid-cols-3 gap-6">
               {[
                 {
-                  name: '김지은',
-                  role: '라이프스타일 블로거',
-                  avatar: '👩‍💼',
-                  content: '지수가 Level 3에서 Level 9로 상승했어요! 정말 정확한 분석이에요.'
+                  icon: '📊',
+                  title: '정확한 지수 분석',
+                  description: '40개 이상의 지표를 분석하여 11단계 레벨로 블로그 품질을 객관적으로 평가합니다.'
                 },
                 {
-                  name: '박민수',
-                  role: 'IT 블로거',
-                  avatar: '👨‍💻',
-                  content: 'SEO 개선 팁 덕분에 방문자가 3배 증가했습니다. 강력 추천!'
+                  icon: '🔍',
+                  title: '키워드 경쟁 분석',
+                  description: '네이버 VIEW 탭 상위 블로그들의 지수를 비교 분석하여 경쟁력을 파악할 수 있습니다.'
                 },
                 {
-                  name: '이서연',
-                  role: '맛집 블로거',
-                  avatar: '👩‍🍳',
-                  content: '매일 체크하는 필수 도구예요. VIEW 탭 진입도 쉬워졌어요!'
+                  icon: '📈',
+                  title: '성장 가이드 제공',
+                  description: 'AI 기반 맞춤 개선 권장사항으로 블로그 성장 전략을 제안받을 수 있습니다.'
                 },
-              ].map((testimonial, index) => (
+              ].map((feature, index) => (
                 <motion.div
                   key={index}
                   initial={{ opacity: 0, scale: 0.9 }}
@@ -578,10 +575,9 @@ export default function Home() {
                   transition={{ delay: index * 0.1 }}
                   className="glass rounded-3xl p-6 hover:shadow-xl transition-all duration-300"
                 >
-                  <div className="text-5xl mb-4">{testimonial.avatar}</div>
-                  <p className="text-gray-700 mb-4 italic">"{testimonial.content}"</p>
-                  <div className="font-semibold">{testimonial.name}</div>
-                  <div className="text-sm text-gray-500">{testimonial.role}</div>
+                  <div className="text-5xl mb-4">{feature.icon}</div>
+                  <h3 className="font-bold text-lg mb-2">{feature.title}</h3>
+                  <p className="text-gray-600 text-sm">{feature.description}</p>
                 </motion.div>
               ))}
             </div>

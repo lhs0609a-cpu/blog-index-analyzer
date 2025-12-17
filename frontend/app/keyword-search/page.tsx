@@ -7,6 +7,9 @@ import { getApiUrl } from '@/lib/api/apiConfig'
 import * as Tabs from '@radix-ui/react-tabs'
 import { motion } from 'framer-motion'
 import { Check, Loader2, X, TrendingUp, TrendingDown, ArrowLeft } from 'lucide-react'
+import { useAuthStore } from '@/lib/stores/auth'
+import { incrementUsage, checkUsageLimit } from '@/lib/api/subscription'
+import toast from 'react-hot-toast'
 
 interface BlogIndexResult {
   rank: number
@@ -194,6 +197,9 @@ interface LearningStatus {
 }
 
 function KeywordSearchContent() {
+  // 인증 상태
+  const { isAuthenticated, user } = useAuthStore()
+
   // 멀티 키워드 검색 관련
   const [keywordsInput, setKeywordsInput] = useState('')
   const [keywordStatuses, setKeywordStatuses] = useState<KeywordSearchStatus[]>([])
@@ -251,6 +257,22 @@ function KeywordSearchContent() {
   const performSearch = useCallback(async (searchKeyword: string) => {
     if (!searchKeyword.trim()) return
 
+    // 로그인한 사용자인 경우 사용량 체크 및 차감
+    if (isAuthenticated && user?.id) {
+      try {
+        const usageCheck = await checkUsageLimit(user.id, 'keyword_search')
+        if (!usageCheck.allowed) {
+          toast.error(`일일 키워드 검색 한도(${usageCheck.limit}회)에 도달했습니다. 업그레이드를 고려해주세요.`)
+          return
+        }
+        // 사용량 차감
+        await incrementUsage(user.id, 'keyword_search')
+      } catch (err) {
+        console.error('Usage tracking error:', err)
+        // 사용량 추적 실패 시에도 검색은 진행
+      }
+    }
+
     setLoading(true)
     setError('')
     setResults(null)
@@ -305,7 +327,7 @@ function KeywordSearchContent() {
         setProgressMessage('')
       }, 1000)
     }
-  }, [])
+  }, [isAuthenticated, user])
 
   // 학습 엔진 상태 조회
   const fetchLearningStatus = async () => {
@@ -350,6 +372,22 @@ function KeywordSearchContent() {
     if (keywords.length > 10) {
       setError('최대 10개까지만 입력 가능합니다')
       return
+    }
+
+    // 로그인한 사용자인 경우 사용량 체크 및 차감 (멀티 검색은 1회로 처리)
+    if (isAuthenticated && user?.id) {
+      try {
+        const usageCheck = await checkUsageLimit(user.id, 'keyword_search')
+        if (!usageCheck.allowed) {
+          toast.error(`일일 키워드 검색 한도(${usageCheck.limit}회)에 도달했습니다. 업그레이드를 고려해주세요.`)
+          return
+        }
+        // 사용량 차감
+        await incrementUsage(user.id, 'keyword_search')
+      } catch (err) {
+        console.error('Usage tracking error:', err)
+        // 사용량 추적 실패 시에도 검색은 진행
+      }
     }
 
     // 초기 상태 설정

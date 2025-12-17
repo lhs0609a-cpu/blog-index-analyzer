@@ -13,8 +13,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# 데이터베이스 경로
-DB_PATH = os.path.join(os.path.dirname(__file__), "subscription.db")
+# 데이터베이스 경로 - /app/data 볼륨에 저장 (영속적)
+DATA_DIR = os.environ.get("DATA_DIR", "/app/data")
+os.makedirs(DATA_DIR, exist_ok=True)
+DB_PATH = os.path.join(DATA_DIR, "subscription.db")
 
 
 class PlanType(str, Enum):
@@ -39,6 +41,10 @@ PLAN_LIMITS = {
         "excel_export": False,
         "api_access": False,
         "team_members": 1,
+        # 순위 추적 기능
+        "rank_tracking_blogs": 1,      # 추적 가능 블로그 수
+        "rank_check_daily": 1,         # 일일 순위 확인 횟수
+        "rank_history_days": 7,        # 순위 히스토리 보관 기간
     },
     PlanType.BASIC: {
         "name": "베이직",
@@ -53,6 +59,10 @@ PLAN_LIMITS = {
         "excel_export": False,
         "api_access": False,
         "team_members": 1,
+        # 순위 추적 기능
+        "rank_tracking_blogs": 3,
+        "rank_check_daily": 5,
+        "rank_history_days": 30,
     },
     PlanType.PRO: {
         "name": "프로",
@@ -67,6 +77,10 @@ PLAN_LIMITS = {
         "excel_export": True,
         "api_access": False,
         "team_members": 3,
+        # 순위 추적 기능
+        "rank_tracking_blogs": 10,
+        "rank_check_daily": 20,
+        "rank_history_days": 90,
     },
     PlanType.BUSINESS: {
         "name": "비즈니스",
@@ -81,6 +95,10 @@ PLAN_LIMITS = {
         "excel_export": True,
         "api_access": True,
         "team_members": 10,
+        # 순위 추적 기능
+        "rank_tracking_blogs": -1,   # 무제한
+        "rank_check_daily": -1,      # 무제한
+        "rank_history_days": -1,     # 무제한
     },
 }
 

@@ -145,37 +145,82 @@ export default function BlogDetailPage() {
     )
   }
 
-  // Merge API data with demo data for missing fields
+  // 실제 API 데이터 사용 (가짜 데이터 제거)
   const displayData = {
     ...blogData,
     stats: {
       ...blogData.stats,
-      avg_likes: blogData.stats.avg_likes || 24,
-      avg_comments: blogData.stats.avg_comments || 8,
-      posting_frequency: blogData.stats.posting_frequency || 4.2
+      avg_likes: blogData.stats.avg_likes || 0,
+      avg_comments: blogData.stats.avg_comments || 0,
+      posting_frequency: blogData.stats.posting_frequency || 0
     },
-    recent_posts: blogData.recent_posts && blogData.recent_posts.length > 0
-      ? blogData.recent_posts
-      : [
-          {
-            id: 1,
-            title: '최근 포스트 1',
-            thumbnail: '📝',
-            date: new Date().toISOString().split('T')[0],
-            views: 100,
-            likes: 10,
-            comments: 2
-          }
-        ],
+    recent_posts: blogData.recent_posts || [],
     history: blogData.history && blogData.history.length > 0
       ? blogData.history
       : [
           {
-            date: new Date().toISOString().substring(0, 7),
+            date: new Date().toISOString().substring(0, 10),
             score: blogData.index.total_score,
             level: blogData.index.level
           }
         ]
+  }
+
+  // 실제 추천사항 생성 (API 응답 기반)
+  const getImprovementTips = () => {
+    const tips = []
+
+    // 포스팅 수 기반 추천
+    if ((blogData.stats.total_posts || 0) < 100) {
+      tips.push({
+        title: '포스팅 수 증가',
+        description: `현재 ${blogData.stats.total_posts || 0}개의 포스트가 있습니다. 꾸준한 포스팅으로 콘텐츠 축적이 필요합니다.`,
+        priority: 'high',
+        impact: '+3.0 점'
+      })
+    }
+
+    // 이웃 수 기반 추천
+    if ((blogData.stats.neighbor_count || 0) < 200) {
+      tips.push({
+        title: '이웃 활동 강화',
+        description: '이웃 블로그 방문 및 댓글 활동으로 커뮤니티 참여도를 높여보세요.',
+        priority: 'medium',
+        impact: '+2.0 점'
+      })
+    }
+
+    // 점수 기반 추천
+    if (blogData.index.total_score < 50) {
+      tips.push({
+        title: 'SEO 최적화',
+        description: '제목과 본문에 핵심 키워드를 자연스럽게 배치하세요.',
+        priority: 'high',
+        impact: '+4.0 점'
+      })
+    }
+
+    // 레벨 기반 추천
+    if (blogData.index.level < 5) {
+      tips.push({
+        title: '콘텐츠 품질 향상',
+        description: '이미지, 영상 등 멀티미디어를 활용하고 깊이 있는 콘텐츠를 작성하세요.',
+        priority: 'medium',
+        impact: '+2.5 점'
+      })
+    }
+
+    // 기본 추천사항
+    if (tips.length === 0) {
+      tips.push({
+        title: '현재 상태 유지',
+        description: '블로그가 잘 운영되고 있습니다. 꾸준한 포스팅을 유지하세요!',
+        priority: 'low',
+        impact: '유지'
+      })
+    }
+
+    return tips
   }
 
   return (
@@ -478,26 +523,7 @@ export default function BlogDetailPage() {
 
               <div className="space-y-4">
                 <h4 className="font-bold text-xl mb-4">개선 포인트</h4>
-                {[
-                  {
-                    title: '포스팅 빈도 증가',
-                    description: '주 4.2회에서 5-6회로 늘리면 트래픽 점수가 상승할 수 있습니다.',
-                    priority: 'high',
-                    impact: '+1.5 점'
-                  },
-                  {
-                    title: 'SEO 최적화',
-                    description: '제목과 본문에 키워드를 더 자연스럽게 배치하세요.',
-                    priority: 'medium',
-                    impact: '+2.0 점'
-                  },
-                  {
-                    title: '독자 참여 유도',
-                    description: '글 말미에 질문을 추가하여 댓글 참여를 유도하세요.',
-                    priority: 'medium',
-                    impact: '+1.0 점'
-                  }
-                ].map((tip, index) => (
+                {getImprovementTips().map((tip, index) => (
                   <motion.div
                     key={index}
                     initial={{ opacity: 0, x: -20 }}
@@ -506,6 +532,8 @@ export default function BlogDetailPage() {
                     className={`p-6 rounded-2xl border-l-4 ${
                       tip.priority === 'high'
                         ? 'bg-red-50 border-red-500'
+                        : tip.priority === 'low'
+                        ? 'bg-green-50 border-green-500'
                         : 'bg-orange-50 border-orange-500'
                     }`}
                   >

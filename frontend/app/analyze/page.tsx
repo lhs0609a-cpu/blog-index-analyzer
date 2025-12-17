@@ -10,10 +10,13 @@ import { useWindowSize } from '@/lib/hooks/useWindowSize'
 import { analyzeBlog, saveBlogToList } from '@/lib/api/blog'
 import type { BlogIndexResult } from '@/lib/types/api'
 import toast from 'react-hot-toast'
+import { useAuthStore } from '@/lib/stores/auth'
+import { incrementUsage, checkUsageLimit } from '@/lib/api/subscription'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 export default function AnalyzePage() {
   const router = useRouter()
+  const { isAuthenticated, user } = useAuthStore()
   const [blogId, setBlogId] = useState('')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [result, setResult] = useState<BlogIndexResult | null>(null)
@@ -25,6 +28,22 @@ export default function AnalyzePage() {
     if (!blogId.trim()) {
       toast.error('블로그 ID를 입력해주세요')
       return
+    }
+
+    // 로그인한 사용자인 경우 사용량 체크 및 차감
+    if (isAuthenticated && user?.id) {
+      try {
+        const usageCheck = await checkUsageLimit(user.id, 'blog_analysis')
+        if (!usageCheck.allowed) {
+          toast.error(`일일 블로그 분석 한도(${usageCheck.limit}회)에 도달했습니다. 업그레이드를 고려해주세요.`)
+          return
+        }
+        // 사용량 차감
+        await incrementUsage(user.id, 'blog_analysis')
+      } catch (err) {
+        console.error('Usage tracking error:', err)
+        // 사용량 추적 실패 시에도 분석은 진행
+      }
     }
 
     setIsAnalyzing(true)
@@ -43,7 +62,7 @@ export default function AnalyzePage() {
       if (analysisResponse.result) {
         const analysisResult = analysisResponse.result
 
-        // Save to user's list
+        // Save to user's list (user?.id를 전달하여 로그인 사용자는 서버에 저장)
         await saveBlogToList({
           id: analysisResult.blog.blog_id,
           blog_id: analysisResult.blog.blog_id,
@@ -58,7 +77,7 @@ export default function AnalyzePage() {
             engagement: analysisResult.stats.neighbor_count
           },
           last_analyzed: new Date().toISOString()
-        })
+        }, user?.id)
 
         setResult(analysisResult)
         toast.success('분석이 완료되었습니다!')

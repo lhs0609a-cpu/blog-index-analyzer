@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import { useAuthStore } from '@/lib/stores/auth'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev'
 
@@ -85,9 +86,10 @@ interface OptimizationSettings {
 }
 
 export default function AdOptimizerPage() {
+  const { isAuthenticated, user } = useAuthStore()
   const [activeTab, setActiveTab] = useState<'dashboard' | 'keywords' | 'discover' | 'excluded' | 'settings' | 'logs'>('dashboard')
   const [isLoading, setIsLoading] = useState(false)
-  const [userId] = useState(1) // 실제로는 인증에서 가져옴
+  const userId = user?.id || 1 // 인증된 사용자 ID 사용, 기본값 1
 
   // 대시보드 상태
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null)

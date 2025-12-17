@@ -100,21 +100,9 @@ export default function LearningEnginePage() {
     training_count: 0
   })
 
-  const [weights, setWeights] = useState<WeightInfo[]>([
-    { name: 'C-Rank', value: 0.52, change: 0.02, trend: 'up' },
-    { name: 'D.I.A.', value: 0.48, change: -0.02, trend: 'down' },
-    { name: '포스트수', value: 0.15, change: 0.03, trend: 'up' },
-    { name: '이웃수', value: 0.10, change: 0.00, trend: 'stable' },
-    { name: '블로그연령', value: 0.08, change: -0.01, trend: 'down' },
-  ])
+  const [weights, setWeights] = useState<WeightInfo[]>([])
 
-  const [accuracyHistory, setAccuracyHistory] = useState<AccuracyHistory[]>([
-    { timestamp: '10회', accuracy: 62, samples: 100 },
-    { timestamp: '20회', accuracy: 68, samples: 200 },
-    { timestamp: '30회', accuracy: 73, samples: 300 },
-    { timestamp: '40회', accuracy: 76, samples: 400 },
-    { timestamp: '50회', accuracy: 78.5, samples: 500 },
-  ])
+  const [accuracyHistory, setAccuracyHistory] = useState<AccuracyHistory[]>([])
 
   const [trainingSessions, setTrainingSessions] = useState<TrainingSession[]>([])
   const [deviationAnalysis, setDeviationAnalysis] = useState<DeviationAnalysis | null>(null)
@@ -344,29 +332,37 @@ export default function LearningEnginePage() {
                 <TrendingUp className="w-6 h-6 text-purple-500" />
                 정확도 향상 추이
               </h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={accuracyHistory}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="timestamp" stroke="#6b7280" />
-                  <YAxis domain={[0, 100]} stroke="#6b7280" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#fff',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px'
-                    }}
-                  />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="accuracy"
-                    stroke="#8b5cf6"
-                    strokeWidth={3}
-                    name="정확도 (%)"
-                    dot={{ fill: '#8b5cf6', r: 5 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              {accuracyHistory.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={accuracyHistory}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="timestamp" stroke="#6b7280" />
+                    <YAxis domain={[0, 100]} stroke="#6b7280" />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#fff',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px'
+                      }}
+                    />
+                    <Legend />
+                    <Line
+                      type="monotone"
+                      dataKey="accuracy"
+                      stroke="#8b5cf6"
+                      strokeWidth={3}
+                      name="정확도 (%)"
+                      dot={{ fill: '#8b5cf6', r: 5 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-[300px] text-gray-400">
+                  <TrendingUp className="w-12 h-12 mb-3" />
+                  <p className="text-lg font-medium">아직 학습 데이터가 없습니다</p>
+                  <p className="text-sm mt-1">키워드 검색을 통해 데이터가 수집되면 그래프가 표시됩니다</p>
+                </div>
+              )}
             </div>
           </>
         )}
@@ -598,35 +594,43 @@ export default function LearningEnginePage() {
         {activeTab === 'overview' && (
         <div className="bg-white rounded-2xl shadow-lg p-6">
           <h2 className="text-xl font-bold text-gray-800 mb-4">현재 가중치 분포</h2>
-          <div className="space-y-4">
-            {weights.map((weight, idx) => (
-              <div key={idx} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-gray-700">{weight.name}</span>
-                    {getTrendIcon(weight.trend)}
+          {weights.length > 0 ? (
+            <div className="space-y-4">
+              {weights.map((weight, idx) => (
+                <div key={idx} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-gray-700">{weight.name}</span>
+                      {getTrendIcon(weight.trend)}
+                    </div>
+                    <div className="text-right">
+                      <span className="text-lg font-bold text-gray-800">
+                        {(weight.value * 100).toFixed(1)}%
+                      </span>
+                      <span className={`ml-2 text-sm ${
+                        weight.change > 0 ? 'text-green-600' :
+                        weight.change < 0 ? 'text-red-600' : 'text-gray-500'
+                      }`}>
+                        ({weight.change > 0 ? '+' : ''}{(weight.change * 100).toFixed(1)}%)
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-lg font-bold text-gray-800">
-                      {(weight.value * 100).toFixed(1)}%
-                    </span>
-                    <span className={`ml-2 text-sm ${
-                      weight.change > 0 ? 'text-green-600' :
-                      weight.change < 0 ? 'text-red-600' : 'text-gray-500'
-                    }`}>
-                      ({weight.change > 0 ? '+' : ''}{(weight.change * 100).toFixed(1)}%)
-                    </span>
+                  <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                    <div
+                      className={`h-full ${getWeightColor(weight.value)} transition-all duration-500`}
+                      style={{ width: `${weight.value * 100}%` }}
+                    />
                   </div>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                  <div
-                    className={`h-full ${getWeightColor(weight.value)} transition-all duration-500`}
-                    style={{ width: `${weight.value * 100}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+              <Activity className="w-12 h-12 mb-3" />
+              <p className="text-lg font-medium">가중치 데이터를 불러오는 중...</p>
+              <p className="text-sm mt-1">학습이 진행되면 가중치 분포가 표시됩니다</p>
+            </div>
+          )}
         </div>
         )}
 
