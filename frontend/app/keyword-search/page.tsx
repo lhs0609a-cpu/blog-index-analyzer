@@ -585,19 +585,21 @@ function KeywordSearchContent() {
       const postsGap = avgPosts - myPosts
       const neighborsGap = avgNeighbors - myNeighbors
 
-      // 10위권 진입 가능성 계산
-      const scoreDiff = (myScore / avgScore) * 100
-      let probability = Math.min(Math.max(scoreDiff - 20, 0), 100)
+      // 10위권 진입 가능성 계산 (C-Rank 기반)
+      const cRankDiff = (myCRank / avgCRank) * 100
+      let probability = Math.min(Math.max(cRankDiff - 20, 0), 100)
 
-      // 예상 순위 계산
-      const betterBlogs = top10Blogs.filter(b => (b.index?.total_score || 0) > myScore).length
+      // 예상 순위 계산 (C-Rank 기반)
+      const betterBlogs = top10Blogs.filter(b => {
+        const bBreakdown = b.index?.score_breakdown
+        const bCRank = bBreakdown?.c_rank ?? (bBreakdown as any)?.trust ?? 0
+        return bCRank > myCRank
+      }).length
       const rankEstimate = betterBlogs + 1
 
-      // 추천사항 생성
+      // 추천사항 생성 (C-Rank 중심)
       const recommendations: string[] = []
-      if (scoreGap > 10) recommendations.push(`총점을 ${scoreGap.toFixed(1)}점 올려야 합니다`)
       if (cRankGap > 5) recommendations.push(`C-Rank를 ${cRankGap.toFixed(1)}점 개선하세요 (주제 집중, 꾸준한 포스팅, 소통 활동)`)
-      if (diaGap > 5) recommendations.push(`D.I.A.를 ${diaGap.toFixed(1)}점 개선하세요 (경험 후기, 독창적 정보, 상세한 내용)`)
       if (postsGap > 20) recommendations.push(`포스트를 ${Math.ceil(postsGap)}개 더 작성하세요`)
       if (neighborsGap > 10) recommendations.push(`이웃을 ${Math.ceil(neighborsGap)}명 더 늘리세요`)
 
@@ -703,19 +705,21 @@ function KeywordSearchContent() {
       const postsGap = avgPosts - myPosts
       const neighborsGap = avgNeighbors - myNeighbors
 
-      // 10위권 진입 가능성 계산
-      const scoreDiff = (myScore / avgScore) * 100
-      let probability = Math.min(Math.max(scoreDiff - 20, 0), 100)
+      // 10위권 진입 가능성 계산 (C-Rank 기반)
+      const cRankDiff = (myCRank / avgCRank) * 100
+      let probability = Math.min(Math.max(cRankDiff - 20, 0), 100)
 
-      // 예상 순위 계산
-      const betterBlogs = top10Blogs.filter(b => (b.index?.total_score || 0) > myScore).length
+      // 예상 순위 계산 (C-Rank 기반)
+      const betterBlogs = top10Blogs.filter(b => {
+        const bBreakdown = b.index?.score_breakdown
+        const bCRank = bBreakdown?.c_rank ?? (bBreakdown as any)?.trust ?? 0
+        return bCRank > myCRank
+      }).length
       const rankEstimate = betterBlogs + 1
 
-      // 추천사항 생성
+      // 추천사항 생성 (C-Rank 중심)
       const recommendations: string[] = []
-      if (scoreGap > 10) recommendations.push(`총점을 ${scoreGap.toFixed(1)}점 올려야 합니다`)
       if (cRankGap > 5) recommendations.push(`C-Rank를 ${cRankGap.toFixed(1)}점 개선하세요 (주제 집중, 꾸준한 포스팅, 소통 활동)`)
-      if (diaGap > 5) recommendations.push(`D.I.A.를 ${diaGap.toFixed(1)}점 개선하세요 (경험 후기, 독창적 정보, 상세한 내용)`)
       if (postsGap > 20) recommendations.push(`포스트를 ${Math.ceil(postsGap)}개 더 작성하세요`)
       if (neighborsGap > 10) recommendations.push(`이웃을 ${Math.ceil(neighborsGap)}명 더 늘리세요`)
 
