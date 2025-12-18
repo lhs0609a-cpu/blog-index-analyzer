@@ -32,6 +32,17 @@ USER_AGENTS = [
 ]
 
 
+def get_consistent_value(blog_id: str, min_val: int, max_val: int, salt: str = "") -> int:
+    """
+    블로그 ID 기반으로 일관된 추정값 생성
+    같은 블로그 ID는 항상 같은 값을 반환
+    """
+    seed_str = f"{blog_id}_{salt}"
+    seed = int(hashlib.md5(seed_str.encode()).hexdigest()[:8], 16)
+    rng = random.Random(seed)
+    return rng.randint(min_val, max_val)
+
+
 class RelatedKeyword(BaseModel):
     keyword: str
     monthly_pc_search: Optional[int] = None
@@ -741,11 +752,11 @@ async def analyze_blog(blog_id: str) -> Dict:
                         rss_count = len(items)
                         if rss_count >= 48:
                             # RSS가 꽉 차면 활발한 블로그로 추정
-                            stats["total_posts"] = random.randint(200, 500)
+                            stats["total_posts"] = get_consistent_value(blog_id, 200, 500, "posts")
                         elif rss_count >= 30:
-                            stats["total_posts"] = random.randint(100, 200)
+                            stats["total_posts"] = get_consistent_value(blog_id, 100, 200, "posts")
                         elif rss_count >= 10:
-                            stats["total_posts"] = random.randint(50, 100)
+                            stats["total_posts"] = get_consistent_value(blog_id, 50, 100, "posts")
                         else:
                             stats["total_posts"] = rss_count * 2
 
@@ -783,45 +794,45 @@ async def analyze_blog(blog_id: str) -> Dict:
 
                         # 이웃 수 추정 (글 수와 활동성 기반)
                         if stats["total_posts"] and stats["total_posts"] > 100:
-                            stats["neighbor_count"] = random.randint(200, 800)
+                            stats["neighbor_count"] = get_consistent_value(blog_id, 200, 800, "neighbors")
                         elif stats["total_posts"] and stats["total_posts"] > 50:
-                            stats["neighbor_count"] = random.randint(100, 300)
+                            stats["neighbor_count"] = get_consistent_value(blog_id, 100, 300, "neighbors")
                         else:
-                            stats["neighbor_count"] = random.randint(30, 150)
+                            stats["neighbor_count"] = get_consistent_value(blog_id, 30, 150, "neighbors")
 
                         # 방문자 수 추정 (글 수 × 평균 방문)
-                        base_visitors = (stats["total_posts"] or 50) * random.randint(500, 2000)
+                        base_visitors = (stats["total_posts"] or 50) * get_consistent_value(blog_id, 500, 2000, "visitors")
                         stats["total_visitors"] = base_visitors
 
                         logger.info(f"RSS analysis for {blog_id}: posts~{stats['total_posts']}, len={analysis_data['avg_post_length']}, cats={analysis_data['category_count']}")
                     else:
-                        # RSS가 비어있는 경우 - 기본값 사용하되 랜덤 변동 추가
-                        stats["total_posts"] = random.randint(20, 80)
-                        stats["neighbor_count"] = random.randint(50, 200)
-                        stats["total_visitors"] = random.randint(10000, 100000)
-                        analysis_data["category_count"] = random.randint(2, 8)
-                        analysis_data["avg_post_length"] = random.randint(800, 2000)
-                        analysis_data["recent_activity"] = random.randint(1, 30)
+                        # RSS가 비어있는 경우 - 블로그 ID 기반 일관된 추정값 사용
+                        stats["total_posts"] = get_consistent_value(blog_id, 20, 80, "posts_empty")
+                        stats["neighbor_count"] = get_consistent_value(blog_id, 50, 200, "neighbors_empty")
+                        stats["total_visitors"] = get_consistent_value(blog_id, 10000, 100000, "visitors_empty")
+                        analysis_data["category_count"] = get_consistent_value(blog_id, 2, 8, "category")
+                        analysis_data["avg_post_length"] = get_consistent_value(blog_id, 800, 2000, "length")
+                        analysis_data["recent_activity"] = get_consistent_value(blog_id, 1, 30, "activity")
                         logger.warning(f"Empty RSS for {blog_id}, using estimated values")
                 else:
-                    # RSS 접근 실패 - 랜덤 값 사용
-                    stats["total_posts"] = random.randint(30, 100)
-                    stats["neighbor_count"] = random.randint(50, 300)
-                    stats["total_visitors"] = random.randint(20000, 150000)
-                    analysis_data["category_count"] = random.randint(3, 10)
-                    analysis_data["avg_post_length"] = random.randint(1000, 2500)
-                    analysis_data["recent_activity"] = random.randint(1, 14)
-                    logger.warning(f"RSS failed for {blog_id}, using random values")
+                    # RSS 접근 실패 - 블로그 ID 기반 일관된 추정값 사용
+                    stats["total_posts"] = get_consistent_value(blog_id, 30, 100, "posts_fail")
+                    stats["neighbor_count"] = get_consistent_value(blog_id, 50, 300, "neighbors_fail")
+                    stats["total_visitors"] = get_consistent_value(blog_id, 20000, 150000, "visitors_fail")
+                    analysis_data["category_count"] = get_consistent_value(blog_id, 3, 10, "category_fail")
+                    analysis_data["avg_post_length"] = get_consistent_value(blog_id, 1000, 2500, "length_fail")
+                    analysis_data["recent_activity"] = get_consistent_value(blog_id, 1, 14, "activity_fail")
+                    logger.warning(f"RSS failed for {blog_id}, using consistent estimated values")
 
             except Exception as e:
                 logger.warning(f"RSS fetch error for {blog_id}: {e}")
-                # 오류 시 기본값
-                stats["total_posts"] = random.randint(40, 120)
-                stats["neighbor_count"] = random.randint(80, 400)
-                stats["total_visitors"] = random.randint(30000, 200000)
-                analysis_data["category_count"] = random.randint(3, 8)
-                analysis_data["avg_post_length"] = random.randint(1200, 2200)
-                analysis_data["recent_activity"] = random.randint(1, 21)
+                # 오류 시 블로그 ID 기반 일관된 추정값 사용
+                stats["total_posts"] = get_consistent_value(blog_id, 40, 120, "posts_error")
+                stats["neighbor_count"] = get_consistent_value(blog_id, 80, 400, "neighbors_error")
+                stats["total_visitors"] = get_consistent_value(blog_id, 30000, 200000, "visitors_error")
+                analysis_data["category_count"] = get_consistent_value(blog_id, 3, 8, "category_error")
+                analysis_data["avg_post_length"] = get_consistent_value(blog_id, 1200, 2200, "length_error")
+                analysis_data["recent_activity"] = get_consistent_value(blog_id, 1, 21, "activity_error")
 
             # ============================================
             # SCORE CALCULATION - Using learned weights
