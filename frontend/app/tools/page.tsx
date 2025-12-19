@@ -17,7 +17,7 @@ import {
   TrendingUp as DataChart, ShoppingCart, MapPin, Newspaper,
   Coffee, Video, UserCircle, Globe, HelpCircle, Store,
   Percent, Package, Navigation, Megaphone, BookOpen, Film,
-  Award as Badge, Layers, MessageSquareText, ShoppingBag, Info, X
+  Award as Badge, Layers, MessageSquareText, ShoppingBag, Info, X, Filter, Tags
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -27,7 +27,7 @@ import { PLAN_INFO } from '@/lib/features/featureAccess'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev'
 
-type TabType = 'title' | 'blueocean' | 'writing' | 'insight' | 'prediction' | 'report' | 'hashtag' | 'timing' | 'youtube' | 'lowquality' | 'backup' | 'campaign' | 'ranktrack' | 'clone' | 'comment' | 'algorithm' | 'lifespan' | 'refresh' | 'related' | 'mentor' | 'trend' | 'revenue' | 'roadmap' | 'secretkw' | 'datalab' | 'shopping' | 'place' | 'news' | 'cafe' | 'naverView' | 'influencer' | 'searchAnalysis' | 'kin' | 'smartstore'
+type TabType = 'title' | 'blueocean' | 'writing' | 'insight' | 'prediction' | 'report' | 'hashtag' | 'timing' | 'youtube' | 'lowquality' | 'backup' | 'campaign' | 'ranktrack' | 'clone' | 'comment' | 'algorithm' | 'lifespan' | 'refresh' | 'related' | 'mentor' | 'trend' | 'revenue' | 'roadmap' | 'secretkw' | 'datalab' | 'shopping' | 'place' | 'news' | 'cafe' | 'naverView' | 'influencer' | 'searchAnalysis' | 'kin' | 'smartstore' | 'keywordAnalysis'
 
 // AI 제목 생성 결과 타입
 interface TitleResult {
@@ -1056,6 +1056,12 @@ export default function ToolsPage() {
       description: '스마트스토어와 블로그 시너지를 분석합니다.',
       steps: ['1. 스마트스토어 ID를 입력하세요', '2. "분석하기" 버튼을 클릭하세요', '3. 상품 키워드를 확인하세요', '4. 블로그 콘텐츠 아이디어를 활용하세요'],
       tips: ['상품과 연관된 블로그 글을 작성하세요', '전환율 높은 키워드를 우선 공략하세요']
+    },
+    keywordAnalysis: {
+      title: '키워드 유형 분석',
+      description: '연관 키워드를 유형별로 분류하고 필터링합니다.',
+      steps: ['1. 분석할 키워드를 입력하세요', '2. 연관 키워드가 자동으로 분류됩니다', '3. 유형별 필터로 원하는 키워드를 찾으세요', '4. 검색량 기준으로 정렬하세요'],
+      tips: ['정보형 키워드는 교육 콘텐츠에 적합합니다', '병원탐색형은 지역 타겟팅과 함께 활용하세요', '검색량 500+ 키워드부터 공략하는 것을 추천합니다']
     }
   }
 
@@ -1074,6 +1080,7 @@ export default function ToolsPage() {
     { id: 'campaign' as TabType, label: '체험단', icon: Gift, color: 'from-pink-500 to-rose-500' },
     { id: 'ranktrack' as TabType, label: '순위 추적', icon: Activity, color: 'from-teal-500 to-cyan-500' },
     { id: 'clone' as TabType, label: '클론 분석', icon: Scan, color: 'from-fuchsia-500 to-purple-600' },
+    { id: 'keywordAnalysis' as TabType, label: '키워드 분석', icon: Tags, color: 'from-indigo-500 to-purple-500' },
     { id: 'comment' as TabType, label: '댓글 AI', icon: MessageSquare, color: 'from-sky-500 to-blue-500' },
     { id: 'algorithm' as TabType, label: '알고리즘', icon: Brain, color: 'from-rose-500 to-pink-600' },
     { id: 'lifespan' as TabType, label: '콘텐츠 수명', icon: Timer, color: 'from-lime-500 to-green-500' },
