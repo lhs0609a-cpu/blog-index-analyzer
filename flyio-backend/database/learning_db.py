@@ -25,6 +25,9 @@ def get_db():
     finally:
         conn.close()
 
+# Alias for backward compatibility
+get_learning_db = get_db
+
 def init_learning_tables():
     """Initialize learning database tables"""
     with get_db() as conn:
