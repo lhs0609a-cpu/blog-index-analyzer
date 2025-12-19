@@ -115,11 +115,15 @@ export interface HealthCheckResponse {
 }
 
 export interface UserResponse {
-  id: string
+  id: number
   email: string
-  name: string
+  name: string | null
+  blog_id: string | null
+  plan: string
+  is_active: boolean
+  is_verified: boolean
+  is_admin: boolean
   created_at: string
-  updated_at: string
 }
 
 export interface ApiError {

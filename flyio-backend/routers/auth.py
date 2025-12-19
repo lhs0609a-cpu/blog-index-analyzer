@@ -52,6 +52,7 @@ class UserResponse(BaseModel):
     plan: str
     is_active: bool
     is_verified: bool
+    is_admin: bool
     created_at: str
 
 
@@ -109,24 +110,30 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     )
 
     if not token:
+        logger.warning("No token provided")
         raise credentials_exception
 
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id: int = payload.get("sub")
+        logger.info(f"Token decoded successfully, user_id: {user_id}")
         if user_id is None:
+            logger.warning("No user_id in token payload")
             raise credentials_exception
-    except JWTError:
+    except JWTError as e:
+        logger.warning(f"JWT decode error: {e}, token prefix: {token[:20] if len(token) > 20 else token}...")
         raise credentials_exception
 
     user_db = get_user_db()
     user = user_db.get_user_by_id(int(user_id))
     if user is None:
+        logger.warning(f"User not found for id: {user_id}")
         raise credentials_exception
 
     if not user.get("is_active"):
         raise HTTPException(status_code=400, detail="Inactive user")
 
+    logger.info(f"User authenticated: {user.get('email')}, is_admin: {user.get('is_admin')}")
     return user
 
 
@@ -140,6 +147,7 @@ def user_to_response(user: dict) -> dict:
         "plan": user.get("plan", "free"),
         "is_active": bool(user.get("is_active", True)),
         "is_verified": bool(user.get("is_verified", False)),
+        "is_admin": bool(user.get("is_admin", False)),
         "created_at": str(user.get("created_at", ""))
     }
 
@@ -184,7 +192,7 @@ async def register(request: RegisterRequest):
     user = user_db.get_user_by_id(user_id)
 
     # Create access token
-    access_token = create_access_token(data={"sub": user_id})
+    access_token = create_access_token(data={"sub": str(user_id)})
 
     logger.info(f"User registered: {request.email}")
 
@@ -226,7 +234,7 @@ async def login(request: LoginRequest):
         )
 
     # Create access token
-    access_token = create_access_token(data={"sub": user["id"]})
+    access_token = create_access_token(data={"sub": str(user["id"])})
 
     logger.info(f"User logged in: {request.email}")
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Sparkles, TrendingUp, Zap, Award, Users, BarChart3, LogOut, Search, BookOpen, ArrowRight, Building2, Mic, CreditCard, X, PenTool } from 'lucide-react'
+import { Sparkles, TrendingUp, Zap, Award, Users, BarChart3, LogOut, Search, BookOpen, ArrowRight, Building2, Mic, CreditCard, X, PenTool, Shield } from 'lucide-react'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import toast from 'react-hot-toast'
@@ -58,6 +58,18 @@ export default function Home() {
                 대시보드
               </motion.button>
             </Link>
+            {user?.is_admin && (
+              <Link href="/admin">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="px-4 py-3 rounded-full glass hover:bg-white/90 transition-all font-semibold flex items-center gap-2 text-purple-700"
+                >
+                  <Shield className="w-4 h-4" />
+                  관리자
+                </motion.button>
+              </Link>
+            )}
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
