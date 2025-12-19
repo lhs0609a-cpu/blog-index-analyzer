@@ -105,6 +105,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ User blogs tables initialization failed: {e}")
 
+    # Keyword Analysis DB 초기화
+    try:
+        from database.keyword_analysis_db import init_keyword_analysis_tables
+        init_keyword_analysis_tables()
+        logger.info("✅ Keyword analysis tables initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ Keyword analysis tables initialization failed: {e}")
+
     # 자동 백업 스케줄러 시작
     try:
         from services.backup_service import backup_scheduler
@@ -217,6 +225,7 @@ from routers import subscription, payment, naver_ad, content_lifespan, admin, co
 from routers import challenge
 from routers import rank_tracker
 from routers import user_blogs
+from routers import keyword_analysis
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
@@ -236,6 +245,7 @@ app.include_router(content_lifespan.router, prefix="/api/content-lifespan", tags
 app.include_router(challenge.router, prefix="/api/challenge", tags=["블로그챌린지"])
 app.include_router(rank_tracker.router, prefix="/api/rank-tracker", tags=["순위추적"])
 app.include_router(user_blogs.router, prefix="/api/user-blogs", tags=["사용자블로그"])
+app.include_router(keyword_analysis.router, prefix="/api/keyword-analysis", tags=["키워드분석"])
 
 
 if __name__ == "__main__":
