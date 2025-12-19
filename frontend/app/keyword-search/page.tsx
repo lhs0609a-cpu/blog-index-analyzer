@@ -6,12 +6,10 @@ import { ConnectionIndicator } from '@/components/ConnectionIndicator'
 import { getApiUrl } from '@/lib/api/apiConfig'
 import * as Tabs from '@radix-ui/react-tabs'
 import { motion } from 'framer-motion'
-import { Check, Loader2, X, TrendingUp, TrendingDown, ArrowLeft, Filter } from 'lucide-react'
+import { Check, Loader2, X, TrendingUp, TrendingDown, ArrowLeft } from 'lucide-react'
 import { useAuthStore } from '@/lib/stores/auth'
 import { incrementUsage, checkUsageLimit } from '@/lib/api/subscription'
 import toast from 'react-hot-toast'
-import { KeywordTypeTag, KeywordTypeChip, ALL_KEYWORD_TYPES } from '@/components/keyword-analysis'
-import { KeywordType, KEYWORD_TYPE_COLORS } from '@/lib/types/keyword-analysis'
 
 interface BlogIndexResult {
   rank: number
@@ -117,8 +115,6 @@ interface RelatedKeyword {
   monthly_mobile_search: number | null
   monthly_total_search: number | null
   competition: string | null
-  keyword_type?: KeywordType  // 키워드 유형 (정보형, 증상형 등)
-  confidence?: number  // 분류 신뢰도
 }
 
 interface RelatedKeywordsResponse {
@@ -236,11 +232,6 @@ function KeywordSearchContent() {
   const [relatedKeywords, setRelatedKeywords] = useState<RelatedKeywordsResponse | null>(null)
   const [loadingRelatedKeywords, setLoadingRelatedKeywords] = useState(false)
   const [showAllRelatedKeywords, setShowAllRelatedKeywords] = useState(false)
-
-  // 키워드 유형 필터 상태
-  const [selectedKeywordTypes, setSelectedKeywordTypes] = useState<KeywordType[]>([])
-  const [minSearchVolume, setMinSearchVolume] = useState<number>(0)
-  const [showKeywordFilter, setShowKeywordFilter] = useState(false)
 
   // 학습 엔진 상태
   const [learningStatus, setLearningStatus] = useState<LearningStatus | null>(null)
@@ -903,91 +894,6 @@ function KeywordSearchContent() {
     } finally {
       setLoading(false)
     }
-  }
-
-  // 키워드 유형 분류 함수 (프론트엔드 간이 분류)
-  const classifyKeywordType = (keyword: string): KeywordType => {
-    const kw = keyword.toLowerCase()
-
-    // 지역형 (강남, 분당 등 + 병원)
-    const localPrefixes = ['강남', '서초', '송파', '분당', '판교', '일산', '수원', '부천']
-    for (const prefix of localPrefixes) {
-      if (kw.includes(prefix) && (kw.includes('병원') || kw.includes('의원') || kw.includes('클리닉'))) {
-        return '지역형'
-      }
-    }
-
-    // 광역형 (서울, 부산 등 + 병원)
-    const broadPrefixes = ['서울', '부산', '대구', '인천', '광주', '대전', '울산', '경기']
-    for (const prefix of broadPrefixes) {
-      if (kw.includes(prefix) && (kw.includes('병원') || kw.includes('의원'))) {
-        return '광역형'
-      }
-    }
-
-    // 비용/검사형
-    if (kw.includes('비용') || kw.includes('가격') || kw.includes('검사') || kw.includes('치료비') || kw.includes('보험') || kw.includes('실비')) {
-      return '비용검사형'
-    }
-
-    // 병원탐색형
-    if (kw.includes('병원') || kw.includes('의원') || kw.includes('추천') || kw.includes('잘하는') || kw.includes('클리닉')) {
-      return '병원탐색형'
-    }
-
-    // 증상형
-    if (kw.includes('증상') || kw.includes('아프') || kw.includes('통증') || kw.includes('쑤시') || kw.includes('저림') || kw.includes('두통')) {
-      return '증상형'
-    }
-
-    // 정보형 (기본)
-    if (kw.endsWith('란') || kw.endsWith('이란') || kw.includes('원인') || kw.includes('효과') || kw.includes('방법')) {
-      return '정보형'
-    }
-
-    return '정보형' // 기본값
-  }
-
-  // 필터링된 연관 키워드 목록
-  const getFilteredRelatedKeywords = (): RelatedKeyword[] => {
-    if (!relatedKeywords?.keywords) return []
-
-    return relatedKeywords.keywords.filter(kw => {
-      // 검색량 필터
-      if (minSearchVolume > 0 && (kw.monthly_total_search || 0) < minSearchVolume) {
-        return false
-      }
-
-      // 유형 필터
-      if (selectedKeywordTypes.length > 0) {
-        const kwType = kw.keyword_type || classifyKeywordType(kw.keyword)
-        if (!selectedKeywordTypes.includes(kwType)) {
-          return false
-        }
-      }
-
-      return true
-    })
-  }
-
-  // 유형별 키워드 개수 계산
-  const getKeywordTypeDistribution = (): Record<KeywordType, number> => {
-    const dist: Record<KeywordType, number> = {
-      '정보형': 0,
-      '증상형': 0,
-      '병원탐색형': 0,
-      '비용검사형': 0,
-      '지역형': 0,
-      '광역형': 0,
-      '미분류': 0
-    }
-
-    relatedKeywords?.keywords.forEach(kw => {
-      const type = kw.keyword_type || classifyKeywordType(kw.keyword)
-      dist[type] = (dist[type] || 0) + 1
-    })
-
-    return dist
   }
 
   // 검색량 포맷팅
@@ -2341,7 +2247,7 @@ function KeywordSearchContent() {
                 연관 키워드 & 검색량
                 {relatedKeywords && relatedKeywords.keywords.length > 0 && (
                   <span className="text-sm font-normal text-gray-500">
-                    (총 {relatedKeywords.keywords.length}개{selectedKeywordTypes.length > 0 || minSearchVolume > 0 ? ` → 필터: ${getFilteredRelatedKeywords().length}개` : ''})
+                    (총 {relatedKeywords.keywords.length}개)
                   </span>
                 )}
               </h2>
@@ -2351,93 +2257,8 @@ function KeywordSearchContent() {
                     {relatedKeywords.source === 'searchad' ? '네이버 검색광고 API' : '네이버 자동완성'}
                   </span>
                 )}
-                {relatedKeywords && relatedKeywords.keywords.length > 0 && (
-                  <button
-                    onClick={() => setShowKeywordFilter(!showKeywordFilter)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                      showKeywordFilter || selectedKeywordTypes.length > 0 || minSearchVolume > 0
-                        ? 'bg-purple-100 text-purple-700'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    <Filter className="w-4 h-4" />
-                    필터
-                    {(selectedKeywordTypes.length > 0 || minSearchVolume > 0) && (
-                      <span className="ml-1 px-1.5 py-0.5 bg-purple-500 text-white text-xs rounded-full">
-                        {selectedKeywordTypes.length + (minSearchVolume > 0 ? 1 : 0)}
-                      </span>
-                    )}
-                  </button>
-                )}
               </div>
             </div>
-
-            {/* 키워드 유형 필터 패널 */}
-            {showKeywordFilter && relatedKeywords && relatedKeywords.keywords.length > 0 && (
-              <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="mb-3">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">키워드 유형</label>
-                  <div className="flex flex-wrap gap-2">
-                    {ALL_KEYWORD_TYPES.map(type => {
-                      const count = getKeywordTypeDistribution()[type] || 0
-                      const isSelected = selectedKeywordTypes.includes(type)
-                      const colors = KEYWORD_TYPE_COLORS[type]
-                      return (
-                        <button
-                          key={type}
-                          onClick={() => {
-                            setSelectedKeywordTypes(prev =>
-                              prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
-                            )
-                          }}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                            isSelected
-                              ? `${colors.bg} ${colors.text} border-2 ${colors.border}`
-                              : 'bg-white text-gray-600 border-2 border-gray-200 hover:bg-gray-100'
-                          }`}
-                        >
-                          {type}
-                          <span className={`px-1.5 py-0.5 rounded-full text-xs ${isSelected ? 'bg-white/50' : 'bg-gray-100'}`}>
-                            {count}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm font-medium text-gray-700">최소 검색량:</label>
-                    <select
-                      value={minSearchVolume}
-                      onChange={(e) => setMinSearchVolume(Number(e.target.value))}
-                      className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500"
-                    >
-                      <option value={0}>전체</option>
-                      <option value={100}>100+</option>
-                      <option value={500}>500+</option>
-                      <option value={1000}>1,000+</option>
-                      <option value={5000}>5,000+</option>
-                      <option value={10000}>10,000+</option>
-                    </select>
-                  </div>
-
-                  {(selectedKeywordTypes.length > 0 || minSearchVolume > 0) && (
-                    <button
-                      onClick={() => {
-                        setSelectedKeywordTypes([])
-                        setMinSearchVolume(0)
-                      }}
-                      className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
-                    >
-                      <X className="w-4 h-4" />
-                      필터 초기화
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
 
             {loadingRelatedKeywords ? (
               <div className="flex items-center justify-center py-8">
@@ -2455,7 +2276,6 @@ function KeywordSearchContent() {
                           <tr className="border-b border-gray-200">
                             <th className="text-left py-3 px-4 font-semibold text-gray-700 w-8">#</th>
                             <th className="text-left py-3 px-4 font-semibold text-gray-700">키워드</th>
-                            <th className="text-center py-3 px-4 font-semibold text-gray-700">유형</th>
                             <th className="text-center py-3 px-4 font-semibold text-gray-700">추천</th>
                             <th className="text-right py-3 px-4 font-semibold text-gray-700">PC</th>
                             <th className="text-right py-3 px-4 font-semibold text-gray-700">
@@ -2467,9 +2287,8 @@ function KeywordSearchContent() {
                           </tr>
                         </thead>
                         <tbody>
-                          {getFilteredRelatedKeywords().slice(0, showAllRelatedKeywords ? 100 : 20).map((kw, idx) => {
+                          {relatedKeywords.keywords.slice(0, showAllRelatedKeywords ? 100 : 20).map((kw, idx) => {
                             const isRecommended = isRecommendedKeyword(kw.keyword)
-                            const kwType = kw.keyword_type || classifyKeywordType(kw.keyword)
                             return (
                               <tr
                                 key={idx}
@@ -2485,9 +2304,6 @@ function KeywordSearchContent() {
                                   }`}>
                                     {kw.keyword}
                                   </span>
-                                </td>
-                                <td className="text-center py-3 px-4">
-                                  <KeywordTypeTag type={kwType} size="sm" />
                                 </td>
                                 <td className="text-center py-3 px-4">
                                   {isRecommended && (
@@ -2550,7 +2366,7 @@ function KeywordSearchContent() {
                     </div>
 
                     {/* 펼치기/접기 버튼 */}
-                    {getFilteredRelatedKeywords().length > 20 && (
+                    {relatedKeywords.keywords.length > 20 && (
                       <div className="mt-4 text-center">
                         <button
                           onClick={() => setShowAllRelatedKeywords(!showAllRelatedKeywords)}
@@ -2568,13 +2384,13 @@ function KeywordSearchContent() {
                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                               </svg>
-                              {getFilteredRelatedKeywords().length}개 모두 보기 (모바일 검색량 포함)
+                              {relatedKeywords.keywords.length}개 모두 보기 (모바일 검색량 포함)
                             </>
                           )}
                         </button>
                         {!showAllRelatedKeywords && (
                           <p className="mt-2 text-sm text-gray-500">
-                            현재 상위 20개만 표시 중 • 펼치면 {getFilteredRelatedKeywords().length}개 연관검색어와 모바일 검색량을 확인할 수 있습니다
+                            현재 상위 20개만 표시 중 • 펼치면 {relatedKeywords.keywords.length}개 연관검색어와 모바일 검색량을 확인할 수 있습니다
                           </p>
                         )}
                       </div>
@@ -2583,10 +2399,10 @@ function KeywordSearchContent() {
                 )}
 
                 {/* 검색량 없는 경우 (자동완성) - 칩 형태 */}
-                {!getFilteredRelatedKeywords().some(kw => kw.monthly_total_search !== null) && (
+                {!relatedKeywords.keywords.some(kw => kw.monthly_total_search !== null) && (
                   <>
                     <div className="flex flex-wrap gap-2">
-                      {getFilteredRelatedKeywords().slice(0, showAllRelatedKeywords ? 100 : 20).map((kw, idx) => (
+                      {relatedKeywords.keywords.slice(0, showAllRelatedKeywords ? 100 : 20).map((kw, idx) => (
                         <button
                           key={idx}
                           onClick={() => handleRelatedKeywordClick(kw.keyword)}
@@ -2598,7 +2414,7 @@ function KeywordSearchContent() {
                       ))}
                     </div>
                     {/* 펼치기/접기 버튼 */}
-                    {getFilteredRelatedKeywords().length > 20 && (
+                    {relatedKeywords.keywords.length > 20 && (
                       <div className="mt-4 text-center">
                         <button
                           onClick={() => setShowAllRelatedKeywords(!showAllRelatedKeywords)}
@@ -2616,7 +2432,7 @@ function KeywordSearchContent() {
                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                               </svg>
-                              {getFilteredRelatedKeywords().length}개 모두 보기
+                              {relatedKeywords.keywords.length}개 모두 보기
                             </>
                           )}
                         </button>
