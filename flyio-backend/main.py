@@ -127,7 +127,7 @@ async def lifespan(app: FastAPI):
     try:
         from services.auto_learning_service import auto_learning_scheduler
         auto_learning_scheduler.start()
-        logger.info("✅ Auto learning scheduler started (every 30 min)")
+        logger.info("✅ Auto learning scheduler started (every 1 min)")
     except Exception as e:
         logger.warning(f"⚠️ Auto learning scheduler failed to start: {e}")
 

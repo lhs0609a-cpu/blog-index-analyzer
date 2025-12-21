@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 # ==============================================
 AUTO_LEARNING_CONFIG = {
     "enabled": True,                    # 자동 학습 활성화 여부
-    "interval_minutes": 30,             # 학습 주기 (분)
-    "keywords_per_cycle": 2,            # 한 번에 학습할 키워드 수
+    "interval_minutes": 1,              # 학습 주기 (분)
+    "keywords_per_cycle": 1,            # 한 번에 학습할 키워드 수
     "blogs_per_keyword": 13,            # 키워드당 분석할 블로그 수
     "delay_between_keywords": 5.0,      # 키워드 간 대기 시간 (초)
     "delay_between_blogs": 1.0,         # 블로그 간 대기 시간 (초)
