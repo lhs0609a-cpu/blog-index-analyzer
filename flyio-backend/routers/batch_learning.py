@@ -1186,6 +1186,98 @@ async def run_batch_learning(
     logger.info(f"Batch learning completed: {learning_state['completed_keywords']} keywords, {learning_state['total_blogs_analyzed']} blogs")
 
 
+# ========================================
+# 자동 학습 스케줄러 API
+# ========================================
+
+@router.get("/auto-learning/status")
+async def get_auto_learning_status():
+    """자동 학습 스케줄러 상태 조회"""
+    from services.auto_learning_service import get_auto_learning_status
+    return get_auto_learning_status()
+
+
+@router.post("/auto-learning/enable")
+async def enable_auto_learning():
+    """자동 학습 활성화"""
+    from services.auto_learning_service import auto_learning_scheduler
+    auto_learning_scheduler.enable()
+    return {
+        "success": True,
+        "message": "자동 학습이 활성화되었습니다",
+        "status": "enabled"
+    }
+
+
+@router.post("/auto-learning/disable")
+async def disable_auto_learning():
+    """자동 학습 비활성화"""
+    from services.auto_learning_service import auto_learning_scheduler
+    auto_learning_scheduler.disable()
+    return {
+        "success": True,
+        "message": "자동 학습이 비활성화되었습니다",
+        "status": "disabled"
+    }
+
+
+class AutoLearningConfigUpdate(BaseModel):
+    interval_minutes: Optional[int] = None
+    keywords_per_cycle: Optional[int] = None
+    blogs_per_keyword: Optional[int] = None
+    delay_between_keywords: Optional[float] = None
+    delay_between_blogs: Optional[float] = None
+    auto_train_threshold: Optional[int] = None
+
+
+@router.put("/auto-learning/config")
+async def update_auto_learning_config(config: AutoLearningConfigUpdate):
+    """자동 학습 설정 업데이트"""
+    from services.auto_learning_service import update_auto_learning_config as update_config
+
+    updates = {k: v for k, v in config.dict().items() if v is not None}
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="업데이트할 설정이 없습니다")
+
+    new_config = update_config(updates)
+
+    return {
+        "success": True,
+        "message": "설정이 업데이트되었습니다",
+        "config": new_config
+    }
+
+
+@router.post("/auto-learning/trigger")
+async def trigger_auto_learning_now(background_tasks: BackgroundTasks):
+    """자동 학습 즉시 실행 (수동 트리거)"""
+    from services.auto_learning_service import run_single_learning_cycle, auto_learning_state
+
+    if auto_learning_state["is_running"]:
+        raise HTTPException(status_code=400, detail="이미 학습이 진행 중입니다")
+
+    background_tasks.add_task(run_single_learning_cycle_sync)
+
+    return {
+        "success": True,
+        "message": "자동 학습 사이클이 시작되었습니다"
+    }
+
+
+def run_single_learning_cycle_sync():
+    """동기 방식으로 학습 사이클 실행 (BackgroundTasks용)"""
+    import asyncio
+    from services.auto_learning_service import run_single_learning_cycle
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(run_single_learning_cycle())
+    finally:
+        loop.close()
+
+
 async def run_model_training():
     """수집된 데이터로 모델 학습 - 정확도가 향상될 때만 가중치 저장"""
     global learning_state

@@ -1,9 +1,11 @@
 """
 FastAPI 메인 애플리케이션
 """
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from contextlib import asynccontextmanager
 import logging
 
@@ -121,6 +123,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Backup scheduler failed to start: {e}")
 
+    # 자동 학습 스케줄러 시작
+    try:
+        from services.auto_learning_service import auto_learning_scheduler
+        auto_learning_scheduler.start()
+        logger.info("✅ Auto learning scheduler started (every 30 min)")
+    except Exception as e:
+        logger.warning(f"⚠️ Auto learning scheduler failed to start: {e}")
+
     # Redis 연결 초기화 (선택적)
     if settings.REDIS_URL:
         try:
@@ -142,6 +152,14 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info(f"🛑 {settings.APP_NAME} shutting down...")
+
+    # 자동 학습 스케줄러 중지
+    try:
+        from services.auto_learning_service import auto_learning_scheduler
+        auto_learning_scheduler.stop()
+        logger.info("✅ Auto learning scheduler stopped")
+    except Exception as e:
+        logger.warning(f"⚠️ Auto learning scheduler shutdown issue: {e}")
 
     # 백업 스케줄러 중지 및 마지막 백업 생성
     try:
@@ -186,6 +204,18 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=3600,  # preflight 캐시 1시간
 )
+
+
+# 422 Validation Error 상세 로깅
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.error(f"Validation error on {request.method} {request.url}")
+    logger.error(f"Validation errors: {exc.errors()}")
+    logger.error(f"Request body: {exc.body if hasattr(exc, 'body') else 'N/A'}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()}
+    )
 
 
 @app.get("/")
