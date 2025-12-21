@@ -21,6 +21,38 @@ interface LearningStatus {
   accuracy_after: number;
 }
 
+interface AutoLearningConfig {
+  enabled: boolean;
+  interval_minutes: number;
+  keywords_per_cycle: number;
+  blogs_per_keyword: number;
+  delay_between_keywords: number;
+  delay_between_blogs: number;
+  auto_train_threshold: number;
+  quiet_hours_start: number;
+  quiet_hours_end: number;
+  quiet_hours_interval: number;
+}
+
+interface AutoLearningState {
+  is_running: boolean;
+  is_enabled: boolean;
+  last_run: string | null;
+  next_run: string | null;
+  total_keywords_learned: number;
+  total_blogs_analyzed: number;
+  total_cycles: number;
+  errors_count: number;
+  current_keyword: string | null;
+  samples_since_last_train: number;
+  recent_errors: Array<{ time: string; keyword: string; error: string }>;
+}
+
+interface AutoLearningStatus {
+  config: AutoLearningConfig;
+  state: AutoLearningState;
+}
+
 interface Category {
   id: string;
   name: string;
@@ -75,6 +107,66 @@ export default function BatchLearningPage() {
   const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
   const [keywordDetail, setKeywordDetail] = useState<KeywordLog | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+
+  // 자동 학습 상태
+  const [autoLearningStatus, setAutoLearningStatus] = useState<AutoLearningStatus | null>(null);
+  const [autoLearningLoading, setAutoLearningLoading] = useState(false);
+
+  // 자동 학습 상태 가져오기
+  const fetchAutoLearningStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/batch-learning/auto-learning/status`);
+      if (res.ok) {
+        const data = await res.json();
+        setAutoLearningStatus(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch auto learning status:', e);
+    }
+  }, []);
+
+  // 자동 학습 토글
+  const toggleAutoLearning = async () => {
+    if (!autoLearningStatus) return;
+
+    setAutoLearningLoading(true);
+    try {
+      const endpoint = autoLearningStatus.state.is_enabled ? 'disable' : 'enable';
+      const res = await fetch(`${API_BASE}/api/batch-learning/auto-learning/${endpoint}`, {
+        method: 'POST'
+      });
+
+      if (res.ok) {
+        await fetchAutoLearningStatus();
+      }
+    } catch (e) {
+      console.error('Failed to toggle auto learning:', e);
+    } finally {
+      setAutoLearningLoading(false);
+    }
+  };
+
+  // 자동 학습 즉시 실행
+  const triggerAutoLearning = async () => {
+    setAutoLearningLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/batch-learning/auto-learning/trigger`, {
+        method: 'POST'
+      });
+
+      if (res.ok) {
+        alert('자동 학습 사이클이 시작되었습니다');
+        await fetchAutoLearningStatus();
+      } else {
+        const data = await res.json();
+        alert(data.detail || '실행 실패');
+      }
+    } catch (e) {
+      console.error('Failed to trigger auto learning:', e);
+    } finally {
+      setAutoLearningLoading(false);
+    }
+  };
 
   // 상태 폴링
   const fetchStatus = useCallback(async () => {
@@ -153,15 +245,17 @@ export default function BatchLearningPage() {
     fetchStatus();
     fetchCategories();
     fetchLogs();
+    fetchAutoLearningStatus();
 
     // 학습 중이면 3초마다 상태 업데이트
     const interval = setInterval(() => {
       fetchStatus();
       fetchLogs();
+      fetchAutoLearningStatus();
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [fetchStatus, fetchCategories, fetchLogs]);
+  }, [fetchStatus, fetchCategories, fetchLogs, fetchAutoLearningStatus]);
 
   useEffect(() => {
     fetchPreview();
@@ -238,6 +332,144 @@ export default function BatchLearningPage() {
         <p className="text-gray-600 mt-2">
           다양한 키워드를 자동으로 검색하고 분석하여 AI 학습 데이터를 축적합니다
         </p>
+      </div>
+
+      {/* 자동 학습 제어 패널 */}
+      <div className="max-w-6xl mx-auto mb-6">
+        <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-2xl shadow-lg p-1">
+          <div className="bg-white rounded-xl p-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              {/* 왼쪽: 상태 및 토글 */}
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">🔄</span>
+                  <div>
+                    <h2 className="font-bold text-gray-800">자동 학습 스케줄러</h2>
+                    <p className="text-sm text-gray-500">백그라운드에서 자동으로 학습 진행</p>
+                  </div>
+                </div>
+
+                {/* ON/OFF 토글 */}
+                <button
+                  onClick={toggleAutoLearning}
+                  disabled={autoLearningLoading}
+                  className={`relative w-16 h-8 rounded-full transition-all duration-300 ${
+                    autoLearningStatus?.state.is_enabled
+                      ? 'bg-gradient-to-r from-green-400 to-green-500'
+                      : 'bg-gray-300'
+                  } ${autoLearningLoading ? 'opacity-50' : ''}`}
+                >
+                  <span
+                    className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-md transition-all duration-300 ${
+                      autoLearningStatus?.state.is_enabled ? 'left-9' : 'left-1'
+                    }`}
+                  />
+                </button>
+                <span className={`font-semibold ${
+                  autoLearningStatus?.state.is_enabled ? 'text-green-600' : 'text-gray-500'
+                }`}>
+                  {autoLearningStatus?.state.is_enabled ? 'ON' : 'OFF'}
+                </span>
+              </div>
+
+              {/* 중간: 상태 정보 */}
+              {autoLearningStatus && (
+                <div className="flex flex-wrap gap-4 text-sm">
+                  {/* 현재 상태 */}
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${
+                      autoLearningStatus.state.is_running
+                        ? 'bg-green-500 animate-pulse'
+                        : autoLearningStatus.state.is_enabled
+                        ? 'bg-yellow-500'
+                        : 'bg-gray-400'
+                    }`} />
+                    <span className="text-gray-600">
+                      {autoLearningStatus.state.is_running
+                        ? `학습 중: ${autoLearningStatus.state.current_keyword || '...'}`
+                        : autoLearningStatus.state.is_enabled
+                        ? '대기 중'
+                        : '비활성화'}
+                    </span>
+                  </div>
+
+                  {/* 통계 */}
+                  <div className="flex items-center gap-1 px-3 py-1 bg-purple-100 rounded-full">
+                    <span className="text-purple-700 font-medium">
+                      📊 {autoLearningStatus.state.total_keywords_learned}개 키워드
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 px-3 py-1 bg-blue-100 rounded-full">
+                    <span className="text-blue-700 font-medium">
+                      📝 {autoLearningStatus.state.total_blogs_analyzed}개 블로그
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 px-3 py-1 bg-green-100 rounded-full">
+                    <span className="text-green-700 font-medium">
+                      🔁 {autoLearningStatus.state.total_cycles}회 사이클
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* 오른쪽: 버튼 */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={triggerAutoLearning}
+                  disabled={autoLearningLoading || autoLearningStatus?.state.is_running}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white rounded-lg font-medium text-sm transition-colors"
+                >
+                  ▶️ 즉시 실행
+                </button>
+              </div>
+            </div>
+
+            {/* 상세 정보 (펼침) */}
+            {autoLearningStatus && (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-500">학습 주기</span>
+                    <p className="font-medium text-gray-800">
+                      {autoLearningStatus.config.interval_minutes}분마다
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">키워드/사이클</span>
+                    <p className="font-medium text-gray-800">
+                      {autoLearningStatus.config.keywords_per_cycle}개
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">마지막 실행</span>
+                    <p className="font-medium text-gray-800">
+                      {autoLearningStatus.state.last_run
+                        ? new Date(autoLearningStatus.state.last_run).toLocaleTimeString('ko-KR')
+                        : '-'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">다음 실행</span>
+                    <p className="font-medium text-gray-800">
+                      {autoLearningStatus.state.next_run
+                        ? new Date(autoLearningStatus.state.next_run).toLocaleTimeString('ko-KR')
+                        : '-'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* 에러 표시 */}
+                {autoLearningStatus.state.errors_count > 0 && (
+                  <div className="mt-3 p-3 bg-red-50 rounded-lg">
+                    <p className="text-sm text-red-700">
+                      ⚠️ 최근 에러 {autoLearningStatus.state.errors_count}건
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
