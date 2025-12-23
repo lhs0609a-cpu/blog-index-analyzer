@@ -116,23 +116,6 @@ async def get_premium_users(admin: dict = Depends(require_admin)):
     return {"users": users, "count": len(users)}
 
 
-@router.get("/users/{user_id}")
-async def get_user_detail(
-    user_id: int,
-    admin: dict = Depends(require_admin)
-):
-    """Get user detail (admin only)"""
-    user_db = get_user_db()
-    user = user_db.get_user_by_id(user_id)
-
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    # Remove password hash
-    user.pop('hashed_password', None)
-    return user
-
-
 @router.post("/users/grant-premium")
 async def grant_premium_access(
     request: GrantPremiumRequest,
@@ -295,35 +278,61 @@ async def get_expiring_users(
 ):
     """Get users whose subscription expires within N days (admin only)"""
     try:
+        logger.info(f"get_expiring_users called with days={days}")
         user_db = get_user_db()
         usage_db = get_usage_db()
 
         users = user_db.get_expiring_users(days=days)
+        logger.info(f"Found {len(users)} expiring users")
 
-        # Add remaining days and usage for each user
+        # Add remaining days and usage for each user - with proper serialization
         from datetime import datetime
         now = datetime.now()
 
+        serialized_users = []
         for user in users:
-            expires_at = user.get('subscription_expires_at')
-            if expires_at:
-                try:
-                    expiry = datetime.fromisoformat(expires_at.replace('Z', '+00:00').replace('+00:00', ''))
-                    user['remaining_days'] = max(0, (expiry - now).days)
-                except:
-                    user['remaining_days'] = None
-
-            # Get today's usage
             try:
-                usage = usage_db.get_user_usage(user['id'], user.get('plan', 'free'))
-                user['usage_today'] = usage.get('count', 0)
-                user['usage_limit'] = usage.get('limit', 0)
-            except Exception as e:
-                logger.error(f"Error getting usage for user {user['id']}: {e}")
-                user['usage_today'] = 0
-                user['usage_limit'] = 0
+                expires_at = user.get('subscription_expires_at')
+                remaining_days = None
+                if expires_at:
+                    try:
+                        expiry = datetime.fromisoformat(expires_at.replace('Z', '+00:00').replace('+00:00', ''))
+                        remaining_days = max(0, (expiry - now).days)
+                    except:
+                        remaining_days = None
 
-        return {"users": users, "count": len(users), "days": days}
+                # Get today's usage
+                usage_today = 0
+                usage_limit = 0
+                try:
+                    usage = usage_db.get_user_usage(user['id'], user.get('plan', 'free'))
+                    usage_today = usage.get('count', 0)
+                    usage_limit = usage.get('limit', 0)
+                except Exception as e:
+                    logger.error(f"Error getting usage for user {user['id']}: {e}")
+
+                serialized_user = {
+                    "id": user.get('id'),
+                    "email": user.get('email'),
+                    "name": user.get('name'),
+                    "plan": user.get('plan', 'free'),
+                    "is_premium_granted": bool(user.get('is_premium_granted', False)),
+                    "subscription_expires_at": str(user.get('subscription_expires_at')) if user.get('subscription_expires_at') else None,
+                    "granted_by": user.get('granted_by'),
+                    "memo": user.get('memo'),
+                    "created_at": str(user.get('created_at', '')),
+                    "remaining_days": remaining_days,
+                    "usage_today": usage_today,
+                    "usage_limit": usage_limit
+                }
+                serialized_users.append(serialized_user)
+            except Exception as e:
+                logger.error(f"Error serializing expiring user {user.get('id')}: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+
+        logger.info(f"Returning {len(serialized_users)} serialized expiring users")
+        return {"users": serialized_users, "count": len(serialized_users), "days": days}
     except Exception as e:
         logger.error(f"Error in get_expiring_users: {e}")
         import traceback
@@ -339,16 +348,22 @@ async def get_users_with_usage(
 ):
     """Get all users with remaining days and today's usage (admin only)"""
     try:
+        logger.info(f"get_users_with_usage called with limit={limit}, offset={offset}")
         user_db = get_user_db()
         usage_db = get_usage_db()
 
+        logger.info("Fetching users from database...")
         users = user_db.get_all_users_with_usage(limit=limit, offset=offset)
+        logger.info(f"Got {len(users)} users from database")
         total = user_db.get_users_count()
+        logger.info(f"Total users count: {total}")
 
         # Serialize users properly
+        logger.info("Starting user serialization...")
         serialized_users = []
-        for user in users:
+        for idx, user in enumerate(users):
             try:
+                logger.info(f"Processing user {idx}: id={user.get('id')}, email={user.get('email')}")
                 usage = usage_db.get_user_usage(user['id'], user.get('plan', 'free'))
                 serialized_user = {
                     "id": user.get('id'),
@@ -370,15 +385,21 @@ async def get_users_with_usage(
                     "usage_limit": usage.get('limit', 0)
                 }
                 serialized_users.append(serialized_user)
+                logger.info(f"User {idx} serialized successfully")
             except Exception as e:
                 logger.error(f"Error processing user {user.get('id')}: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
 
-        return {
+        logger.info(f"Serialization complete. Returning {len(serialized_users)} users")
+        response = {
             "users": serialized_users,
             "total": total,
             "limit": limit,
             "offset": offset
         }
+        logger.info(f"Response prepared: {len(response['users'])} users, total={response['total']}")
+        return response
     except Exception as e:
         logger.error(f"Error in get_users_with_usage: {e}")
         import traceback
@@ -623,3 +644,22 @@ async def setup_initial_admin(request: InitialAdminSetupRequest):
         }
 
     raise HTTPException(status_code=500, detail="Failed to set admin status")
+
+
+# ============ Dynamic User Routes (must be at the end to avoid route conflicts) ============
+
+@router.get("/users/{user_id}")
+async def get_user_by_id(
+    user_id: int,
+    admin: dict = Depends(require_admin)
+):
+    """Get user detail by ID (admin only) - must be defined after all /users/* routes"""
+    user_db = get_user_db()
+    user = user_db.get_user_by_id(user_id)
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Remove password hash
+    user.pop('hashed_password', None)
+    return user

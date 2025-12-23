@@ -18,6 +18,7 @@ from bs4 import BeautifulSoup
 
 from config import settings
 from database.learning_db import add_learning_sample, get_current_weights, save_current_weights, get_learning_samples
+from database.keyword_analysis_db import get_cached_related_keywords, cache_related_keywords
 from services.learning_engine import train_model, calculate_blog_score
 
 router = APIRouter()
@@ -1079,6 +1080,12 @@ async def analyze_blog(blog_id: str) -> Dict:
 async def get_related_keywords_from_searchad(keyword: str) -> RelatedKeywordsResponse:
     """Get related keywords and search volume from Naver Search Ad API"""
 
+    # 1. 캐시 확인 (12시간 유효)
+    cached = get_cached_related_keywords(keyword)
+    if cached:
+        logger.info(f"Cache hit for related keywords: {keyword}")
+        return RelatedKeywordsResponse(**cached)
+
     # Check if API credentials are configured
     if not settings.NAVER_AD_API_KEY or not settings.NAVER_AD_SECRET_KEY or not settings.NAVER_AD_CUSTOMER_ID:
         logger.warning("Naver Search Ad API credentials not configured")
@@ -1166,13 +1173,22 @@ async def get_related_keywords_from_searchad(keyword: str) -> RelatedKeywordsRes
                 # Sort by total search volume
                 related_keywords.sort(key=lambda x: x.monthly_total_search or 0, reverse=True)
 
-                return RelatedKeywordsResponse(
+                response = RelatedKeywordsResponse(
                     success=True,
                     keyword=keyword,
                     source="searchad",
                     total_count=len(related_keywords),
                     keywords=related_keywords
                 )
+
+                # 캐시에 저장 (12시간)
+                try:
+                    cache_related_keywords(keyword, response.model_dump())
+                    logger.info(f"Cached related keywords for: {keyword}")
+                except Exception as cache_error:
+                    logger.warning(f"Failed to cache related keywords: {cache_error}")
+
+                return response
             else:
                 logger.error(f"Naver Search Ad API error: {response.status_code} - {response.text}")
                 return RelatedKeywordsResponse(

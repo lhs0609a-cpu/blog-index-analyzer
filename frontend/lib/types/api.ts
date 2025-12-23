@@ -123,6 +123,7 @@ export interface UserResponse {
   is_active: boolean
   is_verified: boolean
   is_admin: boolean
+  is_premium_granted?: boolean
   created_at: string
 }
 

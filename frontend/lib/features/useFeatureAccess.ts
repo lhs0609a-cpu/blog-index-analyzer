@@ -44,7 +44,14 @@ export function useFeatureAccess(): UseFeatureAccessReturn {
   const [backendPlan, setBackendPlan] = useState<Plan | null>(null)
 
   // Determine current plan
-  const plan: Plan = backendPlan || (user?.plan as Plan) || (isAuthenticated ? 'free' : 'guest')
+  // Admin users always have unlimited access
+  // Users with premium granted also have their granted plan
+  const effectivePlan: Plan = user?.is_admin
+    ? 'unlimited'
+    : user?.is_premium_granted
+      ? ((user?.plan as Plan) || 'unlimited')
+      : (backendPlan || (user?.plan as Plan) || (isAuthenticated ? 'free' : 'guest'))
+  const plan = effectivePlan
   const planInfo = PLAN_INFO[plan]
 
   // Fetch user's plan from backend

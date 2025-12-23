@@ -127,6 +127,17 @@ def init_keyword_analysis_tables():
             )
         """)
 
+        # 6. 연관 키워드 API 결과 캐시 (가장 느린 API 호출 캐싱)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS related_keywords_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                keyword VARCHAR(200) NOT NULL UNIQUE,
+                response_data TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL
+            )
+        """)
+
         # 인덱스 생성
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_kac_keyword ON keyword_analysis_cache(keyword)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_kac_expires ON keyword_analysis_cache(expires_at)")
@@ -137,6 +148,8 @@ def init_keyword_analysis_tables():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_kch_keyword ON keyword_competition_history(keyword)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_kch_date ON keyword_competition_history(date)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_trc_keyword ON tab_ratio_cache(keyword)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_rkc_keyword ON related_keywords_cache(keyword)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_rkc_expires ON related_keywords_cache(expires_at)")
 
         logger.info("Keyword analysis tables initialized successfully")
 
@@ -184,9 +197,44 @@ def clear_expired_cache():
         cursor = conn.cursor()
         cursor.execute("DELETE FROM keyword_analysis_cache WHERE expires_at < datetime('now')")
         cursor.execute("DELETE FROM tab_ratio_cache WHERE expires_at < datetime('now')")
+        cursor.execute("DELETE FROM related_keywords_cache WHERE expires_at < datetime('now')")
         deleted = cursor.rowcount
         logger.info(f"Cleared {deleted} expired cache entries")
         return deleted
+
+
+# ========== 연관 키워드 캐시 ==========
+
+def get_cached_related_keywords(keyword: str) -> Optional[Dict[str, Any]]:
+    """캐시된 연관 키워드 결과 조회"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT response_data FROM related_keywords_cache
+            WHERE keyword = ? AND expires_at > datetime('now')
+        """, (keyword,))
+
+        row = cursor.fetchone()
+        if row:
+            return json.loads(row['response_data'])
+        return None
+
+
+def cache_related_keywords(keyword: str, data: Dict[str, Any], ttl_hours: int = 12):
+    """연관 키워드 결과 캐싱 (12시간 기본)"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        expires_at = datetime.now() + timedelta(hours=ttl_hours)
+
+        cursor.execute("""
+            INSERT OR REPLACE INTO related_keywords_cache
+            (keyword, response_data, expires_at)
+            VALUES (?, ?, ?)
+        """, (
+            keyword,
+            json.dumps(data, ensure_ascii=False),
+            expires_at.isoformat()
+        ))
 
 
 # ========== 키워드 유형 학습 ==========

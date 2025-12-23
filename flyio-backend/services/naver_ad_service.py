@@ -26,6 +26,8 @@ class BidStrategy(Enum):
     TARGET_POSITION = "target_position"      # 목표 순위
     MINIMIZE_CPC = "minimize_cpc"            # CPC 최소화
     BALANCED = "balanced"                    # 균형 (기본)
+    TARGET_CPA = "target_cpa"                # 목표 CPA (전환당비용) - 전환 최적화
+    MAXIMIZE_CONVERSIONS = "maximize_conversions"  # 전환수 최대화
 
 
 @dataclass
@@ -301,6 +303,13 @@ class KeywordDiscoveryEngine:
         self.max_competition = 0.85          # 최대 경쟁도
         self.blacklist: List[str] = []       # 제외할 키워드 패턴
         self.core_terms: List[str] = []      # 핵심 키워드
+        # 전환 의도 키워드 (구매 단계 키워드)
+        self.conversion_intent_keywords: List[str] = [
+            "가격", "비용", "요금", "구독", "결제", "신청", "구매", "주문",
+            "추천", "비교", "순위", "vs", "후기", "리뷰", "평가",
+            "사이트", "서비스", "프로그램", "툴", "앱", "업체",
+            "하는법", "방법", "어떻게"
+        ]
 
     def set_filters(
         self,
@@ -432,15 +441,103 @@ class KeywordDiscoveryEngine:
         return True
 
     def _calculate_potential(self, suggestion: KeywordSuggestion) -> float:
-        """키워드 잠재력 점수 계산"""
-        # 잠재력 = (검색량 * 관련성) / (경쟁도 * 예상CPC + 1)
+        """키워드 잠재력 점수 계산 (전환 중심)"""
+        # 기본 잠재력 = (검색량 * 관련성) / (경쟁도 * 예상CPC + 1)
         search_score = min(suggestion.monthly_search_count / 10000, 1.0)
 
-        potential = (
+        base_potential = (
             search_score * suggestion.relevance_score * 100
         ) / (suggestion.competition_index * (suggestion.suggested_bid / 1000 + 1) + 0.1)
 
+        # 전환 의도 점수 (핵심!)
+        conversion_score = self._calculate_conversion_intent(suggestion.keyword)
+
+        # 최종 잠재력 = 기본 잠재력 * (1 + 전환의도점수)
+        # 전환 의도가 높은 키워드는 2배까지 점수 상승
+        potential = base_potential * (1 + conversion_score)
+
         return potential
+
+    def _calculate_conversion_intent(self, keyword: str) -> float:
+        """전환 의도 점수 계산 (0~1)"""
+        keyword_lower = keyword.lower()
+        score = 0.0
+
+        # 전환 의도 키워드 매칭
+        for intent_kw in self.conversion_intent_keywords:
+            if intent_kw in keyword_lower:
+                # 구매 단계 키워드는 높은 점수
+                if intent_kw in ["가격", "비용", "구독", "결제", "신청", "구매"]:
+                    score += 0.4  # 구매 의도 강함
+                elif intent_kw in ["추천", "비교", "순위", "후기", "리뷰"]:
+                    score += 0.3  # 비교 검토 단계
+                elif intent_kw in ["사이트", "서비스", "툴", "업체"]:
+                    score += 0.2  # 솔루션 탐색
+                else:
+                    score += 0.1  # 정보 탐색
+
+        return min(score, 1.0)  # 최대 1.0
+
+    async def discover_conversion_keywords(
+        self,
+        seed_keywords: List[str],
+        max_results: int = 50
+    ) -> List[KeywordSuggestion]:
+        """전환 키워드만 집중 발굴"""
+        all_suggestions = []
+        seen_keywords = set()
+
+        # 시드 키워드 + 전환 의도 키워드 조합 생성
+        expanded_seeds = []
+        for seed in seed_keywords:
+            expanded_seeds.append(seed)
+            for intent in ["가격", "추천", "비교", "사이트", "후기"]:
+                expanded_seeds.append(f"{seed} {intent}")
+
+        for seed in expanded_seeds:
+            try:
+                response = await self.api.get_related_keywords(seed)
+                related = response.get("keywordList", [])
+
+                for item in related:
+                    keyword = item.get("relKeyword", "")
+
+                    if keyword in seen_keywords:
+                        continue
+                    seen_keywords.add(keyword)
+
+                    # 전환 의도 점수 먼저 체크
+                    conversion_score = self._calculate_conversion_intent(keyword)
+                    if conversion_score < 0.1:  # 전환 의도 없는 키워드 스킵
+                        continue
+
+                    suggestion = KeywordSuggestion(
+                        keyword=keyword,
+                        monthly_search_count=item.get("monthlyPcQcCnt", 0) + item.get("monthlyMobileQcCnt", 0),
+                        monthly_pc_search_count=item.get("monthlyPcQcCnt", 0),
+                        monthly_mobile_search_count=item.get("monthlyMobileQcCnt", 0),
+                        competition_level=item.get("compIdx", ""),
+                        competition_index=self._parse_competition(item.get("compIdx", "")),
+                        suggested_bid=item.get("plAvgDepth", 0),
+                        relevance_score=self._calculate_relevance(keyword, seed.split()[0]),
+                        potential_score=0
+                    )
+
+                    # 필터링 (경쟁도, 검색량)
+                    if suggestion.monthly_search_count >= self.min_search_volume:
+                        if suggestion.competition_index <= self.max_competition:
+                            suggestion.potential_score = self._calculate_potential(suggestion)
+                            all_suggestions.append(suggestion)
+
+            except Exception as e:
+                logger.error(f"Error discovering conversion keywords for '{seed}': {e}")
+
+            await asyncio.sleep(0.3)
+
+        # 잠재력 점수로 정렬 (전환 의도 높은 키워드 우선)
+        all_suggestions.sort(key=lambda x: x.potential_score, reverse=True)
+
+        return all_suggestions[:max_results]
 
 
 class BidOptimizationEngine:
@@ -451,6 +548,8 @@ class BidOptimizationEngine:
         self.strategy = BidStrategy.BALANCED
         self.target_roas = 300              # 목표 ROAS (%)
         self.target_position = 3            # 목표 순위
+        self.target_cpa = 20000             # 목표 CPA (전환당 비용)
+        self.conversion_value = 59400       # 전환 가치 (LTV)
         self.max_bid_change_ratio = 0.2     # 최대 변경폭 (20%)
         self.min_bid = 70                   # 네이버 최소 입찰가
         self.max_bid = 100000               # 최대 입찰가
@@ -461,6 +560,8 @@ class BidOptimizationEngine:
         strategy: BidStrategy,
         target_roas: float = 300,
         target_position: int = 3,
+        target_cpa: int = 20000,
+        conversion_value: int = 59400,
         max_bid_change_ratio: float = 0.2,
         min_bid: int = 70,
         max_bid: int = 100000
@@ -469,6 +570,8 @@ class BidOptimizationEngine:
         self.strategy = strategy
         self.target_roas = target_roas
         self.target_position = target_position
+        self.target_cpa = target_cpa
+        self.conversion_value = conversion_value
         self.max_bid_change_ratio = max_bid_change_ratio
         self.min_bid = min_bid
         self.max_bid = max_bid
@@ -619,6 +722,63 @@ class BidOptimizationEngine:
                 if actual_cpc > current_bid * 0.9:
                     new_bid = int(current_bid * 0.95)
                     reason = f"CPC {actual_cpc:.0f}원 절감 시도"
+
+        elif self.strategy == BidStrategy.TARGET_CPA:
+            # CPA 기반 입찰 (전환 최적화 핵심)
+            if conversions > 0:
+                actual_cpa = cost / conversions
+                if actual_cpa < self.target_cpa * 0.7:
+                    # CPA 목표보다 훨씬 낮음 → 더 공격적 입찰
+                    adjustment = min(1.3, self.target_cpa / actual_cpa)
+                    new_bid = int(current_bid * adjustment)
+                    reason = f"CPA {actual_cpa:,.0f}원 < 목표 {self.target_cpa:,}원, 적극 투자"
+                elif actual_cpa < self.target_cpa:
+                    # CPA 목표 달성 → 소폭 상향
+                    new_bid = int(current_bid * 1.1)
+                    reason = f"CPA {actual_cpa:,.0f}원 목표 달성, 볼륨 확대"
+                elif actual_cpa > self.target_cpa * 1.5:
+                    # CPA 목표 크게 초과 → 입찰 대폭 하향
+                    new_bid = int(current_bid * 0.7)
+                    reason = f"CPA {actual_cpa:,.0f}원 > 목표 150%, 입찰 축소"
+                elif actual_cpa > self.target_cpa:
+                    # CPA 목표 초과 → 입찰 하향
+                    adjustment = max(0.85, self.target_cpa / actual_cpa)
+                    new_bid = int(current_bid * adjustment)
+                    reason = f"CPA {actual_cpa:,.0f}원 > 목표, 효율 조정"
+            else:
+                # 전환 없는 키워드 → 빠르게 비용 절감
+                if clicks > 30 and cost > self.target_cpa * 0.5:
+                    new_bid = int(current_bid * 0.6)
+                    reason = f"전환 없음, 비용 {cost:,}원 소진, 대폭 하향"
+                elif clicks > 10 and cost > self.target_cpa * 0.3:
+                    new_bid = int(current_bid * 0.8)
+                    reason = f"전환 없음, 비용 절감"
+
+        elif self.strategy == BidStrategy.MAXIMIZE_CONVERSIONS:
+            # 전환수 최대화 (CPA 제한 내에서)
+            if conversions > 0:
+                actual_cpa = cost / conversions
+                # 전환 발생 키워드는 적극 투자
+                if actual_cpa < self.target_cpa:
+                    # 예산 내 → 최대 입찰
+                    new_bid = int(current_bid * 1.2)
+                    reason = f"전환 키워드, CPA {actual_cpa:,.0f}원, 최대 투자"
+                else:
+                    # CPA 초과해도 전환 있으면 유지
+                    new_bid = current_bid
+                    reason = f"전환 유지, CPA {actual_cpa:,.0f}원"
+            else:
+                # 전환 없는 키워드 → 최소 입찰로 테스트
+                if clicks > 50:
+                    new_bid = self.min_bid
+                    reason = "전환 없음, 최소 입찰로 전환"
+                elif impressions > 500 and ctr > 0.02:
+                    # CTR 양호하면 한번 더 기회
+                    new_bid = current_bid
+                    reason = "CTR 양호, 전환 대기"
+                elif cost > self.target_cpa * 0.3:
+                    new_bid = int(current_bid * 0.7)
+                    reason = "전환 없음, 비용 절감"
 
         else:  # BALANCED
             # 균형 전략

@@ -148,6 +148,7 @@ def user_to_response(user: dict) -> dict:
         "is_active": bool(user.get("is_active", True)),
         "is_verified": bool(user.get("is_verified", False)),
         "is_admin": bool(user.get("is_admin", False)),
+        "is_premium_granted": bool(user.get("is_premium_granted", False)),
         "created_at": str(user.get("created_at", ""))
     }
 

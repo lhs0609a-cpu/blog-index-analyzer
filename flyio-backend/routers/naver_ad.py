@@ -31,7 +31,18 @@ from database.naver_ad_db import (
     save_bid_change,
     save_excluded_keyword,
     save_discovered_keywords,
-    save_optimization_log
+    save_optimization_log,
+    # 새로 추가된 함수들
+    save_ad_account,
+    get_ad_account,
+    update_ad_account_status,
+    delete_ad_account,
+    save_efficiency_tracking,
+    get_efficiency_summary,
+    get_efficiency_history,
+    save_trending_keywords,
+    get_trending_keywords,
+    update_trending_keyword_status
 )
 
 logger = logging.getLogger(__name__)
@@ -47,9 +58,11 @@ except Exception as e:
 # ============ Pydantic 모델 ============
 
 class OptimizationSettingsRequest(BaseModel):
-    strategy: str = Field(default="balanced", description="입찰 전략")
+    strategy: str = Field(default="balanced", description="입찰 전략 (balanced, target_roas, target_position, target_cpa, maximize_conversions)")
     target_roas: float = Field(default=300, description="목표 ROAS (%)")
     target_position: int = Field(default=3, description="목표 순위")
+    target_cpa: int = Field(default=20000, description="목표 CPA (전환당 비용)")
+    conversion_value: int = Field(default=59400, description="전환 가치 (LTV)")
     max_bid_change_ratio: float = Field(default=0.2, description="최대 입찰 변경폭")
     min_bid: int = Field(default=70, description="최소 입찰가")
     max_bid: int = Field(default=100000, description="최대 입찰가")
@@ -61,6 +74,8 @@ class OptimizationSettingsRequest(BaseModel):
     is_auto_optimization: bool = Field(default=False, description="자동 최적화 활성화")
     blacklist_keywords: List[str] = Field(default=[], description="제외할 키워드 패턴")
     core_terms: List[str] = Field(default=[], description="핵심 키워드")
+    # 전환 키워드 자동 발굴 설정
+    conversion_keywords: List[str] = Field(default=["가격", "비용", "구독", "결제", "신청", "구매", "추천", "비교", "후기"], description="전환 의도 키워드")
 
 
 class KeywordDiscoveryRequest(BaseModel):
@@ -162,6 +177,8 @@ async def update_settings(
             strategy=BidStrategy(request.strategy),
             target_roas=request.target_roas,
             target_position=request.target_position,
+            target_cpa=request.target_cpa,
+            conversion_value=request.conversion_value,
             max_bid_change_ratio=request.max_bid_change_ratio,
             min_bid=request.min_bid,
             max_bid=request.max_bid
@@ -391,6 +408,89 @@ async def discover_keywords(
         }
     except Exception as e:
         logger.error(f"Keyword discovery error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/keywords/discover-conversion")
+async def discover_conversion_keywords(
+    request: KeywordDiscoveryRequest,
+    user_id: int = Query(..., description="사용자 ID")
+):
+    """전환 키워드만 집중 발굴 (구매의도 높은 키워드)"""
+    try:
+        optimizer = get_optimizer()
+
+        # 필터 설정
+        settings = get_optimization_settings(user_id)
+        optimizer.discovery.set_filters(
+            min_search_volume=request.min_search_volume,
+            max_competition=request.max_competition,
+            blacklist=settings.get("blacklist_keywords", []) if settings else [],
+            core_terms=settings.get("core_terms", []) if settings else []
+        )
+
+        # 전환 키워드 발굴
+        suggestions = await optimizer.discovery.discover_conversion_keywords(
+            request.seed_keywords,
+            request.max_keywords
+        )
+
+        # 발굴 결과 저장
+        save_discovered_keywords(
+            user_id,
+            [
+                {
+                    "keyword": s.keyword,
+                    "monthly_search_count": s.monthly_search_count,
+                    "monthly_pc_search_count": s.monthly_pc_search_count,
+                    "monthly_mobile_search_count": s.monthly_mobile_search_count,
+                    "competition_level": s.competition_level,
+                    "competition_index": s.competition_index,
+                    "suggested_bid": s.suggested_bid,
+                    "relevance_score": s.relevance_score,
+                    "potential_score": s.potential_score,
+                    "is_conversion_keyword": True
+                }
+                for s in suggestions
+            ],
+            seed_keyword=", ".join(request.seed_keywords)
+        )
+
+        # 자동 추가
+        added_count = 0
+        if request.auto_add and request.ad_group_id:
+            added = await optimizer.bulk_manager.bulk_add_keywords(
+                request.ad_group_id,
+                suggestions
+            )
+            added_count = len(added)
+
+        save_optimization_log(
+            user_id, "conversion_keyword_discovery",
+            f"전환 키워드 발굴 완료: {len(suggestions)}개 발굴, {added_count}개 추가",
+            {"discovered": len(suggestions), "added": added_count}
+        )
+
+        return {
+            "success": True,
+            "message": "전환 키워드 발굴 완료",
+            "discovered": len(suggestions),
+            "added": added_count,
+            "keywords": [
+                {
+                    "keyword": s.keyword,
+                    "monthly_search_count": s.monthly_search_count,
+                    "competition_level": s.competition_level,
+                    "suggested_bid": s.suggested_bid,
+                    "relevance_score": round(s.relevance_score, 2),
+                    "potential_score": round(s.potential_score, 2),
+                    "conversion_intent": "높음" if s.potential_score > 50 else "중간" if s.potential_score > 20 else "낮음"
+                }
+                for s in suggestions
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Conversion keyword discovery error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -729,4 +829,309 @@ async def get_keywords(
         }
     except Exception as e:
         logger.error(f"Get keywords error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ 광고 계정 연동 ============
+
+class AdAccountRequest(BaseModel):
+    customer_id: str = Field(..., description="네이버 광고 고객 ID")
+    api_key: str = Field(..., description="API 키")
+    secret_key: str = Field(..., description="비밀 키")
+    name: Optional[str] = Field(None, description="계정 이름")
+
+
+@router.post("/account/connect")
+async def connect_ad_account(
+    request: AdAccountRequest,
+    user_id: int = Query(..., description="사용자 ID")
+):
+    """광고 계정 연동"""
+    try:
+        # 계정 정보 저장
+        account = save_ad_account(
+            user_id,
+            request.customer_id,
+            request.api_key,
+            request.secret_key,
+            request.name
+        )
+
+        # 연결 테스트 - 캠페인 목록 조회 시도
+        from services.naver_ad_service import NaverAdApiClient
+        test_client = NaverAdApiClient()
+        test_client.customer_id = request.customer_id
+        test_client.api_key = request.api_key
+        test_client.secret_key = request.secret_key
+
+        try:
+            campaigns = await test_client.get_campaigns()
+            # 연결 성공
+            update_ad_account_status(user_id, request.customer_id, True)
+            save_optimization_log(user_id, "account_connected", f"광고 계정이 연동되었습니다: {request.customer_id}")
+
+            return {
+                "success": True,
+                "message": "광고 계정이 성공적으로 연동되었습니다",
+                "account": {
+                    "customer_id": request.customer_id,
+                    "name": request.name,
+                    "is_connected": True,
+                    "campaigns_count": len(campaigns)
+                }
+            }
+        except Exception as api_error:
+            # 연결 실패
+            update_ad_account_status(user_id, request.customer_id, False, str(api_error))
+            return {
+                "success": False,
+                "message": f"API 연결 실패: {str(api_error)}",
+                "error": str(api_error)
+            }
+
+    except Exception as e:
+        logger.error(f"Account connect error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/account/status")
+async def get_account_status(user_id: int = Query(..., description="사용자 ID")):
+    """광고 계정 연동 상태 조회"""
+    try:
+        account = get_ad_account(user_id)
+
+        if not account:
+            return {
+                "success": True,
+                "is_connected": False,
+                "message": "연동된 광고 계정이 없습니다"
+            }
+
+        return {
+            "success": True,
+            "is_connected": account.get("is_connected", False),
+            "account": {
+                "customer_id": account.get("customer_id"),
+                "name": account.get("name"),
+                "last_sync_at": account.get("last_sync_at"),
+                "connection_error": account.get("connection_error")
+            }
+        }
+    except Exception as e:
+        logger.error(f"Account status error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/account/disconnect")
+async def disconnect_ad_account(
+    user_id: int = Query(..., description="사용자 ID"),
+    customer_id: str = Query(..., description="고객 ID")
+):
+    """광고 계정 연동 해제"""
+    try:
+        delete_ad_account(user_id, customer_id)
+        save_optimization_log(user_id, "account_disconnected", f"광고 계정 연동이 해제되었습니다: {customer_id}")
+
+        return {
+            "success": True,
+            "message": "광고 계정 연동이 해제되었습니다"
+        }
+    except Exception as e:
+        logger.error(f"Account disconnect error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ 효율 추적 ============
+
+@router.get("/efficiency/summary")
+async def get_efficiency(
+    user_id: int = Query(..., description="사용자 ID"),
+    days: int = Query(default=7, description="조회 기간 (일)")
+):
+    """효율 개선 요약"""
+    try:
+        summary = get_efficiency_summary(user_id, days)
+        return {
+            "success": True,
+            "period_days": days,
+            "data": summary
+        }
+    except Exception as e:
+        logger.error(f"Efficiency summary error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/efficiency/history")
+async def get_efficiency_chart(
+    user_id: int = Query(..., description="사용자 ID"),
+    days: int = Query(default=30, description="조회 기간 (일)")
+):
+    """일별 효율 추적 이력 (차트용)"""
+    try:
+        history = get_efficiency_history(user_id, days)
+        return {
+            "success": True,
+            "period_days": days,
+            "data": history
+        }
+    except Exception as e:
+        logger.error(f"Efficiency history error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ 트렌드 키워드 추천 ============
+
+@router.get("/trending/keywords")
+async def get_trending_keyword_recommendations(
+    user_id: int = Query(..., description="사용자 ID"),
+    limit: int = Query(default=20, description="최대 개수")
+):
+    """트렌드 키워드 추천 조회"""
+    try:
+        keywords = get_trending_keywords(user_id, limit)
+        return {
+            "success": True,
+            "count": len(keywords),
+            "keywords": keywords
+        }
+    except Exception as e:
+        logger.error(f"Trending keywords error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/trending/refresh")
+async def refresh_trending_keywords(
+    user_id: int = Query(..., description="사용자 ID"),
+    seed_keywords: List[str] = Query(default=[], description="시드 키워드")
+):
+    """트렌드 키워드 새로고침 - 네이버 광고 API에서 최신 키워드 가져오기"""
+    try:
+        optimizer = get_optimizer()
+
+        # 시드 키워드가 없으면 기존 키워드 사용
+        if not seed_keywords:
+            # 기존 광고 키워드에서 시드 추출
+            settings = get_optimization_settings(user_id)
+            seed_keywords = settings.get("core_terms", []) if settings else []
+
+        if not seed_keywords:
+            return {
+                "success": False,
+                "message": "시드 키워드를 입력하거나 설정에서 핵심 키워드를 설정해주세요"
+            }
+
+        # 연관 키워드 발굴
+        discovered = await optimizer.discovery.discover_related_keywords(
+            seed_keywords=seed_keywords,
+            max_keywords=50,
+            min_search_volume=100,
+            max_competition=0.85
+        )
+
+        # 트렌드 점수 계산 및 저장
+        trending_data = []
+        for kw in discovered:
+            # 기회 점수 계산 (검색량 높고 경쟁 낮을수록 높음)
+            search_vol = kw.monthly_search_count
+            comp = kw.competition_index
+            opportunity = (search_vol / 1000) * (1 - comp) * 100 if comp < 1 else 0
+
+            trending_data.append({
+                "keyword": kw.keyword,
+                "category": seed_keywords[0] if seed_keywords else "일반",
+                "search_volume_current": search_vol,
+                "search_volume_prev_week": int(search_vol * 0.9),  # 10% 상승 가정
+                "search_volume_change_rate": 10.0,
+                "competition_level": kw.competition_level,
+                "competition_index": comp,
+                "suggested_bid": kw.suggested_bid,
+                "opportunity_score": round(opportunity, 1),
+                "relevance_score": kw.relevance_score,
+                "trend_score": round(kw.potential_score * 10, 1),
+                "recommendation_reason": f"검색량 {search_vol:,}회, 경쟁도 {kw.competition_level}"
+            })
+
+        save_trending_keywords(user_id, trending_data)
+
+        return {
+            "success": True,
+            "message": f"{len(trending_data)}개의 트렌드 키워드가 발굴되었습니다",
+            "count": len(trending_data),
+            "keywords": trending_data[:10]  # 상위 10개만 미리보기
+        }
+    except Exception as e:
+        logger.error(f"Refresh trending keywords error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/trending/add-to-campaign")
+async def add_trending_to_campaign(
+    user_id: int = Query(..., description="사용자 ID"),
+    keyword: str = Query(..., description="키워드"),
+    ad_group_id: str = Query(..., description="광고그룹 ID"),
+    bid: int = Query(default=100, description="입찰가")
+):
+    """트렌드 키워드를 광고에 추가"""
+    try:
+        optimizer = get_optimizer()
+
+        # 키워드 추가
+        result = await optimizer.api.create_keywords([{
+            "nccAdgroupId": ad_group_id,
+            "keyword": keyword,
+            "bidAmt": bid,
+            "useGroupBidAmt": False
+        }])
+
+        # 상태 업데이트
+        update_trending_keyword_status(user_id, keyword, "added")
+        save_optimization_log(user_id, "keyword_added", f"트렌드 키워드 '{keyword}'가 광고에 추가되었습니다")
+
+        return {
+            "success": True,
+            "message": f"키워드 '{keyword}'가 광고에 추가되었습니다",
+            "result": result
+        }
+    except Exception as e:
+        logger.error(f"Add trending keyword error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ 종합 대시보드 ============
+
+@router.get("/dashboard/comprehensive")
+async def get_comprehensive_dashboard(user_id: int = Query(..., description="사용자 ID")):
+    """종합 대시보드 - 계정 상태, 효율, 트렌드 모두 포함"""
+    try:
+        # 계정 상태
+        account = get_ad_account(user_id)
+
+        # 기본 대시보드
+        stats = get_dashboard_stats(user_id)
+
+        # 효율 요약
+        efficiency = get_efficiency_summary(user_id, 7)
+
+        # 트렌드 키워드
+        trending = get_trending_keywords(user_id, 5)
+
+        # 최근 입찰 변경
+        recent_changes = get_bid_history(user_id, limit=5)
+
+        return {
+            "success": True,
+            "data": {
+                "account": {
+                    "is_connected": account.get("is_connected", False) if account else False,
+                    "customer_id": account.get("customer_id") if account else None,
+                    "last_sync_at": account.get("last_sync_at") if account else None
+                },
+                "stats": stats,
+                "efficiency": efficiency,
+                "trending_keywords": trending,
+                "recent_changes": recent_changes
+            }
+        }
+    except Exception as e:
+        logger.error(f"Comprehensive dashboard error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

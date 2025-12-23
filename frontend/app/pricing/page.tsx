@@ -212,11 +212,18 @@ export default function PricingPage() {
           className="text-center mb-12"
         >
           <h1 className="text-5xl font-bold mb-4">
-            <span className="gradient-text">요금제</span>
+            <span className="gradient-text">정기결제 요금제</span>
           </h1>
-          <p className="text-xl text-gray-600 mb-8">
+          <p className="text-xl text-gray-600 mb-4">
             블랭크와 함께 블로그를 성장시키세요
           </p>
+          {/* 정기결제 안내 - 토스페이먼츠 심사용 */}
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-100 text-purple-700 rounded-full text-sm mb-4">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>월간(1개월) 또는 연간(12개월) 정기결제 서비스입니다</span>
+          </div>
 
           {/* Billing Toggle */}
           <div className="inline-flex items-center gap-4 p-2 rounded-full glass">
@@ -500,6 +507,56 @@ export default function PricingPage() {
           </div>
         </motion.div>
 
+        {/* 정기결제 상세 안내 - 토스페이먼츠 심사용 */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.55 }}
+          className="mt-12 glass rounded-3xl p-8"
+        >
+          <h2 className="text-2xl font-bold text-center mb-6">정기결제 서비스 안내</h2>
+          <div className="grid md:grid-cols-3 gap-6">
+            <div className="text-center p-4">
+              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h3 className="font-bold mb-2">서비스 제공 기간</h3>
+              <p className="text-sm text-gray-600">
+                <strong>월간 결제:</strong> 결제일로부터 1개월(30일)<br/>
+                <strong>연간 결제:</strong> 결제일로부터 12개월(365일)
+              </p>
+            </div>
+            <div className="text-center p-4">
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </div>
+              <h3 className="font-bold mb-2">자동 갱신</h3>
+              <p className="text-sm text-gray-600">
+                정기결제는 만료일에 자동 갱신됩니다.<br/>
+                갱신 1일 전까지 해지 가능합니다.
+              </p>
+            </div>
+            <div className="text-center p-4">
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="font-bold mb-2">환불 정책</h3>
+              <p className="text-sm text-gray-600">
+                7일 이내 전액 환불 가능<br/>
+                <Link href="/refund-policy" className="text-purple-600 hover:underline">
+                  자세한 환불정책 보기 →
+                </Link>
+              </p>
+            </div>
+          </div>
+        </motion.div>
+
         {/* FAQ */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -514,6 +571,23 @@ export default function PricingPage() {
 
           <div className="grid md:grid-cols-2 gap-6 text-left max-w-4xl mx-auto">
             <div className="glass rounded-2xl p-6">
+              <h3 className="font-bold mb-2">정기결제는 어떻게 작동하나요?</h3>
+              <p className="text-gray-600 text-sm">
+                월간 결제 시 매월 같은 날짜에, 연간 결제 시 1년 후 같은 날짜에
+                등록된 결제수단으로 자동 결제됩니다. 해지는 언제든 가능합니다.
+              </p>
+            </div>
+            <div className="glass rounded-2xl p-6">
+              <h3 className="font-bold mb-2">환불 정책은 어떻게 되나요?</h3>
+              <p className="text-gray-600 text-sm">
+                결제 후 7일 이내 전액 환불이 가능합니다.
+                7일 이후에는 남은 기간에 대해 일할 계산하여 환불해드립니다.{' '}
+                <Link href="/refund-policy" className="text-purple-600 hover:underline">
+                  자세히 보기
+                </Link>
+              </p>
+            </div>
+            <div className="glass rounded-2xl p-6">
               <h3 className="font-bold mb-2">언제든 플랜을 변경할 수 있나요?</h3>
               <p className="text-gray-600 text-sm">
                 네, 언제든 업그레이드하거나 다운그레이드할 수 있습니다.
@@ -521,26 +595,28 @@ export default function PricingPage() {
               </p>
             </div>
             <div className="glass rounded-2xl p-6">
-              <h3 className="font-bold mb-2">환불 정책은 어떻게 되나요?</h3>
-              <p className="text-gray-600 text-sm">
-                결제 후 7일 이내 전액 환불이 가능합니다.
-                7일 이후에는 남은 기간에 대해 일할 계산하여 환불해드립니다.
-              </p>
-            </div>
-            <div className="glass rounded-2xl p-6">
-              <h3 className="font-bold mb-2">추가 크레딧은 어떻게 구매하나요?</h3>
-              <p className="text-gray-600 text-sm">
-                일일 한도를 초과해도 추가 크레딧을 구매하여 더 많이 검색할 수 있습니다.
-                100회 2,900원 / 500회 9,900원 / 1000회 17,900원
-              </p>
-            </div>
-            <div className="glass rounded-2xl p-6">
               <h3 className="font-bold mb-2">결제 수단은 무엇이 있나요?</h3>
               <p className="text-gray-600 text-sm">
-                신용카드, 체크카드, 계좌이체, 간편결제(카카오페이, 네이버페이 등)를
+                신용카드, 체크카드, 계좌이체, 간편결제(카카오페이, 네이버페이, 토스 등)를
                 지원합니다.
               </p>
             </div>
+          </div>
+        </motion.div>
+
+        {/* 하단 링크 */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.7 }}
+          className="mt-12 text-center text-sm text-gray-500"
+        >
+          <div className="flex justify-center gap-4 flex-wrap">
+            <Link href="/terms" className="hover:text-purple-600">이용약관</Link>
+            <span>|</span>
+            <Link href="/refund-policy" className="hover:text-purple-600">환불정책</Link>
+            <span>|</span>
+            <a href="mailto:lhs0609c@naver.com" className="hover:text-purple-600">문의하기</a>
           </div>
         </motion.div>
       </div>

@@ -124,9 +124,10 @@ export default function AdminPage() {
     setToken(savedToken);
 
     if (savedToken) {
-      fetchHealthStatus(url);
+      fetchHealthStatus(url, savedToken);
       fetchAdminData(url, savedToken);
     } else {
+      fetchHealthStatus(url);  // 기본 헬스체크만
       setIsLoading(false);
     }
   }, []);
@@ -146,8 +147,24 @@ export default function AdminPage() {
     }
   }, [autoRefresh, token, apiUrl]);
 
-  const fetchHealthStatus = async (url: string) => {
+  const fetchHealthStatus = async (url: string, authToken?: string) => {
     try {
+      // 인증 토큰이 있으면 상세 헬스체크, 없으면 기본 헬스체크
+      if (authToken) {
+        const response = await fetch(`${url}/api/admin/health`, {
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setHealthStatus(data);
+          return;
+        }
+      }
+
+      // 인증 실패 시 기본 헬스체크
       const response = await fetch(`${url}/health`);
       if (response.ok) {
         const data = await response.json();
@@ -841,16 +858,8 @@ export default function AdminPage() {
                                 >
                                   상세
                                 </button>
-                                {!user.is_premium_granted && user.plan === 'free' ? (
-                                  <button
-                                    onClick={() => {
-                                      setSelectedUserId(user.id);
-                                      setShowGrantModal(true);
-                                    }}
-                                    className="text-sm text-purple-600 hover:text-purple-800"
-                                  >
-                                    권한 부여
-                                  </button>
+                                {user.is_admin ? (
+                                  <span className="text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded">전체 접근</span>
                                 ) : user.is_premium_granted ? (
                                   <button
                                     onClick={() => revokePremium(user.id)}
@@ -858,7 +867,18 @@ export default function AdminPage() {
                                   >
                                     권한 해제
                                   </button>
-                                ) : null}
+                                ) : (
+                                  <button
+                                    onClick={() => {
+                                      setSelectedUserId(user.id);
+                                      setGrantPlan('unlimited');
+                                      setShowGrantModal(true);
+                                    }}
+                                    className="text-sm text-green-600 hover:text-green-800 font-medium"
+                                  >
+                                    전체 기능 해제
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -1321,14 +1341,26 @@ export default function AdminPage() {
                 >
                   관리자 설정
                 </button>
-                {!userDetail.user.is_premium_granted && userDetail.user.plan === 'free' && (
+                {userDetail.user.is_admin ? (
+                  <div className="flex-1 px-4 py-2 bg-purple-100 text-purple-700 rounded-lg text-center">
+                    관리자 (전체 접근)
+                  </div>
+                ) : userDetail.user.is_premium_granted ? (
+                  <button
+                    onClick={() => revokePremium(userDetail.user.id)}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                  >
+                    권한 해제
+                  </button>
+                ) : (
                   <button
                     onClick={() => {
+                      setGrantPlan('unlimited');
                       setShowGrantModal(true);
                     }}
                     className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                   >
-                    프리미엄 부여
+                    전체 기능 해제
                   </button>
                 )}
               </div>

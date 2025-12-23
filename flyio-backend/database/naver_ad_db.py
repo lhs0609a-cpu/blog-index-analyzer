@@ -29,17 +29,84 @@ def init_naver_ad_tables():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # 광고 계정 설정 테이블
+    # 광고 계정 설정 테이블 (API 자격 증명 포함)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS ad_accounts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
             customer_id VARCHAR(50) NOT NULL,
+            api_key VARCHAR(200),
+            secret_key VARCHAR(200),
             name VARCHAR(200),
+            is_connected BOOLEAN DEFAULT FALSE,
             is_active BOOLEAN DEFAULT TRUE,
+            last_sync_at TIMESTAMP,
+            connection_error TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(user_id, customer_id)
+        )
+    """)
+
+    # 효율 추적 테이블 - 시간대별 성과 비교
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS efficiency_tracking (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            date DATE NOT NULL,
+            hour INTEGER DEFAULT 0,
+            -- 최적화 전/후 비교
+            cost_before INTEGER DEFAULT 0,
+            cost_after INTEGER DEFAULT 0,
+            cost_saved INTEGER DEFAULT 0,
+            -- 성과 지표
+            impressions INTEGER DEFAULT 0,
+            clicks INTEGER DEFAULT 0,
+            conversions INTEGER DEFAULT 0,
+            revenue INTEGER DEFAULT 0,
+            -- 효율 지표
+            ctr_before REAL DEFAULT 0,
+            ctr_after REAL DEFAULT 0,
+            roas_before REAL DEFAULT 0,
+            roas_after REAL DEFAULT 0,
+            -- 순위 변화
+            avg_position_before REAL DEFAULT 0,
+            avg_position_after REAL DEFAULT 0,
+            -- 입찰 변경 통계
+            bid_changes_count INTEGER DEFAULT 0,
+            total_bid_increase INTEGER DEFAULT 0,
+            total_bid_decrease INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, date, hour)
+        )
+    """)
+
+    # 트렌드 키워드 추천 테이블
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS trending_keywords (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            keyword VARCHAR(200) NOT NULL,
+            category VARCHAR(100),
+            -- 검색량 트렌드
+            search_volume_current INTEGER DEFAULT 0,
+            search_volume_prev_week INTEGER DEFAULT 0,
+            search_volume_change_rate REAL DEFAULT 0,
+            -- 경쟁도 분석
+            competition_level VARCHAR(20),
+            competition_index REAL DEFAULT 0,
+            suggested_bid INTEGER DEFAULT 0,
+            -- 추천 점수
+            opportunity_score REAL DEFAULT 0,
+            relevance_score REAL DEFAULT 0,
+            trend_score REAL DEFAULT 0,
+            -- 상태
+            is_recommended BOOLEAN DEFAULT TRUE,
+            recommendation_reason TEXT,
+            status VARCHAR(20) DEFAULT 'pending',
+            discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMP,
+            UNIQUE(user_id, keyword)
         )
     """)
 
@@ -809,3 +876,277 @@ def get_dashboard_stats(user_id: int) -> dict:
         "is_auto_optimization": settings.get("is_auto_optimization", False) if settings else False,
         "strategy": settings.get("strategy", "balanced") if settings else "balanced"
     }
+
+
+# ============ 광고 계정 관리 ============
+
+def save_ad_account(user_id: int, customer_id: str, api_key: str, secret_key: str, name: str = None) -> dict:
+    """광고 계정 자격 증명 저장"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO ad_accounts (user_id, customer_id, api_key, secret_key, name, updated_at)
+        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(user_id, customer_id) DO UPDATE SET
+            api_key = excluded.api_key,
+            secret_key = excluded.secret_key,
+            name = excluded.name,
+            updated_at = CURRENT_TIMESTAMP
+    """, (user_id, customer_id, api_key, secret_key, name or f"광고계정_{customer_id}"))
+
+    conn.commit()
+    conn.close()
+
+    return get_ad_account(user_id)
+
+
+def get_ad_account(user_id: int) -> Optional[dict]:
+    """사용자 광고 계정 조회"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT * FROM ad_accounts WHERE user_id = ? AND is_active = TRUE
+        ORDER BY updated_at DESC LIMIT 1
+    """, (user_id,))
+
+    row = cursor.fetchone()
+    conn.close()
+
+    return dict(row) if row else None
+
+
+def update_ad_account_status(user_id: int, customer_id: str, is_connected: bool, error: str = None):
+    """광고 계정 연결 상태 업데이트"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE ad_accounts SET
+            is_connected = ?,
+            connection_error = ?,
+            last_sync_at = CASE WHEN ? = TRUE THEN CURRENT_TIMESTAMP ELSE last_sync_at END,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = ? AND customer_id = ?
+    """, (is_connected, error, is_connected, user_id, customer_id))
+
+    conn.commit()
+    conn.close()
+
+
+def delete_ad_account(user_id: int, customer_id: str):
+    """광고 계정 삭제 (비활성화)"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE ad_accounts SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = ? AND customer_id = ?
+    """, (user_id, customer_id))
+
+    conn.commit()
+    conn.close()
+
+
+# ============ 효율 추적 ============
+
+def save_efficiency_tracking(user_id: int, data: dict):
+    """효율 추적 데이터 저장"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    hour = datetime.now().hour
+
+    cursor.execute("""
+        INSERT INTO efficiency_tracking (
+            user_id, date, hour,
+            cost_before, cost_after, cost_saved,
+            impressions, clicks, conversions, revenue,
+            ctr_before, ctr_after, roas_before, roas_after,
+            avg_position_before, avg_position_after,
+            bid_changes_count, total_bid_increase, total_bid_decrease
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, date, hour) DO UPDATE SET
+            cost_after = cost_after + excluded.cost_after,
+            cost_saved = cost_saved + excluded.cost_saved,
+            impressions = impressions + excluded.impressions,
+            clicks = clicks + excluded.clicks,
+            conversions = conversions + excluded.conversions,
+            revenue = revenue + excluded.revenue,
+            ctr_after = excluded.ctr_after,
+            roas_after = excluded.roas_after,
+            avg_position_after = excluded.avg_position_after,
+            bid_changes_count = bid_changes_count + excluded.bid_changes_count,
+            total_bid_increase = total_bid_increase + excluded.total_bid_increase,
+            total_bid_decrease = total_bid_decrease + excluded.total_bid_decrease
+    """, (
+        user_id, today, hour,
+        data.get("cost_before", 0), data.get("cost_after", 0), data.get("cost_saved", 0),
+        data.get("impressions", 0), data.get("clicks", 0), data.get("conversions", 0), data.get("revenue", 0),
+        data.get("ctr_before", 0), data.get("ctr_after", 0), data.get("roas_before", 0), data.get("roas_after", 0),
+        data.get("avg_position_before", 0), data.get("avg_position_after", 0),
+        data.get("bid_changes_count", 0), data.get("total_bid_increase", 0), data.get("total_bid_decrease", 0)
+    ))
+
+    conn.commit()
+    conn.close()
+
+
+def get_efficiency_summary(user_id: int, days: int = 7) -> dict:
+    """효율 개선 요약 조회"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+
+    cursor.execute("""
+        SELECT
+            SUM(cost_saved) as total_saved,
+            SUM(cost_before) as total_cost_before,
+            SUM(cost_after) as total_cost_after,
+            SUM(impressions) as total_impressions,
+            SUM(clicks) as total_clicks,
+            SUM(conversions) as total_conversions,
+            SUM(revenue) as total_revenue,
+            SUM(bid_changes_count) as total_bid_changes,
+            AVG(roas_before) as avg_roas_before,
+            AVG(roas_after) as avg_roas_after,
+            AVG(ctr_before) as avg_ctr_before,
+            AVG(ctr_after) as avg_ctr_after,
+            AVG(avg_position_before) as avg_position_before,
+            AVG(avg_position_after) as avg_position_after
+        FROM efficiency_tracking
+        WHERE user_id = ? AND date >= ?
+    """, (user_id, start_date))
+
+    row = cursor.fetchone()
+    conn.close()
+
+    if row and row["total_cost_before"]:
+        total_cost_before = row["total_cost_before"] or 1
+        return {
+            "total_saved": row["total_saved"] or 0,
+            "total_cost_before": total_cost_before,
+            "total_cost_after": row["total_cost_after"] or 0,
+            "savings_rate": round((row["total_saved"] or 0) / total_cost_before * 100, 1),
+            "total_impressions": row["total_impressions"] or 0,
+            "total_clicks": row["total_clicks"] or 0,
+            "total_conversions": row["total_conversions"] or 0,
+            "total_revenue": row["total_revenue"] or 0,
+            "total_bid_changes": row["total_bid_changes"] or 0,
+            "roas_improvement": round((row["avg_roas_after"] or 0) - (row["avg_roas_before"] or 0), 1),
+            "ctr_improvement": round(((row["avg_ctr_after"] or 0) - (row["avg_ctr_before"] or 0)) * 100, 2),
+            "position_improvement": round((row["avg_position_before"] or 0) - (row["avg_position_after"] or 0), 1),
+            "avg_roas_before": round(row["avg_roas_before"] or 0, 1),
+            "avg_roas_after": round(row["avg_roas_after"] or 0, 1)
+        }
+
+    return {
+        "total_saved": 0, "savings_rate": 0,
+        "total_bid_changes": 0, "roas_improvement": 0,
+        "ctr_improvement": 0, "position_improvement": 0
+    }
+
+
+def get_efficiency_history(user_id: int, days: int = 30) -> List[dict]:
+    """일별 효율 추적 이력"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+
+    cursor.execute("""
+        SELECT
+            date,
+            SUM(cost_saved) as cost_saved,
+            SUM(impressions) as impressions,
+            SUM(clicks) as clicks,
+            SUM(conversions) as conversions,
+            SUM(revenue) as revenue,
+            SUM(bid_changes_count) as bid_changes,
+            AVG(roas_after) as roas,
+            AVG(ctr_after) as ctr
+        FROM efficiency_tracking
+        WHERE user_id = ? AND date >= ?
+        GROUP BY date
+        ORDER BY date ASC
+    """, (user_id, start_date))
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    return [dict(row) for row in rows]
+
+
+# ============ 트렌드 키워드 ============
+
+def save_trending_keywords(user_id: int, keywords: List[dict]):
+    """트렌드 키워드 저장"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    expires_at = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
+
+    for kw in keywords:
+        cursor.execute("""
+            INSERT INTO trending_keywords (
+                user_id, keyword, category,
+                search_volume_current, search_volume_prev_week, search_volume_change_rate,
+                competition_level, competition_index, suggested_bid,
+                opportunity_score, relevance_score, trend_score,
+                recommendation_reason, expires_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, keyword) DO UPDATE SET
+                search_volume_current = excluded.search_volume_current,
+                search_volume_change_rate = excluded.search_volume_change_rate,
+                opportunity_score = excluded.opportunity_score,
+                trend_score = excluded.trend_score,
+                recommendation_reason = excluded.recommendation_reason,
+                expires_at = excluded.expires_at,
+                discovered_at = CURRENT_TIMESTAMP
+        """, (
+            user_id, kw.get("keyword"), kw.get("category"),
+            kw.get("search_volume_current", 0), kw.get("search_volume_prev_week", 0),
+            kw.get("search_volume_change_rate", 0),
+            kw.get("competition_level"), kw.get("competition_index", 0), kw.get("suggested_bid", 0),
+            kw.get("opportunity_score", 0), kw.get("relevance_score", 0), kw.get("trend_score", 0),
+            kw.get("recommendation_reason"), expires_at
+        ))
+
+    conn.commit()
+    conn.close()
+
+
+def get_trending_keywords(user_id: int, limit: int = 20) -> List[dict]:
+    """트렌드 키워드 조회"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT * FROM trending_keywords
+        WHERE user_id = ? AND is_recommended = TRUE AND status = 'pending'
+        AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+        ORDER BY opportunity_score DESC, trend_score DESC
+        LIMIT ?
+    """, (user_id, limit))
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    return [dict(row) for row in rows]
+
+
+def update_trending_keyword_status(user_id: int, keyword: str, status: str):
+    """트렌드 키워드 상태 업데이트"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE trending_keywords SET status = ?
+        WHERE user_id = ? AND keyword = ?
+    """, (status, user_id, keyword))
+
+    conn.commit()
+    conn.close()

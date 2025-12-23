@@ -313,11 +313,16 @@ class UserDB:
             return [dict(row) for row in cursor.fetchall()]
 
     def get_user_effective_plan(self, user_id: int) -> str:
-        """Get user's effective plan (considering granted premium)"""
+        """Get user's effective plan (considering admin and granted premium)"""
         user = self.get_user_by_id(user_id)
         if not user:
             return 'guest'
 
+        # Admin users always have unlimited access
+        if user.get('is_admin'):
+            return 'unlimited'
+
+        # Users with granted premium access
         if user.get('is_premium_granted'):
             return user.get('plan', 'unlimited')
 

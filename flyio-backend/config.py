@@ -159,6 +159,9 @@ class Settings(BaseSettings):
     NAVER_AD_API_KEY: str = ""
     NAVER_AD_SECRET_KEY: str = ""
 
+    # OpenAI API (for AI title generation, etc.)
+    OPENAI_API_KEY: str = ""
+
     # Supabase (External backup & persistent storage)
     SUPABASE_URL: str = ""
     SUPABASE_KEY: str = ""  # anon key (public)

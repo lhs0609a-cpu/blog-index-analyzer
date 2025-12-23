@@ -109,3 +109,5 @@ next-env.d.ts
 temp/
 tmp/
 nul
+
+.vercel
