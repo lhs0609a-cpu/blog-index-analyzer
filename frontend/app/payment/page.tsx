@@ -9,8 +9,8 @@ import { useAuthStore } from '@/lib/stores/auth'
 import { confirmPayment, completeSubscriptionPayment, type PlanType } from '@/lib/api/subscription'
 import toast from 'react-hot-toast'
 
-// 토스페이먼츠 클라이언트 키 (라이브) - 자동결제(빌링)용
-const TOSS_CLIENT_KEY = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY || 'live_ck_DpexMgkW36wL11qKN79bVGbR5ozO'
+// 토스페이먼츠 클라이언트 키 (라이브) - 자동결제(빌링)용 / MID: bill_nsmard045
+const TOSS_CLIENT_KEY = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY || 'live_ck_6BYq7GWPVv4LKjjM6ojG8NE5vbo1'
 
 function PaymentContent() {
   const searchParams = useSearchParams()
