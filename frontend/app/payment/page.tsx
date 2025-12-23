@@ -3,14 +3,14 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { CreditCard, Lock, ArrowLeft, Loader2, CheckCircle } from 'lucide-react'
+import { CreditCard, Lock, ArrowLeft, Loader2, CheckCircle, Calendar, Shield, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import { confirmPayment, completeSubscriptionPayment, type PlanType } from '@/lib/api/subscription'
 import toast from 'react-hot-toast'
 
-// 토스페이먼츠 클라이언트 키 (환경변수에서)
-const TOSS_CLIENT_KEY = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY || ''
+// 토스페이먼츠 클라이언트 키 (라이브) - 자동결제(빌링)용
+const TOSS_CLIENT_KEY = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY || 'live_ck_DpexMgkW36wL11qKN79bVGbR5ozO'
 
 function PaymentContent() {
   const searchParams = useSearchParams()
@@ -23,33 +23,35 @@ function PaymentContent() {
   const planType = (searchParams.get('planType') || 'basic') as PlanType
   const billingCycle = (searchParams.get('billingCycle') || 'monthly') as 'monthly' | 'yearly'
 
-  // 결제 성공 콜백 파라미터
-  const paymentKey = searchParams.get('paymentKey')
+  // 빌링키 발급 성공 콜백 파라미터
+  const customerKey = searchParams.get('customerKey')
+  const authKey = searchParams.get('authKey')
   const success = searchParams.get('success')
 
   const [isProcessing, setIsProcessing] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
+  const [agreedToTerms, setAgreedToTerms] = useState(false)
 
   useEffect(() => {
-    // 결제 성공 콜백 처리
-    if (success === 'true' && paymentKey && orderId && user?.id) {
-      handlePaymentSuccess()
+    // 빌링키 발급 성공 콜백 처리
+    if (success === 'true' && authKey && customerKey && user?.id) {
+      handleBillingSuccess()
     }
-  }, [success, paymentKey, orderId, user])
+  }, [success, authKey, customerKey, user])
 
-  const handlePaymentSuccess = async () => {
-    if (!user?.id || !paymentKey || !orderId) return
+  const handleBillingSuccess = async () => {
+    if (!user?.id || !authKey || !customerKey) return
 
     setIsProcessing(true)
     try {
-      // 1. 결제 승인
-      await confirmPayment(user.id, paymentKey, orderId, amount)
+      // 1. 빌링키 발급 확인 및 첫 결제 진행 (백엔드에서 처리)
+      await confirmPayment(user.id, authKey, orderId, amount)
 
       // 2. 구독 완료 처리
-      await completeSubscriptionPayment(user.id, paymentKey, orderId, planType, billingCycle)
+      await completeSubscriptionPayment(user.id, authKey, orderId, planType, billingCycle)
 
       setIsComplete(true)
-      toast.success('결제가 완료되었습니다!')
+      toast.success('정기결제 등록이 완료되었습니다!')
 
       // 3초 후 대시보드로 이동
       setTimeout(() => {
@@ -57,34 +59,45 @@ function PaymentContent() {
       }, 3000)
 
     } catch (error) {
-      console.error('Payment confirmation failed:', error)
-      toast.error('결제 처리 중 오류가 발생했습니다')
+      console.error('Billing registration failed:', error)
+      toast.error('정기결제 등록 중 오류가 발생했습니다')
     } finally {
       setIsProcessing(false)
     }
   }
 
-  const initiateTossPayment = async () => {
+  const initiateBillingPayment = async () => {
+    if (!agreedToTerms) {
+      toast.error('이용약관 및 환불정책에 동의해주세요')
+      return
+    }
+
     if (!TOSS_CLIENT_KEY) {
       toast.error('결제 시스템이 설정되지 않았습니다')
       return
     }
 
+    if (!user?.id) {
+      toast.error('로그인이 필요합니다')
+      router.push('/login')
+      return
+    }
+
     try {
-      // 토스페이먼츠 SDK 로드 (실제 구현 시)
-      // @ts-ignore
+      // 토스페이먼츠 SDK 로드
       const tossPayments = await loadTossPayments(TOSS_CLIENT_KEY)
 
-      await tossPayments.requestPayment('카드', {
-        amount: amount,
-        orderId: orderId,
-        orderName: orderName,
-        customerName: user?.name || '고객',
-        successUrl: `${window.location.origin}/payment?success=true&orderId=${orderId}&planType=${planType}&billingCycle=${billingCycle}`,
+      // 고객 고유 키 생성 (사용자 ID 기반)
+      const customerKey = `customer_${user.id}_${Date.now()}`
+
+      // 빌링키 발급 요청 (정기결제용)
+      await tossPayments.requestBillingAuth('카드', {
+        customerKey: customerKey,
+        successUrl: `${window.location.origin}/payment?success=true&orderId=${orderId}&planType=${planType}&billingCycle=${billingCycle}&amount=${amount}&orderName=${encodeURIComponent(orderName)}`,
         failUrl: `${window.location.origin}/payment?success=false&orderId=${orderId}`,
       })
     } catch (error) {
-      console.error('Toss payment error:', error)
+      console.error('Toss billing error:', error)
       toast.error('결제창을 열 수 없습니다')
     }
   }
@@ -106,11 +119,11 @@ function PaymentContent() {
           >
             <CheckCircle className="w-16 h-16 text-green-500" />
           </motion.div>
-          <h1 className="text-3xl font-bold mb-4">결제 완료!</h1>
+          <h1 className="text-3xl font-bold mb-4">정기결제 등록 완료!</h1>
           <p className="text-gray-600 mb-6">
-            블랭크 프리미엄 서비스를 이용해주셔서 감사합니다.
+            블랭크 프리미엄 서비스가 활성화되었습니다.
             <br />
-            잠시 후 구독 관리 페이지로 이동합니다.
+            {billingCycle === 'yearly' ? '1년 후' : '다음 달'} 같은 날짜에 자동 결제됩니다.
           </p>
           <Link href="/dashboard/subscription">
             <button className="px-8 py-3 rounded-xl instagram-gradient text-white font-semibold">
@@ -128,7 +141,7 @@ function PaymentContent() {
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-16 h-16 animate-spin text-purple-600 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold mb-2">결제 처리 중...</h1>
+          <h1 className="text-2xl font-bold mb-2">정기결제 등록 중...</h1>
           <p className="text-gray-600">잠시만 기다려주세요</p>
         </div>
       </div>
@@ -147,9 +160,9 @@ function PaymentContent() {
           <div className="inline-flex p-6 rounded-full bg-red-100 mb-6">
             <CreditCard className="w-16 h-16 text-red-500" />
           </div>
-          <h1 className="text-3xl font-bold mb-4">결제 실패</h1>
+          <h1 className="text-3xl font-bold mb-4">등록 실패</h1>
           <p className="text-gray-600 mb-6">
-            결제가 취소되었거나 오류가 발생했습니다.
+            카드 등록이 취소되었거나 오류가 발생했습니다.
             <br />
             다시 시도해주세요.
           </p>
@@ -160,7 +173,7 @@ function PaymentContent() {
               </button>
             </Link>
             <button
-              onClick={initiateTossPayment}
+              onClick={initiateBillingPayment}
               className="px-8 py-3 rounded-xl instagram-gradient text-white font-semibold"
             >
               다시 시도
@@ -171,7 +184,7 @@ function PaymentContent() {
     )
   }
 
-  // 결제 시작 화면
+  // 결제 시작 화면 (빌링 전용)
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 py-12 px-4">
       <div className="container mx-auto max-w-lg">
@@ -197,12 +210,28 @@ function PaymentContent() {
             <div className="inline-flex p-4 rounded-full instagram-gradient mb-4">
               <CreditCard className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-3xl font-bold">결제하기</h1>
+            <h1 className="text-3xl font-bold">정기결제 등록</h1>
+            <p className="text-gray-500 mt-2 text-sm">카드를 등록하면 자동으로 결제됩니다</p>
+          </div>
+
+          {/* 정기결제 안내 */}
+          <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 mb-6">
+            <div className="flex items-start gap-3">
+              <RefreshCw className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-semibold text-purple-800 mb-1">정기결제 서비스</p>
+                <p className="text-purple-700">
+                  {billingCycle === 'yearly'
+                    ? '결제일로부터 12개월(1년) 후 자동 갱신됩니다.'
+                    : '결제일로부터 1개월(30일) 후 자동 갱신됩니다.'}
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Order Summary */}
-          <div className="bg-gray-50 rounded-2xl p-6 mb-8">
-            <h2 className="font-semibold mb-4">주문 내역</h2>
+          <div className="bg-gray-50 rounded-2xl p-6 mb-6">
+            <h2 className="font-semibold mb-4">구독 내역</h2>
             <div className="space-y-3">
               <div className="flex justify-between">
                 <span className="text-gray-600">상품</span>
@@ -210,48 +239,105 @@ function PaymentContent() {
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">결제 주기</span>
-                <span className="font-medium">{billingCycle === 'yearly' ? '연간' : '월간'}</span>
+                <span className="font-medium">{billingCycle === 'yearly' ? '연간 (12개월)' : '월간 (1개월)'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">서비스 기간</span>
+                <span className="font-medium">{billingCycle === 'yearly' ? '365일' : '30일'}</span>
               </div>
               <div className="border-t pt-3 flex justify-between">
-                <span className="font-semibold">총 결제 금액</span>
+                <span className="font-semibold">결제 금액</span>
                 <span className="font-bold text-xl gradient-text">
-                  {amount.toLocaleString()}원
+                  {amount.toLocaleString()}원{billingCycle === 'yearly' ? '/년' : '/월'}
                 </span>
               </div>
             </div>
           </div>
 
+          {/* Benefits */}
+          <div className="grid grid-cols-3 gap-3 mb-6">
+            <div className="text-center p-3 bg-gray-50 rounded-xl">
+              <Calendar className="w-5 h-5 text-purple-600 mx-auto mb-1" />
+              <p className="text-xs text-gray-600">자동 갱신</p>
+            </div>
+            <div className="text-center p-3 bg-gray-50 rounded-xl">
+              <Shield className="w-5 h-5 text-green-600 mx-auto mb-1" />
+              <p className="text-xs text-gray-600">7일 환불</p>
+            </div>
+            <div className="text-center p-3 bg-gray-50 rounded-xl">
+              <Lock className="w-5 h-5 text-blue-600 mx-auto mb-1" />
+              <p className="text-xs text-gray-600">안전 결제</p>
+            </div>
+          </div>
+
+          {/* Terms Agreement */}
+          <div className="mb-6">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={agreedToTerms}
+                onChange={(e) => setAgreedToTerms(e.target.checked)}
+                className="mt-1 w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+              />
+              <span className="text-sm text-gray-600">
+                <Link href="/terms" className="text-purple-600 hover:underline" target="_blank">
+                  이용약관
+                </Link>
+                {' '}및{' '}
+                <Link href="/refund-policy" className="text-purple-600 hover:underline" target="_blank">
+                  환불정책
+                </Link>
+                에 동의합니다. 정기결제는 해지 전까지 자동으로 갱신됩니다.
+              </span>
+            </label>
+          </div>
+
           {/* Security Notice */}
           <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
             <Lock className="w-4 h-4" />
-            <span>결제 정보는 안전하게 암호화되어 전송됩니다</span>
+            <span>결제 정보는 토스페이먼츠를 통해 안전하게 처리됩니다</span>
           </div>
 
           {/* Payment Button */}
           <button
-            onClick={initiateTossPayment}
-            className="w-full py-4 rounded-xl instagram-gradient text-white font-bold text-lg hover:shadow-lg transition-all"
+            onClick={initiateBillingPayment}
+            disabled={!agreedToTerms}
+            className={`w-full py-4 rounded-xl font-bold text-lg transition-all ${
+              agreedToTerms
+                ? 'instagram-gradient text-white hover:shadow-lg'
+                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            }`}
           >
-            {amount.toLocaleString()}원 결제하기
+            카드 등록하고 {amount.toLocaleString()}원 결제하기
           </button>
 
           {/* Payment Methods */}
           <div className="mt-6 text-center text-sm text-gray-500">
-            <p className="mb-2">결제 수단</p>
-            <div className="flex justify-center gap-4 flex-wrap">
-              <span className="px-3 py-1 bg-gray-100 rounded-full">신용카드</span>
-              <span className="px-3 py-1 bg-gray-100 rounded-full">계좌이체</span>
-              <span className="px-3 py-1 bg-gray-100 rounded-full">카카오페이</span>
-              <span className="px-3 py-1 bg-gray-100 rounded-full">네이버페이</span>
+            <p className="mb-2">지원 결제 수단</p>
+            <div className="flex justify-center gap-3 flex-wrap">
+              <span className="px-3 py-1 bg-gray-100 rounded-full text-xs">신용카드</span>
+              <span className="px-3 py-1 bg-gray-100 rounded-full text-xs">체크카드</span>
+              <span className="px-3 py-1 bg-gray-100 rounded-full text-xs">카카오페이</span>
+              <span className="px-3 py-1 bg-gray-100 rounded-full text-xs">네이버페이</span>
+              <span className="px-3 py-1 bg-gray-100 rounded-full text-xs">토스</span>
             </div>
           </div>
         </motion.div>
 
-        {/* Terms */}
-        <p className="text-center text-xs text-gray-400 mt-6">
-          결제를 진행하면 <span className="underline">이용약관</span> 및{' '}
-          <span className="underline">환불 정책</span>에 동의하는 것으로 간주됩니다.
-        </p>
+        {/* Additional Info */}
+        <div className="mt-6 text-center text-xs text-gray-400 space-y-1">
+          <p>정기결제 해지는 마이페이지에서 언제든 가능합니다.</p>
+          <p>
+            문의:{' '}
+            <a href="mailto:lhs0609c@naver.com" className="hover:text-purple-600">
+              lhs0609c@naver.com
+            </a>
+            {' '}|{' '}
+            <a href="tel:010-8465-0609" className="hover:text-purple-600">
+              010-8465-0609
+            </a>
+          </p>
+        </div>
       </div>
     </div>
   )
@@ -269,7 +355,7 @@ export default function PaymentPage() {
   )
 }
 
-// 토스페이먼츠 SDK 로드 함수 (실제 구현 시 사용)
+// 토스페이먼츠 SDK 로드 함수
 function loadTossPayments(clientKey: string): Promise<any> {
   return new Promise((resolve, reject) => {
     if (typeof window === 'undefined') {
