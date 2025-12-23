@@ -17,13 +17,25 @@ from datetime import datetime
 import uuid
 import json
 
+# 2025 네이버 AI 신뢰도 평가 서비스
+try:
+    from services.trust_score_service import (
+        calculate_total_trust_score,
+        calculate_source_trust_score,
+        detect_keyword_category,
+        SOURCE_TRUST_SCORES
+    )
+    TRUST_SERVICE_AVAILABLE = True
+except ImportError:
+    TRUST_SERVICE_AVAILABLE = False
+
 
 # ==============================================
 # CONSTANTS
 # ==============================================
 DEFAULT_WEIGHTS = {
     'c_rank': {
-        'weight': 0.50,
+        'weight': 0.42,  # 신뢰도 요소 추가로 감소
         'sub_weights': {
             'context': 0.35,  # 주제 집중도
             'content': 0.40,  # 콘텐츠 품질
@@ -31,16 +43,27 @@ DEFAULT_WEIGHTS = {
         }
     },
     'dia': {
-        'weight': 0.50,
+        'weight': 0.43,  # 신뢰도 요소 추가로 감소
         'sub_weights': {
             'depth': 0.33,      # 깊이
             'information': 0.34, # 정보성
             'accuracy': 0.33    # 정확성
         }
     },
+    # 2025 네이버 AI 신뢰도 평가 요소 (15%)
+    'trust_factors': {
+        'weight': 0.15,
+        'sub_weights': {
+            'source_trust': 0.35,       # 출처 신뢰도
+            'expertise': 0.30,          # 전문성
+            'visual_quality': 0.15,     # 시각적 품질
+            'source_diversity': 0.10,   # 출처 다양성
+            'content_freshness': 0.10,  # 콘텐츠 최신성
+        }
+    },
     'extra_factors': {
-        'post_count': 0.15,
-        'neighbor_count': 0.10,
+        'post_count': 0.12,
+        'neighbor_count': 0.08,
         'visitor_count': 0.05,
         'recent_activity': 0.10,
         'content_length': 0.10
@@ -60,19 +83,49 @@ DEFAULT_WEIGHTS = {
 # ==============================================
 # SCORE CALCULATION
 # ==============================================
-def calculate_blog_score(features: Dict, weights: Dict) -> float:
+def calculate_blog_score(features: Dict, weights: Dict, keyword: str = '') -> float:
     """
     Calculate blog score based on features and weights
-
-    Score = (C-Rank * c_rank_weight) + (D.I.A. * dia_weight) + extra_factors
+    
+    2025 네이버 AI 신뢰도 평가 반영:
+    Score = (C-Rank * 0.42) + (D.I.A. * 0.43) + (Trust * 0.15) + extra_factors
     """
     # C-Rank component
     c_rank_score = features.get('c_rank_score', 0) or 0
-    c_rank_weight = weights.get('c_rank', {}).get('weight', 0.5)
+    c_rank_weight = weights.get('c_rank', {}).get('weight', 0.42)
 
     # D.I.A. component
     dia_score = features.get('dia_score', 0) or 0
-    dia_weight = weights.get('dia', {}).get('weight', 0.5)
+    dia_weight = weights.get('dia', {}).get('weight', 0.43)
+    
+    # 2025 네이버 AI 신뢰도 점수 (15%)
+    trust_score = 50  # 기본값
+    if TRUST_SERVICE_AVAILABLE:
+        try:
+            blog_info = {
+                'blog_id': features.get('blog_id', ''),
+                'blog_name': features.get('blog_name', ''),
+                'neighbor_count': features.get('neighbor_count', 0),
+                'post_count': features.get('post_count', 0),
+                'blog_age_days': features.get('blog_age_days', 0),
+                'is_official': features.get('is_official', False),
+                'is_power_blogger': features.get('is_power_blogger', False),
+            }
+            post_info = {
+                'image_count': features.get('image_count', 0),
+                'heading_count': features.get('heading_count', 0),
+                'paragraph_count': features.get('paragraph_count', 0),
+                'content_length': features.get('content_length', 0),
+                'video_count': features.get('video_count', 0),
+                'days_since_post': features.get('days_since_post', 30),
+                'external_link_count': features.get('external_link_count', 0),
+            }
+            trust_result = calculate_total_trust_score(blog_info, post_info, '', keyword)
+            trust_score = trust_result.get('total_score', 50)
+        except Exception:
+            trust_score = 50
+    
+    trust_weight = weights.get('trust_factors', {}).get('weight', 0.15)
 
     # Extra factors
     extra_weights = weights.get('extra_factors', {})
@@ -83,8 +136,8 @@ def calculate_blog_score(features: Dict, weights: Dict) -> float:
     visitor_count = features.get('visitor_count', 0) or 0
 
     # Normalize and calculate extra scores
-    post_score = min(post_count / 1000, 1.0) * extra_weights.get('post_count', 0.15)
-    neighbor_score = min(neighbor_count / 1000, 1.0) * extra_weights.get('neighbor_count', 0.10)
+    post_score = min(post_count / 1000, 1.0) * extra_weights.get('post_count', 0.12)
+    neighbor_score = min(neighbor_count / 1000, 1.0) * extra_weights.get('neighbor_count', 0.08)
     visitor_score = min(visitor_count / 100000, 1.0) * extra_weights.get('visitor_count', 0.05)
 
     # C-Rank sub-components (if available)
@@ -122,10 +175,11 @@ def calculate_blog_score(features: Dict, weights: Dict) -> float:
     else:
         final_dia = dia_score
 
-    # Total score calculation
+    # Total score calculation (2025 네이버 AI 신뢰도 평가 반영)
     total_score = (
         final_c_rank * c_rank_weight +
         final_dia * dia_weight +
+        trust_score * trust_weight +  # 신뢰도 점수 (15%)
         post_score * 100 +
         neighbor_score * 100 +
         visitor_score * 100
