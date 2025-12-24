@@ -315,11 +315,8 @@ function PaymentContent() {
           <div className="mt-6 text-center text-sm text-gray-500">
             <p className="mb-2">지원 결제 수단</p>
             <div className="flex justify-center gap-3 flex-wrap">
-              <span className="px-3 py-1 bg-gray-100 rounded-full text-xs">신용카드</span>
-              <span className="px-3 py-1 bg-gray-100 rounded-full text-xs">체크카드</span>
-              <span className="px-3 py-1 bg-gray-100 rounded-full text-xs">카카오페이</span>
-              <span className="px-3 py-1 bg-gray-100 rounded-full text-xs">네이버페이</span>
-              <span className="px-3 py-1 bg-gray-100 rounded-full text-xs">토스</span>
+              <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">신용카드</span>
+              <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">체크카드</span>
             </div>
           </div>
         </motion.div>

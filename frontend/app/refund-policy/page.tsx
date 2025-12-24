@@ -299,7 +299,7 @@ export default function RefundPolicyPage() {
                   <li><strong>신용카드:</strong> 취소 승인 후 3~7영업일 (카드사별 상이)</li>
                   <li><strong>체크카드:</strong> 취소 승인 후 3~5영업일</li>
                   <li><strong>계좌이체:</strong> 취소 승인 후 3영업일 이내</li>
-                  <li><strong>간편결제 (카카오페이, 네이버페이, 토스 등):</strong> 취소 승인 후 즉시~3영업일</li>
+                  
                 </ul>
                 <p className="text-xs text-gray-500 mt-2">
                   * 환불 처리 후 실제 환불까지는 결제수단 및 카드사/은행 정책에 따라 추가 시간이 소요될 수 있습니다.

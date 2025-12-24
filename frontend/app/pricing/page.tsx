@@ -597,8 +597,7 @@ export default function PricingPage() {
             <div className="glass rounded-2xl p-6">
               <h3 className="font-bold mb-2">결제 수단은 무엇이 있나요?</h3>
               <p className="text-gray-600 text-sm">
-                신용카드, 체크카드, 계좌이체, 간편결제(카카오페이, 네이버페이, 토스 등)를
-                지원합니다.
+                신용카드와 체크카드를 지원합니다.
               </p>
             </div>
           </div>
