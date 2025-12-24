@@ -2120,21 +2120,29 @@ function KeywordSearchContent() {
                     <div className="text-2xl font-bold text-pink-600">Lv.{results.insights.average_level}</div>
                     <div className="text-xs text-gray-600">평균 레벨</div>
                   </div>
-                  <div className="bg-white rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-blue-600">
-                      {results.insights.average_content_length 
-                        ? results.insights.average_content_length >= 1000 
-                          ? `${(results.insights.average_content_length / 1000).toFixed(1)}k`
-                          : results.insights.average_content_length
-                        : '-'}
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 text-center border-2 border-blue-300 shadow-lg transform hover:scale-105 transition-transform">
+                    <div className="flex items-center justify-center gap-2 mb-1">
+                      <span className="text-2xl">📝</span>
+                      <div className="text-3xl font-extrabold text-blue-600">
+                        {results.insights.average_content_length
+                          ? results.insights.average_content_length >= 1000
+                            ? `${(results.insights.average_content_length / 1000).toFixed(1)}k`
+                            : results.insights.average_content_length
+                          : '-'}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-600">평균 글자수</div>
+                    <div className="text-sm font-bold text-blue-700">평균 글자수</div>
+                    <div className="text-[10px] text-blue-500 mt-1">상위노출 권장: 2k~4k자</div>
                   </div>
-                  <div className="bg-white rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-green-600">
-                      {results.insights.average_image_count?.toFixed(1) || '-'}
+                  <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 text-center border-2 border-green-300 shadow-lg transform hover:scale-105 transition-transform">
+                    <div className="flex items-center justify-center gap-2 mb-1">
+                      <span className="text-2xl">📷</span>
+                      <div className="text-3xl font-extrabold text-green-600">
+                        {results.insights.average_image_count?.toFixed(1) || '-'}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-600">평균 사진수</div>
+                    <div className="text-sm font-bold text-green-700">평균 사진수</div>
+                    <div className="text-[10px] text-green-500 mt-1">상위노출 권장: 15~30장</div>
                   </div>
                 </div>
 
@@ -2183,11 +2191,17 @@ function KeywordSearchContent() {
                         <div>분석한</div>
                         <div>포스트 수</div>
                       </th>
-                      <th className="px-3 py-3 text-center text-xs font-bold text-blue-700 uppercase tracking-wider w-20">
-                        <div>글자수</div>
+                      <th className="px-3 py-3 text-center text-xs font-bold text-blue-700 uppercase tracking-wider w-24 bg-blue-50">
+                        <div className="flex items-center justify-center gap-1">
+                          <span>📝</span>
+                          <span>글자수</span>
+                        </div>
                       </th>
-                      <th className="px-3 py-3 text-center text-xs font-bold text-green-700 uppercase tracking-wider w-20">
-                        <div>사진수</div>
+                      <th className="px-3 py-3 text-center text-xs font-bold text-green-700 uppercase tracking-wider w-24 bg-green-50">
+                        <div className="flex items-center justify-center gap-1">
+                          <span>📷</span>
+                          <span>사진수</span>
+                        </div>
                       </th>
                       <th className="px-3 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider w-20"></th>
                     </tr>
@@ -2285,28 +2299,66 @@ function KeywordSearchContent() {
                               </div>
                             </td>
 
-                            {/* 글자수 */}
+                            {/* 글자수 - 시각화 강화 */}
                             <td className="px-3 py-3 text-center">
-                              <span className="text-sm text-blue-600 font-medium">
-                                {blog.post_analysis?.content_length ? (
-                                  blog.post_analysis.content_length >= 1000 
-                                    ? `${(blog.post_analysis.content_length / 1000).toFixed(1)}k`
-                                    : blog.post_analysis.content_length
-                                ) : (
-                                  <span className="text-gray-400 text-xs">-</span>
-                                )}
-                              </span>
+                              {blog.post_analysis?.content_length ? (
+                                <div className="flex flex-col items-center gap-1">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-base font-bold text-blue-600">
+                                      {blog.post_analysis.content_length >= 1000 
+                                        ? `${(blog.post_analysis.content_length / 1000).toFixed(1)}k`
+                                        : blog.post_analysis.content_length}
+                                    </span>
+                                    {results?.insights?.average_content_length && (
+                                      blog.post_analysis.content_length >= results.insights.average_content_length 
+                                        ? <span className="text-green-500 text-xs">▲</span>
+                                        : <span className="text-red-400 text-xs">▼</span>
+                                    )}
+                                  </div>
+                                  <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                    <div 
+                                      className={"h-full rounded-full " + (
+                                        blog.post_analysis.content_length >= 3000 ? 'bg-green-500' :
+                                        blog.post_analysis.content_length >= 2000 ? 'bg-blue-500' :
+                                        blog.post_analysis.content_length >= 1000 ? 'bg-yellow-500' : 'bg-red-400'
+                                      )}
+                                      style={{ width: Math.min(100, (blog.post_analysis.content_length / 5000) * 100) + '%' }}
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 text-xs">-</span>
+                              )}
                             </td>
 
-                            {/* 사진수 */}
+                            {/* 사진수 - 시각화 강화 */}
                             <td className="px-3 py-3 text-center">
-                              <span className="text-sm text-green-600 font-medium">
-                                {blog.post_analysis?.image_count !== undefined && blog.post_analysis?.image_count !== null ? (
-                                  blog.post_analysis.image_count
-                                ) : (
-                                  <span className="text-gray-400 text-xs">-</span>
-                                )}
-                              </span>
+                              {blog.post_analysis?.image_count !== undefined && blog.post_analysis?.image_count !== null ? (
+                                <div className="flex flex-col items-center gap-1">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-base font-bold text-green-600">
+                                      {blog.post_analysis.image_count}
+                                    </span>
+                                    {results?.insights?.average_image_count && (
+                                      blog.post_analysis.image_count >= results.insights.average_image_count 
+                                        ? <span className="text-green-500 text-xs">▲</span>
+                                        : <span className="text-red-400 text-xs">▼</span>
+                                    )}
+                                  </div>
+                                  <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                    <div 
+                                      className={"h-full rounded-full " + (
+                                        blog.post_analysis.image_count >= 25 ? 'bg-green-500' :
+                                        blog.post_analysis.image_count >= 15 ? 'bg-blue-500' :
+                                        blog.post_analysis.image_count >= 8 ? 'bg-yellow-500' : 'bg-red-400'
+                                      )}
+                                      style={{ width: Math.min(100, (blog.post_analysis.image_count / 40) * 100) + '%' }}
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 text-xs">-</span>
+                              )}
                             </td>
 
                             {/* Action */}
