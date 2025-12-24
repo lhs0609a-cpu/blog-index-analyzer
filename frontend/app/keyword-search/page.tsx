@@ -39,6 +39,20 @@ interface BlogIndexResult {
     total_visitors: number
     neighbor_count: number
   } | null
+  post_analysis?: {
+    content_length: number  // 글자수 (공백 제외)
+    image_count: number  // 이미지 수
+    video_count: number  // 영상 수
+    heading_count: number  // 소제목 수
+    keyword_count: number  // 키워드 등장 횟수
+    keyword_density: number  // 키워드 밀도
+    like_count: number  // 공감 수
+    comment_count: number  // 댓글 수
+    has_map: boolean  // 지도 포함 여부
+    has_link: boolean  // 외부 링크 포함 여부
+    title_has_keyword: boolean  // 제목에 키워드 포함
+    post_age_days?: number  // 포스트 작성 후 경과일
+  } | null
   error?: string
 }
 
@@ -53,6 +67,10 @@ interface KeywordSearchInsights {
     [key: string]: number
   }
   common_patterns: string[]
+  // 포스트 콘텐츠 분석 통계
+  average_content_length?: number  // 평균 글자수
+  average_image_count?: number  // 평균 이미지 수
+  average_video_count?: number  // 평균 영상 수
 }
 
 interface KeywordSearchResponse {
@@ -1239,7 +1257,7 @@ function KeywordSearchContent() {
                               <span className="text-2xl">📊</span>
                               키워드 인사이트
                             </h4>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                               <div className="bg-white rounded-lg p-4 text-center">
                                 <div className="text-2xl font-bold text-purple-600">
                                   {status.result?.insights?.average_score || 0}
@@ -1263,6 +1281,22 @@ function KeywordSearchContent() {
                                   {status.result?.insights?.average_neighbors || 0}
                                 </div>
                                 <div className="text-xs text-gray-600 mt-1">평균 이웃</div>
+                              </div>
+                              <div className="bg-white rounded-lg p-4 text-center">
+                                <div className="text-2xl font-bold text-blue-500">
+                                  {status.result?.insights?.average_content_length 
+                                    ? status.result.insights.average_content_length >= 1000 
+                                      ? `${(status.result.insights.average_content_length / 1000).toFixed(1)}k`
+                                      : status.result.insights.average_content_length
+                                    : '-'}
+                                </div>
+                                <div className="text-xs text-gray-600 mt-1">평균 글자수</div>
+                              </div>
+                              <div className="bg-white rounded-lg p-4 text-center">
+                                <div className="text-2xl font-bold text-green-500">
+                                  {status.result?.insights?.average_image_count?.toFixed(1) || '-'}
+                                </div>
+                                <div className="text-xs text-gray-600 mt-1">평균 사진수</div>
                               </div>
                             </div>
                             <div className="mt-4 text-sm text-gray-700">
@@ -1557,6 +1591,8 @@ function KeywordSearchContent() {
                                   <th className="px-3 py-3 text-center text-xs font-bold text-purple-700 uppercase tracking-wider w-20">C-Rank</th>
                                   <th className="px-3 py-3 text-center text-xs font-bold text-pink-700 uppercase tracking-wider w-20">D.I.A.</th>
                                   <th className="px-3 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider w-20">포스트</th>
+                                  <th className="px-3 py-3 text-center text-xs font-bold text-blue-700 uppercase tracking-wider w-20">글자수</th>
+                                  <th className="px-3 py-3 text-center text-xs font-bold text-green-700 uppercase tracking-wider w-20">사진</th>
                                   <th className="px-3 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider w-20"></th>
                                 </tr>
                               </thead>
@@ -1634,6 +1670,26 @@ function KeywordSearchContent() {
                                           </span>
                                         </td>
                                         <td className="px-3 py-3 text-center">
+                                          <span className="text-sm text-blue-600 font-medium">
+                                            {blog.post_analysis?.content_length ? (
+                                              blog.post_analysis.content_length >= 1000 
+                                                ? `${(blog.post_analysis.content_length / 1000).toFixed(1)}k`
+                                                : blog.post_analysis.content_length
+                                            ) : (
+                                              <span className="text-gray-400 text-xs">-</span>
+                                            )}
+                                          </span>
+                                        </td>
+                                        <td className="px-3 py-3 text-center">
+                                          <span className="text-sm text-green-600 font-medium">
+                                            {blog.post_analysis?.image_count !== undefined ? (
+                                              blog.post_analysis.image_count
+                                            ) : (
+                                              <span className="text-gray-400 text-xs">-</span>
+                                            )}
+                                          </span>
+                                        </td>
+                                        <td className="px-3 py-3 text-center">
                                           <button
                                             onClick={() => openBreakdownModal(blog.blog_id)}
                                             className="px-3 py-1.5 text-xs bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:shadow-lg transition-all font-semibold whitespace-nowrap"
@@ -1643,7 +1699,7 @@ function KeywordSearchContent() {
                                         </td>
                                       </>
                                     ) : (
-                                      <td colSpan={6} className="px-3 py-3 text-center text-sm text-red-600">
+                                      <td colSpan={8} className="px-3 py-3 text-center text-sm text-red-600">
                                         분석 실패
                                       </td>
                                     )}
@@ -2218,7 +2274,7 @@ function KeywordSearchContent() {
                             </td>
                           </>
                         ) : (
-                          <td colSpan={6} className="px-3 py-3 text-center text-sm text-red-600">
+                          <td colSpan={8} className="px-3 py-3 text-center text-sm text-red-600">
                             분석 실패
                           </td>
                         )}

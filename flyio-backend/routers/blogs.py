@@ -62,6 +62,22 @@ class RelatedKeywordsResponse(BaseModel):
     message: Optional[str] = None
 
 
+class PostAnalysis(BaseModel):
+    """개별 포스트 콘텐츠 분석 결과"""
+    content_length: int = 0  # 글자수 (공백 제외)
+    image_count: int = 0  # 이미지 수
+    video_count: int = 0  # 영상 수
+    heading_count: int = 0  # 소제목 수
+    keyword_count: int = 0  # 키워드 등장 횟수
+    keyword_density: float = 0.0  # 키워드 밀도
+    like_count: int = 0  # 공감 수
+    comment_count: int = 0  # 댓글 수
+    has_map: bool = False  # 지도 포함 여부
+    has_link: bool = False  # 외부 링크 포함 여부
+    title_has_keyword: bool = False  # 제목에 키워드 포함
+    post_age_days: Optional[int] = None  # 포스트 작성 후 경과일
+
+
 class BlogStats(BaseModel):
     total_posts: Optional[int] = None
     neighbor_count: Optional[int] = None
@@ -90,6 +106,7 @@ class BlogResult(BaseModel):
     smart_block_keyword: Optional[str] = None
     stats: Optional[BlogStats] = None
     index: Optional[BlogIndex] = None
+    post_analysis: Optional[PostAnalysis] = None  # 포스트 콘텐츠 분석 결과
 
 
 class SearchInsights(BaseModel):
@@ -101,6 +118,10 @@ class SearchInsights(BaseModel):
     top_score: float = 0
     score_distribution: Dict[str, int] = {}
     common_patterns: List[str] = []
+    # 포스트 콘텐츠 분석 통계
+    average_content_length: int = 0  # 평균 글자수
+    average_image_count: float = 0  # 평균 이미지 수
+    average_video_count: float = 0  # 평균 영상 수
 
 
 class KeywordSearchResponse(BaseModel):
@@ -1560,11 +1581,14 @@ async def search_keyword_with_tabs(
         # 모든 블로그를 동시에 분석 (병렬 처리)
         async def analyze_single(item):
             try:
+                # 블로그 분석
                 analysis = await analyze_blog(item["blog_id"])
-                return item, analysis
+                # 포스트 콘텐츠 분석 추가
+                post_analysis_result = await analyze_post(item["post_url"], keyword)
+                return item, analysis, post_analysis_result
             except Exception as e:
                 logger.warning(f"Failed to analyze {item['blog_id']}: {e}")
-                return item, {"stats": {}, "index": {}}
+                return item, {"stats": {}, "index": {}}, {}
 
         # 동시에 최대 5개씩 분석 (서버 부하 방지)
         semaphore = asyncio.Semaphore(5)
@@ -1577,9 +1601,27 @@ async def search_keyword_with_tabs(
         analysis_tasks = [analyze_with_limit(item) for item in search_results]
         analysis_results = await asyncio.gather(*analysis_tasks)
 
-        for item, analysis in analysis_results:
+        for item, analysis, post_analysis_data in analysis_results:
             stats = analysis.get("stats", {})
             index = analysis.get("index", {})
+
+            # 포스트 분석 데이터를 PostAnalysis 모델로 변환
+            post_analysis_obj = None
+            if post_analysis_data and post_analysis_data.get("data_fetched"):
+                post_analysis_obj = PostAnalysis(
+                    content_length=post_analysis_data.get("content_length", 0),
+                    image_count=post_analysis_data.get("image_count", 0),
+                    video_count=post_analysis_data.get("video_count", 0),
+                    heading_count=post_analysis_data.get("heading_count", 0),
+                    keyword_count=post_analysis_data.get("keyword_count", 0),
+                    keyword_density=post_analysis_data.get("keyword_density", 0.0),
+                    like_count=post_analysis_data.get("like_count", 0),
+                    comment_count=post_analysis_data.get("comment_count", 0),
+                    has_map=post_analysis_data.get("has_map", False),
+                    has_link=post_analysis_data.get("has_link", False),
+                    title_has_keyword=post_analysis_data.get("title_has_keyword", False),
+                    post_age_days=post_analysis_data.get("post_age_days")
+                )
 
             blog_result = BlogResult(
                 rank=item["rank"],
@@ -1593,7 +1635,8 @@ async def search_keyword_with_tabs(
                 tab_type=item["tab_type"],
                 smart_block_keyword=item.get("smart_block_keyword"),
                 stats=BlogStats(**stats) if stats else None,
-                index=BlogIndex(**index) if index else None
+                index=BlogIndex(**index) if index else None,
+                post_analysis=post_analysis_obj
             )
             results.append(blog_result)
 
@@ -1631,6 +1674,16 @@ async def search_keyword_with_tabs(
 
     # Calculate insights
     count = len(results)
+    
+    # 포스트 콘텐츠 분석 통계 계산
+    content_lengths = [r.post_analysis.content_length for r in results if r.post_analysis]
+    image_counts = [r.post_analysis.image_count for r in results if r.post_analysis]
+    video_counts = [r.post_analysis.video_count for r in results if r.post_analysis]
+    
+    avg_content_length = int(sum(content_lengths) / len(content_lengths)) if content_lengths else 0
+    avg_image_count = round(sum(image_counts) / len(image_counts), 1) if image_counts else 0
+    avg_video_count = round(sum(video_counts) / len(video_counts), 1) if video_counts else 0
+    
     insights = SearchInsights(
         average_score=round(total_score / analyzed_count, 1) if analyzed_count > 0 else 0,
         average_level=round(total_level / analyzed_count, 1) if analyzed_count > 0 else 0,
@@ -1639,7 +1692,10 @@ async def search_keyword_with_tabs(
         top_level=max([r.index.level for r in results if r.index], default=0),
         top_score=max([r.index.total_score for r in results if r.index], default=0),
         score_distribution={},
-        common_patterns=[]
+        common_patterns=[],
+        average_content_length=avg_content_length,
+        average_image_count=avg_image_count,
+        average_video_count=avg_video_count
     )
 
     # Auto-collect learning samples from search results
