@@ -1699,7 +1699,7 @@ function KeywordSearchContent() {
                                         </td>
                                       </>
                                     ) : (
-                                      <td colSpan={8} className="px-3 py-3 text-center text-sm text-red-600">
+                                      <td colSpan={10} className="px-3 py-3 text-center text-sm text-red-600">
                                         분석 실패
                                       </td>
                                     )}
@@ -2111,7 +2111,7 @@ function KeywordSearchContent() {
                 </h3>
 
                 {/* 통계 그리드 - 크롤링 가능한 정보만 표시 */}
-                <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                   <div className="bg-white rounded-lg p-3 text-center">
                     <div className="text-2xl font-bold text-purple-600">{results.insights.average_score}</div>
                     <div className="text-xs text-gray-600">평균 점수</div>
@@ -2119,6 +2119,22 @@ function KeywordSearchContent() {
                   <div className="bg-white rounded-lg p-3 text-center">
                     <div className="text-2xl font-bold text-pink-600">Lv.{results.insights.average_level}</div>
                     <div className="text-xs text-gray-600">평균 레벨</div>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {results.insights.average_content_length 
+                        ? results.insights.average_content_length >= 1000 
+                          ? `${(results.insights.average_content_length / 1000).toFixed(1)}k`
+                          : results.insights.average_content_length
+                        : '-'}
+                    </div>
+                    <div className="text-xs text-gray-600">평균 글자수</div>
+                  </div>
+                  <div className="bg-white rounded-lg p-3 text-center">
+                    <div className="text-2xl font-bold text-green-600">
+                      {results.insights.average_image_count?.toFixed(1) || '-'}
+                    </div>
+                    <div className="text-xs text-gray-600">평균 사진수</div>
                   </div>
                 </div>
 
@@ -2166,6 +2182,12 @@ function KeywordSearchContent() {
                       <th className="px-3 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider w-24">
                         <div>분석한</div>
                         <div>포스트 수</div>
+                      </th>
+                      <th className="px-3 py-3 text-center text-xs font-bold text-blue-700 uppercase tracking-wider w-20">
+                        <div>글자수</div>
+                      </th>
+                      <th className="px-3 py-3 text-center text-xs font-bold text-green-700 uppercase tracking-wider w-20">
+                        <div>사진수</div>
                       </th>
                       <th className="px-3 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider w-20"></th>
                     </tr>
@@ -2263,6 +2285,30 @@ function KeywordSearchContent() {
                               </div>
                             </td>
 
+                            {/* 글자수 */}
+                            <td className="px-3 py-3 text-center">
+                              <span className="text-sm text-blue-600 font-medium">
+                                {blog.post_analysis?.content_length ? (
+                                  blog.post_analysis.content_length >= 1000 
+                                    ? `${(blog.post_analysis.content_length / 1000).toFixed(1)}k`
+                                    : blog.post_analysis.content_length
+                                ) : (
+                                  <span className="text-gray-400 text-xs">-</span>
+                                )}
+                              </span>
+                            </td>
+
+                            {/* 사진수 */}
+                            <td className="px-3 py-3 text-center">
+                              <span className="text-sm text-green-600 font-medium">
+                                {blog.post_analysis?.image_count !== undefined && blog.post_analysis?.image_count !== null ? (
+                                  blog.post_analysis.image_count
+                                ) : (
+                                  <span className="text-gray-400 text-xs">-</span>
+                                )}
+                              </span>
+                            </td>
+
                             {/* Action */}
                             <td className="px-3 py-3 text-center">
                               <button
@@ -2274,7 +2320,7 @@ function KeywordSearchContent() {
                             </td>
                           </>
                         ) : (
-                          <td colSpan={8} className="px-3 py-3 text-center text-sm text-red-600">
+                          <td colSpan={10} className="px-3 py-3 text-center text-sm text-red-600">
                             분석 실패
                           </td>
                         )}
