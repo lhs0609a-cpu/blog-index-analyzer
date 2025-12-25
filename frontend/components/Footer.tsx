@@ -84,7 +84,6 @@ export default function Footer() {
           <div className="text-xs text-gray-500 space-y-1">
             <div className="flex flex-wrap gap-x-4 gap-y-1">
               <span><strong>상호명:</strong> 머프키치</span>
-              <span><strong>대표자:</strong> 양보름</span>
               <span><strong>사업자등록번호:</strong> 401-20-84647</span>
               <span><strong>통신판매업신고:</strong> 제2025-고양덕양구-1770호</span>
             </div>
