@@ -310,7 +310,7 @@ export default function BlogDetailPage() {
                 <div className="text-4xl font-bold gradient-text mb-1">
                   Level {displayData.index.level}
                 </div>
-                <div className="text-sm text-gray-600 mb-2">{displayData.index.grade}</div>
+                <div className="text-sm text-gray-600 mb-2">Lv.{displayData.index.level}</div>
               </motion.div>
             </div>
 

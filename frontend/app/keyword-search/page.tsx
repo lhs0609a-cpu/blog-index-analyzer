@@ -1459,7 +1459,7 @@ function KeywordSearchContent() {
                                   <div className={`inline-flex px-3 py-1 rounded-full text-white text-sm font-bold ${getLevelColor(myBlogResults[status.keyword].index.level)}`}>
                                     Lv.{myBlogResults[status.keyword].index.level}
                                   </div>
-                                  <p className="text-xs text-gray-500 mt-1">{myBlogResults[status.keyword].index.grade}</p>
+                                  <p className="text-xs text-gray-500 mt-1">Lv.{myBlogResults[status.keyword].index.level}</p>
                                 </div>
                               </div>
 
@@ -1948,7 +1948,7 @@ function KeywordSearchContent() {
                 <div className={`inline-flex px-3 py-1 rounded-full text-white text-sm font-bold ${getLevelColor(myBlogResult.index.level)}`}>
                   Lv.{myBlogResult.index.level}
                 </div>
-                <p className="text-xs text-gray-500 mt-1">{myBlogResult.index.grade}</p>
+                <p className="text-xs text-gray-500 mt-1">Lv.{myBlogResult.index.level}</p>
               </div>
             </div>
 
@@ -2249,7 +2249,7 @@ function KeywordSearchContent() {
                                 <span className={`inline-flex px-2 py-0.5 rounded-full text-white text-xs font-bold ${getLevelColor(blog.index.level)}`}>
                                   Lv.{blog.index.level}
                                 </span>
-                                <span className="text-xs text-gray-500 truncate max-w-[80px]">{blog.index.grade}</span>
+                                
                               </div>
                             </td>
 

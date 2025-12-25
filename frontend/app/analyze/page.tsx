@@ -277,19 +277,18 @@ export default function AnalyzePage() {
                           })()}
                         </div>
                         <div className="text-3xl font-bold text-gray-900 mb-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-purple-100 to-pink-100">
-                          {result.index.grade}
+                          Lv.{result.index.level}
                         </div>
-                        <div className="text-lg text-gray-600 mt-3 font-medium">{result.index.level_category}</div>
 
                         {/* 레벨 프로그레스 시각화 - 확대 버전 */}
                         <div className="mt-10 px-4">
                           {/* 레벨 구간 설명 - 대형 티어 카드 */}
                           <div className="grid grid-cols-4 gap-4 mb-10">
                             {[
-                              { range: '1', label: '일반', color: 'bg-gray-400', textColor: 'text-gray-700', bgActive: 'bg-gray-50' },
-                              { range: '2-8', label: '준최적화', color: 'bg-blue-500', textColor: 'text-blue-600', bgActive: 'bg-blue-50' },
-                              { range: '9-11', label: '최적화', color: 'bg-purple-500', textColor: 'text-purple-600', bgActive: 'bg-purple-50' },
-                              { range: '12-15', label: '찐최적화', color: 'bg-gradient-to-r from-pink-500 to-rose-500', textColor: 'text-pink-600', bgActive: 'bg-pink-50' },
+                              { range: '1', label: 'Lv.1', color: 'bg-gray-400', textColor: 'text-gray-700', bgActive: 'bg-gray-50' },
+                              { range: '2-8', label: 'Lv.2~8', color: 'bg-blue-500', textColor: 'text-blue-600', bgActive: 'bg-blue-50' },
+                              { range: '9-11', label: 'Lv.9~11', color: 'bg-purple-500', textColor: 'text-purple-600', bgActive: 'bg-purple-50' },
+                              { range: '12-15', label: 'Lv.12~15', color: 'bg-gradient-to-r from-pink-500 to-rose-500', textColor: 'text-pink-600', bgActive: 'bg-pink-50' },
                             ].map((tier) => {
                               const currentLevel = result.index.level
                               const isActive = (tier.range === '1' && currentLevel === 1) ||
@@ -310,9 +309,7 @@ export default function AnalyzePage() {
                                   <div className={`text-xl font-bold ${isActive ? tier.textColor : 'text-gray-400'}`}>
                                     {tier.label}
                                   </div>
-                                  <div className={`text-base mt-2 font-medium ${isActive ? 'text-gray-600' : 'text-gray-400'}`}>
-                                    Lv.{tier.range}
-                                  </div>
+
                                   {isActive && (
                                     <div className="mt-3">
                                       <span className="text-xs font-bold text-white bg-purple-500 px-3 py-1 rounded-full">
