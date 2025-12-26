@@ -1443,84 +1443,215 @@ async def predict_rank(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    상위노출 예측 - 키워드 순위 예측
+    상위노출 예측 - 키워드 순위 예측 (실제 데이터 기반)
+
+    1. 상위 블로그 실제 분석
+    2. 월검색량 조회
+    3. 내 블로그와 비교 분석 (blog_id 입력 시)
+    4. 학습 데이터 기반 예측
     """
     try:
-        # 키워드 검색 결과 분석
-        search_results = await scrape_naver_search(keyword, 50)
+        from routers.blogs import fetch_naver_search_results, analyze_blog, get_related_keywords_from_searchad
 
-        # 블로그 수 확인
-        blog_count = len(search_results)
+        # 1. 상위 블로그 실제 분석
+        search_results = await fetch_naver_search_results(keyword, limit=13)
 
-        # 난이도 계산
-        difficulty = min(100, blog_count * 2)
+        if not search_results:
+            raise HTTPException(status_code=404, detail="검색 결과가 없습니다")
 
-        # 예상 순위 범위 계산
-        if difficulty < 30:
-            predicted_rank = {"min": 1, "max": 10, "probability": 75}
-        elif difficulty < 60:
-            predicted_rank = {"min": 5, "max": 30, "probability": 55}
-        else:
-            predicted_rank = {"min": 10, "max": 50, "probability": 35}
+        # 상위 블로그 분석 (병렬 처리)
+        import asyncio
 
-        # 키워드 통계 (네이버 광고 API 사용 시도)
-        keyword_stats = {}
-        if settings.NAVER_AD_API_KEY:
+        async def analyze_single(item):
             try:
-                timestamp = str(int(time.time() * 1000))
-                uri = "/keywordstool"
-                signature = generate_naver_ad_signature(timestamp, "GET", uri)
-
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    response = await client.get(
-                        f"https://api.naver.com{uri}",
-                        headers={
-                            "X-Timestamp": timestamp,
-                            "X-API-KEY": settings.NAVER_AD_API_KEY,
-                            "X-Customer": settings.NAVER_AD_CUSTOMER_ID,
-                            "X-Signature": signature
-                        },
-                        params={"hintKeywords": keyword, "showDetail": "1"}
-                    )
-
-                    if response.status_code == 200:
-                        data = response.json()
-                        kw_list = data.get("keywordList", [])
-                        if kw_list:
-                            kw = kw_list[0]
-                            monthly_pc = kw.get("monthlyPcQcCnt", 0)
-                            monthly_mobile = kw.get("monthlyMobileQcCnt", 0)
-                            keyword_stats = {
-                                "monthlySearch": (monthly_pc if isinstance(monthly_pc, int) else 0) + (monthly_mobile if isinstance(monthly_mobile, int) else 0),
-                                "competition": kw.get("compIdx", "중간")
-                            }
+                analysis = await analyze_blog(item["blog_id"])
+                return {
+                    "rank": item["rank"],
+                    "blog_id": item["blog_id"],
+                    "blog_name": item.get("blog_name", ""),
+                    "post_title": item.get("post_title", ""),
+                    "stats": analysis.get("stats", {}),
+                    "index": analysis.get("index", {})
+                }
             except:
-                pass
+                return None
+
+        # 동시에 최대 5개씩 분석
+        semaphore = asyncio.Semaphore(5)
+        async def analyze_with_limit(item):
+            async with semaphore:
+                return await analyze_single(item)
+
+        tasks = [analyze_with_limit(item) for item in search_results[:10]]
+        analyzed_results = await asyncio.gather(*tasks)
+        analyzed_results = [r for r in analyzed_results if r and r.get("index")]
+
+        # 상위 블로그 통계 계산
+        top_scores = [r["index"].get("total_score", 0) for r in analyzed_results]
+        top_levels = [r["index"].get("level", 0) for r in analyzed_results]
+        top_posts = [r["stats"].get("total_posts", 0) for r in analyzed_results if r.get("stats")]
+        top_neighbors = [r["stats"].get("neighbor_count", 0) for r in analyzed_results if r.get("stats")]
+
+        avg_score = round(sum(top_scores) / len(top_scores), 1) if top_scores else 50
+        avg_level = round(sum(top_levels) / len(top_levels), 1) if top_levels else 3
+        min_score = min(top_scores) if top_scores else 30
+        max_score = max(top_scores) if top_scores else 80
+        avg_posts = int(sum(top_posts) / len(top_posts)) if top_posts else 100
+        avg_neighbors = int(sum(top_neighbors) / len(top_neighbors)) if top_neighbors else 500
+
+        # 2. 월검색량 조회
+        monthly_search = 0
+        competition_level = "중간"
+        try:
+            related_result = await get_related_keywords_from_searchad(keyword)
+            if related_result.success and related_result.keywords:
+                for kw in related_result.keywords:
+                    if kw.keyword.replace(" ", "") == keyword.replace(" ", ""):
+                        monthly_search = kw.monthly_total_search or 0
+                        competition_level = kw.competition or "중간"
+                        break
+                if monthly_search == 0 and related_result.keywords:
+                    monthly_search = related_result.keywords[0].monthly_total_search or 0
+                    competition_level = related_result.keywords[0].competition or "중간"
+        except Exception as e:
+            logger.warning(f"Failed to get search volume: {e}")
+
+        # 3. 난이도 계산 (실제 데이터 기반)
+        # 평균 점수가 높을수록 난이도 높음
+        score_difficulty = min(100, avg_score * 1.2)
+        # 레벨이 높을수록 난이도 높음
+        level_difficulty = avg_level * 15
+        # 검색량이 많을수록 난이도 높음
+        search_difficulty = min(30, monthly_search / 1000) if monthly_search else 10
+
+        difficulty = int(min(100, (score_difficulty * 0.5 + level_difficulty * 0.3 + search_difficulty * 0.2)))
+
+        # 4. 내 블로그 분석 (blog_id 입력 시)
+        my_blog_analysis = None
+        predicted_rank = None
+        gap_analysis = None
+
+        if blog_id and blog_id.strip():
+            try:
+                my_analysis = await analyze_blog(blog_id)
+                my_stats = my_analysis.get("stats", {})
+                my_index = my_analysis.get("index", {})
+                my_score = my_index.get("total_score", 0)
+                my_level = my_index.get("level", 0)
+
+                my_blog_analysis = {
+                    "blog_id": blog_id,
+                    "score": my_score,
+                    "level": my_level,
+                    "posts": my_stats.get("total_posts", 0),
+                    "neighbors": my_stats.get("neighbor_count", 0)
+                }
+
+                # 내 점수와 상위 블로그 비교하여 예상 순위 계산
+                better_count = sum(1 for s in top_scores if s > my_score)
+                estimated_rank = better_count + 1
+
+                # 예상 순위 범위
+                if my_score >= avg_score:
+                    predicted_rank = {
+                        "min": max(1, estimated_rank - 2),
+                        "max": min(13, estimated_rank + 3),
+                        "probability": min(90, 70 + (my_score - avg_score))
+                    }
+                else:
+                    gap = avg_score - my_score
+                    predicted_rank = {
+                        "min": max(5, estimated_rank),
+                        "max": min(30, estimated_rank + 10),
+                        "probability": max(10, 50 - gap)
+                    }
+
+                # 갭 분석
+                gap_analysis = {
+                    "score_gap": round(avg_score - my_score, 1),
+                    "level_gap": round(avg_level - my_level, 1),
+                    "posts_gap": avg_posts - my_stats.get("total_posts", 0),
+                    "neighbors_gap": avg_neighbors - my_stats.get("neighbor_count", 0),
+                    "status": "상위진입가능" if my_score >= min_score else "추가노력필요"
+                }
+            except Exception as e:
+                logger.warning(f"Failed to analyze my blog: {e}")
+
+        # 예상 순위 (내 블로그 없을 때)
+        if not predicted_rank:
+            if difficulty < 40:
+                predicted_rank = {"min": 1, "max": 10, "probability": 70}
+            elif difficulty < 60:
+                predicted_rank = {"min": 5, "max": 20, "probability": 50}
+            elif difficulty < 80:
+                predicted_rank = {"min": 10, "max": 30, "probability": 35}
+            else:
+                predicted_rank = {"min": 15, "max": 50, "probability": 20}
+
+        # 5. 맞춤형 팁 생성
+        tips = []
+        if my_blog_analysis:
+            if gap_analysis["score_gap"] > 10:
+                tips.append(f"상위 블로그 평균보다 {gap_analysis['score_gap']}점 부족합니다. 블로그 지수를 높여보세요.")
+            if gap_analysis["posts_gap"] > 50:
+                tips.append(f"포스팅 수가 평균보다 {gap_analysis['posts_gap']}개 부족합니다. 꾸준한 포스팅이 필요합니다.")
+            if gap_analysis["neighbors_gap"] > 200:
+                tips.append(f"이웃 수를 늘려 소통을 활성화하세요. (현재 차이: {gap_analysis['neighbors_gap']}명)")
+            if my_blog_analysis["score"] >= min_score:
+                tips.append("✅ 상위 10위 진입 가능한 점수입니다! 콘텐츠 품질에 집중하세요.")
+
+        tips.extend([
+            f"상위 블로그 평균 점수: {avg_score}점, 평균 레벨: Lv.{avg_level}",
+            "제목 앞부분에 키워드를 자연스럽게 배치하세요",
+            "2000자 이상의 상세한 본문 작성을 권장합니다",
+            "이미지 5장 이상, 영상 1개 이상 포함하면 유리합니다"
+        ])
+
+        # 상위 블로그 정보
+        top_blogs = []
+        for r in analyzed_results[:5]:
+            top_blogs.append({
+                "rank": r["rank"],
+                "blog_name": r["blog_name"],
+                "score": round(r["index"].get("total_score", 0), 1),
+                "level": r["index"].get("level", 0),
+                "posts": r["stats"].get("total_posts", 0) if r.get("stats") else 0
+            })
 
         return {
             "success": True,
             "keyword": keyword,
             "difficulty": difficulty,
+            "difficultyLabel": "매우 쉬움" if difficulty < 30 else "쉬움" if difficulty < 50 else "보통" if difficulty < 70 else "어려움" if difficulty < 85 else "매우 어려움",
             "predictedRank": predicted_rank,
-            "blogCount": blog_count,
-            "keywordStats": keyword_stats or {"monthlySearch": blog_count * 100, "competition": "중간" if difficulty < 60 else "높음"},
-            "tips": [
-                "제목 앞에 키워드를 배치하세요",
-                "1500자 이상의 상세한 본문이 유리합니다",
-                "이미지 3장 이상 포함을 권장합니다",
-                "발행 후 24시간 내 조회수가 중요합니다"
-            ],
+            "monthlySearch": monthly_search,
+            "competition": competition_level,
+            "topBlogsStats": {
+                "avgScore": avg_score,
+                "avgLevel": avg_level,
+                "minScore": min_score,
+                "maxScore": max_score,
+                "avgPosts": avg_posts,
+                "avgNeighbors": avg_neighbors
+            },
+            "topBlogs": top_blogs,
+            "myBlogAnalysis": my_blog_analysis,
+            "gapAnalysis": gap_analysis,
+            "tips": tips[:6],
             "successFactors": {
-                "titleOptimization": 30,
-                "contentQuality": 25,
-                "blogAuthority": 20,
-                "engagement": 15,
-                "freshness": 10
+                "blogAuthority": {"weight": 35, "description": "블로그 지수 (C-Rank, D.I.A.)"},
+                "contentQuality": {"weight": 30, "description": "콘텐츠 품질 (글자수, 이미지, 구조)"},
+                "keywordOptimization": {"weight": 20, "description": "키워드 최적화 (제목, 본문)"},
+                "engagement": {"weight": 15, "description": "사용자 반응 (조회수, 좋아요, 댓글)"}
             }
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Rank prediction error: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 

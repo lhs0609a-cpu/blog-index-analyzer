@@ -17,7 +17,7 @@ import {
   TrendingUp as DataChart, ShoppingCart, MapPin, Newspaper,
   Coffee, Video, UserCircle, Globe, HelpCircle, Store,
   Percent, Package, Navigation, Megaphone, BookOpen, Film,
-  Award as Badge, Layers, MessageSquareText, ShoppingBag, Info, X, Filter, Tags, Save, Plus
+  Award as Badge, Layers, MessageSquareText, ShoppingBag, Info, X, Filter, Tags, Save, Plus, User
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -85,10 +85,39 @@ interface InsightResult {
 interface PredictionResult {
   keyword: string
   difficulty: number
+  difficultyLabel: string
   successRate: number
-  avgScore: number
-  avgPosts: number
-  avgNeighbors: number
+  monthlySearch: number
+  competition: string
+  topBlogsStats: {
+    avgScore: number
+    avgLevel: number
+    minScore: number
+    maxScore: number
+    avgPosts: number
+    avgNeighbors: number
+  }
+  topBlogs: {
+    rank: number
+    blog_name: string
+    score: number
+    level: number
+    posts: number
+  }[]
+  myBlogAnalysis?: {
+    blog_id: string
+    score: number
+    level: number
+    posts: number
+    neighbors: number
+  }
+  gapAnalysis?: {
+    score_gap: number
+    level_gap: number
+    posts_gap: number
+    neighbors_gap: number
+    status: string
+  }
   recommendation: string
   tips: string[]
 }
@@ -697,6 +726,7 @@ export default function ToolsPage() {
 
   // 상위 노출 예측 상태
   const [predictionKeyword, setPredictionKeyword] = useState('')
+  const [predictionBlogId, setPredictionBlogId] = useState('')
   const [predictionLoading, setPredictionLoading] = useState(false)
   const [predictionResult, setPredictionResult] = useState<PredictionResult | null>(null)
 
@@ -1418,7 +1448,9 @@ export default function ToolsPage() {
     setPredictionLoading(true)
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`${API_BASE}/api/tools/prediction/rank?keyword=${encodeURIComponent(predictionKeyword)}`, {
+      // 내 블로그 ID도 함께 전송
+      const blogIdParam = predictionBlogId.trim() ? `&blog_id=${encodeURIComponent(predictionBlogId.trim())}` : ''
+      const response = await fetch(`${API_BASE}/api/tools/prediction/rank?keyword=${encodeURIComponent(predictionKeyword)}${blogIdParam}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1430,12 +1462,19 @@ export default function ToolsPage() {
         const data = await response.json()
         setPredictionResult({
           keyword: predictionKeyword,
-          difficulty: data.difficulty,
+          difficulty: data.difficulty || 50,
+          difficultyLabel: data.difficultyLabel || '보통',
           successRate: data.predictedRank?.probability || 50,
-          avgScore: data.keywordStats?.monthlySearch ? Math.min(100, data.keywordStats.monthlySearch / 100) : 50,
-          avgPosts: data.blogCount || 100,
-          avgNeighbors: data.blogCount * 10 || 500,
-          recommendation: data.difficulty < 40 ? '도전 추천!' : data.difficulty < 70 ? '경쟁 보통' : '경쟁 치열',
+          monthlySearch: data.monthlySearch || 0,
+          competition: data.competition || '중간',
+          topBlogsStats: data.topBlogsStats || {
+            avgScore: 50, avgLevel: 3, minScore: 30, maxScore: 80, avgPosts: 100, avgNeighbors: 500
+          },
+          topBlogs: data.topBlogs || [],
+          myBlogAnalysis: data.myBlogAnalysis,
+          gapAnalysis: data.gapAnalysis,
+          recommendation: data.gapAnalysis?.status === '상위진입가능' ? '도전 추천!' :
+                         data.difficulty < 40 ? '쉬움' : data.difficulty < 70 ? '보통' : '어려움',
           tips: data.tips || [
             '제목에 키워드를 자연스럽게 포함하세요',
             '본문 2000자 이상 작성을 권장합니다'
@@ -3768,60 +3807,218 @@ export default function ToolsPage() {
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold">상위 노출 예측</h2>
-                    <p className="text-gray-600">키워드 경쟁도와 상위 노출 가능성을 분석합니다</p>
+                    <p className="text-gray-600">키워드 경쟁도와 상위 노출 가능성을 실제 데이터로 분석합니다</p>
                   </div>
                 </div>
 
-                <div className="flex gap-4 mb-6">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                    <input
-                      type="text"
-                      value={predictionKeyword}
-                      onChange={(e) => setPredictionKeyword(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handlePrediction()}
-                      placeholder="분석할 키워드 입력 (예: 강남 맛집)"
-                      className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
-                      disabled={predictionLoading}
-                    />
+                <div className="space-y-4 mb-6">
+                  <div className="flex gap-4">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <input
+                        type="text"
+                        value={predictionKeyword}
+                        onChange={(e) => setPredictionKeyword(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && handlePrediction()}
+                        placeholder="분석할 키워드 입력 (예: 강남 맛집)"
+                        className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
+                        disabled={predictionLoading}
+                      />
+                    </div>
                   </div>
-                  <button
-                    onClick={handlePrediction}
-                    disabled={predictionLoading}
-                    className="px-8 py-4 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50"
-                  >
-                    {predictionLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : '분석하기'}
-                  </button>
+                  <div className="flex gap-4">
+                    <div className="relative flex-1">
+                      <User className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <input
+                        type="text"
+                        value={predictionBlogId}
+                        onChange={(e) => setPredictionBlogId(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && handlePrediction()}
+                        placeholder="내 블로그 ID (선택사항 - 입력 시 맞춤 분석)"
+                        className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
+                        disabled={predictionLoading}
+                      />
+                    </div>
+                    <button
+                      onClick={handlePrediction}
+                      disabled={predictionLoading}
+                      className="px-8 py-4 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {predictionLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Target className="w-5 h-5" />분석하기</>}
+                    </button>
+                  </div>
                 </div>
 
                 {predictionResult && (
                   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                    <div className="grid md:grid-cols-3 gap-4">
-                      <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 text-center">
-                        <div className="text-4xl font-bold gradient-text mb-2">{predictionResult.successRate}%</div>
-                        <div className="text-sm text-gray-600">상위 노출 예측</div>
+                    {/* 메인 지표 */}
+                    <div className="grid md:grid-cols-4 gap-4">
+                      <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-5 text-center">
+                        <div className="text-3xl font-bold text-purple-600 mb-1">{predictionResult.successRate}%</div>
+                        <div className="text-xs text-gray-600">상위 노출 확률</div>
                       </div>
-                      <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-6 text-center">
-                        <div className={`text-4xl font-bold ${getDifficultyColor(predictionResult.difficulty)} mb-2`}>
-                          {getDifficultyLabel(predictionResult.difficulty)}
+                      <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-5 text-center">
+                        <div className={`text-3xl font-bold ${getDifficultyColor(predictionResult.difficulty)} mb-1`}>
+                          {predictionResult.difficultyLabel}
                         </div>
-                        <div className="text-sm text-gray-600">키워드 난이도</div>
+                        <div className="text-xs text-gray-600">난이도 ({predictionResult.difficulty}점)</div>
                       </div>
-                      <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 text-center">
-                        <div className="text-4xl font-bold text-green-600 mb-2">{predictionResult.recommendation}</div>
-                        <div className="text-sm text-gray-600">추천</div>
+                      <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-5 text-center">
+                        <div className="text-3xl font-bold text-orange-600 mb-1">
+                          {predictionResult.monthlySearch >= 10000
+                            ? `${(predictionResult.monthlySearch / 10000).toFixed(1)}만`
+                            : predictionResult.monthlySearch >= 1000
+                              ? `${(predictionResult.monthlySearch / 1000).toFixed(1)}천`
+                              : predictionResult.monthlySearch || '-'}
+                        </div>
+                        <div className="text-xs text-gray-600">월검색량</div>
+                      </div>
+                      <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-5 text-center">
+                        <div className="text-3xl font-bold text-green-600 mb-1">{predictionResult.competition}</div>
+                        <div className="text-xs text-gray-600">광고 경쟁</div>
                       </div>
                     </div>
 
+                    {/* 상위 블로그 통계 */}
+                    <div className="bg-white rounded-2xl p-6 border border-gray-100">
+                      <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                        <BarChart3 className="w-5 h-5 text-blue-600" />
+                        상위 블로그 분석 (TOP 10)
+                      </h3>
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                        <div className="text-center p-3 bg-gray-50 rounded-xl">
+                          <div className="text-2xl font-bold text-gray-800">{predictionResult.topBlogsStats.avgScore}</div>
+                          <div className="text-xs text-gray-500">평균 점수</div>
+                        </div>
+                        <div className="text-center p-3 bg-gray-50 rounded-xl">
+                          <div className="text-2xl font-bold text-gray-800">Lv.{predictionResult.topBlogsStats.avgLevel}</div>
+                          <div className="text-xs text-gray-500">평균 레벨</div>
+                        </div>
+                        <div className="text-center p-3 bg-gray-50 rounded-xl">
+                          <div className="text-2xl font-bold text-green-600">{predictionResult.topBlogsStats.minScore}</div>
+                          <div className="text-xs text-gray-500">최저 점수</div>
+                        </div>
+                        <div className="text-center p-3 bg-gray-50 rounded-xl">
+                          <div className="text-2xl font-bold text-red-600">{predictionResult.topBlogsStats.maxScore}</div>
+                          <div className="text-xs text-gray-500">최고 점수</div>
+                        </div>
+                        <div className="text-center p-3 bg-gray-50 rounded-xl">
+                          <div className="text-2xl font-bold text-gray-800">{predictionResult.topBlogsStats.avgPosts}</div>
+                          <div className="text-xs text-gray-500">평균 포스팅</div>
+                        </div>
+                        <div className="text-center p-3 bg-gray-50 rounded-xl">
+                          <div className="text-2xl font-bold text-gray-800">{predictionResult.topBlogsStats.avgNeighbors}</div>
+                          <div className="text-xs text-gray-500">평균 이웃</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 상위 블로그 목록 */}
+                    {predictionResult.topBlogs && predictionResult.topBlogs.length > 0 && (
+                      <div className="bg-white rounded-2xl p-6 border border-gray-100">
+                        <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                          <Trophy className="w-5 h-5 text-yellow-500" />
+                          상위 5개 블로그
+                        </h3>
+                        <div className="space-y-3">
+                          {predictionResult.topBlogs.map((blog, i) => (
+                            <div key={i} className="flex items-center gap-4 p-3 bg-gray-50 rounded-xl">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${
+                                i === 0 ? 'bg-yellow-500' : i === 1 ? 'bg-gray-400' : i === 2 ? 'bg-amber-600' : 'bg-gray-300'
+                              }`}>
+                                {blog.rank}
+                              </div>
+                              <div className="flex-1">
+                                <div className="font-medium text-gray-800">{blog.blog_name || `블로그 ${blog.rank}`}</div>
+                                <div className="text-xs text-gray-500">포스팅 {blog.posts}개</div>
+                              </div>
+                              <div className="text-right">
+                                <div className="font-bold text-purple-600">{blog.score}점</div>
+                                <div className="text-xs text-gray-500">Lv.{blog.level}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 내 블로그 분석 결과 */}
+                    {predictionResult.myBlogAnalysis && predictionResult.gapAnalysis && (
+                      <div className={`rounded-2xl p-6 border-2 ${
+                        predictionResult.gapAnalysis.status === '상위진입가능'
+                          ? 'bg-green-50 border-green-300'
+                          : 'bg-amber-50 border-amber-300'
+                      }`}>
+                        <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                          <User className="w-5 h-5" />
+                          내 블로그 경쟁력 분석
+                          <span className={`ml-2 px-3 py-1 rounded-full text-sm font-bold ${
+                            predictionResult.gapAnalysis.status === '상위진입가능'
+                              ? 'bg-green-500 text-white'
+                              : 'bg-amber-500 text-white'
+                          }`}>
+                            {predictionResult.gapAnalysis.status}
+                          </span>
+                        </h3>
+                        <div className="grid md:grid-cols-2 gap-6">
+                          <div>
+                            <div className="text-sm text-gray-600 mb-2">내 블로그 현황</div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="p-3 bg-white rounded-xl text-center">
+                                <div className="text-2xl font-bold text-purple-600">{predictionResult.myBlogAnalysis.score}</div>
+                                <div className="text-xs text-gray-500">점수</div>
+                              </div>
+                              <div className="p-3 bg-white rounded-xl text-center">
+                                <div className="text-2xl font-bold text-purple-600">Lv.{predictionResult.myBlogAnalysis.level}</div>
+                                <div className="text-xs text-gray-500">레벨</div>
+                              </div>
+                              <div className="p-3 bg-white rounded-xl text-center">
+                                <div className="text-2xl font-bold text-gray-700">{predictionResult.myBlogAnalysis.posts}</div>
+                                <div className="text-xs text-gray-500">포스팅</div>
+                              </div>
+                              <div className="p-3 bg-white rounded-xl text-center">
+                                <div className="text-2xl font-bold text-gray-700">{predictionResult.myBlogAnalysis.neighbors}</div>
+                                <div className="text-xs text-gray-500">이웃</div>
+                              </div>
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-sm text-gray-600 mb-2">상위 블로그 대비 차이</div>
+                            <div className="space-y-2">
+                              <div className="flex justify-between items-center p-2 bg-white rounded-lg">
+                                <span className="text-sm text-gray-600">점수 차이</span>
+                                <span className={`font-bold ${predictionResult.gapAnalysis.score_gap > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                                  {predictionResult.gapAnalysis.score_gap > 0 ? `-${predictionResult.gapAnalysis.score_gap}` : `+${Math.abs(predictionResult.gapAnalysis.score_gap)}`}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center p-2 bg-white rounded-lg">
+                                <span className="text-sm text-gray-600">레벨 차이</span>
+                                <span className={`font-bold ${predictionResult.gapAnalysis.level_gap > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                                  {predictionResult.gapAnalysis.level_gap > 0 ? `-${predictionResult.gapAnalysis.level_gap}` : `+${Math.abs(predictionResult.gapAnalysis.level_gap)}`}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center p-2 bg-white rounded-lg">
+                                <span className="text-sm text-gray-600">포스팅 차이</span>
+                                <span className={`font-bold ${predictionResult.gapAnalysis.posts_gap > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                                  {predictionResult.gapAnalysis.posts_gap > 0 ? `-${predictionResult.gapAnalysis.posts_gap}` : `+${Math.abs(predictionResult.gapAnalysis.posts_gap)}`}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 팁 */}
                     <div className="bg-purple-50 rounded-2xl p-6">
                       <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
                         <Sparkles className="w-5 h-5 text-purple-600" />
-                        상위 노출 팁
+                        상위 노출 전략
                       </h3>
                       <ul className="space-y-2">
                         {predictionResult.tips.map((tip, i) => (
                           <li key={i} className="flex items-start gap-2 text-gray-700">
-                            <span className="text-purple-500 mt-1">•</span>
+                            <CheckCircle className="w-5 h-5 text-purple-500 mt-0.5 flex-shrink-0" />
                             <span>{tip}</span>
                           </li>
                         ))}
