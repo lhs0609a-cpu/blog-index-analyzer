@@ -257,14 +257,14 @@ async def generate_ai_title(
         # 2. 월간 검색량 조회
         monthly_search = 0
         try:
-            search_data = await get_related_keywords_from_searchad(keyword)
-            if search_data:
-                for kw in search_data:
-                    if kw.get("relKeyword", "") == keyword:
-                        pc = kw.get("monthlyPcQcCnt", 0)
-                        mobile = kw.get("monthlyMobileQcCnt", 0)
-                        monthly_search = (pc if isinstance(pc, int) else 0) + (mobile if isinstance(mobile, int) else 0)
+            search_result = await get_related_keywords_from_searchad(keyword)
+            if search_result.success and search_result.keywords:
+                for kw in search_result.keywords:
+                    if kw.keyword.replace(" ", "") == keyword.replace(" ", ""):
+                        monthly_search = kw.monthly_total_search or 0
                         break
+                if monthly_search == 0 and search_result.keywords:
+                    monthly_search = search_result.keywords[0].monthly_total_search or 0
         except:
             pass
 
@@ -417,9 +417,18 @@ async def discover_keywords(
         # 1. 네이버 광고 API로 연관 키워드 조회
         keyword_list = []
         try:
-            search_data = await get_related_keywords_from_searchad(seed)
-            if search_data:
-                keyword_list = search_data
+            search_result = await get_related_keywords_from_searchad(seed)
+            if search_result.success and search_result.keywords:
+                # RelatedKeyword 객체를 dict로 변환
+                keyword_list = [
+                    {
+                        "relKeyword": kw.keyword,
+                        "monthlyPcQcCnt": kw.monthly_pc_search or 0,
+                        "monthlyMobileQcCnt": kw.monthly_mobile_search or 0,
+                        "compIdx": kw.competition or "중간"
+                    }
+                    for kw in search_result.keywords
+                ]
         except:
             pass
 
@@ -2276,15 +2285,15 @@ async def track_rank(
         monthly_search = 0
         competition = "중간"
         try:
-            search_data = await get_related_keywords_from_searchad(keyword)
-            if search_data:
-                for kw in search_data:
-                    if kw.get("relKeyword", "") == keyword:
-                        pc = kw.get("monthlyPcQcCnt", 0)
-                        mobile = kw.get("monthlyMobileQcCnt", 0)
-                        monthly_search = (pc if isinstance(pc, int) else 0) + (mobile if isinstance(mobile, int) else 0)
-                        competition = kw.get("compIdx", "중간")
+            search_result = await get_related_keywords_from_searchad(keyword)
+            if search_result.success and search_result.keywords:
+                for kw in search_result.keywords:
+                    if kw.keyword.replace(" ", "") == keyword.replace(" ", ""):
+                        monthly_search = kw.monthly_total_search or 0
+                        competition = kw.competition or "중간"
                         break
+                if monthly_search == 0 and search_result.keywords:
+                    monthly_search = search_result.keywords[0].monthly_total_search or 0
         except:
             pass
 
@@ -2534,16 +2543,16 @@ async def snipe_trend(
                     search_volume = 0
                     try:
                         if len(trends) < 10:  # API 호출 제한
-                            search_data = await get_related_keywords_from_searchad(keyword)
-                            if search_data:
-                                for kw in search_data:
-                                    if kw.get("relKeyword", "") == keyword:
-                                        pc = kw.get("monthlyPcQcCnt", 0)
-                                        mobile = kw.get("monthlyMobileQcCnt", 0)
-                                        search_volume = (pc if isinstance(pc, int) else 0) + (mobile if isinstance(mobile, int) else 0)
-                                        comp = kw.get("compIdx", "중간")
+                            search_result = await get_related_keywords_from_searchad(keyword)
+                            if search_result.success and search_result.keywords:
+                                for kw in search_result.keywords:
+                                    if kw.keyword.replace(" ", "") == keyword.replace(" ", ""):
+                                        search_volume = kw.monthly_total_search or 0
+                                        comp = kw.competition or "중간"
                                         competition = {"낮음": "low", "중간": "medium", "높음": "high"}.get(comp, "medium")
                                         break
+                                if search_volume == 0 and search_result.keywords:
+                                    search_volume = search_result.keywords[0].monthly_total_search or 0
                     except:
                         pass
 
