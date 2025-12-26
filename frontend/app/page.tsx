@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Sparkles, TrendingUp, Zap, Award, Users, BarChart3, LogOut, Search, BookOpen, ArrowRight, Building2, Mic, CreditCard, X, PenTool, Shield } from 'lucide-react'
+import { Sparkles, TrendingUp, Zap, Award, Users, BarChart3, LogOut, Search, BookOpen, ArrowRight, Building2, Mic, CreditCard, X, PenTool, Shield, Target } from 'lucide-react'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import toast from 'react-hot-toast'
@@ -244,7 +244,7 @@ export default function Home() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.3 }}
-              className="grid grid-cols-2 md:grid-cols-4 gap-3 max-w-4xl mx-auto"
+              className="grid grid-cols-2 md:grid-cols-5 gap-3 max-w-5xl mx-auto"
             >
               <Link
                 href="/analyze"
@@ -256,6 +256,22 @@ export default function Home() {
                   </div>
                   <span className="font-bold text-gray-800 text-sm">블로그 분석</span>
                   <span className="text-xs text-gray-500">ID로 지수 측정</span>
+                </div>
+              </Link>
+
+              <Link
+                href="/ad-optimizer"
+                className="group relative p-4 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 hover:shadow-xl hover:shadow-green-500/30 transition-all duration-300 hover:-translate-y-1"
+              >
+                <div className="absolute top-2 right-2">
+                  <span className="px-1.5 py-0.5 text-[10px] font-bold bg-yellow-400 text-yellow-900 rounded-full">NEW</span>
+                </div>
+                <div className="flex flex-col items-center text-center gap-2">
+                  <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <Target className="w-6 h-6 text-white" />
+                  </div>
+                  <span className="font-bold text-white text-sm">광고 최적화</span>
+                  <span className="text-xs text-white/80">네이버 광고</span>
                 </div>
               </Link>
 
@@ -294,9 +310,6 @@ export default function Home() {
                 rel="noopener noreferrer"
                 className="group relative p-4 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 hover:shadow-xl hover:shadow-cyan-500/30 transition-all duration-300 hover:-translate-y-1"
               >
-                <div className="absolute top-2 right-2">
-                  <span className="px-1.5 py-0.5 text-[10px] font-bold bg-white text-cyan-600 rounded-full">NEW</span>
-                </div>
                 <div className="flex flex-col items-center text-center gap-2">
                   <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                     <PenTool className="w-6 h-6 text-white" />

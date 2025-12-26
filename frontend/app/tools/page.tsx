@@ -3236,7 +3236,7 @@ export default function ToolsPage() {
                   </button>
                 )
               })}
-              {/* 광고 최적화 - 별도 페이지 링크 */}
+              {/* 네이버 광고 최적화 - 별도 페이지 링크 */}
               <Link
                 href="/ad-optimizer"
                 className="group relative flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all bg-white/60 hover:bg-white hover:shadow-md text-gray-600 hover:scale-105"
@@ -3245,7 +3245,18 @@ export default function ToolsPage() {
                   PRO
                 </div>
                 <Megaphone className="w-5 h-5 group-hover:text-orange-500" />
-                <span className="text-[10px] font-medium truncate w-full text-center">광고 최적화</span>
+                <span className="text-[10px] font-medium truncate w-full text-center">네이버 광고</span>
+              </Link>
+              {/* 통합 광고 최적화 - 모든 플랫폼 */}
+              <Link
+                href="/ad-optimizer/unified"
+                className="group relative flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all bg-gradient-to-br from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100 hover:shadow-md text-gray-600 hover:scale-105"
+              >
+                <div className="absolute -top-1 -right-1 px-1 py-0.5 text-[8px] font-bold rounded bg-gradient-to-r from-indigo-500 to-purple-500 text-white">
+                  NEW
+                </div>
+                <Zap className="w-5 h-5 group-hover:text-indigo-500" />
+                <span className="text-[10px] font-medium truncate w-full text-center">통합 광고</span>
               </Link>
             </div>
           </div>

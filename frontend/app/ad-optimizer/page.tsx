@@ -13,6 +13,7 @@ import {
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
+import { useFeature } from '@/lib/features/useFeatureAccess'
 import Tutorial, { adOptimizerTutorialSteps } from '@/components/Tutorial'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev'
@@ -124,9 +125,238 @@ interface TrendingKeyword {
 
 export default function AdOptimizerPage() {
   const { isAuthenticated, user } = useAuthStore()
+  const { allowed: hasAccess, isLocked, upgradeHint } = useFeature('adOptimizer')
   const [activeTab, setActiveTab] = useState<'connect' | 'dashboard' | 'efficiency' | 'trending' | 'keywords' | 'discover' | 'excluded' | 'settings' | 'logs'>('connect')
   const [isLoading, setIsLoading] = useState(false)
+  const [showApiTutorial, setShowApiTutorial] = useState(false)
   const userId = user?.id || 1 // 인증된 사용자 ID 사용, 기본값 1
+
+  // 프로 플랜 미만 사용자 접근 제한 - 프리미엄 유도 팝업
+  if (isLocked) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-indigo-900 flex items-center justify-center p-4 overflow-hidden relative">
+        {/* 배경 효과 */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse" />
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+          <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-green-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }} />
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+          className="relative z-10 max-w-2xl w-full"
+        >
+          {/* 메인 카드 */}
+          <div className="bg-white/10 backdrop-blur-xl rounded-3xl border border-white/20 overflow-hidden">
+            {/* 상단 헤더 - 애니메이션 효과 */}
+            <div className="bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 p-6 text-center relative overflow-hidden">
+              <motion.div
+                animate={{ x: ['-100%', '100%'] }}
+                transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+              />
+              <div className="relative">
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+                  className="w-20 h-20 mx-auto mb-4 relative"
+                >
+                  <div className="absolute inset-0 bg-white/20 rounded-2xl" />
+                  <div className="absolute inset-2 bg-white rounded-xl flex items-center justify-center">
+                    <Zap className="w-10 h-10 text-green-500" />
+                  </div>
+                </motion.div>
+                <h1 className="text-2xl font-bold text-white mb-1">AI 광고 자동 최적화</h1>
+                <p className="text-green-100 text-sm">잠자는 동안에도 AI가 광고비를 절약합니다</p>
+              </div>
+            </div>
+
+            {/* 핵심 수치 강조 */}
+            <div className="p-6">
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="bg-gradient-to-br from-blue-500/20 to-blue-600/20 rounded-2xl p-4 text-center border border-blue-400/30"
+                >
+                  <motion.p
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 0.4, type: 'spring' }}
+                    className="text-3xl font-bold text-blue-400"
+                  >
+                    1분
+                  </motion.p>
+                  <p className="text-blue-200 text-xs mt-1">입찰가 자동 조정</p>
+                </motion.div>
+
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="bg-gradient-to-br from-green-500/20 to-emerald-600/20 rounded-2xl p-4 text-center border border-green-400/30"
+                >
+                  <motion.p
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 0.5, type: 'spring' }}
+                    className="text-3xl font-bold text-green-400"
+                  >
+                    3배↑
+                  </motion.p>
+                  <p className="text-green-200 text-xs mt-1">평균 ROAS 상승</p>
+                </motion.div>
+
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                  className="bg-gradient-to-br from-orange-500/20 to-red-600/20 rounded-2xl p-4 text-center border border-orange-400/30"
+                >
+                  <motion.p
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 0.6, type: 'spring' }}
+                    className="text-3xl font-bold text-orange-400"
+                  >
+                    -40%
+                  </motion.p>
+                  <p className="text-orange-200 text-xs mt-1">광고비 절감</p>
+                </motion.div>
+              </div>
+
+              {/* 베네핏 리스트 */}
+              <div className="space-y-3 mb-6">
+                {[
+                  { icon: Clock, text: '1분마다 실시간 입찰가 자동 최적화', highlight: '24시간 365일' },
+                  { icon: TrendingUp, text: 'AI가 ROAS 높은 키워드에 자동 집중 투자', highlight: '수익 극대화' },
+                  { icon: Target, text: '전환 없는 비효율 키워드 자동 제외', highlight: '낭비 제로' },
+                  { icon: Flame, text: '급상승 트렌드 키워드 자동 발굴 & 추천', highlight: '기회 선점' },
+                  { icon: DollarSign, text: '절감된 광고비 실시간 추적 대시보드', highlight: '투명한 성과' },
+                ].map((item, idx) => (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.5 + idx * 0.1 }}
+                    className="flex items-center gap-3 bg-white/5 rounded-xl p-3 border border-white/10"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center flex-shrink-0">
+                      <item.icon className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-white text-sm">{item.text}</p>
+                    </div>
+                    <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs font-medium rounded-full">
+                      {item.highlight}
+                    </span>
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* 비교 섹션 */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1 }}
+                className="bg-gradient-to-r from-red-500/10 via-transparent to-green-500/10 rounded-2xl p-4 mb-6"
+              >
+                <div className="grid grid-cols-2 gap-4 text-center">
+                  <div>
+                    <p className="text-red-400 text-xs mb-2">수동 관리</p>
+                    <div className="space-y-1 text-xs text-gray-400">
+                      <p>매일 3시간 이상 모니터링</p>
+                      <p>감에 의존한 입찰가 조정</p>
+                      <p>놓치는 트렌드 키워드</p>
+                      <p>비효율 키워드 방치</p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-green-400 text-xs mb-2">AI 자동 최적화</p>
+                    <div className="space-y-1 text-xs text-white">
+                      <p>✓ 24시간 완전 자동화</p>
+                      <p>✓ 데이터 기반 최적 입찰</p>
+                      <p>✓ 트렌드 키워드 자동 발굴</p>
+                      <p>✓ 비효율 키워드 즉시 제외</p>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* 사용자 후기 느낌 */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.2 }}
+                className="bg-white/5 rounded-xl p-4 mb-6 border border-white/10"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="flex -space-x-2">
+                    {['bg-blue-500', 'bg-green-500', 'bg-purple-500'].map((color, i) => (
+                      <div key={i} className={`w-6 h-6 ${color} rounded-full border-2 border-slate-900`} />
+                    ))}
+                  </div>
+                  <p className="text-yellow-400 text-sm">★★★★★</p>
+                </div>
+                <p className="text-gray-300 text-sm italic">
+                  &ldquo;매일 입찰가 조정하느라 3시간씩 쓰던 게 이제 0분이에요.
+                  오히려 ROAS는 2배 올랐습니다!&rdquo;
+                </p>
+                <p className="text-gray-500 text-xs mt-1">- 쇼핑몰 운영자 K님</p>
+              </motion.div>
+
+              {/* CTA 버튼 */}
+              <div className="space-y-3">
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <Link
+                    href="/pricing"
+                    className="block w-full py-4 bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 text-white text-center rounded-xl font-bold text-lg shadow-lg shadow-green-500/30 hover:shadow-green-500/50 transition-all relative overflow-hidden group"
+                  >
+                    <motion.div
+                      animate={{ x: ['-100%', '100%'] }}
+                      transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                      className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
+                    />
+                    <span className="relative flex items-center justify-center gap-2">
+                      <Zap className="w-5 h-5" />
+                      프로 플랜으로 시작하기
+                      <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">월 19,900원</span>
+                    </span>
+                  </Link>
+                </motion.div>
+
+                <Link
+                  href="/tools"
+                  className="block w-full py-3 text-gray-400 text-center rounded-xl font-medium hover:text-white transition-colors text-sm"
+                >
+                  나중에 할게요
+                </Link>
+              </div>
+
+              {/* 보장 */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.5 }}
+                className="mt-4 text-center"
+              >
+                <p className="text-gray-500 text-xs flex items-center justify-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  7일 무료 체험 · 언제든 해지 가능 · 환불 보장
+                </p>
+              </motion.div>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    )
+  }
 
   // 계정 연동 상태
   const [adAccount, setAdAccount] = useState<AdAccount | null>(null)
@@ -838,13 +1068,148 @@ export default function AdOptimizerPage() {
                 </div>
 
                 <div className="mt-8 p-4 bg-gray-50 rounded-xl">
-                  <h4 className="font-medium text-gray-900 mb-2">API 키 발급 방법</h4>
-                  <ol className="text-sm text-gray-600 space-y-1 list-decimal list-inside">
-                    <li>네이버 검색광고 센터 로그인</li>
-                    <li>도구 → API 관리 메뉴 클릭</li>
-                    <li>API 라이선스 키 발급 신청</li>
-                    <li>발급된 키 정보 입력</li>
-                  </ol>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-medium text-gray-900">API 키 발급 방법</h4>
+                    <button
+                      onClick={() => setShowApiTutorial(!showApiTutorial)}
+                      className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                    >
+                      {showApiTutorial ? '간략히 보기' : '자세히 보기'}
+                      {showApiTutorial ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </button>
+                  </div>
+
+                  {!showApiTutorial ? (
+                    <ol className="text-sm text-gray-600 space-y-1 list-decimal list-inside">
+                      <li>네이버 검색광고 센터 로그인</li>
+                      <li>도구 → API 관리 메뉴 클릭</li>
+                      <li>API 라이선스 키 발급 신청</li>
+                      <li>발급된 키 정보 입력</li>
+                    </ol>
+                  ) : (
+                    <div className="space-y-6">
+                      {/* Step 1 */}
+                      <div className="bg-white rounded-xl p-4 border border-gray-200">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold text-sm">1</div>
+                          <h5 className="font-semibold text-gray-900">네이버 검색광고 센터 접속</h5>
+                        </div>
+                        <div className="ml-11 space-y-2">
+                          <p className="text-sm text-gray-600">
+                            아래 링크를 클릭하여 네이버 검색광고 센터에 로그인하세요.
+                          </p>
+                          <a
+                            href="https://searchad.naver.com"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors"
+                          >
+                            네이버 검색광고 센터 바로가기
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </a>
+                          <p className="text-xs text-gray-500">
+                            * 광고 계정이 없다면 먼저 광고주 가입이 필요합니다.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Step 2 */}
+                      <div className="bg-white rounded-xl p-4 border border-gray-200">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold text-sm">2</div>
+                          <h5 className="font-semibold text-gray-900">API 관리 메뉴 찾기</h5>
+                        </div>
+                        <div className="ml-11 space-y-3">
+                          <p className="text-sm text-gray-600">로그인 후 아래 경로로 이동하세요:</p>
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="px-3 py-1 bg-gray-100 rounded-lg font-medium">도구</span>
+                            <span className="text-gray-400">→</span>
+                            <span className="px-3 py-1 bg-gray-100 rounded-lg font-medium">API 사용 관리</span>
+                          </div>
+                          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                            <p className="text-sm text-amber-800">
+                              <strong>💡 팁:</strong> 상단 메뉴바에서 &quot;도구&quot; 메뉴를 클릭하면 드롭다운 메뉴가 나타납니다.
+                              그 중 &quot;API 사용 관리&quot;를 선택하세요.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Step 3 */}
+                      <div className="bg-white rounded-xl p-4 border border-gray-200">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold text-sm">3</div>
+                          <h5 className="font-semibold text-gray-900">API 라이선스 발급</h5>
+                        </div>
+                        <div className="ml-11 space-y-3">
+                          <p className="text-sm text-gray-600">
+                            API 관리 화면에서 &quot;API 라이선스 발급&quot; 버튼을 클릭합니다.
+                          </p>
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div className="bg-gray-50 rounded-lg p-3">
+                              <p className="font-medium text-gray-700 mb-1">고객 ID (Customer ID)</p>
+                              <p className="text-gray-500 text-xs">광고 계정 고유 번호 (7자리)</p>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg p-3">
+                              <p className="font-medium text-gray-700 mb-1">액세스 라이선스</p>
+                              <p className="text-gray-500 text-xs">API 키 (API Key)</p>
+                            </div>
+                            <div className="bg-gray-50 rounded-lg p-3 col-span-2">
+                              <p className="font-medium text-gray-700 mb-1">비밀 키 (Secret Key)</p>
+                              <p className="text-gray-500 text-xs">발급 시 1회만 표시됩니다. 반드시 복사해서 안전한 곳에 저장하세요!</p>
+                            </div>
+                          </div>
+                          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                            <p className="text-sm text-red-800">
+                              <strong>⚠️ 주의:</strong> 비밀 키는 발급 시 <strong>단 1회만</strong> 표시됩니다.
+                              창을 닫으면 다시 확인할 수 없으니, 꼭 복사해두세요!
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Step 4 */}
+                      <div className="bg-white rounded-xl p-4 border border-gray-200">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center font-bold text-sm">4</div>
+                          <h5 className="font-semibold text-gray-900">키 정보 입력</h5>
+                        </div>
+                        <div className="ml-11 space-y-2">
+                          <p className="text-sm text-gray-600">
+                            발급받은 정보를 위의 입력란에 입력하고 &quot;계정 연동하기&quot; 버튼을 클릭하세요.
+                          </p>
+                          <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 rounded-lg p-3">
+                            <CheckCircle className="w-5 h-5" />
+                            <span>연동이 완료되면 자동 최적화를 시작할 수 있습니다!</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* FAQ */}
+                      <div className="bg-blue-50 rounded-xl p-4">
+                        <h5 className="font-semibold text-blue-900 mb-3 flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4" />
+                          자주 묻는 질문
+                        </h5>
+                        <div className="space-y-3 text-sm">
+                          <div>
+                            <p className="font-medium text-blue-800">Q. API 관리 메뉴가 보이지 않아요</p>
+                            <p className="text-blue-700">A. 광고주 마스터 권한이 필요합니다. 계정 관리자에게 권한을 요청하세요.</p>
+                          </div>
+                          <div>
+                            <p className="font-medium text-blue-800">Q. 비밀 키를 잃어버렸어요</p>
+                            <p className="text-blue-700">A. 기존 라이선스를 삭제하고 새로 발급받으셔야 합니다.</p>
+                          </div>
+                          <div>
+                            <p className="font-medium text-blue-800">Q. 연동 시 오류가 발생해요</p>
+                            <p className="text-blue-700">A. API 키가 정확한지 확인하고, 공백 없이 입력했는지 확인해주세요.</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )}

@@ -544,6 +544,21 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.UNLIMITED: AccessLevel.FULL
         }
     ),
+
+    # ============ 광고 최적화 (Ad Optimization) ============
+    "adOptimizer": FeatureConfig(
+        name="adOptimizer",
+        display_name="네이버 광고 자동 최적화",
+        description="네이버 검색광고 입찰가를 AI가 자동으로 최적화합니다",
+        category="premium",
+        access={
+            Plan.GUEST: AccessLevel.NONE,
+            Plan.FREE: AccessLevel.NONE,
+            Plan.BASIC: AccessLevel.NONE,
+            Plan.PRO: AccessLevel.FULL,
+            Plan.UNLIMITED: AccessLevel.FULL
+        }
+    ),
 }
 
 

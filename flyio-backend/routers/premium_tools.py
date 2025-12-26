@@ -635,16 +635,33 @@ async def generate_hashtags(
                     "type": "related"
                 })
 
-        # 인기 변형 추가
+        # 인기 변형 추가 - 연관 키워드 데이터에서 검색량 확인
         popular_suffixes = ["추천", "후기", "꿀팁", "맛집", "여행", "정보", "리뷰"]
+        main_search = next((k["search_volume"] for k in related_keywords if k["keyword"].replace(" ", "") == base_keyword), 0)
+
         for suffix in popular_suffixes:
             combined = f"{base_keyword}{suffix}"
             if combined.lower() not in seen:
                 seen.add(combined.lower())
+                # 연관 키워드에서 검색량 찾기
+                variation_search = next(
+                    (k["search_volume"] for k in related_keywords
+                     if k["keyword"].replace(" ", "") == combined or combined in k["keyword"].replace(" ", "")),
+                    0
+                )
+                # 검색량이 있으면 그 기반으로, 없으면 메인 키워드의 10-30% 수준으로 계산
+                if variation_search:
+                    pop = min(85, max(20, variation_search // 50))
+                else:
+                    # 메인 키워드 검색량의 일정 비율로 추정 (suffix별로 다른 비율)
+                    suffix_ratios = {"추천": 0.25, "후기": 0.20, "꿀팁": 0.15, "맛집": 0.18, "여행": 0.12, "정보": 0.10, "리뷰": 0.15}
+                    estimated = int(main_search * suffix_ratios.get(suffix, 0.15))
+                    pop = min(60, max(15, estimated // 50)) if estimated else 25
+
                 hashtags.append({
                     "tag": f"#{combined}",
-                    "popularity": random.randint(25, 50),
-                    "searchVolume": 0,
+                    "popularity": pop,
+                    "searchVolume": variation_search,
                     "type": "variation"
                 })
 
@@ -1232,6 +1249,7 @@ async def analyze_cafe(
 ):
     """
     네이버 카페 분석 - 인기 토픽, 질문, 추천 카페
+    검색 결과 순위 기반 분석
     """
     try:
         # 네이버 카페 검색 API 호출
@@ -1249,59 +1267,76 @@ async def analyze_cafe(
                 if response.status_code == 200:
                     data = response.json()
                     items = data.get("items", [])
+                    total_results = data.get("total", 0)
 
-                    # 토픽 분석
+                    # 카페명별 게시글 수 집계
+                    cafe_counts = {}
+                    for item in items:
+                        cafe_name = item.get("cafename", "")
+                        if cafe_name:
+                            cafe_counts[cafe_name] = cafe_counts.get(cafe_name, 0) + 1
+
+                    # 토픽 분석 - 순위 기반 engagement 추정
                     topics = []
                     for i, item in enumerate(items[:5]):
                         title = re.sub(r'<[^>]+>', '', item.get("title", ""))
+                        cafe_name = item.get("cafename", "")
+                        # 순위가 높을수록 높은 점수 (1위=100점, 5위=60점)
+                        rank_score = 100 - (i * 8)
                         topics.append({
                             "topic": title[:50],
-                            "cafeName": item.get("cafename", ""),
-                            "postCount": random.randint(50, 200),
-                            "engagement": random.randint(500, 3000),
+                            "cafeName": cafe_name,
+                            "rank": i + 1,
+                            "relevanceScore": rank_score,
+                            "cafePostsInResults": cafe_counts.get(cafe_name, 1),
                             "category": keyword
                         })
 
                     # 질문형 게시글 추출
                     questions = []
                     question_keywords = ["추천", "어디", "어떻게", "할까", "좋을까", "?"]
-                    for item in items:
+                    for idx, item in enumerate(items):
                         title = re.sub(r'<[^>]+>', '', item.get("title", ""))
                         if any(q in title for q in question_keywords):
                             questions.append({
                                 "question": title[:60],
                                 "cafeName": item.get("cafename", ""),
-                                "answers": random.randint(10, 100),
-                                "views": random.randint(500, 3000),
+                                "rank": idx + 1,
                                 "suggestedKeyword": f"{keyword} {title.split()[0] if title.split() else ''}"[:30]
                             })
                             if len(questions) >= 5:
                                 break
 
+                    # 상위 카페 추출 (검색 결과에 많이 등장한 카페)
+                    recommended_cafes = []
+                    for cafe_name, count in sorted(cafe_counts.items(), key=lambda x: x[1], reverse=True)[:3]:
+                        match_score = min(100, 50 + count * 15)
+                        recommended_cafes.append({
+                            "name": cafe_name,
+                            "postsInResults": count,
+                            "matchScore": match_score,
+                            "category": keyword
+                        })
+
                     return {
                         "success": True,
                         "keyword": keyword,
+                        "totalResults": total_results,
                         "popularTopics": topics,
                         "questions": questions[:5],
-                        "recommendedCafes": [
-                            {"name": "파워블로거 모임", "members": 50000, "category": "블로그", "matchScore": 95},
-                            {"name": "마케팅 연구소", "members": 30000, "category": "마케팅", "matchScore": 88},
-                        ],
-                        "trafficSource": []
+                        "recommendedCafes": recommended_cafes,
+                        "dataSource": "네이버 카페 검색 API"
                     }
 
-        # Fallback 데이터
+        # Fallback - API 키가 없을 때
         return {
-            "success": True,
+            "success": False,
             "keyword": keyword,
-            "popularTopics": [
-                {"topic": f"{keyword} 추천해주세요", "cafeName": "인기카페", "postCount": 150, "engagement": 2500, "category": keyword}
-            ],
-            "questions": [
-                {"question": f"{keyword} 어디가 좋을까요?", "cafeName": "질문카페", "answers": 45, "views": 1200, "suggestedKeyword": f"{keyword} 추천"}
-            ],
+            "message": "네이버 API 키가 설정되지 않았습니다",
+            "popularTopics": [],
+            "questions": [],
             "recommendedCafes": [],
-            "trafficSource": []
+            "dataSource": "API 키 필요"
         }
 
     except Exception as e:
@@ -1599,7 +1634,9 @@ async def analyze_insight(
         # 경쟁도 분석
         competition_count = len(keyword_results)
         difficulty = min(100, competition_count * 2)
-        success_rate = max(10, 100 - difficulty + random.randint(0, 20))
+        # 경쟁도와 블로그 키워드 빈도 기반으로 성공률 계산
+        keyword_match_rate = sum(1 for r in keyword_results[:20] if keyword.lower() in r.get("title", "").lower()) / 20 if keyword_results else 0
+        success_rate = max(10, int(100 - difficulty + (keyword_match_rate * 30)))
 
         # 상위 글 분석
         top_posts = []
@@ -2014,12 +2051,24 @@ async def generate_report(
 ):
     """
     성과 리포트 생성 - 블로그 분석 리포트
+    실제 블로그 분석 데이터 기반
     """
     try:
-        # 블로그 글 검색
-        blog_results = await scrape_naver_search(f"site:blog.naver.com/{blog_id}", 30)
+        from routers.blogs import analyze_blog
 
-        post_count = len(blog_results)
+        # 블로그 실제 분석
+        analysis = await analyze_blog(blog_id)
+        stats = analysis.get("stats", {})
+        index = analysis.get("index", {})
+
+        post_count = stats.get("total_posts", 0)
+        total_score = index.get("total_score", 0)
+        level = index.get("level", 0)
+        neighbors = stats.get("neighbor_count", 0)
+        blog_age = stats.get("blog_age_days", 0)
+
+        # 블로그 글 검색 (카테고리 분석용)
+        blog_results = await scrape_naver_search(f"site:blog.naver.com/{blog_id}", 30)
 
         # 카테고리 분석
         categories = {}
@@ -2043,26 +2092,46 @@ async def generate_report(
         from collections import Counter
         keyword_freq = Counter(keywords).most_common(15)
 
+        # 예상 조회수 계산 (점수, 레벨, 포스팅 수 기반)
+        estimated_views = int(post_count * (total_score / 10) * (1 + level * 0.3))
+
+        # 성장률 계산 (포스팅 빈도 기반)
+        posts_per_day = post_count / max(1, blog_age)
+        if posts_per_day > 0.5:
+            growth = 20 + int(posts_per_day * 10)
+        elif posts_per_day > 0.2:
+            growth = 10
+        else:
+            growth = -5
+
+        # 참여율 계산 (이웃 수와 점수 기반)
+        engagement = min(95, int(30 + (neighbors / 100) + (total_score / 2)))
+
         return {
             "success": True,
             "blogId": blog_id,
             "period": period,
             "summary": {
                 "totalPosts": post_count,
-                "estimatedViews": post_count * random.randint(100, 500),
+                "totalScore": round(total_score, 1),
+                "level": level,
+                "neighbors": neighbors,
+                "estimatedViews": estimated_views,
                 "topCategory": max(categories, key=categories.get) if categories else "기타",
-                "avgPostsPerWeek": post_count / 4 if period == "month" else post_count / 12
+                "avgPostsPerWeek": round(post_count / max(1, blog_age / 7), 1)
             },
             "categories": [{"name": k, "count": v} for k, v in sorted(categories.items(), key=lambda x: x[1], reverse=True)],
             "topKeywords": [{"keyword": k, "count": c} for k, c in keyword_freq],
             "trends": {
-                "growth": random.randint(-10, 30),
-                "engagement": random.randint(50, 90),
-                "consistency": min(100, post_count * 10)
+                "growth": min(50, max(-20, growth)),
+                "engagement": engagement,
+                "consistency": min(100, int(posts_per_day * 200))
             },
+            "dataSource": "실제 블로그 분석",
             "recommendations": [
-                "꾸준한 포스팅을 유지하세요" if post_count < 10 else "포스팅 빈도가 좋습니다",
+                "꾸준한 포스팅을 유지하세요" if posts_per_day < 0.3 else "포스팅 빈도가 좋습니다",
                 f"'{keyword_freq[0][0]}' 키워드를 더 활용해보세요" if keyword_freq else "다양한 키워드를 시도해보세요",
+                f"현재 Lv.{level}입니다. 블로그 지수를 높여보세요" if level < 4 else "블로그 지수가 좋습니다",
                 "이미지와 영상 콘텐츠를 추가하면 참여율이 올라갑니다"
             ]
         }
@@ -3060,33 +3129,68 @@ async def find_related(
 ):
     """
     연관 포스트 찾기 - 내부 링크용 관련 글 추천
+    키워드 매칭 기반 연관도 계산
     """
     try:
+        def calculate_relevance(title: str, desc: str, keyword: str) -> int:
+            """키워드 매칭 기반 연관도 계산"""
+            relevance = 50  # 기본 점수
+            keyword_lower = keyword.lower()
+            title_lower = title.lower()
+            desc_lower = desc.lower()
+
+            # 제목에 키워드 포함
+            if keyword_lower in title_lower:
+                relevance += 30
+                # 제목 앞부분에 키워드가 있으면 추가 점수
+                if title_lower.find(keyword_lower) < len(title_lower) // 3:
+                    relevance += 10
+
+            # 설명에 키워드 포함
+            if keyword_lower in desc_lower:
+                relevance += 10
+
+            # 키워드 단어들이 각각 포함되는지 확인
+            keyword_words = keyword.split()
+            for word in keyword_words:
+                if word.lower() in title_lower:
+                    relevance += 5
+
+            return min(100, relevance)
+
         # 내 블로그에서 관련 글 검색
         my_posts = []
         if blog_id:
             blog_results = await scrape_naver_search(f"site:blog.naver.com/{blog_id} {keyword}", 20)
             for r in blog_results:
                 title = re.sub(r'<[^>]+>', '', r.get("title", ""))
+                desc = re.sub(r'<[^>]+>', '', r.get("description", ""))
+                relevance = calculate_relevance(title, desc, keyword)
                 my_posts.append({
                     "title": title[:50],
                     "link": r.get("link", ""),
-                    "relevance": random.randint(70, 100),
+                    "relevance": relevance,
                     "type": "내 블로그"
                 })
+            # 연관도 순으로 정렬
+            my_posts.sort(key=lambda x: x["relevance"], reverse=True)
 
         # 외부 인기 글
         external_results = await scrape_naver_search(keyword, 20)
         external_posts = []
         for r in external_results[:10]:
             title = re.sub(r'<[^>]+>', '', r.get("title", ""))
+            desc = re.sub(r'<[^>]+>', '', r.get("description", ""))
+            relevance = calculate_relevance(title, desc, keyword)
             external_posts.append({
                 "title": title[:50],
                 "link": r.get("link", ""),
                 "blogName": r.get("bloggername", ""),
-                "relevance": random.randint(60, 90),
+                "relevance": relevance,
                 "type": "외부 참고"
             })
+        # 연관도 순으로 정렬
+        external_posts.sort(key=lambda x: x["relevance"], reverse=True)
 
         # 연관 키워드
         all_text = " ".join([r.get("title", "") for r in external_results])
@@ -3120,39 +3224,87 @@ async def match_mentor(
 ):
     """
     멘토 매칭 - 카테고리별 추천 블로거
+    실제 블로그 분석 데이터 기반
     """
     try:
-        # 카테고리별 인기 블로그 검색
-        search_results = await scrape_naver_search(f"{category} 블로그 추천", 20)
+        from routers.blogs import analyze_blog, fetch_naver_search_results
+        import asyncio
+
+        # 카테고리별 인기 블로그 검색 (블로그 탭에서 검색)
+        search_results = await fetch_naver_search_results(f"{category}", limit=15)
 
         mentors = []
-        for i, r in enumerate(search_results[:10]):
-            blog_name = r.get("bloggername", f"멘토{i+1}")
-            link = r.get("link", "")
+        analyzed_blogs = set()  # 중복 블로그 방지
 
-            # 블로그 ID 추출
-            blog_id = ""
-            if "blog.naver.com/" in link:
-                parts = link.split("blog.naver.com/")
-                if len(parts) > 1:
-                    blog_id = parts[1].split("/")[0]
+        async def analyze_mentor(item):
+            try:
+                blog_id = item.get("blog_id", "")
+                if not blog_id or blog_id in analyzed_blogs:
+                    return None
 
-            mentors.append({
-                "name": blog_name[:20],
-                "blogId": blog_id,
-                "specialty": [category],
-                "score": random.randint(70, 95),
-                "experience": random.choice(["5년 이상", "3년 이상", "2년 이상"]),
-                "style": random.choice(["정보형", "감성형", "리뷰형", "일상형"]),
-                "rating": round(4 + random.random(), 1),
-                "reviews": random.randint(10, 100),
-                "available": random.random() > 0.3,
-                "tips": [
-                    "이 블로그의 제목 패턴을 분석해보세요",
-                    "포스팅 주기를 참고하세요",
-                    "이미지 활용 방법을 벤치마킹하세요"
-                ]
-            })
+                analyzed_blogs.add(blog_id)
+                analysis = await analyze_blog(blog_id)
+                stats = analysis.get("stats", {})
+                index = analysis.get("index", {})
+
+                total_posts = stats.get("total_posts", 0)
+                total_score = index.get("total_score", 0)
+                level = index.get("level", 0)
+                neighbor_count = stats.get("neighbor_count", 0)
+                blog_age = stats.get("blog_age_days", 0)
+
+                # 경험 수준 계산 (블로그 운영 기간 기반)
+                if blog_age > 1825:  # 5년
+                    exp = "5년 이상"
+                elif blog_age > 1095:  # 3년
+                    exp = "3년 이상"
+                elif blog_age > 730:  # 2년
+                    exp = "2년 이상"
+                elif blog_age > 365:
+                    exp = "1년 이상"
+                else:
+                    exp = "1년 미만"
+
+                # 블로그 스타일 추정 (포스팅 빈도와 지수 기반)
+                posts_per_month = (total_posts / max(1, blog_age / 30))
+                if posts_per_month > 10:
+                    style = "정보형"  # 많은 포스팅
+                elif neighbor_count > 1000:
+                    style = "감성형"  # 많은 이웃
+                elif total_score > 60:
+                    style = "리뷰형"  # 높은 점수
+                else:
+                    style = "일상형"
+
+                return {
+                    "name": item.get("blog_name", "")[:20],
+                    "blogId": blog_id,
+                    "specialty": [category],
+                    "score": round(total_score, 1),
+                    "level": level,
+                    "posts": total_posts,
+                    "neighbors": neighbor_count,
+                    "experience": exp,
+                    "style": style,
+                    "tips": [
+                        f"총 {total_posts}개의 포스팅을 분석해보세요",
+                        f"Lv.{level} 블로그의 글쓰기 패턴을 참고하세요",
+                        f"이웃 {neighbor_count}명과 소통하는 방식을 벤치마킹하세요"
+                    ]
+                }
+            except Exception as e:
+                logger.warning(f"Failed to analyze mentor blog: {e}")
+                return None
+
+        # 병렬로 블로그 분석
+        semaphore = asyncio.Semaphore(5)
+        async def analyze_with_limit(item):
+            async with semaphore:
+                return await analyze_mentor(item)
+
+        tasks = [analyze_with_limit(item) for item in search_results[:10]]
+        results = await asyncio.gather(*tasks)
+        mentors = [r for r in results if r and r.get("score", 0) > 30]
 
         # 점수순 정렬
         mentors.sort(key=lambda x: x["score"], reverse=True)
@@ -3161,10 +3313,11 @@ async def match_mentor(
             "success": True,
             "category": category,
             "experience": experience,
-            "mentors": mentors,
+            "mentors": mentors[:8],
             "totalFound": len(mentors),
+            "dataSource": "실제 블로그 분석",
             "matchingTips": [
-                "비슷한 주제의 성공 블로그를 분석하세요",
+                "높은 점수의 블로그 글쓰기 패턴을 분석하세요",
                 "꾸준함이 가장 중요합니다",
                 "자신만의 스타일을 개발하세요"
             ]
@@ -3183,20 +3336,42 @@ async def generate_roadmap(
 ):
     """
     성장 로드맵 생성 - 단계별 목표 설정
+    실제 블로그 분석 데이터 기반
     """
     try:
+        from routers.blogs import analyze_blog
+
         # 현재 블로그 상태 분석
         current_stats = {
             "posts": 0,
             "estimatedVisitors": 0,
-            "score": 30
+            "score": 30,
+            "level": 0,
+            "neighbors": 0
         }
 
         if blog_id:
-            blog_results = await scrape_naver_search(f"site:blog.naver.com/{blog_id}", 30)
-            current_stats["posts"] = len(blog_results)
-            current_stats["estimatedVisitors"] = len(blog_results) * random.randint(50, 200)
-            current_stats["score"] = min(90, 30 + len(blog_results) * 2)
+            try:
+                analysis = await analyze_blog(blog_id)
+                stats = analysis.get("stats", {})
+                index = analysis.get("index", {})
+
+                total_posts = stats.get("total_posts", 0)
+                total_score = index.get("total_score", 30)
+                level = index.get("level", 0)
+                neighbors = stats.get("neighbor_count", 0)
+
+                # 예상 방문자 계산 (점수와 포스팅 수 기반)
+                # 점수가 높을수록, 포스팅이 많을수록 방문자 많음
+                estimated_visitors = int(total_posts * (total_score / 10) * (1 + level * 0.5))
+
+                current_stats["posts"] = total_posts
+                current_stats["estimatedVisitors"] = estimated_visitors
+                current_stats["score"] = round(total_score, 1)
+                current_stats["level"] = level
+                current_stats["neighbors"] = neighbors
+            except Exception as e:
+                logger.warning(f"Failed to analyze blog for roadmap: {e}")
 
         # 레벨 정의
         levels = [
@@ -3273,52 +3448,92 @@ async def get_secret_keywords(
 ):
     """
     비공개 키워드 DB - 경쟁이 적은 숨겨진 키워드
+    실제 네이버 검색량 데이터 기반
     """
     try:
-        # 카테고리별 키워드 세트
-        category_keywords = {
-            "맛집": ["동네 숨은 맛집", "가성비 맛집", "데이트 코스", "혼밥 맛집", "브런치 카페"],
-            "여행": ["당일치기 여행", "숨은 관광지", "로컬 맛집", "사진 명소", "힐링 여행"],
-            "뷰티": ["피부 관리", "홈케어", "가성비 화장품", "민감성 피부", "데일리 메이크업"],
-            "IT": ["앱 추천", "생산성 도구", "무료 프로그램", "초보 가이드", "꿀팁 정리"],
-            "육아": ["육아 꿀팁", "아기 용품", "놀이터 추천", "어린이 교육", "육아 정보"]
+        from routers.blogs import get_related_keywords_from_searchad, fetch_naver_search_results
+
+        # 카테고리별 시드 키워드 (연관 키워드 조회용)
+        category_seeds = {
+            "맛집": ["맛집 추천", "동네 맛집"],
+            "여행": ["국내 여행", "당일치기"],
+            "뷰티": ["피부 관리", "화장품 추천"],
+            "IT": ["앱 추천", "프로그램"],
+            "육아": ["육아 꿀팁", "아기 용품"]
         }
 
         # 선택된 카테고리 또는 전체
-        if category != "all" and category in category_keywords:
+        if category != "all" and category in category_seeds:
             selected_cats = [category]
         else:
-            selected_cats = list(category_keywords.keys())
+            selected_cats = list(category_seeds.keys())
 
         keywords = []
+
+        # 각 카테고리별 실제 연관 키워드 조회
+        import asyncio
         for cat in selected_cats:
-            base_keywords = category_keywords.get(cat, [])
-            for kw in base_keywords:
-                keywords.append({
-                    "keyword": kw,
-                    "category": cat,
-                    "searchVolume": random.randint(1000, 10000),
-                    "competition": random.randint(10, 40),
-                    "cpc": random.randint(100, 500),
-                    "opportunity": random.randint(60, 95),
-                    "trend": random.choice(["hot", "rising", "stable"]),
-                    "reason": "검색량 대비 경쟁 낮음",
-                    "exclusiveUntil": f"{random.randint(12, 48)}시간 후"
-                })
+            seeds = category_seeds.get(cat, [])
+            for seed in seeds[:1]:  # 카테고리당 1개 시드만 (속도)
+                try:
+                    related_result = await get_related_keywords_from_searchad(seed)
+                    if related_result.success and related_result.keywords:
+                        for kw in related_result.keywords[:10]:
+                            search_vol = kw.monthly_total_search or 0
+                            competition = kw.competition or "중간"
+
+                            # 경쟁도를 숫자로 변환
+                            comp_map = {"낮음": 20, "중간": 50, "높음": 80}
+                            comp_score = comp_map.get(competition, 50)
+
+                            # 기회 점수 계산 (검색량 높고 경쟁 낮으면 높음)
+                            if search_vol > 0:
+                                opportunity = min(95, max(30, int((search_vol / 100) - comp_score + 50)))
+                            else:
+                                opportunity = 30
+
+                            # 트렌드 판단 (검색량 기반)
+                            if search_vol > 5000:
+                                trend = "hot"
+                            elif search_vol > 2000:
+                                trend = "rising"
+                            else:
+                                trend = "stable"
+
+                            keywords.append({
+                                "keyword": kw.keyword,
+                                "category": cat,
+                                "searchVolume": search_vol,
+                                "competition": comp_score,
+                                "competitionLabel": competition,
+                                "opportunity": opportunity,
+                                "trend": trend,
+                                "reason": f"월검색량 {search_vol:,}회, 경쟁도 {competition}"
+                            })
+                except Exception as e:
+                    logger.warning(f"Failed to get keywords for {cat}: {e}")
 
         # 기회 점수순 정렬
         keywords.sort(key=lambda x: x["opportunity"], reverse=True)
 
+        # 중복 제거
+        seen = set()
+        unique_keywords = []
+        for kw in keywords:
+            if kw["keyword"] not in seen:
+                seen.add(kw["keyword"])
+                unique_keywords.append(kw)
+
         return {
             "success": True,
             "category": category,
-            "keywords": keywords[:20],
-            "totalAvailable": len(keywords),
-            "remainingAccess": random.randint(5, 15),
+            "keywords": unique_keywords[:20],
+            "totalAvailable": len(unique_keywords),
+            "dataSource": "네이버 검색광고 API",
             "tips": [
                 "기회 점수가 높은 키워드를 우선 공략하세요",
-                "트렌드가 'hot'인 키워드는 빠르게 작성하세요",
-                "독점 시간이 끝나기 전에 발행하세요"
+                "월검색량이 높고 경쟁도가 낮은 키워드가 좋습니다",
+                "트렌드가 'hot'인 키워드는 빠르게 작성하세요"
             ]
         }
 

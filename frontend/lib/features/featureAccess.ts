@@ -302,6 +302,15 @@ export const FEATURES: Record<string, FeatureConfig> = {
     description: '블로그 습관을 기르는 30일 성장 프로그램',
     category: 'content',
     access: { guest: 'none', free: 'full', basic: 'full', pro: 'full', unlimited: 'full' }
+  },
+
+  // Ad Optimization (Pro and above)
+  adOptimizer: {
+    name: 'adOptimizer',
+    displayName: '네이버 광고 자동 최적화',
+    description: '네이버 검색광고 입찰가를 AI가 자동으로 최적화합니다',
+    category: 'premium',
+    access: { guest: 'none', free: 'none', basic: 'none', pro: 'full', unlimited: 'full' }
   }
 }
 

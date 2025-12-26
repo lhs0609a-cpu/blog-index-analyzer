@@ -131,6 +131,22 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Auto learning scheduler failed to start: {e}")
 
+    # 광고 자동 최적화 스케줄러 시작
+    try:
+        from services.ad_auto_optimizer import ad_auto_optimizer
+        ad_auto_optimizer.start(interval_seconds=60)  # 1분마다 실행
+        logger.info("✅ Ad auto optimizer started (every 1 min)")
+    except Exception as e:
+        logger.warning(f"⚠️ Ad auto optimizer failed to start: {e}")
+
+    # Ad Optimization DB 초기화
+    try:
+        from database.ad_optimization_db import init_ad_optimization_tables
+        init_ad_optimization_tables()
+        logger.info("✅ Ad optimization tables initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ Ad optimization tables initialization failed: {e}")
+
     # Redis 연결 초기화 (선택적)
     if settings.REDIS_URL:
         try:
@@ -160,6 +176,14 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Auto learning scheduler stopped")
     except Exception as e:
         logger.warning(f"⚠️ Auto learning scheduler shutdown issue: {e}")
+
+    # 광고 자동 최적화 스케줄러 중지
+    try:
+        from services.ad_auto_optimizer import ad_auto_optimizer
+        ad_auto_optimizer.stop()
+        logger.info("✅ Ad auto optimizer stopped")
+    except Exception as e:
+        logger.warning(f"⚠️ Ad auto optimizer shutdown issue: {e}")
 
     # 백업 스케줄러 중지 및 마지막 백업 생성
     try:
@@ -258,6 +282,8 @@ from routers import user_blogs
 from routers import keyword_analysis
 from routers import premium_tools
 from routers import revenue
+from routers import unified_ads
+from routers import ad_dashboard
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
@@ -280,6 +306,8 @@ app.include_router(user_blogs.router, prefix="/api/user-blogs", tags=["사용자
 app.include_router(keyword_analysis.router, prefix="/api/keyword-analysis", tags=["키워드분석"])
 app.include_router(premium_tools.router, prefix="/api/tools", tags=["프리미엄도구"])
 app.include_router(revenue.router, prefix="/api/revenue", tags=["수익관리"])
+app.include_router(unified_ads.router)  # prefix already set in router
+app.include_router(ad_dashboard.router)  # prefix already set in router
 
 
 if __name__ == "__main__":
