@@ -122,6 +122,8 @@ class SearchInsights(BaseModel):
     average_content_length: int = 0  # 평균 글자수
     average_image_count: float = 0  # 평균 이미지 수
     average_video_count: float = 0  # 평균 영상 수
+    # 월간 검색량
+    monthly_search_volume: int = 0  # 월간 검색량
 
 
 class KeywordSearchResponse(BaseModel):
@@ -1683,7 +1685,23 @@ async def search_keyword_with_tabs(
     avg_content_length = int(sum(content_lengths) / len(content_lengths)) if content_lengths else 0
     avg_image_count = round(sum(image_counts) / len(image_counts), 1) if image_counts else 0
     avg_video_count = round(sum(video_counts) / len(video_counts), 1) if video_counts else 0
-    
+
+    # 월간 검색량 조회
+    monthly_search_volume = 0
+    try:
+        related_result = await get_related_keywords_from_searchad(keyword)
+        if related_result.success and related_result.keywords:
+            # 정확히 일치하는 키워드의 검색량을 찾음
+            for kw in related_result.keywords:
+                if kw.keyword.replace(" ", "") == keyword.replace(" ", ""):
+                    monthly_search_volume = kw.monthly_total_search or 0
+                    break
+            # 정확히 일치하는 것이 없으면 첫 번째 키워드 사용
+            if monthly_search_volume == 0 and related_result.keywords:
+                monthly_search_volume = related_result.keywords[0].monthly_total_search or 0
+    except Exception as e:
+        logger.warning(f"Failed to fetch monthly search volume: {e}")
+
     insights = SearchInsights(
         average_score=round(total_score / analyzed_count, 1) if analyzed_count > 0 else 0,
         average_level=round(total_level / analyzed_count, 1) if analyzed_count > 0 else 0,
@@ -1695,7 +1713,8 @@ async def search_keyword_with_tabs(
         common_patterns=[],
         average_content_length=avg_content_length,
         average_image_count=avg_image_count,
-        average_video_count=avg_video_count
+        average_video_count=avg_video_count,
+        monthly_search_volume=monthly_search_volume
     )
 
     # Auto-collect learning samples from search results

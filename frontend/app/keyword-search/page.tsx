@@ -1257,7 +1257,19 @@ function KeywordSearchContent() {
                               <span className="text-2xl">📊</span>
                               키워드 인사이트
                             </h4>
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                              <div className="bg-white rounded-lg p-4 text-center">
+                                <div className="text-2xl font-bold text-orange-600">
+                                  {status.result?.insights?.monthly_search_volume
+                                    ? status.result.insights.monthly_search_volume >= 10000
+                                      ? `${(status.result.insights.monthly_search_volume / 10000).toFixed(1)}만`
+                                      : status.result.insights.monthly_search_volume >= 1000
+                                        ? `${(status.result.insights.monthly_search_volume / 1000).toFixed(1)}천`
+                                        : status.result.insights.monthly_search_volume.toLocaleString()
+                                    : '-'}
+                                </div>
+                                <div className="text-xs text-gray-600 mt-1">월검색량</div>
+                              </div>
                               <div className="bg-white rounded-lg p-4 text-center">
                                 <div className="text-2xl font-bold text-purple-600">
                                   {status.result?.insights?.average_score || 0}
@@ -1284,8 +1296,8 @@ function KeywordSearchContent() {
                               </div>
                               <div className="bg-white rounded-lg p-4 text-center">
                                 <div className="text-2xl font-bold text-blue-500">
-                                  {status.result?.insights?.average_content_length 
-                                    ? status.result.insights.average_content_length >= 1000 
+                                  {status.result?.insights?.average_content_length
+                                    ? status.result.insights.average_content_length >= 1000
                                       ? `${(status.result.insights.average_content_length / 1000).toFixed(1)}k`
                                       : status.result.insights.average_content_length
                                     : '-'}
