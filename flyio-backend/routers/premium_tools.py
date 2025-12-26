@@ -242,55 +242,98 @@ async def generate_ai_title(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    AI 제목 생성 - OpenAI API 사용
-    실제 AI가 키워드 기반으로 클릭률 높은 제목 생성
+    AI 제목 생성 - 실제 상위 블로그 제목 분석 + OpenAI API 사용
+    상위 노출된 실제 제목을 분석하여 최적화된 제목 생성
     """
-    style_prompts = {
-        "curious": "독자의 호기심을 자극하는 질문형",
-        "informative": "정보를 명확하게 전달하는",
-        "engaging": "감정적으로 연결되는 매력적인",
-        "clickbait": "클릭을 유도하는 강렬한"
-    }
+    from routers.blogs import fetch_naver_search_results, get_related_keywords_from_searchad
 
-    style_desc = style_prompts.get(request.style, style_prompts["engaging"])
+    keyword = request.keyword
 
-    prompt = f"""당신은 네이버 블로그 제목 전문가입니다.
-키워드: "{request.keyword}"
+    try:
+        # 1. 실제 상위 블로그 제목들 가져오기
+        top_blogs = await fetch_naver_search_results(keyword, display=10)
+        top_titles = [blog.get("title", "").replace("<b>", "").replace("</b>", "") for blog in top_blogs[:10]]
 
-다음 조건으로 블로그 제목 {request.count}개를 생성해주세요:
+        # 2. 월간 검색량 조회
+        monthly_search = 0
+        try:
+            search_data = await get_related_keywords_from_searchad(keyword)
+            if search_data:
+                for kw in search_data:
+                    if kw.get("relKeyword", "") == keyword:
+                        pc = kw.get("monthlyPcQcCnt", 0)
+                        mobile = kw.get("monthlyMobileQcCnt", 0)
+                        monthly_search = (pc if isinstance(pc, int) else 0) + (mobile if isinstance(mobile, int) else 0)
+                        break
+        except:
+            pass
+
+        # 3. 제목 패턴 분석
+        title_patterns = {
+            "has_number": sum(1 for t in top_titles if any(c.isdigit() for c in t)),
+            "has_emoji": sum(1 for t in top_titles if any(ord(c) > 127 for c in t)),
+            "has_question": sum(1 for t in top_titles if "?" in t),
+            "has_brackets": sum(1 for t in top_titles if "(" in t or "[" in t),
+            "avg_length": sum(len(t) for t in top_titles) / len(top_titles) if top_titles else 25
+        }
+
+        style_prompts = {
+            "curious": "독자의 호기심을 자극하는 질문형",
+            "informative": "정보를 명확하게 전달하는",
+            "engaging": "감정적으로 연결되는 매력적인",
+            "clickbait": "클릭을 유도하는 강렬한"
+        }
+        style_desc = style_prompts.get(request.style, style_prompts["engaging"])
+
+        # 4. AI 프롬프트 생성 (실제 상위 제목 참고)
+        prompt = f"""당신은 네이버 블로그 제목 전문가입니다.
+키워드: "{keyword}"
+월간 검색량: {monthly_search:,}회
+
+현재 상위 노출된 실제 제목들:
+{chr(10).join([f"- {t}" for t in top_titles[:5]])}
+
+상위 제목 패턴 분석:
+- 숫자 포함: {title_patterns['has_number']}개 ({title_patterns['has_number']*10}%)
+- 이모지 포함: {title_patterns['has_emoji']}개
+- 질문형: {title_patterns['has_question']}개
+- 괄호 사용: {title_patterns['has_brackets']}개
+- 평균 길이: {title_patterns['avg_length']:.0f}자
+
+위 분석을 참고하여 다음 조건으로 블로그 제목 {request.count}개를 생성해주세요:
 1. 스타일: {style_desc}
-2. 네이버 검색에 최적화된 제목 (30자 내외)
-3. 클릭률을 높이는 숫자, 이모지, 강조 표현 활용
-4. 검색 의도에 맞는 제목
+2. 상위 제목들의 성공 패턴 반영
+3. 길이: {int(title_patterns['avg_length'])-5}~{int(title_patterns['avg_length'])+5}자
+4. 기존 제목들과 차별화되면서도 검색 의도 충족
 
 JSON 형식으로 응답해주세요:
 [
-  {{"title": "제목1", "ctr_score": 85, "tips": ["팁1", "팁2"]}},
-  ...
+  {{"title": "제목1", "ctr_score": 85, "tips": ["실제 데이터 기반 팁1", "팁2"], "reference": "참고한 상위 제목 패턴"}}
 ]
 """
 
-    try:
-        # OpenAI API 호출
+        # 5. OpenAI API 호출
         if settings.OPENAI_API_KEY:
-            ai_response = await call_openai_api(prompt, max_tokens=800)
+            ai_response = await call_openai_api(prompt, max_tokens=1000)
 
-            # JSON 파싱 시도
             try:
-                # JSON 부분만 추출
                 json_match = re.search(r'\[.*\]', ai_response, re.DOTALL)
                 if json_match:
                     titles = json.loads(json_match.group())
                     return {
                         "success": True,
-                        "keyword": request.keyword,
+                        "keyword": keyword,
                         "style": request.style,
+                        "monthly_search": monthly_search,
+                        "top_titles_analyzed": len(top_titles),
+                        "title_patterns": title_patterns,
                         "titles": [
                             {
                                 "title": t.get("title", ""),
                                 "ctr_score": t.get("ctr_score", 75),
                                 "style": request.style,
-                                "tips": t.get("tips", [])
+                                "tips": t.get("tips", []),
+                                "reference": t.get("reference", "")
                             }
                             for t in titles[:request.count]
                         ]
@@ -298,56 +341,57 @@ JSON 형식으로 응답해주세요:
             except json.JSONDecodeError:
                 pass
 
-        # Fallback: 템플릿 기반 생성
-        templates = {
-            "curious": [
-                f"{request.keyword}, 이것도 모르고 있었다고?",
-                f"왜 아무도 {request.keyword}에 대해 말하지 않을까?",
-                f"{request.keyword}의 숨겨진 비밀 3가지",
-                f"진짜 {request.keyword} 알아보기 전에 이것부터",
-                f"{request.keyword} 제대로 알고 있나요?"
-            ],
-            "informative": [
-                f"2024 {request.keyword} 완벽 가이드",
-                f"{request.keyword} 총정리 (초보자용)",
-                f"{request.keyword} A to Z 정리",
-                f"전문가가 알려주는 {request.keyword} 팁",
-                f"{request.keyword} 비교분석 총정리"
-            ],
-            "engaging": [
-                f"{request.keyword} 이렇게 하면 달라집니다",
-                f"나만 알고 싶은 {request.keyword} 꿀팁",
-                f"{request.keyword} 후회 없이 선택하는 법",
-                f"직접 해본 {request.keyword} 솔직 후기",
-                f"{request.keyword} 실패 없는 방법"
-            ],
-            "clickbait": [
-                f"충격! {request.keyword}의 진실",
-                f"{request.keyword} 이거 보면 바뀝니다 (찐)",
-                f"대박 {request.keyword} 꿀팁 공개",
-                f"{request.keyword} 안 보면 손해!",
-                f"드디어 공개하는 {request.keyword} 비법"
-            ]
-        }
+        # Fallback: 실제 상위 제목 기반 템플릿 생성
+        templates = []
 
-        selected = templates.get(request.style, templates["engaging"])
+        # 실제 상위 제목에서 패턴 추출하여 변형
+        for top_title in top_titles[:3]:
+            if request.style == "curious":
+                templates.append(f"{keyword}? 이렇게 하면 됩니다")
+                templates.append(f"왜 {keyword}을 이렇게 하는 걸까요?")
+            elif request.style == "informative":
+                templates.append(f"2024 {keyword} 완벽 정리")
+                templates.append(f"{keyword} 핵심만 정리했습니다")
+            elif request.style == "engaging":
+                templates.append(f"{keyword} 직접 해본 솔직 후기")
+                templates.append(f"나만 알고 싶은 {keyword} 꿀팁")
+            else:  # clickbait
+                templates.append(f"역대급 {keyword} 꿀팁 공개!")
+                templates.append(f"{keyword} 이것 모르면 손해!")
+
+        # 숫자가 효과적이면 숫자 포함 제목 추가
+        if title_patterns["has_number"] >= 3:
+            templates.append(f"{keyword} 꼭 알아야 할 5가지")
+            templates.append(f"{keyword} TOP 3 추천")
+
+        # 질문형이 효과적이면 질문형 추가
+        if title_patterns["has_question"] >= 2:
+            templates.append(f"{keyword}, 어떻게 해야 할까요?")
+
         titles = []
-        for i, title in enumerate(selected[:request.count]):
+        for i, title in enumerate(templates[:request.count]):
+            tips = []
+            if title_patterns["has_number"] >= 3:
+                tips.append(f"상위 {title_patterns['has_number']}개 제목이 숫자 포함 - 숫자 사용 권장")
+            if title_patterns["has_question"] >= 2:
+                tips.append(f"질문형 제목 {title_patterns['has_question']}개 상위 노출 중")
+            tips.append(f"평균 제목 길이 {title_patterns['avg_length']:.0f}자 권장")
+
             titles.append({
                 "title": title,
-                "ctr_score": random.randint(70, 95),
+                "ctr_score": 75 + i * 3,
                 "style": request.style,
-                "tips": [
-                    "숫자를 넣으면 클릭률이 36% 상승",
-                    "궁금증을 유발하는 제목이 효과적",
-                    f"'{request.keyword}' 키워드를 제목 앞쪽에 배치"
-                ]
+                "tips": tips,
+                "reference": f"상위 {len(top_titles)}개 제목 패턴 분석"
             })
 
         return {
             "success": True,
-            "keyword": request.keyword,
+            "keyword": keyword,
             "style": request.style,
+            "monthly_search": monthly_search,
+            "top_titles_analyzed": len(top_titles),
+            "title_patterns": title_patterns,
             "titles": titles
         }
 
@@ -362,110 +406,138 @@ async def discover_keywords(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    블루오션 키워드 발굴 - 네이버 광고 API 사용
-    검색량 대비 경쟁이 낮은 키워드 찾기
+    블루오션 키워드 발굴 - 네이버 광고 API + 실제 블로그 경쟁 분석
+    검색량 대비 경쟁이 낮은 키워드를 실제 데이터로 찾기
     """
+    from routers.blogs import fetch_naver_search_results, analyze_blog, get_related_keywords_from_searchad
+
     seed = request.seed_keyword
 
     try:
-        # 네이버 광고 API로 연관 키워드 조회
-        if settings.NAVER_AD_API_KEY and settings.NAVER_AD_CUSTOMER_ID:
-            timestamp = str(int(time.time() * 1000))
-            uri = "/keywordstool"
-            signature = generate_naver_ad_signature(timestamp, "GET", uri)
+        # 1. 네이버 광고 API로 연관 키워드 조회
+        keyword_list = []
+        try:
+            search_data = await get_related_keywords_from_searchad(seed)
+            if search_data:
+                keyword_list = search_data
+        except:
+            pass
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    f"https://api.naver.com{uri}",
-                    headers={
-                        "X-Timestamp": timestamp,
-                        "X-API-KEY": settings.NAVER_AD_API_KEY,
-                        "X-Customer": settings.NAVER_AD_CUSTOMER_ID,
-                        "X-Signature": signature
-                    },
-                    params={"hintKeywords": seed, "showDetail": "1"}
-                )
+        # 2. 상위 키워드들에 대해 실제 블로그 경쟁도 분석
+        results = []
 
-                if response.status_code == 200:
-                    data = response.json()
-                    keyword_list = data.get("keywordList", [])
+        # 키워드가 없으면 기본 연관어 생성
+        if not keyword_list:
+            suffixes = ["추천", "가격", "후기", "방법", "비교", "순위", "종류", "효과", "장단점", "꿀팁"]
+            keyword_list = [{"relKeyword": f"{seed} {s}"} for s in suffixes]
 
-                    # 블루오션 점수 계산
-                    results = []
-                    for kw in keyword_list[:20]:
-                        monthly_pc = kw.get("monthlyPcQcCnt", 0)
-                        monthly_mobile = kw.get("monthlyMobileQcCnt", 0)
-                        monthly_total = monthly_pc + monthly_mobile if isinstance(monthly_pc, int) and isinstance(monthly_mobile, int) else 0
+        # 상위 10개 키워드에 대해 분석
+        analyzed_count = 0
+        for kw in keyword_list[:15]:
+            kw_name = kw.get("relKeyword", "")
+            if not kw_name:
+                continue
 
-                        competition = kw.get("compIdx", "중간")
-                        comp_score = {"낮음": 30, "중간": 60, "높음": 90}.get(competition, 60)
+            # 검색량 데이터
+            monthly_pc = kw.get("monthlyPcQcCnt", 0)
+            monthly_mobile = kw.get("monthlyMobileQcCnt", 0)
+            if isinstance(monthly_pc, str) and monthly_pc == "< 10":
+                monthly_pc = 5
+            if isinstance(monthly_mobile, str) and monthly_mobile == "< 10":
+                monthly_mobile = 5
+            monthly_total = (monthly_pc if isinstance(monthly_pc, int) else 0) + \
+                           (monthly_mobile if isinstance(monthly_mobile, int) else 0)
 
-                        # 블루오션 점수: 검색량 많고 경쟁 낮을수록 높음
-                        if monthly_total > 0:
-                            opportunity = min(100, (monthly_total / 1000) * (100 - comp_score))
-                        else:
-                            opportunity = 0
+            competition = kw.get("compIdx", "중간")
+            comp_score = {"낮음": 30, "중간": 60, "높음": 90}.get(competition, 60)
 
-                        results.append({
-                            "keyword": kw.get("relKeyword", ""),
-                            "monthly_search": monthly_total,
-                            "monthly_pc": monthly_pc if isinstance(monthly_pc, int) else 0,
-                            "monthly_mobile": monthly_mobile if isinstance(monthly_mobile, int) else 0,
-                            "competition": competition,
-                            "competition_score": comp_score,
-                            "opportunity_score": round(opportunity, 1),
-                            "cpc": kw.get("plAvgDepth", 0)
-                        })
+            # 실제 블로그 경쟁도 분석 (상위 5개 블로그)
+            blog_competition = {"avg_score": 0, "avg_level": 0, "top_blogs": []}
+            try:
+                if analyzed_count < 5:  # API 호출 제한
+                    top_blogs = await fetch_naver_search_results(kw_name, display=5)
+                    if top_blogs:
+                        scores = []
+                        levels = []
+                        for blog in top_blogs[:3]:
+                            blog_id = ""
+                            blog_link = blog.get("link", "")
+                            if "blog.naver.com/" in blog_link:
+                                parts = blog_link.split("blog.naver.com/")
+                                if len(parts) > 1:
+                                    blog_id = parts[1].split("/")[0].split("?")[0]
 
-                    # 기회 점수 순으로 정렬
-                    results.sort(key=lambda x: x["opportunity_score"], reverse=True)
+                            if blog_id:
+                                try:
+                                    analysis = await analyze_blog(blog_id)
+                                    if analysis:
+                                        scores.append(analysis.get("total_score", 50))
+                                        levels.append(analysis.get("level", 3))
+                                except:
+                                    pass
 
-                    return {
-                        "success": True,
-                        "seed_keyword": seed,
-                        "keywords": results,
-                        "total_found": len(results),
-                        "recommendation": f"'{results[0]['keyword']}'이(가) 가장 좋은 기회입니다!" if results else ""
-                    }
+                        if scores:
+                            blog_competition = {
+                                "avg_score": sum(scores) / len(scores),
+                                "avg_level": sum(levels) / len(levels),
+                                "analyzed_blogs": len(scores)
+                            }
+                    analyzed_count += 1
+            except:
+                pass
 
-        # Fallback: 네이버 블로그 검색으로 경쟁도 추정
-        blog_results = await scrape_naver_search(seed, 100)
+            # 블루오션 점수 계산 (검색량 높고, 광고경쟁 낮고, 블로그 점수 낮을수록 높음)
+            search_factor = min(40, (monthly_total / 500)) if monthly_total > 0 else 0
+            ad_competition_factor = (100 - comp_score) * 0.3
+            blog_competition_factor = 0
+            if blog_competition.get("avg_score", 0) > 0:
+                # 상위 블로그 점수가 낮을수록 기회가 큼
+                blog_competition_factor = max(0, (80 - blog_competition["avg_score"])) * 0.3
 
-        # 연관 키워드 생성
-        suffixes = ["추천", "가격", "후기", "방법", "비교", "순위", "종류", "효과", "장단점", "꿀팁"]
-        prefixes = ["2024", "최신", "인기", "베스트", "초보", "전문가", "실제", "솔직"]
+            opportunity = search_factor + ad_competition_factor + blog_competition_factor
 
-        keywords = []
-        for suffix in suffixes:
-            kw = f"{seed} {suffix}"
-            blog_count = len([b for b in blog_results if suffix in b.get("title", "")])
-            competition = "낮음" if blog_count < 3 else "중간" if blog_count < 7 else "높음"
+            # 난이도 라벨
+            if blog_competition.get("avg_score", 0) >= 70 or comp_score >= 80:
+                difficulty = "상"
+            elif blog_competition.get("avg_score", 0) >= 50 or comp_score >= 60:
+                difficulty = "중"
+            else:
+                difficulty = "하"
 
-            keywords.append({
-                "keyword": kw,
-                "monthly_search": random.randint(500, 5000),
-                "competition": competition,
-                "blog_count": blog_count,
-                "opportunity_score": random.randint(50, 90)
+            results.append({
+                "keyword": kw_name,
+                "monthly_search": monthly_total,
+                "monthly_pc": monthly_pc if isinstance(monthly_pc, int) else 0,
+                "monthly_mobile": monthly_mobile if isinstance(monthly_mobile, int) else 0,
+                "ad_competition": competition,
+                "ad_competition_score": comp_score,
+                "blog_competition": blog_competition,
+                "difficulty": difficulty,
+                "opportunity_score": round(min(100, opportunity), 1),
+                "recommendation": "추천" if opportunity >= 50 else "보통" if opportunity >= 30 else "경쟁심함"
             })
 
-        for prefix in prefixes[:5]:
-            kw = f"{prefix} {seed}"
-            keywords.append({
-                "keyword": kw,
-                "monthly_search": random.randint(300, 3000),
-                "competition": "낮음",
-                "blog_count": random.randint(1, 10),
-                "opportunity_score": random.randint(60, 95)
-            })
+        # 기회 점수 순으로 정렬
+        results.sort(key=lambda x: x["opportunity_score"], reverse=True)
 
-        keywords.sort(key=lambda x: x["opportunity_score"], reverse=True)
+        # 블루오션 키워드 찾기 (검색량 있고, 경쟁 낮은 것)
+        blue_ocean = [r for r in results if r["opportunity_score"] >= 50 and r["monthly_search"] >= 100]
+
+        recommendation = ""
+        if blue_ocean:
+            top = blue_ocean[0]
+            recommendation = f"'{top['keyword']}'이(가) 블루오션! 월 {top['monthly_search']:,}회 검색, 경쟁 {top['difficulty']}"
+        elif results:
+            recommendation = f"'{results[0]['keyword']}'이(가) 가장 좋은 기회입니다."
 
         return {
             "success": True,
             "seed_keyword": seed,
-            "keywords": keywords,
-            "total_found": len(keywords)
+            "keywords": results,
+            "blue_ocean_keywords": blue_ocean[:5],
+            "total_found": len(results),
+            "analyzed_with_blog_data": analyzed_count,
+            "recommendation": recommendation
         }
 
     except Exception as e:
@@ -479,88 +551,117 @@ async def generate_hashtags(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    해시태그 추천 - 키워드 기반 최적 해시태그 생성
+    해시태그 추천 - 실제 상위 글 분석 + 연관 키워드 기반
     """
     keyword = request.keyword
 
     try:
-        # 네이버 블로그 검색으로 실제 사용되는 해시태그 패턴 분석
-        blog_results = await scrape_naver_search(f"#{keyword}", 20)
+        from routers.blogs import fetch_naver_search_results, get_related_keywords_from_searchad
 
-        # 기본 해시태그 생성
-        base_tags = [keyword]
+        # 1. 실제 상위 글에서 해시태그 패턴 분석
+        search_results = await fetch_naver_search_results(keyword, limit=13)
 
-        # 변형 생성
-        variations = [
-            keyword.replace(" ", ""),
-            keyword.replace(" ", "_"),
-            f"{keyword}추천",
-            f"{keyword}후기",
-            f"{keyword}꿀팁",
-            f"{keyword}정보",
-            f"오늘의{keyword.replace(' ', '')}",
-            f"{keyword}스타그램",
-            f"daily{keyword.replace(' ', '')}",
-        ]
+        extracted_tags = []
+        for result in search_results:
+            title = result.get("post_title", "") or result.get("title", "")
+            # 해시태그 패턴 추출 (#으로 시작하는 단어)
+            import re
+            tags_in_title = re.findall(r'#([가-힣a-zA-Z0-9_]+)', title)
+            extracted_tags.extend(tags_in_title)
 
-        # 연관 키워드 추가
-        if settings.NAVER_AD_API_KEY:
-            try:
-                timestamp = str(int(time.time() * 1000))
-                uri = "/keywordstool"
-                signature = generate_naver_ad_signature(timestamp, "GET", uri)
+        # 2. 연관 키워드 조회 (월검색량 포함)
+        related_keywords = []
+        try:
+            related_result = await get_related_keywords_from_searchad(keyword)
+            if related_result.success and related_result.keywords:
+                for kw in related_result.keywords[:15]:
+                    related_keywords.append({
+                        "keyword": kw.keyword,
+                        "search_volume": kw.monthly_total_search or 0
+                    })
+        except Exception as e:
+            logger.warning(f"Failed to get related keywords: {e}")
 
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    response = await client.get(
-                        f"https://api.naver.com{uri}",
-                        headers={
-                            "X-Timestamp": timestamp,
-                            "X-API-KEY": settings.NAVER_AD_API_KEY,
-                            "X-Customer": settings.NAVER_AD_CUSTOMER_ID,
-                            "X-Signature": signature
-                        },
-                        params={"hintKeywords": keyword, "showDetail": "1"}
-                    )
+        # 3. 기본 해시태그 생성
+        base_keyword = keyword.replace(" ", "")
 
-                    if response.status_code == 200:
-                        data = response.json()
-                        for kw in data.get("keywordList", [])[:10]:
-                            rel = kw.get("relKeyword", "")
-                            if rel and rel != keyword:
-                                variations.append(rel.replace(" ", ""))
-            except:
-                pass
-
-        # 중복 제거 및 포맷
-        seen = set()
         hashtags = []
-        for tag in base_tags + variations:
-            clean_tag = tag.strip().replace(" ", "")
-            if clean_tag and clean_tag.lower() not in seen:
+        seen = set()
+
+        # 메인 키워드
+        if base_keyword.lower() not in seen:
+            seen.add(base_keyword.lower())
+            main_search = next((k["search_volume"] for k in related_keywords if k["keyword"].replace(" ", "") == base_keyword), 0)
+            hashtags.append({
+                "tag": f"#{base_keyword}",
+                "popularity": min(100, max(50, main_search // 100)) if main_search else 85,
+                "searchVolume": main_search,
+                "type": "primary"
+            })
+
+        # 상위 글에서 추출한 해시태그
+        from collections import Counter
+        tag_counts = Counter(extracted_tags)
+        for tag, count in tag_counts.most_common(10):
+            if tag.lower() not in seen and len(tag) >= 2:
+                seen.add(tag.lower())
+                hashtags.append({
+                    "tag": f"#{tag}",
+                    "popularity": min(90, 40 + count * 10),
+                    "searchVolume": 0,
+                    "type": "trending",
+                    "usedInTop": count
+                })
+
+        # 연관 키워드 기반 해시태그
+        for kw_data in related_keywords:
+            clean_tag = kw_data["keyword"].replace(" ", "")
+            if clean_tag.lower() not in seen and len(clean_tag) >= 2:
                 seen.add(clean_tag.lower())
-
-                # 인기도 추정
-                popularity = random.randint(50, 100) if clean_tag == keyword.replace(" ", "") else random.randint(20, 80)
-
+                search_vol = kw_data["search_volume"]
                 hashtags.append({
                     "tag": f"#{clean_tag}",
-                    "popularity": popularity,
-                    "type": "primary" if clean_tag == keyword.replace(" ", "") else "related"
+                    "popularity": min(95, max(20, search_vol // 50)) if search_vol else 30,
+                    "searchVolume": search_vol,
+                    "type": "related"
+                })
+
+        # 인기 변형 추가
+        popular_suffixes = ["추천", "후기", "꿀팁", "맛집", "여행", "정보", "리뷰"]
+        for suffix in popular_suffixes:
+            combined = f"{base_keyword}{suffix}"
+            if combined.lower() not in seen:
+                seen.add(combined.lower())
+                hashtags.append({
+                    "tag": f"#{combined}",
+                    "popularity": random.randint(25, 50),
+                    "searchVolume": 0,
+                    "type": "variation"
                 })
 
         # 인기도 순 정렬
         hashtags.sort(key=lambda x: x["popularity"], reverse=True)
 
+        # 상위 count개 선택
+        selected = hashtags[:request.count]
+
         return {
             "success": True,
             "keyword": keyword,
-            "hashtags": hashtags[:request.count],
+            "hashtags": selected,
             "total": len(hashtags),
-            "copy_text": " ".join([h["tag"] for h in hashtags[:request.count]])
+            "copy_text": " ".join([h["tag"] for h in selected]),
+            "stats": {
+                "fromTopPosts": len([h for h in selected if h.get("type") == "trending"]),
+                "fromRelated": len([h for h in selected if h.get("type") == "related"]),
+                "totalAnalyzed": len(search_results)
+            }
         }
 
     except Exception as e:
         logger.error(f"Hashtag generation error: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -570,144 +671,235 @@ async def check_low_quality(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    저품질 위험도 체크 - 블로그 콘텐츠 분석
+    저품질 위험도 체크 - 실제 블로그 분석 기반
     """
     blog_id = request.blog_id
 
     try:
-        # 블로그 RSS 또는 검색 결과로 최근 글 분석
-        blog_results = await scrape_naver_search(f"site:blog.naver.com/{blog_id}", 10)
+        from routers.blogs import analyze_blog
+
+        # 1. 실제 블로그 분석
+        analysis = await analyze_blog(blog_id)
+        stats = analysis.get("stats", {})
+        index = analysis.get("index", {})
+        breakdown = index.get("score_breakdown", {})
 
         checks = []
         risk_score = 0
 
-        # 1. 포스팅 빈도 체크
-        if len(blog_results) >= 5:
+        # 2. 블로그 지수 체크
+        total_score = index.get("total_score", 0)
+        if total_score >= 50:
             checks.append({
-                "item": "포스팅 빈도",
+                "item": "블로그 지수",
                 "status": "good",
-                "message": "최근 포스팅이 활발합니다",
-                "score": 0
+                "message": f"블로그 점수 {total_score}점으로 양호합니다",
+                "score": 0,
+                "detail": {"value": total_score, "threshold": 50}
             })
-        else:
+        elif total_score >= 30:
             checks.append({
-                "item": "포스팅 빈도",
+                "item": "블로그 지수",
                 "status": "warning",
-                "message": "포스팅 빈도가 낮습니다. 주 2-3회 이상 권장",
-                "score": 20
-            })
-            risk_score += 20
-
-        # 2. 콘텐츠 다양성 체크 (제목 분석)
-        if blog_results:
-            titles = [r.get("title", "") for r in blog_results]
-            unique_words = set()
-            for title in titles:
-                words = re.findall(r'[가-힣]+', title)
-                unique_words.update(words)
-
-            if len(unique_words) > 30:
-                checks.append({
-                    "item": "콘텐츠 다양성",
-                    "status": "good",
-                    "message": "다양한 주제를 다루고 있습니다",
-                    "score": 0
-                })
-            else:
-                checks.append({
-                    "item": "콘텐츠 다양성",
-                    "status": "warning",
-                    "message": "주제가 편중되어 있습니다. 다양한 주제 권장",
-                    "score": 15
-                })
-                risk_score += 15
-
-        # 3. 광고성 콘텐츠 체크
-        ad_keywords = ["협찬", "제공", "광고", "체험단", "원고료"]
-        ad_count = sum(1 for r in blog_results if any(k in r.get("title", "") + r.get("description", "") for k in ad_keywords))
-
-        if ad_count <= 2:
-            checks.append({
-                "item": "광고성 콘텐츠",
-                "status": "good",
-                "message": "광고성 콘텐츠 비율이 적절합니다",
-                "score": 0
-            })
-        elif ad_count <= 5:
-            checks.append({
-                "item": "광고성 콘텐츠",
-                "status": "warning",
-                "message": "광고성 콘텐츠가 다소 많습니다",
-                "score": 15
+                "message": f"블로그 점수 {total_score}점으로 개선이 필요합니다",
+                "score": 15,
+                "detail": {"value": total_score, "threshold": 50}
             })
             risk_score += 15
         else:
             checks.append({
-                "item": "광고성 콘텐츠",
+                "item": "블로그 지수",
                 "status": "danger",
-                "message": "광고성 콘텐츠 비율이 높습니다. 저품질 위험!",
-                "score": 30
+                "message": f"블로그 점수 {total_score}점으로 저품질 위험이 있습니다",
+                "score": 25,
+                "detail": {"value": total_score, "threshold": 50}
             })
-            risk_score += 30
+            risk_score += 25
 
-        # 4. 제목 최적화 체크
-        short_titles = sum(1 for r in blog_results if len(r.get("title", "")) < 15)
-        if short_titles <= 2:
+        # 3. 포스팅 수 체크
+        total_posts = stats.get("total_posts", 0)
+        if total_posts >= 100:
             checks.append({
-                "item": "제목 최적화",
+                "item": "포스팅 수",
                 "status": "good",
-                "message": "제목 길이가 적절합니다",
-                "score": 0
+                "message": f"총 {total_posts}개의 포스팅으로 충분합니다",
+                "score": 0,
+                "detail": {"value": total_posts, "threshold": 100}
             })
-        else:
+        elif total_posts >= 30:
             checks.append({
-                "item": "제목 최적화",
+                "item": "포스팅 수",
                 "status": "warning",
-                "message": "짧은 제목이 많습니다. 20-30자 권장",
-                "score": 10
+                "message": f"총 {total_posts}개 포스팅. 100개 이상 권장",
+                "score": 10,
+                "detail": {"value": total_posts, "threshold": 100}
             })
             risk_score += 10
+        else:
+            checks.append({
+                "item": "포스팅 수",
+                "status": "danger",
+                "message": f"총 {total_posts}개 포스팅으로 매우 적습니다",
+                "score": 20,
+                "detail": {"value": total_posts, "threshold": 100}
+            })
+            risk_score += 20
 
-        # 5. 이미지 사용 체크 (description에서 추정)
-        checks.append({
-            "item": "이미지 사용",
-            "status": "info",
-            "message": "이미지 3장 이상 권장",
-            "score": 0
-        })
+        # 4. 이웃 수 체크
+        neighbor_count = stats.get("neighbor_count", 0)
+        if neighbor_count >= 500:
+            checks.append({
+                "item": "이웃 수",
+                "status": "good",
+                "message": f"이웃 {neighbor_count}명으로 활발한 소통",
+                "score": 0,
+                "detail": {"value": neighbor_count, "threshold": 500}
+            })
+        elif neighbor_count >= 100:
+            checks.append({
+                "item": "이웃 수",
+                "status": "warning",
+                "message": f"이웃 {neighbor_count}명. 더 많은 소통 권장",
+                "score": 10,
+                "detail": {"value": neighbor_count, "threshold": 500}
+            })
+            risk_score += 10
+        else:
+            checks.append({
+                "item": "이웃 수",
+                "status": "danger",
+                "message": f"이웃 {neighbor_count}명으로 소통이 부족합니다",
+                "score": 15,
+                "detail": {"value": neighbor_count, "threshold": 500}
+            })
+            risk_score += 15
 
-        # 위험도 등급
-        if risk_score <= 20:
+        # 5. C-Rank 분석
+        c_rank = breakdown.get("c_rank", 0)
+        c_rank_detail = breakdown.get("c_rank_detail", {})
+        context = c_rank_detail.get("context", 50)
+        content = c_rank_detail.get("content", 50)
+        chain = c_rank_detail.get("chain", 50)
+
+        if c_rank >= 20:
+            checks.append({
+                "item": "C-Rank 지수",
+                "status": "good",
+                "message": f"C-Rank {c_rank}점으로 우수합니다",
+                "score": 0,
+                "detail": {"context": context, "content": content, "chain": chain}
+            })
+        elif c_rank >= 10:
+            checks.append({
+                "item": "C-Rank 지수",
+                "status": "warning",
+                "message": f"C-Rank {c_rank}점으로 개선 여지가 있습니다",
+                "score": 10,
+                "detail": {"context": context, "content": content, "chain": chain}
+            })
+            risk_score += 10
+        else:
+            checks.append({
+                "item": "C-Rank 지수",
+                "status": "danger",
+                "message": f"C-Rank {c_rank}점으로 낮습니다",
+                "score": 20,
+                "detail": {"context": context, "content": content, "chain": chain}
+            })
+            risk_score += 20
+
+        # 6. D.I.A 분석
+        dia = breakdown.get("dia", 0)
+        dia_detail = breakdown.get("dia_detail", {})
+        depth = dia_detail.get("depth", 50)
+        information = dia_detail.get("information", 50)
+        accuracy = dia_detail.get("accuracy", 50)
+
+        if dia >= 20:
+            checks.append({
+                "item": "D.I.A 지수",
+                "status": "good",
+                "message": f"D.I.A {dia}점으로 양질의 콘텐츠입니다",
+                "score": 0,
+                "detail": {"depth": depth, "information": information, "accuracy": accuracy}
+            })
+        elif dia >= 10:
+            checks.append({
+                "item": "D.I.A 지수",
+                "status": "warning",
+                "message": f"D.I.A {dia}점. 콘텐츠 품질 개선 필요",
+                "score": 10,
+                "detail": {"depth": depth, "information": information, "accuracy": accuracy}
+            })
+            risk_score += 10
+        else:
+            checks.append({
+                "item": "D.I.A 지수",
+                "status": "danger",
+                "message": f"D.I.A {dia}점으로 콘텐츠 품질이 낮습니다",
+                "score": 20,
+                "detail": {"depth": depth, "information": information, "accuracy": accuracy}
+            })
+            risk_score += 20
+
+        # 위험도 등급 (100점 만점으로 정규화)
+        normalized_risk = min(100, risk_score)
+        if normalized_risk <= 20:
             grade = "안전"
             grade_color = "green"
-        elif risk_score <= 40:
+        elif normalized_risk <= 40:
             grade = "주의"
             grade_color = "yellow"
-        elif risk_score <= 60:
+        elif normalized_risk <= 60:
             grade = "위험"
             grade_color = "orange"
         else:
             grade = "심각"
             grade_color = "red"
 
+        # 맞춤형 권장 사항 생성
+        recommendations = []
+        if total_score < 50:
+            recommendations.append(f"블로그 점수 {total_score}점 → 50점 이상 목표로 콘텐츠 품질을 높이세요")
+        if total_posts < 100:
+            recommendations.append(f"포스팅 {total_posts}개 → 100개 이상까지 꾸준히 작성하세요")
+        if neighbor_count < 500:
+            recommendations.append(f"이웃 {neighbor_count}명 → 이웃 추가와 소통을 늘리세요")
+        if c_rank < 15:
+            recommendations.append("C-Rank 향상: 전문 분야 집중, 양질의 콘텐츠 작성")
+        if dia < 15:
+            recommendations.append("D.I.A 향상: 정보성 있는 깊이 있는 글 작성")
+
+        # 기본 권장 사항 추가
+        if len(recommendations) < 3:
+            recommendations.extend([
+                "일주일에 2-3개 이상 꾸준히 포스팅하세요",
+                "이미지 5장 이상, 글자수 2000자 이상 권장",
+                "방문자와 소통하며 댓글에 답변하세요"
+            ])
+
         return {
             "success": True,
             "blog_id": blog_id,
-            "risk_score": min(100, risk_score),
+            "risk_score": normalized_risk,
             "grade": grade,
             "grade_color": grade_color,
             "checks": checks,
-            "recommendations": [
-                "일주일에 2-3개 이상 꾸준히 포스팅하세요",
-                "다양한 주제와 키워드를 다루세요",
-                "광고성 콘텐츠는 전체의 20% 이하로 유지하세요",
-                "이미지와 영상을 적극 활용하세요",
-                "방문자와 소통하며 댓글에 답변하세요"
-            ]
+            "blogStats": {
+                "totalScore": total_score,
+                "level": index.get("level", 0),
+                "posts": total_posts,
+                "neighbors": neighbor_count,
+                "cRank": c_rank,
+                "dia": dia
+            },
+            "recommendations": recommendations[:5]
         }
 
     except Exception as e:
         logger.error(f"Low quality check error: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1661,51 +1853,108 @@ async def analyze_timing(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    발행 타이밍 분석 - 최적 발행 시간 추천
+    발행 타이밍 분석 - 실제 상위 글 발행 시간 분석 기반
     """
     try:
-        # 네이버 데이터랩으로 시간대별 검색 추이 분석
-        # 일반적인 블로그 트래픽 패턴 기반 추천
+        from routers.blogs import fetch_naver_search_results
+        from datetime import datetime, timedelta
+        from collections import Counter
 
-        # 요일별 점수 (평일 높음, 주말 약간 낮음)
-        days = [
-            {"day": "월", "score": 85},
-            {"day": "화", "score": 90},
-            {"day": "수", "score": 88},
-            {"day": "목", "score": 82},
-            {"day": "금", "score": 75},
-            {"day": "토", "score": 60},
-            {"day": "일", "score": 65}
-        ]
+        # 1. 상위 글 발행 시간 분석
+        search_results = await fetch_naver_search_results(keyword, limit=13)
 
-        # 시간대별 점수 (오전 9-11시, 오후 8-10시가 피크)
+        post_hours = []
+        post_days = []
+
+        for result in search_results:
+            post_date_str = result.get("post_date", "")
+            if post_date_str:
+                try:
+                    # 다양한 날짜 형식 처리
+                    if "." in post_date_str:
+                        post_date = datetime.strptime(post_date_str, "%Y.%m.%d.")
+                    elif "-" in post_date_str:
+                        post_date = datetime.strptime(post_date_str[:10], "%Y-%m-%d")
+                    else:
+                        continue
+
+                    post_days.append(post_date.weekday())  # 0=월, 6=일
+                except:
+                    pass
+
+        # 2. 요일별 분석
+        day_names = ["월", "화", "수", "목", "금", "토", "일"]
+        day_counts = Counter(post_days)
+
+        days = []
+        for i, day_name in enumerate(day_names):
+            count = day_counts.get(i, 0)
+            # 상위 글에 많이 등장한 요일일수록 높은 점수
+            base_score = 70
+            if count >= 3:
+                score = min(95, base_score + count * 8)
+            elif count >= 2:
+                score = base_score + count * 5
+            elif count >= 1:
+                score = base_score
+            else:
+                # 일반적인 블로그 트래픽 패턴 적용
+                if i in [1, 2]:  # 화, 수
+                    score = 85
+                elif i in [0, 3]:  # 월, 목
+                    score = 80
+                elif i == 4:  # 금
+                    score = 70
+                else:  # 토, 일
+                    score = 60
+            days.append({"day": day_name, "score": score, "topPostCount": count})
+
+        # 3. 시간대별 분석 (일반적인 블로그 트래픽 패턴 + 키워드 특성)
+        # 키워드 특성에 따른 시간대 조정
+        keyword_lower = keyword.lower()
+
         hours = []
         for hour in range(24):
+            # 기본 점수
             if 9 <= hour <= 11:
-                score = random.randint(75, 95)
+                base = 85
             elif 20 <= hour <= 22:
-                score = random.randint(70, 90)
-            elif 12 <= hour <= 14:
-                score = random.randint(55, 75)
-            elif 6 <= hour <= 8:
-                score = random.randint(40, 60)
+                base = 80
+            elif 13 <= hour <= 15:
+                base = 70
+            elif 7 <= hour <= 8:
+                base = 60
+            elif 17 <= hour <= 19:
+                base = 65
             else:
-                score = random.randint(20, 45)
-            hours.append({"hour": hour, "score": score})
+                base = 40
 
-        # 최적 시간 계산
+            # 키워드 특성에 따른 보정
+            if any(x in keyword_lower for x in ["맛집", "음식", "카페", "식당"]):
+                # 맛집 키워드: 식사 시간대 강화
+                if 11 <= hour <= 13 or 17 <= hour <= 19:
+                    base += 15
+            elif any(x in keyword_lower for x in ["여행", "호텔", "숙소", "관광"]):
+                # 여행 키워드: 저녁/밤 시간대 강화
+                if 20 <= hour <= 23:
+                    base += 10
+            elif any(x in keyword_lower for x in ["출근", "직장", "회사"]):
+                # 직장 관련: 출퇴근 시간대 강화
+                if 7 <= hour <= 9 or 18 <= hour <= 20:
+                    base += 10
+
+            hours.append({"hour": hour, "score": min(100, base)})
+
+        # 4. 최적 시간 계산
         best_days = sorted(days, key=lambda x: x["score"], reverse=True)[:3]
         best_hours = sorted(hours, key=lambda x: x["score"], reverse=True)[:5]
 
-        # 다음 최적 발행 시간 계산
-        from datetime import datetime, timedelta
+        # 5. 다음 최적 발행 시간 계산
         now = datetime.now()
-
         optimal_times = []
-        for d in best_days[:2]:
-            for h in best_hours[:2]:
-                # 다음 해당 요일과 시간 계산
-                day_names = ["월", "화", "수", "목", "금", "토", "일"]
+
+        for d in best_days[:3]:
+            for h in best_hours[:3]:
                 target_day = day_names.index(d["day"])
                 days_ahead = target_day - now.weekday()
                 if days_ahead < 0 or (days_ahead == 0 and now.hour >= h["hour"]):
@@ -1720,18 +1969,31 @@ async def analyze_timing(
                 })
 
         optimal_times.sort(key=lambda x: x["score"], reverse=True)
+        optimal_times = optimal_times[:5]
+
+        # 6. 분석 결과 요약
+        top_day = best_days[0]
+        top_hour = best_hours[0]
 
         return {
             "success": True,
             "keyword": keyword,
             "days": days,
             "hours": hours,
-            "optimalTimes": optimal_times[:5],
-            "recommendation": f"'{keyword}' 키워드는 {best_days[0]['day']}요일 {best_hours[0]['hour']}시에 발행하면 조회수가 약 20-30% 상승합니다."
+            "optimalTimes": optimal_times,
+            "analysis": {
+                "topPostsAnalyzed": len(search_results),
+                "bestDay": top_day["day"],
+                "bestHour": top_hour["hour"],
+                "dayDistribution": {d["day"]: d["topPostCount"] for d in days if d["topPostCount"] > 0}
+            },
+            "recommendation": f"'{keyword}' 키워드는 {top_day['day']}요일 {top_hour['hour']}시에 발행을 추천합니다. 상위 {len(search_results)}개 글 중 {top_day['topPostCount']}개가 {top_day['day']}요일에 발행되었습니다."
         }
 
     except Exception as e:
         logger.error(f"Timing analysis error: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1954,30 +2216,108 @@ async def track_rank(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    순위 추적 - 특정 키워드에서 내 블로그 순위 확인
+    순위 추적 - 특정 키워드에서 내 블로그 순위 확인 (실제 데이터 기반)
     """
-    try:
-        # 키워드 검색
-        search_results = await scrape_naver_search(keyword, 50)
+    from routers.blogs import fetch_naver_search_results, analyze_blog, get_related_keywords_from_searchad
 
-        # 내 블로그 찾기
+    try:
+        # 1. 키워드 검색 (실제 네이버 검색 결과)
+        search_results = await fetch_naver_search_results(keyword, display=50)
+
+        # 2. 내 블로그 찾기
         current_rank = None
+        my_post_info = None
         for i, result in enumerate(search_results):
             link = result.get("link", "")
             if blog_id.lower() in link.lower():
                 current_rank = i + 1
+                my_post_info = {
+                    "title": result.get("title", "").replace("<b>", "").replace("</b>", ""),
+                    "postDate": result.get("postdate", ""),
+                    "link": link
+                }
                 break
 
-        # 경쟁자 분석
+        # 3. 경쟁자 분석 (상위 10개 블로그 분석)
         competitors = []
         for i, result in enumerate(search_results[:10]):
             title = re.sub(r'<[^>]+>', '', result.get("title", ""))
-            competitors.append({
+            blog_link = result.get("link", "")
+
+            # 블로그 ID 추출
+            comp_blog_id = ""
+            if "blog.naver.com/" in blog_link:
+                parts = blog_link.split("blog.naver.com/")
+                if len(parts) > 1:
+                    comp_blog_id = parts[1].split("/")[0].split("?")[0]
+
+            comp_data = {
                 "rank": i + 1,
                 "title": title[:50],
                 "blogName": result.get("bloggername", ""),
-                "postDate": result.get("postdate", "")
-            })
+                "blogId": comp_blog_id,
+                "postDate": result.get("postdate", ""),
+                "isMyBlog": blog_id.lower() in blog_link.lower()
+            }
+
+            # 상위 3개 블로그는 상세 분석
+            if i < 3 and comp_blog_id:
+                try:
+                    analysis = await analyze_blog(comp_blog_id)
+                    if analysis:
+                        comp_data["score"] = analysis.get("total_score", 0)
+                        comp_data["level"] = analysis.get("level", 0)
+                except:
+                    pass
+
+            competitors.append(comp_data)
+
+        # 4. 월간 검색량 조회
+        monthly_search = 0
+        competition = "중간"
+        try:
+            search_data = await get_related_keywords_from_searchad(keyword)
+            if search_data:
+                for kw in search_data:
+                    if kw.get("relKeyword", "") == keyword:
+                        pc = kw.get("monthlyPcQcCnt", 0)
+                        mobile = kw.get("monthlyMobileQcCnt", 0)
+                        monthly_search = (pc if isinstance(pc, int) else 0) + (mobile if isinstance(mobile, int) else 0)
+                        competition = kw.get("compIdx", "중간")
+                        break
+        except:
+            pass
+
+        # 5. 순위 분석 및 팁 생성
+        tips = []
+        if current_rank:
+            if current_rank <= 3:
+                tips.append("🏆 TOP 3 안에 있습니다! 이 순위를 유지하세요")
+                tips.append("글 업데이트로 신선도를 유지하세요")
+            elif current_rank <= 10:
+                tips.append("🎯 1페이지 내에 있습니다. TOP 3 진입을 노려보세요")
+                tips.append("더 상세한 정보와 이미지 추가를 권장합니다")
+            elif current_rank <= 20:
+                tips.append("📈 조금 더 노력하면 1페이지 진입 가능합니다")
+                tips.append("경쟁 블로그 분석 후 차별화된 콘텐츠를 만드세요")
+            else:
+                tips.append("📝 제목과 내용에 키워드를 자연스럽게 포함하세요")
+                tips.append("이미지, 영상 등 다양한 미디어를 활용하세요")
+        else:
+            tips.append("❌ 상위 50위 내에 노출되지 않습니다")
+            tips.append("키워드를 포함한 새 글을 작성해보세요")
+            tips.append("더 구체적인 롱테일 키워드를 시도해보세요")
+
+        # 상위 블로그와의 갭 분석
+        gap_analysis = None
+        if current_rank and len(competitors) > 0:
+            top_competitor = competitors[0]
+            if top_competitor.get("score") and current_rank > 1:
+                gap_analysis = {
+                    "rank_gap": current_rank - 1,
+                    "top_blog_score": top_competitor.get("score", 0),
+                    "advice": f"1위 블로그는 점수 {top_competitor.get('score', 0)}점입니다. 콘텐츠 품질을 높여보세요."
+                }
 
         return {
             "success": True,
@@ -1985,17 +2325,13 @@ async def track_rank(
             "blogId": blog_id,
             "currentRank": current_rank,
             "totalResults": len(search_results),
-            "rankChange": random.randint(-5, 5) if current_rank else None,
+            "monthlySearch": monthly_search,
+            "competition": competition,
+            "myPostInfo": my_post_info,
             "competitors": competitors,
-            "history": [
-                {"date": (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d"), "rank": current_rank + random.randint(-3, 3) if current_rank else None}
-                for i in range(7)
-            ] if current_rank else [],
-            "tips": [
-                "제목에 키워드를 포함했는지 확인하세요" if not current_rank else "순위를 유지하려면 글을 업데이트하세요",
-                "검색 의도에 맞는 상세한 정보를 제공하세요",
-                "이미지와 영상을 추가하면 체류시간이 늘어납니다"
-            ]
+            "gapAnalysis": gap_analysis,
+            "tips": tips,
+            "checkedAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
     except Exception as e:
@@ -2009,13 +2345,22 @@ async def analyze_clone(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    클론 분석 - 성공 블로그 분석
+    클론 분석 - 성공 블로그 분석 (실제 블로그 지수 포함)
     """
+    from routers.blogs import fetch_naver_search_results, analyze_blog
+
     try:
-        # 타겟 블로그 검색
+        # 1. 실제 블로그 분석 (점수, 레벨, C-Rank 등)
+        blog_analysis = None
+        try:
+            blog_analysis = await analyze_blog(target_blog_id)
+        except:
+            pass
+
+        # 2. 타겟 블로그 글 검색
         blog_results = await scrape_naver_search(f"site:blog.naver.com/{target_blog_id}", 30)
 
-        if not blog_results:
+        if not blog_results and not blog_analysis:
             raise HTTPException(status_code=404, detail="블로그를 찾을 수 없습니다")
 
         # 글 분석
@@ -2032,10 +2377,16 @@ async def analyze_clone(
 
         keywords = []
         avg_title_length = 0
+        post_dates = []
 
         for r in blog_results:
             title = re.sub(r'<[^>]+>', '', r.get("title", ""))
             avg_title_length += len(title)
+
+            # 포스팅 날짜 수집
+            post_date = r.get("postdate", "")
+            if post_date:
+                post_dates.append(post_date)
 
             # 패턴 분류
             if "?" in title:
@@ -2060,46 +2411,80 @@ async def analyze_clone(
         keyword_freq = Counter(keywords).most_common(10)
 
         # 주요 패턴
-        main_pattern = max(title_patterns, key=title_patterns.get)
+        main_pattern = max(title_patterns, key=title_patterns.get) if any(title_patterns.values()) else "정보형"
 
         # 카테고리 추정
         all_text = " ".join([r.get("title", "") for r in blog_results])
         categories = []
-        if any(w in all_text for w in ["맛집", "음식"]):
+        if any(w in all_text for w in ["맛집", "음식", "카페", "레스토랑"]):
             categories.append("맛집")
-        if any(w in all_text for w in ["여행", "호텔"]):
+        if any(w in all_text for w in ["여행", "호텔", "숙소", "관광"]):
             categories.append("여행")
-        if any(w in all_text for w in ["뷰티", "화장품"]):
+        if any(w in all_text for w in ["뷰티", "화장품", "스킨케어"]):
             categories.append("뷰티")
-        if any(w in all_text for w in ["IT", "리뷰", "테크"]):
+        if any(w in all_text for w in ["IT", "테크", "개발", "코딩"]):
             categories.append("IT/테크")
+        if any(w in all_text for w in ["육아", "아이", "아기"]):
+            categories.append("육아")
+        if any(w in all_text for w in ["인테리어", "집", "가구"]):
+            categories.append("인테리어")
         if not categories:
             categories.append("일반")
+
+        # 3. 실제 블로그 데이터 정리
+        real_blog_data = {}
+        if blog_analysis:
+            real_blog_data = {
+                "score": blog_analysis.get("total_score", 0),
+                "level": blog_analysis.get("level", 0),
+                "totalPosts": blog_analysis.get("total_posts", post_count),
+                "neighbors": blog_analysis.get("neighbors", 0),
+                "cRank": blog_analysis.get("c_rank", {}),
+                "dia": blog_analysis.get("dia", {})
+            }
+
+        # 4. 성공 요인 분석
+        success_factors = []
+        if blog_analysis:
+            score = blog_analysis.get("total_score", 0)
+            if score >= 70:
+                success_factors.append(f"🏆 높은 블로그 지수 ({score}점)")
+            if blog_analysis.get("neighbors", 0) >= 1000:
+                success_factors.append(f"👥 많은 이웃 수 ({blog_analysis.get('neighbors', 0):,}명)")
+            if blog_analysis.get("total_posts", 0) >= 500:
+                success_factors.append(f"📝 풍부한 포스팅 ({blog_analysis.get('total_posts', 0):,}개)")
+
+        success_factors.extend([
+            f"✍️ {main_pattern} 제목 스타일 ({title_patterns[main_pattern]}개 글)",
+            f"📏 평균 {int(avg_title_length)}자 내외의 제목",
+            f"🎯 {categories[0]} 카테고리 집중"
+        ])
+
+        # 5. 벤치마킹 추천
+        recommendations = [
+            f"이 블로거처럼 {main_pattern} 스타일의 제목을 사용해보세요"
+        ]
+        if keyword_freq:
+            recommendations.append(f"'{keyword_freq[0][0]}' 키워드로 비슷한 주제를 다뤄보세요")
+        if blog_analysis and blog_analysis.get("total_score", 0) >= 60:
+            recommendations.append("이 블로거의 포스팅 빈도와 이웃 소통 방식을 벤치마킹하세요")
+        recommendations.append("차별화된 관점으로 콘텐츠를 작성하세요")
 
         return {
             "success": True,
             "targetBlogId": target_blog_id,
+            "blogMetrics": real_blog_data,
             "analysis": {
-                "totalPosts": post_count,
+                "searchedPosts": post_count,
                 "avgTitleLength": int(avg_title_length),
-                "postingFrequency": "주 3-4회" if post_count > 15 else "주 1-2회",
-                "mainCategories": categories,
-                "blogScore": min(90, 40 + post_count * 2)
+                "mainCategories": categories
             },
             "titlePatterns": title_patterns,
             "mainPattern": main_pattern,
             "topKeywords": [{"keyword": k, "count": c} for k, c in keyword_freq],
-            "successFactors": [
-                f"{main_pattern} 제목 스타일 활용",
-                f"평균 {int(avg_title_length)}자 내외의 제목",
-                f"{categories[0]} 카테고리 집중",
-                "꾸준한 포스팅 유지"
-            ],
-            "recommendations": [
-                f"이 블로그처럼 {main_pattern} 제목을 활용해보세요",
-                f"'{keyword_freq[0][0]}' 키워드를 공략해보세요" if keyword_freq else "다양한 키워드를 시도하세요",
-                "비슷한 주제로 차별화된 콘텐츠를 만들어보세요"
-            ]
+            "successFactors": success_factors,
+            "recommendations": recommendations,
+            "analyzedAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
     except HTTPException:
@@ -2115,52 +2500,111 @@ async def snipe_trend(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    트렌드 스나이퍼 - 실시간 급상승 키워드 발굴
+    트렌드 스나이퍼 - 실시간 급상승 키워드 발굴 (실제 데이터 기반)
     """
+    from routers.blogs import fetch_naver_search_results, get_related_keywords_from_searchad
+
     try:
         trends = []
+        analyzed_keywords = set()  # 중복 방지
 
         for category in categories[:5]:
             # 카테고리별 뉴스 검색
-            news_results = await scrape_naver_news(category, 10)
+            news_results = await scrape_naver_news(category, 15)
 
             # 키워드 추출
             all_text = " ".join([n.get("title", "") + " " + n.get("description", "") for n in news_results])
             words = re.findall(r'[가-힣]{2,}', all_text)
 
             from collections import Counter
-            word_freq = Counter(words).most_common(5)
+            word_freq = Counter(words).most_common(8)
+
+            # 제외 키워드
+            exclude_words = {"기자", "뉴스", "속보", "오늘", "내일", "지난", "올해", "작년", "관련", "대해", "통해", "위해"}
 
             for keyword, count in word_freq:
-                if len(keyword) >= 2 and keyword not in ["기자", "뉴스", "속보", "오늘", "내일"]:
-                    # 트렌드 점수 계산
-                    trend_score = min(100, count * 10 + random.randint(20, 40))
+                if len(keyword) >= 2 and keyword not in exclude_words and keyword not in analyzed_keywords:
+                    analyzed_keywords.add(keyword)
+
+                    # 트렌드 점수 계산 (뉴스 빈도 기반)
+                    trend_score = min(100, count * 12)
+
+                    # 실제 경쟁도 및 검색량 조회
+                    competition = "medium"
+                    search_volume = 0
+                    try:
+                        if len(trends) < 10:  # API 호출 제한
+                            search_data = await get_related_keywords_from_searchad(keyword)
+                            if search_data:
+                                for kw in search_data:
+                                    if kw.get("relKeyword", "") == keyword:
+                                        pc = kw.get("monthlyPcQcCnt", 0)
+                                        mobile = kw.get("monthlyMobileQcCnt", 0)
+                                        search_volume = (pc if isinstance(pc, int) else 0) + (mobile if isinstance(mobile, int) else 0)
+                                        comp = kw.get("compIdx", "중간")
+                                        competition = {"낮음": "low", "중간": "medium", "높음": "high"}.get(comp, "medium")
+                                        break
+                    except:
+                        pass
+
+                    # 블로그 경쟁 확인 (상위 블로그 수)
+                    blog_count = 0
+                    try:
+                        if len(trends) < 5:  # API 호출 제한
+                            blog_results = await fetch_naver_search_results(keyword, display=10)
+                            blog_count = len(blog_results)
+                    except:
+                        pass
+
+                    # 기회 점수 계산 (트렌드 높고 경쟁 낮을수록 높음)
+                    opportunity_score = trend_score
+                    if competition == "low":
+                        opportunity_score += 20
+                    elif competition == "high":
+                        opportunity_score -= 20
+                    opportunity_score = max(0, min(100, opportunity_score))
+
+                    # 추천 이유 결정 (실제 데이터 기반)
+                    if trend_score >= 80:
+                        reason = f"뉴스 {count}건 언급 - 급상승 트렌드"
+                    elif search_volume > 5000:
+                        reason = f"월 {search_volume:,}회 검색 - 검색량 높음"
+                    elif competition == "low":
+                        reason = "경쟁도 낮음 - 블루오션"
+                    else:
+                        reason = f"실시간 {count}건 언급"
 
                     trends.append({
                         "keyword": keyword,
                         "category": category,
                         "trendScore": trend_score,
-                        "competition": random.choice(["low", "medium", "high"]),
-                        "matchScore": random.randint(60, 95),
-                        "goldenTime": trend_score > 70,
-                        "reason": random.choice(["급상승 트렌드", "시즌 키워드", "바이럴 예상", "검색량 급증"]),
-                        "searchVolume": count * random.randint(500, 2000),
-                        "deadline": "2시간 내" if trend_score > 80 else "6시간 내"
+                        "competition": competition,
+                        "opportunityScore": opportunity_score,
+                        "goldenTime": trend_score >= 70 and competition != "high",
+                        "reason": reason,
+                        "searchVolume": search_volume,
+                        "newsCount": count,
+                        "blogCount": blog_count,
+                        "deadline": "2시간 내" if trend_score >= 80 else "6시간 내" if trend_score >= 60 else "12시간 내"
                     })
 
-        # 트렌드 점수 순 정렬
-        trends.sort(key=lambda x: x["trendScore"], reverse=True)
+        # 기회 점수 순 정렬
+        trends.sort(key=lambda x: x.get("opportunityScore", x["trendScore"]), reverse=True)
+
+        # 골든타임 키워드 추출
+        golden_keywords = [t for t in trends if t["goldenTime"]]
 
         return {
             "success": True,
             "categories": categories,
             "trends": trends[:15],
-            "goldenTimeCount": len([t for t in trends if t["goldenTime"]]),
+            "goldenTimeKeywords": golden_keywords[:5],
+            "goldenTimeCount": len(golden_keywords),
             "lastUpdated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "tips": [
-                "골든타임 키워드는 빠르게 작성하세요",
-                "트렌드 점수가 높을수록 유입이 많습니다",
-                "경쟁도가 낮은 키워드를 우선 공략하세요"
+                f"🔥 골든타임 키워드 {len(golden_keywords)}개 발견!" if golden_keywords else "현재 골든타임 키워드가 없습니다",
+                "뉴스 기반 트렌드는 빠른 작성이 유리합니다",
+                "경쟁도가 'low'인 키워드를 우선 공략하세요"
             ]
         }
 
@@ -2175,16 +2619,129 @@ async def check_algorithm(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    알고리즘 진단 - 블로그 상태 체크
+    알고리즘 진단 - 블로그 상태 체크 (실제 블로그 분석 포함)
     """
+    from routers.blogs import analyze_blog
+
     try:
-        # 블로그 검색
+        # 1. 실제 블로그 분석 (점수, 레벨, C-Rank, D.I.A)
+        blog_analysis = None
+        try:
+            blog_analysis = await analyze_blog(blog_id)
+        except:
+            pass
+
+        # 2. 블로그 검색 노출 확인
         blog_results = await scrape_naver_search(f"site:blog.naver.com/{blog_id}", 20)
 
         checks = []
-        overall_score = 100
+        recommendations = []
 
-        # 1. 노출 빈도 체크
+        # 실제 블로그 지수 기반 점수
+        if blog_analysis:
+            overall_score = blog_analysis.get("total_score", 50)
+            level = blog_analysis.get("level", 0)
+            c_rank = blog_analysis.get("c_rank", {})
+            dia = blog_analysis.get("dia", {})
+            total_posts = blog_analysis.get("total_posts", 0)
+            neighbors = blog_analysis.get("neighbors", 0)
+
+            # 블로그 지수 체크
+            if overall_score >= 70:
+                checks.append({
+                    "item": "블로그 지수",
+                    "status": "normal",
+                    "message": f"우수한 블로그 지수 ({overall_score}점)",
+                    "detail": f"레벨 {level}"
+                })
+            elif overall_score >= 50:
+                checks.append({
+                    "item": "블로그 지수",
+                    "status": "warning",
+                    "message": f"보통 수준의 블로그 지수 ({overall_score}점)",
+                    "detail": "포스팅 품질과 빈도를 높이세요"
+                })
+            else:
+                checks.append({
+                    "item": "블로그 지수",
+                    "status": "danger",
+                    "message": f"낮은 블로그 지수 ({overall_score}점)",
+                    "detail": "콘텐츠 품질 개선이 필요합니다"
+                })
+                recommendations.append("블로그 지수가 낮습니다. 양질의 콘텐츠를 꾸준히 발행하세요")
+
+            # C-Rank 체크
+            c_rank_score = c_rank.get("score", 0)
+            if c_rank_score >= 70:
+                checks.append({
+                    "item": "C-Rank (맥락)",
+                    "status": "normal",
+                    "message": f"맥락 점수 우수 ({c_rank_score}점)"
+                })
+            elif c_rank_score >= 40:
+                checks.append({
+                    "item": "C-Rank (맥락)",
+                    "status": "warning",
+                    "message": f"맥락 점수 보통 ({c_rank_score}점)",
+                    "detail": "주제 일관성을 유지하세요"
+                })
+            else:
+                checks.append({
+                    "item": "C-Rank (맥락)",
+                    "status": "danger",
+                    "message": f"맥락 점수 개선 필요 ({c_rank_score}점)"
+                })
+                recommendations.append("C-Rank 개선: 특정 주제에 집중하고 일관성을 유지하세요")
+
+            # D.I.A 체크
+            dia_score = dia.get("score", 0)
+            if dia_score >= 70:
+                checks.append({
+                    "item": "D.I.A (깊이)",
+                    "status": "normal",
+                    "message": f"깊이 점수 우수 ({dia_score}점)"
+                })
+            elif dia_score >= 40:
+                checks.append({
+                    "item": "D.I.A (깊이)",
+                    "status": "warning",
+                    "message": f"깊이 점수 보통 ({dia_score}점)",
+                    "detail": "더 상세한 정보를 제공하세요"
+                })
+            else:
+                checks.append({
+                    "item": "D.I.A (깊이)",
+                    "status": "danger",
+                    "message": f"깊이 점수 개선 필요 ({dia_score}점)"
+                })
+                recommendations.append("D.I.A 개선: 글의 깊이와 정보량을 높이세요")
+
+            # 이웃 수 체크
+            if neighbors >= 1000:
+                checks.append({
+                    "item": "커뮤니티",
+                    "status": "normal",
+                    "message": f"활발한 이웃 관계 ({neighbors:,}명)"
+                })
+            elif neighbors >= 100:
+                checks.append({
+                    "item": "커뮤니티",
+                    "status": "warning",
+                    "message": f"이웃 수 보통 ({neighbors:,}명)",
+                    "detail": "이웃 소통을 늘려보세요"
+                })
+            else:
+                checks.append({
+                    "item": "커뮤니티",
+                    "status": "danger",
+                    "message": f"이웃 수 부족 ({neighbors:,}명)"
+                })
+                recommendations.append("이웃 소통을 통해 참여율을 높이세요")
+
+        else:
+            overall_score = 50  # 분석 실패 시 기본값
+
+        # 3. 검색 노출 체크
         if len(blog_results) >= 10:
             checks.append({
                 "item": "검색 노출",
@@ -2199,7 +2756,7 @@ async def check_algorithm(
                 "message": "노출이 다소 감소했습니다",
                 "detail": "포스팅 빈도를 높이세요"
             })
-            overall_score -= 15
+            recommendations.append("검색 노출이 감소했습니다. 포스팅 빈도를 높이세요")
         else:
             checks.append({
                 "item": "검색 노출",
@@ -2207,9 +2764,9 @@ async def check_algorithm(
                 "message": "검색 노출이 매우 적습니다",
                 "detail": "저품질 가능성 확인 필요"
             })
-            overall_score -= 30
+            recommendations.append("⚠️ 검색 노출이 매우 적습니다. 저품질 상태를 확인하세요")
 
-        # 2. 콘텐츠 품질 체크
+        # 4. 제목 품질 체크
         titles = [r.get("title", "") for r in blog_results]
         short_titles = sum(1 for t in titles if len(re.sub(r'<[^>]+>', '', t)) < 15)
 
@@ -2223,64 +2780,46 @@ async def check_algorithm(
             checks.append({
                 "item": "제목 품질",
                 "status": "warning",
-                "message": "짧은 제목이 많습니다",
+                "message": f"짧은 제목이 {short_titles}개 있습니다",
                 "detail": "15자 이상의 제목 권장"
             })
-            overall_score -= 10
-
-        # 3. 포스팅 빈도
-        checks.append({
-            "item": "포스팅 빈도",
-            "status": "normal" if len(blog_results) >= 15 else "warning",
-            "message": "활발한 포스팅" if len(blog_results) >= 15 else "포스팅 빈도 증가 권장"
-        })
-
-        # 4. 다양성 체크
-        all_keywords = []
-        for r in blog_results:
-            words = re.findall(r'[가-힣]{2,}', r.get("title", ""))
-            all_keywords.extend(words)
-
-        unique_ratio = len(set(all_keywords)) / max(len(all_keywords), 1)
-        if unique_ratio > 0.5:
-            checks.append({
-                "item": "콘텐츠 다양성",
-                "status": "normal",
-                "message": "다양한 주제를 다루고 있습니다"
-            })
-        else:
-            checks.append({
-                "item": "콘텐츠 다양성",
-                "status": "warning",
-                "message": "주제가 편중되어 있습니다"
-            })
-            overall_score -= 10
+            recommendations.append("제목은 15자 이상으로 구체적으로 작성하세요")
 
         # 상태 판정
-        if overall_score >= 80:
+        if overall_score >= 70:
             status = "정상"
             status_color = "green"
-        elif overall_score >= 60:
+        elif overall_score >= 50:
             status = "주의"
             status_color = "yellow"
         else:
             status = "위험"
             status_color = "red"
 
+        # 기본 추천사항 추가
+        if not recommendations:
+            recommendations = [
+                "현재 블로그 상태가 양호합니다",
+                "꾸준한 포스팅으로 신선도를 유지하세요",
+                "양질의 콘텐츠로 체류시간을 높이세요"
+            ]
+
         return {
             "success": True,
             "blogId": blog_id,
             "overallScore": max(0, overall_score),
+            "level": blog_analysis.get("level", 0) if blog_analysis else 0,
             "status": status,
             "statusColor": status_color,
+            "blogMetrics": {
+                "totalPosts": blog_analysis.get("total_posts", 0) if blog_analysis else len(blog_results),
+                "neighbors": blog_analysis.get("neighbors", 0) if blog_analysis else 0,
+                "cRank": blog_analysis.get("c_rank", {}) if blog_analysis else {},
+                "dia": blog_analysis.get("dia", {}) if blog_analysis else {}
+            },
             "checks": checks,
             "lastChecked": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "recommendations": [
-                "꾸준한 포스팅으로 신선도를 유지하세요",
-                "다양한 키워드와 주제를 다루세요",
-                "양질의 콘텐츠로 체류시간을 높이세요",
-                "이웃 소통을 통해 참여율을 높이세요"
-            ]
+            "recommendations": recommendations
         }
 
     except Exception as e:
