@@ -69,6 +69,7 @@ class KeywordData:
     match_type: str  # EXACT, PHRASE, BROAD
     status: str
     bid_amount: float
+    ad_group_id: str = ""
     quality_score: Optional[int] = None
     impressions: int = 0
     clicks: int = 0
@@ -77,6 +78,7 @@ class KeywordData:
     revenue: float = 0
     ctr: float = 0
     cpc: float = 0
+    roas: float = 0
     position: Optional[float] = None
 
 

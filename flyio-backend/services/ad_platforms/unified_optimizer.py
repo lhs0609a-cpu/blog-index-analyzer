@@ -12,7 +12,15 @@ from .base import (
     AdPlatformBase, OptimizationStrategy, OptimizationResult,
     CampaignData, PerformanceData
 )
-from . import PLATFORM_SERVICES, get_platform_service
+
+# 순환 import 방지를 위한 지연 import
+def _get_platform_services():
+    from . import PLATFORM_SERVICES
+    return PLATFORM_SERVICES
+
+def _get_platform_service(platform_id: str, credentials: dict):
+    from . import get_platform_service
+    return get_platform_service(platform_id, credentials)
 
 
 class AllocationStrategy(str, Enum):
@@ -81,11 +89,12 @@ class UnifiedAdOptimizer:
         credentials: Dict[str, str]
     ) -> bool:
         """플랫폼 추가 및 연결"""
-        if platform_id not in PLATFORM_SERVICES:
+        platform_services = _get_platform_services()
+        if platform_id not in platform_services:
             raise ValueError(f"지원하지 않는 플랫폼: {platform_id}")
 
         try:
-            service = get_platform_service(platform_id, credentials)
+            service = _get_platform_service(platform_id, credentials)
             await service.connect()
 
             if service.is_connected:
@@ -221,7 +230,7 @@ class UnifiedAdOptimizer:
 
         return CrossPlatformReport(
             report_date=datetime.now().isoformat(),
-            total_platforms=len(PLATFORM_SERVICES),
+            total_platforms=len(_get_platform_services()),
             connected_platforms=len(self._platforms),
             total_spend=total_spend,
             total_revenue=total_revenue,

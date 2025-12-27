@@ -13,10 +13,12 @@ from .kakao_moment import KakaoMomentService
 from .tiktok_ads import TikTokAdsService
 from .criteo import CriteoService
 from .coupang_ads import CoupangAdsService
+from .naver_searchad import NaverSearchAdService
 from .unified_optimizer import UnifiedAdOptimizer, unified_optimizer, AllocationStrategy
 
 # 플랫폼 ID -> 서비스 클래스 매핑
 PLATFORM_SERVICES = {
+    "naver_searchad": NaverSearchAdService,
     "google_ads": GoogleAdsService,
     "meta_ads": MetaAdsService,
     "kakao_moment": KakaoMomentService,
@@ -27,6 +29,13 @@ PLATFORM_SERVICES = {
 
 # 플랫폼 정보
 PLATFORM_INFO = {
+    "naver_searchad": {
+        "name": "Naver Search Ads",
+        "name_ko": "네이버 검색광고",
+        "category": "search",
+        "features": ["search", "shopping", "brand"],
+        "required_fields": [],  # config에서 자동으로 가져옴
+    },
     "google_ads": {
         "name": "Google Ads",
         "name_ko": "구글 애즈",

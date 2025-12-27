@@ -31,6 +31,128 @@ from services.ad_platforms import PLATFORM_SERVICES, get_platform_service, PLATF
 router = APIRouter(prefix="/api/ad-dashboard", tags=["광고 대시보드"])
 
 
+# ============ API 테스트 엔드포인트 ============
+
+@router.get("/test/naver")
+async def test_naver_api():
+    """네이버 검색광고 API 실제 테스트"""
+    from services.ad_platforms.naver_searchad import NaverSearchAdService
+    from datetime import datetime, timedelta
+    from config import settings
+
+    result = {
+        "platform": "naver_searchad",
+        "test_time": datetime.now().isoformat(),
+        "credentials_set": bool(settings.NAVER_AD_CUSTOMER_ID and settings.NAVER_AD_API_KEY),
+        "tests": {}
+    }
+
+    if not result["credentials_set"]:
+        result["error"] = "자격증명이 설정되지 않았습니다"
+        return result
+
+    service = NaverSearchAdService()
+
+    try:
+        # 1. 연결 테스트
+        connected = await service.connect()
+        result["tests"]["connection"] = {
+            "success": connected,
+            "message": "연결 성공" if connected else "연결 실패"
+        }
+
+        if not connected:
+            return result
+
+        # 2. 계정 정보
+        account_info = await service.get_account_info()
+        result["tests"]["account_info"] = {
+            "success": True,
+            "data": account_info
+        }
+
+        # 3. 캠페인 조회
+        campaigns = await service.get_campaigns()
+        result["tests"]["campaigns"] = {
+            "success": True,
+            "count": len(campaigns),
+            "sample": [
+                {
+                    "id": c.campaign_id,
+                    "name": c.name,
+                    "status": c.status,
+                    "budget": c.budget,
+                    "cost": c.cost,
+                    "conversions": c.conversions,
+                    "roas": c.roas
+                }
+                for c in campaigns[:5]
+            ]
+        }
+
+        # 4. 키워드 조회
+        keywords = await service.get_keywords()
+        result["tests"]["keywords"] = {
+            "success": True,
+            "count": len(keywords),
+            "sample": [
+                {
+                    "id": k.keyword_id,
+                    "text": k.keyword_text,
+                    "bid": k.bid_amount,
+                    "status": k.status,
+                    "clicks": k.clicks,
+                    "conversions": k.conversions,
+                    "roas": k.roas
+                }
+                for k in keywords[:10]
+            ]
+        }
+
+        # 5. 최적화 분석 (실제 변경 없이)
+        optimization_analysis = []
+        for kw in keywords:
+            if kw.conversions > 0 and kw.cost > 0:
+                if kw.roas > 300:
+                    optimization_analysis.append({
+                        "keyword": kw.keyword_text,
+                        "action": "bid_increase",
+                        "reason": f"고효율 (ROAS {kw.roas:.0f}%)",
+                        "current_bid": kw.bid_amount,
+                        "suggested_bid": int(kw.bid_amount * 1.2)
+                    })
+                elif kw.roas < 100:
+                    optimization_analysis.append({
+                        "keyword": kw.keyword_text,
+                        "action": "bid_decrease",
+                        "reason": f"저효율 (ROAS {kw.roas:.0f}%)",
+                        "current_bid": kw.bid_amount,
+                        "suggested_bid": int(kw.bid_amount * 0.8)
+                    })
+            elif kw.clicks >= 30 and kw.conversions == 0:
+                optimization_analysis.append({
+                    "keyword": kw.keyword_text,
+                    "action": "pause",
+                    "reason": f"전환 없음 (클릭 {kw.clicks}회)",
+                    "current_bid": kw.bid_amount,
+                    "suggested_bid": 0
+                })
+
+        result["tests"]["optimization_analysis"] = {
+            "success": True,
+            "recommendations": optimization_analysis[:20]
+        }
+
+        await service.disconnect()
+        result["overall_success"] = True
+
+    except Exception as e:
+        result["error"] = str(e)
+        result["overall_success"] = False
+
+    return result
+
+
 # ============ 모델 정의 ============
 
 class AccountConnectRequest(BaseModel):
@@ -251,37 +373,7 @@ async def toggle_auto_optimization(platform_id: str, user_id: int = Query(...)):
 
 # ============ 성과 추적 ============
 
-@router.get("/performance/{platform_id}")
-async def get_platform_performance(
-    platform_id: str,
-    user_id: int = Query(...),
-    days: int = Query(default=30, ge=1, le=90)
-):
-    """플랫폼 성과 히스토리"""
-    history = get_performance_history(user_id, platform_id, days)
-
-    # 트렌드 계산
-    if len(history) >= 2:
-        recent = history[0]
-        previous = history[-1]
-
-        roas_trend = recent.get("roas", 0) - previous.get("roas", 0)
-        cpa_trend = recent.get("cpa", 0) - previous.get("cpa", 0)
-        conversions_trend = recent.get("conversions", 0) - previous.get("conversions", 0)
-    else:
-        roas_trend = cpa_trend = conversions_trend = 0
-
-    return {
-        "platform_id": platform_id,
-        "period_days": days,
-        "history": history,
-        "trends": {
-            "roas_change": roas_trend,
-            "cpa_change": cpa_trend,
-            "conversions_change": conversions_trend,
-        }
-    }
-
+# NOTE: 구체적인 경로가 {platform_id} 보다 먼저 와야 올바르게 매칭됨
 
 @router.get("/performance/all")
 async def get_all_performance(
@@ -644,4 +736,38 @@ async def get_performance_summary(
             }
         },
         "platforms": platform_summaries,
+    }
+
+
+# ============ 플랫폼별 성과 조회 (가장 마지막에 위치해야 {platform_id} 패턴 매칭) ============
+
+@router.get("/performance/{platform_id}")
+async def get_platform_performance(
+    platform_id: str,
+    user_id: int = Query(...),
+    days: int = Query(default=30, ge=1, le=90)
+):
+    """플랫폼 성과 히스토리"""
+    history = get_performance_history(user_id, platform_id, days)
+
+    # 트렌드 계산
+    if len(history) >= 2:
+        recent = history[0]
+        previous = history[-1]
+
+        roas_trend = recent.get("roas", 0) - previous.get("roas", 0)
+        cpa_trend = recent.get("cpa", 0) - previous.get("cpa", 0)
+        conversions_trend = recent.get("conversions", 0) - previous.get("conversions", 0)
+    else:
+        roas_trend = cpa_trend = conversions_trend = 0
+
+    return {
+        "platform_id": platform_id,
+        "period_days": days,
+        "history": history,
+        "trends": {
+            "roas_change": roas_trend,
+            "cpa_change": cpa_trend,
+            "conversions_change": conversions_trend,
+        }
     }

@@ -31,12 +31,16 @@ def get_cipher():
 def get_ad_db_path():
     """DB 경로"""
     data_dir = getattr(settings, 'DATA_DIR', '/data')
+    # 디렉토리가 없으면 생성
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir, exist_ok=True)
     return f"{data_dir}/ad_optimization.db"
 
 
 def get_ad_db():
     """DB 연결"""
-    conn = sqlite3.connect(get_ad_db_path())
+    db_path = get_ad_db_path()
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -801,57 +805,44 @@ def get_keyword_performance_comparison(
     rows = cursor.fetchall()
     conn.close()
 
-    # 성과 데이터 추정 (실제로는 API에서 가져와야 함)
+    # 실제 입찰가 변경 이력만 반환 (더미 성과 데이터 없음)
     result = []
     for row in rows:
         item = dict(row)
 
-        # 입찰가 변화율 기반 성과 추정
-        bid_change_ratio = (item["latest_bid"] - item["first_bid"]) / item["first_bid"] if item["first_bid"] > 0 else 0
-
-        # Before 추정
-        before_roas = 150 + (hash(item["keyword_id"]) % 100)
-        before_cpa = 15000 + (hash(item["keyword_id"]) % 10000)
-        before_conv = 5 + (hash(item["keyword_id"]) % 10)
-
-        # After 추정 (최적화 효과 반영)
-        improvement_factor = 1 + (item["optimization_count"] * 0.05)  # 최적화 횟수당 5% 개선
-        after_roas = before_roas * improvement_factor
-        after_cpa = before_cpa / improvement_factor
-        after_conv = int(before_conv * improvement_factor)
-
+        # 실제 입찰가 데이터만 포함 - 성과 데이터는 API에서 별도 조회 필요
         result.append({
             "keyword_id": item["keyword_id"],
             "keyword_text": item["keyword_text"],
             "platform_id": item["platform_id"],
             "before": {
                 "bid": item["first_bid"],
-                "roas": before_roas,
-                "cpa": before_cpa,
-                "conversions": before_conv,
-                "cost": before_conv * before_cpa,
-                "revenue": before_conv * before_cpa * (before_roas / 100),
-                "impressions": 1000,
-                "clicks": 50,
+                "roas": None,  # 실제 API 조회 필요
+                "cpa": None,
+                "conversions": None,
+                "cost": None,
+                "revenue": None,
+                "impressions": None,
+                "clicks": None,
             },
             "after": {
                 "bid": item["latest_bid"],
-                "roas": after_roas,
-                "cpa": after_cpa,
-                "conversions": after_conv,
-                "cost": after_conv * after_cpa,
-                "revenue": after_conv * after_cpa * (after_roas / 100),
-                "impressions": 1200,
-                "clicks": 60,
+                "roas": None,  # 실제 API 조회 필요
+                "cpa": None,
+                "conversions": None,
+                "cost": None,
+                "revenue": None,
+                "impressions": None,
+                "clicks": None,
             },
             "changes": {
-                "roas_change": ((after_roas - before_roas) / before_roas) * 100,
-                "cpa_change": ((after_cpa - before_cpa) / before_cpa) * 100,
-                "conversions_change": ((after_conv - before_conv) / before_conv) * 100 if before_conv > 0 else 0,
-                "cost_change": (after_conv * after_cpa) - (before_conv * before_cpa),
+                "bid_change": item["latest_bid"] - item["first_bid"],
+                "bid_change_percent": ((item["latest_bid"] - item["first_bid"]) / item["first_bid"] * 100) if item["first_bid"] > 0 else 0,
             },
+            "first_change": item["first_change"],
             "last_optimized": item["last_optimized"],
             "optimization_count": item["optimization_count"],
+            "data_available": False,  # 실제 성과 데이터 미제공 표시
         })
 
     return result
@@ -887,15 +878,22 @@ def get_daily_performance_trends(
     rows = cursor.fetchall()
     conn.close()
 
-    # 데이터가 없으면 추정 데이터 생성
+    # 데이터가 없으면 빈 배열 반환 (더미 데이터 사용 안함)
     if not rows:
-        return generate_estimated_trends(days)
+        return []
 
     return [dict(row) for row in rows]
 
 
 def generate_estimated_trends(days: int = 14) -> List[Dict[str, Any]]:
-    """추정 성과 추이 생성 (데이터가 없을 때)"""
+    """[DEPRECATED] 추정 성과 추이 생성 - 더 이상 사용하지 않음"""
+    # 더미 데이터 생성 함수는 더 이상 사용하지 않음
+    # 실제 데이터가 없으면 빈 배열 반환
+    return []
+
+
+def _deprecated_generate_estimated_trends(days: int = 14) -> List[Dict[str, Any]]:
+    """[DEPRECATED] 이전 버전 호환용 - 더미 데이터 생성"""
     from datetime import datetime, timedelta
 
     trends = []
@@ -928,4 +926,8 @@ def generate_estimated_trends(days: int = 14) -> List[Dict[str, Any]]:
 
 
 # 초기화 시 테이블 생성
-init_ad_optimization_tables()
+try:
+    init_ad_optimization_tables()
+except Exception as e:
+    import logging
+    logging.getLogger(__name__).warning(f"Failed to initialize ad optimization tables: {e}")

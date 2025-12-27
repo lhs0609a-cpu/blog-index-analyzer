@@ -3428,6 +3428,13 @@ export default function ToolsPage() {
                     <h2 className="text-2xl font-bold">블루오션 키워드 발굴</h2>
                     <p className="text-gray-600">경쟁은 낮고 검색량은 높은 숨은 키워드를 찾습니다</p>
                   </div>
+                  <a
+                    href="/blue-ocean"
+                    className="ml-auto px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg text-sm font-semibold hover:shadow-lg transition-all flex items-center gap-2"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    고급 분석 (BOS)
+                  </a>
                 </div>
 
                 <div className="flex gap-4 mb-6">

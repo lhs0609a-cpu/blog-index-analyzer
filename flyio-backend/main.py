@@ -284,6 +284,7 @@ from routers import premium_tools
 from routers import revenue
 from routers import unified_ads
 from routers import ad_dashboard
+from routers import blue_ocean
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
@@ -308,6 +309,7 @@ app.include_router(premium_tools.router, prefix="/api/tools", tags=["프리미�
 app.include_router(revenue.router, prefix="/api/revenue", tags=["수익관리"])
 app.include_router(unified_ads.router)  # prefix already set in router
 app.include_router(ad_dashboard.router)  # prefix already set in router
+app.include_router(blue_ocean.router, prefix="/api/blue-ocean", tags=["블루오션키워드"])
 
 
 if __name__ == "__main__":

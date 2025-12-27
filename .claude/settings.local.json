@@ -237,7 +237,9 @@
       "Bash(\"C:\\\\Users\\\\이아랑\\\\.fly\\\\bin\\\\flyctl.exe\" secrets set TOSS_CLIENT_KEY=\"live_ck_6BYq7GWPVv4LKjjM6ojG8NE5vbo1\" TOSS_SECRET_KEY=\"live_sk_6BYq7GWPVv9RoaKNEm7a3NE5vbo1\" -a naverpay-delivery-tracker)",
       "Bash(start https://vercel.com/fewfs-projects-83cc0821/frontend/deployments)",
       "Bash(start https://vercel.com/fewfs-projects-83cc0821/frontend)",
-      "Bash(start \"https://blog-index-analyzer-feajr8emp-fewfs-projects-83cc0821.vercel.app/keyword-search\")"
+      "Bash(start \"https://blog-index-analyzer-feajr8emp-fewfs-projects-83cc0821.vercel.app/keyword-search\")",
+      "Bash(set PYTHONIOENCODING=utf-8:*)",
+      "Bash(chcp 65001)"
     ],
     "deny": [],
     "ask": []
