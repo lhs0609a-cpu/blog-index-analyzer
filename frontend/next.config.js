@@ -40,3 +40,4 @@ const nextConfig = {
 }
 
 module.exports = nextConfig
+// Trigger deployment 1766927029
