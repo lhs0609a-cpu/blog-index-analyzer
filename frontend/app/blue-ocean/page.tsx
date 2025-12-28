@@ -8,6 +8,7 @@ import {
   BarChart3, FileText, ImagePlus, Loader2, ArrowLeft
 } from 'lucide-react'
 import Link from 'next/link'
+import Tutorial, { blueOceanTutorialSteps } from '@/components/Tutorial'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev'
 
@@ -191,6 +192,7 @@ export default function BlueOceanPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
+                  id="blueocean-input"
                   type="text"
                   value={keyword}
                   onChange={(e) => setKeyword(e.target.value)}
@@ -254,6 +256,7 @@ export default function BlueOceanPage() {
         <AnimatePresence>
           {result && (
             <motion.div
+              id="blueocean-results"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
@@ -518,6 +521,13 @@ export default function BlueOceanPage() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* 게임형 튜토리얼 */}
+      <Tutorial
+        steps={blueOceanTutorialSteps}
+        tutorialKey="blue-ocean"
+        showGameElements={true}
+      />
     </div>
   )
 }

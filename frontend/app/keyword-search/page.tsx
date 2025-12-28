@@ -10,6 +10,7 @@ import { Check, Loader2, X, TrendingUp, TrendingDown, ArrowLeft } from 'lucide-r
 import { useAuthStore } from '@/lib/stores/auth'
 import { incrementUsage, checkUsageLimit } from '@/lib/api/subscription'
 import toast from 'react-hot-toast'
+import Tutorial, { keywordAnalysisTutorialSteps } from '@/components/Tutorial'
 
 interface BlogIndexResult {
   rank: number
@@ -1132,6 +1133,7 @@ function KeywordSearchContent() {
                 검색할 키워드 (최대 10개)
               </label>
               <textarea
+                id="keyword-analysis-input"
                 value={keywordsInput}
                 onChange={(e) => setKeywordsInput(e.target.value)}
                 placeholder="키워드를 쉼표(,)로 구분해서 입력하세요 (띄어쓰기 X)&#10;예시: 강남아토피병원,강남피부과,청담동피부과"
@@ -1165,7 +1167,7 @@ function KeywordSearchContent() {
 
         {/* Multi-Keyword Results - Tab UI */}
         {keywordStatuses.length > 0 && (
-          <Tabs.Root value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs.Root id="keyword-analysis-results" value={activeTab} onValueChange={setActiveTab} className="w-full">
             {/* Tab Navigation */}
             <Tabs.List className="flex flex-wrap gap-2 mb-6 bg-white rounded-lg p-2 shadow-sm border border-gray-200">
               {keywordStatuses.map((status, index) => (
@@ -3096,6 +3098,13 @@ function KeywordSearchContent() {
           </div>
         </div>
       </div>
+
+      {/* 게임형 튜토리얼 */}
+      <Tutorial
+        steps={keywordAnalysisTutorialSteps}
+        tutorialKey="keyword-search"
+        showGameElements={true}
+      />
     </div>
   )
 }
