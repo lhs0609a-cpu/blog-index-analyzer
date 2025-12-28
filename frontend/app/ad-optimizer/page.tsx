@@ -135,153 +135,127 @@ export default function AdOptimizerPage() {
   // 프로 플랜 미만 사용자 접근 제한 - 프리미엄 유도 팝업
   if (isLocked) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center p-4 overflow-hidden relative">
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 overflow-hidden relative">
         {/* 모던 배경 */}
-        <div className="absolute inset-0">
-          {/* 메쉬 그라데이션 */}
-          <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950" />
-
-          {/* 미묘한 그라데이션 오브 */}
-          <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-gradient-to-bl from-violet-600/10 via-transparent to-transparent rounded-full blur-3xl" />
-          <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-gradient-to-tr from-blue-600/10 via-transparent to-transparent rounded-full blur-3xl" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-gradient-to-r from-cyan-500/10 to-violet-500/10 rounded-full blur-3xl" />
-
-          {/* 그리드 패턴 */}
-          <div className="absolute inset-0 opacity-5 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:60px_60px]" />
-        </div>
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-violet-600 opacity-10 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-blue-600 opacity-10 rounded-full blur-3xl" />
 
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.6 }}
           className="relative z-10 max-w-md w-full"
         >
           {/* 프리미엄 카드 */}
-          <div className="relative group">
-            {/* 글로우 효과 - 호버 시 강조 */}
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-violet-500/20 via-blue-500/20 to-cyan-500/20 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
-            <div className="relative bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-white/[0.08] overflow-hidden shadow-2xl shadow-black/50">
-              {/* 헤더 - 미니멀 그라데이션 */}
-              <div className="relative px-8 pt-10 pb-8">
-                {/* 배경 패턴 */}
-                <div className="absolute inset-0 opacity-5">
-                  <div className="absolute inset-0" style={{
-                    backgroundImage: `radial-gradient(circle at 1px 1px, white 1px, transparent 0)`,
-                    backgroundSize: '32px 32px'
-                  }} />
+          <div className="relative bg-slate-900 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
+            {/* 헤더 */}
+            <div className="relative px-8 pt-10 pb-8">
+              {/* 아이콘 */}
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.3, type: 'spring', stiffness: 200 }}
+                className="relative mx-auto w-16 h-16 mb-6"
+              >
+                <div className="w-full h-full bg-gradient-to-br from-violet-500 via-blue-500 to-cyan-500 rounded-2xl flex items-center justify-center shadow-lg">
+                  <Zap className="w-8 h-8 text-white" />
                 </div>
+              </motion.div>
 
-                {/* 아이콘 */}
-                <motion.div
-                  initial={{ scale: 0, rotate: -180 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={{ delay: 0.3, type: 'spring', stiffness: 200 }}
-                  className="relative mx-auto w-16 h-16 mb-6"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-br from-violet-500 to-blue-600 rounded-2xl rotate-6" />
-                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-2xl -rotate-6 opacity-50" />
-                  <div className="relative w-full h-full bg-gradient-to-br from-violet-500 via-blue-500 to-cyan-500 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/30">
-                    <Zap className="w-8 h-8 text-white" />
-                  </div>
-                </motion.div>
+              {/* 타이틀 */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className="text-center"
+              >
+                <h1 className="text-2xl font-bold text-white mb-2 tracking-tight">
+                  AI 광고 자동 최적화
+                </h1>
+                <p className="text-slate-400 text-sm">
+                  잠자는 동안에도 AI가 수익을 극대화합니다
+                </p>
+              </motion.div>
+            </div>
 
-                {/* 타이틀 */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
-                  className="text-center"
-                >
-                  <h1 className="text-2xl font-bold text-white mb-2 tracking-tight">
-                    AI 광고 자동 최적화
-                  </h1>
-                  <p className="text-slate-400 text-sm">
-                    잠자는 동안에도 AI가 수익을 극대화합니다
-                  </p>
-                </motion.div>
+            {/* 핵심 지표 */}
+            <div className="px-6 pb-6">
+              <div className="flex gap-3 mb-8">
+                {[
+                  { value: '1분', label: '자동 조정 주기', color: 'text-blue-400' },
+                  { value: '342%', label: '평균 ROAS', color: 'text-emerald-400' },
+                  { value: '-38%', label: '광고비 절감', color: 'text-amber-400' },
+                ].map((stat, idx) => (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 + idx * 0.1 }}
+                    className="flex-1 bg-slate-800 rounded-xl p-4 text-center"
+                  >
+                    <p className={`text-2xl font-bold ${stat.color}`}>
+                      {stat.value}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">{stat.label}</p>
+                  </motion.div>
+                ))}
               </div>
 
-              {/* 핵심 지표 */}
-              <div className="px-6 pb-6">
-                <div className="flex gap-3 mb-8">
-                  {[
-                    { value: '1분', label: '자동 조정 주기', gradient: 'from-blue-500 to-cyan-500' },
-                    { value: '342%', label: '평균 ROAS', gradient: 'from-emerald-500 to-green-500' },
-                    { value: '-38%', label: '광고비 절감', gradient: 'from-amber-500 to-orange-500' },
-                  ].map((stat, idx) => (
-                    <motion.div
-                      key={idx}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.5 + idx * 0.1 }}
-                      className="flex-1 relative group"
-                    >
-                      <div className={`absolute inset-0 bg-gradient-to-br ${stat.gradient} rounded-2xl opacity-10 group-hover:opacity-20 transition-opacity`} />
-                      <div className="relative p-4 text-center">
-                        <p className={`text-2xl font-bold bg-gradient-to-br ${stat.gradient} bg-clip-text text-transparent`}>
-                          {stat.value}
-                        </p>
-                        <p className="text-[11px] text-slate-500 mt-1 font-medium">{stat.label}</p>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-
-                {/* 기능 리스트 - 클린한 디자인 */}
-                <div className="space-y-2 mb-8">
-                  {[
-                    { icon: Clock, text: '실시간 입찰가 최적화', badge: '24/7' },
-                    { icon: TrendingUp, text: 'ROAS 기반 예산 자동 배분', badge: 'AI' },
-                    { icon: Target, text: '비효율 키워드 자동 중단', badge: '절감' },
-                    { icon: Flame, text: '트렌드 키워드 자동 발굴', badge: '기회' },
-                  ].map((item, idx) => (
-                    <motion.div
-                      key={idx}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.6 + idx * 0.08 }}
-                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors group"
-                    >
-                      <div className="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center group-hover:bg-slate-700 transition-colors">
-                        <item.icon className="w-4 h-4 text-slate-400 group-hover:text-white transition-colors" />
-                      </div>
-                      <span className="flex-1 text-sm text-slate-300">{item.text}</span>
-                      <span className="px-2 py-0.5 bg-slate-800 text-[10px] font-semibold text-slate-400 rounded-md uppercase tracking-wide">
-                        {item.badge}
-                      </span>
-                    </motion.div>
-                  ))}
-                </div>
-
-                {/* 비교 - 모던 카드 */}
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 1 }}
-                  className="grid grid-cols-2 gap-3 mb-8"
-                >
-                  <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-2 h-2 bg-red-500 rounded-full" />
-                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">수동 관리</span>
+              {/* 기능 리스트 */}
+              <div className="space-y-2 mb-8">
+                {[
+                  { icon: Clock, text: '실시간 입찰가 최적화', badge: '24/7' },
+                  { icon: TrendingUp, text: 'ROAS 기반 예산 자동 배분', badge: 'AI' },
+                  { icon: Target, text: '비효율 키워드 자동 중단', badge: '절감' },
+                  { icon: Flame, text: '트렌드 키워드 자동 발굴', badge: '기회' },
+                ].map((item, idx) => (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.6 + idx * 0.08 }}
+                    className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-800 transition-colors"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center">
+                      <item.icon className="w-4 h-4 text-slate-400" />
                     </div>
-                    <ul className="space-y-2 text-xs text-slate-500">
-                      <li className="flex items-center gap-2">
-                        <X className="w-3 h-3" />
-                        <span>매일 3시간+ 모니터링</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <X className="w-3 h-3" />
-                        <span>감에 의존한 조정</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <X className="w-3 h-3" />
-                        <span>기회 손실 발생</span>
-                      </li>
-                    </ul>
+                    <span className="flex-1 text-sm text-slate-300">{item.text}</span>
+                    <span className="px-2 py-0.5 bg-slate-700 text-xs font-semibold text-slate-400 rounded-md uppercase">
+                      {item.badge}
+                    </span>
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* 비교 카드 */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1 }}
+                className="grid grid-cols-2 gap-3 mb-8"
+              >
+                <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-2 h-2 bg-red-500 rounded-full" />
+                    <span className="text-xs font-semibold text-slate-500 uppercase">수동 관리</span>
                   </div>
-                  <div className="bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 rounded-xl p-4 border border-emerald-500/20">
+                  <ul className="space-y-2 text-xs text-slate-500">
+                    <li className="flex items-center gap-2">
+                      <X className="w-3 h-3" />
+                      <span>매일 3시간+ 모니터링</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <X className="w-3 h-3" />
+                      <span>감에 의존한 조정</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <X className="w-3 h-3" />
+                      <span>기회 손실 발생</span>
+                    </li>
+                  </ul>
+                </div>
+                <div className="bg-slate-800 rounded-xl p-4 border border-emerald-800">
                     <div className="flex items-center gap-2 mb-3">
                       <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
                       <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">AI 최적화</span>
