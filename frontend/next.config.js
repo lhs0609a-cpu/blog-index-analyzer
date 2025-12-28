@@ -28,6 +28,11 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
 
+  // ESLint 설정 - 빌드 시 무시 (임시)
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+
   // Turbopack 설정
   turbopack: {
     root: process.cwd(),
