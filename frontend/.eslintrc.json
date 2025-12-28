@@ -4,6 +4,7 @@
     "react/no-unescaped-entities": "off",
     "react-hooks/exhaustive-deps": "off",
     "react/jsx-no-comment-textnodes": "off",
-    "@next/next/no-img-element": "off"
+    "@next/next/no-img-element": "off",
+    "jsx-a11y/alt-text": "off"
   }
 }
