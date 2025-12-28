@@ -1,14 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search, TrendingUp, Target, Sparkles, Crown,
   Gem, Medal, ChevronRight, AlertCircle, Info,
-  BarChart3, Users, FileText, Image, Loader2, ArrowLeft
+  BarChart3, FileText, Image, Loader2, ArrowLeft
 } from 'lucide-react'
 import Link from 'next/link'
-import { useAuth } from '@/lib/auth/AuthContext'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev'
 
@@ -93,7 +92,6 @@ const ratingConfig = {
 }
 
 export default function BlueOceanPage() {
-  const { user } = useAuth()
   const [keyword, setKeyword] = useState('')
   const [myBlogId, setMyBlogId] = useState('')
   const [loading, setLoading] = useState(false)
