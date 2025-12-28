@@ -45,18 +45,21 @@ export default function BlogDetailPage() {
     if (blogId) {
       loadBlogData()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blogId])
 
   useEffect(() => {
     if (tabParam === 'breakdown' && blogId && !breakdownData) {
       loadBreakdownData()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabParam, blogId])
 
   useEffect(() => {
     if (activeTab === 'breakdown' && blogId && !breakdownData && !isLoadingBreakdown) {
       loadBreakdownData()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, blogId])
 
   const loadBlogData = async () => {

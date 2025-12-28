@@ -78,6 +78,7 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
     if (isAuthenticated && user?.id) {
       loadData()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user, blogId])
 
   // 진행 상태 폴링
@@ -107,6 +108,7 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
     return () => {
       if (interval) clearInterval(interval)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskStatus])
 
   const loadData = async () => {

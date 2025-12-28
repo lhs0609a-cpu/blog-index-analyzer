@@ -71,6 +71,7 @@ export default function TodayMissionPage() {
       return
     }
     fetchTodayData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated])
 
   const fetchTodayData = async () => {

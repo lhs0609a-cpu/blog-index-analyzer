@@ -69,6 +69,7 @@ export default function ProgressPage() {
       return
     }
     fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated])
 
   const fetchData = async () => {

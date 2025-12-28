@@ -239,7 +239,8 @@
       "Bash(start https://vercel.com/fewfs-projects-83cc0821/frontend)",
       "Bash(start \"https://blog-index-analyzer-feajr8emp-fewfs-projects-83cc0821.vercel.app/keyword-search\")",
       "Bash(set PYTHONIOENCODING=utf-8:*)",
-      "Bash(chcp 65001)"
+      "Bash(chcp 65001)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []

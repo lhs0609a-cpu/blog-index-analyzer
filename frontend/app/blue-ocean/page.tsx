@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search, TrendingUp, Target, Sparkles, Crown,
   Gem, Medal, ChevronRight, AlertCircle, Info,
-  BarChart3, FileText, Image, Loader2, ArrowLeft
+  BarChart3, FileText, Image as ImageIcon, Loader2, ArrowLeft
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -480,7 +480,7 @@ export default function BlueOceanPage() {
                           <span className="font-bold text-gray-800">{selectedKeyword.recommended_content_length.toLocaleString()}자+</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Image className="w-4 h-4 text-green-500" />
+                          <ImageIcon className="w-4 h-4 text-green-500" />
                           <span className="text-sm text-gray-600">사진:</span>
                           <span className="font-bold text-gray-800">{selectedKeyword.recommended_image_count}장+</span>
                         </div>
