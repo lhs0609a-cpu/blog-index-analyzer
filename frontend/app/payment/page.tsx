@@ -37,6 +37,7 @@ function PaymentContent() {
     if (success === 'true' && authKey && customerKey && user?.id) {
       handleBillingSuccess()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [success, authKey, customerKey, user])
 
   const handleBillingSuccess = async () => {

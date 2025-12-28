@@ -269,6 +269,7 @@ function KeywordSearchContent() {
       }, 100)
       return () => clearTimeout(timer)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
   // 검색 로직 (분리된 함수)
@@ -345,6 +346,7 @@ function KeywordSearchContent() {
         setProgressMessage('')
       }, 1000)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user])
 
   // 학습 엔진 상태 조회

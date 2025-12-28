@@ -673,12 +673,12 @@ export default function LearningDashboard() {
               </h2>
 
               <div className="bg-gray-900 rounded-xl p-4 font-mono text-sm text-green-400 overflow-x-auto">
-                <div className="mb-2 text-gray-500">// 최종 점수 계산</div>
+                <div className="mb-2 text-gray-500">{/* 최종 점수 계산 */}</div>
                 <div className="text-white">
                   final_score = (C-Rank × <span className="text-purple-400">{(weights?.c_rank?.weight || 50) / 100}</span>) +
                   (D.I.A × <span className="text-pink-400">{(weights?.dia?.weight || 50) / 100}</span>) + bonus
                 </div>
-                <div className="mt-4 text-gray-500">// 보너스 점수 (최대 15점)</div>
+                <div className="mt-4 text-gray-500">{/* 보너스 점수 (최대 15점) */}</div>
                 <div className="text-white text-xs">
                   bonus = post_bonus + neighbor_bonus + age_bonus + activity_bonus + visitor_bonus
                 </div>

@@ -39,6 +39,7 @@ export default function SubscriptionPage() {
       return
     }
     loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user])
 
   const loadData = async () => {

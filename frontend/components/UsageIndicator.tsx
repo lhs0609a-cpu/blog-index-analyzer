@@ -23,6 +23,7 @@ export default function UsageIndicator({ compact = false, showUpgrade = true }: 
     if (isAuthenticated && user?.id) {
       loadUsage()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user])
 
   const loadUsage = async () => {

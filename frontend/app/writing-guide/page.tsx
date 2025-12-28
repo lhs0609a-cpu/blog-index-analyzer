@@ -8,7 +8,7 @@ import {
   BookOpen,
   BarChart2,
   FileText,
-  Image,
+  Image as ImageIcon,
   Video,
   Map,
   Link2,
@@ -94,6 +94,7 @@ export default function WritingGuidePage() {
   useEffect(() => {
     fetchGuide()
     fetchStats()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategory])
 
   const fetchGuide = async () => {
@@ -408,7 +409,7 @@ export default function WritingGuidePage() {
               {guide.rules.media && (
                 <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-purple-100">
                   <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <Image className="w-5 h-5 text-orange-600" />
+                    <ImageIcon className="w-5 h-5 text-orange-600" />
                     이미지/동영상 규칙
                   </h3>
 
@@ -416,7 +417,7 @@ export default function WritingGuidePage() {
                     {guide.rules.media.images && (
                       <div className="bg-orange-50 rounded-lg p-4">
                         <div className="flex items-center gap-2 mb-2">
-                          <Image className="w-4 h-4 text-orange-600" />
+                          <ImageIcon className="w-4 h-4 text-orange-600" />
                           <span className="text-sm text-gray-600">이미지</span>
                         </div>
                         <div className="text-2xl font-bold text-orange-600">
