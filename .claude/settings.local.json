@@ -240,7 +240,15 @@
       "Bash(start \"https://blog-index-analyzer-feajr8emp-fewfs-projects-83cc0821.vercel.app/keyword-search\")",
       "Bash(set PYTHONIOENCODING=utf-8:*)",
       "Bash(chcp 65001)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(start \"https://vercel.com/fewfs-projects-83cc0821/blog-index-analyzer/settings/git\")",
+      "Bash(start \"https://github.com/settings/installations\")",
+      "Bash(start:*)",
+      "Bash(head:*)",
+      "Bash(git fetch:*)",
+      "Bash(\"C:\\\\Users\\\\이아랑\\\\.fly\\\\bin\\\\flyctl.exe\" logs -a naverpay-delivery-tracker --count 30)",
+      "Bash(set:*)",
+      "Bash(npm install:*)"
     ],
     "deny": [],
     "ask": []
