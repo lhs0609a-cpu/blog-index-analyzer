@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -45,12 +45,26 @@ export default function RankTrackerPage() {
   const [runningTask, setRunningTask] = useState<TaskStatus | null>(null)
   const [checkingBlogId, setCheckingBlogId] = useState<string | null>(null)
 
+  const loadBlogs = useCallback(async () => {
+    if (!user?.id) return
+
+    try {
+      setIsLoading(true)
+      const data = await getTrackedBlogs(user.id)
+      setBlogs(data.blogs)
+    } catch (error) {
+      console.error('Failed to load blogs:', error)
+      toast.error('블로그 목록을 불러오는데 실패했습니다.')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [user?.id])
+
   useEffect(() => {
     if (isAuthenticated && user?.id) {
       loadBlogs()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, user])
+  }, [isAuthenticated, user?.id, loadBlogs])
 
   // 진행 상태 폴링
   useEffect(() => {
@@ -79,23 +93,7 @@ export default function RankTrackerPage() {
     return () => {
       if (interval) clearInterval(interval)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runningTask])
-
-  const loadBlogs = async () => {
-    if (!user?.id) return
-
-    try {
-      setIsLoading(true)
-      const data = await getTrackedBlogs(user.id)
-      setBlogs(data.blogs)
-    } catch (error) {
-      console.error('Failed to load blogs:', error)
-      toast.error('블로그 목록을 불러오는데 실패했습니다.')
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  }, [runningTask, loadBlogs])
 
   const handleAddBlog = async () => {
     if (!user?.id || !newBlogId.trim()) return

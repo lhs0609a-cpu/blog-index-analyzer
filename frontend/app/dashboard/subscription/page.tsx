@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 import {
   CreditCard, Calendar, Zap, Crown, AlertCircle,
   ArrowLeft, Loader2, CheckCircle, XCircle, Receipt,
-  TrendingUp, Search, BarChart3, Clock
+  TrendingUp, Search, BarChart3, Clock, Check, X
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -23,6 +23,73 @@ const planColors: Record<string, string> = {
   business: 'from-orange-500 to-red-500'
 }
 
+// 플랜별 기능 정의
+const planFeatures = [
+  {
+    name: '키워드 검색',
+    description: '인기 키워드 검색 및 분석',
+    free: '5회/일',
+    basic: '30회/일',
+    pro: '무제한',
+  },
+  {
+    name: '블로그 분석',
+    description: '블로그 순위 예측 분석',
+    free: '3회/일',
+    basic: '20회/일',
+    pro: '무제한',
+  },
+  {
+    name: '순위 추적',
+    description: '키워드별 순위 변동 추적',
+    free: false,
+    basic: '5개',
+    pro: '무제한',
+  },
+  {
+    name: 'AI 글쓰기 도구',
+    description: '제목/소제목 생성, 글 최적화',
+    free: '별도 구독',
+    basic: '별도 구독',
+    pro: '별도 구독',
+  },
+  {
+    name: '30일 챌린지',
+    description: '블로그 성장 미션 참여',
+    free: true,
+    basic: true,
+    pro: true,
+  },
+  {
+    name: '키워드 저장',
+    description: '관심 키워드 저장 및 관리',
+    free: false,
+    basic: '30개',
+    pro: '무제한',
+  },
+  {
+    name: 'AI 학습 엔진',
+    description: '개인화된 순위 예측',
+    free: false,
+    basic: true,
+    pro: true,
+  },
+  {
+    name: '광고 최적화',
+    description: '네이버 광고비 최적화 분석',
+    free: false,
+    basic: false,
+    pro: true,
+  },
+  {
+    name: '우선 고객지원',
+    description: '빠른 문의 응대',
+    free: false,
+    basic: false,
+    pro: true,
+  },
+]
+
 export default function SubscriptionPage() {
   const router = useRouter()
   const { isAuthenticated, user } = useAuthStore()
@@ -35,7 +102,11 @@ export default function SubscriptionPage() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      router.push('/login')
+      toast('로그인이 필요한 기능입니다', {
+        icon: '🔐',
+        duration: 3000,
+      })
+      router.push('/login?redirect=/dashboard/subscription')
       return
     }
     loadData()
@@ -98,6 +169,24 @@ export default function SubscriptionPage() {
     if (percentage >= 90) return 'bg-red-500'
     if (percentage >= 70) return 'bg-yellow-500'
     return 'bg-green-500'
+  }
+
+  const renderFeatureValue = (value: boolean | string, isCurrentPlan: boolean) => {
+    if (value === false) {
+      return <X className="w-5 h-5 text-gray-300 mx-auto" />
+    }
+    if (value === true) {
+      return (
+        <div className={`inline-flex items-center justify-center w-6 h-6 rounded-full ${isCurrentPlan ? 'bg-purple-500' : 'bg-green-500'}`}>
+          <Check className="w-4 h-4 text-white" />
+        </div>
+      )
+    }
+    return (
+      <span className={`text-sm font-medium ${isCurrentPlan ? 'text-purple-700' : 'text-gray-700'}`}>
+        {value}
+      </span>
+    )
   }
 
   if (isLoading) {
@@ -309,6 +398,80 @@ export default function SubscriptionPage() {
               <Link href="/pricing">
                 <button className="px-4 py-2 bg-purple-600 text-white rounded-lg font-semibold text-sm hover:bg-purple-700">
                   업그레이드
+                </button>
+              </Link>
+            </div>
+          )}
+        </motion.div>
+
+        {/* Plan Features Comparison */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="glass rounded-3xl p-8 mb-6"
+        >
+          <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+            <Zap className="w-6 h-6 text-purple-600" />
+            플랜별 기능 비교
+          </h3>
+
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">기능</th>
+                  <th className="text-center py-3 px-4">
+                    <div className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
+                      subscription?.plan_type === 'free' ? 'bg-gray-200 text-gray-800' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      Free
+                    </div>
+                  </th>
+                  <th className="text-center py-3 px-4">
+                    <div className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
+                      subscription?.plan_type === 'basic' ? 'bg-blue-200 text-blue-800' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      Basic
+                    </div>
+                  </th>
+                  <th className="text-center py-3 px-4">
+                    <div className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
+                      subscription?.plan_type === 'pro' ? 'bg-purple-200 text-purple-800' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      Pro
+                    </div>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {planFeatures.map((feature, index) => (
+                  <tr key={feature.name} className={index % 2 === 0 ? 'bg-gray-50' : ''}>
+                    <td className="py-3 px-4">
+                      <div className="font-medium text-gray-900">{feature.name}</div>
+                      <div className="text-xs text-gray-500">{feature.description}</div>
+                    </td>
+                    <td className="text-center py-3 px-4">
+                      {renderFeatureValue(feature.free, subscription?.plan_type === 'free')}
+                    </td>
+                    <td className="text-center py-3 px-4">
+                      {renderFeatureValue(feature.basic, subscription?.plan_type === 'basic')}
+                    </td>
+                    <td className="text-center py-3 px-4">
+                      {renderFeatureValue(feature.pro, subscription?.plan_type === 'pro')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Upgrade CTA */}
+          {subscription?.plan_type !== 'pro' && (
+            <div className="mt-6 text-center">
+              <Link href="/pricing">
+                <button className="px-8 py-3 rounded-xl instagram-gradient text-white font-semibold">
+                  더 많은 기능 사용하기
                 </button>
               </Link>
             </div>

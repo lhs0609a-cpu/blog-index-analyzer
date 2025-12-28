@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft,
@@ -41,28 +41,7 @@ export default function BlogDetailPage() {
   const [isReanalyzing, setIsReanalyzing] = useState(false)
   const [isLoadingBreakdown, setIsLoadingBreakdown] = useState(false)
 
-  useEffect(() => {
-    if (blogId) {
-      loadBlogData()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blogId])
-
-  useEffect(() => {
-    if (tabParam === 'breakdown' && blogId && !breakdownData) {
-      loadBreakdownData()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabParam, blogId])
-
-  useEffect(() => {
-    if (activeTab === 'breakdown' && blogId && !breakdownData && !isLoadingBreakdown) {
-      loadBreakdownData()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, blogId])
-
-  const loadBlogData = async () => {
+  const loadBlogData = useCallback(async () => {
     setIsLoading(true)
     try {
       const data = await getBlogDetails(blogId)
@@ -73,9 +52,9 @@ export default function BlogDetailPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [blogId])
 
-  const loadBreakdownData = async () => {
+  const loadBreakdownData = useCallback(async () => {
     setIsLoadingBreakdown(true)
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/blogs/${blogId}/score-breakdown`)
@@ -90,7 +69,25 @@ export default function BlogDetailPage() {
     } finally {
       setIsLoadingBreakdown(false)
     }
-  }
+  }, [blogId])
+
+  useEffect(() => {
+    if (blogId) {
+      loadBlogData()
+    }
+  }, [blogId, loadBlogData])
+
+  useEffect(() => {
+    if (tabParam === 'breakdown' && blogId && !breakdownData) {
+      loadBreakdownData()
+    }
+  }, [tabParam, blogId, breakdownData, loadBreakdownData])
+
+  useEffect(() => {
+    if (activeTab === 'breakdown' && blogId && !breakdownData && !isLoadingBreakdown) {
+      loadBreakdownData()
+    }
+  }, [activeTab, blogId, breakdownData, isLoadingBreakdown, loadBreakdownData])
 
   const handleReanalyze = async () => {
     setIsReanalyzing(true)

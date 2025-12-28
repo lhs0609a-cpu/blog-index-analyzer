@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
@@ -47,12 +47,7 @@ export default function ChallengePage() {
   const [starting, setStarting] = useState(false)
   const [expandedWeek, setExpandedWeek] = useState<number | null>(null)
 
-  useEffect(() => {
-    fetchData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated])
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true)
     try {
       // 개요 조회 (로그인 불필요)
@@ -78,12 +73,21 @@ export default function ChallengePage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [isAuthenticated])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
 
   const handleStartChallenge = async () => {
     if (!isAuthenticated) {
-      toast.error('로그인이 필요합니다')
-      router.push('/login?redirect=/challenge')
+      toast('로그인이 필요한 기능입니다', {
+        icon: '🔐',
+        duration: 3000,
+      })
+      setTimeout(() => {
+        router.push('/login?redirect=/challenge')
+      }, 1000)
       return
     }
 
@@ -98,6 +102,12 @@ export default function ChallengePage() {
         },
         body: JSON.stringify({ challenge_type: '30day' })
       })
+
+      if (res.status === 401) {
+        toast.error('로그인이 만료되었습니다. 다시 로그인해주세요.')
+        router.push('/login?redirect=/challenge')
+        return
+      }
 
       const data = await res.json()
 
@@ -287,6 +297,12 @@ export default function ChallengePage() {
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                   시작하는 중...
                 </>
+              ) : !isAuthenticated ? (
+                <>
+                  <Lock className="w-6 h-6" />
+                  로그인 후 시작하기
+                  <ArrowRight className="w-5 h-5" />
+                </>
               ) : (
                 <>
                   <Rocket className="w-6 h-6" />
@@ -297,8 +313,8 @@ export default function ChallengePage() {
             </motion.button>
 
             {!isAuthenticated && (
-              <p className="text-sm text-gray-500 mt-4">
-                * 로그인 후 참여할 수 있습니다
+              <p className="text-sm text-purple-600 mt-4 font-medium">
+                🔐 무료 회원 가입 후 참여할 수 있습니다
               </p>
             )}
           </motion.div>

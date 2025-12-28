@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
+import { useState, useEffect, useCallback, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
@@ -74,12 +74,35 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
   // 탭 상태
   const [activeTab, setActiveTab] = useState<'results' | 'history'>('results')
 
+  const loadData = useCallback(async () => {
+    if (!user?.id) return
+
+    try {
+      setIsLoading(true)
+
+      const [resultsData, historyData] = await Promise.all([
+        getRankResults(user.id, blogId),
+        getRankHistory(user.id, blogId, 30)
+      ])
+
+      setBlogName(resultsData.blog.blog_name)
+      setResults(resultsData.results)
+      setStatistics(resultsData.statistics)
+      setLastCheckedAt(resultsData.last_checked_at)
+      setHistory(historyData.history)
+    } catch (error) {
+      console.error('Failed to load data:', error)
+      toast.error('데이터를 불러오는데 실패했습니다.')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [user?.id, blogId])
+
   useEffect(() => {
     if (isAuthenticated && user?.id) {
       loadData()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, user, blogId])
+  }, [isAuthenticated, user?.id, loadData])
 
   // 진행 상태 폴링
   useEffect(() => {
@@ -108,32 +131,7 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
     return () => {
       if (interval) clearInterval(interval)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskStatus])
-
-  const loadData = async () => {
-    if (!user?.id) return
-
-    try {
-      setIsLoading(true)
-
-      const [resultsData, historyData] = await Promise.all([
-        getRankResults(user.id, blogId),
-        getRankHistory(user.id, blogId, 30)
-      ])
-
-      setBlogName(resultsData.blog.blog_name)
-      setResults(resultsData.results)
-      setStatistics(resultsData.statistics)
-      setLastCheckedAt(resultsData.last_checked_at)
-      setHistory(historyData.history)
-    } catch (error) {
-      console.error('Failed to load data:', error)
-      toast.error('데이터를 불러오는데 실패했습니다.')
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  }, [taskStatus, loadData])
 
   const handleStartCheck = async () => {
     if (!user?.id) return

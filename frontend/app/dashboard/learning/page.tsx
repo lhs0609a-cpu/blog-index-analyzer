@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { TrendingUp, Zap, Target, Activity, Award, ArrowUp, ArrowDown, ArrowLeft, AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
 import { getApiUrl } from '@/lib/api/apiConfig'
+import { useAuthStore } from '@/lib/stores/auth'
+import toast from 'react-hot-toast'
 
 interface LearningStats {
   total_samples: number
@@ -92,6 +94,7 @@ interface DeviationAnalysis {
 
 export default function LearningEnginePage() {
   const router = useRouter()
+  const { isAuthenticated } = useAuthStore()
   const [stats, setStats] = useState<LearningStats>({
     total_samples: 0,
     current_accuracy: 0,
@@ -197,6 +200,15 @@ export default function LearningEnginePage() {
   }
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      toast('로그인이 필요한 기능입니다', {
+        icon: '🔐',
+        duration: 3000,
+      })
+      router.push('/login?redirect=/dashboard/learning')
+      return
+    }
+
     fetchLearningStatus()
     fetchTrainingHistory()
     fetchDeviationAnalysis()
@@ -208,7 +220,7 @@ export default function LearningEnginePage() {
     }, 30000)
 
     return () => clearInterval(interval)
-  }, [])
+  }, [isAuthenticated, router])
 
   const getTrendIcon = (trend: string) => {
     if (trend === 'up') return <ArrowUp className="w-4 h-4 text-green-500" />

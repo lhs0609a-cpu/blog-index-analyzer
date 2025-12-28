@@ -2,6 +2,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/lib/stores/auth';
+import toast from 'react-hot-toast';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev';
 
@@ -94,6 +97,8 @@ interface KeywordLog {
 }
 
 export default function BatchLearningPage() {
+  const router = useRouter();
+  const { isAuthenticated } = useAuthStore();
   const [status, setStatus] = useState<LearningStatus | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -242,6 +247,15 @@ export default function BatchLearningPage() {
   };
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      toast('로그인이 필요한 기능입니다', {
+        icon: '🔐',
+        duration: 3000,
+      });
+      router.push('/login?redirect=/dashboard/batch-learning');
+      return;
+    }
+
     fetchStatus();
     fetchCategories();
     fetchLogs();
@@ -255,7 +269,7 @@ export default function BatchLearningPage() {
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [fetchStatus, fetchCategories, fetchLogs, fetchAutoLearningStatus]);
+  }, [isAuthenticated, router, fetchStatus, fetchCategories, fetchLogs, fetchAutoLearningStatus]);
 
   useEffect(() => {
     fetchPreview();

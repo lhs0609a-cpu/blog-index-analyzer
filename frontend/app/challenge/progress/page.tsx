@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
@@ -63,16 +63,7 @@ export default function ProgressPage() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'calendar' | 'badges'>('calendar')
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.push('/login?redirect=/challenge/progress')
-      return
-    }
-    fetchData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated])
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true)
     try {
       const token = localStorage.getItem('auth_token')
@@ -101,7 +92,19 @@ export default function ProgressPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      toast('로그인이 필요한 기능입니다', {
+        icon: '🔐',
+        duration: 3000,
+      })
+      router.push('/login?redirect=/challenge/progress')
+      return
+    }
+    fetchData()
+  }, [isAuthenticated, router, fetchData])
 
   if (loading) {
     return (

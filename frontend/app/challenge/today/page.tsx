@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -65,16 +65,7 @@ export default function TodayMissionPage() {
   const [showLearnContent, setShowLearnContent] = useState(false)
   const [selectedMission, setSelectedMission] = useState<Mission | null>(null)
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.push('/login?redirect=/challenge/today')
-      return
-    }
-    fetchTodayData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated])
-
-  const fetchTodayData = async () => {
+  const fetchTodayData = useCallback(async () => {
     setLoading(true)
     try {
       const token = localStorage.getItem('auth_token')
@@ -105,7 +96,19 @@ export default function TodayMissionPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [router])
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      toast('로그인이 필요한 기능입니다', {
+        icon: '🔐',
+        duration: 3000,
+      })
+      router.push('/login?redirect=/challenge/today')
+      return
+    }
+    fetchTodayData()
+  }, [isAuthenticated, router, fetchTodayData])
 
   const handleCompleteMission = async (mission: Mission) => {
     if (mission.completed) return
