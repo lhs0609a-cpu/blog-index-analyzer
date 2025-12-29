@@ -1,6 +1,6 @@
 {
   "name": "blank-frontend",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "블랭크 - AI 블로그 분석 플랫폼 프론트엔드",
   "private": true,
   "scripts": {
