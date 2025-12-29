@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { TrendingUp, TrendingDown, Heart, MessageCircle, Eye, Sparkles, Plus, Search, Brain, ArrowLeft, Target, RefreshCw, Trash2 } from 'lucide-react'
+import { TrendingUp, TrendingDown, Heart, MessageCircle, Eye, Sparkles, Plus, Search, Brain, ArrowLeft, Target, RefreshCw, Trash2, Zap, BarChart3, Wallet, Globe } from 'lucide-react'
 import Link from 'next/link'
 import { getUserBlogs, deleteBlogFromList } from '@/lib/api/blog'
 import { refreshBlogAnalysis } from '@/lib/api/userBlogs'
@@ -336,6 +336,83 @@ export default function Dashboard() {
               </div>
               <p className="text-sm text-gray-500">
                 학습이 진행될수록 순위 예측 정확도가 향상됩니다
+              </p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* 통합광고 최적화 섹션 */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="glass rounded-3xl p-8 mb-8 bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 border border-indigo-100"
+        >
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
+                <Zap className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">통합 광고 최적화</h2>
+                <p className="text-sm text-gray-600">모든 광고 플랫폼을 AI가 자동으로 최적화합니다</p>
+              </div>
+            </div>
+            <Link
+              href="/ad-optimizer/unified"
+              className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300"
+            >
+              <Zap className="w-5 h-5" />
+              시작하기
+            </Link>
+          </div>
+
+          <div className="grid md:grid-cols-4 gap-4">
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-white/50 hover:shadow-md transition-all">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center">
+                  <Globe className="w-4 h-4 text-white" />
+                </div>
+                <span className="font-semibold text-gray-700">멀티 플랫폼</span>
+              </div>
+              <p className="text-sm text-gray-500">
+                네이버, 구글, 메타, 카카오 등 모든 광고를 한 곳에서
+              </p>
+            </div>
+
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-white/50 hover:shadow-md transition-all">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center">
+                  <Brain className="w-4 h-4 text-white" />
+                </div>
+                <span className="font-semibold text-gray-700">AI 자동 최적화</span>
+              </div>
+              <p className="text-sm text-gray-500">
+                입찰가, 예산, 타겟팅을 AI가 실시간 조정
+              </p>
+            </div>
+
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-white/50 hover:shadow-md transition-all">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center">
+                  <Wallet className="w-4 h-4 text-white" />
+                </div>
+                <span className="font-semibold text-gray-700">예산 최적화</span>
+              </div>
+              <p className="text-sm text-gray-500">
+                성과 기반 자동 예산 배분으로 ROAS 극대화
+              </p>
+            </div>
+
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-white/50 hover:shadow-md transition-all">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center">
+                  <BarChart3 className="w-4 h-4 text-white" />
+                </div>
+                <span className="font-semibold text-gray-700">통합 리포트</span>
+              </div>
+              <p className="text-sm text-gray-500">
+                모든 플랫폼 성과를 한눈에 비교 분석
               </p>
             </div>
           </div>
