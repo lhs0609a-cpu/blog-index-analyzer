@@ -458,7 +458,15 @@ export default function BatchLearningPage() {
                     <span className="text-gray-500">마지막 실행</span>
                     <p className="font-medium text-gray-800">
                       {autoLearningStatus.state.last_run
-                        ? new Date(autoLearningStatus.state.last_run).toLocaleTimeString('ko-KR')
+                        ? new Date(autoLearningStatus.state.last_run).toLocaleString('ko-KR', {
+                            timeZone: 'Asia/Seoul',
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit'
+                          })
                         : '-'}
                     </p>
                   </div>
@@ -466,7 +474,15 @@ export default function BatchLearningPage() {
                     <span className="text-gray-500">다음 실행</span>
                     <p className="font-medium text-gray-800">
                       {autoLearningStatus.state.next_run
-                        ? new Date(autoLearningStatus.state.next_run).toLocaleTimeString('ko-KR')
+                        ? new Date(autoLearningStatus.state.next_run).toLocaleString('ko-KR', {
+                            timeZone: 'Asia/Seoul',
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit'
+                          })
                         : '-'}
                     </p>
                   </div>
