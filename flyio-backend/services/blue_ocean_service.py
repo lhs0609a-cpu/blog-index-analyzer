@@ -10,17 +10,26 @@ Where:
 - 검색량 점수: log10(검색량) / log10(1,000,000) normalized
 - 블로그탭 비율: 블로그 노출 비중 (0~1)
 - 경쟁 점수: 상위10 평균점수 / 100 + 인플루언서 비율 × 0.5
+
+2024-12 피드백 반영:
+- 전국 키워드 7위 이하 예측 → 실제 10위권 밖 문제 해결
+- 안전 마진 시스템 도입
+- 지역/전국 키워드 차별화
 """
 import math
 import asyncio
 import logging
 from typing import List, Dict, Any, Optional, Tuple
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 import httpx
 
 from services.keyword_analysis_service import keyword_analysis_service
+from services.safe_keyword_selector import (
+    safe_keyword_selector, SafetyAnalysis, SafetyGrade,
+    RecommendationType, KeywordScope
+)
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -60,6 +69,16 @@ class BlueOceanKeyword:
     recommended_content_length: int  # 권장 글자수
     recommended_image_count: int     # 권장 사진수
     tips: List[str]                 # 공략 팁
+
+    # 2024-12 추가: 안전 분석 결과
+    keyword_scope: str = "전국"             # 키워드 범위 (지역/광역/전국)
+    raw_predicted_rank: int = 10            # 원본 예측 순위
+    safety_margin: int = 0                  # 적용된 안전 마진
+    adjusted_rank: int = 10                 # 보정된 순위
+    safety_score: float = 0.0               # 안전 지수 (0-100)
+    safety_grade: str = "보통"              # 안전 등급
+    recommendation_type: str = "조건부추천"  # 추천 유형
+    warnings: List[str] = field(default_factory=list)  # 경고 메시지
 
 
 @dataclass
@@ -354,7 +373,33 @@ class BlueOceanService:
                         avg_content_length = int(sum(content_lengths) / len(content_lengths)) if content_lengths else 2500
                         avg_image_count = int(sum(image_counts) / len(image_counts)) if image_counts else 20
 
-                        # 팁 생성
+                        # 2024-12: 안전 분석 추가
+                        safety_analysis = None
+                        if my_blog_score:
+                            safety_analysis = safe_keyword_selector.analyze_keyword_safety(
+                                keyword=kw_data.keyword,
+                                my_score=my_blog_score,
+                                top10_scores=scores,
+                                search_volume=kw_data.monthly_total_search,
+                                influencer_count=influencer_count
+                            )
+
+                            # 안전 분석 기반으로 진입 가능성 재계산
+                            # 피드백 반영: 7위 이하는 진입 어려움으로 표시
+                            if safety_analysis.adjusted_rank <= 3:
+                                entry_chance = EntryChance.HIGH
+                                entry_percentage = min(90, entry_percentage + 10)
+                            elif safety_analysis.adjusted_rank <= 6:
+                                entry_chance = EntryChance.MEDIUM
+                                entry_percentage = min(70, entry_percentage)
+                            elif safety_analysis.adjusted_rank <= 8:
+                                entry_chance = EntryChance.LOW
+                                entry_percentage = min(40, entry_percentage - 20)
+                            else:
+                                entry_chance = EntryChance.VERY_LOW
+                                entry_percentage = min(15, entry_percentage - 40)
+
+                        # 팁 생성 (안전 분석 결과 포함)
                         tips = self.generate_tips(
                             keyword=kw_data.keyword,
                             bos_score=bos_score,
@@ -364,6 +409,12 @@ class BlueOceanService:
                             avg_content_length=avg_content_length,
                             avg_image_count=avg_image_count
                         )
+
+                        # 안전 분석 팁 추가
+                        if safety_analysis:
+                            tips = safety_analysis.tips + tips
+                            if safety_analysis.warnings:
+                                tips = safety_analysis.warnings + tips
 
                         return BlueOceanKeyword(
                             keyword=kw_data.keyword,
@@ -379,7 +430,16 @@ class BlueOceanService:
                             my_score_gap=round(my_blog_score - top10_min, 1) if my_blog_score else None,
                             recommended_content_length=avg_content_length,
                             recommended_image_count=avg_image_count,
-                            tips=tips
+                            tips=tips,
+                            # 안전 분석 결과
+                            keyword_scope=safety_analysis.scope.value if safety_analysis else "전국",
+                            raw_predicted_rank=safety_analysis.raw_predicted_rank if safety_analysis else 10,
+                            safety_margin=safety_analysis.safety_margin if safety_analysis else 0,
+                            adjusted_rank=safety_analysis.adjusted_rank if safety_analysis else 10,
+                            safety_score=safety_analysis.safety_score if safety_analysis else 0.0,
+                            safety_grade=safety_analysis.safety_grade.value if safety_analysis else "보통",
+                            recommendation_type=safety_analysis.recommendation.value if safety_analysis else "조건부추천",
+                            warnings=safety_analysis.warnings if safety_analysis else []
                         )
 
                     except Exception as e:
