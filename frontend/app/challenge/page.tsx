@@ -54,7 +54,10 @@ export default function ChallengePage() {
       const overviewRes = await fetch(`${API_BASE}/api/challenge/overview`)
       if (overviewRes.ok) {
         const data = await overviewRes.json()
-        setOverview(data)
+        // 데이터 유효성 검사
+        if (data.success && Array.isArray(data.weeks) && Array.isArray(data.levels)) {
+          setOverview(data)
+        }
       }
 
       // 상태 조회 (로그인 필요)
@@ -65,7 +68,12 @@ export default function ChallengePage() {
         })
         if (statusRes.ok) {
           const data = await statusRes.json()
-          setStatus(data)
+          if (data.success) {
+            setStatus(data)
+          }
+        } else if (statusRes.status === 401) {
+          // 토큰 만료 등으로 인증 실패 시 - 로그인 페이지로 리다이렉트하지 않고 무시
+          console.log('Challenge status: Authentication failed')
         }
       }
     } catch (error) {

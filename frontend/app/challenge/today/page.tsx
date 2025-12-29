@@ -73,12 +73,28 @@ export default function TodayMissionPage() {
 
       // 오늘의 미션 조회
       const todayRes = await fetch(`${API_BASE}/api/challenge/today`, { headers })
+      // API 응답 상태 체크
+      if (!todayRes.ok) {
+        if (todayRes.status === 401) {
+          toast.error('로그인이 필요합니다')
+          router.push('/login?redirect=/challenge/today')
+        }
+        return
+      }
+
       const todayJson = await todayRes.json()
 
       if (!todayJson.success) {
         if (todayJson.redirect === 'start') {
           router.push('/challenge')
         }
+        return
+      }
+
+      // missions가 배열인지 확인
+      if (!todayJson.missions || !Array.isArray(todayJson.missions)) {
+        console.error('Invalid missions data:', todayJson)
+        toast.error('미션 데이터를 불러오는데 실패했습니다')
         return
       }
 
