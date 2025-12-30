@@ -244,7 +244,7 @@ export default function Home() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.3 }}
-              className="grid grid-cols-2 md:grid-cols-5 gap-3 max-w-5xl mx-auto"
+              className="grid grid-cols-2 md:grid-cols-6 gap-3 max-w-6xl mx-auto"
             >
               <Link
                 href="/analyze"
@@ -263,15 +263,30 @@ export default function Home() {
                 href="/ad-optimizer"
                 className="group relative p-4 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 hover:shadow-xl hover:shadow-green-500/30 transition-all duration-300 hover:-translate-y-1"
               >
-                <div className="absolute top-2 right-2">
-                  <span className="px-1.5 py-0.5 text-[10px] font-bold bg-yellow-400 text-yellow-900 rounded-full">NEW</span>
-                </div>
                 <div className="flex flex-col items-center text-center gap-2">
                   <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                     <Target className="w-6 h-6 text-white" />
                   </div>
                   <span className="font-bold text-white text-sm">광고 최적화</span>
                   <span className="text-xs text-white/80">네이버 광고</span>
+                </div>
+              </Link>
+
+              <Link
+                href="/ad-optimizer/unified"
+                className="group relative p-4 rounded-2xl bg-white/70 backdrop-blur-sm border border-purple-200 hover:border-purple-400 hover:shadow-xl hover:shadow-purple-500/10 transition-all duration-300 hover:-translate-y-1"
+              >
+                <div className="absolute top-2 left-2">
+                  <span className="px-1.5 py-0.5 text-[10px] font-bold bg-purple-500 text-white rounded-full">PRO</span>
+                </div>
+                <div className="absolute top-2 right-2">
+                  <span className="px-1.5 py-0.5 text-[10px] font-bold bg-orange-500 text-white rounded-full animate-pulse">NEW</span>
+                </div>
+                <div className="flex flex-col items-center text-center gap-2 mt-2">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center group-hover:scale-110 group-hover:rotate-12 transition-all duration-300">
+                    <Zap className="w-6 h-6 text-white" />
+                  </div>
+                  <span className="font-bold text-gray-800 text-sm">통합 광고</span>
                 </div>
               </Link>
 
