@@ -91,64 +91,25 @@ export default function UnifiedAdOptimizerPage() {
   const [connectedPlatforms, setConnectedPlatforms] = useState<Record<string, ConnectedPlatform>>({})
   const [isLoading, setIsLoading] = useState(true)
 
-  // AI 인사이트 (데모 데이터)
-  const [aiInsights] = useState<AIInsight[]>([
-    {
-      id: '1',
-      type: 'opportunity',
-      title: '네이버 검색광고 전환율 개선 기회',
-      description: '오후 2-4시 시간대 CPC를 15% 상향 조정하면 전환율이 23% 증가할 것으로 예상됩니다.',
-      impact: '예상 전환 +47건/주',
-      action: '입찰가 자동 조정',
-      platform: 'naver_searchad',
-      timestamp: new Date().toISOString()
-    },
-    {
-      id: '2',
-      type: 'warning',
-      title: '메타 광고 예산 소진 임박',
-      description: '현재 소진 속도로 예산이 3일 후 소진됩니다. 예산 증액 또는 입찰가 조정을 권장합니다.',
-      impact: '남은 예산: ₩120,000',
-      platform: 'meta_ads',
-      timestamp: new Date().toISOString()
-    },
-    {
-      id: '3',
-      type: 'success',
-      title: '카카오모먼트 ROAS 목표 달성',
-      description: '이번 주 ROAS가 목표치 400%를 넘어 467%를 달성했습니다.',
-      impact: 'ROAS +67% 초과 달성',
-      platform: 'kakao_moment',
-      timestamp: new Date().toISOString()
-    },
-    {
-      id: '4',
-      type: 'tip',
-      title: 'A/B 테스트 결과',
-      description: '새로운 광고 소재 B가 기존 대비 18% 높은 CTR을 기록 중입니다. 전체 적용을 권장합니다.',
-      impact: 'CTR 1.2% → 1.42%',
-      action: '전체 적용',
-      timestamp: new Date().toISOString()
-    }
-  ])
+  // AI 인사이트 (API에서 로드)
+  const [aiInsights, setAiInsights] = useState<AIInsight[]>([])
+  const [insightsLoading, setInsightsLoading] = useState(false)
 
-  // 예산 배분 (데모 데이터)
-  const [budgetAllocations] = useState<BudgetAllocation[]>([
-    { platformId: 'naver_searchad', name: '네이버 검색광고', icon: '🟢', currentBudget: 5000000, suggestedBudget: 6500000, performance: 342, trend: 'up' },
-    { platformId: 'google_ads', name: 'Google Ads', icon: '🔵', currentBudget: 3000000, suggestedBudget: 2500000, performance: 285, trend: 'down' },
-    { platformId: 'meta_ads', name: 'Meta 광고', icon: '🔷', currentBudget: 2000000, suggestedBudget: 2800000, performance: 412, trend: 'up' },
-    { platformId: 'kakao_moment', name: '카카오모먼트', icon: '💛', currentBudget: 1500000, suggestedBudget: 1800000, performance: 467, trend: 'up' },
-    { platformId: 'tiktok_ads', name: 'TikTok Ads', icon: '🎵', currentBudget: 1000000, suggestedBudget: 1200000, performance: 523, trend: 'stable' }
-  ])
+  // 예산 배분 (API에서 로드)
+  const [budgetAllocations, setBudgetAllocations] = useState<BudgetAllocation[]>([])
+  const [budgetLoading, setBudgetLoading] = useState(false)
 
-  // 최적화 로그 (데모 데이터)
-  const [optimizationLogs] = useState<OptimizationLog[]>([
-    { id: '1', platform: '네이버', icon: '🟢', action: '입찰가 조정', result: '"블로그 마케팅" 키워드 CPC ₩450 → ₩520', savedAmount: 12000, timestamp: '2분 전' },
-    { id: '2', platform: 'Meta', icon: '🔷', action: '타겟 최적화', result: '25-34세 여성 타겟 강화', timestamp: '5분 전' },
-    { id: '3', platform: 'Google', icon: '🔵', action: '성과 낮은 키워드 중지', result: '5개 키워드 일시 중지', savedAmount: 35000, timestamp: '12분 전' },
-    { id: '4', platform: '카카오', icon: '💛', action: '시간대별 예산 배분', result: '오후 시간대 예산 +20%', timestamp: '18분 전' },
-    { id: '5', platform: '네이버', icon: '🟢', action: '광고 소재 교체', result: 'CTR 높은 소재로 변경', timestamp: '25분 전' }
-  ])
+  // 최적화 로그 (API에서 로드)
+  const [optimizationLogs, setOptimizationLogs] = useState<OptimizationLog[]>([])
+  const [logsLoading, setLogsLoading] = useState(false)
+
+  // 대시보드 요약 (API에서 로드)
+  const [dashboardSummary, setDashboardSummary] = useState<{
+    total_spend: number
+    total_conversions: number
+    total_revenue: number
+    avg_roas: number
+  } | null>(null)
 
   // 연동 모달 상태
   const [connectModalOpen, setConnectModalOpen] = useState(false)
@@ -167,31 +128,177 @@ export default function UnifiedAdOptimizerPage() {
       }
     } catch (error) {
       // 연동된 플랫폼이 없으면 빈 객체
-      setConnectedPlatforms({
-        'naver_searchad': {
-          platform_id: 'naver_searchad',
-          is_connected: true,
-          is_active: true,
-          last_sync_at: new Date().toISOString(),
-          account_name: '테스트 계정',
-          stats: {
-            total_spend: 1250000,
-            total_conversions: 47,
-            roas: 342,
-            optimizations_today: 23
-          }
-        }
-      })
+      setConnectedPlatforms({})
     } finally {
       setIsLoading(false)
+    }
+  }, [user?.id])
+
+  // 대시보드 요약 로드
+  const loadDashboardSummary = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/ads/dashboard/summary?user_id=${user?.id || 1}`)
+      if (res.ok) {
+        const data = await res.json()
+        setDashboardSummary(data.summary)
+      }
+    } catch (error) {
+      console.error('Failed to load dashboard summary:', error)
+    }
+  }, [user?.id])
+
+  // AI 인사이트 로드 (이상 징후 감지)
+  const loadAIInsights = useCallback(async () => {
+    setInsightsLoading(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/ads/cross-platform/anomalies?user_id=${user?.id || 1}`)
+      if (res.ok) {
+        const data = await res.json()
+        // anomalies를 AIInsight 형식으로 변환
+        const insights: AIInsight[] = (data.anomalies || []).map((a: any, idx: number) => ({
+          id: String(idx + 1),
+          type: a.severity === 'high' ? 'warning' : a.severity === 'medium' ? 'opportunity' : 'tip',
+          title: a.title || a.metric,
+          description: a.description || `${a.platform}에서 ${a.metric} 이상 감지`,
+          impact: a.impact || `변동: ${a.change_percent?.toFixed(1)}%`,
+          action: a.recommendation,
+          platform: a.platform,
+          timestamp: a.detected_at || new Date().toISOString()
+        }))
+        setAiInsights(insights)
+      }
+    } catch (error) {
+      console.error('Failed to load AI insights:', error)
+      // 연동된 플랫폼이 없으면 빈 배열
+      setAiInsights([])
+    } finally {
+      setInsightsLoading(false)
+    }
+  }, [user?.id])
+
+  // 예산 배분 로드
+  const loadBudgetAllocations = useCallback(async () => {
+    setBudgetLoading(true)
+    try {
+      // 연동된 플랫폼별 성과 데이터 조회
+      const connectedIds = Object.entries(connectedPlatforms)
+        .filter(([_, p]) => p.is_connected)
+        .map(([id]) => id)
+
+      if (connectedIds.length === 0) {
+        setBudgetAllocations([])
+        return
+      }
+
+      const platformIcons: Record<string, string> = {
+        'naver_searchad': '🟢',
+        'google_ads': '🔵',
+        'meta_ads': '🔷',
+        'kakao_moment': '💛',
+        'tiktok_ads': '🎵',
+        'coupang_ads': '🛒',
+        'criteo': '🔴'
+      }
+
+      const platformNames: Record<string, string> = {
+        'naver_searchad': '네이버 검색광고',
+        'google_ads': 'Google Ads',
+        'meta_ads': 'Meta 광고',
+        'kakao_moment': '카카오모먼트',
+        'tiktok_ads': 'TikTok Ads',
+        'coupang_ads': '쿠팡 광고',
+        'criteo': '크리테오'
+      }
+
+      const allocations: BudgetAllocation[] = await Promise.all(
+        connectedIds.map(async (platformId) => {
+          try {
+            const res = await fetch(`${API_BASE}/api/ads/platforms/${platformId}/performance?user_id=${user?.id || 1}&days=7`)
+            if (res.ok) {
+              const data = await res.json()
+              const perf = data.performance || {}
+              return {
+                platformId,
+                name: platformNames[platformId] || platformId,
+                icon: platformIcons[platformId] || '📊',
+                currentBudget: perf.cost || 0,
+                suggestedBudget: perf.roas > 300 ? perf.cost * 1.3 : perf.cost * 0.8,
+                performance: perf.roas || 0,
+                trend: perf.roas > 350 ? 'up' : perf.roas < 250 ? 'down' : 'stable' as 'up' | 'down' | 'stable'
+              }
+            }
+          } catch (e) {
+            console.error(`Failed to load performance for ${platformId}:`, e)
+          }
+          return {
+            platformId,
+            name: platformNames[platformId] || platformId,
+            icon: platformIcons[platformId] || '📊',
+            currentBudget: 0,
+            suggestedBudget: 0,
+            performance: 0,
+            trend: 'stable' as 'up' | 'down' | 'stable'
+          }
+        })
+      )
+
+      setBudgetAllocations(allocations.filter(a => a.currentBudget > 0 || a.performance > 0))
+    } catch (error) {
+      console.error('Failed to load budget allocations:', error)
+      setBudgetAllocations([])
+    } finally {
+      setBudgetLoading(false)
+    }
+  }, [user?.id, connectedPlatforms])
+
+  // 최적화 로그 로드 (크로스 플랫폼 리포트에서)
+  const loadOptimizationLogs = useCallback(async () => {
+    setLogsLoading(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/ads/cross-platform/report?user_id=${user?.id || 1}&days=7`)
+      if (res.ok) {
+        const data = await res.json()
+        const report = data.report || {}
+
+        // 추천사항을 로그 형식으로 변환
+        const logs: OptimizationLog[] = (report.recommendations || []).map((rec: any, idx: number) => ({
+          id: String(idx + 1),
+          platform: rec.platform || '전체',
+          icon: rec.platform === 'naver_searchad' ? '🟢' :
+                rec.platform === 'google_ads' ? '🔵' :
+                rec.platform === 'meta_ads' ? '🔷' :
+                rec.platform === 'kakao_moment' ? '💛' : '📊',
+          action: rec.action || rec.type || '최적화',
+          result: rec.description || rec.message,
+          savedAmount: rec.expected_savings,
+          timestamp: rec.created_at || '방금 전'
+        }))
+
+        setOptimizationLogs(logs)
+      }
+    } catch (error) {
+      console.error('Failed to load optimization logs:', error)
+      setOptimizationLogs([])
+    } finally {
+      setLogsLoading(false)
     }
   }, [user?.id])
 
   useEffect(() => {
     if (hasAccess) {
       loadConnectedPlatforms()
+      loadDashboardSummary()
+      loadAIInsights()
+      loadOptimizationLogs()
     }
-  }, [hasAccess, loadConnectedPlatforms])
+  }, [hasAccess, loadConnectedPlatforms, loadDashboardSummary, loadAIInsights, loadOptimizationLogs])
+
+  // 연동된 플랫폼이 변경되면 예산 배분 데이터 로드
+  useEffect(() => {
+    if (Object.keys(connectedPlatforms).length > 0) {
+      loadBudgetAllocations()
+    }
+  }, [connectedPlatforms, loadBudgetAllocations])
 
   // 플랫폼 필터링
   const filteredPlatforms = AD_PLATFORMS.filter(platform => {
@@ -689,49 +796,67 @@ export default function UnifiedAdOptimizerPage() {
                     </button>
                   </div>
                   <div className="p-4 space-y-3">
-                    {budgetAllocations.slice(0, 4).map((platform, idx) => (
-                      <motion.div
-                        key={platform.platformId}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: idx * 0.1 }}
-                        className="flex items-center gap-4 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
-                      >
-                        <span className="text-2xl">{platform.icon}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="font-medium text-gray-900 truncate">{platform.name}</span>
-                            <span className={`text-sm font-bold ${
-                              platform.performance >= 400 ? 'text-green-600' :
-                              platform.performance >= 300 ? 'text-blue-600' : 'text-orange-600'
-                            }`}>
-                              ROAS {platform.performance}%
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                              <motion.div
-                                initial={{ width: 0 }}
-                                animate={{ width: `${Math.min(platform.performance / 5, 100)}%` }}
-                                transition={{ duration: 0.8, delay: idx * 0.1 }}
-                                className={`h-full rounded-full ${
-                                  platform.performance >= 400 ? 'bg-green-500' :
-                                  platform.performance >= 300 ? 'bg-blue-500' : 'bg-orange-500'
-                                }`}
-                              />
+                    {budgetLoading ? (
+                      <div className="py-8 text-center">
+                        <Loader2 className="w-6 h-6 animate-spin mx-auto text-gray-400" />
+                        <p className="text-sm text-gray-500 mt-2">로딩 중...</p>
+                      </div>
+                    ) : budgetAllocations.length === 0 ? (
+                      <div className="py-8 text-center">
+                        <BarChart3 className="w-8 h-8 mx-auto text-gray-300 mb-2" />
+                        <p className="text-sm text-gray-500">연동된 플랫폼이 없습니다</p>
+                        <button
+                          onClick={() => setActiveTab('platforms')}
+                          className="mt-2 text-sm text-indigo-600 hover:text-indigo-700"
+                        >
+                          플랫폼 연동하기 →
+                        </button>
+                      </div>
+                    ) : (
+                      budgetAllocations.slice(0, 4).map((platform, idx) => (
+                        <motion.div
+                          key={platform.platformId}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: idx * 0.1 }}
+                          className="flex items-center gap-4 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
+                        >
+                          <span className="text-2xl">{platform.icon}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-medium text-gray-900 truncate">{platform.name}</span>
+                              <span className={`text-sm font-bold ${
+                                platform.performance >= 400 ? 'text-green-600' :
+                                platform.performance >= 300 ? 'text-blue-600' : 'text-orange-600'
+                              }`}>
+                                ROAS {platform.performance}%
+                              </span>
                             </div>
-                            <span className={`text-xs flex items-center gap-1 ${
-                              platform.trend === 'up' ? 'text-green-600' :
-                              platform.trend === 'down' ? 'text-red-600' : 'text-gray-500'
-                            }`}>
-                              {platform.trend === 'up' && <ArrowUpRight className="w-3 h-3" />}
-                              {platform.trend === 'down' && <ArrowDownRight className="w-3 h-3" />}
-                              {platform.trend === 'stable' && '━'}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                <motion.div
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${Math.min(platform.performance / 5, 100)}%` }}
+                                  transition={{ duration: 0.8, delay: idx * 0.1 }}
+                                  className={`h-full rounded-full ${
+                                    platform.performance >= 400 ? 'bg-green-500' :
+                                    platform.performance >= 300 ? 'bg-blue-500' : 'bg-orange-500'
+                                  }`}
+                                />
+                              </div>
+                              <span className={`text-xs flex items-center gap-1 ${
+                                platform.trend === 'up' ? 'text-green-600' :
+                                platform.trend === 'down' ? 'text-red-600' : 'text-gray-500'
+                              }`}>
+                                {platform.trend === 'up' && <ArrowUpRight className="w-3 h-3" />}
+                                {platform.trend === 'down' && <ArrowDownRight className="w-3 h-3" />}
+                                {platform.trend === 'stable' && '━'}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      </motion.div>
-                    ))}
+                        </motion.div>
+                      ))
+                    )}
                   </div>
                 </div>
 
@@ -746,34 +871,52 @@ export default function UnifiedAdOptimizerPage() {
                     <span className="text-xs text-gray-500">자동 업데이트 중</span>
                   </div>
                   <div className="divide-y divide-gray-50">
-                    {optimizationLogs.map((log, idx) => (
-                      <motion.div
-                        key={log.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: idx * 0.05 }}
-                        className="p-4 hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-start gap-3">
-                          <span className="text-xl">{log.icon}</span>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-medium text-gray-900">{log.platform}</span>
-                              <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded-full">{log.action}</span>
+                    {logsLoading ? (
+                      <div className="p-8 text-center">
+                        <Loader2 className="w-6 h-6 animate-spin mx-auto text-gray-400" />
+                        <p className="text-sm text-gray-500 mt-2">로딩 중...</p>
+                      </div>
+                    ) : optimizationLogs.length === 0 ? (
+                      <div className="p-8 text-center">
+                        <Activity className="w-8 h-8 mx-auto text-gray-300 mb-2" />
+                        <p className="text-sm text-gray-500">연동된 플랫폼이 없습니다</p>
+                        <button
+                          onClick={() => setActiveTab('platforms')}
+                          className="mt-2 text-sm text-indigo-600 hover:text-indigo-700"
+                        >
+                          플랫폼 연동하기 →
+                        </button>
+                      </div>
+                    ) : (
+                      optimizationLogs.map((log, idx) => (
+                        <motion.div
+                          key={log.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: idx * 0.05 }}
+                          className="p-4 hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="flex items-start gap-3">
+                            <span className="text-xl">{log.icon}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-medium text-gray-900">{log.platform}</span>
+                                <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded-full">{log.action}</span>
+                              </div>
+                              <p className="text-sm text-gray-600 truncate">{log.result}</p>
                             </div>
-                            <p className="text-sm text-gray-600 truncate">{log.result}</p>
+                            <div className="text-right">
+                              <span className="text-xs text-gray-400">{log.timestamp}</span>
+                              {log.savedAmount && (
+                                <p className="text-xs font-medium text-green-600 mt-1">
+                                  +₩{log.savedAmount.toLocaleString()} 절감
+                                </p>
+                              )}
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <span className="text-xs text-gray-400">{log.timestamp}</span>
-                            {log.savedAmount && (
-                              <p className="text-xs font-medium text-green-600 mt-1">
-                                +₩{log.savedAmount.toLocaleString()} 절감
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))}
+                        </motion.div>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
@@ -791,24 +934,35 @@ export default function UnifiedAdOptimizerPage() {
                     </div>
                   </div>
                   <div className="space-y-3">
-                    {aiInsights.slice(0, 3).map((insight, idx) => (
-                      <motion.div
-                        key={insight.id}
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: idx * 0.1 }}
-                        className="bg-white/10 backdrop-blur-sm rounded-xl p-3"
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          {insight.type === 'opportunity' && <Sparkles className="w-4 h-4 text-yellow-300" />}
-                          {insight.type === 'warning' && <AlertCircle className="w-4 h-4 text-orange-300" />}
-                          {insight.type === 'success' && <Check className="w-4 h-4 text-green-300" />}
-                          {insight.type === 'tip' && <Lightbulb className="w-4 h-4 text-blue-300" />}
-                          <span className="font-medium text-sm">{insight.title}</span>
-                        </div>
-                        <p className="text-xs text-white/80">{insight.impact}</p>
-                      </motion.div>
-                    ))}
+                    {insightsLoading ? (
+                      <div className="text-center py-4">
+                        <Loader2 className="w-5 h-5 animate-spin mx-auto text-white/50" />
+                      </div>
+                    ) : aiInsights.length === 0 ? (
+                      <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 text-center">
+                        <Sparkles className="w-6 h-6 mx-auto text-white/50 mb-2" />
+                        <p className="text-sm text-white/70">플랫폼 연동 후 AI가 분석합니다</p>
+                      </div>
+                    ) : (
+                      aiInsights.slice(0, 3).map((insight, idx) => (
+                        <motion.div
+                          key={insight.id}
+                          initial={{ opacity: 0, x: 20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: idx * 0.1 }}
+                          className="bg-white/10 backdrop-blur-sm rounded-xl p-3"
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            {insight.type === 'opportunity' && <Sparkles className="w-4 h-4 text-yellow-300" />}
+                            {insight.type === 'warning' && <AlertCircle className="w-4 h-4 text-orange-300" />}
+                            {insight.type === 'success' && <Check className="w-4 h-4 text-green-300" />}
+                            {insight.type === 'tip' && <Lightbulb className="w-4 h-4 text-blue-300" />}
+                            <span className="font-medium text-sm">{insight.title}</span>
+                          </div>
+                          <p className="text-xs text-white/80">{insight.impact}</p>
+                        </motion.div>
+                      ))
+                    )}
                   </div>
                   <button
                     onClick={() => setActiveTab('insights')}
