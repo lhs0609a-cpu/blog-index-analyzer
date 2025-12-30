@@ -24,6 +24,10 @@ from services.learning_engine import train_model, calculate_blog_score
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# ===== 글로벌 동시 요청 제한 (서버 과부하 방지) =====
+# 여러 키워드 동시 분석 시에도 전체 요청 수 제한
+GLOBAL_SEMAPHORE = asyncio.Semaphore(15)  # 전체 동시 요청 최대 15개
+
 # ===== 블로그 분석 캐시 (성능 개선) =====
 # TTL: 1시간 (같은 블로그 반복 분석 방지)
 BLOG_ANALYSIS_CACHE: Dict[str, Dict] = {}
@@ -546,9 +550,9 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
             "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
         ]
 
-        # 타임아웃 세분화: 연결 5초, 읽기 10초 (빠른 실패 감지)
-        timeout = httpx.Timeout(10.0, connect=5.0)
-        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, limits=httpx.Limits(max_connections=20)) as client:
+        # 타임아웃 공격적 설정: 연결 3초, 읽기 6초 (빠른 실패 → 재시도)
+        timeout = httpx.Timeout(6.0, connect=3.0)
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, limits=httpx.Limits(max_connections=30)) as client:
             content_text = ""
             title_text = ""
 
@@ -797,9 +801,9 @@ async def analyze_blog(blog_id: str) -> Dict:
             "Accept-Language": "ko-KR,ko;q=0.9",
         }
 
-        # 타임아웃 세분화: 연결 3초, 읽기 8초 (빠른 실패 감지)
-        timeout = httpx.Timeout(8.0, connect=3.0)
-        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, limits=httpx.Limits(max_connections=20)) as client:
+        # 타임아웃 공격적 설정: 연결 2초, 읽기 5초 (빠른 실패 → 재시도)
+        timeout = httpx.Timeout(5.0, connect=2.0)
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, limits=httpx.Limits(max_connections=30)) as client:
             # RSS에서 블로그 정보 추출 (가장 신뢰할 수 있는 소스)
             try:
                 rss_url = f"https://rss.blog.naver.com/{blog_id}.xml"
@@ -1645,14 +1649,16 @@ async def search_keyword_with_tabs(
                 logger.warning(f"Failed to analyze {item['blog_id']} after {max_retries + 1} attempts: {e}")
                 return item, {"stats": {}, "index": {}}, {}
 
-        # 동시에 최대 7개씩 분석 (네이버 차단 방지)
-        semaphore = asyncio.Semaphore(7)
+        # 동시에 최대 5개씩 분석 (키워드당) + 글로벌 제한
+        local_semaphore = asyncio.Semaphore(5)
 
         async def analyze_with_limit(item):
-            async with semaphore:
-                # 요청 간 약간의 지연으로 서버 부하 분산
-                await asyncio.sleep(random.uniform(0.1, 0.3))
-                return await analyze_single(item)
+            # 글로벌 + 로컬 세마포어 모두 적용 (다중 키워드 동시 처리 시 과부하 방지)
+            async with GLOBAL_SEMAPHORE:
+                async with local_semaphore:
+                    # 요청 간 약간의 지연으로 서버 부하 분산
+                    await asyncio.sleep(random.uniform(0.1, 0.3))
+                    return await analyze_single(item)
 
         # 병렬 실행
         analysis_tasks = [analyze_with_limit(item) for item in search_results]
