@@ -9,7 +9,7 @@ import threading
 import time
 import random
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 import json
 
@@ -121,7 +121,7 @@ async def run_single_learning_cycle():
         return
 
     auto_learning_state["is_running"] = True
-    auto_learning_state["last_run"] = datetime.now().isoformat()
+    auto_learning_state["last_run"] = datetime.now(timezone.utc).isoformat()
 
     try:
         # 필요한 모듈 동적 임포트
@@ -232,7 +232,7 @@ async def run_single_learning_cycle():
             except Exception as e:
                 logger.error(f"[AutoLearn] Keyword error {keyword}: {e}")
                 auto_learning_state["errors"].append({
-                    "time": datetime.now().isoformat(),
+                    "time": datetime.now(timezone.utc).isoformat(),
                     "keyword": keyword,
                     "error": str(e)
                 })
@@ -259,7 +259,7 @@ async def run_single_learning_cycle():
         # 다음 실행 시간 계산
         interval = get_current_interval()
         auto_learning_state["next_run"] = (
-            datetime.now() + timedelta(minutes=interval)
+            datetime.now(timezone.utc) + timedelta(minutes=interval)
         ).isoformat()
 
 

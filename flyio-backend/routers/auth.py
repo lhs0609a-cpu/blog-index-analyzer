@@ -164,14 +164,14 @@ async def register(request: RegisterRequest):
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+            detail="이미 가입된 이메일입니다. 로그인을 진행해주세요."
         )
 
     # Validate password
     if len(request.password) < 6:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password must be at least 6 characters"
+            detail="비밀번호는 최소 6자 이상이어야 합니다."
         )
 
     # Create user
@@ -186,7 +186,7 @@ async def register(request: RegisterRequest):
         logger.error(f"Failed to create user: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create user"
+            detail="회원가입 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
         )
 
     # Get created user
@@ -215,7 +215,7 @@ async def login(request: LoginRequest):
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+            detail="등록되지 않은 이메일입니다. 회원가입을 먼저 진행해주세요.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -223,7 +223,7 @@ async def login(request: LoginRequest):
     if not verify_password(request.password, user["hashed_password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+            detail="비밀번호가 올바르지 않습니다. 다시 확인해주세요.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -231,7 +231,7 @@ async def login(request: LoginRequest):
     if not user.get("is_active", True):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Inactive user"
+            detail="비활성화된 계정입니다. 관리자에게 문의해주세요."
         )
 
     # Create access token

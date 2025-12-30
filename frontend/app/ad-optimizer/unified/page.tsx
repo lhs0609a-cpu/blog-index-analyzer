@@ -279,160 +279,227 @@ export default function UnifiedAdOptimizerPage() {
     }
   }
 
-  // 인트로 화면
+  // 인트로 화면 - 젊고 세련된 디자인
   if (showIntro) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-purple-900 overflow-hidden">
-        {/* 배경 효과 */}
+      <div className="min-h-screen bg-gradient-to-br from-violet-50 via-purple-50 to-fuchsia-50 overflow-hidden">
+        {/* 배경 효과 - 밝고 화사한 스타일 */}
         <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-pink-500/10 rounded-full blur-3xl" />
+          <motion.div
+            animate={{
+              scale: [1, 1.2, 1],
+              rotate: [0, 180, 360]
+            }}
+            transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+            className="absolute -top-20 -right-20 w-[500px] h-[500px] bg-gradient-to-br from-purple-300/40 to-pink-300/40 rounded-full blur-3xl"
+          />
+          <motion.div
+            animate={{
+              scale: [1.2, 1, 1.2],
+              rotate: [360, 180, 0]
+            }}
+            transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+            className="absolute -bottom-20 -left-20 w-[600px] h-[600px] bg-gradient-to-br from-indigo-300/40 to-violet-300/40 rounded-full blur-3xl"
+          />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-gradient-to-br from-cyan-200/30 to-blue-200/30 rounded-full blur-3xl" />
         </div>
 
-        <div className="relative z-10 container mx-auto px-4 py-12">
-          {/* 헤더 */}
+        <div className="relative z-10 container mx-auto px-4 py-8">
+          {/* 상단 네비게이션 */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-center mb-12"
+            className="flex items-center justify-between mb-8"
           >
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: "spring", duration: 0.8 }}
-              className="inline-flex items-center justify-center w-24 h-24 rounded-3xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-2xl shadow-purple-500/30 mb-6"
-            >
-              <Zap className="w-12 h-12 text-white" />
-            </motion.div>
-            <h1 className="text-5xl font-bold text-white mb-4">
-              통합 광고 <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">자동 최적화</span>
-            </h1>
-            <p className="text-xl text-gray-300 max-w-2xl mx-auto">
-              네이버, 구글, 메타, 카카오 등 모든 광고 플랫폼을<br />
-              AI가 24시간 자동으로 최적화합니다
-            </p>
+            <Link href="/" className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
+              <ChevronRight className="w-5 h-5 rotate-180" />
+              <span className="font-medium">홈으로</span>
+            </Link>
+            <div className="flex items-center gap-2 px-4 py-2 bg-white/60 backdrop-blur-sm rounded-full border border-purple-200">
+              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              <span className="text-sm font-medium text-gray-700">Pro 기능</span>
+            </div>
           </motion.div>
 
-          {/* 주요 기능 카드 */}
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+          {/* 메인 히어로 섹션 */}
+          <div className="text-center mb-12">
+            <motion.div
+              initial={{ scale: 0, rotate: -180 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ type: "spring", duration: 0.8, bounce: 0.4 }}
+              className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-xl shadow-purple-500/25 mb-6"
+            >
+              <Zap className="w-10 h-10 text-white" />
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <h1 className="text-4xl md:text-5xl font-black mb-4 text-gray-900">
+                통합 광고{' '}
+                <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                  AI 자동화
+                </span>
+              </h1>
+              <p className="text-lg text-gray-600 max-w-xl mx-auto leading-relaxed">
+                네이버, 구글, 메타, 카카오 등 모든 광고를<br />
+                <span className="font-semibold text-purple-600">AI가 24시간 알아서 최적화</span>해요 ✨
+              </p>
+            </motion.div>
+          </div>
+
+          {/* 플랫폼 아이콘 플로팅 */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.4 }}
+            className="flex justify-center items-center gap-3 mb-10 flex-wrap"
+          >
+            {[
+              { icon: "🟢", name: "네이버", color: "from-green-100 to-green-200 border-green-300" },
+              { icon: "🔵", name: "구글", color: "from-blue-100 to-blue-200 border-blue-300" },
+              { icon: "🔷", name: "메타", color: "from-indigo-100 to-indigo-200 border-indigo-300" },
+              { icon: "💛", name: "카카오", color: "from-yellow-100 to-yellow-200 border-yellow-300" },
+              { icon: "🎵", name: "틱톡", color: "from-pink-100 to-pink-200 border-pink-300" },
+              { icon: "🛒", name: "쿠팡", color: "from-orange-100 to-orange-200 border-orange-300" }
+            ].map((platform, idx) => (
+              <motion.div
+                key={idx}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 + idx * 0.08 }}
+                whileHover={{ scale: 1.1, y: -5 }}
+                className={`flex items-center gap-2 px-4 py-2 bg-gradient-to-br ${platform.color} rounded-full border shadow-sm cursor-pointer`}
+              >
+                <span className="text-lg">{platform.icon}</span>
+                <span className="text-sm font-semibold text-gray-700">{platform.name}</span>
+              </motion.div>
+            ))}
+          </motion.div>
+
+          {/* 기능 카드 - 모던 글래스모피즘 */}
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
             {[
               {
-                icon: <Globe className="w-8 h-8" />,
-                title: "멀티 플랫폼 통합",
-                description: "네이버 검색광고, Google Ads, Meta 광고, 카카오모먼트 등 주요 광고 플랫폼을 한 곳에서 관리",
-                gradient: "from-green-400 to-emerald-500",
-                delay: 0.1
+                icon: <Globe className="w-6 h-6" />,
+                title: "멀티 플랫폼",
+                description: "8개 광고 플랫폼 한 번에 관리",
+                emoji: "🌐",
+                gradient: "from-emerald-500 to-teal-500",
+                bg: "from-emerald-50 to-teal-50",
+                border: "border-emerald-200"
               },
               {
-                icon: <Brain className="w-8 h-8" />,
-                title: "AI 실시간 최적화",
-                description: "머신러닝 기반으로 입찰가, 예산, 타겟팅을 24시간 자동 조정하여 최고의 성과 달성",
-                gradient: "from-blue-400 to-indigo-500",
-                delay: 0.2
+                icon: <Brain className="w-6 h-6" />,
+                title: "AI 실시간 분석",
+                description: "입찰가, 예산, 타겟 자동 조정",
+                emoji: "🧠",
+                gradient: "from-blue-500 to-indigo-500",
+                bg: "from-blue-50 to-indigo-50",
+                border: "border-blue-200"
               },
               {
-                icon: <Wallet className="w-8 h-8" />,
-                title: "스마트 예산 배분",
-                description: "플랫폼별 ROAS를 분석하여 성과가 좋은 채널에 예산을 자동으로 재배분",
-                gradient: "from-orange-400 to-red-500",
-                delay: 0.3
+                icon: <Wallet className="w-6 h-6" />,
+                title: "스마트 예산",
+                description: "ROAS 기반 자동 예산 재배분",
+                emoji: "💰",
+                gradient: "from-orange-500 to-amber-500",
+                bg: "from-orange-50 to-amber-50",
+                border: "border-orange-200"
               },
               {
-                icon: <Sparkles className="w-8 h-8" />,
+                icon: <Sparkles className="w-6 h-6" />,
                 title: "AI 인사이트",
-                description: "성과 개선 기회, 위험 요소, 최적화 팁을 AI가 실시간으로 분석하여 제안",
-                gradient: "from-purple-400 to-pink-500",
-                delay: 0.4
+                description: "개선 기회와 위험 요소 알림",
+                emoji: "💡",
+                gradient: "from-purple-500 to-pink-500",
+                bg: "from-purple-50 to-pink-50",
+                border: "border-purple-200"
               }
             ].map((feature, idx) => (
               <motion.div
                 key={idx}
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: feature.delay }}
-                className="group"
+                initial={{ opacity: 0, y: 30, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ delay: 0.6 + idx * 0.1 }}
+                whileHover={{ y: -8, scale: 1.02 }}
+                className={`group relative bg-gradient-to-br ${feature.bg} rounded-2xl border ${feature.border} p-5 hover:shadow-xl transition-all duration-300 cursor-pointer overflow-hidden`}
               >
-                <div className="h-full bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-6 hover:bg-white/10 hover:border-white/20 transition-all duration-300 hover:-translate-y-1">
-                  <div className={`inline-flex items-center justify-center w-14 h-14 rounded-xl bg-gradient-to-br ${feature.gradient} mb-4 shadow-lg group-hover:scale-110 transition-transform`}>
-                    <div className="text-white">{feature.icon}</div>
-                  </div>
-                  <h3 className="text-lg font-bold text-white mb-2">{feature.title}</h3>
-                  <p className="text-gray-400 text-sm leading-relaxed">{feature.description}</p>
+                <div className="absolute -right-4 -top-4 text-6xl opacity-10 group-hover:opacity-20 transition-opacity">
+                  {feature.emoji}
                 </div>
+                <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br ${feature.gradient} mb-3 shadow-lg group-hover:scale-110 group-hover:rotate-6 transition-all`}>
+                  <div className="text-white">{feature.icon}</div>
+                </div>
+                <h3 className="text-base font-bold text-gray-900 mb-1">{feature.title}</h3>
+                <p className="text-sm text-gray-600">{feature.description}</p>
               </motion.div>
             ))}
           </div>
 
-          {/* 지원 플랫폼 */}
+          {/* 성과 지표 - 트렌디한 카운터 */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-8 mb-12"
+            transition={{ delay: 1 }}
+            className="bg-white/70 backdrop-blur-xl rounded-3xl border border-white/50 p-6 mb-10 shadow-lg"
           >
-            <h2 className="text-center text-lg font-semibold text-gray-400 mb-6">지원 광고 플랫폼</h2>
-            <div className="flex flex-wrap justify-center items-center gap-8">
+            <div className="grid grid-cols-3 gap-6">
               {[
-                { name: "네이버 검색광고", icon: "🟢" },
-                { name: "Google Ads", icon: "🔵" },
-                { name: "Meta 광고", icon: "🔷" },
-                { name: "카카오모먼트", icon: "💛" },
-                { name: "TikTok Ads", icon: "🎵" },
-                { name: "트위터 Ads", icon: "🐦" },
-                { name: "네이버 GFA", icon: "📱" },
-                { name: "쿠팡 광고", icon: "🛒" }
-              ].map((platform, idx) => (
+                { value: "30%+", label: "ROAS 개선", icon: "📈", color: "text-emerald-600" },
+                { value: "24/7", label: "자동 최적화", icon: "⚡", color: "text-blue-600" },
+                { value: "50%", label: "시간 절약", icon: "⏰", color: "text-purple-600" }
+              ].map((stat, idx) => (
                 <motion.div
                   key={idx}
-                  initial={{ opacity: 0, scale: 0.8 }}
+                  initial={{ opacity: 0, scale: 0.5 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.6 + idx * 0.05 }}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-full border border-white/10"
+                  transition={{ delay: 1.1 + idx * 0.1, type: "spring" }}
+                  className="text-center"
                 >
-                  <span className="text-xl">{platform.icon}</span>
-                  <span className="text-white text-sm font-medium">{platform.name}</span>
+                  <div className="text-3xl mb-2">{stat.icon}</div>
+                  <div className={`text-3xl md:text-4xl font-black ${stat.color}`}>{stat.value}</div>
+                  <div className="text-sm text-gray-500 font-medium">{stat.label}</div>
                 </motion.div>
               ))}
             </div>
           </motion.div>
 
-          {/* 기대 효과 */}
+          {/* CTA 버튼 - 눈에 띄는 디자인 */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7 }}
-            className="grid md:grid-cols-3 gap-6 mb-12"
-          >
-            {[
-              { value: "30%+", label: "평균 ROAS 개선", color: "text-green-400" },
-              { value: "24/7", label: "자동 최적화", color: "text-blue-400" },
-              { value: "50%", label: "관리 시간 절감", color: "text-purple-400" }
-            ].map((stat, idx) => (
-              <div key={idx} className="text-center p-6 bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10">
-                <div className={`text-4xl font-bold ${stat.color} mb-2`}>{stat.value}</div>
-                <div className="text-gray-400">{stat.label}</div>
-              </div>
-            ))}
-          </motion.div>
-
-          {/* CTA 버튼 */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.8 }}
+            transition={{ delay: 1.3 }}
             className="text-center"
           >
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05, y: -3 }}
+              whileTap={{ scale: 0.98 }}
               onClick={() => setShowIntro(false)}
-              className="inline-flex items-center gap-3 px-10 py-4 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white text-lg font-bold rounded-2xl hover:shadow-2xl hover:shadow-purple-500/30 hover:scale-105 transition-all duration-300"
+              className="group relative inline-flex items-center gap-3 px-10 py-5 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white text-lg font-bold rounded-2xl shadow-xl shadow-purple-500/30 hover:shadow-2xl hover:shadow-purple-500/40 transition-all duration-300 overflow-hidden"
             >
-              <Zap className="w-6 h-6" />
-              시작하기
-              <ChevronRight className="w-5 h-5" />
-            </button>
-            <p className="mt-4 text-gray-500 text-sm">
-              Pro 플랜 이상에서 사용 가능합니다
+              <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+              <Zap className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+              <span>지금 시작하기</span>
+              <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </motion.button>
+            <p className="mt-4 text-gray-500 text-sm flex items-center justify-center gap-2">
+              <Shield className="w-4 h-4" />
+              Pro 플랜에서 이용 가능해요
+            </p>
+          </motion.div>
+
+          {/* 하단 브랜딩 */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.5 }}
+            className="mt-12 text-center"
+          >
+            <p className="text-xs text-gray-400">
+              Powered by <span className="font-semibold text-purple-500">블랭크 AI</span> • 광고 자동화의 새로운 기준
             </p>
           </motion.div>
         </div>
