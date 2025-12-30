@@ -24,6 +24,36 @@ from services.learning_engine import train_model, calculate_blog_score
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# ===== 블로그 분석 캐시 (성능 개선) =====
+# TTL: 1시간 (같은 블로그 반복 분석 방지)
+BLOG_ANALYSIS_CACHE: Dict[str, Dict] = {}
+BLOG_CACHE_TTL = 3600  # 1시간
+
+def get_cached_blog_analysis(blog_id: str) -> Optional[Dict]:
+    """캐시된 블로그 분석 결과 조회"""
+    if blog_id in BLOG_ANALYSIS_CACHE:
+        cached = BLOG_ANALYSIS_CACHE[blog_id]
+        if time.time() - cached["timestamp"] < BLOG_CACHE_TTL:
+            return cached["data"]
+        else:
+            del BLOG_ANALYSIS_CACHE[blog_id]
+    return None
+
+def set_blog_analysis_cache(blog_id: str, data: Dict):
+    """블로그 분석 결과 캐시 저장"""
+    # 캐시 크기 제한 (1000개)
+    if len(BLOG_ANALYSIS_CACHE) > 1000:
+        # 가장 오래된 항목들 삭제
+        sorted_keys = sorted(BLOG_ANALYSIS_CACHE.keys(),
+                            key=lambda k: BLOG_ANALYSIS_CACHE[k]["timestamp"])
+        for key in sorted_keys[:200]:
+            del BLOG_ANALYSIS_CACHE[key]
+
+    BLOG_ANALYSIS_CACHE[blog_id] = {
+        "data": data,
+        "timestamp": time.time()
+    }
+
 # User agents for rotation
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -724,6 +754,12 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
 
 async def analyze_blog(blog_id: str) -> Dict:
     """Analyze a single blog - FAST version using API only (no Playwright)"""
+    # 캐시 확인 (성능 개선)
+    cached = get_cached_blog_analysis(blog_id)
+    if cached:
+        logger.debug(f"Cache hit for blog: {blog_id}")
+        return cached
+
     stats = {
         "total_posts": None,
         "neighbor_count": None,
@@ -1097,7 +1133,10 @@ async def analyze_blog(blog_id: str) -> Dict:
         import traceback
         logger.debug(traceback.format_exc())
 
-    return {"stats": stats, "index": index}
+    # 캐시에 저장 (성능 개선)
+    result = {"stats": stats, "index": index}
+    set_blog_analysis_cache(blog_id, result)
+    return result
 
 
 async def get_related_keywords_from_searchad(keyword: str) -> RelatedKeywordsResponse:
@@ -1579,21 +1618,25 @@ async def search_keyword_with_tabs(
     total_neighbors = 0
     analyzed_count = 0
 
+    # 월간 검색량 조회를 미리 시작 (블로그 분석과 병렬 실행)
+    search_volume_task = asyncio.create_task(get_related_keywords_from_searchad(keyword))
+
     if analyze_content:
         # 모든 블로그를 동시에 분석 (병렬 처리)
         async def analyze_single(item):
             try:
-                # 블로그 분석
-                analysis = await analyze_blog(item["blog_id"])
-                # 포스트 콘텐츠 분석 추가
-                post_analysis_result = await analyze_post(item["post_url"], keyword)
+                # 블로그 분석 + 포스트 분석을 동시에 실행 (성능 개선)
+                analysis, post_analysis_result = await asyncio.gather(
+                    analyze_blog(item["blog_id"]),
+                    analyze_post(item["post_url"], keyword)
+                )
                 return item, analysis, post_analysis_result
             except Exception as e:
                 logger.warning(f"Failed to analyze {item['blog_id']}: {e}")
                 return item, {"stats": {}, "index": {}}, {}
 
-        # 동시에 최대 5개씩 분석 (서버 부하 방지)
-        semaphore = asyncio.Semaphore(5)
+        # 동시에 최대 10개씩 분석 (성능 개선)
+        semaphore = asyncio.Semaphore(10)
 
         async def analyze_with_limit(item):
             async with semaphore:
@@ -1686,10 +1729,10 @@ async def search_keyword_with_tabs(
     avg_image_count = round(sum(image_counts) / len(image_counts), 1) if image_counts else 0
     avg_video_count = round(sum(video_counts) / len(video_counts), 1) if video_counts else 0
 
-    # 월간 검색량 조회
+    # 월간 검색량 조회 (미리 시작한 태스크 결과 가져오기)
     monthly_search_volume = 0
     try:
-        related_result = await get_related_keywords_from_searchad(keyword)
+        related_result = await search_volume_task
         if related_result.success and related_result.keywords:
             # 정확히 일치하는 키워드의 검색량을 찾음
             for kw in related_result.keywords:
