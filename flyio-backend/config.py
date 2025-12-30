@@ -171,6 +171,11 @@ class Settings(BaseSettings):
     TOSS_CLIENT_KEY: str = ""  # 클라이언트 키 (프론트엔드용)
     TOSS_SECRET_KEY: str = ""  # 시크릿 키 (백엔드용)
 
+    # Threads API (Meta)
+    THREADS_APP_ID: str = ""
+    THREADS_APP_SECRET: str = ""
+    THREADS_REDIRECT_URI: str = "https://blog-index-analyzer.vercel.app/threads/callback"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

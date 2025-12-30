@@ -139,6 +139,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Ad auto optimizer failed to start: {e}")
 
+    # Threads 자동 게시 스케줄러 시작
+    try:
+        from services.threads_auto_poster import threads_auto_poster
+        threads_auto_poster.start(interval_seconds=60)  # 1분마다 실행
+        logger.info("✅ Threads auto poster started (every 1 min)")
+    except Exception as e:
+        logger.warning(f"⚠️ Threads auto poster failed to start: {e}")
+
     # Ad Optimization DB 초기화
     try:
         from database.ad_optimization_db import init_ad_optimization_tables
@@ -184,6 +192,14 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Ad auto optimizer stopped")
     except Exception as e:
         logger.warning(f"⚠️ Ad auto optimizer shutdown issue: {e}")
+
+    # Threads 자동 게시 스케줄러 중지
+    try:
+        from services.threads_auto_poster import threads_auto_poster
+        threads_auto_poster.stop()
+        logger.info("✅ Threads auto poster stopped")
+    except Exception as e:
+        logger.warning(f"⚠️ Threads auto poster shutdown issue: {e}")
 
     # 백업 스케줄러 중지 및 마지막 백업 생성
     try:
@@ -286,6 +302,7 @@ from routers import unified_ads
 from routers import ad_dashboard
 from routers import blue_ocean
 from routers import xp
+from routers import threads
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
@@ -312,6 +329,7 @@ app.include_router(unified_ads.router)  # prefix already set in router
 app.include_router(ad_dashboard.router)  # prefix already set in router
 app.include_router(blue_ocean.router, prefix="/api/blue-ocean", tags=["블루오션키워드"])
 app.include_router(xp.router, tags=["XP시스템"])
+app.include_router(threads.router, tags=["쓰레드자동화"])
 
 
 if __name__ == "__main__":
