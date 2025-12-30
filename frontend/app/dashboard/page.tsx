@@ -116,20 +116,24 @@ export default function Dashboard() {
               <Target className="w-5 h-5" />
               순위 추적
             </Link>
-            <Link
-              href="/dashboard/batch-learning"
-              className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold hover:shadow-lg transition-all duration-300"
-            >
-              <Sparkles className="w-5 h-5" />
-              대량 학습
-            </Link>
-            <Link
-              href="/dashboard/learning"
-              className="flex items-center gap-2 px-6 py-3 rounded-full bg-white border-2 border-green-500 text-green-600 font-semibold hover:shadow-lg transition-all duration-300"
-            >
-              <Brain className="w-5 h-5" />
-              AI 학습 엔진
-            </Link>
+            {user?.is_admin && (
+              <Link
+                href="/dashboard/batch-learning"
+                className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold hover:shadow-lg transition-all duration-300"
+              >
+                <Sparkles className="w-5 h-5" />
+                대량 학습
+              </Link>
+            )}
+            {user?.is_admin && (
+              <Link
+                href="/dashboard/learning"
+                className="flex items-center gap-2 px-6 py-3 rounded-full bg-white border-2 border-green-500 text-green-600 font-semibold hover:shadow-lg transition-all duration-300"
+              >
+                <Brain className="w-5 h-5" />
+                AI 학습 엔진
+              </Link>
+            )}
             <Link
               href="/keyword-search"
               className="flex items-center gap-2 px-6 py-3 rounded-full bg-white border-2 border-purple-500 text-purple-600 font-semibold hover:shadow-lg transition-all duration-300"
