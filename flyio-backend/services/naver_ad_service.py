@@ -640,6 +640,30 @@ class BidOptimizationEngine:
                         changes.append(change)
                         self.bid_changes.append(change)
 
+                        # DB에 액션 로깅
+                        try:
+                            from database.optimization_db import log_optimization_action
+                            log_optimization_action(
+                                user_id=self.user_id if hasattr(self, 'user_id') else 1,
+                                platform="naver_searchad",
+                                action_type="bid_change",
+                                target_type="keyword",
+                                target_id=keyword_id,
+                                target_name=kw.get("keyword", ""),
+                                old_value=current_bid,
+                                new_value=new_bid,
+                                reason=reason,
+                                impact_estimate={
+                                    "impressions": stat.get("impCnt", 0),
+                                    "clicks": stat.get("clkCnt", 0),
+                                    "cost": stat.get("salesAmt", 0),
+                                    "conversions": stat.get("convCnt", 0)
+                                },
+                                session_id=self.session_id if hasattr(self, 'session_id') else None
+                            )
+                        except Exception as log_error:
+                            logger.warning(f"Failed to log optimization action: {log_error}")
+
                         logger.info(f"Bid changed: {kw.get('keyword')} {current_bid} -> {new_bid} ({reason})")
 
                     except Exception as e:

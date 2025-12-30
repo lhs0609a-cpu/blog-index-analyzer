@@ -303,6 +303,7 @@ from routers import ad_dashboard
 from routers import blue_ocean
 from routers import xp
 from routers import threads
+from routers import optimization_monitor
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
@@ -330,6 +331,7 @@ app.include_router(ad_dashboard.router)  # prefix already set in router
 app.include_router(blue_ocean.router, prefix="/api/blue-ocean", tags=["블루오션키워드"])
 app.include_router(xp.router, tags=["XP시스템"])
 app.include_router(threads.router, tags=["쓰레드자동화"])
+app.include_router(optimization_monitor.router, tags=["최적화모니터링"])
 
 
 if __name__ == "__main__":

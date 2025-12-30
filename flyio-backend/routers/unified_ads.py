@@ -816,3 +816,69 @@ async def run_optimization_once(
         "changes": [],
         "total_changes": 0
     }
+
+
+# ============ 진단 엔드포인트 ============
+
+@router.get("/diagnostic/naver")
+async def diagnostic_naver():
+    """네이버 검색광고 API 진단"""
+    from services.naver_ad_service import NaverAdApiClient
+    from config import settings
+
+    result = {
+        "credentials_configured": bool(settings.NAVER_AD_CUSTOMER_ID and settings.NAVER_AD_API_KEY),
+        "customer_id": settings.NAVER_AD_CUSTOMER_ID[:4] + "***" if settings.NAVER_AD_CUSTOMER_ID else None,
+        "api_test": None,
+        "campaigns": None,
+        "error": None
+    }
+
+    if not result["credentials_configured"]:
+        result["error"] = "API 자격증명이 설정되지 않았습니다"
+        return result
+
+    try:
+        client = NaverAdApiClient()
+        campaigns = await client.get_campaigns()
+        result["api_test"] = "success"
+        result["campaigns"] = {
+            "count": len(campaigns),
+            "sample": [{"name": c.get("name"), "status": c.get("status")} for c in campaigns[:3]]
+        }
+        await client.close()
+    except Exception as e:
+        result["api_test"] = "failed"
+        result["error"] = str(e)
+
+    return result
+
+
+@router.get("/diagnostic/all")
+async def diagnostic_all():
+    """모든 플랫폼 API 진단"""
+    from config import settings
+
+    results = {}
+
+    # 네이버 검색광고
+    results["naver_searchad"] = {
+        "configured": bool(settings.NAVER_AD_CUSTOMER_ID and settings.NAVER_AD_API_KEY),
+        "customer_id": settings.NAVER_AD_CUSTOMER_ID[:4] + "***" if settings.NAVER_AD_CUSTOMER_ID else None
+    }
+
+    # 다른 플랫폼들 (환경변수 확인)
+    for platform_id, info in PLATFORM_INFO.items():
+        if platform_id == "naver_searchad":
+            continue
+        results[platform_id] = {
+            "configured": False,
+            "required_fields": info.get("required_fields", []),
+            "note": "사용자별 자격증명 필요"
+        }
+
+    return {
+        "platforms": results,
+        "service_level_platforms": ["naver_searchad"],
+        "user_level_platforms": list(PLATFORM_INFO.keys())
+    }
