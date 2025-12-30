@@ -546,7 +546,9 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
             "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
         ]
 
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        # 타임아웃 세분화: 연결 5초, 읽기 10초 (빠른 실패 감지)
+        timeout = httpx.Timeout(10.0, connect=5.0)
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, limits=httpx.Limits(max_connections=20)) as client:
             content_text = ""
             title_text = ""
 
@@ -795,7 +797,9 @@ async def analyze_blog(blog_id: str) -> Dict:
             "Accept-Language": "ko-KR,ko;q=0.9",
         }
 
-        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+        # 타임아웃 세분화: 연결 3초, 읽기 8초 (빠른 실패 감지)
+        timeout = httpx.Timeout(8.0, connect=3.0)
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, limits=httpx.Limits(max_connections=20)) as client:
             # RSS에서 블로그 정보 추출 (가장 신뢰할 수 있는 소스)
             try:
                 rss_url = f"https://rss.blog.naver.com/{blog_id}.xml"
@@ -1622,8 +1626,9 @@ async def search_keyword_with_tabs(
     search_volume_task = asyncio.create_task(get_related_keywords_from_searchad(keyword))
 
     if analyze_content:
-        # 모든 블로그를 동시에 분석 (병렬 처리)
-        async def analyze_single(item):
+        # 모든 블로그를 동시에 분석 (병렬 처리 + 재시도)
+        async def analyze_single(item, retry_count=0):
+            max_retries = 2
             try:
                 # 블로그 분석 + 포스트 분석을 동시에 실행 (성능 개선)
                 analysis, post_analysis_result = await asyncio.gather(
@@ -1632,14 +1637,21 @@ async def search_keyword_with_tabs(
                 )
                 return item, analysis, post_analysis_result
             except Exception as e:
-                logger.warning(f"Failed to analyze {item['blog_id']}: {e}")
+                if retry_count < max_retries:
+                    # 재시도 전 짧은 대기 (지수 백오프)
+                    await asyncio.sleep(0.5 * (retry_count + 1))
+                    logger.info(f"Retrying {item['blog_id']} (attempt {retry_count + 2})")
+                    return await analyze_single(item, retry_count + 1)
+                logger.warning(f"Failed to analyze {item['blog_id']} after {max_retries + 1} attempts: {e}")
                 return item, {"stats": {}, "index": {}}, {}
 
-        # 동시에 최대 10개씩 분석 (성능 개선)
-        semaphore = asyncio.Semaphore(10)
+        # 동시에 최대 7개씩 분석 (네이버 차단 방지)
+        semaphore = asyncio.Semaphore(7)
 
         async def analyze_with_limit(item):
             async with semaphore:
+                # 요청 간 약간의 지연으로 서버 부하 분산
+                await asyncio.sleep(random.uniform(0.1, 0.3))
                 return await analyze_single(item)
 
         # 병렬 실행
