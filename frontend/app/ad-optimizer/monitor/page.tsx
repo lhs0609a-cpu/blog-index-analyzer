@@ -9,7 +9,7 @@ import {
   ArrowUpRight, ArrowDownRight, Minus, Filter, Play, Pause
 } from 'lucide-react'
 import Link from 'next/link'
-import { useAuthStore } from '@/store/authStore'
+import { useAuthStore } from '@/lib/stores/auth'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev'
 

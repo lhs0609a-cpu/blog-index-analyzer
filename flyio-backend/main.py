@@ -304,6 +304,13 @@ from routers import blue_ocean
 from routers import xp
 from routers import threads
 from routers import optimization_monitor
+from routers import hourly_bidding
+from routers import anomaly_detection
+from routers import budget_reallocation
+from routers import creative_fatigue
+from routers import naver_quality
+from routers import budget_pacing
+from routers import funnel_bidding
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
@@ -332,6 +339,13 @@ app.include_router(blue_ocean.router, prefix="/api/blue-ocean", tags=["블루오
 app.include_router(xp.router, tags=["XP시스템"])
 app.include_router(threads.router, tags=["쓰레드자동화"])
 app.include_router(optimization_monitor.router, tags=["최적화모니터링"])
+app.include_router(hourly_bidding.router, tags=["시간대별입찰"])
+app.include_router(anomaly_detection.router, tags=["이상징후감지"])
+app.include_router(budget_reallocation.router, tags=["예산재분배"])
+app.include_router(creative_fatigue.router, tags=["크리에이티브피로도"])
+app.include_router(naver_quality.router, tags=["네이버품질지수"])
+app.include_router(budget_pacing.router, tags=["예산페이싱"])
+app.include_router(funnel_bidding.router, tags=["퍼널입찰"])
 
 
 if __name__ == "__main__":

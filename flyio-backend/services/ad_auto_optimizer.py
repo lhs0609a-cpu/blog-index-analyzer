@@ -18,12 +18,16 @@ from database.ad_optimization_db import (
     get_optimization_settings,
     get_performance_history,
     save_roi_tracking,
+    save_hourly_performance,
+    get_hourly_bid_schedule,
 )
 from services.ad_platforms import (
     get_platform_service,
     PLATFORM_SERVICES,
     OptimizationStrategy,
 )
+from services.hourly_bid_optimizer import get_hourly_optimizer, HourlyBidOptimizer
+from services.anomaly_detection_service import get_anomaly_detector, AnomalyAlert
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +45,8 @@ class AdAutoOptimizer:
         self._is_running = False
         self._optimization_lock = asyncio.Lock()
         self._last_run_results: Dict[str, Any] = {}
+        self._hourly_optimizer = get_hourly_optimizer()
+        self._anomaly_detector = get_anomaly_detector()
 
     def start(self, interval_seconds: int = 60):
         """스케줄러 시작"""
@@ -166,10 +172,37 @@ class AdAutoOptimizer:
         campaigns = await service.get_campaigns()
         keywords = await service.get_keywords() if hasattr(service, 'get_keywords') else []
 
+        # 성과 데이터로 이상 징후 감지
+        anomaly_alerts = await self._detect_anomalies(
+            user_id=user_id,
+            platform_id=platform_id,
+            campaigns=campaigns,
+            keywords=keywords
+        )
+
+        # 이상 징후 발견 시 알림 생성
+        if anomaly_alerts:
+            for alert in anomaly_alerts:
+                create_notification(
+                    user_id=user_id,
+                    notification_type="anomaly_detected",
+                    title=f"이상 징후 감지: {alert.anomaly_type.value}",
+                    message=f"{alert.metric_name} {alert.change_percent:.1f}% 변화 감지",
+                    platform_id=platform_id,
+                    severity=alert.severity.value,
+                    data={
+                        "anomaly_type": alert.anomaly_type.value,
+                        "current_value": alert.current_value,
+                        "baseline_value": alert.baseline_value,
+                        "change_percent": alert.change_percent,
+                    },
+                )
+
         # 전략에 따른 최적화 실행
         strategy = OptimizationStrategy(settings.get("strategy", "balanced"))
         changes = await self._apply_optimization_strategy(
-            service, campaigns, keywords, settings, strategy
+            service, campaigns, keywords, settings, strategy,
+            user_id=user_id, platform_id=platform_id
         )
 
         # 실제 변경 적용
@@ -232,7 +265,9 @@ class AdAutoOptimizer:
         campaigns,
         keywords,
         settings: Dict[str, Any],
-        strategy: OptimizationStrategy
+        strategy: OptimizationStrategy,
+        user_id: int = None,
+        platform_id: str = None
     ) -> List[Dict[str, Any]]:
         """최적화 전략 적용하여 변경 목록 생성"""
         changes = []
@@ -242,6 +277,30 @@ class AdAutoOptimizer:
         min_bid = settings.get("min_bid", 70)
         max_bid = settings.get("max_bid", 100000)
         max_change_ratio = settings.get("max_bid_change_ratio", 0.2)
+
+        # 시간대별 입찰 가중치 적용
+        hourly_modifier = 1.0
+        hourly_reason = ""
+        if user_id and platform_id:
+            schedule = get_hourly_bid_schedule(user_id, platform_id)
+            if schedule:
+                now = datetime.now()
+                hour = now.hour
+                day_of_week = now.weekday()
+
+                # 시간대별 가중치 계산
+                hourly_mod = schedule.get("hourly_modifiers", {}).get(hour, 1.0)
+                daily_mod = schedule.get("daily_modifiers", {}).get(day_of_week, 1.0)
+                hourly_modifier = hourly_mod * daily_mod
+
+                # 범위 제한
+                hourly_modifier = max(0.3, min(2.0, hourly_modifier))
+
+                day_names = ["월", "화", "수", "목", "금", "토", "일"]
+                if hourly_modifier != 1.0:
+                    hourly_reason = f" (시간대 가중치: {day_names[day_of_week]} {hour}시 x{hourly_modifier:.2f})"
+
+                logger.info(f"Applying hourly modifier: {hourly_modifier:.2f} for {day_names[day_of_week]} {hour}:00")
 
         # 키워드 기반 최적화 (검색 광고)
         for kw in keywords:
@@ -262,6 +321,15 @@ class AdAutoOptimizer:
                 change = self._optimize_keyword_balanced(kw, target_roas, target_cpa, min_bid, max_bid, max_change_ratio)
 
             if change:
+                # 시간대별 가중치 적용
+                if hourly_modifier != 1.0 and change.get("new_bid", 0) > 0:
+                    original_bid = change["new_bid"]
+                    adjusted_bid = int(original_bid * hourly_modifier)
+                    adjusted_bid = max(min_bid, min(max_bid, adjusted_bid))
+                    change["new_bid"] = adjusted_bid
+                    change["reason"] = change.get("reason", "") + hourly_reason
+                    change["hourly_modifier"] = hourly_modifier
+
                 changes.append(change)
 
         # 캠페인 예산 최적화
@@ -634,6 +702,109 @@ class AdAutoOptimizer:
                 logger.error(f"Failed to calculate ROI for {account['platform_id']}: {str(e)}")
 
         logger.info("✅ Daily ROI calculation completed")
+
+    async def _detect_anomalies(
+        self,
+        user_id: int,
+        platform_id: str,
+        campaigns: List,
+        keywords: List
+    ) -> List[AnomalyAlert]:
+        """
+        성과 데이터에서 이상 징후 감지
+        - CPC 급등, CTR 급락, 전환율 하락 등
+        """
+        alerts = []
+
+        # 캠페인 레벨 집계
+        total_impressions = sum(c.impressions for c in campaigns if hasattr(c, 'impressions'))
+        total_clicks = sum(c.clicks for c in campaigns if hasattr(c, 'clicks'))
+        total_cost = sum(c.cost for c in campaigns if hasattr(c, 'cost'))
+        total_conversions = sum(c.conversions for c in campaigns if hasattr(c, 'conversions'))
+        total_revenue = sum(c.revenue for c in campaigns if hasattr(c, 'revenue'))
+
+        # 파생 지표 계산
+        current_metrics = {}
+
+        if total_impressions > 0:
+            current_metrics["impressions"] = total_impressions
+            current_metrics["ctr"] = (total_clicks / total_impressions) * 100
+
+        if total_clicks > 0:
+            current_metrics["clicks"] = total_clicks
+            current_metrics["cpc"] = total_cost / total_clicks
+
+        if total_conversions > 0:
+            current_metrics["conversions"] = total_conversions
+            current_metrics["cvr"] = (total_conversions / total_clicks) * 100 if total_clicks > 0 else 0
+
+        if total_cost > 0:
+            current_metrics["spend"] = total_cost
+            current_metrics["roas"] = (total_revenue / total_cost) * 100 if total_revenue > 0 else 0
+
+        # 이상 징후 탐지기에 메트릭 전달하여 분석
+        if current_metrics:
+            detected = self._anomaly_detector.analyze_performance(
+                user_id=user_id,
+                platform_id=platform_id,
+                current_metrics=current_metrics
+            )
+            alerts.extend(detected)
+
+            # 알림을 DB에도 저장
+            from database.ad_optimization_db import save_anomaly_alert
+            for alert in detected:
+                try:
+                    save_anomaly_alert(
+                        alert_id=alert.id,
+                        user_id=alert.user_id,
+                        platform_id=alert.platform_id,
+                        anomaly_type=alert.anomaly_type.value,
+                        severity=alert.severity.value,
+                        metric_name=alert.metric_name,
+                        current_value=alert.current_value,
+                        baseline_value=alert.baseline_value,
+                        change_percent=alert.change_percent,
+                        detected_at=alert.detected_at,
+                        z_score=alert.z_score,
+                        campaign_id=alert.campaign_id,
+                        keyword_id=alert.keyword_id
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to save anomaly alert to DB: {e}")
+
+        # 고위험 키워드 개별 분석
+        for kw in keywords:
+            if not hasattr(kw, 'clicks') or kw.clicks < 10:
+                continue
+
+            kw_metrics = {}
+            if kw.impressions > 0:
+                kw_metrics["ctr"] = (kw.clicks / kw.impressions) * 100
+            if kw.clicks > 0:
+                kw_metrics["cpc"] = kw.cost / kw.clicks
+            if kw.conversions > 0 and kw.clicks > 0:
+                kw_metrics["cvr"] = (kw.conversions / kw.clicks) * 100
+            if kw.cost > 0 and kw.revenue > 0:
+                kw_metrics["roas"] = (kw.revenue / kw.cost) * 100
+
+            if kw_metrics:
+                kw_alerts = self._anomaly_detector.analyze_performance(
+                    user_id=user_id,
+                    platform_id=platform_id,
+                    current_metrics=kw_metrics,
+                    campaign_id=getattr(kw, 'campaign_id', None),
+                    keyword_id=getattr(kw, 'keyword_id', None)
+                )
+                # 키워드 레벨 알림은 HIGH 이상만 추가
+                for alert in kw_alerts:
+                    if alert.severity.value in ['high', 'critical']:
+                        alerts.append(alert)
+
+        if alerts:
+            logger.warning(f"🚨 Detected {len(alerts)} anomalies for {platform_id}")
+
+        return alerts
 
     def get_status(self) -> Dict[str, Any]:
         """스케줄러 상태 조회"""

@@ -248,7 +248,18 @@
       "Bash(git fetch:*)",
       "Bash(\"C:\\\\Users\\\\이아랑\\\\.fly\\\\bin\\\\flyctl.exe\" logs -a naverpay-delivery-tracker --count 30)",
       "Bash(set:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(gh run:*)",
+      "Bash(npm cache clean:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(/c/Users/u/.fly/bin/flyctl.exe deploy)",
+      "Bash(\"C:\\\\Users\\\\u\\\\.fly\\\\bin\\\\flyctl.exe\" deploy)",
+      "Bash(\"C:\\\\Users\\\\u\\\\.fly\\\\bin\\\\flyctl.exe\" logs -a naverpay-delivery-tracker --count 30)",
+      "Bash(\"C:\\\\Users\\\\u\\\\.fly\\\\bin\\\\flyctl.exe\" logs -a naverpay-delivery-tracker -n)",
+      "Bash(\"C:\\\\Users\\\\u\\\\.fly\\\\bin\\\\flyctl.exe\" ssh console:*)",
+      "Bash(\"C:\\\\Users\\\\u\\\\.fly\\\\bin\\\\flyctl.exe\" secrets list -a naverpay-delivery-tracker)",
+      "Bash(\"C:\\\\Users\\\\u\\\\.fly\\\\bin\\\\flyctl.exe\" ssh console -a naverpay-delivery-tracker -C \"cd /app && python -c \"\"\nfrom services.naver_ad_service import NaverAdApiClient\nimport asyncio\n\nasync def test\\(\\):\n    client = NaverAdApiClient\\(\\)\n    try:\n        campaigns = await client.get_campaigns\\(\\)\n        print\\(f''Campaigns: {len\\(campaigns\\)}''\\)\n        for c in campaigns[:3]:\n            print\\(f''  - {c.get\\(\"\"name\"\"\\)}: {c.get\\(\"\"status\"\"\\)}''\\)\n    except Exception as e:\n        print\\(f''Error: {e}''\\)\n    finally:\n        await client.close\\(\\)\n\nasyncio.run\\(test\\(\\)\\)\n\"\"\")",
+      "Bash(\"C:\\\\Users\\\\u\\\\.fly\\\\bin\\\\flyctl.exe\" deploy --wait-timeout 300)"
     ],
     "deny": [],
     "ask": []

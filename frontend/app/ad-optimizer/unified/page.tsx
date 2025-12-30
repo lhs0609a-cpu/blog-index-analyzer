@@ -777,6 +777,277 @@ export default function UnifiedAdOptimizerPage() {
               </motion.div>
             </div>
 
+            {/* 고급 최적화 도구 */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="mb-6"
+            >
+              <Link href="/ad-optimizer/hourly-bidding">
+                <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all cursor-pointer group">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                        <Clock className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                          시간대별 입찰 최적화
+                          <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">NEW</span>
+                        </h3>
+                        <p className="text-blue-100 text-sm">전환율 높은 시간대에 집중 입찰하여 비용 15-25% 절감</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-white/80 group-hover:text-white transition-colors">
+                      <span className="text-sm">설정하기</span>
+                      <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </div>
+              </Link>
+              <Link href="/ad-optimizer/anomaly-detection" className="mt-3 block">
+                <div className="bg-gradient-to-r from-red-500 to-orange-500 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all cursor-pointer group">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                        <Bell className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                          이상 징후 감지
+                          <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">NEW</span>
+                        </h3>
+                        <p className="text-orange-100 text-sm">CPC 급등, CTR 급락 등 성과 이상을 실시간 감지하고 대응</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-white/80 group-hover:text-white transition-colors">
+                      <span className="text-sm">모니터링</span>
+                      <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </div>
+              </Link>
+              <Link href="/ad-optimizer/budget-reallocation" className="mt-3 block">
+                <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all cursor-pointer group">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                        <PieChart className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                          크로스 플랫폼 예산 재분배
+                          <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">NEW</span>
+                        </h3>
+                        <p className="text-purple-100 text-sm">고효율 플랫폼에 예산 집중, 전체 ROAS 10-20% 개선</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-white/80 group-hover:text-white transition-colors">
+                      <span className="text-sm">최적화</span>
+                      <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </div>
+              </Link>
+              <Link href="/ad-optimizer/creative-fatigue" className="mt-3 block">
+                <div className="bg-gradient-to-r from-fuchsia-500 to-violet-500 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all cursor-pointer group">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                        <Flame className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                          크리에이티브 피로도 감지
+                          <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">NEW</span>
+                        </h3>
+                        <p className="text-fuchsia-100 text-sm">Meta 광고 크리에이티브 수명 분석 및 교체 시점 추천</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-white/80 group-hover:text-white transition-colors">
+                      <span className="text-sm">분석하기</span>
+                      <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </div>
+              </Link>
+              <Link href="/ad-optimizer/naver-quality" className="mt-3 block">
+                <div className="bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all cursor-pointer group">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                        <Award className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                          네이버 품질지수 최적화
+                          <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">NEW</span>
+                        </h3>
+                        <p className="text-green-100 text-sm">검색광고 품질지수 분석 및 CPC 절감 전략</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-white/80 group-hover:text-white transition-colors">
+                      <span className="text-sm">최적화</span>
+                      <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </div>
+              </Link>
+              <Link href="/ad-optimizer/budget-pacing" className="mt-3 block">
+                <div className="bg-gradient-to-r from-cyan-500 to-teal-500 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all cursor-pointer group">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                        <Clock className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                          예산 페이싱
+                          <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">NEW</span>
+                        </h3>
+                        <p className="text-cyan-100 text-sm">시간대별 예산 분배 최적화 및 소진 속도 모니터링</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-white/80 group-hover:text-white transition-colors">
+                      <span className="text-sm">관리</span>
+                      <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </div>
+              </Link>
+              <Link href="/ad-optimizer/funnel-bidding" className="mt-3 block">
+                <div className="bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all cursor-pointer group">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                        <Target className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                          퍼널 기반 입찰
+                          <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">NEW</span>
+                        </h3>
+                        <p className="text-indigo-100 text-sm">TOFU/MOFU/BOFU 단계별 입찰 전략 최적화</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-white/80 group-hover:text-white transition-colors">
+                      <span className="text-sm">최적화</span>
+                      <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            </motion.div>
+
+            {/* 플랫폼별 기능 지원 매트릭스 */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="bg-white rounded-2xl shadow-sm overflow-hidden mb-6"
+            >
+              <div className="p-4 border-b border-gray-100">
+                <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                  <Grid className="w-5 h-5 text-indigo-500" />
+                  플랫폼별 기능 지원 현황
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">각 광고 플랫폼에서 사용 가능한 최적화 기능을 확인하세요</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-medium text-gray-600">기능</th>
+                      <th className="px-3 py-3 text-center font-medium text-gray-600">
+                        <span className="flex items-center justify-center gap-1">🟢 네이버</span>
+                      </th>
+                      <th className="px-3 py-3 text-center font-medium text-gray-600">
+                        <span className="flex items-center justify-center gap-1">🔵 구글</span>
+                      </th>
+                      <th className="px-3 py-3 text-center font-medium text-gray-600">
+                        <span className="flex items-center justify-center gap-1">🔷 메타</span>
+                      </th>
+                      <th className="px-3 py-3 text-center font-medium text-gray-600">
+                        <span className="flex items-center justify-center gap-1">💛 카카오</span>
+                      </th>
+                      <th className="px-3 py-3 text-center font-medium text-gray-600">
+                        <span className="flex items-center justify-center gap-1">🎵 틱톡</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    <tr className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-900">이상 징후 감지</td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><Clock className="w-5 h-5 text-yellow-500 mx-auto" title="준비 중" /></td>
+                    </tr>
+                    <tr className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-900">시간대별 입찰</td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><X className="w-5 h-5 text-gray-300 mx-auto" /></td>
+                    </tr>
+                    <tr className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-900">예산 재분배</td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><X className="w-5 h-5 text-gray-300 mx-auto" /></td>
+                    </tr>
+                    <tr className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-900">크리에이티브 피로도</td>
+                      <td className="px-3 py-3 text-center"><X className="w-5 h-5 text-gray-300 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><Clock className="w-5 h-5 text-yellow-500 mx-auto" title="준비 중" /></td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><X className="w-5 h-5 text-gray-300 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                    </tr>
+                    <tr className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-900">품질지수 최적화</td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><Clock className="w-5 h-5 text-yellow-500 mx-auto" title="준비 중" /></td>
+                      <td className="px-3 py-3 text-center"><X className="w-5 h-5 text-gray-300 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><X className="w-5 h-5 text-gray-300 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><X className="w-5 h-5 text-gray-300 mx-auto" /></td>
+                    </tr>
+                    <tr className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-900">예산 페이싱</td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                    </tr>
+                    <tr className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-900">퍼널 기반 입찰</td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div className="p-4 bg-gray-50 border-t border-gray-100">
+                <div className="flex items-center gap-4 text-xs text-gray-500">
+                  <span className="flex items-center gap-1"><Check className="w-4 h-4 text-green-500" /> 지원</span>
+                  <span className="flex items-center gap-1"><Clock className="w-4 h-4 text-yellow-500" /> 준비 중</span>
+                  <span className="flex items-center gap-1"><X className="w-4 h-4 text-gray-300" /> 미지원</span>
+                  <Link href="/ad-optimizer/setup-guide" className="ml-auto text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+                    플랫폼 연동 가이드 <ExternalLink className="w-3 h-3" />
+                  </Link>
+                </div>
+              </div>
+            </motion.div>
+
             {/* 대시보드 2열 레이아웃 */}
             <div className="grid lg:grid-cols-3 gap-6">
               {/* 왼쪽: 플랫폼 성과 요약 + 최적화 피드 */}
