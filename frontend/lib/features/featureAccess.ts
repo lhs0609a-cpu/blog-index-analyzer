@@ -227,6 +227,20 @@ export const FEATURES: Record<string, FeatureConfig> = {
     category: 'keyword',
     access: { guest: 'none', free: 'none', basic: 'full', pro: 'full', unlimited: 'full' }
   },
+  keywordSearch: {
+    name: 'keywordSearch',
+    displayName: '키워드 검색',
+    description: '키워드별 블로그 상위 노출 분석',
+    category: 'keyword',
+    access: { guest: 'limited', free: 'limited', basic: 'limited', pro: 'limited', unlimited: 'full' },
+    limits: {
+      guest: { maxKeywords: 5, treeExpansion: false },
+      free: { maxKeywords: 10, treeExpansion: false },
+      basic: { maxKeywords: 30, treeExpansion: true },
+      pro: { maxKeywords: 50, treeExpansion: true },
+      unlimited: { maxKeywords: 100, treeExpansion: true }
+    }
+  },
 
   // Platform Analysis
   shopping: {

@@ -237,6 +237,40 @@ def cache_related_keywords(keyword: str, data: Dict[str, Any], ttl_hours: int = 
         ))
 
 
+# ========== 키워드 트리 캐시 ==========
+
+def get_cached_keyword_tree(cache_key: str) -> Optional[Dict[str, Any]]:
+    """캐시된 키워드 트리 결과 조회"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT response_data FROM related_keywords_cache
+            WHERE keyword = ? AND expires_at > datetime('now')
+        """, (cache_key,))
+
+        row = cursor.fetchone()
+        if row:
+            return json.loads(row['response_data'])
+        return None
+
+
+def cache_keyword_tree(cache_key: str, data: Dict[str, Any], ttl_hours: int = 6):
+    """키워드 트리 결과 캐싱 (6시간 기본)"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        expires_at = datetime.now() + timedelta(hours=ttl_hours)
+
+        cursor.execute("""
+            INSERT OR REPLACE INTO related_keywords_cache
+            (keyword, response_data, expires_at)
+            VALUES (?, ?, ?)
+        """, (
+            cache_key,
+            json.dumps(data, ensure_ascii=False),
+            expires_at.isoformat()
+        ))
+
+
 # ========== 키워드 유형 학습 ==========
 
 def get_learned_type(keyword: str) -> Optional[Dict[str, Any]]:

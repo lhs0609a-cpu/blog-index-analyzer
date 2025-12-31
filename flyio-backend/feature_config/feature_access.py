@@ -423,6 +423,26 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.UNLIMITED: AccessLevel.FULL
         }
     ),
+    "keywordSearch": FeatureConfig(
+        name="keywordSearch",
+        display_name="키워드 검색",
+        description="키워드별 블로그 상위 노출 분석",
+        category="keyword",
+        access={
+            Plan.GUEST: AccessLevel.LIMITED,
+            Plan.FREE: AccessLevel.LIMITED,
+            Plan.BASIC: AccessLevel.LIMITED,
+            Plan.PRO: AccessLevel.LIMITED,
+            Plan.UNLIMITED: AccessLevel.FULL
+        },
+        limits={
+            Plan.GUEST: {"max_keywords": 5, "tree_expansion": False},
+            Plan.FREE: {"max_keywords": 10, "tree_expansion": False},
+            Plan.BASIC: {"max_keywords": 30, "tree_expansion": True},
+            Plan.PRO: {"max_keywords": 50, "tree_expansion": True},
+            Plan.UNLIMITED: {"max_keywords": 100, "tree_expansion": True}
+        }
+    ),
 
     # ============ 플랫폼 분석 (Platform Analysis) ============
     "shopping": FeatureConfig(

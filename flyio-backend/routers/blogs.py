@@ -26,12 +26,12 @@ logger = logging.getLogger(__name__)
 
 # ===== 글로벌 동시 요청 제한 (서버 과부하 방지) =====
 # 여러 키워드 동시 분석 시에도 전체 요청 수 제한
-GLOBAL_SEMAPHORE = asyncio.Semaphore(15)  # 전체 동시 요청 최대 15개
+GLOBAL_SEMAPHORE = asyncio.Semaphore(30)  # 전체 동시 요청 최대 30개 (15 → 30 성능 개선)
 
 # ===== 블로그 분석 캐시 (성능 개선) =====
-# TTL: 1시간 (같은 블로그 반복 분석 방지)
+# TTL: 4시간 (같은 블로그 반복 분석 방지)
 BLOG_ANALYSIS_CACHE: Dict[str, Dict] = {}
-BLOG_CACHE_TTL = 3600  # 1시간
+BLOG_CACHE_TTL = 14400  # 4시간 (1시간 → 4시간 성능 개선)
 
 def get_cached_blog_analysis(blog_id: str) -> Optional[Dict]:
     """캐시된 블로그 분석 결과 조회"""
@@ -94,6 +94,31 @@ class RelatedKeywordsResponse(BaseModel):
     keywords: List[RelatedKeyword]
     error: Optional[str] = None
     message: Optional[str] = None
+
+
+# ===== 키워드 트리 모델 (2단계 연관 키워드 확장) =====
+class KeywordTreeNode(BaseModel):
+    """키워드 트리 노드"""
+    keyword: str
+    monthly_pc_search: Optional[int] = None
+    monthly_mobile_search: Optional[int] = None
+    monthly_total_search: Optional[int] = None
+    competition: Optional[str] = None
+    depth: int = 0  # 0: 메인, 1: 1차 연관, 2: 2차 연관
+    parent_keyword: Optional[str] = None
+    children: List['KeywordTreeNode'] = []
+
+
+class KeywordTreeResponse(BaseModel):
+    """키워드 트리 응답"""
+    success: bool
+    root_keyword: str
+    total_keywords: int
+    depth: int
+    tree: KeywordTreeNode
+    flat_list: List[RelatedKeyword]
+    error: Optional[str] = None
+    cached: bool = False
 
 
 class PostAnalysis(BaseModel):
@@ -1590,18 +1615,139 @@ async def get_related_keywords(keyword: str):
     return await get_related_keywords_from_autocomplete(keyword)
 
 
+@router.get("/related-keywords-tree/{keyword}", response_model=KeywordTreeResponse)
+async def get_related_keywords_tree(
+    keyword: str,
+    depth: int = Query(2, ge=1, le=2, description="확장 깊이 (1-2)"),
+    limit_per_level: int = Query(10, ge=5, le=20, description="레벨당 키워드 수")
+):
+    """
+    2단계 연관 키워드 트리 조회
+
+    - depth=1: 메인 키워드 → 1차 연관 키워드
+    - depth=2: 메인 → 1차 연관 → 2차 연관 (트리 구조)
+
+    Basic 플랜 이상에서 사용 가능합니다.
+    """
+    logger.info(f"Fetching keyword tree for: {keyword}, depth: {depth}, limit: {limit_per_level}")
+
+    try:
+        # 1. 캐시 확인
+        from database.keyword_analysis_db import get_cached_keyword_tree, cache_keyword_tree
+        cache_key = f"{keyword}_tree_{depth}_{limit_per_level}"
+        cached = get_cached_keyword_tree(cache_key)
+        if cached:
+            logger.info(f"Cache hit for keyword tree: {keyword}")
+            cached['cached'] = True
+            return KeywordTreeResponse(**cached)
+
+        # 2. 루트 노드 생성
+        root = KeywordTreeNode(
+            keyword=keyword,
+            depth=0,
+            children=[]
+        )
+
+        # 3. 1차 연관 키워드 조회
+        level1_result = await get_related_keywords_from_searchad(keyword)
+        level1_keywords = level1_result.keywords[:limit_per_level] if level1_result.success else []
+
+        flat_list: List[RelatedKeyword] = []
+        total_count = 1  # 루트 포함
+
+        # 4. 1차 연관 키워드 노드 생성
+        for kw in level1_keywords:
+            child = KeywordTreeNode(
+                keyword=kw.keyword,
+                monthly_pc_search=kw.monthly_pc_search,
+                monthly_mobile_search=kw.monthly_mobile_search,
+                monthly_total_search=kw.monthly_total_search,
+                competition=kw.competition,
+                depth=1,
+                parent_keyword=keyword,
+                children=[]
+            )
+            flat_list.append(kw)
+            total_count += 1
+
+            # 5. 2차 연관 키워드 조회 (depth=2인 경우)
+            if depth >= 2:
+                # Rate limiting을 위해 약간의 딜레이
+                await asyncio.sleep(0.1)
+
+                level2_result = await get_related_keywords_from_searchad(kw.keyword)
+                level2_keywords = level2_result.keywords[:limit_per_level // 2] if level2_result.success else []
+
+                for kw2 in level2_keywords:
+                    # 중복 제거: 이미 있는 키워드는 건너뜀
+                    if kw2.keyword == keyword or any(f.keyword == kw2.keyword for f in flat_list):
+                        continue
+
+                    grandchild = KeywordTreeNode(
+                        keyword=kw2.keyword,
+                        monthly_pc_search=kw2.monthly_pc_search,
+                        monthly_mobile_search=kw2.monthly_mobile_search,
+                        monthly_total_search=kw2.monthly_total_search,
+                        competition=kw2.competition,
+                        depth=2,
+                        parent_keyword=kw.keyword,
+                        children=[]
+                    )
+                    child.children.append(grandchild)
+                    flat_list.append(kw2)
+                    total_count += 1
+
+            root.children.append(child)
+
+        # 6. 응답 생성
+        response_data = {
+            "success": True,
+            "root_keyword": keyword,
+            "total_keywords": total_count,
+            "depth": depth,
+            "tree": root.model_dump(),
+            "flat_list": [kw.model_dump() for kw in flat_list],
+            "cached": False
+        }
+
+        # 7. 캐시 저장 (6시간)
+        cache_keyword_tree(cache_key, response_data, ttl_hours=6)
+
+        return KeywordTreeResponse(**response_data)
+
+    except Exception as e:
+        logger.error(f"Error fetching keyword tree for {keyword}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return KeywordTreeResponse(
+            success=False,
+            root_keyword=keyword,
+            total_keywords=0,
+            depth=depth,
+            tree=KeywordTreeNode(keyword=keyword),
+            flat_list=[],
+            error=str(e)
+        )
+
+
 @router.post("/search-keyword-with-tabs")
 async def search_keyword_with_tabs(
     keyword: str = Query(..., description="검색할 키워드"),
     limit: int = Query(13, description="결과 개수"),
-    analyze_content: bool = Query(True, description="콘텐츠 분석 여부")
+    analyze_content: bool = Query(True, description="콘텐츠 분석 여부"),
+    quick_mode: bool = Query(False, description="빠른 모드 (상위 5개만 분석)")
 ):
     """
     키워드로 블로그 검색 및 분석
 
     네이버 VIEW 탭에서 블로그를 검색하고 각 블로그의 지수를 분석합니다.
+
+    Args:
+        quick_mode: True일 경우 상위 5개 블로그만 분석 (속도 2-3배 향상)
     """
-    logger.info(f"Searching keyword: {keyword}, limit: {limit}")
+    # 빠른 모드: 분석할 블로그 수 제한
+    effective_limit = min(limit, 5) if quick_mode else limit
+    logger.info(f"Searching keyword: {keyword}, limit: {effective_limit} (quick_mode={quick_mode})")
 
     # Fetch search results from Naver
     search_results = await fetch_naver_search_results(keyword, limit)
@@ -1649,20 +1795,28 @@ async def search_keyword_with_tabs(
                 logger.warning(f"Failed to analyze {item['blog_id']} after {max_retries + 1} attempts: {e}")
                 return item, {"stats": {}, "index": {}}, {}
 
-        # 동시에 최대 5개씩 분석 (키워드당) + 글로벌 제한
-        local_semaphore = asyncio.Semaphore(5)
+        # 동시에 최대 10개씩 분석 (키워드당) + 글로벌 제한 (5 → 10 성능 개선)
+        local_semaphore = asyncio.Semaphore(10)
 
         async def analyze_with_limit(item):
             # 글로벌 + 로컬 세마포어 모두 적용 (다중 키워드 동시 처리 시 과부하 방지)
             async with GLOBAL_SEMAPHORE:
                 async with local_semaphore:
-                    # 요청 간 약간의 지연으로 서버 부하 분산
-                    await asyncio.sleep(random.uniform(0.1, 0.3))
+                    # 지연 최소화 (0.1-0.3 → 0-0.05초) - 성능 개선
+                    await asyncio.sleep(random.uniform(0, 0.05))
                     return await analyze_single(item)
 
-        # 병렬 실행
-        analysis_tasks = [analyze_with_limit(item) for item in search_results]
+        # 빠른 모드: 상위 N개만 분석, 나머지는 기본 정보만 표시
+        items_to_analyze = search_results[:effective_limit]
+        items_to_skip = search_results[effective_limit:]
+
+        # 분석 대상 병렬 실행
+        analysis_tasks = [analyze_with_limit(item) for item in items_to_analyze]
         analysis_results = await asyncio.gather(*analysis_tasks)
+
+        # 분석 제외 항목은 기본 정보만 추가 (빠른 응답)
+        for item in items_to_skip:
+            analysis_results.append((item, {"stats": {}, "index": {}}, {}))
 
         for item, analysis, post_analysis_data in analysis_results:
             stats = analysis.get("stats", {})

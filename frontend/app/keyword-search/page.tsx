@@ -9,6 +9,8 @@ import { motion } from 'framer-motion'
 import { Check, Loader2, X, TrendingUp, TrendingDown, ArrowLeft } from 'lucide-react'
 import { useAuthStore } from '@/lib/stores/auth'
 import { incrementUsage, checkUsageLimit } from '@/lib/api/subscription'
+import { useFeatureAccess } from '@/lib/features/useFeatureAccess'
+import { PLAN_INFO } from '@/lib/features/featureAccess'
 import toast from 'react-hot-toast'
 import Tutorial, { keywordAnalysisTutorialSteps } from '@/components/Tutorial'
 
@@ -146,6 +148,29 @@ interface RelatedKeywordsResponse {
   message?: string
 }
 
+// 키워드 트리 인터페이스
+interface KeywordTreeNode {
+  keyword: string
+  monthly_pc_search: number | null
+  monthly_mobile_search: number | null
+  monthly_total_search: number | null
+  competition: string | null
+  depth: number
+  parent_keyword: string | null
+  children: KeywordTreeNode[]
+}
+
+interface KeywordTreeResponse {
+  success: boolean
+  root_keyword: string
+  total_keywords: number
+  depth: number
+  tree: KeywordTreeNode
+  flat_list: RelatedKeyword[]
+  error?: string
+  cached: boolean
+}
+
 // 학습 엔진 관련 인터페이스
 interface LearningWeights {
   c_rank: {
@@ -219,11 +244,18 @@ function KeywordSearchContent() {
   // 인증 상태
   const { isAuthenticated, user } = useAuthStore()
 
+  // 플랜별 기능 접근
+  const { getAccess, plan } = useFeatureAccess()
+  const keywordSearchAccess = getAccess('keywordSearch')
+  const maxKeywords = keywordSearchAccess.limits?.maxKeywords || 10
+  const canUseTreeExpansion = keywordSearchAccess.limits?.treeExpansion || false
+
   // 멀티 키워드 검색 관련
   const [keywordsInput, setKeywordsInput] = useState('')
   const [keywordStatuses, setKeywordStatuses] = useState<KeywordSearchStatus[]>([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [activeTab, setActiveTab] = useState<string>('input')
+  const [quickMode, setQuickMode] = useState(true) // 빠른 모드 (상위 5개만 분석, 기본 활성화)
 
   // 단일 키워드 검색용 (하위 호환성)
   const [keyword, setKeyword] = useState('')
@@ -251,6 +283,11 @@ function KeywordSearchContent() {
   const [relatedKeywords, setRelatedKeywords] = useState<RelatedKeywordsResponse | null>(null)
   const [loadingRelatedKeywords, setLoadingRelatedKeywords] = useState(false)
   const [showAllRelatedKeywords, setShowAllRelatedKeywords] = useState(false)
+
+  // 키워드 트리 관련 (2단계 연관 키워드 확장)
+  const [keywordTree, setKeywordTree] = useState<KeywordTreeResponse | null>(null)
+  const [loadingKeywordTree, setLoadingKeywordTree] = useState(false)
+  const [expandedTreeNodes, setExpandedTreeNodes] = useState<Set<string>>(new Set())
 
   // 학습 엔진 상태
   const [learningStatus, setLearningStatus] = useState<LearningStatus | null>(null)
@@ -320,7 +357,7 @@ function KeywordSearchContent() {
       }, 3000)
 
       const response = await fetch(
-        `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(searchKeyword)}&limit=13&analyze_content=true`,
+        `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(searchKeyword)}&limit=13&analyze_content=true&quick_mode=${quickMode}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -383,15 +420,15 @@ function KeywordSearchContent() {
       .split(/[,\n]/)
       .map(k => k.trim())
       .filter(k => k.length > 0)
-      .slice(0, 10) // 최대 10개
+      .slice(0, maxKeywords) // 플랜별 동적 제한
 
     if (keywords.length === 0) {
       setError('최소 1개 이상의 키워드를 입력하세요')
       return
     }
 
-    if (keywords.length > 10) {
-      setError('최대 10개까지만 입력 가능합니다')
+    if (keywords.length > maxKeywords) {
+      setError(`${PLAN_INFO[plan].name} 플랜은 최대 ${maxKeywords}개까지 입력 가능합니다. 업그레이드하면 더 많은 키워드를 검색할 수 있습니다.`)
       return
     }
 
@@ -436,7 +473,7 @@ function KeywordSearchContent() {
         )
 
         const response = await fetch(
-          `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(keyword)}&limit=13&analyze_content=true`,
+          `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(keyword)}&limit=13&analyze_content=true&quick_mode=${quickMode}`,
           {
             method: 'POST',
             headers: {
@@ -872,6 +909,53 @@ function KeywordSearchContent() {
     }
   }
 
+  // 키워드 트리 조회 (2단계 연관 키워드 확장) - Basic 이상만 사용 가능
+  const fetchKeywordTree = async (searchKeyword: string) => {
+    if (!canUseTreeExpansion) {
+      toast.error('키워드 트리 확장은 Basic 플랜 이상에서 사용 가능합니다.')
+      return
+    }
+
+    setLoadingKeywordTree(true)
+    setKeywordTree(null)
+
+    try {
+      const apiUrl = getApiUrl()
+      const response = await fetch(
+        `${apiUrl}/api/blogs/related-keywords-tree/${encodeURIComponent(searchKeyword)}?depth=2&limit_per_level=10`
+      )
+
+      if (response.ok) {
+        const data: KeywordTreeResponse = await response.json()
+        setKeywordTree(data)
+        // 1차 노드 기본 확장
+        if (data.tree?.children) {
+          setExpandedTreeNodes(new Set(data.tree.children.map(c => c.keyword)))
+        }
+      } else {
+        toast.error('키워드 트리 조회에 실패했습니다.')
+      }
+    } catch (err) {
+      console.error('[Keyword Tree] Fetch failed:', err)
+      toast.error('키워드 트리 조회 중 오류가 발생했습니다.')
+    } finally {
+      setLoadingKeywordTree(false)
+    }
+  }
+
+  // 트리 노드 확장/접기 토글
+  const toggleTreeNode = (keyword: string) => {
+    setExpandedTreeNodes(prev => {
+      const next = new Set(prev)
+      if (next.has(keyword)) {
+        next.delete(keyword)
+      } else {
+        next.add(keyword)
+      }
+      return next
+    })
+  }
+
   // 연관 키워드 클릭 핸들러 - 해당 키워드로 바로 검색
   const handleRelatedKeywordClick = async (clickedKeyword: string) => {
     setKeyword(clickedKeyword)
@@ -891,7 +975,7 @@ function KeywordSearchContent() {
       }, 500)
 
       const response = await fetch(
-        `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(clickedKeyword)}&limit=13&analyze_content=true`,
+        `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(clickedKeyword)}&limit=13&analyze_content=true&quick_mode=${quickMode}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1130,7 +1214,12 @@ function KeywordSearchContent() {
           <form onSubmit={handleMultiKeywordSearch}>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                검색할 키워드 (최대 10개)
+                검색할 키워드 (최대 {maxKeywords}개)
+                {maxKeywords < 100 && (
+                  <span className="text-xs text-blue-600 ml-2">
+                    업그레이드하면 최대 100개까지 가능
+                  </span>
+                )}
               </label>
               <textarea
                 id="keyword-analysis-input"
@@ -1141,8 +1230,31 @@ function KeywordSearchContent() {
                 disabled={isAnalyzing}
               />
               <p className="mt-2 text-xs text-gray-500">
-                {keywordsInput.split(/[,\n]/).filter(k => k.trim()).length}/10 키워드
+                {keywordsInput.split(/[,\n]/).filter(k => k.trim()).length}/{maxKeywords} 키워드
               </p>
+            </div>
+
+            {/* 빠른 모드 토글 */}
+            <div className="mb-4 flex items-center gap-3">
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={quickMode}
+                  onChange={(e) => setQuickMode(e.target.checked)}
+                  className="sr-only peer"
+                  disabled={isAnalyzing}
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-100 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+                <span className="ms-3 text-sm font-medium text-gray-700">
+                  ⚡ 빠른 모드
+                </span>
+              </label>
+              <span className="text-xs text-gray-500">
+                {quickMode
+                  ? '상위 5개 블로그만 분석 (2-3배 빠름)'
+                  : '전체 13개 블로그 분석 (상세 분석)'
+                }
+              </span>
             </div>
 
             <button
@@ -2427,6 +2539,31 @@ function KeywordSearchContent() {
                     {relatedKeywords.source === 'searchad' ? '네이버 검색광고 API' : '네이버 자동완성'}
                   </span>
                 )}
+                {/* 2단계 확장 버튼 - Basic 이상만 */}
+                {relatedKeywords && relatedKeywords.keywords.length > 0 && (
+                  <button
+                    onClick={() => fetchKeywordTree(relatedKeywords.keyword)}
+                    disabled={loadingKeywordTree || !canUseTreeExpansion}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                      canUseTreeExpansion
+                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600'
+                        : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                    }`}
+                    title={canUseTreeExpansion ? '2단계 연관 키워드 확장' : 'Basic 플랜 이상에서 사용 가능'}
+                  >
+                    {loadingKeywordTree ? (
+                      <span className="flex items-center gap-1">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        확장 중...
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1">
+                        🌳 2단계 확장
+                        {!canUseTreeExpansion && <span className="ml-1">🔒</span>}
+                      </span>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -2622,6 +2759,111 @@ function KeywordSearchContent() {
                     연관 키워드를 조회하려면 키워드를 검색하세요
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* 키워드 트리 (2단계 연관 키워드 확장) */}
+            {keywordTree && keywordTree.success && keywordTree.tree?.children && keywordTree.tree.children.length > 0 && (
+              <div className="mt-6 border-t pt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-md font-bold text-gray-800 flex items-center gap-2">
+                    <span>🌳</span>
+                    2단계 연관 키워드 트리
+                    <span className="text-sm font-normal text-gray-500">
+                      (총 {keywordTree.total_keywords}개)
+                    </span>
+                    {keywordTree.cached && (
+                      <span className="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded">캐시</span>
+                    )}
+                  </h3>
+                </div>
+
+                <div className="space-y-2">
+                  {keywordTree.tree.children.map((level1Node, idx) => (
+                    <div key={level1Node.keyword} className="border border-gray-200 rounded-lg overflow-hidden">
+                      {/* 1차 연관 키워드 헤더 */}
+                      <div
+                        className="flex items-center justify-between p-3 bg-purple-50 cursor-pointer hover:bg-purple-100 transition-colors"
+                        onClick={() => toggleTreeNode(level1Node.keyword)}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-gray-400 text-xs w-6">{idx + 1}</span>
+                          <button className="text-gray-500">
+                            {expandedTreeNodes.has(level1Node.keyword) ? (
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                            )}
+                          </button>
+                          <span
+                            className="font-medium text-purple-700 hover:text-purple-900 cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleRelatedKeywordClick(level1Node.keyword)
+                            }}
+                          >
+                            {level1Node.keyword}
+                          </span>
+                          <span className="px-2 py-0.5 bg-purple-200 text-purple-700 rounded text-xs">1차</span>
+                          {level1Node.children && level1Node.children.length > 0 && (
+                            <span className="text-xs text-gray-500">
+                              (+{level1Node.children.length}개 하위)
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-4 text-sm">
+                          <span className="text-gray-600">
+                            {level1Node.monthly_total_search?.toLocaleString() || '-'}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded text-xs ${
+                            level1Node.competition === '높음' ? 'bg-red-100 text-red-700' :
+                            level1Node.competition === '중간' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-green-100 text-green-700'
+                          }`}>
+                            {level1Node.competition || '-'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 2차 연관 키워드 (확장 시) */}
+                      {expandedTreeNodes.has(level1Node.keyword) && level1Node.children && level1Node.children.length > 0 && (
+                        <div className="border-t border-gray-200 bg-gray-50">
+                          {level1Node.children.map((level2Node, idx2) => (
+                            <div
+                              key={level2Node.keyword}
+                              className="flex items-center justify-between px-3 py-2 pl-12 hover:bg-gray-100 transition-colors cursor-pointer border-b border-gray-100 last:border-b-0"
+                              onClick={() => handleRelatedKeywordClick(level2Node.keyword)}
+                            >
+                              <div className="flex items-center gap-3">
+                                <span className="text-gray-300 text-xs">└</span>
+                                <span className="text-gray-700 hover:text-purple-600">
+                                  {level2Node.keyword}
+                                </span>
+                                <span className="px-2 py-0.5 bg-gray-200 text-gray-600 rounded text-xs">2차</span>
+                              </div>
+                              <div className="flex items-center gap-4 text-sm">
+                                <span className="text-gray-500">
+                                  {level2Node.monthly_total_search?.toLocaleString() || '-'}
+                                </span>
+                                <span className={`px-2 py-0.5 rounded text-xs ${
+                                  level2Node.competition === '높음' ? 'bg-red-100 text-red-700' :
+                                  level2Node.competition === '중간' ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-green-100 text-green-700'
+                                }`}>
+                                  {level2Node.competition || '-'}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
