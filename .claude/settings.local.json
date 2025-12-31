@@ -261,7 +261,8 @@
       "Bash(\"C:\\\\Users\\\\u\\\\.fly\\\\bin\\\\flyctl.exe\" ssh console -a naverpay-delivery-tracker -C \"cd /app && python -c \"\"\nfrom services.naver_ad_service import NaverAdApiClient\nimport asyncio\n\nasync def test\\(\\):\n    client = NaverAdApiClient\\(\\)\n    try:\n        campaigns = await client.get_campaigns\\(\\)\n        print\\(f''Campaigns: {len\\(campaigns\\)}''\\)\n        for c in campaigns[:3]:\n            print\\(f''  - {c.get\\(\"\"name\"\"\\)}: {c.get\\(\"\"status\"\"\\)}''\\)\n    except Exception as e:\n        print\\(f''Error: {e}''\\)\n    finally:\n        await client.close\\(\\)\n\nasyncio.run\\(test\\(\\)\\)\n\"\"\")",
       "Bash(\"C:\\\\Users\\\\u\\\\.fly\\\\bin\\\\flyctl.exe\" deploy --wait-timeout 300)",
       "Bash(\"C:\\\\Users\\\\u\\\\.fly\\\\bin\\\\flyctl.exe\" logs -a naverpay-delivery-tracker --count 50)",
-      "Bash(\"C:\\\\Users\\\\u\\\\.fly\\\\bin\\\\flyctl.exe\" logs -a naverpay-delivery-tracker --count 100)"
+      "Bash(\"C:\\\\Users\\\\u\\\\.fly\\\\bin\\\\flyctl.exe\" logs -a naverpay-delivery-tracker --count 100)",
+      "Bash(\"C:\\\\Users\\\\u\\\\.fly\\\\bin\\\\flyctl.exe\" logs -a naverpay-delivery-tracker --no-tail)"
     ],
     "deny": [],
     "ask": []

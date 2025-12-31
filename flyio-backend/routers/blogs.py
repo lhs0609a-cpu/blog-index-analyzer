@@ -605,20 +605,60 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
 
                             if post_data:
                                 title_text = post_data.get('title', '')
-                                content_text = post_data.get('content', '') or post_data.get('text', '')
+                                raw_content = post_data.get('content', '') or post_data.get('text', '')
 
-                                # HTML 태그 제거
-                                if content_text:
-                                    content_text = re.sub(r'<[^>]+>', ' ', content_text)
+                                # 콘텐츠에서 피처 추출 (태그 제거 전)
+                                if raw_content:
+                                    # 소제목 개수 (h2, h3, h4 태그 또는 se-section-title)
+                                    heading_matches = re.findall(r'<(h[2-4]|strong|b)[^>]*class="[^"]*se-[^"]*"[^>]*>', raw_content, re.IGNORECASE)
+                                    heading_matches += re.findall(r'<(h[2-4])[^>]*>', raw_content, re.IGNORECASE)
+                                    post_analysis["heading_count"] = len(heading_matches)
+
+                                    # 문단 개수 (<p> 또는 <div class="se-text-paragraph">)
+                                    paragraph_matches = re.findall(r'<(p|div)[^>]*class="[^"]*se-text-paragraph[^"]*"[^>]*>', raw_content, re.IGNORECASE)
+                                    paragraph_matches += re.findall(r'<p[^>]*>', raw_content, re.IGNORECASE)
+                                    post_analysis["paragraph_count"] = len(paragraph_matches)
+
+                                    # 지도 포함 여부
+                                    post_analysis["has_map"] = bool(re.search(r'se-map|class="map|map\.naver|place_thumb', raw_content, re.IGNORECASE))
+
+                                    # 외부 링크 포함 여부
+                                    links = re.findall(r'href="(https?://[^"]+)"', raw_content)
+                                    external_links = [l for l in links if 'naver.com' not in l and 'naver.net' not in l]
+                                    post_analysis["has_link"] = len(external_links) > 0
+
+                                    # 이미지 개수 (태그에서 직접 추출)
+                                    img_count = len(re.findall(r'<img[^>]+>', raw_content))
+                                    if img_count > 0:
+                                        post_analysis["image_count"] = img_count
+
+                                    # HTML 태그 제거
+                                    content_text = re.sub(r'<[^>]+>', ' ', raw_content)
                                     content_text = re.sub(r'\s+', ' ', content_text).strip()
 
-                                post_analysis["image_count"] = post_data.get('imageCount', 0) or len(re.findall(r'<img[^>]+>', post_data.get('content', '')))
+                                # 이미지/동영상 카운트 (JSON 필드 우선)
+                                if post_data.get('imageCount', 0) > 0:
+                                    post_analysis["image_count"] = post_data.get('imageCount', 0)
                                 post_analysis["video_count"] = post_data.get('videoCount', 0)
                                 post_analysis["like_count"] = post_data.get('sympathyCount', 0)
                                 post_analysis["comment_count"] = post_data.get('commentCount', 0)
-                                post_analysis["fetch_method"] = "json_preload"
 
-                                logger.info(f"Post data from JSON: {blog_id}/{post_no}")
+                                # 작성일에서 post_age_days 계산
+                                add_date = post_data.get('addDate', '') or post_data.get('logDate', '')
+                                if add_date:
+                                    try:
+                                        from datetime import datetime
+                                        # 다양한 날짜 형식 처리
+                                        date_match = re.search(r'(\d{4})[.\-/]?(\d{2})[.\-/]?(\d{2})', str(add_date))
+                                        if date_match:
+                                            y, m, d = map(int, date_match.groups())
+                                            post_date = datetime(y, m, d)
+                                            post_analysis["post_age_days"] = (datetime.now() - post_date).days
+                                    except:
+                                        pass
+
+                                post_analysis["fetch_method"] = "json_preload"
+                                logger.info(f"Post data from JSON: {blog_id}/{post_no} - headings={post_analysis['heading_count']}, paragraphs={post_analysis['paragraph_count']}, age={post_analysis['post_age_days']}days")
                         except Exception as je:
                             logger.debug(f"JSON parse failed: {je}")
 
@@ -723,17 +763,27 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
                     videos = soup.select('.se-video, iframe[src*="video"], iframe[src*="youtube"], iframe[src*="tv.naver"], .video_player')
                     post_analysis["video_count"] = len(videos)
 
-                # 소제목 개수
-                headings = soup.select('.se-section-title, .se-text-paragraph-align-center, h2, h3, h4, .se-title')
-                post_analysis["heading_count"] = len(headings)
+                # 소제목 개수 (JSON에서 이미 추출된 경우 스킵)
+                if post_analysis["heading_count"] == 0:
+                    headings = soup.select('.se-section-title, .se-text-paragraph-align-center, h2, h3, h4, .se-title, strong.se-text-paragraph')
+                    post_analysis["heading_count"] = len(headings)
 
-                # 지도 포함 여부
-                maps = soup.select('.se-map, iframe[src*="map"], .map_area, .place_thumb')
-                post_analysis["has_map"] = len(maps) > 0
+                # 문단 개수 (JSON에서 이미 추출된 경우 스킵)
+                if post_analysis["paragraph_count"] == 0:
+                    paragraphs = soup.select('.se-text-paragraph, p, .se-module-text')
+                    # 빈 문단 제외
+                    valid_paragraphs = [p for p in paragraphs if len(p.get_text(strip=True)) > 10]
+                    post_analysis["paragraph_count"] = len(valid_paragraphs)
 
-                # 외부 링크 포함 여부
-                links = soup.select('a[href*="http"]:not([href*="naver.com"]):not([href*="naver.net"])')
-                post_analysis["has_link"] = len(links) > 0
+                # 지도 포함 여부 (JSON에서 이미 추출된 경우 스킵)
+                if not post_analysis["has_map"]:
+                    maps = soup.select('.se-map, iframe[src*="map"], .map_area, .place_thumb, .se-place')
+                    post_analysis["has_map"] = len(maps) > 0
+
+                # 외부 링크 포함 여부 (JSON에서 이미 추출된 경우 스킵)
+                if not post_analysis["has_link"]:
+                    links = soup.select('a[href*="http"]:not([href*="naver.com"]):not([href*="naver.net"])')
+                    post_analysis["has_link"] = len(links) > 0
 
                 # 공감 수 (모바일)
                 like_elem = soup.select_one('.u_cnt, .sympathy_count, ._sympathyCount, .like_count, .btn_like_count')

@@ -178,18 +178,28 @@ async def run_single_learning_cycle():
                         c_rank_detail = breakdown.get("c_rank_detail", {})
                         dia_detail = breakdown.get("dia_detail", {})
 
-                        # 글 분석 (선택적)
+                        # 글 분석 (선택적) - 개선된 피처 추출
                         post_features = {}
                         if post_url:
                             try:
                                 post_analysis = await analyze_post(post_url, keyword)
                                 post_features = {
                                     "title_has_keyword": post_analysis.get("title_has_keyword", False),
+                                    "title_keyword_position": post_analysis.get("title_keyword_position", -1),
                                     "content_length": post_analysis.get("content_length", 0),
                                     "image_count": post_analysis.get("image_count", 0),
+                                    "video_count": post_analysis.get("video_count", 0),
                                     "keyword_count": post_analysis.get("keyword_count", 0),
                                     "keyword_density": post_analysis.get("keyword_density", 0),
+                                    "heading_count": post_analysis.get("heading_count", 0),
+                                    "paragraph_count": post_analysis.get("paragraph_count", 0),
+                                    "has_map": post_analysis.get("has_map", False),
+                                    "has_link": post_analysis.get("has_link", False),
+                                    "like_count": post_analysis.get("like_count", 0),
+                                    "comment_count": post_analysis.get("comment_count", 0),
+                                    "post_age_days": post_analysis.get("post_age_days"),
                                 }
+                                logger.debug(f"Post features: heading={post_features['heading_count']}, paragraph={post_features['paragraph_count']}, age={post_features['post_age_days']}")
                             except Exception as e:
                                 logger.debug(f"Post analysis skipped: {e}")
 
