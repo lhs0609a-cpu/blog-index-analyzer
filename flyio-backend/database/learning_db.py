@@ -327,7 +327,7 @@ def get_training_history(limit: int = 50) -> List[Dict]:
         return results
 
 def get_learning_statistics() -> Dict:
-    """Get learning statistics"""
+    """Get learning statistics with real-time accuracy calculation"""
     with get_db() as conn:
         cursor = conn.cursor()
 
@@ -344,15 +344,39 @@ def get_learning_statistics() -> Dict:
         last_training_row = cursor.fetchone()
         last_training = last_training_row[0] if last_training_row else None
 
-        # Latest accuracy
-        cursor.execute("SELECT accuracy_after FROM learning_sessions ORDER BY completed_at DESC LIMIT 1")
-        accuracy_row = cursor.fetchone()
-        current_accuracy = accuracy_row[0] if accuracy_row else 0.0
+        # 실시간 정확도 계산 (키워드별 그룹화)
+        current_accuracy = 0.0
+        accuracy_within_3 = 0.0
+
+        if total_samples >= 26:  # 최소 2개 키워드 * 13개 블로그
+            try:
+                samples = get_learning_samples(limit=1000)
+                if samples:
+                    from services.learning_engine import (
+                        calculate_predicted_scores,
+                        calculate_exact_match_rate_by_keyword,
+                        DEFAULT_WEIGHTS
+                    )
+                    weights = get_current_weights() or DEFAULT_WEIGHTS
+
+                    import numpy as np
+                    predicted_scores = calculate_predicted_scores(samples, weights)
+                    metrics = calculate_exact_match_rate_by_keyword(samples, predicted_scores)
+
+                    current_accuracy = metrics.get('exact_match', 0)
+                    accuracy_within_3 = metrics.get('within_3', 0)
+            except Exception as e:
+                print(f"Accuracy calculation error: {e}")
+                # Fallback to session-based accuracy
+                cursor.execute("SELECT accuracy_after FROM learning_sessions ORDER BY completed_at DESC LIMIT 1")
+                accuracy_row = cursor.fetchone()
+                current_accuracy = accuracy_row[0] if accuracy_row else 0.0
+                accuracy_within_3 = current_accuracy * 1.1
 
         return {
             "total_samples": total_samples,
-            "current_accuracy": current_accuracy,
-            "accuracy_within_3": current_accuracy * 1.1,
+            "current_accuracy": round(current_accuracy, 1),
+            "accuracy_within_3": round(accuracy_within_3, 1),
             "last_training": last_training or "-",
             "training_count": training_count
         }

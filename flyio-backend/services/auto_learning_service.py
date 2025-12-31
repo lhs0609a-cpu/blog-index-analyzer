@@ -29,6 +29,8 @@ AUTO_LEARNING_CONFIG = {
     "quiet_hours_start": 2,             # 조용한 시간 시작 (서버 부하 감소)
     "quiet_hours_end": 6,               # 조용한 시간 끝
     "quiet_hours_interval": 60,         # 조용한 시간대 학습 주기 (분)
+    "daily_training_hour": 3,           # 매일 대규모 훈련 시간 (UTC, 한국시간 12시)
+    "daily_training_samples": 5000,     # 대규모 훈련 시 사용할 샘플 수
 }
 
 # 학습 상태
@@ -43,6 +45,8 @@ auto_learning_state = {
     "errors": [],
     "current_keyword": None,
     "samples_since_last_train": 0,
+    "last_daily_training": None,
+    "daily_training_accuracy": None,
 }
 
 # 키워드 풀 (다양한 카테고리에서 로테이션)
@@ -308,6 +312,85 @@ async def run_auto_training():
         logger.error(f"[AutoLearn] Training failed: {e}")
 
 
+async def run_daily_intensive_training():
+    """매일 대규모 훈련 (더 많은 샘플, 더 많은 반복)"""
+    global auto_learning_state
+
+    try:
+        from database.learning_db import (
+            get_learning_samples, get_current_weights, save_current_weights,
+            save_training_session, save_weight_history
+        )
+        from services.learning_engine import instant_adjust_weights
+        import uuid
+
+        config = AUTO_LEARNING_CONFIG
+        samples = get_learning_samples(limit=config["daily_training_samples"])
+
+        if len(samples) < 100:
+            logger.info(f"[DailyTrain] Not enough samples: {len(samples)}")
+            return
+
+        current_weights = get_current_weights()
+        if not current_weights:
+            return
+
+        session_id = f"daily_{uuid.uuid4().hex[:8]}"
+        started_at = datetime.now(timezone.utc).isoformat()
+
+        logger.info(f"[DailyTrain] 🚀 Starting intensive training with {len(samples)} samples")
+
+        # 더 많은 반복, 더 작은 학습률로 세밀한 조정
+        new_weights, info = instant_adjust_weights(
+            samples=samples,
+            current_weights=current_weights,
+            target_accuracy=80.0,  # 현실적인 목표 (키워드별 정확도 계산 시)
+            max_iterations=200,    # 더 많은 반복
+            learning_rate=0.02,    # 더 작은 학습률
+            momentum=0.95          # 더 높은 모멘텀
+        )
+
+        initial_accuracy = info.get("initial_accuracy", 0)
+        final_accuracy = info.get("final_accuracy", 0)
+        improvement = final_accuracy - initial_accuracy
+
+        completed_at = datetime.now(timezone.utc).isoformat()
+
+        # 결과 저장
+        if final_accuracy >= initial_accuracy:
+            save_current_weights(new_weights)
+            save_weight_history(session_id, new_weights, final_accuracy, len(samples))
+            logger.info(f"[DailyTrain] ✅ Model improved: {initial_accuracy:.1f}% -> {final_accuracy:.1f}%")
+        else:
+            logger.warning(f"[DailyTrain] ⚠️ Model not improved: {initial_accuracy:.1f}% -> {final_accuracy:.1f}%")
+
+        # 세션 저장
+        save_training_session(
+            session_id=session_id,
+            samples_used=len(samples),
+            accuracy_before=initial_accuracy,
+            accuracy_after=final_accuracy,
+            improvement=improvement,
+            duration_seconds=info.get("duration_seconds", 0),
+            epochs=info.get("iterations", 0),
+            learning_rate=0.02,
+            started_at=started_at,
+            completed_at=completed_at,
+            keywords=list(set(s.get('keyword', '') for s in samples[:100])),
+            weight_changes=info.get("weight_changes", {})
+        )
+
+        auto_learning_state["last_daily_training"] = completed_at
+        auto_learning_state["daily_training_accuracy"] = final_accuracy
+
+        logger.info(f"[DailyTrain] 📊 Results: {initial_accuracy:.1f}% -> {final_accuracy:.1f}% (Δ{improvement:+.1f}%)")
+
+    except Exception as e:
+        logger.error(f"[DailyTrain] Training failed: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 class AutoLearningScheduler:
     """자동 학습 스케줄러"""
 
@@ -363,8 +446,20 @@ class AutoLearningScheduler:
 
         logger.info("[AutoLearn] Starting first learning cycle...")
 
+        last_daily_training_date = None
+
         while self.running:
             try:
+                current_hour = datetime.now(timezone.utc).hour
+                current_date = datetime.now(timezone.utc).date()
+
+                # 매일 대규모 훈련 체크 (지정된 시간, 하루 한 번만)
+                if (current_hour == AUTO_LEARNING_CONFIG["daily_training_hour"] and
+                    last_daily_training_date != current_date):
+                    logger.info("[AutoLearn] 🎯 Starting daily intensive training...")
+                    self.loop.run_until_complete(run_daily_intensive_training())
+                    last_daily_training_date = current_date
+
                 if auto_learning_state["is_enabled"]:
                     # 비동기 학습 사이클 실행
                     self.loop.run_until_complete(run_single_learning_cycle())

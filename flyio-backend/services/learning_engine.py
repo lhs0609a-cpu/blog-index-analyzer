@@ -317,6 +317,61 @@ def calculate_exact_match_rate(actual_ranks: np.ndarray, predicted_scores: np.nd
     }
 
 
+def calculate_exact_match_rate_by_keyword(samples: List[Dict], predicted_scores: np.ndarray) -> Dict[str, float]:
+    """
+    키워드별로 그룹화해서 정확도 계산 (핵심 수정!)
+
+    같은 키워드 내에서만 순위를 예측해야 정확함
+    예: 키워드A의 1-13위, 키워드B의 1-13위 각각 따로 계산
+    """
+    from collections import defaultdict
+
+    # 키워드별로 그룹화
+    keyword_groups = defaultdict(list)
+    for i, sample in enumerate(samples):
+        keyword = sample.get('keyword', 'unknown')
+        keyword_groups[keyword].append({
+            'index': i,
+            'actual_rank': sample.get('actual_rank', 0),
+            'predicted_score': predicted_scores[i]
+        })
+
+    all_differences = []
+
+    for keyword, group in keyword_groups.items():
+        if len(group) < 2:
+            continue
+
+        # 이 키워드 내에서만 순위 예측
+        scores = np.array([g['predicted_score'] for g in group])
+        actual_ranks = np.array([g['actual_rank'] for g in group])
+
+        # 점수 기반 예측 순위 (높은 점수 = 낮은 순위 번호)
+        predicted_ranks = rankdata(-scores, method='ordinal')
+
+        # 차이 계산
+        differences = np.abs(predicted_ranks - actual_ranks)
+        all_differences.extend(differences.tolist())
+
+    if not all_differences:
+        return {
+            'exact_match': 0.0, 'within_1': 0.0, 'within_2': 0.0,
+            'within_3': 0.0, 'avg_deviation': 13.0, 'max_deviation': 13.0
+        }
+
+    differences = np.array(all_differences)
+    n = len(differences)
+
+    return {
+        'exact_match': float((differences == 0).sum() / n * 100),
+        'within_1': float((differences <= 1).sum() / n * 100),
+        'within_2': float((differences <= 2).sum() / n * 100),
+        'within_3': float((differences <= 3).sum() / n * 100),
+        'avg_deviation': float(np.mean(differences)),
+        'max_deviation': float(np.max(differences)),
+    }
+
+
 # ==============================================
 # GRADIENT CALCULATION (Numerical Differentiation)
 # ==============================================
@@ -392,6 +447,8 @@ def instant_adjust_weights(
     Goal: Achieve target_accuracy (default 99%) as fast as possible
 
     Uses momentum-based gradient descent for faster convergence
+
+    핵심 수정: 키워드별로 그룹화해서 순위 예측 및 정확도 계산
     """
     start_time = time.time()
 
@@ -415,9 +472,9 @@ def instant_adjust_weights(
 
     actual_ranks = np.array([s['actual_rank'] for s in samples])
 
-    # Initial metrics
+    # Initial metrics - 키워드별 정확도 계산 (핵심 수정!)
     initial_scores = calculate_predicted_scores(samples, weights)
-    initial_metrics = calculate_exact_match_rate(actual_ranks, initial_scores)
+    initial_metrics = calculate_exact_match_rate_by_keyword(samples, initial_scores)
     initial_accuracy = initial_metrics['within_3']  # ±3 accuracy as main metric (더 현실적)
 
     # Momentum storage
@@ -429,9 +486,9 @@ def instant_adjust_weights(
     best_accuracy = initial_accuracy
 
     for iteration in range(max_iterations):
-        # Calculate current metrics
+        # Calculate current metrics - 키워드별 정확도 계산 (핵심 수정!)
         predicted_scores = calculate_predicted_scores(samples, weights)
-        metrics = calculate_exact_match_rate(actual_ranks, predicted_scores)
+        metrics = calculate_exact_match_rate_by_keyword(samples, predicted_scores)
         current_accuracy = metrics['within_3']
 
         # Check if target reached
@@ -491,9 +548,9 @@ def instant_adjust_weights(
     # Use best weights found
     weights = best_weights
 
-    # Final metrics
+    # Final metrics - 키워드별 정확도 계산 (핵심 수정!)
     final_scores = calculate_predicted_scores(samples, weights)
-    final_metrics = calculate_exact_match_rate(actual_ranks, final_scores)
+    final_metrics = calculate_exact_match_rate_by_keyword(samples, final_scores)
     _, final_spearman, final_kendall = calculate_rank_loss(actual_ranks, final_scores)
 
     duration = time.time() - start_time
