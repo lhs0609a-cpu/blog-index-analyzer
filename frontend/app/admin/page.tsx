@@ -68,6 +68,35 @@ interface UserDetail {
   audit_history: AuditLog[];
 }
 
+interface Payment {
+  id: number;
+  user_id: number;
+  user_email?: string;
+  user_name?: string;
+  order_id: string;
+  amount: number;
+  status: string;
+  payment_method?: string;
+  card_company?: string;
+  paid_at?: string;
+  created_at: string;
+}
+
+interface RevenueStats {
+  total_revenue: number;
+  total_transactions: number;
+  today_revenue: number;
+  today_count: number;
+  month_revenue: number;
+  month_count: number;
+  period_revenue: number;
+  period_count: number;
+  period: string;
+  daily_revenue: { date: string; revenue: number; count: number }[];
+  status_stats: Record<string, { count: number; total: number }>;
+  payment_method_stats: Record<string, { count: number; total: number }>;
+}
+
 export default function AdminPage() {
   const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
   const [users, setUsers] = useState<User[]>([]);
@@ -78,7 +107,7 @@ export default function AdminPage() {
   const [totalUsers, setTotalUsers] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [apiUrl, setApiUrlState] = useState('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'premium' | 'expiring' | 'logs'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'premium' | 'expiring' | 'logs' | 'payments'>('overview');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -113,6 +142,19 @@ export default function AdminPage() {
   const [logsTotal, setLogsTotal] = useState(0);
   const [logsOffset, setLogsOffset] = useState(0);
   const [logsFilter, setLogsFilter] = useState('all');
+
+  // Payments & Revenue
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [paymentsTotal, setPaymentsTotal] = useState(0);
+  const [revenueStats, setRevenueStats] = useState<RevenueStats | null>(null);
+  const [paymentsFilter, setPaymentsFilter] = useState('all');
+
+  // Bulk upgrade modal
+  const [showBulkUpgradeModal, setShowBulkUpgradeModal] = useState(false);
+  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
+  const [bulkPlan, setBulkPlan] = useState('pro');
+  const [bulkDays, setBulkDays] = useState(30);
+  const [bulkMemo, setBulkMemo] = useState('');
 
   // Initial load
   useEffect(() => {
@@ -175,6 +217,14 @@ export default function AdminPage() {
     }
   };
 
+  const handleAuthError = useCallback(() => {
+    // Clear expired token and redirect to login
+    localStorage.removeItem('auth_token');
+    setToken(null);
+    alert('로그인이 만료되었습니다. 다시 로그인해주세요.');
+    window.location.href = '/login?redirect=/admin';
+  }, []);
+
   const fetchAdminData = async (url: string, authToken: string, silent: boolean = false) => {
     if (!silent) setIsLoading(true);
     try {
@@ -191,6 +241,14 @@ export default function AdminPage() {
         fetch(`${url}/api/admin/users/expiring?days=7`, { headers }),
         fetch(`${url}/api/admin/stats/subscription`, { headers })
       ]);
+
+      // Check for 401 errors (token expired)
+      if (usersRes.status === 401 || premiumRes.status === 401 ||
+          statsRes.status === 401 || expiringRes.status === 401 ||
+          subStatsRes.status === 401) {
+        handleAuthError();
+        return;
+      }
 
       if (usersRes.ok) {
         const data = await usersRes.json();
@@ -240,6 +298,11 @@ export default function AdminPage() {
         }
       );
 
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
+
       if (response.ok) {
         const data = await response.json();
         setSearchResults(data.users);
@@ -267,6 +330,11 @@ export default function AdminPage() {
           memo: grantMemo || null
         })
       });
+
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
 
       if (response.ok) {
         alert('프리미엄 권한이 부여되었습니다.');
@@ -297,6 +365,11 @@ export default function AdminPage() {
         body: JSON.stringify({ user_id: userId })
       });
 
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
+
       if (response.ok) {
         alert('프리미엄 권한이 해제되었습니다.');
         fetchAdminData(apiUrl, token);
@@ -318,6 +391,11 @@ export default function AdminPage() {
           'Content-Type': 'application/json'
         }
       });
+
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
 
       if (response.ok) {
         const data = await response.json();
@@ -349,6 +427,11 @@ export default function AdminPage() {
           memo: extendMemo || null
         })
       });
+
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
 
       if (response.ok) {
         const result = await response.json();
@@ -385,6 +468,11 @@ export default function AdminPage() {
         })
       });
 
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
+
       if (response.ok) {
         alert(isAdmin ? '관리자 권한이 부여되었습니다.' : '관리자 권한이 해제되었습니다.');
         setShowSetAdminModal(false);
@@ -420,6 +508,11 @@ export default function AdminPage() {
         }
       });
 
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
+
       if (response.ok) {
         const data = await response.json();
         setAuditLogs(data.logs);
@@ -437,6 +530,167 @@ export default function AdminPage() {
       fetchAuditLogs(0, logsFilter);
     }
   }, [activeTab, token]);
+
+  // Fetch payments
+  const fetchPayments = async (status: string = 'all') => {
+    if (!token) return;
+
+    try {
+      const params = new URLSearchParams({ limit: '50' });
+      if (status !== 'all') {
+        params.append('status', status);
+      }
+
+      const response = await fetch(`${apiUrl}/api/admin/payments?${params}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
+
+      if (response.ok) {
+        const data = await response.json();
+        setPayments(data.payments);
+        setPaymentsTotal(data.total);
+      }
+    } catch (error) {
+      console.error('Fetch payments failed:', error);
+    }
+  };
+
+  // Fetch revenue stats
+  const fetchRevenueStats = async () => {
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${apiUrl}/api/admin/stats/revenue?period=30d`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
+
+      if (response.ok) {
+        const data = await response.json();
+        setRevenueStats(data);
+      }
+    } catch (error) {
+      console.error('Fetch revenue stats failed:', error);
+    }
+  };
+
+  // Load payments when tab changes
+  useEffect(() => {
+    if (activeTab === 'payments' && token && payments.length === 0) {
+      fetchPayments(paymentsFilter);
+      fetchRevenueStats();
+    }
+  }, [activeTab, token]);
+
+  // Refund payment
+  const refundPayment = async (paymentId: number) => {
+    if (!token) return;
+
+    const reason = prompt('환불 사유를 입력하세요:');
+    if (!reason) return;
+
+    try {
+      const response = await fetch(`${apiUrl}/api/admin/payments/${paymentId}/refund`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ payment_id: paymentId, reason })
+      });
+
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
+
+      if (response.ok) {
+        alert('환불이 완료되었습니다.');
+        fetchPayments(paymentsFilter);
+        fetchRevenueStats();
+      } else {
+        const error = await response.json();
+        alert(`환불 실패: ${error.detail}`);
+      }
+    } catch (error) {
+      console.error('Refund failed:', error);
+      alert('환불 처리 중 오류가 발생했습니다.');
+    }
+  };
+
+  // Bulk upgrade
+  const bulkUpgrade = async () => {
+    if (selectedUserIds.length === 0 || !token) return;
+
+    try {
+      const response = await fetch(`${apiUrl}/api/admin/users/bulk-upgrade`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          user_ids: selectedUserIds,
+          plan: bulkPlan,
+          days: bulkDays,
+          memo: bulkMemo || null
+        })
+      });
+
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
+
+      if (response.ok) {
+        const result = await response.json();
+        alert(result.message);
+        setShowBulkUpgradeModal(false);
+        setSelectedUserIds([]);
+        setBulkMemo('');
+        fetchAdminData(apiUrl, token);
+      } else {
+        const error = await response.json();
+        alert(`오류: ${error.detail}`);
+      }
+    } catch (error) {
+      console.error('Bulk upgrade failed:', error);
+      alert('일괄 업그레이드에 실패했습니다.');
+    }
+  };
+
+  // Toggle user selection for bulk operations
+  const toggleUserSelection = (userId: number) => {
+    setSelectedUserIds(prev =>
+      prev.includes(userId)
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  // Select all users
+  const selectAllUsers = () => {
+    if (selectedUserIds.length === users.length) {
+      setSelectedUserIds([]);
+    } else {
+      setSelectedUserIds(users.map(u => u.id));
+    }
+  };
 
   // Action type to Korean
   const getActionTypeLabel = (actionType: string) => {
@@ -560,6 +814,7 @@ export default function AdminPage() {
           <nav className="flex gap-8">
             {[
               { id: 'overview', label: '개요' },
+              { id: 'payments', label: '💳 결제 내역' },
               { id: 'users', label: '전체 사용자' },
               { id: 'premium', label: '프리미엄 사용자' },
               { id: 'expiring', label: `만료 임박 (${expiringUsers.length})`, highlight: expiringUsers.length > 0 },
@@ -787,6 +1042,21 @@ export default function AdminPage() {
                   </div>
                 </div>
 
+                {/* Bulk Actions */}
+                {selectedUserIds.length > 0 && (
+                  <div className="bg-blue-50 rounded-xl border border-blue-200 p-4 flex items-center justify-between">
+                    <span className="text-blue-700">
+                      {selectedUserIds.length}명 선택됨
+                    </span>
+                    <button
+                      onClick={() => setShowBulkUpgradeModal(true)}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      일괄 업그레이드
+                    </button>
+                  </div>
+                )}
+
                 {/* Search Results or User List */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                   <div className="p-4 border-b border-gray-200">
@@ -798,9 +1068,17 @@ export default function AdminPage() {
                     <table className="w-full">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                          <th className="px-4 py-3 text-left">
+                            <input
+                              type="checkbox"
+                              checked={selectedUserIds.length === users.length && users.length > 0}
+                              onChange={selectAllUsers}
+                              className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                            />
+                          </th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">이메일</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">플랜</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">업그레이드</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">남은일수</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">오늘사용</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">가입일</th>
@@ -809,8 +1087,15 @@ export default function AdminPage() {
                       </thead>
                       <tbody className="divide-y divide-gray-200">
                         {(searchResults.length > 0 ? searchResults : users).map((user) => (
-                          <tr key={user.id} className="hover:bg-gray-50">
-                            <td className="px-4 py-3 text-sm text-gray-900">{user.id}</td>
+                          <tr key={user.id} className={`hover:bg-gray-50 ${selectedUserIds.includes(user.id) ? 'bg-blue-50' : ''}`}>
+                            <td className="px-4 py-3">
+                              <input
+                                type="checkbox"
+                                checked={selectedUserIds.includes(user.id)}
+                                onChange={() => toggleUserSelection(user.id)}
+                                className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                              />
+                            </td>
                             <td className="px-4 py-3 text-sm text-gray-900">
                               <div>
                                 {user.email}
@@ -821,6 +1106,15 @@ export default function AdminPage() {
                               {user.name && <div className="text-xs text-gray-500">{user.name}</div>}
                             </td>
                             <td className="px-4 py-3">{getPlanBadge(user.plan, user.is_premium_granted)}</td>
+                            <td className="px-4 py-3 text-sm">
+                              {user.plan === 'free' ? (
+                                <span className="text-gray-400">-</span>
+                              ) : user.is_premium_granted ? (
+                                <span className="text-purple-600">🎁 부여</span>
+                              ) : (
+                                <span className="text-green-600">💳 결제</span>
+                              )}
+                            </td>
                             <td className="px-4 py-3 text-sm">
                               {user.plan === 'free' ? (
                                 <span className="text-gray-400">-</span>
@@ -1038,6 +1332,178 @@ export default function AdminPage() {
                     7일 이내 만료 예정인 사용자가 없습니다.
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Payments Tab */}
+            {activeTab === 'payments' && (
+              <div className="space-y-6">
+                {/* Revenue Stats */}
+                {revenueStats && (
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <div className="text-sm text-gray-500 mb-1">오늘 매출</div>
+                      <div className="text-2xl font-bold text-green-600">
+                        ₩{revenueStats.today_revenue.toLocaleString()}
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">{revenueStats.today_count}건</div>
+                    </div>
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <div className="text-sm text-gray-500 mb-1">이번 달 매출</div>
+                      <div className="text-2xl font-bold text-blue-600">
+                        ₩{revenueStats.month_revenue.toLocaleString()}
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">{revenueStats.month_count}건</div>
+                    </div>
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <div className="text-sm text-gray-500 mb-1">전체 매출</div>
+                      <div className="text-2xl font-bold text-purple-600">
+                        ₩{revenueStats.total_revenue.toLocaleString()}
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">{revenueStats.total_transactions}건</div>
+                    </div>
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <div className="text-sm text-gray-500 mb-1">결제 성공률</div>
+                      <div className="text-2xl font-bold text-gray-900">
+                        {revenueStats.status_stats?.completed
+                          ? Math.round((revenueStats.status_stats.completed.count / revenueStats.total_transactions) * 100)
+                          : 0}%
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        완료: {revenueStats.status_stats?.completed?.count || 0}건
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Daily Revenue Chart */}
+                {revenueStats?.daily_revenue && revenueStats.daily_revenue.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h2 className="text-lg font-semibold text-gray-900 mb-4">일별 매출 (최근 30일)</h2>
+                    <div className="flex items-end justify-between gap-2 h-40">
+                      {revenueStats.daily_revenue.map((day, index) => {
+                        const maxRevenue = Math.max(...revenueStats.daily_revenue.map(d => d.revenue), 1);
+                        const height = (day.revenue / maxRevenue) * 100;
+                        return (
+                          <div key={index} className="flex-1 flex flex-col items-center group">
+                            <div className="text-xs text-gray-600 mb-1 opacity-0 group-hover:opacity-100">
+                              ₩{day.revenue.toLocaleString()}
+                            </div>
+                            <div
+                              className="w-full bg-green-500 rounded-t-md transition-all hover:bg-green-600"
+                              style={{ height: `${Math.max(height, 4)}%` }}
+                              title={`${day.date}: ₩${day.revenue.toLocaleString()} (${day.count}건)`}
+                            />
+                            <div className="text-xs text-gray-500 mt-2 rotate-45 origin-left">
+                              {new Date(day.date).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Filter & Actions */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <label className="text-sm font-medium text-gray-700">상태:</label>
+                      <select
+                        value={paymentsFilter}
+                        onChange={(e) => {
+                          setPaymentsFilter(e.target.value);
+                          fetchPayments(e.target.value);
+                        }}
+                        className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      >
+                        <option value="all">전체</option>
+                        <option value="completed">완료</option>
+                        <option value="pending">대기중</option>
+                        <option value="cancelled">취소됨</option>
+                      </select>
+                      <button
+                        onClick={() => {
+                          fetchPayments(paymentsFilter);
+                          fetchRevenueStats();
+                        }}
+                        className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                      >
+                        새로고침
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payments Table */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="p-4 border-b border-gray-200">
+                    <h2 className="font-semibold text-gray-900">결제 내역 ({paymentsTotal}건)</h2>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">날짜</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">사용자</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">금액</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">결제수단</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">액션</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {payments.map((payment) => (
+                          <tr key={payment.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 text-sm text-gray-500">
+                              {new Date(payment.paid_at || payment.created_at).toLocaleString('ko-KR')}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-900">
+                              <div>{payment.user_email || 'Unknown'}</div>
+                              {payment.user_name && <div className="text-xs text-gray-500">{payment.user_name}</div>}
+                            </td>
+                            <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                              ₩{payment.amount.toLocaleString()}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600">
+                              {payment.payment_method || '-'}
+                              {payment.card_company && <span className="text-xs text-gray-400 ml-1">({payment.card_company})</span>}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-1 text-xs rounded-full ${
+                                payment.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                payment.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                                payment.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                'bg-gray-100 text-gray-700'
+                              }`}>
+                                {payment.status === 'completed' ? '완료' :
+                                 payment.status === 'pending' ? '대기중' :
+                                 payment.status === 'cancelled' ? '취소됨' : payment.status}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              {payment.status === 'completed' && (
+                                <button
+                                  onClick={() => refundPayment(payment.id)}
+                                  className="text-sm text-red-600 hover:text-red-800"
+                                >
+                                  환불
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                        {payments.length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                              결제 내역이 없습니다.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1500,6 +1966,76 @@ export default function AdminPage() {
                 }`}
               >
                 {userDetail.user.is_admin ? '관리자 해제' : '관리자 부여'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Upgrade Modal */}
+      {showBulkUpgradeModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">일괄 업그레이드</h3>
+
+            <div className="space-y-4">
+              <div className="bg-blue-50 rounded-lg p-4">
+                <div className="text-sm text-blue-600 mb-1">선택된 사용자</div>
+                <div className="font-medium text-blue-900">{selectedUserIds.length}명</div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">플랜 선택</label>
+                <select
+                  value={bulkPlan}
+                  onChange={(e) => setBulkPlan(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="basic">Basic (일일 50회)</option>
+                  <option value="pro">Pro (일일 200회)</option>
+                  <option value="unlimited">Unlimited (무제한)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">구독 기간 (일)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={bulkDays}
+                  onChange={(e) => setBulkDays(parseInt(e.target.value) || 30)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">메모 (선택)</label>
+                <input
+                  type="text"
+                  value={bulkMemo}
+                  onChange={(e) => setBulkMemo(e.target.value)}
+                  placeholder="예: 이벤트 당첨, 프로모션 등"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowBulkUpgradeModal(false);
+                  setBulkMemo('');
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={bulkUpgrade}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                {selectedUserIds.length}명 업그레이드
               </button>
             </div>
           </div>
