@@ -240,7 +240,7 @@ async def get_samples(limit: int = 100):
 @router.get("/deviation-analysis")
 async def get_deviation_analysis():
     """
-    괴리율 분석 - 실제 순위와 예측 점수의 차이 분석
+    괴리율 분석 - 실제 순위와 예측 점수의 차이 분석 (키워드별 그룹화)
 
     Returns:
         - overall_deviation: 전체 평균 괴리율
@@ -248,106 +248,124 @@ async def get_deviation_analysis():
         - deviation_by_rank: 순위별 괴리율
         - worst_predictions: 가장 크게 벗어난 예측들
         - weight_impact: 각 가중치가 순위에 미치는 영향
-        - trend: 시간에 따른 정확도 변화 추이
+        - keyword_analysis: 키워드별 분석 결과
     """
     try:
         from scipy.stats import spearmanr, rankdata
         import numpy as np
+        from collections import defaultdict
 
-        samples = get_learning_samples(limit=500)
+        samples = get_learning_samples(limit=1000)
         current_weights = get_current_weights()
 
-        if len(samples) < 3:
+        if len(samples) < 13:
             return {
-                "message": "분석에 필요한 데이터가 부족합니다. 최소 3개 이상의 검색 결과가 필요합니다.",
+                "message": "분석에 필요한 데이터가 부족합니다. 최소 1개 키워드(13개 블로그) 이상 필요합니다.",
                 "total_samples": len(samples),
                 "overall_deviation": None
             }
 
-        # 실제 순위와 예측 점수 추출
-        actual_ranks = []
-        predicted_scores = []
-        sample_details = []
-
+        # ===== 키워드별로 그룹화 (핵심 수정!) =====
+        keyword_groups = defaultdict(list)
         for s in samples:
-            actual_rank = s.get('actual_rank', 0)
-            predicted_score = s.get('predicted_score', 0)
-
-            if actual_rank and predicted_score:
-                actual_ranks.append(actual_rank)
-                predicted_scores.append(predicted_score)
-                sample_details.append({
-                    'keyword': s.get('keyword', ''),
+            keyword = s.get('keyword', '')
+            if keyword and s.get('actual_rank') and s.get('predicted_score'):
+                keyword_groups[keyword].append({
+                    'keyword': keyword,
                     'blog_id': s.get('blog_id', ''),
-                    'actual_rank': actual_rank,
-                    'predicted_score': predicted_score,
+                    'actual_rank': s.get('actual_rank'),
+                    'predicted_score': s.get('predicted_score'),
                     'c_rank_score': s.get('c_rank_score', 0),
                     'dia_score': s.get('dia_score', 0),
                     'post_count': s.get('post_count', 0),
                     'neighbor_count': s.get('neighbor_count', 0)
                 })
 
-        if len(actual_ranks) < 3:
+        # 최소 10개 블로그가 있는 키워드만 분석
+        valid_keywords = {k: v for k, v in keyword_groups.items() if len(v) >= 10}
+
+        if not valid_keywords:
             return {
-                "message": "유효한 데이터가 부족합니다.",
+                "message": "유효한 키워드 그룹이 없습니다. 최소 10개 블로그가 있는 키워드가 필요합니다.",
                 "total_samples": len(samples),
+                "keywords_found": len(keyword_groups),
                 "overall_deviation": None
             }
 
-        actual_ranks = np.array(actual_ranks)
-        predicted_scores = np.array(predicted_scores)
+        # ===== 키워드별로 순위 계산 =====
+        all_deviations = []
+        keyword_results = []
+        all_sample_details = []
 
-        # 예측 점수를 순위로 변환 (높은 점수 = 낮은 순위 번호)
-        predicted_ranks = rankdata(-predicted_scores, method='ordinal')
+        for keyword, group in valid_keywords.items():
+            # 해당 키워드 내에서만 순위 계산
+            actual_ranks = np.array([s['actual_rank'] for s in group])
+            predicted_scores = np.array([s['predicted_score'] for s in group])
 
-        # ===== 1. 전체 괴리율 계산 =====
-        # 순위 차이의 평균
-        rank_differences = np.abs(predicted_ranks - actual_ranks)
-        overall_deviation = float(np.mean(rank_differences))
+            # 예측 점수를 순위로 변환 (해당 키워드 내에서만!)
+            predicted_ranks = rankdata(-predicted_scores, method='ordinal')
 
-        # Spearman 상관계수 (순위 상관)
-        correlation, p_value = spearmanr(actual_ranks, predicted_ranks)
+            # 순위 차이 계산
+            rank_diffs = np.abs(predicted_ranks - actual_ranks)
+            all_deviations.extend(rank_diffs.tolist())
 
-        # ===== 2. 순위별 괴리율 =====
-        deviation_by_rank = {}
-        for i in range(1, 14):  # 1위~13위
-            mask = actual_ranks == i
-            if np.sum(mask) > 0:
-                avg_predicted_rank = float(np.mean(predicted_ranks[mask]))
-                avg_deviation = float(np.mean(rank_differences[mask]))
-                deviation_by_rank[str(i)] = {
-                    "count": int(np.sum(mask)),
-                    "avg_predicted_rank": round(avg_predicted_rank, 1),
-                    "avg_deviation": round(avg_deviation, 1),
-                    "accuracy": round((1 - avg_deviation / 13) * 100, 1)  # 정확도 %
-                }
+            # 키워드별 결과 저장
+            keyword_results.append({
+                'keyword': keyword,
+                'sample_count': len(group),
+                'avg_deviation': round(float(np.mean(rank_diffs)), 2),
+                'exact_match': round(float(np.mean(rank_diffs == 0) * 100), 1),
+                'within_3': round(float(np.mean(rank_diffs <= 3) * 100), 1),
+                'correlation': round(float(spearmanr(actual_ranks, predicted_ranks)[0]), 3) if len(group) > 2 else 0
+            })
 
-        # ===== 3. 순위 예측 정확도 =====
-        within_1 = float(np.mean(rank_differences <= 1) * 100)
-        within_3 = float(np.mean(rank_differences <= 3) * 100)
-        within_5 = float(np.mean(rank_differences <= 5) * 100)
+            # 개별 샘플 정보 저장
+            for i, s in enumerate(group):
+                all_sample_details.append({
+                    **s,
+                    'predicted_rank': int(predicted_ranks[i]),
+                    'deviation': int(rank_diffs[i])
+                })
 
+        # ===== 전체 통계 계산 =====
+        all_deviations = np.array(all_deviations)
+        overall_deviation = float(np.mean(all_deviations))
+
+        # 순위 예측 정확도
         rank_accuracy = {
-            "within_1_rank": round(within_1, 1),
-            "within_3_ranks": round(within_3, 1),
-            "within_5_ranks": round(within_5, 1),
-            "perfect_match": round(float(np.mean(rank_differences == 0) * 100), 1)
+            "perfect_match": round(float(np.mean(all_deviations == 0) * 100), 1),
+            "within_1_rank": round(float(np.mean(all_deviations <= 1) * 100), 1),
+            "within_3_ranks": round(float(np.mean(all_deviations <= 3) * 100), 1),
+            "within_5_ranks": round(float(np.mean(all_deviations <= 5) * 100), 1)
         }
 
-        # ===== 4. 가장 큰 괴리 예측들 =====
-        worst_indices = np.argsort(rank_differences)[-10:][::-1]  # 상위 10개
-        worst_predictions = []
-        for idx in worst_indices:
-            if idx < len(sample_details):
-                detail = sample_details[idx]
-                worst_predictions.append({
-                    "keyword": detail['keyword'],
-                    "blog_id": detail['blog_id'],
-                    "actual_rank": int(actual_ranks[idx]),
-                    "predicted_rank": int(predicted_ranks[idx]),
-                    "deviation": int(rank_differences[idx]),
-                    "predicted_score": round(detail['predicted_score'], 1)
-                })
+        # 순위별 괴리율
+        deviation_by_rank = {}
+        for i in range(1, 14):
+            mask = [s['actual_rank'] == i for s in all_sample_details]
+            if any(mask):
+                deviations_for_rank = [s['deviation'] for s, m in zip(all_sample_details, mask) if m]
+                predicted_ranks_for_rank = [s['predicted_rank'] for s, m in zip(all_sample_details, mask) if m]
+                deviation_by_rank[str(i)] = {
+                    "count": len(deviations_for_rank),
+                    "avg_predicted_rank": round(float(np.mean(predicted_ranks_for_rank)), 1),
+                    "avg_deviation": round(float(np.mean(deviations_for_rank)), 1),
+                    "accuracy": round((1 - np.mean(deviations_for_rank) / 13) * 100, 1)
+                }
+
+        # 가장 큰 괴리 예측들
+        sorted_samples = sorted(all_sample_details, key=lambda x: x['deviation'], reverse=True)
+        worst_predictions = [{
+            "keyword": s['keyword'],
+            "blog_id": s['blog_id'],
+            "actual_rank": s['actual_rank'],
+            "predicted_rank": s['predicted_rank'],
+            "deviation": s['deviation'],
+            "predicted_score": round(s['predicted_score'], 1)
+        } for s in sorted_samples[:10]]
+
+        # 키워드 분석 결과 정렬 (정확도 높은 순)
+        keyword_results.sort(key=lambda x: x['avg_deviation'])
 
         # ===== 5. 가중치 영향 분석 =====
         # 상위권(1-3위)과 하위권(10-13위) 비교

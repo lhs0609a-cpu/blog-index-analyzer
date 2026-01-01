@@ -1881,6 +1881,13 @@ async def search_keyword_with_tabs(
     effective_limit = min(limit, 5) if quick_mode else limit
     logger.info(f"Searching keyword: {keyword}, limit: {effective_limit} (quick_mode={quick_mode})")
 
+    # 사용자 검색 키워드를 학습 풀에 자동 추가 (높은 우선순위)
+    try:
+        from database.learning_db import add_user_search_keyword
+        add_user_search_keyword(keyword)
+    except Exception as e:
+        logger.debug(f"Could not add user search keyword: {e}")
+
     # Fetch search results from Naver
     search_results = await fetch_naver_search_results(keyword, limit)
 

@@ -6,6 +6,68 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev';
 
+// 튜토리얼 단계 정의
+const TUTORIAL_STEPS = [
+  {
+    id: 1,
+    title: 'Threads Autopilot에 오신 것을 환영합니다!',
+    description: 'AI가 브랜드에 맞는 자연스러운 콘텐츠를 생성하고, 최적의 시간에 자동으로 게시해드립니다.',
+    icon: '🚀',
+    details: [
+      '90일간의 자연스러운 콘텐츠 플랜 자동 생성',
+      '광고 티 안 나는 4-3-2-1 콘텐츠 법칙 적용',
+      '예약 시간에 맞춰 자동 게시'
+    ]
+  },
+  {
+    id: 2,
+    title: 'Step 1: Threads 계정 연결하기',
+    description: '먼저 Threads 계정을 연결해야 자동 게시가 가능합니다.',
+    icon: '🔗',
+    details: [
+      '상단의 "계정 연결" 버튼을 클릭하세요',
+      'Threads 로그인 화면에서 권한을 승인하세요',
+      '연결이 완료되면 계정이 상단에 표시됩니다'
+    ],
+    action: 'connect'
+  },
+  {
+    id: 3,
+    title: 'Step 2: 페르소나 만들기 (선택)',
+    description: '브랜드를 대표할 가상의 인물을 설정하면 더 일관된 톤의 콘텐츠가 생성됩니다.',
+    icon: '🎭',
+    details: [
+      '이름, 나이, 직업, 성격 등을 설정',
+      '관심사를 추가하면 관련 일상 콘텐츠 생성',
+      '말투(친근/정중)와 이모지 사용량 조절 가능'
+    ],
+    action: 'persona'
+  },
+  {
+    id: 4,
+    title: 'Step 3: 캠페인 생성하기',
+    description: '브랜드 정보를 입력하고 AI가 90일 콘텐츠 플랜을 생성합니다.',
+    icon: '📝',
+    details: [
+      '"새 캠페인" 버튼으로 캠페인 생성',
+      '브랜드 이름, 설명, 타겟 고객 입력',
+      'AI가 자동으로 90일치 콘텐츠 생성'
+    ],
+    action: 'campaign'
+  },
+  {
+    id: 5,
+    title: 'Step 4: 자동 게시 시작!',
+    description: '콘텐츠를 확인하고 캠페인을 시작하면 예약된 시간에 자동으로 게시됩니다.',
+    icon: '✨',
+    details: [
+      '생성된 콘텐츠를 확인하고 필요시 수정',
+      '"캠페인 시작" 버튼으로 자동 게시 활성화',
+      '언제든지 일시정지/재개 가능'
+    ]
+  }
+];
+
 interface Campaign {
   id: string;
   name: string;
@@ -57,8 +119,22 @@ export default function ThreadsPage() {
   });
   const [creating, setCreating] = useState(false);
 
+  // 튜토리얼 상태
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
+  const [tutorialCompleted, setTutorialCompleted] = useState(false);
+
   useEffect(() => {
     fetchData();
+
+    // 튜토리얼 완료 여부 확인
+    const completed = localStorage.getItem('threads_tutorial_completed');
+    if (!completed) {
+      // 첫 방문 시 튜토리얼 표시
+      setTimeout(() => setShowTutorial(true), 500);
+    } else {
+      setTutorialCompleted(true);
+    }
   }, []);
 
   const fetchData = async () => {
@@ -172,6 +248,51 @@ export default function ThreadsPage() {
     return configs[status] || configs.draft;
   };
 
+  // 튜토리얼 함수들
+  const handleTutorialNext = () => {
+    if (tutorialStep < TUTORIAL_STEPS.length - 1) {
+      setTutorialStep(prev => prev + 1);
+    } else {
+      completeTutorial();
+    }
+  };
+
+  const handleTutorialPrev = () => {
+    if (tutorialStep > 0) {
+      setTutorialStep(prev => prev - 1);
+    }
+  };
+
+  const completeTutorial = () => {
+    localStorage.setItem('threads_tutorial_completed', 'true');
+    setTutorialCompleted(true);
+    setShowTutorial(false);
+    setTutorialStep(0);
+  };
+
+  const restartTutorial = () => {
+    setTutorialStep(0);
+    setShowTutorial(true);
+  };
+
+  const handleTutorialAction = (action?: string) => {
+    if (!action) return;
+
+    setShowTutorial(false);
+
+    switch (action) {
+      case 'connect':
+        connectThreadsAccount();
+        break;
+      case 'persona':
+        window.location.href = '/threads/personas/new';
+        break;
+      case 'campaign':
+        setShowCreateModal(true);
+        break;
+    }
+  };
+
   // Threads 로고 SVG
   const ThreadsLogo = () => (
     <svg viewBox="0 0 192 192" className="w-8 h-8" fill="currentColor">
@@ -206,6 +327,17 @@ export default function ThreadsPage() {
               </Link>
 
               <div className="flex items-center gap-3">
+                {/* 도움말 버튼 */}
+                <button
+                  onClick={restartTutorial}
+                  className="p-2.5 border border-white/20 rounded-full hover:bg-white/10 transition-all"
+                  title="사용 가이드"
+                >
+                  <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </button>
+
                 {/* 연결된 계정 */}
                 {accounts.length > 0 ? (
                   <div className="flex items-center gap-2">
@@ -689,6 +821,124 @@ export default function ThreadsPage() {
                     '캠페인 생성'
                   )}
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 튜토리얼 모달 */}
+      <AnimatePresence>
+        {showTutorial && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-50 p-4"
+            onClick={() => completeTutorial()}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-gradient-to-br from-zinc-900 to-zinc-950 border border-white/10 rounded-3xl max-w-md w-full overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* 진행률 표시 */}
+              <div className="flex gap-1 p-4 pb-0">
+                {TUTORIAL_STEPS.map((_, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex-1 h-1 rounded-full transition-colors ${
+                      idx <= tutorialStep ? 'bg-gradient-to-r from-purple-500 to-pink-500' : 'bg-white/10'
+                    }`}
+                  />
+                ))}
+              </div>
+
+              {/* 콘텐츠 */}
+              <div className="p-6">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={tutorialStep}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    {/* 아이콘 */}
+                    <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center">
+                      <span className="text-5xl">{TUTORIAL_STEPS[tutorialStep].icon}</span>
+                    </div>
+
+                    {/* 제목 */}
+                    <h3 className="text-xl font-bold text-white text-center mb-3">
+                      {TUTORIAL_STEPS[tutorialStep].title}
+                    </h3>
+
+                    {/* 설명 */}
+                    <p className="text-white/60 text-center mb-6">
+                      {TUTORIAL_STEPS[tutorialStep].description}
+                    </p>
+
+                    {/* 상세 목록 */}
+                    <div className="space-y-3 mb-6">
+                      {TUTORIAL_STEPS[tutorialStep].details.map((detail, idx) => (
+                        <div key={idx} className="flex items-start gap-3 text-sm">
+                          <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <span className="text-purple-300 text-xs font-bold">{idx + 1}</span>
+                          </div>
+                          <span className="text-white/70">{detail}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* 액션 버튼 (해당 단계에서 바로 실행) */}
+                    {TUTORIAL_STEPS[tutorialStep].action && (
+                      <button
+                        onClick={() => handleTutorialAction(TUTORIAL_STEPS[tutorialStep].action)}
+                        className="w-full py-3 mb-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-medium hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+                      >
+                        {TUTORIAL_STEPS[tutorialStep].action === 'connect' && '지금 계정 연결하기'}
+                        {TUTORIAL_STEPS[tutorialStep].action === 'persona' && '페르소나 만들러 가기'}
+                        {TUTORIAL_STEPS[tutorialStep].action === 'campaign' && '캠페인 만들러 가기'}
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                        </svg>
+                      </button>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+
+              {/* 하단 버튼 */}
+              <div className="p-4 border-t border-white/10 flex items-center justify-between">
+                <button
+                  onClick={handleTutorialPrev}
+                  disabled={tutorialStep === 0}
+                  className={`px-4 py-2 rounded-lg transition-colors ${
+                    tutorialStep === 0
+                      ? 'text-white/20 cursor-not-allowed'
+                      : 'text-white/60 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  이전
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={completeTutorial}
+                    className="px-4 py-2 text-white/40 hover:text-white/60 transition-colors text-sm"
+                  >
+                    건너뛰기
+                  </button>
+                  <button
+                    onClick={handleTutorialNext}
+                    className="px-6 py-2 bg-white text-black rounded-lg font-medium hover:bg-white/90 transition-colors"
+                  >
+                    {tutorialStep === TUTORIAL_STEPS.length - 1 ? '시작하기' : '다음'}
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>

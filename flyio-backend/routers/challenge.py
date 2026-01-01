@@ -2,10 +2,14 @@
 블로그 챌린지 API 라우터
 30일 챌린지, 게이미피케이션, 동기부여 콘텐츠
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import Optional, List
 import logging
+import base64
+import os
+import uuid
+from datetime import datetime
 
 from database.challenge_db import (
     init_challenge_tables,
@@ -1200,6 +1204,7 @@ class CompleteMissionRequest(BaseModel):
     mission_id: str
     mission_type: str  # learn, mission
     notes: Optional[str] = None
+    proof_image: Optional[str] = None  # Base64 인코딩된 이미지
 
 
 class LogWritingRequest(BaseModel):
@@ -1326,6 +1331,43 @@ async def complete(
 ):
     """미션 완료 처리"""
     try:
+        # 실습 미션(mission)의 경우 사진 필수
+        if request.mission_type == "mission" and not request.proof_image:
+            raise HTTPException(
+                status_code=400,
+                detail="미션 완료를 위해 인증 사진이 필요합니다."
+            )
+
+        # 사진이 있으면 저장
+        proof_filename = None
+        if request.proof_image:
+            try:
+                # Base64 디코딩
+                if "," in request.proof_image:
+                    # data:image/jpeg;base64,xxx 형식
+                    header, image_data = request.proof_image.split(",", 1)
+                else:
+                    image_data = request.proof_image
+
+                image_bytes = base64.b64decode(image_data)
+
+                # 파일명 생성
+                proof_filename = f"proof_{current_user['id']}_{request.day_number}_{request.mission_id}_{uuid.uuid4().hex[:8]}.jpg"
+
+                # 저장 경로
+                proof_dir = "/app/data/proofs"
+                os.makedirs(proof_dir, exist_ok=True)
+
+                # 파일 저장
+                proof_path = os.path.join(proof_dir, proof_filename)
+                with open(proof_path, "wb") as f:
+                    f.write(image_bytes)
+
+                logger.info(f"Proof image saved: {proof_path}")
+            except Exception as e:
+                logger.error(f"Failed to save proof image: {e}")
+                # 사진 저장 실패해도 미션 완료는 진행
+
         result = complete_mission(
             user_id=current_user["id"],
             day_number=request.day_number,
@@ -1339,10 +1381,13 @@ async def complete(
 
         return {
             **result,
-            "profile": profile
+            "profile": profile,
+            "proof_saved": proof_filename is not None
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"미션 완료 처리 오류: {e}")
+        logger.error(f"미션 완료 처리 오류: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

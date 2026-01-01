@@ -7,7 +7,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   BookOpen, Target, CheckCircle, Circle, Flame, Star,
   ArrowLeft, Calendar, Zap, Trophy, Award, Lightbulb,
-  ChevronRight, Play, Clock, ArrowRight, Sparkles
+  ChevronRight, Play, Clock, ArrowRight, Sparkles,
+  Camera, Upload, X, Image as ImageIcon
 } from 'lucide-react'
 import { useAuthStore } from '@/lib/stores/auth'
 import toast from 'react-hot-toast'
@@ -64,6 +65,10 @@ export default function TodayMissionPage() {
   const [completingMission, setCompletingMission] = useState<string | null>(null)
   const [showLearnContent, setShowLearnContent] = useState(false)
   const [selectedMission, setSelectedMission] = useState<Mission | null>(null)
+  const [showProofModal, setShowProofModal] = useState(false)
+  const [proofImage, setProofImage] = useState<string | null>(null)
+  const [proofPreview, setProofPreview] = useState<string | null>(null)
+  const [missionNotes, setMissionNotes] = useState('')
 
   const fetchTodayData = useCallback(async () => {
     setLoading(true)
@@ -137,8 +142,45 @@ export default function TodayMissionPage() {
     fetchTodayData()
   }, [isAuthenticated, router, fetchTodayData])
 
-  const handleCompleteMission = async (mission: Mission) => {
+  // 사진 선택 핸들러
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // 파일 크기 체크 (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('이미지 크기는 5MB 이하여야 합니다')
+      return
+    }
+
+    // 미리보기 생성
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const result = event.target?.result as string
+      setProofPreview(result)
+      setProofImage(result)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // 미션 완료 모달 열기
+  const openProofModal = (mission: Mission) => {
+    setSelectedMission(mission)
+    setShowProofModal(true)
+    setProofImage(null)
+    setProofPreview(null)
+    setMissionNotes('')
+  }
+
+  // 미션 완료 제출
+  const handleCompleteMission = async (mission: Mission, requireProof: boolean = false) => {
     if (mission.completed) return
+
+    // 실습 미션의 경우 사진 필수
+    if (requireProof && !proofImage) {
+      toast.error('인증 사진을 첨부해주세요')
+      return
+    }
 
     setCompletingMission(mission.mission_id)
     try {
@@ -152,7 +194,9 @@ export default function TodayMissionPage() {
         body: JSON.stringify({
           day_number: mission.day_number,
           mission_id: mission.mission_id,
-          mission_type: mission.mission_type
+          mission_type: mission.mission_type,
+          notes: missionNotes || null,
+          proof_image: proofImage || null
         })
       })
 
@@ -182,6 +226,10 @@ export default function TodayMissionPage() {
         await fetchTodayData()
         setSelectedMission(null)
         setShowLearnContent(false)
+        setShowProofModal(false)
+        setProofImage(null)
+        setProofPreview(null)
+        setMissionNotes('')
       } else {
         toast.error(data.message || '미션 완료에 실패했습니다')
       }
@@ -428,21 +476,12 @@ export default function TodayMissionPage() {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => handleCompleteMission(practicalMission)}
+                  onClick={() => openProofModal(practicalMission)}
                   disabled={!!completingMission}
                   className="mt-4 w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  {completingMission === practicalMission.mission_id ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      처리 중...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="w-4 h-4" />
-                      미션 완료하기
-                    </>
-                  )}
+                  <Camera className="w-4 h-4" />
+                  인증하고 완료하기
                 </motion.button>
               )}
             </div>
@@ -574,7 +613,7 @@ export default function TodayMissionPage() {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => handleCompleteMission(selectedMission)}
+                  onClick={() => handleCompleteMission(selectedMission, false)}
                   disabled={!!completingMission}
                   className="w-full py-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
                 >
@@ -587,6 +626,145 @@ export default function TodayMissionPage() {
                     <>
                       <CheckCircle className="w-4 h-4" />
                       학습 완료 (+{selectedMission.xp} XP)
+                    </>
+                  )}
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 미션 인증 사진 업로드 모달 */}
+      <AnimatePresence>
+        {showProofModal && selectedMission && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center"
+            onClick={() => setShowProofModal(false)}
+          >
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[90vh] overflow-hidden"
+            >
+              {/* 모달 헤더 */}
+              <div className="p-5 border-b sticky top-0 bg-white">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
+                      <Camera className="w-5 h-5 text-purple-500" />
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500">미션 인증</div>
+                      <div className="font-bold">{selectedMission.title}</div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowProofModal(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+
+              {/* 모달 콘텐츠 */}
+              <div className="p-5 overflow-y-auto max-h-[60vh]">
+                <p className="text-gray-600 mb-4">{selectedMission.description}</p>
+
+                {/* 체크리스트 */}
+                {selectedMission.checklist && selectedMission.checklist.length > 0 && (
+                  <div className="mb-4 p-3 bg-gray-50 rounded-xl">
+                    <div className="text-sm font-medium text-gray-600 mb-2">체크리스트</div>
+                    {selectedMission.checklist.map((item, index) => (
+                      <div key={index} className="flex items-center gap-2 py-1 text-sm text-gray-600">
+                        <Circle className="w-3 h-3 text-gray-400" />
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* 사진 업로드 영역 */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    📸 인증 사진 (필수)
+                  </label>
+
+                  {proofPreview ? (
+                    <div className="relative">
+                      <img
+                        src={proofPreview}
+                        alt="인증 사진 미리보기"
+                        className="w-full h-48 object-cover rounded-xl"
+                      />
+                      <button
+                        onClick={() => {
+                          setProofImage(null)
+                          setProofPreview(null)
+                        }}
+                        className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-colors">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <Upload className="w-10 h-10 text-gray-400 mb-3" />
+                        <p className="mb-2 text-sm text-gray-500">
+                          <span className="font-semibold text-purple-500">클릭하여 업로드</span>
+                        </p>
+                        <p className="text-xs text-gray-400">PNG, JPG (최대 5MB)</p>
+                      </div>
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept="image/*"
+                        onChange={handleImageSelect}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                {/* 메모 입력 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    ✏️ 소감 한마디 (선택)
+                  </label>
+                  <textarea
+                    value={missionNotes}
+                    onChange={(e) => setMissionNotes(e.target.value)}
+                    placeholder="오늘 미션을 수행하면서 느낀 점을 적어보세요..."
+                    className="w-full p-3 border rounded-xl resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              {/* 모달 푸터 */}
+              <div className="p-5 border-t bg-gray-50">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => handleCompleteMission(selectedMission, true)}
+                  disabled={!!completingMission || !proofImage}
+                  className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {completingMission === selectedMission.mission_id ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      처리 중...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-4 h-4" />
+                      {proofImage ? `미션 완료! (+${selectedMission.xp} XP)` : '사진을 첨부해주세요'}
                     </>
                   )}
                 </motion.button>

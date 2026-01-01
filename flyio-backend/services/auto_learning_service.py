@@ -49,60 +49,60 @@ auto_learning_state = {
     "daily_training_accuracy": None,
 }
 
-# 키워드 풀 (다양한 카테고리에서 로테이션)
-ROTATING_KEYWORDS = [
-    # 의료
-    "강남치과", "임플란트", "교정치과", "피부과", "성형외과", "내과", "정형외과",
-    # 맛집
-    "강남맛집", "홍대맛집", "이태원맛집", "삼겹살맛집", "초밥맛집", "파스타맛집",
-    # 여행
-    "제주여행", "부산여행", "오사카여행", "도쿄여행", "방콕여행", "발리여행",
-    # 뷰티
-    "화장품추천", "선크림추천", "샴푸추천", "다이어트", "홈트레이닝",
-    # 생활
-    "이사업체", "청소업체", "인테리어", "냉장고추천", "에어컨추천",
-    # 교육
-    "영어학원", "수학학원", "코딩학원", "토익", "공무원시험",
-    # IT
-    "아이폰", "갤럭시", "맥북", "노트북추천", "모니터추천",
-    # 취미
-    "골프", "테니스", "등산", "캠핑", "낚시",
-    # 반려동물
-    "강아지분양", "고양이분양", "강아지사료", "동물병원",
-    # 웨딩
-    "웨딩홀", "웨딩드레스", "신혼여행", "결혼반지",
-    # 육아
-    "출산준비", "유모차", "카시트", "아기용품",
-]
-
-# 이미 학습한 키워드 추적
-learned_keywords_today = set()
-keyword_index = 0
+# ==============================================
+# DB 기반 키워드 관리 (서버 재시작해도 유지)
+# ==============================================
 
 
 def get_next_keywords(count: int) -> List[str]:
-    """다음 학습할 키워드 선택 (로테이션)"""
-    global keyword_index, learned_keywords_today
+    """다음 학습할 키워드 선택 (DB 기반, 중복 방지)"""
+    try:
+        from database.learning_db import (
+            get_next_keywords_from_pool,
+            get_keyword_learning_stats,
+            initialize_default_keyword_pool
+        )
 
-    keywords = []
-    attempts = 0
-    max_attempts = len(ROTATING_KEYWORDS) * 2
+        # 키워드 풀 상태 확인
+        stats = get_keyword_learning_stats()
 
-    while len(keywords) < count and attempts < max_attempts:
-        keyword = ROTATING_KEYWORDS[keyword_index % len(ROTATING_KEYWORDS)]
-        keyword_index += 1
-        attempts += 1
+        # 키워드 풀이 비어있으면 초기화
+        if stats.get("total_pool", 0) == 0:
+            logger.info("[AutoLearn] Initializing keyword pool...")
+            added = initialize_default_keyword_pool()
+            logger.info(f"[AutoLearn] Added {added} keywords to pool")
 
-        # 오늘 이미 학습한 키워드는 스킵
-        if keyword not in learned_keywords_today:
-            keywords.append(keyword)
-            learned_keywords_today.add(keyword)
+        # 학습할 키워드 가져오기 (최소 1일 경과)
+        keywords = get_next_keywords_from_pool(count, min_days_since_last=1)
 
-    # 하루가 지나면 리셋
-    if datetime.now().hour == 0 and datetime.now().minute < 35:
-        learned_keywords_today.clear()
+        if not keywords:
+            # 모든 키워드가 최근에 학습됨 -> 가장 오래된 것 가져오기
+            logger.info("[AutoLearn] All keywords recently learned, getting oldest...")
+            keywords = get_next_keywords_from_pool(count, min_days_since_last=0)
 
-    return keywords
+        logger.debug(f"[AutoLearn] Next keywords: {keywords}")
+        return keywords
+
+    except Exception as e:
+        logger.error(f"[AutoLearn] Error getting next keywords: {e}")
+        # 폴백: 기본 키워드 반환
+        return ["강남맛집", "제주여행", "임플란트"][:count]
+
+
+def mark_keyword_as_learned(keyword: str, samples_count: int = 13):
+    """키워드 학습 완료 기록 (DB에 저장)"""
+    try:
+        from database.learning_db import mark_keyword_learned, add_to_keyword_pool
+
+        # 키워드 풀에 없으면 추가
+        add_to_keyword_pool(keyword, category="auto_added", source="auto")
+
+        # 학습 완료 기록
+        mark_keyword_learned(keyword, samples_count, source="auto")
+        logger.debug(f"[AutoLearn] Marked keyword as learned: {keyword}")
+
+    except Exception as e:
+        logger.error(f"[AutoLearn] Error marking keyword as learned: {e}")
 
 
 def get_current_interval() -> int:
@@ -257,6 +257,9 @@ async def run_single_learning_cycle():
 
                 auto_learning_state["total_keywords_learned"] += 1
                 logger.info(f"[AutoLearn] Completed {keyword}: {blogs_analyzed} blogs")
+
+                # 키워드 학습 완료 기록 (DB에 저장)
+                mark_keyword_as_learned(keyword, blogs_analyzed)
 
                 # 키워드 간 딜레이
                 await asyncio.sleep(config["delay_between_keywords"])

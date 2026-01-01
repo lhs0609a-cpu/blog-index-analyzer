@@ -577,11 +577,61 @@ def complete_mission(user_id: int, day_number: int, mission_id: str, mission_typ
                 notes = COALESCE(?, notes)
         """, (user_id, day_number, mission_id, mission_type, xp, notes, xp, notes))
 
-        # 게이미피케이션 업데이트
-        add_xp(user_id, xp)
+        # 게이미피케이션 업데이트 (인라인 처리 - 중첩 연결 방지)
+        cursor.execute("""
+            INSERT INTO user_gamification (user_id, total_xp, level)
+            VALUES (?, ?, 1)
+            ON CONFLICT(user_id) DO UPDATE SET
+                total_xp = total_xp + ?,
+                updated_at = CURRENT_TIMESTAMP
+        """, (user_id, xp, xp))
 
-        # 스트릭 업데이트
-        update_streak(user_id)
+        # 레벨 업데이트
+        cursor.execute("SELECT total_xp, level FROM user_gamification WHERE user_id = ?", (user_id,))
+        gam_result = cursor.fetchone()
+        if gam_result:
+            current_xp = gam_result["total_xp"]
+            new_level = 1
+            for level, info in sorted(LEVEL_REQUIREMENTS.items(), reverse=True):
+                if current_xp >= info["min_xp"]:
+                    new_level = level
+                    break
+            if new_level != gam_result["level"]:
+                cursor.execute("UPDATE user_gamification SET level = ? WHERE user_id = ?", (new_level, user_id))
+
+        # 스트릭 업데이트 (인라인 처리)
+        today = date.today().isoformat()
+        cursor.execute("""
+            SELECT current_streak, longest_streak, last_activity_date
+            FROM user_gamification WHERE user_id = ?
+        """, (user_id,))
+        streak_result = cursor.fetchone()
+
+        if streak_result:
+            last_date = streak_result["last_activity_date"]
+            current_streak = streak_result["current_streak"] or 0
+            longest_streak = streak_result["longest_streak"] or 0
+
+            if last_date != today:
+                if last_date:
+                    try:
+                        last = datetime.strptime(last_date, "%Y-%m-%d").date()
+                        diff = (date.today() - last).days
+                        if diff == 1:
+                            current_streak += 1
+                        elif diff > 1:
+                            current_streak = 1
+                    except:
+                        current_streak = 1
+                else:
+                    current_streak = 1
+
+                longest_streak = max(longest_streak, current_streak)
+                cursor.execute("""
+                    UPDATE user_gamification
+                    SET current_streak = ?, longest_streak = ?, last_activity_date = ?
+                    WHERE user_id = ?
+                """, (current_streak, longest_streak, today, user_id))
 
         # 오늘의 모든 미션 완료 여부 확인
         cursor.execute("""
@@ -608,15 +658,15 @@ def complete_mission(user_id: int, day_number: int, mission_id: str, mission_typ
 
         conn.commit()
 
-        # 배지 체크
-        new_badges = check_badges(user_id)
+    # 배지 체크 (별도 트랜잭션으로 처리)
+    new_badges = check_badges(user_id)
 
-        return {
-            "success": True,
-            "xp_earned": xp,
-            "day_completed": day_completed,
-            "new_badges": new_badges
-        }
+    return {
+        "success": True,
+        "xp_earned": xp,
+        "day_completed": day_completed,
+        "new_badges": new_badges
+    }
 
 
 # ========== 게이미피케이션 함수 ==========
@@ -724,6 +774,7 @@ def update_streak(user_id: int) -> Dict[str, Any]:
 def check_badges(user_id: int) -> List[Dict[str, Any]]:
     """배지 획득 체크"""
     new_badges = []
+    total_xp_earned = 0
 
     with get_connection() as conn:
         cursor = conn.cursor()
@@ -762,7 +813,7 @@ def check_badges(user_id: int) -> List[Dict[str, Any]]:
 
             if earned:
                 current_badges.append(badge["id"])
-                add_xp(user_id, badge["xp_reward"])
+                total_xp_earned += badge["xp_reward"]
                 new_badges.append({
                     "id": badge["id"],
                     "name": badge["name"],
@@ -771,11 +822,28 @@ def check_badges(user_id: int) -> List[Dict[str, Any]]:
                 })
 
         if new_badges:
+            # 배지와 XP를 동일 트랜잭션에서 업데이트 (중첩 연결 방지)
             cursor.execute("""
                 UPDATE user_gamification
-                SET badges = ?
+                SET badges = ?,
+                    total_xp = total_xp + ?,
+                    updated_at = CURRENT_TIMESTAMP
                 WHERE user_id = ?
-            """, (json.dumps(current_badges), user_id))
+            """, (json.dumps(current_badges), total_xp_earned, user_id))
+
+            # 레벨 업데이트
+            cursor.execute("SELECT total_xp, level FROM user_gamification WHERE user_id = ?", (user_id,))
+            gam_result = cursor.fetchone()
+            if gam_result:
+                current_xp = gam_result["total_xp"]
+                new_level = 1
+                for level, info in sorted(LEVEL_REQUIREMENTS.items(), reverse=True):
+                    if current_xp >= info["min_xp"]:
+                        new_level = level
+                        break
+                if new_level != gam_result["level"]:
+                    cursor.execute("UPDATE user_gamification SET level = ? WHERE user_id = ?", (new_level, user_id))
+
             conn.commit()
 
     return new_badges
