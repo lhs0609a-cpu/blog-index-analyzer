@@ -369,8 +369,13 @@ export default function AdOptimizerTutorial({
       setAnimateStep(true)
       setTimeout(() => setAnimateStep(false), 300)
     } else {
-      // 튜토리얼 완료
-      localStorage.setItem('ad_optimizer_tutorial_completed', 'true')
+      // 튜토리얼 완료 - localStorage 설정 후 콜백 호출
+      try {
+        localStorage.setItem('ad_optimizer_tutorial_completed', 'true')
+        localStorage.removeItem('ad_optimizer_tutorial_progress')
+      } catch (e) {
+        console.error('Failed to save tutorial completion:', e)
+      }
       onComplete()
     }
   }
@@ -405,7 +410,8 @@ export default function AdOptimizerTutorial({
   const currentStepData = TUTORIAL_STEPS[currentStep - 1]
   const progress = (completedSteps.length / TUTORIAL_STEPS.length) * 100
 
-  if (!isOpen) return null
+  // 튜토리얼이 닫혀있거나 스텝 데이터가 없으면 렌더링하지 않음
+  if (!isOpen || !currentStepData) return null
 
   return (
     <AnimatePresence>

@@ -550,9 +550,13 @@ export default function UnifiedAdOptimizerPage() {
             isOpen={showTutorial}
             onClose={() => setShowTutorial(false)}
             onComplete={() => {
-              setShowTutorial(false)
-              setShowIntro(false)
+              // 튜토리얼 완료 시 상태 업데이트 (순서 중요)
               setTutorialCompleted(true)
+              setShowTutorial(false)
+              // 약간의 지연 후 인트로 화면 숨김 (애니메이션 완료 대기)
+              setTimeout(() => {
+                setShowIntro(false)
+              }, 100)
             }}
           />
         </div>
@@ -596,7 +600,12 @@ export default function UnifiedAdOptimizerPage() {
   const totalConnected = Object.values(connectedPlatforms).filter(p => p.is_connected).length
   const totalActive = Object.values(connectedPlatforms).filter(p => p.is_active).length
   const totalSpend = Object.values(connectedPlatforms).reduce((sum, p) => sum + (p.stats?.total_spend || 0), 0)
-  const avgRoas = Object.values(connectedPlatforms).filter(p => p.stats?.roas).reduce((sum, p, _, arr) => sum + (p.stats?.roas || 0) / arr.length, 0)
+  const avgRoas = (() => {
+    const platformsWithRoas = Object.values(connectedPlatforms).filter(p => p.stats?.roas && p.stats.roas > 0)
+    if (platformsWithRoas.length === 0) return 0
+    const totalRoas = platformsWithRoas.reduce((sum, p) => sum + (p.stats?.roas || 0), 0)
+    return totalRoas / platformsWithRoas.length
+  })()
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -1704,8 +1713,8 @@ export default function UnifiedAdOptimizerPage() {
         isOpen={showTutorial}
         onClose={() => setShowTutorial(false)}
         onComplete={() => {
-          setShowTutorial(false)
           setTutorialCompleted(true)
+          setShowTutorial(false)
         }}
       />
     </div>
