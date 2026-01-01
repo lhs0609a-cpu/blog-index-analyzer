@@ -547,6 +547,220 @@ def get_extra_credits(user_id: int) -> List[Dict]:
     return [dict(row) for row in rows]
 
 
+# ============ 관리자용 결제 내역 함수 ============
+
+def get_all_payments_admin(
+    limit: int = 50,
+    offset: int = 0,
+    status: str = None,
+    start_date: str = None,
+    end_date: str = None
+) -> Dict:
+    """모든 결제 내역 조회 (관리자용)"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # 기본 쿼리
+    query = """
+        SELECT p.*, u.email as user_email, u.name as user_name
+        FROM payments p
+        LEFT JOIN (
+            SELECT id, email, name FROM sqlite_master WHERE type='table' AND name='users'
+        ) u ON 1=0
+        ORDER BY p.created_at DESC
+    """
+
+    # 실제로 users 테이블이 다른 DB에 있을 수 있으므로 단순 조회
+    query = "SELECT * FROM payments WHERE 1=1"
+    params = []
+
+    if status:
+        query += " AND status = ?"
+        params.append(status)
+
+    if start_date:
+        query += " AND created_at >= ?"
+        params.append(start_date)
+
+    if end_date:
+        query += " AND created_at <= ?"
+        params.append(end_date + " 23:59:59")
+
+    # 전체 건수
+    count_query = query.replace("SELECT *", "SELECT COUNT(*)")
+    cursor.execute(count_query, params)
+    total = cursor.fetchone()[0]
+
+    # 페이징
+    query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+
+    return {
+        "payments": [dict(row) for row in rows],
+        "total": total,
+        "limit": limit,
+        "offset": offset
+    }
+
+
+def get_revenue_stats(period: str = "30d") -> Dict:
+    """매출 통계 조회"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # 기간 계산
+    if period == "7d":
+        days = 7
+    elif period == "30d":
+        days = 30
+    elif period == "90d":
+        days = 90
+    elif period == "1y":
+        days = 365
+    else:
+        days = 30
+
+    start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    today = datetime.now().strftime("%Y-%m-%d")
+    this_month_start = datetime.now().strftime("%Y-%m-01")
+
+    # 전체 매출 (완료된 결제만)
+    cursor.execute("""
+        SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count
+        FROM payments
+        WHERE status = 'completed'
+    """)
+    total_row = cursor.fetchone()
+    total_revenue = total_row[0] if total_row else 0
+    total_count = total_row[1] if total_row else 0
+
+    # 오늘 매출
+    cursor.execute("""
+        SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count
+        FROM payments
+        WHERE status = 'completed'
+          AND date(paid_at) = date('now')
+    """)
+    today_row = cursor.fetchone()
+    today_revenue = today_row[0] if today_row else 0
+    today_count = today_row[1] if today_row else 0
+
+    # 이번 달 매출
+    cursor.execute("""
+        SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count
+        FROM payments
+        WHERE status = 'completed'
+          AND paid_at >= ?
+    """, (this_month_start,))
+    month_row = cursor.fetchone()
+    month_revenue = month_row[0] if month_row else 0
+    month_count = month_row[1] if month_row else 0
+
+    # 기간 내 매출
+    cursor.execute("""
+        SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count
+        FROM payments
+        WHERE status = 'completed'
+          AND paid_at >= ?
+    """, (start_date,))
+    period_row = cursor.fetchone()
+    period_revenue = period_row[0] if period_row else 0
+    period_count = period_row[1] if period_row else 0
+
+    # 일별 매출 (최근 N일)
+    cursor.execute("""
+        SELECT date(paid_at) as date, COALESCE(SUM(amount), 0) as revenue, COUNT(*) as count
+        FROM payments
+        WHERE status = 'completed'
+          AND paid_at >= ?
+        GROUP BY date(paid_at)
+        ORDER BY date(paid_at) ASC
+    """, (start_date,))
+    daily_rows = cursor.fetchall()
+    daily_revenue = [{"date": row[0], "revenue": row[1], "count": row[2]} for row in daily_rows]
+
+    # 결제 상태별 통계
+    cursor.execute("""
+        SELECT status, COUNT(*) as count, COALESCE(SUM(amount), 0) as total
+        FROM payments
+        GROUP BY status
+    """)
+    status_rows = cursor.fetchall()
+    status_stats = {row[0]: {"count": row[1], "total": row[2]} for row in status_rows}
+
+    # 결제 수단별 통계
+    cursor.execute("""
+        SELECT payment_method, COUNT(*) as count, COALESCE(SUM(amount), 0) as total
+        FROM payments
+        WHERE status = 'completed' AND payment_method IS NOT NULL
+        GROUP BY payment_method
+    """)
+    method_rows = cursor.fetchall()
+    method_stats = {row[0]: {"count": row[1], "total": row[2]} for row in method_rows}
+
+    conn.close()
+
+    return {
+        "total_revenue": total_revenue,
+        "total_transactions": total_count,
+        "today_revenue": today_revenue,
+        "today_count": today_count,
+        "month_revenue": month_revenue,
+        "month_count": month_count,
+        "period_revenue": period_revenue,
+        "period_count": period_count,
+        "period": period,
+        "daily_revenue": daily_revenue,
+        "status_stats": status_stats,
+        "payment_method_stats": method_stats
+    }
+
+
+def get_payment_by_id(payment_id: int) -> Optional[Dict]:
+    """결제 ID로 조회"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM payments WHERE id = ?", (payment_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    return dict(row) if row else None
+
+
+def cancel_payment_record(payment_id: int, cancel_reason: str = None) -> bool:
+    """결제 취소 처리 (DB 레코드)"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE payments
+        SET status = 'cancelled',
+            cancelled_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    """, (payment_id,))
+
+    success = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+
+    return success
+
+
+def get_payments_count() -> int:
+    """전체 결제 건수"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM payments")
+    count = cursor.fetchone()[0]
+    conn.close()
+    return count
+
+
 # 초기화
 if __name__ == "__main__":
     init_subscription_tables()

@@ -399,234 +399,150 @@ export default function UnifiedAdOptimizerPage() {
     }
   }
 
-  // 인트로 화면 - 젊고 세련된 디자인
+  // 인트로 화면 - 인스타그램 스타일 깔끔한 디자인
   if (showIntro) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-violet-50 via-purple-50 to-fuchsia-50 overflow-hidden">
-        {/* 배경 효과 - 밝고 화사한 스타일 */}
-        <div className="absolute inset-0 overflow-hidden">
-          <motion.div
-            animate={{
-              scale: [1, 1.2, 1],
-              rotate: [0, 180, 360]
-            }}
-            transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-            className="absolute -top-20 -right-20 w-[500px] h-[500px] bg-gradient-to-br from-purple-300/40 to-pink-300/40 rounded-full blur-3xl"
-          />
-          <motion.div
-            animate={{
-              scale: [1.2, 1, 1.2],
-              rotate: [360, 180, 0]
-            }}
-            transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
-            className="absolute -bottom-20 -left-20 w-[600px] h-[600px] bg-gradient-to-br from-indigo-300/40 to-violet-300/40 rounded-full blur-3xl"
-          />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-gradient-to-br from-cyan-200/30 to-blue-200/30 rounded-full blur-3xl" />
-        </div>
+      <div className="min-h-screen bg-white">
+        {/* 상단 그라데이션 바 */}
+        <div className="h-1 w-full bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-600" />
 
-        <div className="relative z-10 container mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto px-6 py-12">
           {/* 상단 네비게이션 */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
+          <motion.nav
+            initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center justify-between mb-8"
+            className="flex items-center justify-between mb-16"
           >
-            <Link href="/" className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
-              <ChevronRight className="w-5 h-5 rotate-180" />
-              <span className="font-medium">홈으로</span>
+            <Link href="/tools" className="text-gray-400 hover:text-gray-600 transition-colors text-sm">
+              ← 도구 목록
             </Link>
-            <div className="flex items-center gap-2 px-4 py-2 bg-white/60 backdrop-blur-sm rounded-full border border-purple-200">
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-sm font-medium text-gray-700">Pro 기능</span>
-            </div>
-          </motion.div>
+            <span className="text-xs font-medium text-gray-400 tracking-wider">PRO</span>
+          </motion.nav>
 
-          {/* 메인 히어로 섹션 */}
-          <div className="text-center mb-12">
+          {/* 메인 히어로 */}
+          <div className="text-center mb-16">
             <motion.div
-              initial={{ scale: 0, rotate: -180 }}
-              animate={{ scale: 1, rotate: 0 }}
-              transition={{ type: "spring", duration: 0.8, bounce: 0.4 }}
-              className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-xl shadow-purple-500/25 mb-6"
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.5 }}
+              className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-br from-pink-500 via-purple-500 to-indigo-500 mb-8"
             >
               <Zap className="w-10 h-10 text-white" />
             </motion.div>
 
-            <motion.div
+            <motion.h1
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="text-4xl md:text-5xl font-bold text-gray-900 mb-4 tracking-tight"
+            >
+              광고 자동 최적화
+            </motion.h1>
+
+            <motion.p
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
+              className="text-lg text-gray-500 max-w-md mx-auto"
             >
-              <h1 className="text-4xl md:text-5xl font-black mb-4 text-gray-900">
-                통합 광고{' '}
-                <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-                  AI 자동화
-                </span>
-              </h1>
-              <p className="text-lg text-gray-600 max-w-xl mx-auto leading-relaxed">
-                네이버, 구글, 메타, 카카오 등 모든 광고를<br />
-                <span className="font-semibold text-purple-600">AI가 24시간 알아서 최적화</span>해요 ✨
-              </p>
-            </motion.div>
+              AI가 24시간 광고 성과를 분석하고<br />자동으로 최적화합니다
+            </motion.p>
           </div>
 
-          {/* 플랫폼 아이콘 플로팅 */}
+          {/* 플랫폼 아이콘 */}
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.4 }}
-            className="flex justify-center items-center gap-3 mb-10 flex-wrap"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="flex justify-center items-center gap-4 mb-16"
           >
             {[
-              { icon: "🟢", name: "네이버", color: "from-green-100 to-green-200 border-green-300" },
-              { icon: "🔵", name: "구글", color: "from-blue-100 to-blue-200 border-blue-300" },
-              { icon: "🔷", name: "메타", color: "from-indigo-100 to-indigo-200 border-indigo-300" },
-              { icon: "💛", name: "카카오", color: "from-yellow-100 to-yellow-200 border-yellow-300" },
-              { icon: "🎵", name: "틱톡", color: "from-pink-100 to-pink-200 border-pink-300" },
-              { icon: "🛒", name: "쿠팡", color: "from-orange-100 to-orange-200 border-orange-300" }
+              { icon: "🟢", name: "네이버" },
+              { icon: "🔵", name: "구글" },
+              { icon: "🔷", name: "메타" },
+              { icon: "💛", name: "카카오" },
+              { icon: "🎵", name: "틱톡" },
             ].map((platform, idx) => (
               <motion.div
                 key={idx}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 + idx * 0.08 }}
-                whileHover={{ scale: 1.1, y: -5 }}
-                className={`flex items-center gap-2 px-4 py-2 bg-gradient-to-br ${platform.color} rounded-full border shadow-sm cursor-pointer`}
+                whileHover={{ y: -2 }}
+                className="flex flex-col items-center gap-1"
               >
-                <span className="text-lg">{platform.icon}</span>
-                <span className="text-sm font-semibold text-gray-700">{platform.name}</span>
+                <span className="text-2xl">{platform.icon}</span>
+                <span className="text-xs text-gray-400">{platform.name}</span>
               </motion.div>
             ))}
           </motion.div>
 
-          {/* 기능 카드 - 모던 글래스모피즘 */}
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+          {/* 기능 카드 - 미니멀 스타일 */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="grid md:grid-cols-2 gap-4 mb-16"
+          >
             {[
-              {
-                icon: <Globe className="w-6 h-6" />,
-                title: "멀티 플랫폼",
-                description: "8개 광고 플랫폼 한 번에 관리",
-                emoji: "🌐",
-                gradient: "from-emerald-500 to-teal-500",
-                bg: "from-emerald-50 to-teal-50",
-                border: "border-emerald-200"
-              },
-              {
-                icon: <Brain className="w-6 h-6" />,
-                title: "AI 실시간 분석",
-                description: "입찰가, 예산, 타겟 자동 조정",
-                emoji: "🧠",
-                gradient: "from-blue-500 to-indigo-500",
-                bg: "from-blue-50 to-indigo-50",
-                border: "border-blue-200"
-              },
-              {
-                icon: <Wallet className="w-6 h-6" />,
-                title: "스마트 예산",
-                description: "ROAS 기반 자동 예산 재배분",
-                emoji: "💰",
-                gradient: "from-orange-500 to-amber-500",
-                bg: "from-orange-50 to-amber-50",
-                border: "border-orange-200"
-              },
-              {
-                icon: <Sparkles className="w-6 h-6" />,
-                title: "AI 인사이트",
-                description: "개선 기회와 위험 요소 알림",
-                emoji: "💡",
-                gradient: "from-purple-500 to-pink-500",
-                bg: "from-purple-50 to-pink-50",
-                border: "border-purple-200"
-              }
+              { icon: <Globe className="w-5 h-5" />, title: "멀티 플랫폼 통합", desc: "8개 광고 플랫폼을 한 곳에서" },
+              { icon: <Brain className="w-5 h-5" />, title: "AI 실시간 최적화", desc: "입찰가, 예산 자동 조정" },
+              { icon: <TrendingUp className="w-5 h-5" />, title: "ROAS 극대화", desc: "성과 기반 예산 재배분" },
+              { icon: <Bell className="w-5 h-5" />, title: "이상 징후 감지", desc: "문제 발생 시 즉시 알림" },
             ].map((feature, idx) => (
-              <motion.div
+              <div
                 key={idx}
-                initial={{ opacity: 0, y: 30, scale: 0.9 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ delay: 0.6 + idx * 0.1 }}
-                whileHover={{ y: -8, scale: 1.02 }}
-                className={`group relative bg-gradient-to-br ${feature.bg} rounded-2xl border ${feature.border} p-5 hover:shadow-xl transition-all duration-300 cursor-pointer overflow-hidden`}
+                className="flex items-start gap-4 p-5 rounded-2xl border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all"
               >
-                <div className="absolute -right-4 -top-4 text-6xl opacity-10 group-hover:opacity-20 transition-opacity">
-                  {feature.emoji}
+                <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-600">
+                  {feature.icon}
                 </div>
-                <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br ${feature.gradient} mb-3 shadow-lg group-hover:scale-110 group-hover:rotate-6 transition-all`}>
-                  <div className="text-white">{feature.icon}</div>
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-0.5">{feature.title}</h3>
+                  <p className="text-sm text-gray-500">{feature.desc}</p>
                 </div>
-                <h3 className="text-base font-bold text-gray-900 mb-1">{feature.title}</h3>
-                <p className="text-sm text-gray-600">{feature.description}</p>
-              </motion.div>
+              </div>
             ))}
-          </div>
-
-          {/* 성과 지표 - 트렌디한 카운터 */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1 }}
-            className="bg-white/70 backdrop-blur-xl rounded-3xl border border-white/50 p-6 mb-10 shadow-lg"
-          >
-            <div className="grid grid-cols-3 gap-6">
-              {[
-                { value: "30%+", label: "ROAS 개선", icon: "📈", color: "text-emerald-600" },
-                { value: "24/7", label: "자동 최적화", icon: "⚡", color: "text-blue-600" },
-                { value: "50%", label: "시간 절약", icon: "⏰", color: "text-purple-600" }
-              ].map((stat, idx) => (
-                <motion.div
-                  key={idx}
-                  initial={{ opacity: 0, scale: 0.5 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 1.1 + idx * 0.1, type: "spring" }}
-                  className="text-center"
-                >
-                  <div className="text-3xl mb-2">{stat.icon}</div>
-                  <div className={`text-3xl md:text-4xl font-black ${stat.color}`}>{stat.value}</div>
-                  <div className="text-sm text-gray-500 font-medium">{stat.label}</div>
-                </motion.div>
-              ))}
-            </div>
           </motion.div>
 
-          {/* CTA 버튼 - 튜토리얼과 바로 시작 옵션 */}
+          {/* 성과 지표 */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.3 }}
-            className="text-center space-y-4"
+            transition={{ delay: 0.5 }}
+            className="flex justify-center gap-12 mb-16"
           >
-            {/* 튜토리얼 시작 (추천) */}
-            <motion.button
-              whileHover={{ scale: 1.05, y: -3 }}
-              whileTap={{ scale: 0.98 }}
+            {[
+              { value: "30%+", label: "ROAS 개선" },
+              { value: "24/7", label: "자동 최적화" },
+              { value: "50%", label: "시간 절약" }
+            ].map((stat, idx) => (
+              <div key={idx} className="text-center">
+                <div className="text-3xl font-bold bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent">
+                  {stat.value}
+                </div>
+                <div className="text-sm text-gray-400 mt-1">{stat.label}</div>
+              </div>
+            ))}
+          </motion.div>
+
+          {/* CTA 버튼 - 인스타 스타일 */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6 }}
+            className="flex flex-col items-center gap-4"
+          >
+            <button
               onClick={() => setShowTutorial(true)}
-              className="group relative inline-flex items-center gap-3 px-10 py-5 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white text-lg font-bold rounded-2xl shadow-xl shadow-purple-500/30 hover:shadow-2xl hover:shadow-purple-500/40 transition-all duration-300 overflow-hidden"
+              className="w-full max-w-sm py-4 bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
-              <BookOpen className="w-6 h-6 group-hover:rotate-12 transition-transform" />
-              <span>5분 만에 설정하기 (튜토리얼)</span>
-              <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </motion.button>
+              시작하기
+            </button>
 
-            <div className="flex items-center gap-4 justify-center">
-              <span className="text-gray-400 text-sm">또는</span>
-            </div>
-
-            {/* 바로 시작 (경험자용) */}
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+            <button
               onClick={() => setShowIntro(false)}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-white text-gray-700 font-medium rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all"
+              className="text-gray-400 hover:text-gray-600 text-sm transition-colors"
             >
-              <Zap className="w-5 h-5 text-purple-500" />
-              <span>바로 시작하기</span>
-              <span className="text-xs text-gray-400">(이미 아시는 분)</span>
-            </motion.button>
-
-            <p className="mt-4 text-gray-500 text-sm flex items-center justify-center gap-2">
-              <Shield className="w-4 h-4" />
-              Pro 플랜에서 이용 가능해요
-            </p>
+              이미 사용해 보셨나요? 바로 시작 →
+            </button>
           </motion.div>
 
           {/* 튜토리얼 모달 */}
@@ -639,18 +555,11 @@ export default function UnifiedAdOptimizerPage() {
               setTutorialCompleted(true)
             }}
           />
+        </div>
 
-          {/* 하단 브랜딩 */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1.5 }}
-            className="mt-12 text-center"
-          >
-            <p className="text-xs text-gray-400">
-              Powered by <span className="font-semibold text-purple-500">블랭크 AI</span> • 광고 자동화의 새로운 기준
-            </p>
-          </motion.div>
+        {/* 하단 */}
+        <div className="absolute bottom-6 left-0 right-0 text-center">
+          <p className="text-xs text-gray-300">BLANK AI</p>
         </div>
       </div>
     )
@@ -690,150 +599,113 @@ export default function UnifiedAdOptimizerPage() {
   const avgRoas = Object.values(connectedPlatforms).filter(p => p.stats?.roas).reduce((sum, p, _, arr) => sum + (p.stats?.roas || 0) / arr.length, 0)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <div className="min-h-screen bg-gray-50">
+      {/* 상단 그라데이션 바 */}
+      <div className="h-1 w-full bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-600" />
+
       {/* 헤더 */}
-      <header className="bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-4">
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-40">
+        <div className="max-w-6xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Link href="/tools" className="text-gray-500 hover:text-gray-700">
+            <div className="flex items-center gap-4">
+              <Link href="/tools" className="text-gray-400 hover:text-gray-600 text-sm">
                 ← 도구
               </Link>
-              <div className="w-px h-6 bg-gray-300" />
-              <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-                  <Zap className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold text-gray-900">통합 광고 자동 최적화</h1>
-                  <p className="text-xs text-gray-500">모든 광고 플랫폼을 한 곳에서</p>
-                </div>
-              </div>
+              <h1 className="text-lg font-semibold text-gray-900">광고 자동 최적화</h1>
             </div>
 
-            <div className="flex items-center gap-3">
-              {/* 튜토리얼 버튼 */}
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowTutorial(true)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-200 transition-colors"
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
               >
-                <HelpCircle className="w-4 h-4" />
-                도움말
+                <HelpCircle className="w-5 h-5" />
               </button>
-              <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg">
+              <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
                 <Bell className="w-5 h-5" />
               </button>
-              <Link
-                href="/ad-optimizer"
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900"
-              >
-                네이버 광고 상세 →
-              </Link>
             </div>
           </div>
 
-          {/* 탭 네비게이션 */}
-          <div className="flex gap-1 mt-4 -mb-px">
+          {/* 탭 네비게이션 - 인스타 스타일 */}
+          <div className="flex gap-8 mt-4 border-t border-gray-100 pt-3 -mb-px">
             {[
-              { id: 'overview', label: '대시보드', icon: <PieChart className="w-4 h-4" /> },
-              { id: 'platforms', label: '플랫폼 관리', icon: <Grid className="w-4 h-4" /> },
-              { id: 'budget', label: '예산 최적화', icon: <Wallet className="w-4 h-4" /> },
-              { id: 'insights', label: 'AI 인사이트', icon: <Brain className="w-4 h-4" /> }
+              { id: 'overview', label: '대시보드' },
+              { id: 'platforms', label: '플랫폼' },
+              { id: 'budget', label: '예산' },
+              { id: 'insights', label: '인사이트' }
             ].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as DashboardTab)}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium rounded-t-xl transition-colors ${
+                className={`pb-3 text-sm font-medium transition-colors relative ${
                   activeTab === tab.id
-                    ? 'bg-white text-indigo-600 border-t border-x border-gray-200'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+                    ? 'text-gray-900'
+                    : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
-                {tab.icon}
                 {tab.label}
+                {activeTab === tab.id && (
+                  <motion.div
+                    layoutId="activeTab"
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-900"
+                  />
+                )}
               </button>
             ))}
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6">
+      <main className="max-w-6xl mx-auto px-6 py-8">
         {/* ==================== OVERVIEW TAB ==================== */}
         {activeTab === 'overview' && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.3 }}
+            transition={{ duration: 0.2 }}
           >
             {/* 튜토리얼 배너 - 미완료 시에만 표시 */}
             {!tutorialCompleted && (
-              <TutorialStartButton
-                onClick={() => setShowTutorial(true)}
-                variant="banner"
-              />
+              <div className="mb-6 p-4 bg-gradient-to-r from-pink-50 to-purple-50 rounded-2xl border border-pink-100">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center">
+                      <BookOpen className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">처음이신가요?</p>
+                      <p className="text-sm text-gray-500">5분이면 설정을 완료할 수 있어요</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowTutorial(true)}
+                    className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
+                  >
+                    시작하기
+                  </button>
+                </div>
+              </div>
             )}
 
-            {/* 통계 요약 */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-2xl p-5 shadow-sm"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                    <Link2 className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <span className="text-sm text-gray-500">연동된 플랫폼</span>
+            {/* 통계 요약 - 인스타 스타일 */}
+            <div className="grid grid-cols-4 gap-6 mb-8">
+              {[
+                { label: '연동 플랫폼', value: totalConnected, suffix: `/${AD_PLATFORMS.length}` },
+                { label: '실행 중', value: totalActive, suffix: '' },
+                { label: '총 광고비', value: `₩${(totalSpend / 10000).toFixed(0)}`, suffix: '만' },
+                { label: 'ROAS', value: avgRoas.toFixed(0), suffix: '%' },
+              ].map((stat, idx) => (
+                <div key={idx} className="text-center">
+                  <p className="text-2xl font-bold text-gray-900">
+                    {stat.value}<span className="text-lg text-gray-400">{stat.suffix}</span>
+                  </p>
+                  <p className="text-sm text-gray-400 mt-1">{stat.label}</p>
                 </div>
-                <p className="text-3xl font-bold text-gray-900">{totalConnected}<span className="text-lg text-gray-400">/{AD_PLATFORMS.length}</span></p>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className="bg-white rounded-2xl p-5 shadow-sm"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
-                    <Play className="w-5 h-5 text-green-600" />
-                  </div>
-                  <span className="text-sm text-gray-500">최적화 실행 중</span>
-                </div>
-                <p className="text-3xl font-bold text-gray-900">{totalActive}</p>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="bg-white rounded-2xl p-5 shadow-sm"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
-                    <DollarSign className="w-5 h-5 text-orange-600" />
-                  </div>
-                  <span className="text-sm text-gray-500">총 광고비</span>
-                </div>
-                <p className="text-3xl font-bold text-gray-900">₩{(totalSpend / 10000).toFixed(0)}<span className="text-lg text-gray-400">만</span></p>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="bg-white rounded-2xl p-5 shadow-sm"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
-                    <TrendingUp className="w-5 h-5 text-purple-600" />
-                  </div>
-                  <span className="text-sm text-gray-500">평균 ROAS</span>
-                </div>
-                <p className="text-3xl font-bold text-gray-900">{avgRoas.toFixed(0)}<span className="text-lg text-gray-400">%</span></p>
-              </motion.div>
+              ))}
             </div>
+
+            <div className="h-px bg-gray-100 mb-8" />
 
             {/* 퀵 스타트 가이드 - 연동된 플랫폼이 없을 때 표시 */}
             {totalConnected === 0 && (
@@ -847,438 +719,218 @@ export default function UnifiedAdOptimizerPage() {
               </motion.div>
             )}
 
-            {/* 고급 최적화 도구 */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: totalConnected === 0 ? 0.5 : 0.4 }}
-              className="mb-6"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">
-                  <Zap className="w-5 h-5 text-indigo-500" />
-                  고급 최적화 도구
-                </h3>
-                <button
-                  onClick={() => setShowTutorial(true)}
-                  className="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
-                >
-                  <HelpCircle className="w-4 h-4" />
-                  사용 방법 보기
-                </button>
-              </div>
-              <Link href="/ad-optimizer/hourly-bidding">
-                <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all cursor-pointer group">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                        <Clock className="w-6 h-6 text-white" />
+            {/* 최적화 도구 - 인스타 스타일 */}
+            <div className="mb-8">
+              <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">최적화 도구</h3>
+              <div className="grid md:grid-cols-2 gap-3">
+                {[
+                  { href: '/ad-optimizer/hourly-bidding', icon: <Clock className="w-5 h-5" />, title: '시간대별 입찰', desc: '비용 15-25% 절감' },
+                  { href: '/ad-optimizer/anomaly-detection', icon: <Bell className="w-5 h-5" />, title: '이상 징후 감지', desc: '실시간 모니터링' },
+                  { href: '/ad-optimizer/budget-reallocation', icon: <PieChart className="w-5 h-5" />, title: '예산 재분배', desc: 'ROAS 10-20% 개선' },
+                  { href: '/ad-optimizer/creative-fatigue', icon: <Flame className="w-5 h-5" />, title: '크리에이티브 분석', desc: '교체 시점 추천' },
+                ].map((tool, idx) => (
+                  <Link key={idx} href={tool.href}>
+                    <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all cursor-pointer group">
+                      <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-600 group-hover:bg-gray-100 transition-colors">
+                        {tool.icon}
                       </div>
-                      <div>
-                        <h3 className="font-bold text-white text-lg flex items-center gap-2">
-                          시간대별 입찰 최적화
-                          <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">NEW</span>
-                        </h3>
-                        <p className="text-blue-100 text-sm">전환율 높은 시간대에 집중 입찰하여 비용 15-25% 절감</p>
+                      <div className="flex-1">
+                        <h4 className="font-medium text-gray-900">{tool.title}</h4>
+                        <p className="text-sm text-gray-400">{tool.desc}</p>
                       </div>
+                      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-400 transition-colors" />
                     </div>
-                    <div className="flex items-center gap-2 text-white/80 group-hover:text-white transition-colors">
-                      <span className="text-sm">설정하기</span>
-                      <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </div>
-                </div>
-              </Link>
-              <Link href="/ad-optimizer/anomaly-detection" className="mt-3 block">
-                <div className="bg-gradient-to-r from-red-500 to-orange-500 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all cursor-pointer group">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                        <Bell className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-white text-lg flex items-center gap-2">
-                          이상 징후 감지
-                          <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">NEW</span>
-                        </h3>
-                        <p className="text-orange-100 text-sm">CPC 급등, CTR 급락 등 성과 이상을 실시간 감지하고 대응</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-white/80 group-hover:text-white transition-colors">
-                      <span className="text-sm">모니터링</span>
-                      <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </div>
-                </div>
-              </Link>
-              <Link href="/ad-optimizer/budget-reallocation" className="mt-3 block">
-                <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all cursor-pointer group">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                        <PieChart className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-white text-lg flex items-center gap-2">
-                          크로스 플랫폼 예산 재분배
-                          <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">NEW</span>
-                        </h3>
-                        <p className="text-purple-100 text-sm">고효율 플랫폼에 예산 집중, 전체 ROAS 10-20% 개선</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-white/80 group-hover:text-white transition-colors">
-                      <span className="text-sm">최적화</span>
-                      <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </div>
-                </div>
-              </Link>
-              <Link href="/ad-optimizer/creative-fatigue" className="mt-3 block">
-                <div className="bg-gradient-to-r from-fuchsia-500 to-violet-500 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all cursor-pointer group">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                        <Flame className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-white text-lg flex items-center gap-2">
-                          크리에이티브 피로도 감지
-                          <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">NEW</span>
-                        </h3>
-                        <p className="text-fuchsia-100 text-sm">Meta 광고 크리에이티브 수명 분석 및 교체 시점 추천</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-white/80 group-hover:text-white transition-colors">
-                      <span className="text-sm">분석하기</span>
-                      <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </div>
-                </div>
-              </Link>
-              <Link href="/ad-optimizer/naver-quality" className="mt-3 block">
-                <div className="bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all cursor-pointer group">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                        <Award className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-white text-lg flex items-center gap-2">
-                          네이버 품질지수 최적화
-                          <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">NEW</span>
-                        </h3>
-                        <p className="text-green-100 text-sm">검색광고 품질지수 분석 및 CPC 절감 전략</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-white/80 group-hover:text-white transition-colors">
-                      <span className="text-sm">최적화</span>
-                      <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </div>
-                </div>
-              </Link>
-              <Link href="/ad-optimizer/budget-pacing" className="mt-3 block">
-                <div className="bg-gradient-to-r from-cyan-500 to-teal-500 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all cursor-pointer group">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                        <Clock className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-white text-lg flex items-center gap-2">
-                          예산 페이싱
-                          <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">NEW</span>
-                        </h3>
-                        <p className="text-cyan-100 text-sm">시간대별 예산 분배 최적화 및 소진 속도 모니터링</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-white/80 group-hover:text-white transition-colors">
-                      <span className="text-sm">관리</span>
-                      <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </div>
-                </div>
-              </Link>
-              <Link href="/ad-optimizer/funnel-bidding" className="mt-3 block">
-                <div className="bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all cursor-pointer group">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                        <Target className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-white text-lg flex items-center gap-2">
-                          퍼널 기반 입찰
-                          <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">NEW</span>
-                        </h3>
-                        <p className="text-indigo-100 text-sm">TOFU/MOFU/BOFU 단계별 입찰 전략 최적화</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-white/80 group-hover:text-white transition-colors">
-                      <span className="text-sm">최적화</span>
-                      <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            </motion.div>
-
-            {/* 플랫폼별 기능 지원 매트릭스 */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="bg-white rounded-2xl shadow-sm overflow-hidden mb-6"
-            >
-              <div className="p-4 border-b border-gray-100">
-                <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                  <Grid className="w-5 h-5 text-indigo-500" />
-                  플랫폼별 기능 지원 현황
-                </h3>
-                <p className="text-sm text-gray-500 mt-1">각 광고 플랫폼에서 사용 가능한 최적화 기능을 확인하세요</p>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-medium text-gray-600">기능</th>
-                      <th className="px-3 py-3 text-center">
-                        <span className="flex items-center justify-center gap-1 px-2 py-1 bg-[#03C75A]/10 rounded-lg text-[#03C75A] font-semibold text-sm">
-                          🟢 네이버
-                        </span>
-                      </th>
-                      <th className="px-3 py-3 text-center">
-                        <span className="flex items-center justify-center gap-1 px-2 py-1 bg-[#4285F4]/10 rounded-lg text-[#4285F4] font-semibold text-sm">
-                          🔵 구글
-                        </span>
-                      </th>
-                      <th className="px-3 py-3 text-center">
-                        <span className="flex items-center justify-center gap-1 px-2 py-1 bg-[#0866FF]/10 rounded-lg text-[#0866FF] font-semibold text-sm">
-                          🔷 메타
-                        </span>
-                      </th>
-                      <th className="px-3 py-3 text-center">
-                        <span className="flex items-center justify-center gap-1 px-2 py-1 bg-[#FEE500]/30 rounded-lg text-[#3C1E1E] font-semibold text-sm">
-                          💛 카카오
-                        </span>
-                      </th>
-                      <th className="px-3 py-3 text-center">
-                        <span className="flex items-center justify-center gap-1 px-2 py-1 bg-gradient-to-r from-[#00F2EA]/20 to-[#FF0050]/20 rounded-lg text-[#00F2EA] font-semibold text-sm">
-                          🎵 틱톡
-                        </span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    <tr className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-900">이상 징후 감지</td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><Clock className="w-5 h-5 text-yellow-500 mx-auto" title="준비 중" /></td>
-                    </tr>
-                    <tr className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-900">시간대별 입찰</td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><X className="w-5 h-5 text-gray-300 mx-auto" /></td>
-                    </tr>
-                    <tr className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-900">예산 재분배</td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><X className="w-5 h-5 text-gray-300 mx-auto" /></td>
-                    </tr>
-                    <tr className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-900">크리에이티브 피로도</td>
-                      <td className="px-3 py-3 text-center"><X className="w-5 h-5 text-gray-300 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><Clock className="w-5 h-5 text-yellow-500 mx-auto" title="준비 중" /></td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><X className="w-5 h-5 text-gray-300 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                    </tr>
-                    <tr className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-900">품질지수 최적화</td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><Clock className="w-5 h-5 text-yellow-500 mx-auto" title="준비 중" /></td>
-                      <td className="px-3 py-3 text-center"><X className="w-5 h-5 text-gray-300 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><X className="w-5 h-5 text-gray-300 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><X className="w-5 h-5 text-gray-300 mx-auto" /></td>
-                    </tr>
-                    <tr className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-900">예산 페이싱</td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                    </tr>
-                    <tr className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-900">퍼널 기반 입찰</td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                      <td className="px-3 py-3 text-center"><Check className="w-5 h-5 text-green-500 mx-auto" /></td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div className="p-4 bg-gray-50 border-t border-gray-100">
-                <div className="flex items-center gap-4 text-xs text-gray-500">
-                  <span className="flex items-center gap-1"><Check className="w-4 h-4 text-green-500" /> 지원</span>
-                  <span className="flex items-center gap-1"><Clock className="w-4 h-4 text-yellow-500" /> 준비 중</span>
-                  <span className="flex items-center gap-1"><X className="w-4 h-4 text-gray-300" /> 미지원</span>
-                  <Link href="/ad-optimizer/setup-guide" className="ml-auto text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
-                    플랫폼 연동 가이드 <ExternalLink className="w-3 h-3" />
                   </Link>
-                </div>
+                ))}
               </div>
-            </motion.div>
+            </div>
+
+            {/* 추가 도구 */}
+            <div className="mb-8">
+              <div className="grid md:grid-cols-2 gap-3">
+                <Link href="/ad-optimizer/naver-quality">
+                  <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all cursor-pointer group">
+                    <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-600 group-hover:bg-gray-100 transition-colors">
+                      <Award className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-medium text-gray-900">품질지수 최적화</h4>
+                      <p className="text-sm text-gray-400">네이버 광고 품질 개선</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-400 transition-colors" />
+                  </div>
+                </Link>
+                <Link href="/ad-optimizer/funnel-bidding">
+                  <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all cursor-pointer group">
+                    <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-600 group-hover:bg-gray-100 transition-colors">
+                      <Target className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-medium text-gray-900">퍼널 기반 입찰</h4>
+                      <p className="text-sm text-gray-400">단계별 전략 적용</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-400 transition-colors" />
+                  </div>
+                </Link>
+              </div>
+            </div>
+
+            {/* 플랫폼별 기능 지원 - 심플 테이블 */}
+            <div className="bg-white rounded-xl border border-gray-100 overflow-hidden mb-8">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50/50">
+                    <th className="px-4 py-3 text-left text-gray-500 font-medium">기능</th>
+                    <th className="px-3 py-3 text-center text-xs text-gray-400">네이버</th>
+                    <th className="px-3 py-3 text-center text-xs text-gray-400">구글</th>
+                    <th className="px-3 py-3 text-center text-xs text-gray-400">메타</th>
+                    <th className="px-3 py-3 text-center text-xs text-gray-400">카카오</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  <tr className="hover:bg-gray-50/50">
+                    <td className="px-4 py-2.5 text-gray-700">시간대별 입찰</td>
+                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto" /></td>
+                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto" /></td>
+                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto" /></td>
+                    <td className="px-3 py-2.5 text-center"><X className="w-4 h-4 text-gray-200 mx-auto" /></td>
+                  </tr>
+                  <tr className="hover:bg-gray-50/50">
+                    <td className="px-4 py-2.5 text-gray-700">예산 재분배</td>
+                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto" /></td>
+                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto" /></td>
+                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto" /></td>
+                    <td className="px-3 py-2.5 text-center"><X className="w-4 h-4 text-gray-200 mx-auto" /></td>
+                  </tr>
+                  <tr className="hover:bg-gray-50/50">
+                    <td className="px-4 py-2.5 text-gray-700">크리에이티브 피로도</td>
+                    <td className="px-3 py-2.5 text-center"><X className="w-4 h-4 text-gray-200 mx-auto" /></td>
+                    <td className="px-3 py-2.5 text-center"><Clock className="w-4 h-4 text-gray-400 mx-auto" /></td>
+                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto" /></td>
+                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto" /></td>
+                  </tr>
+                  <tr className="hover:bg-gray-50/50">
+                    <td className="px-4 py-2.5 text-gray-700">품질지수 최적화</td>
+                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto" /></td>
+                    <td className="px-3 py-2.5 text-center"><Clock className="w-4 h-4 text-gray-400 mx-auto" /></td>
+                    <td className="px-3 py-2.5 text-center"><X className="w-4 h-4 text-gray-200 mx-auto" /></td>
+                    <td className="px-3 py-2.5 text-center"><X className="w-4 h-4 text-gray-200 mx-auto" /></td>
+                  </tr>
+                </tbody>
+              </table>
+              <div className="px-4 py-2 border-t border-gray-50 flex items-center gap-4 text-xs text-gray-400">
+                <span className="flex items-center gap-1"><Check className="w-3 h-3" /> 지원</span>
+                <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> 준비 중</span>
+                <Link href="/ad-optimizer/setup-guide" className="ml-auto hover:text-gray-600">연동 가이드 →</Link>
+              </div>
+            </div>
 
             {/* 대시보드 2열 레이아웃 */}
             <div className="grid lg:grid-cols-3 gap-6">
               {/* 왼쪽: 플랫폼 성과 요약 + 최적화 피드 */}
               <div className="lg:col-span-2 space-y-6">
                 {/* 플랫폼별 성과 */}
-                <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                  <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-                    <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                      <BarChart3 className="w-5 h-5 text-indigo-500" />
-                      플랫폼별 성과
-                    </h3>
+                <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+                  <div className="p-4 border-b border-gray-50 flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-900">플랫폼별 성과</h3>
                     <button
                       onClick={() => setActiveTab('platforms')}
-                      className="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+                      className="text-sm text-gray-500 hover:text-gray-900"
                     >
-                      전체 보기 <ChevronRight className="w-4 h-4" />
+                      전체 보기 →
                     </button>
                   </div>
                   <div className="p-4 space-y-3">
                     {budgetLoading ? (
                       <div className="py-8 text-center">
-                        <Loader2 className="w-6 h-6 animate-spin mx-auto text-gray-400" />
-                        <p className="text-sm text-gray-500 mt-2">로딩 중...</p>
+                        <Loader2 className="w-5 h-5 animate-spin mx-auto text-gray-300" />
                       </div>
                     ) : budgetAllocations.length === 0 ? (
                       <div className="py-8 text-center">
-                        <BarChart3 className="w-8 h-8 mx-auto text-gray-300 mb-2" />
-                        <p className="text-sm text-gray-500">연동된 플랫폼이 없습니다</p>
+                        <p className="text-sm text-gray-400">연동된 플랫폼이 없습니다</p>
                         <button
                           onClick={() => setActiveTab('platforms')}
-                          className="mt-2 text-sm text-indigo-600 hover:text-indigo-700"
+                          className="mt-2 text-sm text-gray-900 hover:underline"
                         >
                           플랫폼 연동하기 →
                         </button>
                       </div>
                     ) : (
                       budgetAllocations.slice(0, 4).map((platform, idx) => (
-                        <motion.div
+                        <div
                           key={platform.platformId}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: idx * 0.1 }}
-                          className="flex items-center gap-4 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
+                          className="flex items-center gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors"
                         >
-                          <span className="text-2xl">{platform.icon}</span>
+                          <span className="text-xl">{platform.icon}</span>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="font-medium text-gray-900 truncate">{platform.name}</span>
-                              <span className={`text-sm font-bold ${
-                                platform.performance >= 400 ? 'text-green-600' :
-                                platform.performance >= 300 ? 'text-blue-600' : 'text-orange-600'
-                              }`}>
-                                ROAS {platform.performance}%
+                              <span className="text-sm font-medium text-gray-900">{platform.name}</span>
+                              <span className="text-sm text-gray-900">
+                                {platform.performance}%
                               </span>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                <motion.div
-                                  initial={{ width: 0 }}
-                                  animate={{ width: `${Math.min(platform.performance / 5, 100)}%` }}
-                                  transition={{ duration: 0.8, delay: idx * 0.1 }}
-                                  className={`h-full rounded-full ${
-                                    platform.performance >= 400 ? 'bg-green-500' :
-                                    platform.performance >= 300 ? 'bg-blue-500' : 'bg-orange-500'
-                                  }`}
-                                />
-                              </div>
-                              <span className={`text-xs flex items-center gap-1 ${
-                                platform.trend === 'up' ? 'text-green-600' :
-                                platform.trend === 'down' ? 'text-red-600' : 'text-gray-500'
-                              }`}>
-                                {platform.trend === 'up' && <ArrowUpRight className="w-3 h-3" />}
-                                {platform.trend === 'down' && <ArrowDownRight className="w-3 h-3" />}
-                                {platform.trend === 'stable' && '━'}
-                              </span>
+                            <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                style={{ width: `${Math.min(platform.performance / 5, 100)}%` }}
+                                className="h-full rounded-full bg-gray-900"
+                              />
                             </div>
                           </div>
-                        </motion.div>
+                        </div>
                       ))
                     )}
                   </div>
                 </div>
 
                 {/* 실시간 최적화 피드 */}
-                <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                  <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-                    <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                      <Activity className="w-5 h-5 text-green-500" />
-                      실시간 최적화 활동
-                      <span className="ml-2 w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                    </h3>
-                    <span className="text-xs text-gray-500">자동 업데이트 중</span>
+                <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+                  <div className="p-4 border-b border-gray-50 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-gray-900">최적화 활동</h3>
+                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                    </div>
+                    <span className="text-xs text-gray-400">실시간</span>
                   </div>
                   <div className="divide-y divide-gray-50">
                     {logsLoading ? (
                       <div className="p-8 text-center">
-                        <Loader2 className="w-6 h-6 animate-spin mx-auto text-gray-400" />
-                        <p className="text-sm text-gray-500 mt-2">로딩 중...</p>
+                        <Loader2 className="w-5 h-5 animate-spin mx-auto text-gray-300" />
                       </div>
                     ) : optimizationLogs.length === 0 ? (
                       <div className="p-8 text-center">
-                        <Activity className="w-8 h-8 mx-auto text-gray-300 mb-2" />
-                        <p className="text-sm text-gray-500">연동된 플랫폼이 없습니다</p>
+                        <p className="text-sm text-gray-400">연동된 플랫폼이 없습니다</p>
                         <button
                           onClick={() => setActiveTab('platforms')}
-                          className="mt-2 text-sm text-indigo-600 hover:text-indigo-700"
+                          className="mt-2 text-sm text-gray-900 hover:underline"
                         >
                           플랫폼 연동하기 →
                         </button>
                       </div>
                     ) : (
                       optimizationLogs.map((log, idx) => (
-                        <motion.div
+                        <div
                           key={log.id}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: idx * 0.05 }}
-                          className="p-4 hover:bg-gray-50 transition-colors"
+                          className="px-4 py-3 hover:bg-gray-50 transition-colors"
                         >
                           <div className="flex items-start gap-3">
-                            <span className="text-xl">{log.icon}</span>
+                            <span className="text-lg">{log.icon}</span>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="font-medium text-gray-900">{log.platform}</span>
-                                <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded-full">{log.action}</span>
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <span className="text-sm font-medium text-gray-900">{log.platform}</span>
+                                <span className="text-xs text-gray-400">{log.action}</span>
                               </div>
-                              <p className="text-sm text-gray-600 truncate">{log.result}</p>
+                              <p className="text-sm text-gray-500 truncate">{log.result}</p>
                             </div>
                             <div className="text-right">
                               <span className="text-xs text-gray-400">{log.timestamp}</span>
                               {log.savedAmount && (
-                                <p className="text-xs font-medium text-green-600 mt-1">
-                                  +₩{log.savedAmount.toLocaleString()} 절감
+                                <p className="text-xs text-gray-900 mt-0.5">
+                                  +₩{log.savedAmount.toLocaleString()}
                                 </p>
                               )}
                             </div>
                           </div>
-                        </motion.div>
+                        </div>
                       ))
                     )}
                   </div>

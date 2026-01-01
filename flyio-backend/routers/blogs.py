@@ -807,12 +807,15 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
                     except:
                         pass
 
-                # 작성일 추출
-                date_elem = soup.select_one('.se_publishDate, .se-date, ._postAddDate, .post_date, .date')
+                # 작성일 추출 (여러 방법 시도)
+                from datetime import datetime
+
+                # 방법 1: HTML 요소에서 찾기
+                date_elem = soup.select_one('.se_publishDate, .se-date, ._postAddDate, .post_date, .date, .blog_date, time')
                 if date_elem:
                     try:
-                        from datetime import datetime
                         date_text = date_elem.get_text(strip=True)
+                        # YYYY.MM.DD 또는 YYYY-MM-DD 형식
                         date_match = re.search(r'(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})', date_text)
                         if date_match:
                             y, m, d = map(int, date_match.groups())
@@ -821,7 +824,86 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
                     except:
                         pass
 
-                logger.info(f"Post analyzed [{post_analysis.get('fetch_method', 'unknown')}]: {blog_id}/{post_no} - {post_analysis['content_length']} chars, {post_analysis['image_count']} imgs, kw={post_analysis['keyword_count']}")
+                # 방법 2: HTML에서 14자리 타임스탬프 찾기 (YYYYMMDDHHMMSS)
+                if post_analysis["post_age_days"] is None:
+                    try:
+                        raw_html = str(resp.content)
+                        # addDate 또는 logDate 관련 타임스탬프
+                        timestamp_match = re.search(r'(?:addDate|logDate|publishDate|date)["\'\s:=]+["\']?(\d{14})', raw_html, re.IGNORECASE)
+                        if timestamp_match:
+                            ts = timestamp_match.group(1)
+                            y, m, d = int(ts[:4]), int(ts[4:6]), int(ts[6:8])
+                            post_date = datetime(y, m, d)
+                            post_analysis["post_age_days"] = (datetime.now() - post_date).days
+                    except:
+                        pass
+
+                # 방법 3: 메타 태그에서 찾기
+                if post_analysis["post_age_days"] is None:
+                    try:
+                        meta_date = soup.select_one('meta[property="article:published_time"], meta[name="date"]')
+                        if meta_date and meta_date.get('content'):
+                            date_str = meta_date.get('content')
+                            date_match = re.search(r'(\d{4})-(\d{2})-(\d{2})', date_str)
+                            if date_match:
+                                y, m, d = map(int, date_match.groups())
+                                post_date = datetime(y, m, d)
+                                post_analysis["post_age_days"] = (datetime.now() - post_date).days
+                    except:
+                        pass
+
+                # 방법 4: HTML 전체에서 YYYY.MM.DD 패턴 찾기 (가장 공격적)
+                if post_analysis["post_age_days"] is None:
+                    try:
+                        html_text = str(resp.text)
+                        # YYYY.MM.DD, YYYY-MM-DD, YYYY/MM/DD 형식
+                        date_match = re.search(r'(20[12][0-9])[\.\-/]([01]?[0-9])[\.\-/]([0-3]?[0-9])', html_text)
+                        if date_match:
+                            y, m, d = int(date_match.group(1)), int(date_match.group(2)), int(date_match.group(3))
+                            if 1 <= m <= 12 and 1 <= d <= 31:
+                                post_date = datetime(y, m, d)
+                                post_analysis["post_age_days"] = (datetime.now() - post_date).days
+                    except:
+                        pass
+
+                # 방법 5: RSS 피드에서 날짜 가져오기 (가장 확실)
+                if post_analysis["post_age_days"] is None and blog_id and post_no:
+                    try:
+                        rss_url = f"https://rss.blog.naver.com/{blog_id}.xml"
+                        rss_resp = await client.get(rss_url, timeout=5.0)
+                        if rss_resp.status_code == 200:
+                            rss_xml = rss_resp.text
+                            # RSS에서 해당 포스트의 pubDate 찾기
+                            # 패턴: <link>.../{post_no}</link> 다음에 오는 <pubDate>
+                            items = re.findall(
+                                r'<item>.*?<link>[^<]*/' + post_no + r'</link>.*?<pubDate>([^<]+)</pubDate>',
+                                rss_xml,
+                                re.DOTALL
+                            )
+                            if items:
+                                pub_date_str = items[0].strip()
+                                # "Wed, 31 Dec 2025 16:46:05 +0900" 형식 파싱
+                                from email.utils import parsedate_to_datetime
+                                try:
+                                    pub_date = parsedate_to_datetime(pub_date_str)
+                                    post_analysis["post_age_days"] = (datetime.now(pub_date.tzinfo) - pub_date).days
+                                    logger.debug(f"Got date from RSS: {blog_id}/{post_no} - {post_analysis['post_age_days']} days old")
+                                except:
+                                    # 대체 파싱: "31 Dec 2025" 추출
+                                    date_match = re.search(r'(\d{1,2})\s+(\w+)\s+(\d{4})', pub_date_str)
+                                    if date_match:
+                                        day = int(date_match.group(1))
+                                        month_str = date_match.group(2)
+                                        year = int(date_match.group(3))
+                                        months = {'Jan':1,'Feb':2,'Mar':3,'Apr':4,'May':5,'Jun':6,
+                                                  'Jul':7,'Aug':8,'Sep':9,'Oct':10,'Nov':11,'Dec':12}
+                                        month = months.get(month_str, 1)
+                                        post_date = datetime(year, month, day)
+                                        post_analysis["post_age_days"] = (datetime.now() - post_date).days
+                    except Exception as rss_err:
+                        logger.debug(f"RSS date extraction failed: {rss_err}")
+
+                logger.info(f"Post analyzed [{post_analysis.get('fetch_method', 'unknown')}]: {blog_id}/{post_no} - {post_analysis['content_length']} chars, {post_analysis['image_count']} imgs, kw={post_analysis['keyword_count']}, age={post_analysis['post_age_days']}days")
             else:
                 logger.warning(f"Failed to fetch post: {blog_id}/{post_no} - status {resp.status_code}")
 

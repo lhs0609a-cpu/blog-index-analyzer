@@ -18,6 +18,13 @@ from database.admin_audit_db import (
     ACTION_EXTEND_SUBSCRIPTION,
     ACTION_SET_ADMIN
 )
+from database.subscription_db import (
+    get_all_payments_admin,
+    get_revenue_stats,
+    get_payment_by_id,
+    cancel_payment_record,
+    get_payment_history
+)
 from routers.auth import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -47,6 +54,18 @@ class ExtendSubscriptionRequest(BaseModel):
     user_id: int
     days: int
     memo: Optional[str] = None
+
+
+class BulkUpgradeRequest(BaseModel):
+    user_ids: List[int]
+    plan: str = 'pro'
+    days: int = 30
+    memo: Optional[str] = None
+
+
+class RefundRequest(BaseModel):
+    payment_id: int
+    reason: str
 
 
 class UserResponse(BaseModel):
@@ -644,6 +663,232 @@ async def setup_initial_admin(request: InitialAdminSetupRequest):
         }
 
     raise HTTPException(status_code=500, detail="Failed to set admin status")
+
+
+# ============ Payment Management ============
+
+@router.get("/payments")
+async def get_all_payments(
+    limit: int = 50,
+    offset: int = 0,
+    status: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    admin: dict = Depends(require_admin)
+):
+    """모든 결제 내역 조회 (admin only)"""
+    result = get_all_payments_admin(
+        limit=limit,
+        offset=offset,
+        status=status,
+        start_date=start_date,
+        end_date=end_date
+    )
+
+    # 사용자 정보 추가
+    user_db = get_user_db()
+    payments_with_user = []
+    for payment in result['payments']:
+        user = user_db.get_user_by_id(payment['user_id'])
+        payment['user_email'] = user.get('email') if user else 'Unknown'
+        payment['user_name'] = user.get('name') if user else 'Unknown'
+        payments_with_user.append(payment)
+
+    result['payments'] = payments_with_user
+    return result
+
+
+@router.get("/stats/revenue")
+async def get_revenue_statistics(
+    period: str = "30d",
+    admin: dict = Depends(require_admin)
+):
+    """매출 통계 조회 (admin only)"""
+    return get_revenue_stats(period=period)
+
+
+@router.get("/users/{user_id}/payments")
+async def get_user_payment_history(
+    user_id: int,
+    limit: int = 20,
+    admin: dict = Depends(require_admin)
+):
+    """특정 사용자의 결제 내역 조회 (admin only)"""
+    user_db = get_user_db()
+    user = user_db.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    payments = get_payment_history(user_id, limit=limit)
+    return {
+        "user_id": user_id,
+        "user_email": user.get('email'),
+        "payments": payments,
+        "count": len(payments)
+    }
+
+
+@router.post("/payments/{payment_id}/refund")
+async def refund_payment(
+    payment_id: int,
+    request: RefundRequest,
+    admin: dict = Depends(require_admin)
+):
+    """결제 환불 처리 (admin only)"""
+    import httpx
+    import base64
+
+    # 결제 정보 조회
+    payment = get_payment_by_id(payment_id)
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+
+    if payment['status'] != 'completed':
+        raise HTTPException(status_code=400, detail="Only completed payments can be refunded")
+
+    payment_key = payment.get('payment_key')
+    if not payment_key:
+        raise HTTPException(status_code=400, detail="Payment key not found")
+
+    # 토스페이먼츠 환불 API 호출
+    TOSS_SECRET_KEY = getattr(settings, 'TOSS_SECRET_KEY', '')
+    if not TOSS_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="Payment system not configured")
+
+    encoded_key = base64.b64encode(f"{TOSS_SECRET_KEY}:".encode()).decode()
+    headers = {
+        "Authorization": f"Basic {encoded_key}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"https://api.tosspayments.com/v1/payments/{payment_key}/cancel",
+                headers=headers,
+                json={"cancelReason": request.reason}
+            )
+
+            if response.status_code != 200:
+                error_data = response.json()
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=error_data.get("message", "환불 처리에 실패했습니다")
+                )
+
+            # DB 업데이트
+            cancel_payment_record(payment_id)
+
+            # 사용자 플랜 다운그레이드
+            user_db = get_user_db()
+            user_db.revoke_premium(payment['user_id'])
+
+            # 감사 로그
+            log_admin_action(
+                admin_id=admin['id'],
+                admin_email=admin['email'],
+                action_type="REFUND_PAYMENT",
+                target_user_id=payment['user_id'],
+                target_email="",
+                details={
+                    "payment_id": payment_id,
+                    "amount": payment['amount'],
+                    "reason": request.reason
+                }
+            )
+
+            logger.info(f"Admin {admin['email']} refunded payment {payment_id}")
+
+            return {
+                "success": True,
+                "message": "환불이 완료되었습니다",
+                "payment_id": payment_id,
+                "refunded_amount": payment['amount']
+            }
+
+    except httpx.RequestError as e:
+        logger.error(f"Refund request error: {e}")
+        raise HTTPException(status_code=500, detail="결제 서버 연결에 실패했습니다")
+
+
+# ============ Bulk Operations ============
+
+@router.post("/users/bulk-upgrade")
+async def bulk_upgrade_users(
+    request: BulkUpgradeRequest,
+    admin: dict = Depends(require_admin)
+):
+    """여러 사용자 일괄 플랜 업그레이드 (admin only)"""
+    if len(request.user_ids) > 50:
+        raise HTTPException(status_code=400, detail="한 번에 최대 50명까지 업그레이드 가능합니다")
+
+    if request.plan not in ['basic', 'pro', 'unlimited']:
+        raise HTTPException(status_code=400, detail="유효하지 않은 플랜입니다")
+
+    user_db = get_user_db()
+    results = {
+        "success": [],
+        "failed": []
+    }
+
+    for user_id in request.user_ids:
+        try:
+            user = user_db.get_user_by_id(user_id)
+            if not user:
+                results['failed'].append({"user_id": user_id, "error": "User not found"})
+                continue
+
+            success = user_db.grant_premium(
+                user_id=user_id,
+                admin_id=admin['id'],
+                plan=request.plan,
+                memo=request.memo or f"일괄 업그레이드 ({request.days}일)"
+            )
+
+            if success:
+                # 구독 기간 설정
+                if request.days > 0:
+                    user_db.extend_subscription(
+                        user_id=user_id,
+                        days=request.days,
+                        admin_id=admin['id'],
+                        memo=request.memo
+                    )
+
+                results['success'].append({
+                    "user_id": user_id,
+                    "email": user.get('email'),
+                    "plan": request.plan
+                })
+
+                # 감사 로그
+                log_admin_action(
+                    admin_id=admin['id'],
+                    admin_email=admin['email'],
+                    action_type="BULK_UPGRADE",
+                    target_user_id=user_id,
+                    target_email=user.get('email', ''),
+                    details={
+                        "plan": request.plan,
+                        "days": request.days,
+                        "memo": request.memo
+                    }
+                )
+            else:
+                results['failed'].append({"user_id": user_id, "error": "Upgrade failed"})
+
+        except Exception as e:
+            logger.error(f"Bulk upgrade error for user {user_id}: {e}")
+            results['failed'].append({"user_id": user_id, "error": str(e)})
+
+    logger.info(f"Admin {admin['email']} bulk upgraded {len(results['success'])} users to {request.plan}")
+
+    return {
+        "message": f"{len(results['success'])}명 업그레이드 완료, {len(results['failed'])}명 실패",
+        "success_count": len(results['success']),
+        "failed_count": len(results['failed']),
+        "results": results
+    }
 
 
 # ============ Dynamic User Routes (must be at the end to avoid route conflicts) ============

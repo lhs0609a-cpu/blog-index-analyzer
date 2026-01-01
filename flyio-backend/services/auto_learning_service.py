@@ -199,6 +199,24 @@ async def run_single_learning_cycle():
                                     "comment_count": post_analysis.get("comment_count", 0),
                                     "post_age_days": post_analysis.get("post_age_days"),
                                 }
+
+                                # post_age_days가 없으면 검색 API의 postdate에서 계산
+                                if post_features["post_age_days"] is None:
+                                    post_date_str = result.get("post_date", "") or ""  # YYYYMMDD 형식
+                                    if not post_date_str:
+                                        logger.info(f"[AutoLearn] No post_date in result for {blog_id}: keys={list(result.keys())}")
+                                    if post_date_str and len(str(post_date_str)) == 8:
+                                        try:
+                                            post_date_str = str(post_date_str)
+                                            y = int(post_date_str[:4])
+                                            m = int(post_date_str[4:6])
+                                            d = int(post_date_str[6:8])
+                                            post_date = datetime(y, m, d)
+                                            post_features["post_age_days"] = (datetime.now() - post_date).days
+                                            logger.info(f"[AutoLearn] Got post_age_days from API: {blog_id} = {post_features['post_age_days']} days (date: {post_date_str})")
+                                        except Exception as date_err:
+                                            logger.debug(f"[AutoLearn] Date parse error: {date_err}")
+
                                 logger.debug(f"Post features: heading={post_features['heading_count']}, paragraph={post_features['paragraph_count']}, age={post_features['post_age_days']}")
                             except Exception as e:
                                 logger.debug(f"Post analysis skipped: {e}")

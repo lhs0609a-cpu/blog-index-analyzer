@@ -1,13 +1,73 @@
 'use client'
 
-import { motion } from 'framer-motion'
-import { Sparkles, TrendingUp, Zap, Award, Users, BarChart3, LogOut, Search, BookOpen, ArrowRight, Building2, Mic, CreditCard, X, PenTool, Shield, Target } from 'lucide-react'
+import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion'
+import { Sparkles, TrendingUp, Zap, Award, BarChart3, LogOut, Search, BookOpen, ArrowRight, Building2, Mic, CreditCard, X, PenTool, Shield, Target, Star, Flame, Crown, ChevronRight, Play, Rocket, Heart, MousePointer, ArrowUpRight, Layers, Globe, Check, Users } from 'lucide-react'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import UsageIndicator from '@/components/UsageIndicator'
+
+// 3D 틸트 카드 컴포넌트
+function TiltCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const x = useMotionValue(0)
+  const y = useMotionValue(0)
+
+  const rotateX = useTransform(y, [-100, 100], [10, -10])
+  const rotateY = useTransform(x, [-100, 100], [-10, 10])
+
+  const springConfig = { stiffness: 300, damping: 30 }
+  const rotateXSpring = useSpring(rotateX, springConfig)
+  const rotateYSpring = useSpring(rotateY, springConfig)
+
+  const handleMouse = (e: React.MouseEvent) => {
+    if (!ref.current) return
+    const rect = ref.current.getBoundingClientRect()
+    const centerX = rect.left + rect.width / 2
+    const centerY = rect.top + rect.height / 2
+    x.set(e.clientX - centerX)
+    y.set(e.clientY - centerY)
+  }
+
+  const handleMouseLeave = () => {
+    x.set(0)
+    y.set(0)
+  }
+
+  return (
+    <motion.div
+      ref={ref}
+      onMouseMove={handleMouse}
+      onMouseLeave={handleMouseLeave}
+      style={{
+        rotateX: rotateXSpring,
+        rotateY: rotateYSpring,
+        transformStyle: "preserve-3d",
+      }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+// Marquee 컴포넌트
+function Marquee({ children, speed = 30, direction = "left" }: { children: React.ReactNode; speed?: number; direction?: "left" | "right" }) {
+  return (
+    <div className="relative overflow-hidden whitespace-nowrap">
+      <motion.div
+        className="inline-flex gap-8"
+        animate={{ x: direction === "left" ? [0, -1000] : [-1000, 0] }}
+        transition={{ duration: speed, repeat: Infinity, ease: "linear" }}
+      >
+        {children}
+        {children}
+      </motion.div>
+    </div>
+  )
+}
 
 export default function Home() {
   const { isAuthenticated, user, logout } = useAuthStore()
@@ -16,9 +76,17 @@ export default function Home() {
   const [searchKeyword, setSearchKeyword] = useState('')
   const [isSearching, setIsSearching] = useState(false)
   const [showAdPopup, setShowAdPopup] = useState(true)
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
 
   useEffect(() => {
     setMounted(true)
+
+    const handleMouseMove = (e: MouseEvent) => {
+      setMousePosition({ x: e.clientX, y: e.clientY })
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    return () => window.removeEventListener('mousemove', handleMouseMove)
   }, [])
 
   const handleKeywordSearch = (e: React.FormEvent) => {
@@ -38,323 +106,431 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50">
-      {/* Header */}
-      <div className="absolute top-0 right-0 p-8 z-10">
-        {!mounted ? (
-          <div className="flex items-center gap-4 opacity-0">
-            <div className="px-6 py-3 rounded-full glass">로딩중...</div>
-          </div>
-        ) : isAuthenticated ? (
-          <div className="flex items-center gap-4">
-            <UsageIndicator />
-            <span className="text-gray-700 font-medium">안녕하세요, {user?.name}님</span>
-            <Link href="/dashboard">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="px-6 py-3 rounded-full instagram-gradient text-white font-semibold hover:shadow-lg transition-all"
-              >
-                대시보드
-              </motion.button>
-            </Link>
-            {user?.is_admin && (
-              <Link href="/admin">
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className="px-4 py-3 rounded-full glass hover:bg-white/90 transition-all font-semibold flex items-center gap-2 text-purple-700"
-                >
-                  <Shield className="w-4 h-4" />
-                  관리자
-                </motion.button>
-              </Link>
-            )}
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleLogout}
-              className="p-3 rounded-full glass hover:bg-white/90 transition-all"
-            >
-              <LogOut className="w-5 h-5" />
-            </motion.button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-4">
-            <Link href="/pricing">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="px-6 py-3 rounded-full glass hover:bg-white/90 transition-all font-semibold flex items-center gap-2"
-              >
-                <CreditCard className="w-4 h-4" />
-                요금제
-              </motion.button>
-            </Link>
-            <Link href="/login">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="px-6 py-3 rounded-full glass hover:bg-white/90 transition-all font-semibold"
-              >
-                로그인
-              </motion.button>
-            </Link>
-            <Link href="/register">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="px-6 py-3 rounded-full instagram-gradient text-white font-semibold hover:shadow-lg transition-all"
-              >
-                회원가입
-              </motion.button>
-            </Link>
-          </div>
-        )}
+    <div className="min-h-screen bg-[#0a0a0f] text-white overflow-hidden">
+      {/* Cursor glow effect */}
+      <div
+        className="fixed pointer-events-none z-50 w-[500px] h-[500px] rounded-full opacity-20 blur-[100px] transition-all duration-100"
+        style={{
+          background: 'radial-gradient(circle, rgba(139, 92, 246, 0.4) 0%, rgba(236, 72, 153, 0.2) 50%, transparent 70%)',
+          left: mousePosition.x - 250,
+          top: mousePosition.y - 250,
+        }}
+      />
+
+      {/* Animated background grid */}
+      <div className="fixed inset-0 bg-[linear-gradient(rgba(139,92,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.03)_1px,transparent_1px)] bg-[size:100px_100px]" />
+
+      {/* Floating orbs */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <motion.div
+          className="absolute top-20 left-[10%] w-[400px] h-[400px] rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(139, 92, 246, 0.3) 0%, transparent 70%)' }}
+          animate={{
+            y: [0, -50, 0],
+            scale: [1, 1.1, 1],
+          }}
+          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <motion.div
+          className="absolute top-[40%] right-[5%] w-[300px] h-[300px] rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(236, 72, 153, 0.3) 0%, transparent 70%)' }}
+          animate={{
+            y: [0, 50, 0],
+            scale: [1, 1.2, 1],
+          }}
+          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <motion.div
+          className="absolute bottom-[10%] left-[30%] w-[350px] h-[350px] rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(34, 211, 238, 0.2) 0%, transparent 70%)' }}
+          animate={{
+            x: [0, 30, 0],
+            y: [0, -30, 0],
+          }}
+          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
+        />
       </div>
 
-      {/* Hero Section */}
-      <section className="relative overflow-hidden">
-        {/* Animated background blobs */}
-        <div className="absolute inset-0 overflow-hidden">
-          <motion.div
-            className="absolute top-20 left-20 w-96 h-96 bg-purple-400/30 rounded-full blur-3xl"
-            animate={{
-              scale: [1, 1.2, 1],
-              x: [0, 50, 0],
-              y: [0, 30, 0],
-            }}
-            transition={{
-              duration: 20,
-              repeat: Infinity,
-              ease: "easeInOut"
-            }}
-          />
-          <motion.div
-            className="absolute bottom-20 right-20 w-96 h-96 bg-pink-400/30 rounded-full blur-3xl"
-            animate={{
-              scale: [1, 1.3, 1],
-              x: [0, -50, 0],
-              y: [0, -30, 0],
-            }}
-            transition={{
-              duration: 15,
-              repeat: Infinity,
-              ease: "easeInOut"
-            }}
-          />
-        </div>
-
-        <div className="relative container mx-auto px-4 py-20">
-          <div className="max-w-4xl mx-auto text-center">
-            {/* Badge */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass mb-8"
-            >
-              <Sparkles className="w-4 h-4 text-purple-600" />
-              <span className="text-sm font-medium">블랭크 - AI 기반 블로그 분석 플랫폼</span>
-              <span className="text-xs text-purple-500 bg-purple-100 px-2 py-0.5 rounded-full font-semibold">v1.2.0</span>
-            </motion.div>
-
-            {/* Main Title */}
-            <motion.h1
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-              className="text-6xl md:text-7xl font-bold mb-6"
-            >
-              <span className="gradient-text">블랭크</span>
-              <br />
-              <span className="text-gray-900">블로그 지수 분석</span>
-            </motion.h1>
-
-            {/* Subtitle */}
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto"
-            >
-              40+ 지표를 분석하여 블로그 품질을 정확하게 측정합니다.
-              <br />
-              인플루언서들이 선택한 #1 블로그 분석 도구
-            </motion.p>
-
-            {/* Keyword Search Bar */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.25 }}
-              className="max-w-2xl mx-auto mb-8"
-            >
-              <form onSubmit={handleKeywordSearch} className="relative">
-                <div className="relative flex items-center">
-                  <div className="absolute left-5 text-gray-400">
-                    <Search className="w-5 h-5" />
+      {/* Header */}
+      <header className="fixed top-0 left-0 right-0 z-50">
+        <div className="mx-4 mt-4">
+          <div className="backdrop-blur-2xl bg-white/5 border border-white/10 rounded-2xl px-6 py-4">
+            <div className="flex items-center justify-between">
+              {/* Logo */}
+              <Link href="/" className="flex items-center gap-3 group">
+                <motion.div
+                  className="relative w-10 h-10 rounded-xl overflow-hidden"
+                  whileHover={{ scale: 1.1, rotate: 5 }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-violet-500 via-pink-500 to-orange-400" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Sparkles className="w-5 h-5 text-white" />
                   </div>
-                  <input
-                    type="text"
-                    value={searchKeyword}
-                    onChange={(e) => setSearchKeyword(e.target.value)}
-                    placeholder="키워드를 입력하세요 (예: 맛집, 여행, 육아)"
-                    className="w-full pl-14 pr-36 py-5 rounded-full glass border-2 border-transparent focus:border-purple-400 focus:outline-none text-lg transition-all duration-300 shadow-lg hover:shadow-xl"
-                    disabled={isSearching}
-                  />
-                  <button
-                    type="submit"
-                    disabled={isSearching}
-                    className="absolute right-2 px-6 py-3 rounded-full instagram-gradient text-white font-semibold hover:opacity-90 transition-all duration-300 disabled:opacity-50 flex items-center gap-2"
+                </motion.div>
+                <span className="text-xl font-black bg-gradient-to-r from-violet-400 via-pink-400 to-orange-400 bg-clip-text text-transparent">블랭크</span>
+              </Link>
+
+              {/* Navigation */}
+              {!mounted ? (
+                <div className="w-32 h-10 bg-white/10 rounded-full animate-pulse" />
+              ) : isAuthenticated ? (
+                <div className="flex items-center gap-3">
+                  <UsageIndicator />
+                  <span className="hidden md:block text-sm font-medium text-gray-400">
+                    {user?.name}님
+                  </span>
+                  <Link href="/dashboard">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="px-5 py-2.5 text-sm font-bold bg-gradient-to-r from-violet-600 to-pink-600 rounded-xl hover:shadow-lg hover:shadow-violet-500/25 transition-shadow"
+                    >
+                      대시보드
+                    </motion.button>
+                  </Link>
+                  {user?.is_admin && (
+                    <Link href="/admin">
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className="p-2.5 rounded-xl bg-violet-500/20 border border-violet-500/30"
+                      >
+                        <Shield className="w-4 h-4 text-violet-400" />
+                      </motion.button>
+                    </Link>
+                  )}
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleLogout}
+                    className="p-2.5 rounded-xl hover:bg-white/10 transition-colors"
                   >
-                    {isSearching ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        검색중...
-                      </>
-                    ) : (
-                      <>
-                        <Search className="w-4 h-4" />
-                        키워드 검색
-                      </>
-                    )}
-                  </button>
+                    <LogOut className="w-4 h-4 text-gray-400" />
+                  </motion.button>
                 </div>
-                <p className="text-sm text-gray-500 mt-3">
-                  💡 키워드로 검색하면 네이버 VIEW 탭 상위 블로그들의 지수를 한눈에 분석할 수 있어요
-                </p>
-              </form>
-            </motion.div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <Link href="/pricing" className="hidden md:block">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="px-4 py-2.5 text-sm font-medium text-gray-300 hover:text-white transition-colors flex items-center gap-2"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      요금제
+                    </motion.button>
+                  </Link>
+                  <Link href="/login">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="px-5 py-2.5 text-sm font-medium border border-white/20 rounded-xl hover:bg-white/10 transition-colors"
+                    >
+                      로그인
+                    </motion.button>
+                  </Link>
+                  <Link href="/register">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="px-5 py-2.5 text-sm font-bold bg-white text-gray-900 rounded-xl hover:bg-gray-100 transition-colors"
+                    >
+                      시작하기
+                    </motion.button>
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
 
-            {/* Divider */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.5, delay: 0.28 }}
-              className="flex items-center justify-center gap-4 mb-8"
-            >
-              <div className="h-px w-16 bg-gray-300"></div>
-              <span className="text-sm text-gray-400">또는</span>
-              <div className="h-px w-16 bg-gray-300"></div>
-            </motion.div>
-
-            {/* CTA Buttons - 트렌디한 카드 스타일 */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-              className="grid grid-cols-2 md:grid-cols-6 gap-3 max-w-6xl mx-auto"
-            >
-              <Link
-                href="/analyze"
-                className="group relative p-4 rounded-2xl bg-white/70 backdrop-blur-sm border border-purple-200 hover:border-purple-400 hover:shadow-xl hover:shadow-purple-500/10 transition-all duration-300 hover:-translate-y-1"
+      {/* Hero Section */}
+      <section className="relative pt-32 pb-16 md:pt-44 md:pb-24">
+        <div className="container mx-auto px-4">
+          <div className="max-w-6xl mx-auto">
+            {/* Main Content */}
+            <div className="text-center mb-16">
+              {/* Badge */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-violet-500/10 border border-violet-500/20 mb-8"
               >
-                <div className="flex flex-col items-center text-center gap-2">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                    <Zap className="w-6 h-6 text-white" />
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500"></span>
+                </span>
+                <span className="text-sm font-medium text-violet-300">AI 블로그 분석 플랫폼</span>
+                <span className="px-2 py-0.5 text-[10px] font-bold bg-gradient-to-r from-violet-500 to-pink-500 rounded-full">v2.0</span>
+              </motion.div>
+
+              {/* Main Title */}
+              <motion.h1
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.1 }}
+                className="text-5xl md:text-7xl lg:text-8xl font-black mb-6 tracking-tight leading-[0.9]"
+              >
+                <span className="block mb-2 bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">블로그 지수를</span>
+                <span className="relative inline-block">
+                  <span className="bg-gradient-to-r from-violet-400 via-pink-400 to-orange-400 bg-clip-text text-transparent">한눈에</span>
+                  <motion.span
+                    className="absolute -bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-violet-500 via-pink-500 to-orange-500 rounded-full"
+                    initial={{ scaleX: 0 }}
+                    animate={{ scaleX: 1 }}
+                    transition={{ delay: 0.8, duration: 0.6 }}
+                  />
+                </span>
+              </motion.h1>
+
+              {/* Subtitle */}
+              <motion.p
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                className="text-lg md:text-xl text-gray-400 mb-12 max-w-2xl mx-auto leading-relaxed"
+              >
+                <span className="text-violet-400 font-semibold">40+</span> 지표 분석 · <span className="text-pink-400 font-semibold">11단계</span> 레벨 시스템
+                <br className="hidden md:block" />
+                인플루언서들이 선택한 <span className="text-white font-semibold">#1</span> 분석 도구
+              </motion.p>
+
+              {/* Search Bar */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+                className="max-w-2xl mx-auto mb-10"
+              >
+                <form onSubmit={handleKeywordSearch} className="relative group">
+                  <div className="absolute -inset-1 bg-gradient-to-r from-violet-600 via-pink-600 to-orange-600 rounded-2xl blur-xl opacity-40 group-hover:opacity-60 transition-opacity" />
+                  <div className="relative flex items-center bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
+                    <div className="absolute left-5 text-gray-500">
+                      <Search className="w-5 h-5" />
+                    </div>
+                    <input
+                      type="text"
+                      value={searchKeyword}
+                      onChange={(e) => setSearchKeyword(e.target.value)}
+                      placeholder="키워드를 입력하세요 (예: 맛집, 여행, 육아)"
+                      className="w-full px-5 py-5 pl-14 pr-36 bg-transparent text-white placeholder:text-gray-500 focus:outline-none"
+                      disabled={isSearching}
+                    />
+                    <button
+                      type="submit"
+                      disabled={isSearching}
+                      className="absolute right-2 px-6 py-3 rounded-xl bg-gradient-to-r from-violet-600 to-pink-600 text-white font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-violet-500/25"
+                    >
+                      {isSearching ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          검색중
+                        </>
+                      ) : (
+                        <>
+                          <Search className="w-4 h-4" />
+                          검색
+                        </>
+                      )}
+                    </button>
                   </div>
-                  <span className="font-bold text-gray-800 text-sm">블로그 분석</span>
-                  <span className="text-xs text-gray-500">ID로 지수 측정</span>
-                </div>
-              </Link>
+                </form>
+              </motion.div>
 
-              <Link
-                href="/ad-optimizer"
-                className="group relative p-4 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 hover:shadow-xl hover:shadow-green-500/30 transition-all duration-300 hover:-translate-y-1"
+              {/* Stats Row */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.4 }}
+                className="flex flex-wrap items-center justify-center gap-8 md:gap-16"
               >
-                <div className="flex flex-col items-center text-center gap-2">
-                  <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                    <Target className="w-6 h-6 text-white" />
+                {[
+                  { value: '40+', label: '분석 지표', color: 'from-violet-500 to-purple-500' },
+                  { value: '11단계', label: '레벨 시스템', color: 'from-pink-500 to-rose-500' },
+                  { value: '실시간', label: '분석 제공', color: 'from-cyan-500 to-blue-500' },
+                ].map((stat, index) => (
+                  <div key={index} className="flex items-center gap-3">
+                    <div className={`w-1 h-10 rounded-full bg-gradient-to-b ${stat.color}`} />
+                    <div className="text-left">
+                      <div className="text-2xl font-black text-white">{stat.value}</div>
+                      <div className="text-xs text-gray-500">{stat.label}</div>
+                    </div>
                   </div>
-                  <span className="font-bold text-white text-sm">광고 최적화</span>
-                  <span className="text-xs text-white/80">네이버 광고</span>
-                </div>
-              </Link>
+                ))}
+              </motion.div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-              <Link
-                href="/ad-optimizer/unified"
-                className="group relative p-4 rounded-2xl bg-white/70 backdrop-blur-sm border border-purple-200 hover:border-purple-400 hover:shadow-xl hover:shadow-purple-500/10 transition-all duration-300 hover:-translate-y-1"
-              >
-                <div className="absolute top-2 left-2">
-                  <span className="px-1.5 py-0.5 text-[10px] font-bold bg-purple-500 text-white rounded-full">PRO</span>
-                </div>
-                <div className="absolute top-2 right-2">
-                  <span className="px-1.5 py-0.5 text-[10px] font-bold bg-orange-500 text-white rounded-full animate-pulse">NEW</span>
-                </div>
-                <div className="flex flex-col items-center text-center gap-2 mt-2">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center group-hover:scale-110 group-hover:rotate-12 transition-all duration-300">
-                    <Zap className="w-6 h-6 text-white" />
+      {/* Marquee Section */}
+      <section className="py-8 border-y border-white/5 bg-white/[0.02]">
+        <Marquee speed={40}>
+          <div className="flex items-center gap-8 text-gray-500">
+            {['블로그 분석', '키워드 리서치', 'AI 글쓰기', '광고 최적화', '성장 가이드', '레벨 측정', 'VIEW 탭 분석', '경쟁 분석'].map((item, i) => (
+              <span key={i} className="flex items-center gap-3 text-lg font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />
+                {item}
+              </span>
+            ))}
+          </div>
+        </Marquee>
+      </section>
+
+      {/* Bento Grid Section */}
+      <section className="py-20 relative">
+        <div className="container mx-auto px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="grid grid-cols-12 gap-4 max-w-6xl mx-auto"
+          >
+            {/* 블로그 분석 - Large */}
+            <Link href="/analyze" className="col-span-12 md:col-span-6 group">
+              <TiltCard className="h-full">
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  className="relative h-full p-8 rounded-3xl bg-gradient-to-br from-violet-600/20 to-purple-600/10 border border-violet-500/20 overflow-hidden"
+                >
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-violet-500/20 rounded-full blur-[100px]" />
+                  <div className="relative">
+                    <div className="flex items-start justify-between mb-6">
+                      <div className="w-14 h-14 rounded-2xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center group-hover:scale-110 group-hover:rotate-6 transition-all">
+                        <Zap className="w-7 h-7 text-violet-400" />
+                      </div>
+                      <ArrowUpRight className="w-6 h-6 text-violet-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-white mb-2">블로그 분석</h3>
+                    <p className="text-gray-400 mb-6">블로그 ID만 입력하면 40개 이상의 지표를 즉시 분석합니다</p>
+                    <div className="flex items-center gap-2">
+                      <span className="px-3 py-1 text-xs font-medium bg-violet-500/20 text-violet-300 rounded-full">FREE</span>
+                      <span className="px-3 py-1 text-xs font-medium bg-white/10 text-gray-400 rounded-full">11단계 레벨</span>
+                    </div>
                   </div>
-                  <span className="font-bold text-gray-800 text-sm">통합 광고</span>
-                </div>
-              </Link>
+                </motion.div>
+              </TiltCard>
+            </Link>
 
-              <Link
-                href="/dashboard"
-                className="group relative p-4 rounded-2xl bg-white/70 backdrop-blur-sm border border-gray-200 hover:border-gray-400 hover:shadow-xl hover:shadow-gray-500/10 transition-all duration-300 hover:-translate-y-1"
-              >
-                <div className="flex flex-col items-center text-center gap-2">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gray-600 to-gray-800 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+            {/* 광고 최적화 - Medium */}
+            <Link href="/ad-optimizer" className="col-span-12 md:col-span-6 group">
+              <TiltCard className="h-full">
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  className="relative h-full p-8 rounded-3xl bg-gradient-to-br from-emerald-600/20 to-teal-600/10 border border-emerald-500/20 overflow-hidden"
+                >
+                  <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500/20 rounded-full blur-[80px]" />
+                  <span className="absolute top-4 right-4 px-2 py-1 text-[10px] font-bold bg-orange-500 text-white rounded-full animate-pulse">HOT</span>
+                  <div className="relative">
+                    <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                      <Target className="w-7 h-7 text-emerald-400" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-white mb-2">광고 최적화</h3>
+                    <p className="text-gray-400 mb-6">네이버 광고 성과 분석 및 최적화 추천</p>
+                    <div className="flex items-center gap-2">
+                      <span className="px-3 py-1 text-xs font-medium bg-emerald-500/20 text-emerald-300 rounded-full">PRO</span>
+                    </div>
+                  </div>
+                </motion.div>
+              </TiltCard>
+            </Link>
+
+            {/* 통합 광고 */}
+            <Link href="/ad-optimizer/unified" className="col-span-6 md:col-span-4 group">
+              <TiltCard className="h-full">
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  className="relative h-full p-6 rounded-3xl bg-white/5 border border-white/10 overflow-hidden"
+                >
+                  <div className="flex gap-1 absolute top-3 right-3">
+                    <span className="px-2 py-0.5 text-[9px] font-bold bg-violet-500 text-white rounded-full">PRO</span>
+                    <span className="px-2 py-0.5 text-[9px] font-bold bg-orange-500 text-white rounded-full">NEW</span>
+                  </div>
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-violet-500 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:-rotate-6 transition-all">
+                    <Rocket className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="font-bold text-white mb-1">통합 광고</h3>
+                  <p className="text-xs text-gray-500">멀티 플랫폼</p>
+                </motion.div>
+              </TiltCard>
+            </Link>
+
+            {/* 대시보드 */}
+            <Link href="/dashboard" className="col-span-6 md:col-span-4 group">
+              <TiltCard className="h-full">
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  className="relative h-full p-6 rounded-3xl bg-white/5 border border-white/10 overflow-hidden"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gray-600 to-gray-800 flex items-center justify-center mb-4 group-hover:scale-110 transition-all">
                     <BarChart3 className="w-6 h-6 text-white" />
                   </div>
-                  <span className="font-bold text-gray-800 text-sm">대시보드</span>
-                  <span className="text-xs text-gray-500">내 분석 현황</span>
-                </div>
-              </Link>
+                  <h3 className="font-bold text-white mb-1">대시보드</h3>
+                  <p className="text-xs text-gray-500">내 분석 현황</p>
+                </motion.div>
+              </TiltCard>
+            </Link>
 
-              <Link
-                href="/tools"
-                className="group relative p-4 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 hover:shadow-xl hover:shadow-purple-500/30 transition-all duration-300 hover:-translate-y-1"
-              >
-                <div className="absolute top-2 right-2">
-                  <span className="px-1.5 py-0.5 text-[10px] font-bold bg-yellow-400 text-yellow-900 rounded-full">HOT</span>
-                </div>
-                <div className="flex flex-col items-center text-center gap-2">
-                  <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                    <Sparkles className="w-6 h-6 text-white" />
+            {/* 글쓰기 가이드 */}
+            <Link href="/writing-guide" className="col-span-6 md:col-span-4 group">
+              <TiltCard className="h-full">
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  className="relative h-full p-6 rounded-3xl bg-white/5 border border-white/10 overflow-hidden"
+                >
+                  <span className="absolute top-3 right-3 px-2 py-0.5 text-[9px] font-bold bg-green-500 text-white rounded-full">NEW</span>
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-pink-500 to-orange-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-all">
+                    <BookOpen className="w-6 h-6 text-white" />
                   </div>
-                  <span className="font-bold text-white text-sm">프리미엄 도구</span>
-                  <span className="text-xs text-white/80">34개 AI 도구</span>
-                </div>
-              </Link>
+                  <h3 className="font-bold text-white mb-1">글쓰기 가이드</h3>
+                  <p className="text-xs text-gray-500">최적화 팁</p>
+                </motion.div>
+              </TiltCard>
+            </Link>
 
-              <a
-                href="https://doctor-voice-pro-ghwi.vercel.app/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group relative p-4 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 hover:shadow-xl hover:shadow-cyan-500/30 transition-all duration-300 hover:-translate-y-1"
-              >
-                <div className="flex flex-col items-center text-center gap-2">
-                  <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                    <PenTool className="w-6 h-6 text-white" />
+            {/* 프리미엄 도구 - Wide */}
+            <Link href="/tools" className="col-span-12 md:col-span-8 group">
+              <TiltCard className="h-full">
+                <motion.div
+                  whileHover={{ scale: 1.01 }}
+                  className="relative h-full p-8 rounded-3xl bg-gradient-to-r from-violet-600/30 via-pink-600/20 to-orange-600/20 border border-violet-500/20 overflow-hidden"
+                >
+                  <div className="absolute -right-20 -top-20 w-64 h-64 bg-pink-500/20 rounded-full blur-[100px]" />
+                  <div className="relative flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
+                          <Sparkles className="w-5 h-5 text-white" />
+                        </div>
+                        <span className="text-xs font-bold text-white/60 bg-white/10 px-3 py-1 rounded-full">34개 도구</span>
+                      </div>
+                      <h3 className="text-2xl font-bold text-white mb-2">프리미엄 AI 도구</h3>
+                      <p className="text-gray-400">블로그 성장에 필요한 모든 것</p>
+                    </div>
+                    <ChevronRight className="w-8 h-8 text-white/40 group-hover:translate-x-2 group-hover:text-white/80 transition-all" />
                   </div>
-                  <span className="font-bold text-white text-sm">AI 글쓰기</span>
-                  <span className="text-xs text-white/80">AI 자동 작성</span>
-                </div>
-              </a>
-            </motion.div>
+                </motion.div>
+              </TiltCard>
+            </Link>
 
-            {/* Stats */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-              className="grid grid-cols-3 gap-8 mt-16 max-w-2xl mx-auto"
-            >
-              {[
-                { value: '40+', label: '분석 지표' },
-                { value: '11단계', label: '레벨 시스템' },
-                { value: '실시간', label: '분석 제공' },
-              ].map((stat, index) => (
-                <div key={index} className="text-center">
-                  <div className="text-3xl font-bold gradient-text">{stat.value}</div>
-                  <div className="text-sm text-gray-600 mt-1">{stat.label}</div>
-                </div>
-              ))}
-            </motion.div>
-
-          </div>
+            {/* AI 글쓰기 */}
+            <a href="https://doctor-voice-pro-ghwi.vercel.app/" target="_blank" rel="noopener noreferrer" className="col-span-6 md:col-span-4 group">
+              <TiltCard className="h-full">
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  className="relative h-full p-6 rounded-3xl bg-gradient-to-br from-cyan-600/20 to-blue-600/10 border border-cyan-500/20 overflow-hidden"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                    <PenTool className="w-6 h-6 text-cyan-400" />
+                  </div>
+                  <h3 className="font-bold text-white mb-1">AI 글쓰기</h3>
+                  <p className="text-xs text-gray-500">자동 작성</p>
+                </motion.div>
+              </TiltCard>
+            </a>
+          </motion.div>
         </div>
       </section>
 
@@ -367,141 +543,77 @@ export default function Home() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-4xl font-bold mb-4">
-              <span className="gradient-text">강력한 기능</span>
+            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm font-medium text-gray-400 mb-6">
+              <Layers className="w-4 h-4" />
+              FEATURES
+            </span>
+            <h2 className="text-4xl md:text-5xl font-black mb-4">
+              <span className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">강력한 기능</span>
             </h2>
-            <p className="text-gray-600 text-lg">블로그 성장에 필요한 모든 것</p>
+            <p className="text-gray-500 text-lg">블로그 성장에 필요한 모든 것</p>
           </motion.div>
 
-          <div className="grid md:grid-cols-4 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 max-w-6xl mx-auto">
             {[
               {
-                icon: <TrendingUp className="w-10 h-10" />,
+                icon: TrendingUp,
                 title: '실시간 지수 측정',
-                description: '11단계 레벨 시스템으로 블로그 등급을 정확하게 평가합니다.',
-                gradient: 'from-purple-500 to-pink-500',
-                link: '/analyze'
+                description: '11단계 레벨 시스템으로 블로그 등급을 정확하게 평가',
+                gradient: 'from-violet-500/20 to-purple-500/10',
+                iconColor: 'text-violet-400',
+                borderColor: 'border-violet-500/20'
               },
               {
-                icon: <BarChart3 className="w-10 h-10" />,
+                icon: BarChart3,
                 title: '상세한 분석',
-                description: '신뢰도, 콘텐츠, 참여도, SEO, 트래픽을 종합 분석합니다.',
-                gradient: 'from-pink-500 to-orange-500',
-                link: '/keyword-search'
+                description: '신뢰도, 콘텐츠, 참여도, SEO, 트래픽을 종합 분석',
+                gradient: 'from-pink-500/20 to-rose-500/10',
+                iconColor: 'text-pink-400',
+                borderColor: 'border-pink-500/20'
               },
               {
-                icon: <Award className="w-10 h-10" />,
+                icon: Award,
                 title: '맞춤 개선안',
-                description: 'AI가 분석한 맞춤형 권장사항으로 블로그를 성장시키세요.',
-                gradient: 'from-orange-500 to-yellow-500',
-                link: '/dashboard'
+                description: 'AI가 분석한 맞춤형 권장사항으로 블로그 성장',
+                gradient: 'from-orange-500/20 to-amber-500/10',
+                iconColor: 'text-orange-400',
+                borderColor: 'border-orange-500/20'
               },
               {
-                icon: <BookOpen className="w-10 h-10" />,
+                icon: BookOpen,
                 title: '글쓰기 가이드',
-                description: '상위 글 분석 데이터 기반 실시간 최적화 가이드를 제공합니다.',
-                gradient: 'from-green-500 to-teal-500',
-                link: '/writing-guide',
+                description: '상위 글 분석 데이터 기반 실시간 최적화 가이드',
+                gradient: 'from-emerald-500/20 to-teal-500/10',
+                iconColor: 'text-emerald-400',
+                borderColor: 'border-emerald-500/20',
                 isNew: true
               },
             ].map((feature, index) => (
-              <Link key={index} href={feature.link || '#'}>
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: index * 0.1 }}
-                  whileHover={{ y: -10 }}
-                  className="group relative glass rounded-3xl p-6 hover:shadow-2xl transition-all duration-300 cursor-pointer h-full"
-                >
-                  {feature.isNew && (
-                    <span className="absolute top-4 right-4 px-2 py-1 text-xs font-bold bg-green-500 text-white rounded-full">
-                      NEW
-                    </span>
-                  )}
-                  <div className={`inline-flex p-3 rounded-2xl bg-gradient-to-br ${feature.gradient} text-white mb-4 group-hover:scale-110 transition-transform duration-300`}>
-                    {feature.icon}
-                  </div>
-                  <h3 className="text-xl font-bold mb-2">{feature.title}</h3>
-                  <p className="text-gray-600 text-sm">{feature.description}</p>
-                </motion.div>
-              </Link>
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: index * 0.1 }}
+                whileHover={{ y: -8 }}
+                className={`relative p-6 rounded-3xl bg-gradient-to-br ${feature.gradient} border ${feature.borderColor} cursor-pointer group`}
+              >
+                {feature.isNew && (
+                  <span className="absolute top-4 right-4 px-2 py-0.5 text-[10px] font-bold bg-gradient-to-r from-violet-500 to-pink-500 text-white rounded-full">NEW</span>
+                )}
+                <div className={`inline-flex p-3 rounded-xl bg-white/5 ${feature.iconColor} mb-4 group-hover:scale-110 group-hover:rotate-3 transition-all`}>
+                  <feature.icon className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-bold mb-2 text-white">{feature.title}</h3>
+                <p className="text-gray-500 text-sm leading-relaxed">{feature.description}</p>
+              </motion.div>
             ))}
           </div>
-
-          {/* Platon Marketing Success Story */}
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="mt-20"
-          >
-            <a
-              href="https://www.brandplaton.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group block relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-8 md:p-10 cursor-pointer"
-            >
-              {/* Background decoration */}
-              <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl" />
-              <div className="absolute bottom-0 left-0 w-64 h-64 bg-pink-500/20 rounded-full blur-3xl" />
-
-              <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
-                <div className="flex-1">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm mb-4">
-                    <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                    <span className="text-xs font-medium text-white/80">실시간 상담 가능</span>
-                  </div>
-
-                  <h3 className="text-3xl md:text-4xl font-bold text-white mb-3">
-                    블로그 상위노출,<br />
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">전문가에게 맡기세요</span>
-                  </h3>
-
-                  <p className="text-gray-300 text-lg mb-6 max-w-lg">
-                    70개 이상의 병원이 플라톤마케팅과 함께 성장했습니다.
-                    데이터 기반 마케팅으로 확실한 결과를 만들어드립니다.
-                  </p>
-
-                  <div className="flex flex-wrap items-center gap-4 text-sm text-gray-400">
-                    <div className="flex items-center gap-2">
-                      <svg className="w-5 h-5 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                      <span>무료 블로그 진단</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <svg className="w-5 h-5 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                      <span>맞춤 전략 제안</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <svg className="w-5 h-5 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                      <span>월 리포트 제공</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-col items-center gap-4">
-                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/30">
-                    <Building2 className="w-10 h-10 text-white" />
-                  </div>
-                  <button className="px-8 py-4 rounded-full bg-white text-gray-900 font-bold text-lg group-hover:bg-gradient-to-r group-hover:from-purple-500 group-hover:to-pink-500 group-hover:text-white transition-all duration-300 shadow-xl flex items-center gap-2">
-                    무료 상담 신청
-                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                  </button>
-                </div>
-              </div>
-            </a>
-          </motion.div>
         </div>
       </section>
 
       {/* 30일 챌린지 배너 */}
-      <section className="py-16 relative overflow-hidden">
+      <section className="py-12 relative">
         <div className="container mx-auto px-4">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -509,59 +621,52 @@ export default function Home() {
             viewport={{ once: true }}
           >
             <Link href="/challenge" className="group block">
-              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-purple-600 via-pink-500 to-orange-500 p-8 md:p-12">
-                {/* Animated background elements */}
-                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl" />
-                <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full blur-3xl" />
+              <div className="relative overflow-hidden rounded-3xl p-1 bg-gradient-to-r from-violet-600 via-pink-600 to-orange-600">
+                <div className="relative bg-[#0a0a0f] rounded-[1.4rem] p-8 md:p-10">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-violet-500/20 rounded-full blur-[100px]" />
+                  <div className="absolute bottom-0 left-0 w-48 h-48 bg-pink-500/20 rounded-full blur-[80px]" />
 
-                <div className="relative flex flex-col md:flex-row items-center justify-between gap-8">
-                  <div className="text-center md:text-left">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm mb-4">
-                      <span className="text-xl">🚀</span>
-                      <span className="text-sm font-medium text-white">무료 회원도 참여 가능</span>
-                    </div>
-
-                    <h3 className="text-3xl md:text-4xl font-bold text-white mb-3">
-                      30일 블로그 챌린지
-                    </h3>
-
-                    <p className="text-white/90 text-lg mb-4 max-w-lg">
-                      매일 10분! 블로그 초보자도 30일 후에는 전문가가 됩니다.
-                      <br />
-                      미션 완료하고 배지도 획득하세요!
-                    </p>
-
-                    <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-sm text-white/80">
-                      <div className="flex items-center gap-2">
-                        <span>📅</span>
-                        <span>30일 커리큘럼</span>
+                  <div className="relative flex flex-col md:flex-row items-center justify-between gap-8">
+                    <div className="text-center md:text-left">
+                      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 mb-4">
+                        <Rocket className="w-4 h-4 text-violet-400" />
+                        <span className="text-sm font-semibold text-white">무료 회원도 참여 가능</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span>🏆</span>
-                        <span>배지 & XP 시스템</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span>🔥</span>
-                        <span>연속 기록 도전</span>
+
+                      <h3 className="text-3xl md:text-4xl font-black text-white mb-3">
+                        30일 블로그 챌린지
+                      </h3>
+
+                      <p className="text-gray-400 text-lg mb-4 max-w-lg">
+                        매일 10분! 블로그 초보자도 30일 후에는 전문가가 됩니다.
+                      </p>
+
+                      <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
+                        {['30일 커리큘럼', '배지 & XP', '연속 기록'].map((item, i) => (
+                          <div key={i} className="flex items-center gap-2 text-sm text-gray-400">
+                            <Check className="w-4 h-4 text-violet-400" />
+                            <span>{item}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="grid grid-cols-3 gap-2">
-                      {['🌱', '📝', '⭐', '🔥', '🏆', '👑'].map((emoji, i) => (
-                        <div
-                          key={i}
-                          className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-2xl group-hover:scale-110 transition-transform"
-                          style={{ transitionDelay: `${i * 50}ms` }}
-                        >
-                          {emoji}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="px-8 py-4 rounded-full bg-white text-purple-600 font-bold text-lg group-hover:scale-105 transition-transform shadow-xl flex items-center gap-2">
-                      지금 시작하기
-                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="grid grid-cols-3 gap-2">
+                        {['🌱', '📝', '⭐', '🔥', '🏆', '👑'].map((emoji, i) => (
+                          <motion.div
+                            key={i}
+                            whileHover={{ scale: 1.2, rotate: 10 }}
+                            className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center text-2xl"
+                          >
+                            {emoji}
+                          </motion.div>
+                        ))}
+                      </div>
+                      <div className="px-8 py-4 rounded-2xl bg-white text-gray-900 font-bold text-lg group-hover:scale-105 transition-transform flex items-center gap-2">
+                        지금 시작하기
+                        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -571,8 +676,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Service Features */}
-      <section className="py-20 bg-gradient-to-br from-purple-100 via-pink-100 to-orange-100">
+      {/* Why Choose Us */}
+      <section className="py-20 relative">
         <div className="container mx-auto px-4">
           <motion.div
             initial={{ opacity: 0 }}
@@ -580,13 +685,12 @@ export default function Home() {
             viewport={{ once: true }}
             className="max-w-4xl mx-auto text-center"
           >
-            <div className="inline-flex items-center gap-2 mb-6">
-              <Sparkles className="w-6 h-6 text-purple-600" />
-              <span className="text-purple-600 font-semibold">블랭크가 제공하는 가치</span>
-            </div>
-
-            <h2 className="text-4xl font-bold mb-12">
-              왜 블랭크인가요?
+            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm font-medium text-gray-400 mb-6">
+              <Star className="w-4 h-4" />
+              WHY BLANK
+            </span>
+            <h2 className="text-4xl md:text-5xl font-black mb-12">
+              왜 <span className="bg-gradient-to-r from-violet-400 to-pink-400 bg-clip-text text-transparent">블랭크</span>인가요?
             </h2>
 
             <div className="grid md:grid-cols-3 gap-6">
@@ -609,15 +713,16 @@ export default function Home() {
               ].map((feature, index) => (
                 <motion.div
                   key={index}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  whileInView={{ opacity: 1, scale: 1 }}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: index * 0.1 }}
-                  className="glass rounded-3xl p-6 hover:shadow-xl transition-all duration-300"
+                  whileHover={{ y: -5 }}
+                  className="p-6 rounded-3xl bg-white/5 border border-white/10"
                 >
                   <div className="text-5xl mb-4">{feature.icon}</div>
-                  <h3 className="font-bold text-lg mb-2">{feature.title}</h3>
-                  <p className="text-gray-600 text-sm">{feature.description}</p>
+                  <h3 className="font-bold text-lg mb-2 text-white">{feature.title}</h3>
+                  <p className="text-gray-500 text-sm leading-relaxed">{feature.description}</p>
                 </motion.div>
               ))}
             </div>
@@ -627,51 +732,58 @@ export default function Home() {
 
       {/* CTA Section */}
       <section className="py-20 relative overflow-hidden">
-        <div className="absolute inset-0 instagram-gradient opacity-90" />
+        <div className="absolute inset-0 bg-gradient-to-br from-violet-600/20 via-pink-600/10 to-orange-600/20" />
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(139,92,246,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.05)_1px,transparent_1px)] bg-[size:60px_60px]" />
 
-        <div className="relative container mx-auto px-4 text-center text-white">
+        <div className="relative container mx-auto px-4 text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             className="max-w-3xl mx-auto"
           >
-            <h2 className="text-5xl font-bold mb-6">
+            <motion.div
+              animate={{ rotate: [0, 10, -10, 0] }}
+              transition={{ duration: 2, repeat: Infinity }}
+              className="inline-flex mb-6"
+            >
+              <Sparkles className="w-12 h-12 text-violet-400" />
+            </motion.div>
+
+            <h2 className="text-4xl md:text-5xl font-black mb-6 text-white">
               지금 바로 시작하세요
             </h2>
-            <p className="text-xl mb-10 text-white/90">
-              무료로 블로그 지수를 확인하고,
-              <br />
-              성장 전략을 받아보세요
+            <p className="text-xl mb-10 text-gray-400">
+              무료로 블로그 지수를 확인하고, 성장 전략을 받아보세요
             </p>
+
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link
                 href="/analyze"
-                className="inline-flex items-center gap-2 px-10 py-5 bg-white text-purple-600 rounded-full font-bold text-lg hover:scale-105 transition-transform duration-300 shadow-2xl"
+                className="group inline-flex items-center gap-3 px-10 py-5 bg-white text-gray-900 rounded-2xl font-bold text-lg hover:scale-105 transition-all"
               >
                 <Sparkles className="w-6 h-6" />
                 무료 분석 시작
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Link>
               <a
                 href="https://www.brandplaton.com/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group inline-flex items-center gap-3 px-10 py-5 bg-white/10 backdrop-blur-md text-white border border-white/30 rounded-full font-bold text-lg hover:bg-white hover:text-purple-600 transition-all duration-300"
+                className="group inline-flex items-center gap-3 px-10 py-5 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl font-bold text-lg hover:bg-white hover:text-gray-900 transition-all"
               >
                 <Building2 className="w-5 h-5" />
-                <span>전문가 상담받기</span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                전문가 상담받기
               </a>
             </div>
           </motion.div>
         </div>
       </section>
 
-      {/* Platon Marketing Showcase */}
-      <section className="py-20 bg-black relative overflow-hidden">
-        {/* Animated background */}
+      {/* Stats Section */}
+      <section className="py-20 relative overflow-hidden border-t border-white/5">
         <div className="absolute inset-0">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-purple-600/20 rounded-full blur-[120px]" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-violet-600/5 rounded-full blur-[120px]" />
         </div>
 
         <div className="container mx-auto px-4 relative">
@@ -681,42 +793,42 @@ export default function Home() {
             viewport={{ once: true }}
             className="text-center"
           >
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-purple-500/30 bg-purple-500/10 mb-8">
-              <span className="w-2 h-2 rounded-full bg-purple-400" />
-              <span className="text-sm text-purple-300 font-medium">Trusted by 70+ Healthcare Partners</span>
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-violet-500/10 border border-violet-500/20 mb-8">
+              <Heart className="w-4 h-4 text-pink-400" />
+              <span className="text-sm text-violet-300 font-medium">Trusted by 70+ Healthcare Partners</span>
             </div>
 
-            <h3 className="text-4xl md:text-6xl font-bold text-white mb-6">
-              마케팅, 결과로 증명합니다
+            <h3 className="text-4xl md:text-5xl font-black text-white mb-12">
+              마케팅, <span className="bg-gradient-to-r from-violet-400 to-pink-400 bg-clip-text text-transparent">결과</span>로 증명합니다
             </h3>
 
-            <p className="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
-              데이터 기반 전략으로 병원 매출 성장을 이끌어드립니다
-            </p>
-
-            {/* Stats */}
             <div className="grid grid-cols-3 gap-8 max-w-3xl mx-auto mb-12">
-              <div className="text-center">
-                <div className="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 mb-2">70+</div>
-                <div className="text-gray-500 text-sm">파트너 병원</div>
-              </div>
-              <div className="text-center">
-                <div className="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 mb-2">200%</div>
-                <div className="text-gray-500 text-sm">평균 성장률</div>
-              </div>
-              <div className="text-center">
-                <div className="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 mb-2">3개월</div>
-                <div className="text-gray-500 text-sm">성과 달성</div>
-              </div>
+              {[
+                { value: '70+', label: '파트너 병원' },
+                { value: '200%', label: '평균 성장률' },
+                { value: '3개월', label: '성과 달성' },
+              ].map((stat, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.1 }}
+                  className="text-center"
+                >
+                  <div className="text-4xl md:text-5xl font-black bg-gradient-to-r from-violet-400 to-pink-400 bg-clip-text text-transparent mb-2">{stat.value}</div>
+                  <div className="text-gray-500 text-sm">{stat.label}</div>
+                </motion.div>
+              ))}
             </div>
 
             <a
               href="https://www.brandplaton.com/"
               target="_blank"
               rel="noopener noreferrer"
-              className="group inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-full font-bold text-lg hover:shadow-lg hover:shadow-purple-500/30 transition-all duration-300"
+              className="group inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-violet-600 to-pink-600 text-white rounded-2xl font-bold text-lg hover:shadow-lg hover:shadow-violet-500/25 transition-all"
             >
-              <span>성공 사례 확인하기</span>
+              성공 사례 확인하기
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </a>
           </motion.div>
@@ -724,38 +836,41 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12">
+      <footer className="bg-black text-white py-16 border-t border-white/10">
         <div className="container mx-auto px-4">
-          <div className="grid md:grid-cols-3 gap-8 mb-8">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-lg font-bold gradient-text">블랭크</span>
-                <span className="text-xs text-gray-400 bg-gray-800 px-2 py-0.5 rounded">v1.2.0</span>
+          <div className="grid md:grid-cols-4 gap-8 mb-12">
+            <div className="md:col-span-2">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-white" />
+                </div>
+                <span className="text-xl font-black bg-gradient-to-r from-violet-400 to-pink-400 bg-clip-text text-transparent">블랭크</span>
+                <span className="text-xs text-gray-600 bg-white/5 px-2 py-0.5 rounded">v2.0</span>
               </div>
-              <p className="text-sm text-gray-400">
-                AI 기반 블로그 분석 플랫폼으로<br />
-                블로그 성장을 도와드립니다.
+              <p className="text-sm text-gray-500 max-w-xs leading-relaxed">
+                AI 기반 블로그 분석 플랫폼으로 블로그 성장을 도와드립니다.
               </p>
             </div>
             <div>
-              <h4 className="font-semibold mb-4">서비스</h4>
-              <ul className="space-y-2 text-sm text-gray-400">
-                <li><Link href="/analyze" className="hover:text-white transition-colors">블로그 분석</Link></li>
-                <li><Link href="/keyword-search" className="hover:text-white transition-colors">키워드 검색</Link></li>
-                <li><Link href="/dashboard" className="hover:text-white transition-colors">대시보드</Link></li>
+              <h4 className="font-bold mb-4 text-white">서비스</h4>
+              <ul className="space-y-3 text-sm text-gray-500">
+                <li><Link href="/analyze" className="hover:text-violet-400 transition-colors">블로그 분석</Link></li>
+                <li><Link href="/keyword-search" className="hover:text-violet-400 transition-colors">키워드 검색</Link></li>
+                <li><Link href="/dashboard" className="hover:text-violet-400 transition-colors">대시보드</Link></li>
+                <li><Link href="/tools" className="hover:text-violet-400 transition-colors">프리미엄 도구</Link></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold mb-4">플라톤마케팅</h4>
-              <ul className="space-y-2 text-sm text-gray-400">
+              <h4 className="font-bold mb-4 text-white">플라톤마케팅</h4>
+              <ul className="space-y-3 text-sm text-gray-500">
                 <li>
-                  <a href="https://www.brandplaton.com/" target="_blank" rel="noopener noreferrer" className="hover:text-purple-400 transition-colors flex items-center gap-2">
+                  <a href="https://www.brandplaton.com/" target="_blank" rel="noopener noreferrer" className="hover:text-violet-400 transition-colors flex items-center gap-2">
                     <Building2 className="w-4 h-4" />
                     병원마케팅 전문
                   </a>
                 </li>
                 <li>
-                  <a href="https://www.brandplaton.com/" target="_blank" rel="noopener noreferrer" className="hover:text-purple-400 transition-colors flex items-center gap-2">
+                  <a href="https://www.brandplaton.com/" target="_blank" rel="noopener noreferrer" className="hover:text-violet-400 transition-colors flex items-center gap-2">
                     <ArrowRight className="w-4 h-4" />
                     무료 상담 신청
                   </a>
@@ -769,85 +884,72 @@ export default function Home() {
               </ul>
             </div>
           </div>
-          <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="text-sm text-gray-400">
-              © 2024 <a href="https://www.brandplaton.com/" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 transition-colors font-medium">플라톤마케팅</a>. All rights reserved.
-            </div>
-            <div className="flex items-center gap-4 text-sm text-gray-400">
-              <span>AI 학습 엔진 탑재</span>
-              <span>•</span>
-              <span>실시간 분석</span>
-              <span>•</span>
-              <a href="https://www.brandplaton.com/" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 transition-colors">
-                병원마케팅 문의
+
+          <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="text-sm text-gray-600">
+              © 2024{' '}
+              <a href="https://www.brandplaton.com/" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:text-violet-300 transition-colors font-medium">
+                플라톤마케팅
               </a>
+              . All rights reserved.
             </div>
-          </div>
-          {/* 이용약관 및 개인정보처리방침 */}
-          <div className="border-t border-gray-800 mt-8 pt-6 text-center">
-            <div className="flex items-center justify-center gap-4 text-sm text-gray-500">
-              <Link href="/terms" className="hover:text-gray-300 transition-colors">
-                이용약관
-              </Link>
-              <span>|</span>
-              <Link href="/terms" className="hover:text-gray-300 transition-colors">
-                개인정보처리방침
-              </Link>
-              <span>|</span>
+            <div className="flex items-center gap-6 text-sm text-gray-600">
+              <Link href="/terms" className="hover:text-gray-400 transition-colors">이용약관</Link>
+              <Link href="/terms" className="hover:text-gray-400 transition-colors">개인정보처리방침</Link>
               <span>lhs0609c@naver.com</span>
             </div>
           </div>
         </div>
       </footer>
+
       {/* Fixed Bottom Ad Popup */}
-      {showAdPopup && (
-        <motion.div
-          initial={{ y: 100, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 100, opacity: 0 }}
-          transition={{ duration: 0.3 }}
-          className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-[480px] z-50"
-        >
-          <div className="relative bg-black text-white rounded-2xl shadow-2xl overflow-hidden">
-            {/* Close Button */}
-            <button
-              onClick={() => setShowAdPopup(false)}
-              className="absolute top-3 right-3 p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors z-10"
-            >
-              <X className="w-4 h-4" />
-            </button>
+      <AnimatePresence>
+        {showAdPopup && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-[420px] z-50"
+          >
+            <div className="relative backdrop-blur-2xl bg-black/80 border border-white/10 rounded-2xl overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-r from-violet-600/10 via-pink-600/10 to-orange-600/10" />
 
-            {/* Gradient border effect */}
-            <div className="absolute inset-0 bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 opacity-20" />
+              <button
+                onClick={() => setShowAdPopup(false)}
+                className="absolute top-3 right-3 p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors z-10"
+              >
+                <X className="w-4 h-4 text-white" />
+              </button>
 
-            {/* Content */}
-            <a
-              href="https://www.brandplaton.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="relative block p-4 hover:bg-white/5 transition-colors"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
-                  <Building2 className="w-6 h-6 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-semibold text-purple-400 uppercase">AD</span>
-                    <span className="px-1.5 py-0.5 text-[9px] bg-gradient-to-r from-purple-500 to-pink-500 rounded font-bold">HOT</span>
+              <a
+                href="https://www.brandplaton.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="relative block p-4 hover:bg-white/5 transition-colors"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center flex-shrink-0">
+                    <Building2 className="w-7 h-7 text-white" />
                   </div>
-                  <div className="text-sm font-bold truncate">병원 매출, 3개월 만에 2배 성장시킨 비결</div>
-                  <div className="text-xs text-gray-400">플라톤마케팅 | 70+ 병원 선택</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] font-bold text-violet-400">AD</span>
+                      <span className="px-2 py-0.5 text-[9px] font-bold bg-gradient-to-r from-violet-500 to-pink-500 text-white rounded-full">HOT</span>
+                    </div>
+                    <div className="text-sm font-bold text-white truncate">병원 매출, 3개월 만에 2배 성장</div>
+                    <div className="text-xs text-gray-500">플라톤마케팅 | 70+ 병원 선택</div>
+                  </div>
+                  <div className="hidden sm:flex items-center gap-1 px-4 py-2 rounded-xl bg-white text-gray-900 text-xs font-bold flex-shrink-0">
+                    <span>보기</span>
+                    <ChevronRight className="w-3 h-3" />
+                  </div>
                 </div>
-                <div className="hidden sm:flex items-center gap-1 px-3 py-1.5 rounded-full bg-white text-black text-xs font-semibold flex-shrink-0">
-                  <span>보기</span>
-                  <ArrowRight className="w-3 h-3" />
-                </div>
-              </div>
-            </a>
-          </div>
-        </motion.div>
-      )}
+              </a>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

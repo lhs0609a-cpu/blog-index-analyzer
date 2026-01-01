@@ -35,47 +35,47 @@ except ImportError:
 # ==============================================
 DEFAULT_WEIGHTS = {
     'c_rank': {
-        'weight': 0.42,  # 신뢰도 요소 추가로 감소
+        'weight': 0.25,  # 블로그 지수 (비중 축소)
         'sub_weights': {
-            'context': 0.35,  # 주제 집중도
-            'content': 0.40,  # 콘텐츠 품질
-            'chain': 0.25     # 연결성
+            'context': 0.35,
+            'content': 0.40,
+            'chain': 0.25
         }
     },
     'dia': {
-        'weight': 0.43,  # 신뢰도 요소 추가로 감소
+        'weight': 0.25,  # 블로그 지수 (비중 축소)
         'sub_weights': {
-            'depth': 0.33,      # 깊이
-            'information': 0.34, # 정보성
-            'accuracy': 0.33    # 정확성
+            'depth': 0.33,
+            'information': 0.34,
+            'accuracy': 0.33
         }
     },
-    # 2025 네이버 AI 신뢰도 평가 요소 (15%)
-    'trust_factors': {
-        'weight': 0.15,
+    # 글 콘텐츠 요소 (50% - 핵심!)
+    'content_factors': {
+        'weight': 0.50,
         'sub_weights': {
-            'source_trust': 0.35,       # 출처 신뢰도
-            'expertise': 0.30,          # 전문성
-            'visual_quality': 0.15,     # 시각적 품질
-            'source_diversity': 0.10,   # 출처 다양성
-            'content_freshness': 0.10,  # 콘텐츠 최신성
+            'content_length': 0.15,      # 본문 길이
+            'heading_count': 0.12,       # 소제목 수
+            'paragraph_count': 0.10,     # 문단 수
+            'image_count': 0.12,         # 이미지 수
+            'keyword_count': 0.15,       # 키워드 언급 횟수
+            'keyword_density': 0.08,     # 키워드 밀도
+            'freshness': 0.15,           # 글 최신성 (post_age_days 기반)
+            'title_keyword': 0.13,       # 제목 키워드 포함
         }
     },
+    # 블로그 메타 요소 (deprecated, 하위 호환용)
     'extra_factors': {
-        'post_count': 0.12,
-        'neighbor_count': 0.08,
-        'visitor_count': 0.05,
-        'recent_activity': 0.10,
-        'content_length': 0.10
+        'post_count': 0.05,
+        'neighbor_count': 0.03,
+        'visitor_count': 0.02,
     },
-    'post_factors': {  # 글 단위 요소
-        'title_keyword_match': 0.20,
-        'content_keyword_density': 0.15,
-        'content_length': 0.15,
-        'image_count': 0.10,
-        'freshness': 0.15,
-        'engagement': 0.10,
-        'structure_quality': 0.15
+    # 부가 요소
+    'bonus_factors': {
+        'has_map': 0.03,       # 지도 포함
+        'has_link': 0.02,      # 외부 링크
+        'video_count': 0.05,   # 동영상 수
+        'engagement': 0.05,    # 공감+댓글
     }
 }
 
@@ -86,104 +86,146 @@ DEFAULT_WEIGHTS = {
 def calculate_blog_score(features: Dict, weights: Dict, keyword: str = '') -> float:
     """
     Calculate blog score based on features and weights
-    
-    2025 네이버 AI 신뢰도 평가 반영:
-    Score = (C-Rank * 0.42) + (D.I.A. * 0.43) + (Trust * 0.15) + extra_factors
+
+    새로운 점수 계산 공식 (글 콘텐츠 중심):
+    Score = (C-Rank * 0.25) + (D.I.A. * 0.25) + (Content * 0.50) + Bonus
+
+    Content 요소: heading_count, paragraph_count, image_count,
+                  keyword_count, content_length, freshness, title_keyword
     """
-    # C-Rank component
+    total_score = 0.0
+
+    # ===== 1. C-Rank 점수 (25%) =====
     c_rank_score = features.get('c_rank_score', 0) or 0
-    c_rank_weight = weights.get('c_rank', {}).get('weight', 0.42)
+    c_rank_weight = weights.get('c_rank', {}).get('weight', 0.25)
 
-    # D.I.A. component
-    dia_score = features.get('dia_score', 0) or 0
-    dia_weight = weights.get('dia', {}).get('weight', 0.43)
-    
-    # 2025 네이버 AI 신뢰도 점수 (15%)
-    trust_score = 50  # 기본값
-    if TRUST_SERVICE_AVAILABLE:
-        try:
-            blog_info = {
-                'blog_id': features.get('blog_id', ''),
-                'blog_name': features.get('blog_name', ''),
-                'neighbor_count': features.get('neighbor_count', 0),
-                'post_count': features.get('post_count', 0),
-                'blog_age_days': features.get('blog_age_days', 0),
-                'is_official': features.get('is_official', False),
-                'is_power_blogger': features.get('is_power_blogger', False),
-            }
-            post_info = {
-                'image_count': features.get('image_count', 0),
-                'heading_count': features.get('heading_count', 0),
-                'paragraph_count': features.get('paragraph_count', 0),
-                'content_length': features.get('content_length', 0),
-                'video_count': features.get('video_count', 0),
-                'days_since_post': features.get('days_since_post', 30),
-                'external_link_count': features.get('external_link_count', 0),
-            }
-            trust_result = calculate_total_trust_score(blog_info, post_info, '', keyword)
-            trust_score = trust_result.get('total_score', 50)
-        except Exception:
-            trust_score = 50
-    
-    trust_weight = weights.get('trust_factors', {}).get('weight', 0.15)
-
-    # Extra factors
-    extra_weights = weights.get('extra_factors', {})
-
-    # Blog-level factors
-    post_count = features.get('post_count', 0) or 0
-    neighbor_count = features.get('neighbor_count', 0) or 0
-    visitor_count = features.get('visitor_count', 0) or 0
-
-    # Normalize and calculate extra scores
-    post_score = min(post_count / 1000, 1.0) * extra_weights.get('post_count', 0.12)
-    neighbor_score = min(neighbor_count / 1000, 1.0) * extra_weights.get('neighbor_count', 0.08)
-    visitor_score = min(visitor_count / 100000, 1.0) * extra_weights.get('visitor_count', 0.05)
-
-    # C-Rank sub-components (if available)
+    # C-Rank sub-components
     context_score = features.get('context_score', 50) or 50
     content_score = features.get('content_score', 50) or 50
     chain_score = features.get('chain_score', 50) or 50
 
     c_sub = weights.get('c_rank', {}).get('sub_weights', {})
-    c_rank_detailed = (
-        context_score * c_sub.get('context', 0.35) +
-        content_score * c_sub.get('content', 0.40) +
-        chain_score * c_sub.get('chain', 0.25)
-    )
+    if features.get('context_score') is not None:
+        c_rank_final = (
+            context_score * c_sub.get('context', 0.35) +
+            content_score * c_sub.get('content', 0.40) +
+            chain_score * c_sub.get('chain', 0.25)
+        )
+    else:
+        c_rank_final = c_rank_score
 
-    # D.I.A. sub-components (if available)
+    total_score += c_rank_final * c_rank_weight
+
+    # ===== 2. D.I.A. 점수 (25%) =====
+    dia_score = features.get('dia_score', 0) or 0
+    dia_weight = weights.get('dia', {}).get('weight', 0.25)
+
     depth_score = features.get('depth_score', 50) or 50
     info_score = features.get('information_score', 50) or 50
     accuracy_score = features.get('accuracy_score', 50) or 50
 
     d_sub = weights.get('dia', {}).get('sub_weights', {})
-    dia_detailed = (
-        depth_score * d_sub.get('depth', 0.33) +
-        info_score * d_sub.get('information', 0.34) +
-        accuracy_score * d_sub.get('accuracy', 0.33)
-    )
-
-    # Use detailed scores if sub-components are available, otherwise use provided scores
-    if features.get('context_score') is not None:
-        final_c_rank = c_rank_detailed
-    else:
-        final_c_rank = c_rank_score
-
     if features.get('depth_score') is not None:
-        final_dia = dia_detailed
+        dia_final = (
+            depth_score * d_sub.get('depth', 0.33) +
+            info_score * d_sub.get('information', 0.34) +
+            accuracy_score * d_sub.get('accuracy', 0.33)
+        )
     else:
-        final_dia = dia_score
+        dia_final = dia_score
 
-    # Total score calculation (2025 네이버 AI 신뢰도 평가 반영)
-    total_score = (
-        final_c_rank * c_rank_weight +
-        final_dia * dia_weight +
-        trust_score * trust_weight +  # 신뢰도 점수 (15%)
-        post_score * 100 +
-        neighbor_score * 100 +
-        visitor_score * 100
-    )
+    total_score += dia_final * dia_weight
+
+    # ===== 3. 글 콘텐츠 점수 (50% - 핵심!) =====
+    content_weights = weights.get('content_factors', {}).get('sub_weights', {})
+    content_main_weight = weights.get('content_factors', {}).get('weight', 0.50)
+
+    content_score_total = 0.0
+
+    # 본문 길이 (0-100점으로 정규화, 3000자 기준)
+    content_length = features.get('content_length', 0) or 0
+    length_score = min(content_length / 3000, 1.0) * 100
+    content_score_total += length_score * content_weights.get('content_length', 0.15)
+
+    # 소제목 수 (0-100점, 10개 기준)
+    heading_count = features.get('heading_count', 0) or 0
+    heading_score = min(heading_count / 10, 1.0) * 100
+    content_score_total += heading_score * content_weights.get('heading_count', 0.12)
+
+    # 문단 수 (0-100점, 20개 기준)
+    paragraph_count = features.get('paragraph_count', 0) or 0
+    paragraph_score = min(paragraph_count / 20, 1.0) * 100
+    content_score_total += paragraph_score * content_weights.get('paragraph_count', 0.10)
+
+    # 이미지 수 (0-100점, 15개 기준)
+    image_count = features.get('image_count', 0) or 0
+    image_score = min(image_count / 15, 1.0) * 100
+    content_score_total += image_score * content_weights.get('image_count', 0.12)
+
+    # 키워드 언급 횟수 (0-100점, 10회 기준)
+    keyword_count = features.get('keyword_count', 0) or 0
+    kw_count_score = min(keyword_count / 10, 1.0) * 100
+    content_score_total += kw_count_score * content_weights.get('keyword_count', 0.15)
+
+    # 키워드 밀도 (0-100점, 1.0% 기준이 최적, 너무 높으면 감점)
+    keyword_density = features.get('keyword_density', 0) or 0
+    if keyword_density <= 1.5:
+        density_score = min(keyword_density / 1.0, 1.0) * 100
+    else:
+        # 밀도가 너무 높으면 감점 (스팸 방지)
+        density_score = max(0, 100 - (keyword_density - 1.5) * 30)
+    content_score_total += density_score * content_weights.get('keyword_density', 0.08)
+
+    # 글 최신성 (post_age_days 기반, 0-100점)
+    post_age_days = features.get('post_age_days')
+    if post_age_days is not None:
+        if post_age_days <= 1:
+            freshness_score = 100
+        elif post_age_days <= 7:
+            freshness_score = 90
+        elif post_age_days <= 30:
+            freshness_score = 70
+        elif post_age_days <= 90:
+            freshness_score = 50
+        elif post_age_days <= 180:
+            freshness_score = 30
+        else:
+            freshness_score = 10
+    else:
+        freshness_score = 50  # 알 수 없으면 중간값
+    content_score_total += freshness_score * content_weights.get('freshness', 0.15)
+
+    # 제목 키워드 포함 (0 or 100점)
+    title_has_keyword = features.get('title_has_keyword', False)
+    title_score = 100 if title_has_keyword else 0
+    content_score_total += title_score * content_weights.get('title_keyword', 0.13)
+
+    total_score += content_score_total * content_main_weight
+
+    # ===== 4. 보너스 요소 =====
+    bonus_weights = weights.get('bonus_factors', {})
+
+    # 지도 포함
+    has_map = features.get('has_map', False)
+    if has_map:
+        total_score += 100 * bonus_weights.get('has_map', 0.03)
+
+    # 외부 링크
+    has_link = features.get('has_link', False)
+    if has_link:
+        total_score += 100 * bonus_weights.get('has_link', 0.02)
+
+    # 동영상 수
+    video_count = features.get('video_count', 0) or 0
+    video_score = min(video_count / 3, 1.0) * 100
+    total_score += video_score * bonus_weights.get('video_count', 0.05)
+
+    # 공감 + 댓글 (engagement)
+    like_count = features.get('like_count', 0) or 0
+    comment_count = features.get('comment_count', 0) or 0
+    engagement = like_count + comment_count * 2  # 댓글에 가중치
+    engagement_score = min(engagement / 50, 1.0) * 100
+    total_score += engagement_score * bonus_weights.get('engagement', 0.05)
 
     return total_score
 
@@ -249,22 +291,47 @@ def calculate_combined_score(blog_features: Dict, post_features: Dict, weights: 
 # PREDICTION & LOSS CALCULATION
 # ==============================================
 def calculate_predicted_scores(samples: List[Dict], weights: Dict) -> np.ndarray:
-    """Calculate predicted scores for all samples"""
+    """Calculate predicted scores for all samples
+
+    핵심 수정: 모든 피처를 calculate_blog_score에 전달
+    - 블로그 지수: c_rank_score, dia_score
+    - 글 콘텐츠: heading_count, paragraph_count, content_length, image_count, etc.
+    - 보너스: has_map, has_link, video_count, like_count, comment_count
+    """
     scores = []
     for sample in samples:
         features = {
+            # ===== 블로그 전체 지수 (25% + 25%) =====
             'c_rank_score': sample.get('c_rank_score'),
             'dia_score': sample.get('dia_score'),
             'post_count': sample.get('post_count'),
             'neighbor_count': sample.get('neighbor_count'),
             'visitor_count': sample.get('visitor_count'),
-            # Sub-components
+            # C-Rank Sub-components
             'context_score': sample.get('context_score'),
             'content_score': sample.get('content_score'),
             'chain_score': sample.get('chain_score'),
+            # D.I.A. Sub-components
             'depth_score': sample.get('depth_score'),
             'information_score': sample.get('information_score'),
             'accuracy_score': sample.get('accuracy_score'),
+
+            # ===== 글 콘텐츠 요소 (50% - 핵심!) =====
+            'content_length': sample.get('content_length', 0),
+            'heading_count': sample.get('heading_count', 0),
+            'paragraph_count': sample.get('paragraph_count', 0),
+            'image_count': sample.get('image_count', 0),
+            'keyword_count': sample.get('keyword_count', 0),
+            'keyword_density': sample.get('keyword_density', 0),
+            'post_age_days': sample.get('post_age_days'),
+            'title_has_keyword': sample.get('title_has_keyword', False),
+
+            # ===== 보너스 요소 =====
+            'has_map': sample.get('has_map', False),
+            'has_link': sample.get('has_link', False),
+            'video_count': sample.get('video_count', 0),
+            'like_count': sample.get('like_count', 0),
+            'comment_count': sample.get('comment_count', 0),
         }
         score = calculate_blog_score(features, weights)
         scores.append(score)
@@ -419,13 +486,42 @@ def calculate_all_gradients(samples: List[Dict], weights: Dict, epsilon: float =
         w_copy['dia']['sub_weights'][sub] += epsilon
         gradients[f'dia.{sub}'] = calc_gradient(w_copy, f'dia.{sub}', epsilon)
 
-    # Extra factors gradients
+    # Extra factors gradients (legacy)
     for factor in ['post_count', 'neighbor_count', 'visitor_count']:
         w_copy = json.loads(json.dumps(weights))
         if 'extra_factors' not in w_copy:
             w_copy['extra_factors'] = DEFAULT_WEIGHTS['extra_factors'].copy()
         w_copy['extra_factors'][factor] += epsilon
         gradients[f'extra.{factor}'] = calc_gradient(w_copy, f'extra.{factor}', epsilon)
+
+    # Content factors gradients (핵심 - 50% 가중치!)
+    content_sub_weights = [
+        'content_length', 'heading_count', 'paragraph_count', 'image_count',
+        'keyword_count', 'keyword_density', 'freshness', 'title_keyword'
+    ]
+    for factor in content_sub_weights:
+        w_copy = json.loads(json.dumps(weights))
+        if 'content_factors' not in w_copy:
+            w_copy['content_factors'] = json.loads(json.dumps(DEFAULT_WEIGHTS['content_factors']))
+        if 'sub_weights' not in w_copy['content_factors']:
+            w_copy['content_factors']['sub_weights'] = json.loads(json.dumps(DEFAULT_WEIGHTS['content_factors']['sub_weights']))
+        w_copy['content_factors']['sub_weights'][factor] += epsilon
+        gradients[f'content.{factor}'] = calc_gradient(w_copy, f'content.{factor}', epsilon)
+
+    # Content factors main weight gradient
+    w_copy = json.loads(json.dumps(weights))
+    if 'content_factors' not in w_copy:
+        w_copy['content_factors'] = json.loads(json.dumps(DEFAULT_WEIGHTS['content_factors']))
+    w_copy['content_factors']['weight'] += epsilon
+    gradients['content_factors.weight'] = calc_gradient(w_copy, 'content_factors.weight', epsilon)
+
+    # Bonus factors gradients
+    for factor in ['has_map', 'has_link', 'video_count', 'engagement']:
+        w_copy = json.loads(json.dumps(weights))
+        if 'bonus_factors' not in w_copy:
+            w_copy['bonus_factors'] = json.loads(json.dumps(DEFAULT_WEIGHTS['bonus_factors']))
+        w_copy['bonus_factors'][factor] += epsilon
+        gradients[f'bonus.{factor}'] = calc_gradient(w_copy, f'bonus.{factor}', epsilon)
 
     return gradients
 
@@ -460,15 +556,23 @@ def instant_adjust_weights(
 
     # Ensure all required keys exist
     if 'c_rank' not in weights:
-        weights['c_rank'] = DEFAULT_WEIGHTS['c_rank'].copy()
+        weights['c_rank'] = json.loads(json.dumps(DEFAULT_WEIGHTS['c_rank']))
     if 'dia' not in weights:
-        weights['dia'] = DEFAULT_WEIGHTS['dia'].copy()
+        weights['dia'] = json.loads(json.dumps(DEFAULT_WEIGHTS['dia']))
     if 'extra_factors' not in weights:
-        weights['extra_factors'] = DEFAULT_WEIGHTS['extra_factors'].copy()
+        weights['extra_factors'] = json.loads(json.dumps(DEFAULT_WEIGHTS['extra_factors']))
+    if 'content_factors' not in weights:
+        weights['content_factors'] = json.loads(json.dumps(DEFAULT_WEIGHTS['content_factors']))
+    if 'bonus_factors' not in weights:
+        weights['bonus_factors'] = json.loads(json.dumps(DEFAULT_WEIGHTS['bonus_factors']))
     if 'sub_weights' not in weights['c_rank']:
-        weights['c_rank']['sub_weights'] = DEFAULT_WEIGHTS['c_rank']['sub_weights'].copy()
+        weights['c_rank']['sub_weights'] = json.loads(json.dumps(DEFAULT_WEIGHTS['c_rank']['sub_weights']))
     if 'sub_weights' not in weights['dia']:
-        weights['dia']['sub_weights'] = DEFAULT_WEIGHTS['dia']['sub_weights'].copy()
+        weights['dia']['sub_weights'] = json.loads(json.dumps(DEFAULT_WEIGHTS['dia']['sub_weights']))
+    if 'sub_weights' not in weights.get('content_factors', {}):
+        if 'content_factors' not in weights:
+            weights['content_factors'] = {}
+        weights['content_factors']['sub_weights'] = json.loads(json.dumps(DEFAULT_WEIGHTS['content_factors']['sub_weights']))
 
     actual_ranks = np.array([s['actual_rank'] for s in samples])
 
@@ -520,12 +624,20 @@ def instant_adjust_weights(
                     weights['c_rank']['weight'] += velocity[key]
                 elif category == 'dia' and param == 'weight':
                     weights['dia']['weight'] += velocity[key]
+                elif category == 'content_factors' and param == 'weight':
+                    weights['content_factors']['weight'] += velocity[key]
                 elif category == 'c_rank' and param in ['context', 'content', 'chain']:
                     weights['c_rank']['sub_weights'][param] += velocity[key]
                 elif category == 'dia' and param in ['depth', 'information', 'accuracy']:
                     weights['dia']['sub_weights'][param] += velocity[key]
                 elif category == 'extra':
                     weights['extra_factors'][param] += velocity[key]
+                elif category == 'content':
+                    # content.heading_count, content.paragraph_count, etc.
+                    weights['content_factors']['sub_weights'][param] += velocity[key]
+                elif category == 'bonus':
+                    # bonus.has_map, bonus.video_count, etc.
+                    weights['bonus_factors'][param] += velocity[key]
 
         # Constrain weights to valid ranges
         weights = constrain_weights(weights)
@@ -577,38 +689,77 @@ def instant_adjust_weights(
 
 
 def constrain_weights(weights: Dict) -> Dict:
-    """Ensure all weights are within valid ranges"""
-    # Main weights: 0.1 ~ 0.9
-    weights['c_rank']['weight'] = max(0.1, min(0.9, weights['c_rank']['weight']))
-    weights['dia']['weight'] = max(0.1, min(0.9, weights['dia']['weight']))
+    """Ensure all weights are within valid ranges
 
-    # Normalize main weights to sum to 1
-    total = weights['c_rank']['weight'] + weights['dia']['weight']
-    if total != 0:
-        weights['c_rank']['weight'] /= total
-        weights['dia']['weight'] /= total
+    새로운 구조:
+    - c_rank: 25%, dia: 25%, content_factors: 50%
+    - content_factors.sub_weights: 8개 요소
+    - bonus_factors: 추가 보너스 (별도 합산)
+    """
+    # Main weights: 0.05 ~ 0.6
+    weights['c_rank']['weight'] = max(0.05, min(0.6, weights['c_rank']['weight']))
+    weights['dia']['weight'] = max(0.05, min(0.6, weights['dia']['weight']))
 
-    # Sub-weights: 0.1 ~ 0.6
+    # Content factors main weight: 0.2 ~ 0.7 (핵심!)
+    if 'content_factors' in weights and 'weight' in weights['content_factors']:
+        weights['content_factors']['weight'] = max(0.2, min(0.7, weights['content_factors']['weight']))
+
+    # Normalize main weights to sum to 1 (c_rank + dia + content_factors)
+    c_rank_w = weights.get('c_rank', {}).get('weight', 0.25)
+    dia_w = weights.get('dia', {}).get('weight', 0.25)
+    content_w = weights.get('content_factors', {}).get('weight', 0.50)
+    total = c_rank_w + dia_w + content_w
+    if total > 0:
+        weights['c_rank']['weight'] = c_rank_w / total
+        weights['dia']['weight'] = dia_w / total
+        if 'content_factors' in weights:
+            weights['content_factors']['weight'] = content_w / total
+
+    # C-Rank Sub-weights: 0.1 ~ 0.6
     for sub in ['context', 'content', 'chain']:
-        weights['c_rank']['sub_weights'][sub] = max(0.1, min(0.6, weights['c_rank']['sub_weights'][sub]))
+        if sub in weights.get('c_rank', {}).get('sub_weights', {}):
+            weights['c_rank']['sub_weights'][sub] = max(0.1, min(0.6, weights['c_rank']['sub_weights'][sub]))
 
+    # D.I.A. Sub-weights: 0.1 ~ 0.6
     for sub in ['depth', 'information', 'accuracy']:
-        weights['dia']['sub_weights'][sub] = max(0.1, min(0.6, weights['dia']['sub_weights'][sub]))
+        if sub in weights.get('dia', {}).get('sub_weights', {}):
+            weights['dia']['sub_weights'][sub] = max(0.1, min(0.6, weights['dia']['sub_weights'][sub]))
 
-    # Normalize sub-weights
-    c_total = sum(weights['c_rank']['sub_weights'].values())
-    if c_total != 0:
-        for k in weights['c_rank']['sub_weights']:
-            weights['c_rank']['sub_weights'][k] /= c_total
+    # Content factors sub-weights: 0.05 ~ 0.3
+    content_subs = ['content_length', 'heading_count', 'paragraph_count', 'image_count',
+                    'keyword_count', 'keyword_density', 'freshness', 'title_keyword']
+    for sub in content_subs:
+        if sub in weights.get('content_factors', {}).get('sub_weights', {}):
+            weights['content_factors']['sub_weights'][sub] = max(0.05, min(0.3, weights['content_factors']['sub_weights'][sub]))
 
-    d_total = sum(weights['dia']['sub_weights'].values())
-    if d_total != 0:
-        for k in weights['dia']['sub_weights']:
-            weights['dia']['sub_weights'][k] /= d_total
+    # Normalize C-Rank sub-weights
+    if 'c_rank' in weights and 'sub_weights' in weights['c_rank']:
+        c_total = sum(weights['c_rank']['sub_weights'].values())
+        if c_total > 0:
+            for k in weights['c_rank']['sub_weights']:
+                weights['c_rank']['sub_weights'][k] /= c_total
 
-    # Extra factors: 0.01 ~ 0.5
+    # Normalize D.I.A. sub-weights
+    if 'dia' in weights and 'sub_weights' in weights['dia']:
+        d_total = sum(weights['dia']['sub_weights'].values())
+        if d_total > 0:
+            for k in weights['dia']['sub_weights']:
+                weights['dia']['sub_weights'][k] /= d_total
+
+    # Normalize content factors sub-weights
+    if 'content_factors' in weights and 'sub_weights' in weights['content_factors']:
+        cf_total = sum(weights['content_factors']['sub_weights'].values())
+        if cf_total > 0:
+            for k in weights['content_factors']['sub_weights']:
+                weights['content_factors']['sub_weights'][k] /= cf_total
+
+    # Extra factors: 0.01 ~ 0.3 (legacy)
     for factor in weights.get('extra_factors', {}):
-        weights['extra_factors'][factor] = max(0.01, min(0.5, weights['extra_factors'][factor]))
+        weights['extra_factors'][factor] = max(0.01, min(0.3, weights['extra_factors'][factor]))
+
+    # Bonus factors: 0.01 ~ 0.15
+    for factor in weights.get('bonus_factors', {}):
+        weights['bonus_factors'][factor] = max(0.01, min(0.15, weights['bonus_factors'][factor]))
 
     return weights
 
