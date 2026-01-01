@@ -106,12 +106,12 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-white overflow-hidden">
+    <div className="min-h-screen bg-[#fafafa] text-gray-900 overflow-hidden">
       {/* Cursor glow effect */}
       <div
-        className="fixed pointer-events-none z-50 w-[500px] h-[500px] rounded-full opacity-20 blur-[100px] transition-all duration-100"
+        className="fixed pointer-events-none z-50 w-[500px] h-[500px] rounded-full opacity-30 blur-[100px] transition-all duration-100"
         style={{
-          background: 'radial-gradient(circle, rgba(139, 92, 246, 0.4) 0%, rgba(236, 72, 153, 0.2) 50%, transparent 70%)',
+          background: 'radial-gradient(circle, rgba(139, 92, 246, 0.3) 0%, rgba(236, 72, 153, 0.15) 50%, transparent 70%)',
           left: mousePosition.x - 250,
           top: mousePosition.y - 250,
         }}
@@ -124,7 +124,7 @@ export default function Home() {
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <motion.div
           className="absolute top-20 left-[10%] w-[400px] h-[400px] rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(139, 92, 246, 0.3) 0%, transparent 70%)' }}
+          style={{ background: 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%)' }}
           animate={{
             y: [0, -50, 0],
             scale: [1, 1.1, 1],
@@ -133,7 +133,7 @@ export default function Home() {
         />
         <motion.div
           className="absolute top-[40%] right-[5%] w-[300px] h-[300px] rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(236, 72, 153, 0.3) 0%, transparent 70%)' }}
+          style={{ background: 'radial-gradient(circle, rgba(236, 72, 153, 0.15) 0%, transparent 70%)' }}
           animate={{
             y: [0, 50, 0],
             scale: [1, 1.2, 1],
@@ -142,7 +142,7 @@ export default function Home() {
         />
         <motion.div
           className="absolute bottom-[10%] left-[30%] w-[350px] h-[350px] rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(34, 211, 238, 0.2) 0%, transparent 70%)' }}
+          style={{ background: 'radial-gradient(circle, rgba(34, 211, 238, 0.1) 0%, transparent 70%)' }}
           animate={{
             x: [0, 30, 0],
             y: [0, -30, 0],
@@ -154,7 +154,7 @@ export default function Home() {
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50">
         <div className="mx-4 mt-4">
-          <div className="backdrop-blur-2xl bg-white/5 border border-white/10 rounded-2xl px-6 py-4">
+          <div className="backdrop-blur-2xl bg-white/70 border border-gray-200/50 rounded-2xl px-6 py-4 shadow-lg shadow-gray-200/50">
             <div className="flex items-center justify-between">
               {/* Logo */}
               <Link href="/" className="flex items-center gap-3 group">
@@ -167,23 +167,23 @@ export default function Home() {
                     <Sparkles className="w-5 h-5 text-white" />
                   </div>
                 </motion.div>
-                <span className="text-xl font-black bg-gradient-to-r from-violet-400 via-pink-400 to-orange-400 bg-clip-text text-transparent">블랭크</span>
+                <span className="text-xl font-black bg-gradient-to-r from-violet-600 via-pink-600 to-orange-500 bg-clip-text text-transparent">블랭크</span>
               </Link>
 
               {/* Navigation */}
               {!mounted ? (
-                <div className="w-32 h-10 bg-white/10 rounded-full animate-pulse" />
+                <div className="w-32 h-10 bg-gray-200 rounded-full animate-pulse" />
               ) : isAuthenticated ? (
                 <div className="flex items-center gap-3">
                   <UsageIndicator />
-                  <span className="hidden md:block text-sm font-medium text-gray-400">
+                  <span className="hidden md:block text-sm font-medium text-gray-600">
                     {user?.name}님
                   </span>
                   <Link href="/dashboard">
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className="px-5 py-2.5 text-sm font-bold bg-gradient-to-r from-violet-600 to-pink-600 rounded-xl hover:shadow-lg hover:shadow-violet-500/25 transition-shadow"
+                      className="px-5 py-2.5 text-sm font-bold bg-gradient-to-r from-violet-600 to-pink-600 text-white rounded-xl hover:shadow-lg hover:shadow-violet-500/25 transition-shadow"
                     >
                       대시보드
                     </motion.button>
@@ -193,9 +193,9 @@ export default function Home() {
                       <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
-                        className="p-2.5 rounded-xl bg-violet-500/20 border border-violet-500/30"
+                        className="p-2.5 rounded-xl bg-violet-100 border border-violet-200"
                       >
-                        <Shield className="w-4 h-4 text-violet-400" />
+                        <Shield className="w-4 h-4 text-violet-600" />
                       </motion.button>
                     </Link>
                   )}
@@ -203,9 +203,9 @@ export default function Home() {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={handleLogout}
-                    className="p-2.5 rounded-xl hover:bg-white/10 transition-colors"
+                    className="p-2.5 rounded-xl hover:bg-gray-100 transition-colors"
                   >
-                    <LogOut className="w-4 h-4 text-gray-400" />
+                    <LogOut className="w-4 h-4 text-gray-500" />
                   </motion.button>
                 </div>
               ) : (
@@ -214,7 +214,7 @@ export default function Home() {
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className="px-4 py-2.5 text-sm font-medium text-gray-300 hover:text-white transition-colors flex items-center gap-2"
+                      className="px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors flex items-center gap-2"
                     >
                       <CreditCard className="w-4 h-4" />
                       요금제
@@ -224,7 +224,7 @@ export default function Home() {
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className="px-5 py-2.5 text-sm font-medium border border-white/20 rounded-xl hover:bg-white/10 transition-colors"
+                      className="px-5 py-2.5 text-sm font-medium border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors"
                     >
                       로그인
                     </motion.button>
@@ -233,7 +233,7 @@ export default function Home() {
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className="px-5 py-2.5 text-sm font-bold bg-white text-gray-900 rounded-xl hover:bg-gray-100 transition-colors"
+                      className="px-5 py-2.5 text-sm font-bold bg-gradient-to-r from-violet-600 to-pink-600 text-white rounded-xl hover:shadow-lg hover:shadow-violet-500/25 transition-shadow"
                     >
                       시작하기
                     </motion.button>
@@ -256,14 +256,14 @@ export default function Home() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-violet-500/10 border border-violet-500/20 mb-8"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-violet-100 border border-violet-200 mb-8"
               >
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500"></span>
                 </span>
-                <span className="text-sm font-medium text-violet-300">AI 블로그 분석 플랫폼</span>
-                <span className="px-2 py-0.5 text-[10px] font-bold bg-gradient-to-r from-violet-500 to-pink-500 rounded-full">v2.0</span>
+                <span className="text-sm font-medium text-violet-700">AI 블로그 분석 플랫폼</span>
+                <span className="px-2 py-0.5 text-[10px] font-bold bg-gradient-to-r from-violet-500 to-pink-500 text-white rounded-full">v2.0</span>
               </motion.div>
 
               {/* Main Title */}
@@ -273,9 +273,9 @@ export default function Home() {
                 transition={{ duration: 0.6, delay: 0.1 }}
                 className="text-5xl md:text-7xl lg:text-8xl font-black mb-6 tracking-tight leading-[0.9]"
               >
-                <span className="block mb-2 bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">블로그 지수를</span>
+                <span className="block mb-2 text-gray-900">블로그 지수를</span>
                 <span className="relative inline-block">
-                  <span className="bg-gradient-to-r from-violet-400 via-pink-400 to-orange-400 bg-clip-text text-transparent">한눈에</span>
+                  <span className="bg-gradient-to-r from-violet-600 via-pink-600 to-orange-500 bg-clip-text text-transparent">한눈에</span>
                   <motion.span
                     className="absolute -bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-violet-500 via-pink-500 to-orange-500 rounded-full"
                     initial={{ scaleX: 0 }}
@@ -290,11 +290,11 @@ export default function Home() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
-                className="text-lg md:text-xl text-gray-400 mb-12 max-w-2xl mx-auto leading-relaxed"
+                className="text-lg md:text-xl text-gray-600 mb-12 max-w-2xl mx-auto leading-relaxed"
               >
-                <span className="text-violet-400 font-semibold">40+</span> 지표 분석 · <span className="text-pink-400 font-semibold">11단계</span> 레벨 시스템
+                <span className="text-violet-600 font-semibold">40+</span> 지표 분석 · <span className="text-pink-600 font-semibold">11단계</span> 레벨 시스템
                 <br className="hidden md:block" />
-                인플루언서들이 선택한 <span className="text-white font-semibold">#1</span> 분석 도구
+                인플루언서들이 선택한 <span className="text-gray-900 font-semibold">#1</span> 분석 도구
               </motion.p>
 
               {/* Search Bar */}
@@ -305,9 +305,9 @@ export default function Home() {
                 className="max-w-2xl mx-auto mb-10"
               >
                 <form onSubmit={handleKeywordSearch} className="relative group">
-                  <div className="absolute -inset-1 bg-gradient-to-r from-violet-600 via-pink-600 to-orange-600 rounded-2xl blur-xl opacity-40 group-hover:opacity-60 transition-opacity" />
-                  <div className="relative flex items-center bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
-                    <div className="absolute left-5 text-gray-500">
+                  <div className="absolute -inset-1 bg-gradient-to-r from-violet-600 via-pink-600 to-orange-600 rounded-2xl blur-xl opacity-20 group-hover:opacity-40 transition-opacity" />
+                  <div className="relative flex items-center bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-xl shadow-gray-200/50">
+                    <div className="absolute left-5 text-gray-400">
                       <Search className="w-5 h-5" />
                     </div>
                     <input
@@ -315,7 +315,7 @@ export default function Home() {
                       value={searchKeyword}
                       onChange={(e) => setSearchKeyword(e.target.value)}
                       placeholder="키워드를 입력하세요 (예: 맛집, 여행, 육아)"
-                      className="w-full px-5 py-5 pl-14 pr-36 bg-transparent text-white placeholder:text-gray-500 focus:outline-none"
+                      className="w-full px-5 py-5 pl-14 pr-36 bg-transparent text-gray-900 placeholder:text-gray-400 focus:outline-none"
                       disabled={isSearching}
                     />
                     <button
@@ -354,7 +354,7 @@ export default function Home() {
                   <div key={index} className="flex items-center gap-3">
                     <div className={`w-1 h-10 rounded-full bg-gradient-to-b ${stat.color}`} />
                     <div className="text-left">
-                      <div className="text-2xl font-black text-white">{stat.value}</div>
+                      <div className="text-2xl font-black text-gray-900">{stat.value}</div>
                       <div className="text-xs text-gray-500">{stat.label}</div>
                     </div>
                   </div>
@@ -366,7 +366,7 @@ export default function Home() {
       </section>
 
       {/* Marquee Section */}
-      <section className="py-8 border-y border-white/5 bg-white/[0.02]">
+      <section className="py-8 border-y border-gray-200 bg-white/50">
         <Marquee speed={40}>
           <div className="flex items-center gap-8 text-gray-500">
             {['블로그 분석', '키워드 리서치', 'AI 글쓰기', '광고 최적화', '성장 가이드', '레벨 측정', 'VIEW 탭 분석', '경쟁 분석'].map((item, i) => (
@@ -393,21 +393,21 @@ export default function Home() {
               <TiltCard className="h-full">
                 <motion.div
                   whileHover={{ scale: 1.02 }}
-                  className="relative h-full p-8 rounded-3xl bg-gradient-to-br from-violet-600/20 to-purple-600/10 border border-violet-500/20 overflow-hidden"
+                  className="relative h-full p-8 rounded-3xl bg-gradient-to-br from-violet-100 to-purple-50 border border-violet-200/50 overflow-hidden shadow-xl shadow-violet-100/50"
                 >
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-violet-500/20 rounded-full blur-[100px]" />
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-violet-200/30 rounded-full blur-[100px]" />
                   <div className="relative">
                     <div className="flex items-start justify-between mb-6">
-                      <div className="w-14 h-14 rounded-2xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center group-hover:scale-110 group-hover:rotate-6 transition-all">
-                        <Zap className="w-7 h-7 text-violet-400" />
+                      <div className="w-14 h-14 rounded-2xl bg-violet-500 flex items-center justify-center group-hover:scale-110 group-hover:rotate-6 transition-all shadow-lg shadow-violet-500/30">
+                        <Zap className="w-7 h-7 text-white" />
                       </div>
-                      <ArrowUpRight className="w-6 h-6 text-violet-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <ArrowUpRight className="w-6 h-6 text-violet-600 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
-                    <h3 className="text-2xl font-bold text-white mb-2">블로그 분석</h3>
-                    <p className="text-gray-400 mb-6">블로그 ID만 입력하면 40개 이상의 지표를 즉시 분석합니다</p>
+                    <h3 className="text-2xl font-bold text-gray-900 mb-2">블로그 분석</h3>
+                    <p className="text-gray-600 mb-6">블로그 ID만 입력하면 40개 이상의 지표를 즉시 분석합니다</p>
                     <div className="flex items-center gap-2">
-                      <span className="px-3 py-1 text-xs font-medium bg-violet-500/20 text-violet-300 rounded-full">FREE</span>
-                      <span className="px-3 py-1 text-xs font-medium bg-white/10 text-gray-400 rounded-full">11단계 레벨</span>
+                      <span className="px-3 py-1 text-xs font-medium bg-violet-500 text-white rounded-full">FREE</span>
+                      <span className="px-3 py-1 text-xs font-medium bg-white text-gray-600 rounded-full border border-gray-200">11단계 레벨</span>
                     </div>
                   </div>
                 </motion.div>
@@ -419,18 +419,18 @@ export default function Home() {
               <TiltCard className="h-full">
                 <motion.div
                   whileHover={{ scale: 1.02 }}
-                  className="relative h-full p-8 rounded-3xl bg-gradient-to-br from-emerald-600/20 to-teal-600/10 border border-emerald-500/20 overflow-hidden"
+                  className="relative h-full p-8 rounded-3xl bg-gradient-to-br from-emerald-100 to-teal-50 border border-emerald-200/50 overflow-hidden shadow-xl shadow-emerald-100/50"
                 >
-                  <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500/20 rounded-full blur-[80px]" />
+                  <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-200/30 rounded-full blur-[80px]" />
                   <span className="absolute top-4 right-4 px-2 py-1 text-[10px] font-bold bg-orange-500 text-white rounded-full animate-pulse">HOT</span>
                   <div className="relative">
-                    <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                      <Target className="w-7 h-7 text-emerald-400" />
+                    <div className="w-14 h-14 rounded-2xl bg-emerald-500 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-lg shadow-emerald-500/30">
+                      <Target className="w-7 h-7 text-white" />
                     </div>
-                    <h3 className="text-2xl font-bold text-white mb-2">광고 최적화</h3>
-                    <p className="text-gray-400 mb-6">네이버 광고 성과 분석 및 최적화 추천</p>
+                    <h3 className="text-2xl font-bold text-gray-900 mb-2">광고 최적화</h3>
+                    <p className="text-gray-600 mb-6">네이버 광고 성과 분석 및 최적화 추천</p>
                     <div className="flex items-center gap-2">
-                      <span className="px-3 py-1 text-xs font-medium bg-emerald-500/20 text-emerald-300 rounded-full">PRO</span>
+                      <span className="px-3 py-1 text-xs font-medium bg-emerald-500 text-white rounded-full">PRO</span>
                     </div>
                   </div>
                 </motion.div>
@@ -442,16 +442,16 @@ export default function Home() {
               <TiltCard className="h-full">
                 <motion.div
                   whileHover={{ scale: 1.02 }}
-                  className="relative h-full p-6 rounded-3xl bg-white/5 border border-white/10 overflow-hidden"
+                  className="relative h-full p-6 rounded-3xl bg-white border border-gray-200 overflow-hidden shadow-lg shadow-gray-100/50"
                 >
                   <div className="flex gap-1 absolute top-3 right-3">
                     <span className="px-2 py-0.5 text-[9px] font-bold bg-violet-500 text-white rounded-full">PRO</span>
                     <span className="px-2 py-0.5 text-[9px] font-bold bg-orange-500 text-white rounded-full">NEW</span>
                   </div>
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-violet-500 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:-rotate-6 transition-all">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-violet-500 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:-rotate-6 transition-all shadow-lg shadow-violet-500/25">
                     <Rocket className="w-6 h-6 text-white" />
                   </div>
-                  <h3 className="font-bold text-white mb-1">통합 광고</h3>
+                  <h3 className="font-bold text-gray-900 mb-1">통합 광고</h3>
                   <p className="text-xs text-gray-500">멀티 플랫폼</p>
                 </motion.div>
               </TiltCard>
@@ -462,12 +462,12 @@ export default function Home() {
               <TiltCard className="h-full">
                 <motion.div
                   whileHover={{ scale: 1.02 }}
-                  className="relative h-full p-6 rounded-3xl bg-white/5 border border-white/10 overflow-hidden"
+                  className="relative h-full p-6 rounded-3xl bg-white border border-gray-200 overflow-hidden shadow-lg shadow-gray-100/50"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gray-600 to-gray-800 flex items-center justify-center mb-4 group-hover:scale-110 transition-all">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center mb-4 group-hover:scale-110 transition-all shadow-lg shadow-gray-500/25">
                     <BarChart3 className="w-6 h-6 text-white" />
                   </div>
-                  <h3 className="font-bold text-white mb-1">대시보드</h3>
+                  <h3 className="font-bold text-gray-900 mb-1">대시보드</h3>
                   <p className="text-xs text-gray-500">내 분석 현황</p>
                 </motion.div>
               </TiltCard>
@@ -478,13 +478,13 @@ export default function Home() {
               <TiltCard className="h-full">
                 <motion.div
                   whileHover={{ scale: 1.02 }}
-                  className="relative h-full p-6 rounded-3xl bg-white/5 border border-white/10 overflow-hidden"
+                  className="relative h-full p-6 rounded-3xl bg-white border border-gray-200 overflow-hidden shadow-lg shadow-gray-100/50"
                 >
                   <span className="absolute top-3 right-3 px-2 py-0.5 text-[9px] font-bold bg-green-500 text-white rounded-full">NEW</span>
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-pink-500 to-orange-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-all">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-pink-500 to-orange-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-all shadow-lg shadow-pink-500/25">
                     <BookOpen className="w-6 h-6 text-white" />
                   </div>
-                  <h3 className="font-bold text-white mb-1">글쓰기 가이드</h3>
+                  <h3 className="font-bold text-gray-900 mb-1">글쓰기 가이드</h3>
                   <p className="text-xs text-gray-500">최적화 팁</p>
                 </motion.div>
               </TiltCard>
@@ -495,21 +495,21 @@ export default function Home() {
               <TiltCard className="h-full">
                 <motion.div
                   whileHover={{ scale: 1.01 }}
-                  className="relative h-full p-8 rounded-3xl bg-gradient-to-r from-violet-600/30 via-pink-600/20 to-orange-600/20 border border-violet-500/20 overflow-hidden"
+                  className="relative h-full p-8 rounded-3xl bg-gradient-to-r from-violet-100 via-pink-100 to-orange-100 border border-violet-200/50 overflow-hidden shadow-xl shadow-violet-100/50"
                 >
-                  <div className="absolute -right-20 -top-20 w-64 h-64 bg-pink-500/20 rounded-full blur-[100px]" />
+                  <div className="absolute -right-20 -top-20 w-64 h-64 bg-pink-200/30 rounded-full blur-[100px]" />
                   <div className="relative flex items-center justify-between">
                     <div>
                       <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
-                          <Sparkles className="w-5 h-5 text-white" />
+                        <div className="w-10 h-10 rounded-xl bg-white/80 flex items-center justify-center shadow-lg">
+                          <Sparkles className="w-5 h-5 text-violet-600" />
                         </div>
-                        <span className="text-xs font-bold text-white/60 bg-white/10 px-3 py-1 rounded-full">34개 도구</span>
+                        <span className="text-xs font-bold text-violet-600 bg-white/80 px-3 py-1 rounded-full">34개 도구</span>
                       </div>
-                      <h3 className="text-2xl font-bold text-white mb-2">프리미엄 AI 도구</h3>
-                      <p className="text-gray-400">블로그 성장에 필요한 모든 것</p>
+                      <h3 className="text-2xl font-bold text-gray-900 mb-2">프리미엄 AI 도구</h3>
+                      <p className="text-gray-600">블로그 성장에 필요한 모든 것</p>
                     </div>
-                    <ChevronRight className="w-8 h-8 text-white/40 group-hover:translate-x-2 group-hover:text-white/80 transition-all" />
+                    <ChevronRight className="w-8 h-8 text-gray-400 group-hover:translate-x-2 group-hover:text-violet-600 transition-all" />
                   </div>
                 </motion.div>
               </TiltCard>
@@ -520,12 +520,12 @@ export default function Home() {
               <TiltCard className="h-full">
                 <motion.div
                   whileHover={{ scale: 1.02 }}
-                  className="relative h-full p-6 rounded-3xl bg-gradient-to-br from-cyan-600/20 to-blue-600/10 border border-cyan-500/20 overflow-hidden"
+                  className="relative h-full p-6 rounded-3xl bg-gradient-to-br from-cyan-100 to-blue-50 border border-cyan-200/50 overflow-hidden shadow-xl shadow-cyan-100/50"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                    <PenTool className="w-6 h-6 text-cyan-400" />
+                  <div className="w-12 h-12 rounded-xl bg-cyan-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg shadow-cyan-500/30">
+                    <PenTool className="w-6 h-6 text-white" />
                   </div>
-                  <h3 className="font-bold text-white mb-1">AI 글쓰기</h3>
+                  <h3 className="font-bold text-gray-900 mb-1">AI 글쓰기</h3>
                   <p className="text-xs text-gray-500">자동 작성</p>
                 </motion.div>
               </TiltCard>
@@ -543,12 +543,12 @@ export default function Home() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm font-medium text-gray-400 mb-6">
+            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gray-100 border border-gray-200 text-sm font-medium text-gray-600 mb-6">
               <Layers className="w-4 h-4" />
               FEATURES
             </span>
             <h2 className="text-4xl md:text-5xl font-black mb-4">
-              <span className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">강력한 기능</span>
+              <span className="text-gray-900">강력한 기능</span>
             </h2>
             <p className="text-gray-500 text-lg">블로그 성장에 필요한 모든 것</p>
           </motion.div>
@@ -559,33 +559,33 @@ export default function Home() {
                 icon: TrendingUp,
                 title: '실시간 지수 측정',
                 description: '11단계 레벨 시스템으로 블로그 등급을 정확하게 평가',
-                gradient: 'from-violet-500/20 to-purple-500/10',
-                iconColor: 'text-violet-400',
-                borderColor: 'border-violet-500/20'
+                gradient: 'from-violet-100 to-purple-50',
+                iconBg: 'bg-violet-500',
+                borderColor: 'border-violet-200/50'
               },
               {
                 icon: BarChart3,
                 title: '상세한 분석',
                 description: '신뢰도, 콘텐츠, 참여도, SEO, 트래픽을 종합 분석',
-                gradient: 'from-pink-500/20 to-rose-500/10',
-                iconColor: 'text-pink-400',
-                borderColor: 'border-pink-500/20'
+                gradient: 'from-pink-100 to-rose-50',
+                iconBg: 'bg-pink-500',
+                borderColor: 'border-pink-200/50'
               },
               {
                 icon: Award,
                 title: '맞춤 개선안',
                 description: 'AI가 분석한 맞춤형 권장사항으로 블로그 성장',
-                gradient: 'from-orange-500/20 to-amber-500/10',
-                iconColor: 'text-orange-400',
-                borderColor: 'border-orange-500/20'
+                gradient: 'from-orange-100 to-amber-50',
+                iconBg: 'bg-orange-500',
+                borderColor: 'border-orange-200/50'
               },
               {
                 icon: BookOpen,
                 title: '글쓰기 가이드',
                 description: '상위 글 분석 데이터 기반 실시간 최적화 가이드',
-                gradient: 'from-emerald-500/20 to-teal-500/10',
-                iconColor: 'text-emerald-400',
-                borderColor: 'border-emerald-500/20',
+                gradient: 'from-emerald-100 to-teal-50',
+                iconBg: 'bg-emerald-500',
+                borderColor: 'border-emerald-200/50',
                 isNew: true
               },
             ].map((feature, index) => (
@@ -596,15 +596,15 @@ export default function Home() {
                 viewport={{ once: true }}
                 transition={{ delay: index * 0.1 }}
                 whileHover={{ y: -8 }}
-                className={`relative p-6 rounded-3xl bg-gradient-to-br ${feature.gradient} border ${feature.borderColor} cursor-pointer group`}
+                className={`relative p-6 rounded-3xl bg-gradient-to-br ${feature.gradient} border ${feature.borderColor} cursor-pointer group shadow-xl`}
               >
                 {feature.isNew && (
                   <span className="absolute top-4 right-4 px-2 py-0.5 text-[10px] font-bold bg-gradient-to-r from-violet-500 to-pink-500 text-white rounded-full">NEW</span>
                 )}
-                <div className={`inline-flex p-3 rounded-xl bg-white/5 ${feature.iconColor} mb-4 group-hover:scale-110 group-hover:rotate-3 transition-all`}>
+                <div className={`inline-flex p-3 rounded-xl ${feature.iconBg} text-white mb-4 group-hover:scale-110 group-hover:rotate-3 transition-all shadow-lg`}>
                   <feature.icon className="w-6 h-6" />
                 </div>
-                <h3 className="text-lg font-bold mb-2 text-white">{feature.title}</h3>
+                <h3 className="text-lg font-bold mb-2 text-gray-900">{feature.title}</h3>
                 <p className="text-gray-500 text-sm leading-relaxed">{feature.description}</p>
               </motion.div>
             ))}
@@ -621,30 +621,30 @@ export default function Home() {
             viewport={{ once: true }}
           >
             <Link href="/challenge" className="group block">
-              <div className="relative overflow-hidden rounded-3xl p-1 bg-gradient-to-r from-violet-600 via-pink-600 to-orange-600">
-                <div className="relative bg-[#0a0a0f] rounded-[1.4rem] p-8 md:p-10">
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-violet-500/20 rounded-full blur-[100px]" />
-                  <div className="absolute bottom-0 left-0 w-48 h-48 bg-pink-500/20 rounded-full blur-[80px]" />
+              <div className="relative overflow-hidden rounded-3xl p-1 bg-gradient-to-r from-violet-600 via-pink-600 to-orange-600 shadow-2xl shadow-violet-500/20">
+                <div className="relative bg-white rounded-[1.4rem] p-8 md:p-10">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-violet-100 rounded-full blur-[100px]" />
+                  <div className="absolute bottom-0 left-0 w-48 h-48 bg-pink-100 rounded-full blur-[80px]" />
 
                   <div className="relative flex flex-col md:flex-row items-center justify-between gap-8">
                     <div className="text-center md:text-left">
-                      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 mb-4">
-                        <Rocket className="w-4 h-4 text-violet-400" />
-                        <span className="text-sm font-semibold text-white">무료 회원도 참여 가능</span>
+                      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-violet-100 mb-4">
+                        <Rocket className="w-4 h-4 text-violet-600" />
+                        <span className="text-sm font-semibold text-violet-700">무료 회원도 참여 가능</span>
                       </div>
 
-                      <h3 className="text-3xl md:text-4xl font-black text-white mb-3">
+                      <h3 className="text-3xl md:text-4xl font-black text-gray-900 mb-3">
                         30일 블로그 챌린지
                       </h3>
 
-                      <p className="text-gray-400 text-lg mb-4 max-w-lg">
+                      <p className="text-gray-600 text-lg mb-4 max-w-lg">
                         매일 10분! 블로그 초보자도 30일 후에는 전문가가 됩니다.
                       </p>
 
                       <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
                         {['30일 커리큘럼', '배지 & XP', '연속 기록'].map((item, i) => (
-                          <div key={i} className="flex items-center gap-2 text-sm text-gray-400">
-                            <Check className="w-4 h-4 text-violet-400" />
+                          <div key={i} className="flex items-center gap-2 text-sm text-gray-600">
+                            <Check className="w-4 h-4 text-violet-600" />
                             <span>{item}</span>
                           </div>
                         ))}
@@ -657,13 +657,13 @@ export default function Home() {
                           <motion.div
                             key={i}
                             whileHover={{ scale: 1.2, rotate: 10 }}
-                            className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center text-2xl"
+                            className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-2xl"
                           >
                             {emoji}
                           </motion.div>
                         ))}
                       </div>
-                      <div className="px-8 py-4 rounded-2xl bg-white text-gray-900 font-bold text-lg group-hover:scale-105 transition-transform flex items-center gap-2">
+                      <div className="px-8 py-4 rounded-2xl bg-gradient-to-r from-violet-600 to-pink-600 text-white font-bold text-lg group-hover:scale-105 transition-transform flex items-center gap-2 shadow-lg shadow-violet-500/30">
                         지금 시작하기
                         <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                       </div>
@@ -685,12 +685,12 @@ export default function Home() {
             viewport={{ once: true }}
             className="max-w-4xl mx-auto text-center"
           >
-            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm font-medium text-gray-400 mb-6">
+            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gray-100 border border-gray-200 text-sm font-medium text-gray-600 mb-6">
               <Star className="w-4 h-4" />
               WHY BLANK
             </span>
             <h2 className="text-4xl md:text-5xl font-black mb-12">
-              왜 <span className="bg-gradient-to-r from-violet-400 to-pink-400 bg-clip-text text-transparent">블랭크</span>인가요?
+              왜 <span className="bg-gradient-to-r from-violet-600 to-pink-600 bg-clip-text text-transparent">블랭크</span>인가요?
             </h2>
 
             <div className="grid md:grid-cols-3 gap-6">
@@ -718,10 +718,10 @@ export default function Home() {
                   viewport={{ once: true }}
                   transition={{ delay: index * 0.1 }}
                   whileHover={{ y: -5 }}
-                  className="p-6 rounded-3xl bg-white/5 border border-white/10"
+                  className="p-6 rounded-3xl bg-white border border-gray-200 shadow-xl shadow-gray-100/50"
                 >
                   <div className="text-5xl mb-4">{feature.icon}</div>
-                  <h3 className="font-bold text-lg mb-2 text-white">{feature.title}</h3>
+                  <h3 className="font-bold text-lg mb-2 text-gray-900">{feature.title}</h3>
                   <p className="text-gray-500 text-sm leading-relaxed">{feature.description}</p>
                 </motion.div>
               ))}
@@ -732,10 +732,10 @@ export default function Home() {
 
       {/* CTA Section */}
       <section className="py-20 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-violet-600/20 via-pink-600/10 to-orange-600/20" />
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(139,92,246,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.05)_1px,transparent_1px)] bg-[size:60px_60px]" />
+        <div className="absolute inset-0 bg-gradient-to-br from-violet-600 via-pink-600 to-orange-500" />
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[size:60px_60px]" />
 
-        <div className="relative container mx-auto px-4 text-center">
+        <div className="relative container mx-auto px-4 text-center text-white">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -747,20 +747,20 @@ export default function Home() {
               transition={{ duration: 2, repeat: Infinity }}
               className="inline-flex mb-6"
             >
-              <Sparkles className="w-12 h-12 text-violet-400" />
+              <Sparkles className="w-12 h-12 text-white/80" />
             </motion.div>
 
-            <h2 className="text-4xl md:text-5xl font-black mb-6 text-white">
+            <h2 className="text-4xl md:text-5xl font-black mb-6">
               지금 바로 시작하세요
             </h2>
-            <p className="text-xl mb-10 text-gray-400">
+            <p className="text-xl mb-10 text-white/90">
               무료로 블로그 지수를 확인하고, 성장 전략을 받아보세요
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link
                 href="/analyze"
-                className="group inline-flex items-center gap-3 px-10 py-5 bg-white text-gray-900 rounded-2xl font-bold text-lg hover:scale-105 transition-all"
+                className="group inline-flex items-center gap-3 px-10 py-5 bg-white text-violet-600 rounded-2xl font-bold text-lg hover:scale-105 transition-all shadow-2xl"
               >
                 <Sparkles className="w-6 h-6" />
                 무료 분석 시작
@@ -770,7 +770,7 @@ export default function Home() {
                 href="https://www.brandplaton.com/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group inline-flex items-center gap-3 px-10 py-5 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl font-bold text-lg hover:bg-white hover:text-gray-900 transition-all"
+                className="group inline-flex items-center gap-3 px-10 py-5 bg-white/10 backdrop-blur-md border border-white/30 rounded-2xl font-bold text-lg hover:bg-white hover:text-violet-600 transition-all"
               >
                 <Building2 className="w-5 h-5" />
                 전문가 상담받기
@@ -781,9 +781,9 @@ export default function Home() {
       </section>
 
       {/* Stats Section */}
-      <section className="py-20 relative overflow-hidden border-t border-white/5">
+      <section className="py-20 bg-gray-900 relative overflow-hidden">
         <div className="absolute inset-0">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-violet-600/5 rounded-full blur-[120px]" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-violet-600/10 rounded-full blur-[120px]" />
         </div>
 
         <div className="container mx-auto px-4 relative">
@@ -793,7 +793,7 @@ export default function Home() {
             viewport={{ once: true }}
             className="text-center"
           >
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-violet-500/10 border border-violet-500/20 mb-8">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-violet-500/20 border border-violet-500/30 mb-8">
               <Heart className="w-4 h-4 text-pink-400" />
               <span className="text-sm text-violet-300 font-medium">Trusted by 70+ Healthcare Partners</span>
             </div>
@@ -836,7 +836,7 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-black text-white py-16 border-t border-white/10">
+      <footer className="bg-gray-900 text-white py-16 border-t border-gray-800">
         <div className="container mx-auto px-4">
           <div className="grid md:grid-cols-4 gap-8 mb-12">
             <div className="md:col-span-2">
@@ -845,7 +845,7 @@ export default function Home() {
                   <Sparkles className="w-5 h-5 text-white" />
                 </div>
                 <span className="text-xl font-black bg-gradient-to-r from-violet-400 to-pink-400 bg-clip-text text-transparent">블랭크</span>
-                <span className="text-xs text-gray-600 bg-white/5 px-2 py-0.5 rounded">v2.0</span>
+                <span className="text-xs text-gray-600 bg-gray-800 px-2 py-0.5 rounded">v2.0</span>
               </div>
               <p className="text-sm text-gray-500 max-w-xs leading-relaxed">
                 AI 기반 블로그 분석 플랫폼으로 블로그 성장을 도와드립니다.
@@ -885,7 +885,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="text-sm text-gray-600">
               © 2024{' '}
               <a href="https://www.brandplaton.com/" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:text-violet-300 transition-colors font-medium">
@@ -912,35 +912,35 @@ export default function Home() {
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
             className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-[420px] z-50"
           >
-            <div className="relative backdrop-blur-2xl bg-black/80 border border-white/10 rounded-2xl overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-violet-600/10 via-pink-600/10 to-orange-600/10" />
+            <div className="relative backdrop-blur-2xl bg-white/90 border border-gray-200 rounded-2xl overflow-hidden shadow-2xl shadow-gray-300/50">
+              <div className="absolute inset-0 bg-gradient-to-r from-violet-500/5 via-pink-500/5 to-orange-500/5" />
 
               <button
                 onClick={() => setShowAdPopup(false)}
-                className="absolute top-3 right-3 p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors z-10"
+                className="absolute top-3 right-3 p-1.5 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors z-10"
               >
-                <X className="w-4 h-4 text-white" />
+                <X className="w-4 h-4 text-gray-500" />
               </button>
 
               <a
                 href="https://www.brandplaton.com/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="relative block p-4 hover:bg-white/5 transition-colors"
+                className="relative block p-4 hover:bg-gray-50 transition-colors"
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center flex-shrink-0">
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center flex-shrink-0 shadow-lg shadow-violet-500/30">
                     <Building2 className="w-7 h-7 text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] font-bold text-violet-400">AD</span>
+                      <span className="text-[10px] font-bold text-violet-600">AD</span>
                       <span className="px-2 py-0.5 text-[9px] font-bold bg-gradient-to-r from-violet-500 to-pink-500 text-white rounded-full">HOT</span>
                     </div>
-                    <div className="text-sm font-bold text-white truncate">병원 매출, 3개월 만에 2배 성장</div>
+                    <div className="text-sm font-bold text-gray-900 truncate">병원 매출, 3개월 만에 2배 성장</div>
                     <div className="text-xs text-gray-500">플라톤마케팅 | 70+ 병원 선택</div>
                   </div>
-                  <div className="hidden sm:flex items-center gap-1 px-4 py-2 rounded-xl bg-white text-gray-900 text-xs font-bold flex-shrink-0">
+                  <div className="hidden sm:flex items-center gap-1 px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-pink-600 text-white text-xs font-bold flex-shrink-0">
                     <span>보기</span>
                     <ChevronRight className="w-3 h-3" />
                   </div>
