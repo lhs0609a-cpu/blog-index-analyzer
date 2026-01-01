@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Mail, Lock, User, Loader2, Sparkles, ArrowLeft, Check } from 'lucide-react'
+import { Mail, Lock, User, Loader2, Sparkles, ArrowLeft, Check, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { register } from '@/lib/api/auth'
@@ -17,6 +17,18 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      setMousePosition({ x: e.clientX, y: e.clientY })
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    return () => window.removeEventListener('mousemove', handleMouseMove)
+  }, [])
 
   const passwordRequirements = [
     { label: '최소 8자 이상', met: password.length >= 8 },
@@ -59,20 +71,63 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 flex items-center justify-center py-12 px-4">
+    <div className="min-h-screen bg-[#0a0a0f] text-white flex items-center justify-center py-12 px-4 overflow-hidden relative">
+      {/* Cursor glow effect */}
+      <div
+        className="fixed pointer-events-none z-0 w-[600px] h-[600px] rounded-full opacity-15 blur-[120px] transition-all duration-200"
+        style={{
+          background: 'radial-gradient(circle, rgba(139, 92, 246, 0.5) 0%, rgba(236, 72, 153, 0.3) 50%, transparent 70%)',
+          left: mousePosition.x - 300,
+          top: mousePosition.y - 300,
+        }}
+      />
+
+      {/* Animated background grid */}
+      <div className="fixed inset-0 bg-[linear-gradient(rgba(139,92,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.03)_1px,transparent_1px)] bg-[size:80px_80px]" />
+
+      {/* Floating orbs */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <motion.div
+          className="absolute top-10 right-[15%] w-[350px] h-[350px] rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(236, 72, 153, 0.25) 0%, transparent 70%)' }}
+          animate={{
+            y: [0, -40, 0],
+            scale: [1, 1.1, 1],
+          }}
+          transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <motion.div
+          className="absolute bottom-10 left-[10%] w-[400px] h-[400px] rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(139, 92, 246, 0.2) 0%, transparent 70%)' }}
+          animate={{
+            y: [0, 40, 0],
+            scale: [1, 1.15, 1],
+          }}
+          transition={{ duration: 11, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <motion.div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(251, 146, 60, 0.15) 0%, transparent 70%)' }}
+          animate={{
+            scale: [1, 1.2, 1],
+          }}
+          transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
+        />
+      </div>
+
       {/* Back to Home */}
-      <Link href="/" className="absolute top-8 left-8">
+      <Link href="/" className="absolute top-6 left-6 z-50">
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          className="flex items-center gap-2 px-4 py-2 rounded-full glass hover:bg-white/90 transition-all"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xl hover:bg-white/10 transition-all text-sm font-medium"
         >
           <ArrowLeft className="w-4 h-4" />
           홈으로
         </motion.button>
       </Link>
 
-      <div className="max-w-md w-full">
+      <div className="max-w-md w-full relative z-10">
         {/* Logo/Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -83,14 +138,14 @@ export default function RegisterPage() {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: "spring", delay: 0.1 }}
-            className="inline-flex p-4 rounded-full instagram-gradient mb-4"
+            className="inline-flex p-4 rounded-2xl bg-gradient-to-br from-violet-600 to-pink-600 mb-6 shadow-lg shadow-violet-500/30"
           >
             <Sparkles className="w-8 h-8 text-white" />
           </motion.div>
-          <h1 className="text-4xl font-bold mb-2">
-            <span className="gradient-text">회원가입</span>
+          <h1 className="text-4xl font-black mb-3">
+            <span className="bg-gradient-to-r from-violet-400 via-pink-400 to-orange-400 bg-clip-text text-transparent">회원가입</span>
           </h1>
-          <p className="text-gray-600">
+          <p className="text-gray-400">
             지금 시작하고 블로그를 성장시키세요
           </p>
         </motion.div>
@@ -100,143 +155,174 @@ export default function RegisterPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="glass rounded-3xl p-8"
+          className="relative"
         >
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Name */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                이름
-              </label>
-              <div className="relative">
-                <User className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="홍길동"
-                  className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none transition-all"
-                  disabled={isLoading}
-                />
-              </div>
-            </div>
+          {/* Card glow effect */}
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-violet-600 via-pink-600 to-orange-600 rounded-3xl blur opacity-20" />
 
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                이메일
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="your@email.com"
-                  className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none transition-all"
-                  disabled={isLoading}
-                />
-              </div>
-            </div>
-
-            {/* Password */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                비밀번호
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none transition-all"
-                  disabled={isLoading}
-                />
-              </div>
-
-              {/* Password Requirements */}
-              {password && (
-                <div className="mt-3 space-y-1">
-                  {passwordRequirements.map((req, index) => (
-                    <div key={index} className="flex items-center gap-2 text-sm">
-                      <div
-                        className={`w-4 h-4 rounded-full flex items-center justify-center ${
-                          req.met ? 'bg-green-500' : 'bg-gray-300'
-                        }`}
-                      >
-                        {req.met && <Check className="w-3 h-3 text-white" />}
-                      </div>
-                      <span className={req.met ? 'text-green-600' : 'text-gray-500'}>
-                        {req.label}
-                      </span>
-                    </div>
-                  ))}
+          <div className="relative backdrop-blur-2xl bg-white/5 border border-white/10 rounded-3xl p-8">
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Name */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-300 mb-2">
+                  이름
+                </label>
+                <div className="relative group">
+                  <User className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 w-5 h-5 group-focus-within:text-violet-400 transition-colors" />
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="홍길동"
+                    className="w-full pl-12 pr-4 py-4 rounded-xl bg-white/5 border border-white/10 focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/20 focus:outline-none transition-all text-white placeholder:text-gray-500"
+                    disabled={isLoading}
+                  />
                 </div>
-              )}
-            </div>
-
-            {/* Confirm Password */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                비밀번호 확인
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className={`w-full pl-12 pr-4 py-3 rounded-xl border-2 ${
-                    confirmPassword && password !== confirmPassword
-                      ? 'border-red-500'
-                      : 'border-gray-200'
-                  } focus:border-purple-500 focus:outline-none transition-all`}
-                  disabled={isLoading}
-                />
               </div>
-              {confirmPassword && password !== confirmPassword && (
-                <p className="text-sm text-red-500 mt-1">비밀번호가 일치하지 않습니다</p>
-              )}
+
+              {/* Email */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-300 mb-2">
+                  이메일
+                </label>
+                <div className="relative group">
+                  <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 w-5 h-5 group-focus-within:text-violet-400 transition-colors" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="your@email.com"
+                    className="w-full pl-12 pr-4 py-4 rounded-xl bg-white/5 border border-white/10 focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/20 focus:outline-none transition-all text-white placeholder:text-gray-500"
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
+
+              {/* Password */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-300 mb-2">
+                  비밀번호
+                </label>
+                <div className="relative group">
+                  <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 w-5 h-5 group-focus-within:text-violet-400 transition-colors" />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full pl-12 pr-12 py-4 rounded-xl bg-white/5 border border-white/10 focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/20 focus:outline-none transition-all text-white placeholder:text-gray-500"
+                    disabled={isLoading}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+
+                {/* Password Requirements */}
+                {password && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="mt-3 space-y-1.5"
+                  >
+                    {passwordRequirements.map((req, index) => (
+                      <div key={index} className="flex items-center gap-2 text-sm">
+                        <div
+                          className={`w-4 h-4 rounded-full flex items-center justify-center transition-colors ${
+                            req.met ? 'bg-emerald-500' : 'bg-gray-600'
+                          }`}
+                        >
+                          {req.met && <Check className="w-3 h-3 text-white" />}
+                        </div>
+                        <span className={req.met ? 'text-emerald-400' : 'text-gray-500'}>
+                          {req.label}
+                        </span>
+                      </div>
+                    ))}
+                  </motion.div>
+                )}
+              </div>
+
+              {/* Confirm Password */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-300 mb-2">
+                  비밀번호 확인
+                </label>
+                <div className="relative group">
+                  <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 w-5 h-5 group-focus-within:text-violet-400 transition-colors" />
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className={`w-full pl-12 pr-12 py-4 rounded-xl bg-white/5 border ${
+                      confirmPassword && password !== confirmPassword
+                        ? 'border-red-500/50'
+                        : 'border-white/10'
+                    } focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/20 focus:outline-none transition-all text-white placeholder:text-gray-500`}
+                    disabled={isLoading}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+                {confirmPassword && password !== confirmPassword && (
+                  <p className="text-sm text-red-400 mt-2">비밀번호가 일치하지 않습니다</p>
+                )}
+                {confirmPassword && password === confirmPassword && confirmPassword.length > 0 && (
+                  <p className="text-sm text-emerald-400 mt-2 flex items-center gap-1">
+                    <Check className="w-4 h-4" />
+                    비밀번호가 일치합니다
+                  </p>
+                )}
+              </div>
+
+              {/* Submit Button */}
+              <motion.button
+                type="submit"
+                disabled={isLoading}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="w-full py-4 px-6 rounded-xl bg-gradient-to-r from-violet-600 to-pink-600 text-white font-bold text-lg hover:shadow-lg hover:shadow-violet-500/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-6"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    가입 중...
+                  </>
+                ) : (
+                  '회원가입'
+                )}
+              </motion.button>
+            </form>
+
+            {/* Divider */}
+            <div className="relative my-8">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-white/10"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-4 bg-[#0a0a0f] text-gray-500">또는</span>
+              </div>
             </div>
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-3 px-6 rounded-xl instagram-gradient text-white font-semibold hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  가입 중...
-                </>
-              ) : (
-                '회원가입'
-              )}
-            </button>
-          </form>
-
-          {/* Divider */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300"></div>
+            {/* Login Link */}
+            <div className="text-center">
+              <p className="text-gray-400">
+                이미 계정이 있으신가요?{' '}
+                <Link href="/login" className="font-semibold text-violet-400 hover:text-violet-300 transition-colors">
+                  로그인
+                </Link>
+              </p>
             </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-gray-500">또는</span>
-            </div>
-          </div>
-
-          {/* Login Link */}
-          <div className="text-center">
-            <p className="text-gray-600">
-              이미 계정이 있으신가요?{' '}
-              <Link href="/login" className="font-semibold text-purple-600 hover:text-purple-700">
-                로그인
-              </Link>
-            </p>
           </div>
         </motion.div>
 
@@ -245,10 +331,10 @@ export default function RegisterPage() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.4 }}
-          className="text-center text-sm text-gray-500 mt-8"
+          className="text-center text-sm text-gray-600 mt-8"
         >
-          회원가입하면 <span className="font-semibold">이용약관</span> 및{' '}
-          <span className="font-semibold">개인정보 처리방침</span>에 동의하게 됩니다.
+          회원가입하면 <Link href="/terms" className="font-semibold text-gray-500 hover:text-gray-400 transition-colors">이용약관</Link> 및{' '}
+          <Link href="/terms" className="font-semibold text-gray-500 hover:text-gray-400 transition-colors">개인정보 처리방침</Link>에 동의하게 됩니다.
         </motion.p>
       </div>
     </div>
