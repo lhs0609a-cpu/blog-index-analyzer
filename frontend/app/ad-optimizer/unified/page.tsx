@@ -8,7 +8,8 @@ import {
   DollarSign, Target, AlertCircle, ExternalLink, Clock, Shield,
   Loader2, Filter, Grid, List, Star, Sparkles, ArrowRight, ArrowUpRight,
   ArrowDownRight, PieChart, Activity, Wallet, MousePointer, Eye,
-  ShoppingCart, Percent, Brain, Lightbulb, Award, Flame, Bell, Globe
+  ShoppingCart, Percent, Brain, Lightbulb, Award, Flame, Bell, Globe,
+  HelpCircle, BookOpen, PlayCircle
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
@@ -21,6 +22,8 @@ import {
   AdPlatform,
   PlatformCategory
 } from '../platforms'
+import AdOptimizerTutorial, { TutorialStartButton } from '@/components/ad-optimizer/AdOptimizerTutorial'
+import { FeatureHelpCard, QuickStartGuide } from '@/components/ad-optimizer/FeatureHelpCard'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev'
 
@@ -82,6 +85,16 @@ export default function UnifiedAdOptimizerPage() {
 
   // 인트로 화면 상태
   const [showIntro, setShowIntro] = useState(true)
+
+  // 튜토리얼 상태
+  const [showTutorial, setShowTutorial] = useState(false)
+  const [tutorialCompleted, setTutorialCompleted] = useState(false)
+
+  // 튜토리얼 완료 여부 확인
+  useEffect(() => {
+    const completed = localStorage.getItem('ad_optimizer_tutorial_completed') === 'true'
+    setTutorialCompleted(completed)
+  }, [])
 
   // 대시보드 탭 상태
   const [activeTab, setActiveTab] = useState<DashboardTab>('overview')
@@ -574,29 +587,58 @@ export default function UnifiedAdOptimizerPage() {
             </div>
           </motion.div>
 
-          {/* CTA 버튼 - 눈에 띄는 디자인 */}
+          {/* CTA 버튼 - 튜토리얼과 바로 시작 옵션 */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 1.3 }}
-            className="text-center"
+            className="text-center space-y-4"
           >
+            {/* 튜토리얼 시작 (추천) */}
             <motion.button
               whileHover={{ scale: 1.05, y: -3 }}
               whileTap={{ scale: 0.98 }}
-              onClick={() => setShowIntro(false)}
+              onClick={() => setShowTutorial(true)}
               className="group relative inline-flex items-center gap-3 px-10 py-5 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white text-lg font-bold rounded-2xl shadow-xl shadow-purple-500/30 hover:shadow-2xl hover:shadow-purple-500/40 transition-all duration-300 overflow-hidden"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
-              <Zap className="w-6 h-6 group-hover:rotate-12 transition-transform" />
-              <span>지금 시작하기</span>
+              <BookOpen className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+              <span>5분 만에 설정하기 (튜토리얼)</span>
               <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </motion.button>
+
+            <div className="flex items-center gap-4 justify-center">
+              <span className="text-gray-400 text-sm">또는</span>
+            </div>
+
+            {/* 바로 시작 (경험자용) */}
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setShowIntro(false)}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-white text-gray-700 font-medium rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all"
+            >
+              <Zap className="w-5 h-5 text-purple-500" />
+              <span>바로 시작하기</span>
+              <span className="text-xs text-gray-400">(이미 아시는 분)</span>
+            </motion.button>
+
             <p className="mt-4 text-gray-500 text-sm flex items-center justify-center gap-2">
               <Shield className="w-4 h-4" />
               Pro 플랜에서 이용 가능해요
             </p>
           </motion.div>
+
+          {/* 튜토리얼 모달 */}
+          <AdOptimizerTutorial
+            isOpen={showTutorial}
+            onClose={() => setShowTutorial(false)}
+            onComplete={() => {
+              setShowTutorial(false)
+              setShowIntro(false)
+              setTutorialCompleted(true)
+            }}
+          />
 
           {/* 하단 브랜딩 */}
           <motion.div
@@ -670,6 +712,14 @@ export default function UnifiedAdOptimizerPage() {
             </div>
 
             <div className="flex items-center gap-3">
+              {/* 튜토리얼 버튼 */}
+              <button
+                onClick={() => setShowTutorial(true)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-200 transition-colors"
+              >
+                <HelpCircle className="w-4 h-4" />
+                도움말
+              </button>
               <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg">
                 <Bell className="w-5 h-5" />
               </button>
@@ -715,6 +765,14 @@ export default function UnifiedAdOptimizerPage() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
           >
+            {/* 튜토리얼 배너 - 미완료 시에만 표시 */}
+            {!tutorialCompleted && (
+              <TutorialStartButton
+                onClick={() => setShowTutorial(true)}
+                variant="banner"
+              />
+            )}
+
             {/* 통계 요약 */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <motion.div
@@ -777,13 +835,38 @@ export default function UnifiedAdOptimizerPage() {
               </motion.div>
             </div>
 
+            {/* 퀵 스타트 가이드 - 연동된 플랫폼이 없을 때 표시 */}
+            {totalConnected === 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className="mb-6"
+              >
+                <QuickStartGuide />
+              </motion.div>
+            )}
+
             {/* 고급 최적화 도구 */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
+              transition={{ delay: totalConnected === 0 ? 0.5 : 0.4 }}
               className="mb-6"
             >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-indigo-500" />
+                  고급 최적화 도구
+                </h3>
+                <button
+                  onClick={() => setShowTutorial(true)}
+                  className="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+                >
+                  <HelpCircle className="w-4 h-4" />
+                  사용 방법 보기
+                </button>
+              </div>
               <Link href="/ad-optimizer/hourly-bidding">
                 <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all cursor-pointer group">
                   <div className="flex items-center justify-between">
@@ -1578,10 +1661,13 @@ export default function UnifiedAdOptimizerPage() {
               {/* 예산 배분 리스트 */}
               <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm overflow-hidden">
                 <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-                  <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                    <PieChart className="w-5 h-5 text-indigo-500" />
-                    플랫폼별 예산 배분
-                  </h3>
+                  <div className="flex items-center gap-3">
+                    <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                      <PieChart className="w-5 h-5 text-indigo-500" />
+                      플랫폼별 예산 배분
+                    </h3>
+                    <FeatureHelpCard featureId="budget-reallocation" variant="button" />
+                  </div>
                   <button className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity flex items-center gap-2">
                     <Sparkles className="w-4 h-4" />
                     AI 최적화 적용
@@ -1756,6 +1842,13 @@ export default function UnifiedAdOptimizerPage() {
             </div>
 
             {/* 인사이트 리스트 */}
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                <Brain className="w-5 h-5 text-indigo-500" />
+                AI 분석 결과
+              </h3>
+              <FeatureHelpCard featureId="anomaly-detection" variant="button" />
+            </div>
             <div className="space-y-4">
               {aiInsights.map((insight, idx) => (
                 <motion.div
@@ -1941,6 +2034,28 @@ export default function UnifiedAdOptimizerPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* 플로팅 도움말 버튼 */}
+      <motion.button
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+        transition={{ delay: 1, type: 'spring' }}
+        onClick={() => setShowTutorial(true)}
+        className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-full shadow-lg hover:shadow-xl flex items-center justify-center transition-all z-40 hover:scale-110 group"
+        title="도움말 및 설정 가이드"
+      >
+        <HelpCircle className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+      </motion.button>
+
+      {/* 튜토리얼 모달 (대시보드용) */}
+      <AdOptimizerTutorial
+        isOpen={showTutorial}
+        onClose={() => setShowTutorial(false)}
+        onComplete={() => {
+          setShowTutorial(false)
+          setTutorialCompleted(true)
+        }}
+      />
     </div>
   )
 }
