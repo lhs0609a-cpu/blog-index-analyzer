@@ -8,6 +8,8 @@ import {
   PlatformSupportBanner,
   FEATURE_PLATFORMS,
   FEATURE_DESCRIPTIONS,
+  PLATFORM_STYLES,
+  PlatformTabs,
 } from "@/components/ad-optimizer/PlatformSupportBanner";
 
 interface AnomalyAlert {
@@ -377,18 +379,32 @@ export default function AnomalyDetectionPage() {
         {/* Alerts Tab */}
         {activeTab === "alerts" && (
           <div>
+            {/* Platform Tabs - 플랫폼별 고유 디자인 적용 */}
+            <div className="mb-4">
+              <div className="flex gap-2 flex-wrap">
+                {["naver", "google", "meta", "kakao"].map((platformId) => {
+                  const style = PLATFORM_STYLES[platformId];
+                  const isSelected = selectedPlatform === platformId;
+                  return (
+                    <button
+                      key={platformId}
+                      onClick={() => setSelectedPlatform(platformId)}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                        isSelected
+                          ? `${style?.bgSolid} text-white shadow-lg`
+                          : `${style?.bgGradient} ${style?.textColor} border ${style?.borderColor} hover:scale-105`
+                      }`}
+                    >
+                      <span className="text-lg">{style?.icon}</span>
+                      <span>{style?.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Filters */}
             <div className="flex flex-wrap gap-3 mb-4">
-              <select
-                value={selectedPlatform}
-                onChange={(e) => setSelectedPlatform(e.target.value)}
-                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2"
-              >
-                <option value="naver">네이버</option>
-                <option value="google">구글</option>
-                <option value="meta">메타</option>
-                <option value="kakao">카카오</option>
-              </select>
               <select
                 value={severityFilter}
                 onChange={(e) => setSeverityFilter(e.target.value)}

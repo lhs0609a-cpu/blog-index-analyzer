@@ -63,17 +63,20 @@ export default function ChallengePage() {
       // 상태 조회 (로그인 필요)
       if (isAuthenticated) {
         const token = localStorage.getItem('auth_token')
-        const statusRes = await fetch(`${API_BASE}/api/challenge/status`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        if (statusRes.ok) {
-          const data = await statusRes.json()
-          if (data.success) {
-            setStatus(data)
+        if (token) {
+          const statusRes = await fetch(`${API_BASE}/api/challenge/status`, {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+          if (statusRes.ok) {
+            const data = await statusRes.json()
+            if (data.success) {
+              setStatus(data)
+            }
+          } else if (statusRes.status === 401) {
+            // 토큰 만료 - 로컬 스토리지 정리 (로그인 페이지로 리다이렉트하지 않고 비로그인 상태로 전환)
+            console.log('Challenge status: Authentication failed - clearing token')
+            localStorage.removeItem('auth_token')
           }
-        } else if (statusRes.status === 401) {
-          // 토큰 만료 등으로 인증 실패 시 - 로그인 페이지로 리다이렉트하지 않고 무시
-          console.log('Challenge status: Authentication failed')
         }
       }
     } catch (error) {
@@ -112,6 +115,7 @@ export default function ChallengePage() {
       })
 
       if (res.status === 401) {
+        localStorage.removeItem('auth_token')
         toast.error('로그인이 만료되었습니다. 다시 로그인해주세요.')
         router.push('/login?redirect=/challenge')
         return

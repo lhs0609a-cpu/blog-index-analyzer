@@ -15,6 +15,8 @@ import {
   PlatformSupportBanner,
   FEATURE_PLATFORMS,
   FEATURE_DESCRIPTIONS,
+  PLATFORM_STYLES,
+  PlatformBadge,
 } from "@/components/ad-optimizer/PlatformSupportBanner"
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev'
@@ -44,13 +46,11 @@ const STAGE_STYLES: Record<string, { bg: string; text: string; border: string; i
   }
 }
 
-// 플랫폼 아이콘
-const PLATFORM_ICONS: Record<string, string> = {
-  naver: '🟢',
-  google: '🔵',
-  meta: '🔷',
-  kakao: '🟡'
-}
+// 플랫폼 아이콘 - PLATFORM_STYLES에서 가져옴
+const getPlatformIcon = (platform: string) => {
+  const style = PLATFORM_STYLES[platform];
+  return style?.icon || '📊';
+};
 
 interface Campaign {
   campaign_id: string
@@ -643,7 +643,7 @@ export default function FunnelBiddingPage() {
                               </span>
                             </div>
                             <p className="text-sm text-gray-500">
-                              {PLATFORM_ICONS[campaign.platform]} {campaign.platform} · {campaign.objective}
+                              {getPlatformIcon(campaign.platform)} {campaign.platform} · {campaign.objective}
                             </p>
                           </div>
                         </div>

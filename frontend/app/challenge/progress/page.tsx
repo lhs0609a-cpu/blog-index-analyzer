@@ -67,10 +67,29 @@ export default function ProgressPage() {
     setLoading(true)
     try {
       const token = localStorage.getItem('auth_token')
+
+      // 토큰이 없으면 바로 리다이렉트
+      if (!token) {
+        toast.error('로그인이 필요합니다')
+        router.push('/login?redirect=/challenge/progress')
+        return
+      }
+
       const headers = { Authorization: `Bearer ${token}` }
 
       // 진행률 조회
       const progressRes = await fetch(`${API_BASE}/api/challenge/progress`, { headers })
+
+      // 401 에러 처리
+      if (!progressRes.ok) {
+        if (progressRes.status === 401) {
+          localStorage.removeItem('auth_token')
+          toast.error('로그인이 만료되었습니다. 다시 로그인해주세요.')
+          router.push('/login?redirect=/challenge/progress')
+        }
+        return
+      }
+
       const progressJson = await progressRes.json()
 
       if (progressJson.success) {
@@ -92,7 +111,7 @@ export default function ProgressPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [router])
 
   useEffect(() => {
     if (!isAuthenticated) {

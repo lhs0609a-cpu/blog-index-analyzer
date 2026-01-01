@@ -7,6 +7,7 @@ import {
   PlatformSupportBanner,
   FEATURE_PLATFORMS,
   FEATURE_DESCRIPTIONS,
+  PLATFORM_STYLES,
 } from "@/components/ad-optimizer/PlatformSupportBanner";
 
 interface FatigueSummary {
@@ -233,18 +234,35 @@ export default function CreativeFatiguePage() {
             </p>
           </div>
           <div className="flex items-center gap-4">
-            <select
-              value={adAccountId}
-              onChange={(e) => setAdAccountId(e.target.value)}
-              className="border rounded-lg px-4 py-2"
-            >
-              <optgroup label="Meta (Facebook/Instagram)">
-                <option value="meta_default">🔷 Meta 기본 계정</option>
-              </optgroup>
-              <optgroup label="TikTok Ads">
-                <option value="tiktok_default">🎵 TikTok 기본 계정</option>
-              </optgroup>
-            </select>
+            {/* 플랫폼 선택 - 고유 브랜드 스타일 */}
+            <div className="flex gap-2 p-1 bg-gray-100 rounded-xl">
+              {[
+                { id: "meta_default", key: "meta", name: "Meta", subtext: "Facebook/Instagram" },
+                { id: "tiktok_default", key: "tiktok", name: "TikTok", subtext: "TikTok Ads" },
+              ].map((platform) => {
+                const style = PLATFORM_STYLES[platform.key];
+                const isSelected = adAccountId === platform.id;
+                return (
+                  <button
+                    key={platform.id}
+                    onClick={() => setAdAccountId(platform.id)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                      isSelected
+                        ? `${style?.bgSolid} text-white shadow-lg`
+                        : `text-gray-600 hover:bg-gray-200`
+                    }`}
+                  >
+                    <span className="text-lg">{style?.icon}</span>
+                    <div className="text-left">
+                      <div>{platform.name}</div>
+                      <div className={`text-xs ${isSelected ? 'text-white/70' : 'text-gray-400'}`}>
+                        {platform.subtext}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
             <button
               onClick={runAnalysis}
               disabled={analyzing}

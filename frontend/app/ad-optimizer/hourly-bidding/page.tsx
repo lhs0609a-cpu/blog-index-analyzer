@@ -29,6 +29,7 @@ import {
   PlatformSupportBanner,
   FEATURE_PLATFORMS,
   FEATURE_DESCRIPTIONS,
+  PLATFORM_STYLES,
 } from "@/components/ad-optimizer/PlatformSupportBanner";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://naverpay-delivery-tracker.fly.dev";
@@ -331,17 +332,32 @@ export default function HourlyBiddingPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* 플랫폼 선택 */}
-            <select
-              value={selectedPlatform}
-              onChange={(e) => setSelectedPlatform(e.target.value)}
-              className="bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="naver_searchad">🟢 네이버 검색광고</option>
-              <option value="google_ads">🔵 구글 Ads</option>
-              <option value="meta_ads">🔷 메타 광고</option>
-              <option value="kakao_moment">💛 카카오모먼트</option>
-            </select>
+            {/* 플랫폼 선택 - 고유 브랜드 스타일 적용 */}
+            <div className="flex gap-1.5 bg-white/5 rounded-xl p-1">
+              {[
+                { id: "naver_searchad", key: "naver", name: "네이버" },
+                { id: "google_ads", key: "google", name: "구글" },
+                { id: "meta_ads", key: "meta", name: "메타" },
+                { id: "kakao_moment", key: "kakao", name: "카카오" },
+              ].map((platform) => {
+                const style = PLATFORM_STYLES[platform.key];
+                const isSelected = selectedPlatform === platform.id;
+                return (
+                  <button
+                    key={platform.id}
+                    onClick={() => setSelectedPlatform(platform.id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-sm transition-all ${
+                      isSelected
+                        ? `${style?.bgSolid} text-white shadow-lg`
+                        : `text-gray-400 hover:text-white ${style?.hoverBg}`
+                    }`}
+                  >
+                    <span>{style?.icon}</span>
+                    <span>{platform.name}</span>
+                  </button>
+                );
+              })}
+            </div>
             <button
               onClick={autoOptimize}
               className="flex items-center gap-2 px-4 py-2 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors"

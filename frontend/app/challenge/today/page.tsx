@@ -69,6 +69,14 @@ export default function TodayMissionPage() {
     setLoading(true)
     try {
       const token = localStorage.getItem('auth_token')
+
+      // 토큰이 없으면 바로 리다이렉트
+      if (!token) {
+        toast.error('로그인이 필요합니다')
+        router.push('/login?redirect=/challenge/today')
+        return
+      }
+
       const headers = { Authorization: `Bearer ${token}` }
 
       // 오늘의 미션 조회
@@ -76,7 +84,9 @@ export default function TodayMissionPage() {
       // API 응답 상태 체크
       if (!todayRes.ok) {
         if (todayRes.status === 401) {
-          toast.error('로그인이 필요합니다')
+          // 토큰 만료 - 로컬스토리지 정리
+          localStorage.removeItem('auth_token')
+          toast.error('로그인이 만료되었습니다. 다시 로그인해주세요.')
           router.push('/login?redirect=/challenge/today')
         }
         return
@@ -86,6 +96,7 @@ export default function TodayMissionPage() {
 
       if (!todayJson.success) {
         if (todayJson.redirect === 'start') {
+          // 챌린지를 시작하지 않은 상태 - 조용히 리다이렉트
           router.push('/challenge')
         }
         return
@@ -93,8 +104,8 @@ export default function TodayMissionPage() {
 
       // missions가 배열인지 확인
       if (!todayJson.missions || !Array.isArray(todayJson.missions)) {
-        console.error('Invalid missions data:', todayJson)
-        toast.error('미션 데이터를 불러오는데 실패했습니다')
+        // 디버그용 로그만 남기고 토스트는 표시하지 않음 (리다이렉트 케이스 처리됨)
+        console.warn('Missions data not available:', todayJson)
         return
       }
 

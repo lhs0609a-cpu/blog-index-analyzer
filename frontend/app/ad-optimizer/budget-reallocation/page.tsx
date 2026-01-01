@@ -8,6 +8,9 @@ import {
   PlatformSupportBanner,
   FEATURE_PLATFORMS,
   FEATURE_DESCRIPTIONS,
+  PLATFORM_STYLES,
+  PlatformCard,
+  PlatformBadge,
 } from "@/components/ad-optimizer/PlatformSupportBanner";
 
 interface PlatformHealth {
@@ -419,68 +422,95 @@ export default function BudgetReallocationPage() {
                   </div>
                 )}
 
-                {/* Platform Cards */}
+                {/* Platform Cards - 플랫폼별 고유 디자인 적용 */}
                 <div className="grid md:grid-cols-2 gap-4">
-                  {healthData?.platforms?.map((platform) => (
-                    <div
-                      key={platform.platform_id}
-                      className="bg-gray-800 rounded-lg p-4 border border-gray-700"
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="font-semibold text-lg">{platform.platform_name}</h3>
-                        <span className={`font-medium ${getStatusColor(platform.status)}`}>
-                          {getStatusLabel(platform.status)}
-                        </span>
-                      </div>
+                  {healthData?.platforms?.map((platform) => {
+                    const style = PLATFORM_STYLES[platform.platform_id];
+                    const defaultStyle = {
+                      bgGradient: "bg-gray-800",
+                      borderColor: "border-gray-700",
+                      textColor: "text-white",
+                      accentColor: "#6B7280",
+                      iconBg: "bg-gray-700",
+                      icon: "📊",
+                    };
+                    const platformStyle = style || defaultStyle;
 
-                      {/* Efficiency Bar */}
-                      <div className="mb-4">
-                        <div className="flex justify-between text-sm text-gray-400 mb-1">
-                          <span>효율성 점수</span>
-                          <span>{platform.efficiency_score.toFixed(0)}점</span>
+                    return (
+                      <div
+                        key={platform.platform_id}
+                        className={`${platformStyle.bgGradient} rounded-xl p-5 border ${platformStyle.borderColor} transition-all hover:shadow-lg hover:shadow-${platform.platform_id === 'naver' ? '[#03C75A]/10' : platform.platform_id === 'google' ? '[#4285F4]/10' : platform.platform_id === 'meta' ? '[#0866FF]/10' : platform.platform_id === 'kakao' ? '[#FEE500]/10' : platform.platform_id === 'coupang' ? '[#E81E25]/10' : 'gray-900/20'}`}
+                      >
+                        {/* Platform Header */}
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className={`${style?.iconBg || 'bg-gray-700'} p-2.5 rounded-xl`}>
+                              <span className="text-2xl">{style?.icon || '📊'}</span>
+                            </div>
+                            <div>
+                              <h3 className={`font-bold text-lg ${platformStyle.textColor}`}>
+                                {platform.platform_name}
+                              </h3>
+                              <span className={`text-xs font-medium ${getStatusColor(platform.status)} bg-${platform.status === 'excellent' ? 'green' : platform.status === 'good' ? 'blue' : platform.status === 'fair' ? 'yellow' : 'red'}-500/20 px-2 py-0.5 rounded-full`}>
+                                {getStatusLabel(platform.status)}
+                              </span>
+                            </div>
+                          </div>
+                          <div className={`text-3xl font-bold ${platformStyle.textColor}`}>
+                            {platform.efficiency_score.toFixed(0)}
+                            <span className="text-sm font-normal text-gray-400">점</span>
+                          </div>
                         </div>
-                        <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full ${
-                              platform.efficiency_score >= 70
-                                ? "bg-green-500"
-                                : platform.efficiency_score >= 40
-                                ? "bg-yellow-500"
-                                : "bg-red-500"
-                            }`}
-                            style={{ width: `${platform.efficiency_score}%` }}
-                          />
-                        </div>
-                      </div>
 
-                      {/* Metrics */}
-                      <div className="grid grid-cols-2 gap-3 text-sm mb-3">
-                        <div>
-                          <span className="text-gray-400">예산 비중</span>
-                          <span className="float-right">{platform.budget_share}%</span>
+                        {/* Efficiency Bar - 플랫폼 색상 적용 */}
+                        <div className="mb-4">
+                          <div className="flex justify-between text-sm text-gray-400 mb-1">
+                            <span>효율성</span>
+                            <span>{platform.efficiency_ratio.toFixed(2)}x</span>
+                          </div>
+                          <div className="h-2.5 bg-gray-700/50 rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{
+                                width: `${Math.min(platform.efficiency_score, 100)}%`,
+                                backgroundColor: style?.accentColor || '#6B7280'
+                              }}
+                            />
+                          </div>
                         </div>
-                        <div>
-                          <span className="text-gray-400">매출 비중</span>
-                          <span className="float-right">{platform.revenue_share}%</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">ROAS</span>
-                          <span className="float-right">{platform.metrics.roas}%</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">CPA</span>
-                          <span className="float-right">
-                            {platform.metrics.cpa ? `${formatCurrency(platform.metrics.cpa)}원` : "-"}
-                          </span>
-                        </div>
-                      </div>
 
-                      {/* Recommendation */}
-                      <div className="text-sm text-blue-400 border-t border-gray-700 pt-3">
-                        {platform.recommendation}
+                        {/* Metrics Grid - 플랫폼 색상 적용 */}
+                        <div className="grid grid-cols-2 gap-3 text-sm mb-4">
+                          <div className="bg-black/20 rounded-lg p-2.5">
+                            <span className="text-gray-400 text-xs">예산 비중</span>
+                            <div className={`font-bold ${platformStyle.textColor}`}>{platform.budget_share}%</div>
+                          </div>
+                          <div className="bg-black/20 rounded-lg p-2.5">
+                            <span className="text-gray-400 text-xs">매출 비중</span>
+                            <div className={`font-bold ${platformStyle.textColor}`}>{platform.revenue_share}%</div>
+                          </div>
+                          <div className="bg-black/20 rounded-lg p-2.5">
+                            <span className="text-gray-400 text-xs">ROAS</span>
+                            <div className={`font-bold ${platform.metrics.roas >= 300 ? 'text-green-400' : platform.metrics.roas >= 150 ? platformStyle.textColor : 'text-red-400'}`}>
+                              {platform.metrics.roas}%
+                            </div>
+                          </div>
+                          <div className="bg-black/20 rounded-lg p-2.5">
+                            <span className="text-gray-400 text-xs">CPA</span>
+                            <div className="font-bold text-white">
+                              {platform.metrics.cpa ? `₩${formatCurrency(platform.metrics.cpa)}` : "-"}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Recommendation - 플랫폼 색상 테두리 적용 */}
+                        <div className={`text-sm border-t border-gray-600/50 pt-3`}>
+                          <span className={`${platformStyle.textColor} font-medium`}>💡 </span>
+                          <span className="text-gray-300">{platform.recommendation}</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </>
             )}
@@ -532,53 +562,101 @@ export default function BudgetReallocationPage() {
                 </div>
 
                 <div className="space-y-3">
-                  {plan.reallocations.map((realloc) => (
-                    <div
-                      key={realloc.platform_id}
-                      className="bg-gray-700 rounded-lg p-4 flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-4">
-                        <span
-                          className={`px-2 py-1 rounded text-xs ${getPriorityColor(realloc.priority)}`}
-                        >
-                          {realloc.priority === "high"
-                            ? "우선"
-                            : realloc.priority === "medium"
-                            ? "보통"
-                            : realloc.priority === "low"
-                            ? "낮음"
-                            : "제외"}
-                        </span>
-                        <div>
-                          <div className="font-medium">{realloc.platform_name}</div>
-                          <div className="text-sm text-gray-400">{realloc.reason}</div>
+                  {plan.reallocations.map((realloc) => {
+                    const style = PLATFORM_STYLES[realloc.platform_id];
+                    const isIncrease = realloc.change_amount > 0;
+                    const isDecrease = realloc.change_amount < 0;
+
+                    return (
+                      <div
+                        key={realloc.platform_id}
+                        className={`${style?.bgGradient || 'bg-gray-700'} rounded-xl p-4 border ${style?.borderColor || 'border-gray-600'} transition-all hover:scale-[1.01]`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            {/* Platform Icon */}
+                            <div className={`${style?.iconBg || 'bg-gray-600'} p-2 rounded-xl`}>
+                              <span className="text-xl">{style?.icon || '📊'}</span>
+                            </div>
+
+                            {/* Priority Badge */}
+                            <span
+                              className={`px-2.5 py-1 rounded-lg text-xs font-medium ${getPriorityColor(realloc.priority)}`}
+                            >
+                              {realloc.priority === "high"
+                                ? "🔥 우선"
+                                : realloc.priority === "medium"
+                                ? "📈 보통"
+                                : realloc.priority === "low"
+                                ? "📉 낮음"
+                                : "⏸️ 제외"}
+                            </span>
+
+                            <div>
+                              <div className={`font-bold ${style?.textColor || 'text-white'}`}>
+                                {realloc.platform_name}
+                              </div>
+                              <div className="text-sm text-gray-400">{realloc.reason}</div>
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <div className="text-gray-400 text-sm">
+                              ₩{formatCurrency(realloc.current_budget)}
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-gray-500">→</span>
+                              <span className={`font-bold text-lg ${style?.textColor || 'text-white'}`}>
+                                ₩{formatCurrency(realloc.suggested_budget)}
+                              </span>
+                              <span
+                                className={`text-sm font-medium px-2 py-0.5 rounded-full ${
+                                  isIncrease
+                                    ? "text-green-400 bg-green-500/20"
+                                    : isDecrease
+                                    ? "text-red-400 bg-red-500/20"
+                                    : "text-gray-400 bg-gray-500/20"
+                                }`}
+                              >
+                                {isIncrease ? "↑" : isDecrease ? "↓" : "−"}
+                                {Math.abs(realloc.change_percent).toFixed(1)}%
+                              </span>
+                            </div>
+                          </div>
                         </div>
+
+                        {/* Expected Impact */}
+                        {realloc.expected_impact && (
+                          <div className="grid grid-cols-4 gap-2 mt-3 pt-3 border-t border-gray-600/30">
+                            <div className="text-center">
+                              <div className="text-xs text-gray-500">노출수</div>
+                              <div className={`text-sm font-medium ${style?.textColor || 'text-white'}`}>
+                                +{formatCurrency(realloc.expected_impact.impressions)}
+                              </div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-xs text-gray-500">클릭수</div>
+                              <div className={`text-sm font-medium ${style?.textColor || 'text-white'}`}>
+                                +{formatCurrency(realloc.expected_impact.clicks)}
+                              </div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-xs text-gray-500">전환수</div>
+                              <div className={`text-sm font-medium ${style?.textColor || 'text-white'}`}>
+                                +{realloc.expected_impact.conversions}
+                              </div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-xs text-gray-500">예상 매출</div>
+                              <div className="text-sm font-medium text-green-400">
+                                +₩{formatCurrency(realloc.expected_impact.revenue)}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <div className="text-right">
-                        <div className="text-gray-400 text-sm">
-                          {formatCurrency(realloc.current_budget)}원
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-400">→</span>
-                          <span className="font-medium">
-                            {formatCurrency(realloc.suggested_budget)}원
-                          </span>
-                          <span
-                            className={`text-sm ${
-                              realloc.change_amount > 0
-                                ? "text-green-400"
-                                : realloc.change_amount < 0
-                                ? "text-red-400"
-                                : "text-gray-400"
-                            }`}
-                          >
-                            ({realloc.change_amount > 0 ? "+" : ""}
-                            {realloc.change_percent.toFixed(1)}%)
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

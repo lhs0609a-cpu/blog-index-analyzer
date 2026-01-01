@@ -959,20 +959,30 @@ export default function UnifiedAdOptimizerPage() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-4 py-3 text-left font-medium text-gray-600">기능</th>
-                      <th className="px-3 py-3 text-center font-medium text-gray-600">
-                        <span className="flex items-center justify-center gap-1">🟢 네이버</span>
+                      <th className="px-3 py-3 text-center">
+                        <span className="flex items-center justify-center gap-1 px-2 py-1 bg-[#03C75A]/10 rounded-lg text-[#03C75A] font-semibold text-sm">
+                          🟢 네이버
+                        </span>
                       </th>
-                      <th className="px-3 py-3 text-center font-medium text-gray-600">
-                        <span className="flex items-center justify-center gap-1">🔵 구글</span>
+                      <th className="px-3 py-3 text-center">
+                        <span className="flex items-center justify-center gap-1 px-2 py-1 bg-[#4285F4]/10 rounded-lg text-[#4285F4] font-semibold text-sm">
+                          🔵 구글
+                        </span>
                       </th>
-                      <th className="px-3 py-3 text-center font-medium text-gray-600">
-                        <span className="flex items-center justify-center gap-1">🔷 메타</span>
+                      <th className="px-3 py-3 text-center">
+                        <span className="flex items-center justify-center gap-1 px-2 py-1 bg-[#0866FF]/10 rounded-lg text-[#0866FF] font-semibold text-sm">
+                          🔷 메타
+                        </span>
                       </th>
-                      <th className="px-3 py-3 text-center font-medium text-gray-600">
-                        <span className="flex items-center justify-center gap-1">💛 카카오</span>
+                      <th className="px-3 py-3 text-center">
+                        <span className="flex items-center justify-center gap-1 px-2 py-1 bg-[#FEE500]/30 rounded-lg text-[#3C1E1E] font-semibold text-sm">
+                          💛 카카오
+                        </span>
                       </th>
-                      <th className="px-3 py-3 text-center font-medium text-gray-600">
-                        <span className="flex items-center justify-center gap-1">🎵 틱톡</span>
+                      <th className="px-3 py-3 text-center">
+                        <span className="flex items-center justify-center gap-1 px-2 py-1 bg-gradient-to-r from-[#00F2EA]/20 to-[#FF0050]/20 rounded-lg text-[#00F2EA] font-semibold text-sm">
+                          🎵 틱톡
+                        </span>
                       </th>
                     </tr>
                   </thead>
