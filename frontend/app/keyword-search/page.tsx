@@ -255,7 +255,7 @@ function KeywordSearchContent() {
   const [keywordStatuses, setKeywordStatuses] = useState<KeywordSearchStatus[]>([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [activeTab, setActiveTab] = useState<string>('input')
-  const [quickMode, setQuickMode] = useState(true) // 빠른 모드 (상위 5개만 분석, 기본 활성화)
+  // quickMode 제거 - 항상 전체 13개 블로그 분석
 
   // 단일 키워드 검색용 (하위 호환성)
   const [keyword, setKeyword] = useState('')
@@ -357,7 +357,7 @@ function KeywordSearchContent() {
       }, 3000)
 
       const response = await fetch(
-        `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(searchKeyword)}&limit=13&analyze_content=true&quick_mode=${quickMode}`,
+        `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(searchKeyword)}&limit=13&analyze_content=true&quick_mode=false`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -473,7 +473,7 @@ function KeywordSearchContent() {
         )
 
         const response = await fetch(
-          `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(keyword)}&limit=13&analyze_content=true&quick_mode=${quickMode}`,
+          `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(keyword)}&limit=13&analyze_content=true&quick_mode=false`,
           {
             method: 'POST',
             headers: {
@@ -975,7 +975,7 @@ function KeywordSearchContent() {
       }, 500)
 
       const response = await fetch(
-        `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(clickedKeyword)}&limit=13&analyze_content=true&quick_mode=${quickMode}`,
+        `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(clickedKeyword)}&limit=13&analyze_content=true&quick_mode=false`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1234,27 +1234,10 @@ function KeywordSearchContent() {
               </p>
             </div>
 
-            {/* 빠른 모드 토글 */}
-            <div className="mb-4 flex items-center gap-3">
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={quickMode}
-                  onChange={(e) => setQuickMode(e.target.checked)}
-                  className="sr-only peer"
-                  disabled={isAnalyzing}
-                />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-100 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
-                <span className="ms-3 text-sm font-medium text-gray-700">
-                  ⚡ 빠른 모드
-                </span>
-              </label>
-              <span className="text-xs text-gray-500">
-                {quickMode
-                  ? '상위 5개 블로그만 분석 (2-3배 빠름)'
-                  : '전체 13개 블로그 분석 (상세 분석)'
-                }
-              </span>
+            {/* 전체 13개 블로그 분석 안내 */}
+            <div className="mb-4 flex items-center gap-2 text-sm text-gray-600">
+              <span className="text-green-500">✓</span>
+              <span>상위 13개 블로그 전체 분석 (상세 분석)</span>
             </div>
 
             <button
