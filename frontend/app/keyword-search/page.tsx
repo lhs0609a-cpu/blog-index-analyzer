@@ -462,8 +462,12 @@ function KeywordSearchContent() {
     setIsAnalyzing(true)
     setError('')
 
-    // 각 키워드를 병렬로 검색
-    const searchPromises = keywords.map(async (keyword, index) => {
+    // 동시 요청 수 제한 (서버 과부하 방지)
+    // 각 키워드당 ~40-50개의 HTTP 요청이 발생하므로 동시 요청을 3개로 제한
+    const MAX_CONCURRENT = 3
+
+    // 단일 키워드 검색 함수
+    const searchSingleKeyword = async (keyword: string, index: number) => {
       try {
         // 상태를 loading으로 업데이트
         setKeywordStatuses(prev =>
@@ -510,10 +514,30 @@ function KeywordSearchContent() {
           )
         )
       }
-    })
+    }
 
-    // 모든 검색 완료 대기
-    await Promise.all(searchPromises)
+    // 동시 요청 수 제한하여 병렬 처리
+    const processWithConcurrencyLimit = async () => {
+      const queue = keywords.map((keyword, index) => ({ keyword, index }))
+      const executing: Promise<void>[] = []
+
+      for (const { keyword, index } of queue) {
+        const promise = searchSingleKeyword(keyword, index).then(() => {
+          executing.splice(executing.indexOf(promise), 1)
+        })
+        executing.push(promise)
+
+        // 동시 실행 수가 제한에 도달하면 하나가 완료될 때까지 대기
+        if (executing.length >= MAX_CONCURRENT) {
+          await Promise.race(executing)
+        }
+      }
+
+      // 남은 모든 요청 완료 대기
+      await Promise.all(executing)
+    }
+
+    await processWithConcurrencyLimit()
     setIsAnalyzing(false)
 
     // 첫 번째 키워드에 대해 연관 키워드 조회 및 학습 데이터 수집
