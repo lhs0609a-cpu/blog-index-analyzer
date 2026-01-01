@@ -142,7 +142,7 @@ export const AD_PLATFORMS: AdPlatform[] = [
     nameKo: '틱톡 광고',
     category: 'social',
     icon: '🎵',
-    color: 'from-pink-500 to-rose-600',
+    color: 'from-cyan-400 via-black to-pink-500',
     description: 'MZ세대 타겟, 숏폼 영상 광고',
     features: ['영상 성과 분석', '오디언스 최적화', '입찰가 자동 조정', '트렌드 해시태그 분석'],
     apiAvailable: true,
