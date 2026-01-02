@@ -55,38 +55,133 @@ auto_learning_state = {
 
 
 def get_next_keywords(count: int) -> List[str]:
-    """다음 학습할 키워드 선택 (DB 기반, 중복 방지)"""
+    """다음 학습할 키워드 선택 (DB 기반, 중복 방지 강화)"""
     try:
         from database.learning_db import (
             get_next_keywords_from_pool,
             get_keyword_learning_stats,
-            initialize_default_keyword_pool
+            initialize_default_keyword_pool,
+            get_unlearned_keywords,
+            add_to_keyword_pool
         )
 
         # 키워드 풀 상태 확인
         stats = get_keyword_learning_stats()
 
-        # 키워드 풀이 비어있으면 초기화
+        # 키워드 풀이 비어있거나 미학습 키워드가 부족하면 초기화/확장
         if stats.get("total_pool", 0) == 0:
             logger.info("[AutoLearn] Initializing keyword pool...")
             added = initialize_default_keyword_pool()
             logger.info(f"[AutoLearn] Added {added} keywords to pool")
+        elif stats.get("never_learned", 0) < 50:
+            # 미학습 키워드가 50개 미만이면 새 키워드 추가
+            logger.info("[AutoLearn] Adding more keywords to pool...")
+            _add_trending_keywords()
 
-        # 학습할 키워드 가져오기 (최소 1일 경과)
-        keywords = get_next_keywords_from_pool(count, min_days_since_last=1)
+        # 1순위: 한 번도 학습 안된 키워드만 가져오기
+        keywords = get_unlearned_keywords(limit=count)
 
-        if not keywords:
-            # 모든 키워드가 최근에 학습됨 -> 가장 오래된 것 가져오기
-            logger.info("[AutoLearn] All keywords recently learned, getting oldest...")
-            keywords = get_next_keywords_from_pool(count, min_days_since_last=0)
+        if keywords:
+            logger.info(f"[AutoLearn] Found {len(keywords)} unlearned keywords")
+            return keywords
 
-        logger.debug(f"[AutoLearn] Next keywords: {keywords}")
-        return keywords
+        # 2순위: 30일 이상 경과한 키워드 (재학습)
+        keywords = get_next_keywords_from_pool(count, min_days_since_last=30)
+
+        if keywords:
+            logger.info(f"[AutoLearn] Relearning old keywords (30+ days): {keywords}")
+            return keywords
+
+        # 3순위: 새 키워드 자동 생성 후 학습
+        logger.info("[AutoLearn] All keywords learned, generating new keywords...")
+        new_keywords = _generate_new_keywords(count)
+        for kw in new_keywords:
+            add_to_keyword_pool(kw, category="auto_generated", source="auto", priority=5)
+        return new_keywords
 
     except Exception as e:
         logger.error(f"[AutoLearn] Error getting next keywords: {e}")
-        # 폴백: 기본 키워드 반환
-        return ["강남맛집", "제주여행", "임플란트"][:count]
+        import traceback
+        traceback.print_exc()
+        # 폴백: 랜덤 키워드 생성
+        return _generate_new_keywords(count)
+
+
+def _add_trending_keywords():
+    """트렌딩/인기 키워드 추가"""
+    try:
+        from database.learning_db import add_to_keyword_pool
+
+        # 다양한 카테고리의 키워드 추가
+        trending_keywords = [
+            # 뷰티/화장품
+            ("선크림추천", "뷰티"), ("파운데이션추천", "뷰티"), ("립스틱추천", "뷰티"),
+            ("스킨케어", "뷰티"), ("클렌징폼", "뷰티"), ("토너추천", "뷰티"),
+            ("세럼추천", "뷰티"), ("마스크팩", "뷰티"), ("아이라이너", "뷰티"),
+            # 맛집
+            ("강남맛집", "맛집"), ("홍대맛집", "맛집"), ("이태원맛집", "맛집"),
+            ("성수맛집", "맛집"), ("여의도맛집", "맛집"), ("판교맛집", "맛집"),
+            ("분당맛집", "맛집"), ("일산맛집", "맛집"), ("수원맛집", "맛집"),
+            # 여행
+            ("제주여행", "여행"), ("부산여행", "여행"), ("강릉여행", "여행"),
+            ("경주여행", "여행"), ("전주여행", "여행"), ("속초여행", "여행"),
+            ("일본여행", "여행"), ("베트남여행", "여행"), ("태국여행", "여행"),
+            # 건강/의료
+            ("다이어트", "건강"), ("헬스장추천", "건강"), ("필라테스", "건강"),
+            ("요가", "건강"), ("영양제추천", "건강"), ("비타민추천", "건강"),
+            # IT/전자
+            ("노트북추천", "IT"), ("스마트폰추천", "IT"), ("태블릿추천", "IT"),
+            ("이어폰추천", "IT"), ("모니터추천", "IT"), ("키보드추천", "IT"),
+            # 육아/교육
+            ("영어학원", "교육"), ("수학학원", "교육"), ("유아교육", "교육"),
+            ("어린이집", "교육"), ("초등학교", "교육"), ("중학교", "교육"),
+            # 반려동물
+            ("강아지사료", "반려동물"), ("고양이사료", "반려동물"), ("동물병원", "반려동물"),
+            # 인테리어
+            ("인테리어", "인테리어"), ("가구추천", "인테리어"), ("조명추천", "인테리어"),
+            # 자동차
+            ("자동차추천", "자동차"), ("전기차", "자동차"), ("타이어추천", "자동차"),
+        ]
+
+        added = 0
+        for keyword, category in trending_keywords:
+            if add_to_keyword_pool(keyword, category=category, source="trending", priority=3):
+                added += 1
+
+        logger.info(f"[AutoLearn] Added {added} trending keywords")
+
+    except Exception as e:
+        logger.error(f"[AutoLearn] Error adding trending keywords: {e}")
+
+
+def _generate_new_keywords(count: int) -> List[str]:
+    """새 키워드 자동 생성 (조합 방식)"""
+    import random
+
+    prefixes = [
+        "강남", "홍대", "신촌", "명동", "이태원", "성수", "판교", "분당",
+        "수원", "인천", "대전", "대구", "부산", "광주", "제주"
+    ]
+
+    suffixes = [
+        "맛집", "카페", "피부과", "치과", "헬스장", "필라테스", "요가",
+        "미용실", "네일샵", "마사지", "정형외과", "안과", "한의원",
+        "병원", "학원", "호텔", "숙소", "관광", "데이트", "브런치"
+    ]
+
+    keywords = []
+    used = set()
+
+    while len(keywords) < count:
+        prefix = random.choice(prefixes)
+        suffix = random.choice(suffixes)
+        kw = f"{prefix}{suffix}"
+
+        if kw not in used:
+            used.add(kw)
+            keywords.append(kw)
+
+    return keywords
 
 
 def mark_keyword_as_learned(keyword: str, samples_count: int = 13):
