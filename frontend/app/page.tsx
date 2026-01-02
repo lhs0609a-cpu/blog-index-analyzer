@@ -534,6 +534,25 @@ export default function Home() {
               </TiltCard>
             </Link>
 
+            {/* X (Twitter) 자동화 */}
+            <Link href="/x" className="col-span-6 md:col-span-4 group">
+              <TiltCard className="h-full">
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  className="relative h-full p-6 rounded-3xl bg-gradient-to-br from-sky-950 to-slate-900 border border-sky-800/50 overflow-hidden shadow-xl shadow-sky-900/50"
+                >
+                  <span className="absolute top-3 right-3 px-2 py-0.5 text-[9px] font-bold bg-gradient-to-r from-sky-500 to-blue-500 text-white rounded-full">NEW</span>
+                  <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg">
+                    <svg viewBox="0 0 24 24" className="w-6 h-6" fill="black">
+                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                    </svg>
+                  </div>
+                  <h3 className="font-bold text-white mb-1">X 자동화</h3>
+                  <p className="text-xs text-gray-400">AI 트윗 자동 게시</p>
+                </motion.div>
+              </TiltCard>
+            </Link>
+
             {/* AI 글쓰기 */}
             <a href="https://doctor-voice-pro-ghwi.vercel.app/" target="_blank" rel="noopener noreferrer" className="col-span-6 md:col-span-4 group">
               <TiltCard className="h-full">
@@ -854,72 +873,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-gray-900 text-white py-16 border-t border-gray-800">
-        <div className="container mx-auto px-4">
-          <div className="grid md:grid-cols-4 gap-8 mb-12">
-            <div className="md:col-span-2">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center">
-                  <Sparkles className="w-5 h-5 text-white" />
-                </div>
-                <span className="text-xl font-black bg-gradient-to-r from-violet-400 to-pink-400 bg-clip-text text-transparent">블랭크</span>
-                <span className="text-xs text-gray-600 bg-gray-800 px-2 py-0.5 rounded">v2.0</span>
-              </div>
-              <p className="text-sm text-gray-500 max-w-xs leading-relaxed">
-                AI 기반 블로그 분석 플랫폼으로 블로그 성장을 도와드립니다.
-              </p>
-            </div>
-            <div>
-              <h4 className="font-bold mb-4 text-white">서비스</h4>
-              <ul className="space-y-3 text-sm text-gray-500">
-                <li><Link href="/analyze" className="hover:text-violet-400 transition-colors">블로그 분석</Link></li>
-                <li><Link href="/keyword-search" className="hover:text-violet-400 transition-colors">키워드 검색</Link></li>
-                <li><Link href="/dashboard" className="hover:text-violet-400 transition-colors">대시보드</Link></li>
-                <li><Link href="/tools" className="hover:text-violet-400 transition-colors">프리미엄 도구</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-bold mb-4 text-white">플라톤마케팅</h4>
-              <ul className="space-y-3 text-sm text-gray-500">
-                <li>
-                  <a href="https://www.brandplaton.com/" target="_blank" rel="noopener noreferrer" className="hover:text-violet-400 transition-colors flex items-center gap-2">
-                    <Building2 className="w-4 h-4" />
-                    병원마케팅 전문
-                  </a>
-                </li>
-                <li>
-                  <a href="https://www.brandplaton.com/" target="_blank" rel="noopener noreferrer" className="hover:text-violet-400 transition-colors flex items-center gap-2">
-                    <ArrowRight className="w-4 h-4" />
-                    무료 상담 신청
-                  </a>
-                </li>
-                <li>
-                  <a href="https://doctor-voice-pro-ghwi.vercel.app/" target="_blank" rel="noopener noreferrer" className="hover:text-cyan-400 transition-colors flex items-center gap-2">
-                    <Mic className="w-4 h-4" />
-                    AI 자동 글쓰기
-                  </a>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="text-sm text-gray-600">
-              © 2024{' '}
-              <a href="https://www.brandplaton.com/" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:text-violet-300 transition-colors font-medium">
-                플라톤마케팅
-              </a>
-              . All rights reserved.
-            </div>
-            <div className="flex items-center gap-6 text-sm text-gray-600">
-              <Link href="/terms" className="hover:text-gray-400 transition-colors">이용약관</Link>
-              <Link href="/terms" className="hover:text-gray-400 transition-colors">개인정보처리방침</Link>
-              <span>lhs0609c@naver.com</span>
-            </div>
-          </div>
-        </div>
-      </footer>
 
       {/* Fixed Bottom Ad Popup */}
       <AnimatePresence>
