@@ -473,23 +473,6 @@ export default function Home() {
               </TiltCard>
             </Link>
 
-            {/* 글쓰기 가이드 */}
-            <Link href="/writing-guide" className="col-span-6 md:col-span-4 group">
-              <TiltCard className="h-full">
-                <motion.div
-                  whileHover={{ scale: 1.02 }}
-                  className="relative h-full p-6 rounded-3xl bg-white border border-gray-200 overflow-hidden shadow-lg shadow-gray-100/50"
-                >
-                  <span className="absolute top-3 right-3 px-2 py-0.5 text-[9px] font-bold bg-green-500 text-white rounded-full">NEW</span>
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-pink-500 to-orange-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-all shadow-lg shadow-pink-500/25">
-                    <BookOpen className="w-6 h-6 text-white" />
-                  </div>
-                  <h3 className="font-bold text-gray-900 mb-1">글쓰기 가이드</h3>
-                  <p className="text-xs text-gray-500">최적화 팁</p>
-                </motion.div>
-              </TiltCard>
-            </Link>
-
             {/* 프리미엄 도구 - Wide */}
             <Link href="/tools" className="col-span-12 md:col-span-8 group">
               <TiltCard className="h-full">
