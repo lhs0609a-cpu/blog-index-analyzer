@@ -147,6 +147,22 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Threads auto poster failed to start: {e}")
 
+    # X (Twitter) DB 초기화
+    try:
+        from database.x_db import init_x_tables
+        init_x_tables()
+        logger.info("✅ X (Twitter) tables initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ X tables initialization failed: {e}")
+
+    # X 자동 게시 스케줄러 시작
+    try:
+        from services.x_auto_poster import start_auto_poster
+        start_auto_poster()
+        logger.info("✅ X auto poster started (every 1 min)")
+    except Exception as e:
+        logger.warning(f"⚠️ X auto poster failed to start: {e}")
+
     # Ad Optimization DB 초기화
     try:
         from database.ad_optimization_db import init_ad_optimization_tables
@@ -200,6 +216,14 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Threads auto poster stopped")
     except Exception as e:
         logger.warning(f"⚠️ Threads auto poster shutdown issue: {e}")
+
+    # X 자동 게시 스케줄러 중지
+    try:
+        from services.x_auto_poster import stop_auto_poster
+        stop_auto_poster()
+        logger.info("✅ X auto poster stopped")
+    except Exception as e:
+        logger.warning(f"⚠️ X auto poster shutdown issue: {e}")
 
     # 백업 스케줄러 중지 및 마지막 백업 생성
     try:
@@ -303,6 +327,7 @@ from routers import ad_dashboard
 from routers import blue_ocean
 from routers import xp
 from routers import threads
+from routers import x as x_router
 from routers import optimization_monitor
 from routers import hourly_bidding
 from routers import anomaly_detection
@@ -338,6 +363,7 @@ app.include_router(ad_dashboard.router)  # prefix already set in router
 app.include_router(blue_ocean.router, prefix="/api/blue-ocean", tags=["블루오션키워드"])
 app.include_router(xp.router, tags=["XP시스템"])
 app.include_router(threads.router, tags=["쓰레드자동화"])
+app.include_router(x_router.router, tags=["X자동화"])
 app.include_router(optimization_monitor.router, tags=["최적화모니터링"])
 app.include_router(hourly_bidding.router, tags=["시간대별입찰"])
 app.include_router(anomaly_detection.router, tags=["이상징후감지"])
