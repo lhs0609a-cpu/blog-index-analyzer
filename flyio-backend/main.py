@@ -139,6 +139,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Ad auto optimizer failed to start: {e}")
 
+    # Threads DB 초기화
+    try:
+        from database.threads_db import init_threads_db
+        init_threads_db()
+        logger.info("✅ Threads tables initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ Threads tables initialization failed: {e}")
+
     # Threads 자동 게시 스케줄러 시작
     try:
         from services.threads_auto_poster import threads_auto_poster
