@@ -10,8 +10,13 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
-# 데이터 경로
-DATA_DIR = Path("/data") if Path("/data").exists() else Path("./data")
+# 데이터 경로 - Windows/Linux 호환
+import sys
+import os
+if sys.platform == "win32":
+    DATA_DIR = Path(os.path.dirname(__file__)).parent / "data"
+else:
+    DATA_DIR = Path("/data") if Path("/data").exists() else Path("./data")
 DATA_DIR.mkdir(exist_ok=True)
 DB_PATH = DATA_DIR / "optimization_history.db"
 

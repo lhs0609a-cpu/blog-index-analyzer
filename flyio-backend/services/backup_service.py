@@ -15,8 +15,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Backup configuration
-BACKUP_DIR = "/app/data/backups"
-DATABASE_PATH = "/app/blog_analyzer.db"
+# Windows 로컬 개발환경에서는 ./data 사용
+import sys
+if sys.platform == "win32":
+    BACKUP_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "backups")
+    DATABASE_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "blog_analyzer.db")
+else:
+    BACKUP_DIR = "/app/data/backups"
+    DATABASE_PATH = "/app/data/blog_analyzer.db"
 MAX_BACKUPS = 48  # 48시간 분량 (매시간 백업)
 BACKUP_INTERVAL_SECONDS = 3600  # 1시간마다
 

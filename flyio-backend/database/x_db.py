@@ -12,7 +12,12 @@ import uuid
 logger = logging.getLogger(__name__)
 
 # 데이터베이스 경로 - /app/data 볼륨에 저장 (영속적)
-DATA_DIR = os.environ.get("DATA_DIR", "/app/data")
+# Windows 로컬 개발환경에서는 ./data 사용
+import sys
+if sys.platform == "win32":
+    DATA_DIR = os.environ.get("DATA_DIR", os.path.join(os.path.dirname(__file__), "..", "data"))
+else:
+    DATA_DIR = os.environ.get("DATA_DIR", "/app/data")
 os.makedirs(DATA_DIR, exist_ok=True)
 DB_PATH = os.path.join(DATA_DIR, "blog_analyzer.db")
 
