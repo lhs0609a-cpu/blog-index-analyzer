@@ -1088,20 +1088,25 @@ async def analyze_blog(blog_id: str) -> Dict:
 
             # Content Score (콘텐츠 품질) - 0~100
             content_score = 50  # Base
-            if analysis_data["avg_post_length"]:
-                avg_len = analysis_data["avg_post_length"]
-                if avg_len >= 3000:
-                    content_score = 95
-                elif avg_len >= 2000:
-                    content_score = 85
-                elif avg_len >= 1500:
-                    content_score = 75
-                elif avg_len >= 1000:
-                    content_score = 65
-                elif avg_len >= 500:
-                    content_score = 50
-                else:
-                    content_score = 35
+            # RSS description은 요약이라 실제 글 길이의 10-15% 정도만 포함
+            # 따라서 RSS 길이 × 6~8 정도가 실제 글 길이에 가까움
+            avg_len = analysis_data.get("avg_post_length") or 0
+            if avg_len > 0 and avg_len < 500:
+                # RSS 요약문이 짧으면 실제 글 길이로 보정 (약 6~8배)
+                avg_len = avg_len * 7
+
+            if avg_len >= 3000:
+                content_score = 95
+            elif avg_len >= 2000:
+                content_score = 85
+            elif avg_len >= 1500:
+                content_score = 75
+            elif avg_len >= 1000:
+                content_score = 65
+            elif avg_len >= 500:
+                content_score = 50
+            else:
+                content_score = 35
 
             # Chain Score (연결성) - 0~100
             chain_score = 50  # Base
