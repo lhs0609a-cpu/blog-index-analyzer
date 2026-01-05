@@ -1243,24 +1243,24 @@ async def analyze_blog(blog_id: str) -> Dict:
 
             index["total_score"] = min(round(total_score, 1), 100)
 
-            # Calculate level (1-10)
-            if total_score >= 90:
+            # Calculate level (1-10) - 5점 단위로 세분화
+            if total_score >= 45:
                 index["level"] = 10
-            elif total_score >= 80:
-                index["level"] = 9
-            elif total_score >= 70:
-                index["level"] = 8
-            elif total_score >= 60:
-                index["level"] = 7
-            elif total_score >= 50:
-                index["level"] = 6
             elif total_score >= 40:
+                index["level"] = 9
+            elif total_score >= 35:
+                index["level"] = 8
+            elif total_score >= 32:
+                index["level"] = 7
+            elif total_score >= 29:
+                index["level"] = 6
+            elif total_score >= 26:
                 index["level"] = 5
-            elif total_score >= 30:
+            elif total_score >= 23:
                 index["level"] = 4
             elif total_score >= 20:
                 index["level"] = 3
-            elif total_score >= 10:
+            elif total_score >= 15:
                 index["level"] = 2
             else:
                 index["level"] = 1
