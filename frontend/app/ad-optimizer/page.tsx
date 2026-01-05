@@ -132,6 +132,65 @@ export default function AdOptimizerPage() {
   const [showApiTutorial, setShowApiTutorial] = useState(false)
   const userId = user?.id || 1 // 인증된 사용자 ID 사용, 기본값 1
 
+  // 계정 연동 상태 (Hook은 조건부 return 전에 모두 선언해야 함)
+  const [adAccount, setAdAccount] = useState<AdAccount | null>(null)
+  const [connectForm, setConnectForm] = useState({
+    customer_id: '',
+    api_key: '',
+    secret_key: '',
+    name: ''
+  })
+  const [isConnecting, setIsConnecting] = useState(false)
+
+  // 효율 추적 상태
+  const [efficiency, setEfficiency] = useState<EfficiencySummary | null>(null)
+  const [efficiencyHistory, setEfficiencyHistory] = useState<any[]>([])
+
+  // 트렌드 키워드 상태
+  const [trendingKeywords, setTrendingKeywords] = useState<TrendingKeyword[]>([])
+  const [isRefreshingTrending, setIsRefreshingTrending] = useState(false)
+
+  // 대시보드 상태
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null)
+  const [recentChanges, setRecentChanges] = useState<BidChange[]>([])
+  const [isAutoRunning, setIsAutoRunning] = useState(false)
+
+  // 키워드 발굴 상태
+  const [seedKeywords, setSeedKeywords] = useState('')
+  const [discoveredKeywords, setDiscoveredKeywords] = useState<DiscoveredKeyword[]>([])
+  const [isDiscovering, setIsDiscovering] = useState(false)
+
+  // 제외 키워드 상태
+  const [excludedKeywords, setExcludedKeywords] = useState<ExcludedKeyword[]>([])
+
+  // 설정 상태
+  const [settings, setSettings] = useState<OptimizationSettings>({
+    strategy: 'balanced',
+    target_roas: 300,
+    target_position: 3,
+    target_cpa: 20000,
+    conversion_value: 59400,
+    max_bid_change_ratio: 0.2,
+    min_bid: 70,
+    max_bid: 100000,
+    min_ctr: 0.01,
+    max_cost_no_conv: 50000,
+    min_quality_score: 4,
+    evaluation_days: 7,
+    optimization_interval: 60,
+    is_auto_optimization: false,
+    blacklist_keywords: [],
+    core_terms: [],
+    conversion_keywords: ['가격', '비용', '구독', '결제', '신청', '구매', '추천', '비교', '후기']
+  })
+  const [blacklistInput, setBlacklistInput] = useState('')
+  const [coreTermsInput, setCoreTermsInput] = useState('')
+  const [conversionKeywordsInput, setConversionKeywordsInput] = useState('')
+  const [isDiscoveringConversion, setIsDiscoveringConversion] = useState(false)
+
+  // 로그 상태
+  const [logs, setLogs] = useState<any[]>([])
+
   // 프로 플랜 미만 사용자 접근 제한 - 프리미엄 유도 팝업
   if (isLocked) {
     return (
@@ -348,65 +407,6 @@ export default function AdOptimizerPage() {
       </div>
     )
   }
-
-  // 계정 연동 상태
-  const [adAccount, setAdAccount] = useState<AdAccount | null>(null)
-  const [connectForm, setConnectForm] = useState({
-    customer_id: '',
-    api_key: '',
-    secret_key: '',
-    name: ''
-  })
-  const [isConnecting, setIsConnecting] = useState(false)
-
-  // 효율 추적 상태
-  const [efficiency, setEfficiency] = useState<EfficiencySummary | null>(null)
-  const [efficiencyHistory, setEfficiencyHistory] = useState<any[]>([])
-
-  // 트렌드 키워드 상태
-  const [trendingKeywords, setTrendingKeywords] = useState<TrendingKeyword[]>([])
-  const [isRefreshingTrending, setIsRefreshingTrending] = useState(false)
-
-  // 대시보드 상태
-  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null)
-  const [recentChanges, setRecentChanges] = useState<BidChange[]>([])
-  const [isAutoRunning, setIsAutoRunning] = useState(false)
-
-  // 키워드 발굴 상태
-  const [seedKeywords, setSeedKeywords] = useState('')
-  const [discoveredKeywords, setDiscoveredKeywords] = useState<DiscoveredKeyword[]>([])
-  const [isDiscovering, setIsDiscovering] = useState(false)
-
-  // 제외 키워드 상태
-  const [excludedKeywords, setExcludedKeywords] = useState<ExcludedKeyword[]>([])
-
-  // 설정 상태
-  const [settings, setSettings] = useState<OptimizationSettings>({
-    strategy: 'balanced',
-    target_roas: 300,
-    target_position: 3,
-    target_cpa: 20000,
-    conversion_value: 59400,
-    max_bid_change_ratio: 0.2,
-    min_bid: 70,
-    max_bid: 100000,
-    min_ctr: 0.01,
-    max_cost_no_conv: 50000,
-    min_quality_score: 4,
-    evaluation_days: 7,
-    optimization_interval: 60,
-    is_auto_optimization: false,
-    blacklist_keywords: [],
-    core_terms: [],
-    conversion_keywords: ['가격', '비용', '구독', '결제', '신청', '구매', '추천', '비교', '후기']
-  })
-  const [blacklistInput, setBlacklistInput] = useState('')
-  const [coreTermsInput, setCoreTermsInput] = useState('')
-  const [conversionKeywordsInput, setConversionKeywordsInput] = useState('')
-  const [isDiscoveringConversion, setIsDiscoveringConversion] = useState(false)
-
-  // 로그 상태
-  const [logs, setLogs] = useState<any[]>([])
 
   // 대시보드 데이터 로드
   const loadDashboard = useCallback(async () => {
