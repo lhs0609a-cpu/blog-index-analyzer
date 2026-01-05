@@ -15,7 +15,7 @@ import sys
 if sys.platform == "win32":
     _default_path = os.path.join(os.path.dirname(__file__), "..", "data", "challenge.db")
 else:
-    _default_path = "/app/data/challenge.db"
+    _default_path = "/data/challenge.db"
 DB_PATH = os.environ.get("CHALLENGE_DB_PATH", _default_path)
 
 # 레벨 시스템 정의

@@ -1359,7 +1359,7 @@ async def complete(
                 if sys.platform == "win32":
                     proof_dir = os.path.join(os.path.dirname(__file__), "..", "data", "proofs")
                 else:
-                    proof_dir = "/app/data/proofs"
+                    proof_dir = "/data/proofs"
                 os.makedirs(proof_dir, exist_ok=True)
 
                 # 파일 저장
