@@ -1239,7 +1239,7 @@ async def analyze_blog(blog_id: str) -> Dict:
             if not analysis_data["data_sources"]:
                 total_score = 25
             elif len(analysis_data["data_sources"]) == 1:
-                total_score = max(total_score * 0.7, 30)
+                total_score = total_score * 0.7
 
             index["total_score"] = min(round(total_score, 1), 100)
 
