@@ -31,9 +31,9 @@ const DEFAULT_PLANS: PlanInfo[] = [
     price_monthly: 0,
     price_yearly: 0,
     features: {
-      keyword_search_daily: 5,
-      blog_analysis_daily: 3,
-      search_results_count: 10,
+      keyword_search_daily: 8,
+      blog_analysis_daily: 2,
+      search_results_count: 5,
       history_days: 0,
       competitor_compare: 0,
       rank_alert: false,
