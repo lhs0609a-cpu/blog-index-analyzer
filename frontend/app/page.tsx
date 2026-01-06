@@ -473,19 +473,20 @@ export default function Home() {
               </TiltCard>
             </Link>
 
-            {/* 글쓰기 가이드 */}
-            <Link href="/writing-guide" className="col-span-6 md:col-span-4 group">
+            {/* 커뮤니티 */}
+            <Link href="/community" className="col-span-6 md:col-span-4 group">
               <TiltCard className="h-full">
                 <motion.div
                   whileHover={{ scale: 1.02 }}
-                  className="relative h-full p-6 rounded-3xl bg-white border border-gray-200 overflow-hidden shadow-lg shadow-gray-100/50"
+                  className="relative h-full p-6 rounded-3xl bg-gradient-to-br from-indigo-100 to-purple-100 border border-indigo-200/50 overflow-hidden shadow-xl shadow-indigo-100/50"
                 >
-                  <span className="absolute top-3 right-3 px-2 py-0.5 text-[9px] font-bold bg-green-500 text-white rounded-full">NEW</span>
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-pink-500 to-orange-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-all shadow-lg shadow-pink-500/25">
-                    <BookOpen className="w-6 h-6 text-white" />
+                  <span className="absolute top-3 right-3 px-2 py-0.5 text-[9px] font-bold bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-full">NEW</span>
+                  <div className="absolute -right-10 -top-10 w-32 h-32 bg-purple-200/30 rounded-full blur-[50px]" />
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg shadow-indigo-500/30">
+                    <Users className="w-6 h-6 text-white" />
                   </div>
-                  <h3 className="font-bold text-gray-900 mb-1">글쓰기 가이드</h3>
-                  <p className="text-xs text-gray-500">최적화 팁</p>
+                  <h3 className="font-bold text-gray-900 mb-1">커뮤니티</h3>
+                  <p className="text-xs text-gray-600">실시간 활동 & 랭킹</p>
                 </motion.div>
               </TiltCard>
             </Link>

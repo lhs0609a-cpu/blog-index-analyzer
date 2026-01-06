@@ -77,11 +77,7 @@ export const metadata: Metadata = {
   // 파비콘 및 아이콘
   icons: {
     icon: [
-      { url: '/favicon.ico', sizes: 'any' },
       { url: '/icon.svg', type: 'image/svg+xml' },
-    ],
-    apple: [
-      { url: '/apple-touch-icon.png', sizes: '180x180' },
     ],
   },
 
