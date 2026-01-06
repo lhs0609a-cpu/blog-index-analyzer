@@ -5,14 +5,18 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Activity, Trophy, TrendingUp, MessageSquare, Zap, Users,
   Crown, Medal, Star, ThumbsUp, Send, Clock, ArrowUp, ArrowDown,
-  Flame, Target, ChevronRight, RefreshCw, Search, Award
+  Flame, Target, ChevronRight, RefreshCw, Search, Award,
+  PenSquare, Eye, MessageCircle, X, Hash, Plus
 } from 'lucide-react'
 import { useAuthStore } from '@/lib/stores/auth'
 import {
   getCommunitySummary, getActivityFeed, getLeaderboard, getInsights,
   getTrendingKeywords, getRankingSuccesses, createInsight, likeInsight,
-  getUserPoints, type CommunitySummary, type ActivityFeedItem,
-  type LeaderboardEntry, type Insight, type TrendingKeyword, type RankingSuccess, type UserPoints
+  getUserPoints, getPosts, createPost, getPost, likePost, getPostComments,
+  createPostComment, POST_CATEGORIES,
+  type CommunitySummary, type ActivityFeedItem,
+  type LeaderboardEntry, type Insight, type TrendingKeyword, type RankingSuccess, type UserPoints,
+  type Post, type PostComment
 } from '@/lib/api/community'
 
 // 활동 타입별 아이콘 및 색상
@@ -38,7 +42,7 @@ const LEVEL_ICONS: Record<string, string> = {
 
 export default function CommunityPage() {
   const { user, isAuthenticated } = useAuthStore()
-  const [activeTab, setActiveTab] = useState<'feed' | 'leaderboard' | 'insights' | 'trends'>('feed')
+  const [activeTab, setActiveTab] = useState<'feed' | 'leaderboard' | 'insights' | 'trends' | 'posts'>('posts')
   const [summary, setSummary] = useState<CommunitySummary | null>(null)
   const [myPoints, setMyPoints] = useState<UserPoints | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -196,6 +200,7 @@ export default function CommunityPage() {
         {/* 탭 네비게이션 */}
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
           {[
+            { id: 'posts', label: '게시판', icon: <PenSquare className="w-4 h-4" /> },
             { id: 'feed', label: '실시간 피드', icon: <Activity className="w-4 h-4" /> },
             { id: 'leaderboard', label: '리더보드', icon: <Trophy className="w-4 h-4" /> },
             { id: 'insights', label: '인사이트', icon: <MessageSquare className="w-4 h-4" /> },
@@ -221,6 +226,9 @@ export default function CommunityPage() {
           {/* 메인 컨텐츠 */}
           <div className="lg:col-span-2">
             <AnimatePresence mode="wait">
+              {activeTab === 'posts' && (
+                <PostsSection key="posts" userId={user?.id} isAuthenticated={isAuthenticated} />
+              )}
               {activeTab === 'feed' && (
                 <ActivityFeedSection key="feed" activities={summary?.recent_activities || []} />
               )}
@@ -811,6 +819,622 @@ function PointsGuideCard() {
           포인트를 모아 레벨을 올리고 리더보드 상위에 도전하세요!
         </p>
       </div>
+    </div>
+  )
+}
+
+// 게시판 섹션
+function PostsSection({ userId, isAuthenticated }: { userId?: number; isAuthenticated: boolean }) {
+  const [posts, setPosts] = useState<Post[]>([])
+  const [category, setCategory] = useState<string | null>(null)
+  const [sortBy, setSortBy] = useState<'recent' | 'popular' | 'comments'>('recent')
+  const [isLoading, setIsLoading] = useState(true)
+  const [showWriteModal, setShowWriteModal] = useState(false)
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  useEffect(() => {
+    loadPosts()
+  }, [category, sortBy])
+
+  const loadPosts = async () => {
+    setIsLoading(true)
+    try {
+      const data = await getPosts({
+        category: category || undefined,
+        sort_by: sortBy,
+        limit: 20,
+        search: searchQuery || undefined
+      })
+      setPosts(data.posts)
+    } catch (error) {
+      console.error('Failed to load posts:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    loadPosts()
+  }
+
+  const handlePostCreated = () => {
+    setShowWriteModal(false)
+    loadPosts()
+  }
+
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diff = Math.floor((now.getTime() - date.getTime()) / 1000)
+
+    if (diff < 60) return '방금 전'
+    if (diff < 3600) return `${Math.floor(diff / 60)}분 전`
+    if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`
+    return date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="space-y-4"
+    >
+      {/* 헤더 영역 */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <PenSquare className="w-5 h-5 text-indigo-600" />
+            <h2 className="font-bold text-gray-900">게시판</h2>
+          </div>
+
+          {isAuthenticated && (
+            <button
+              onClick={() => setShowWriteModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-indigo-200 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              글쓰기
+            </button>
+          )}
+        </div>
+
+        {/* 검색 */}
+        <form onSubmit={handleSearch} className="mt-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="게시글 검색..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            />
+          </div>
+        </form>
+
+        {/* 카테고리 & 정렬 */}
+        <div className="flex flex-wrap items-center gap-2 mt-4">
+          <button
+            onClick={() => setCategory(null)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              category === null
+                ? 'bg-indigo-100 text-indigo-700'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            전체
+          </button>
+          {Object.entries(POST_CATEGORIES).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setCategory(key)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                category === key
+                  ? 'bg-indigo-100 text-indigo-700'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+
+          <div className="ml-auto flex gap-1 bg-gray-100 rounded-lg p-1">
+            {[
+              { id: 'recent', label: '최신' },
+              { id: 'popular', label: '인기' },
+              { id: 'comments', label: '댓글' }
+            ].map((s) => (
+              <button
+                key={s.id}
+                onClick={() => setSortBy(s.id as any)}
+                className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                  sortBy === s.id
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* 게시글 목록 */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        {isLoading ? (
+          <div className="p-8 text-center text-gray-500">로딩 중...</div>
+        ) : posts.length === 0 ? (
+          <div className="p-8 text-center">
+            <PenSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500">아직 게시글이 없습니다</p>
+            {isAuthenticated && (
+              <button
+                onClick={() => setShowWriteModal(true)}
+                className="mt-3 text-indigo-600 hover:text-indigo-700 font-medium"
+              >
+                첫 번째 글을 작성해보세요!
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {posts.map((post, index) => (
+              <motion.div
+                key={post.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.03 }}
+                onClick={() => setSelectedPost(post)}
+                className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`px-2 py-0.5 text-xs rounded-full ${
+                        post.category === 'tip' ? 'bg-green-100 text-green-700' :
+                        post.category === 'question' ? 'bg-yellow-100 text-yellow-700' :
+                        post.category === 'success' ? 'bg-purple-100 text-purple-700' :
+                        'bg-gray-100 text-gray-600'
+                      }`}>
+                        {POST_CATEGORIES[post.category] || '자유'}
+                      </span>
+                      <span className="text-xs text-gray-400">{post.masked_name}</span>
+                    </div>
+                    <h3 className="font-medium text-gray-900 line-clamp-1">{post.title}</h3>
+                    <p className="text-sm text-gray-500 line-clamp-2 mt-1">{post.content}</p>
+                    {post.tags && post.tags.length > 0 && (
+                      <div className="flex gap-1 mt-2">
+                        {post.tags.slice(0, 3).map((tag, i) => (
+                          <span key={i} className="text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-end gap-1 text-xs text-gray-400">
+                    <span>{formatTime(post.created_at)}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="flex items-center gap-1">
+                        <Eye className="w-3 h-3" /> {post.views}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <ThumbsUp className="w-3 h-3" /> {post.likes}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <MessageCircle className="w-3 h-3" /> {post.comments_count}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 글쓰기 모달 */}
+      {showWriteModal && userId && (
+        <WritePostModal
+          userId={userId}
+          onClose={() => setShowWriteModal(false)}
+          onSuccess={handlePostCreated}
+        />
+      )}
+
+      {/* 게시글 상세 모달 */}
+      {selectedPost && (
+        <PostDetailModal
+          post={selectedPost}
+          userId={userId}
+          onClose={() => setSelectedPost(null)}
+          onUpdate={loadPosts}
+        />
+      )}
+    </motion.div>
+  )
+}
+
+// 글쓰기 모달
+function WritePostModal({
+  userId,
+  onClose,
+  onSuccess
+}: {
+  userId: number
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const [title, setTitle] = useState('')
+  const [content, setContent] = useState('')
+  const [category, setCategory] = useState('free')
+  const [tagInput, setTagInput] = useState('')
+  const [tags, setTags] = useState<string[]>([])
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleAddTag = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      const tag = tagInput.trim().replace(/^#/, '')
+      if (tag && !tags.includes(tag) && tags.length < 5) {
+        setTags([...tags, tag])
+        setTagInput('')
+      }
+    }
+  }
+
+  const removeTag = (tagToRemove: string) => {
+    setTags(tags.filter(t => t !== tagToRemove))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (title.trim().length < 2) {
+      setError('제목을 2자 이상 입력해주세요')
+      return
+    }
+    if (content.trim().length < 10) {
+      setError('내용을 10자 이상 입력해주세요')
+      return
+    }
+
+    setIsSubmitting(true)
+    setError('')
+
+    try {
+      await createPost(userId, title.trim(), content.trim(), category, tags.length > 0 ? tags : undefined)
+      onSuccess()
+    } catch (err) {
+      setError('게시글 작성에 실패했습니다')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden"
+      >
+        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-900">글쓰기</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto max-h-[calc(90vh-140px)]">
+          {/* 카테고리 선택 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">카테고리</label>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(POST_CATEGORIES).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setCategory(key)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    category === key
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 제목 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">제목</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="제목을 입력하세요"
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              maxLength={100}
+            />
+          </div>
+
+          {/* 내용 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">내용</label>
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder="내용을 입력하세요 (최소 10자)"
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[200px] resize-none"
+              maxLength={5000}
+            />
+            <p className="text-xs text-gray-400 mt-1 text-right">{content.length}/5000</p>
+          </div>
+
+          {/* 태그 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">태그 (최대 5개)</label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="flex items-center gap-1 px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm"
+                >
+                  #{tag}
+                  <button type="button" onClick={() => removeTag(tag)} className="hover:text-indigo-900">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+            <input
+              type="text"
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={handleAddTag}
+              placeholder="태그 입력 후 Enter"
+              className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              disabled={tags.length >= 5}
+            />
+          </div>
+
+          {error && (
+            <p className="text-red-500 text-sm">{error}</p>
+          )}
+        </form>
+
+        <div className="flex gap-3 p-4 border-t border-gray-100">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-3 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50"
+          >
+            취소
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={isSubmitting || title.length < 2 || content.length < 10}
+            className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg transition-all"
+          >
+            {isSubmitting ? '게시 중...' : '게시하기'}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// 게시글 상세 모달
+function PostDetailModal({
+  post,
+  userId,
+  onClose,
+  onUpdate
+}: {
+  post: Post
+  userId?: number
+  onClose: () => void
+  onUpdate: () => void
+}) {
+  const [fullPost, setFullPost] = useState<Post>(post)
+  const [comments, setComments] = useState<PostComment[]>([])
+  const [newComment, setNewComment] = useState('')
+  const [isLoadingComments, setIsLoadingComments] = useState(true)
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false)
+
+  useEffect(() => {
+    loadFullPost()
+    loadComments()
+  }, [post.id])
+
+  const loadFullPost = async () => {
+    try {
+      const data = await getPost(post.id, userId)
+      setFullPost(data)
+    } catch (error) {
+      console.error('Failed to load post:', error)
+    }
+  }
+
+  const loadComments = async () => {
+    setIsLoadingComments(true)
+    try {
+      const data = await getPostComments(post.id)
+      setComments(data.comments)
+    } catch (error) {
+      console.error('Failed to load comments:', error)
+    } finally {
+      setIsLoadingComments(false)
+    }
+  }
+
+  const handleLike = async () => {
+    if (!userId) return
+    try {
+      const result = await likePost(post.id, userId)
+      setFullPost({ ...fullPost, likes: result.likes })
+      onUpdate()
+    } catch (error) {
+      console.error('Failed to like post:', error)
+    }
+  }
+
+  const handleSubmitComment = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!userId || !newComment.trim()) return
+
+    setIsSubmittingComment(true)
+    try {
+      await createPostComment(post.id, userId, newComment.trim())
+      setNewComment('')
+      loadComments()
+      setFullPost({ ...fullPost, comments_count: fullPost.comments_count + 1 })
+      onUpdate()
+    } catch (error) {
+      console.error('Failed to create comment:', error)
+    } finally {
+      setIsSubmittingComment(false)
+    }
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
+      >
+        {/* 헤더 */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <span className={`px-2 py-0.5 text-xs rounded-full ${
+              fullPost.category === 'tip' ? 'bg-green-100 text-green-700' :
+              fullPost.category === 'question' ? 'bg-yellow-100 text-yellow-700' :
+              fullPost.category === 'success' ? 'bg-purple-100 text-purple-700' :
+              'bg-gray-100 text-gray-600'
+            }`}>
+              {POST_CATEGORIES[fullPost.category] || '자유'}
+            </span>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        {/* 본문 */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <h1 className="text-xl font-bold text-gray-900 mb-2">{fullPost.title}</h1>
+          <div className="flex items-center gap-3 text-sm text-gray-500 mb-4">
+            <span>{fullPost.masked_name}</span>
+            <span>·</span>
+            <span>{formatDate(fullPost.created_at)}</span>
+            <span className="flex items-center gap-1">
+              <Eye className="w-4 h-4" /> {fullPost.views}
+            </span>
+          </div>
+
+          {fullPost.tags && fullPost.tags.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-4">
+              {fullPost.tags.map((tag, i) => (
+                <span key={i} className="text-sm text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">
+            {fullPost.content}
+          </div>
+
+          {/* 좋아요 버튼 */}
+          <div className="flex items-center gap-4 mt-6 pt-4 border-t border-gray-100">
+            <button
+              onClick={handleLike}
+              disabled={!userId}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-colors ${
+                userId
+                  ? 'hover:bg-indigo-50 text-gray-600 hover:text-indigo-600'
+                  : 'text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              <ThumbsUp className="w-5 h-5" />
+              좋아요 {fullPost.likes}
+            </button>
+            <span className="flex items-center gap-2 text-gray-500">
+              <MessageCircle className="w-5 h-5" />
+              댓글 {fullPost.comments_count}
+            </span>
+          </div>
+
+          {/* 댓글 섹션 */}
+          <div className="mt-6">
+            <h3 className="font-bold text-gray-900 mb-4">댓글 {comments.length}개</h3>
+
+            {/* 댓글 작성 */}
+            {userId ? (
+              <form onSubmit={handleSubmitComment} className="mb-4">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder="댓글을 입력하세요"
+                    className="flex-1 px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isSubmittingComment || !newComment.trim()}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-medium disabled:opacity-50 hover:bg-indigo-700 transition-colors"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <p className="text-sm text-gray-500 mb-4">댓글을 작성하려면 로그인이 필요합니다</p>
+            )}
+
+            {/* 댓글 목록 */}
+            {isLoadingComments ? (
+              <p className="text-center text-gray-500 py-4">댓글 로딩 중...</p>
+            ) : comments.length === 0 ? (
+              <p className="text-center text-gray-500 py-4">아직 댓글이 없습니다</p>
+            ) : (
+              <div className="space-y-3">
+                {comments.map((comment) => (
+                  <div key={comment.id} className="bg-gray-50 rounded-xl p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-medium text-gray-900 text-sm">{comment.masked_name}</span>
+                      <span className="text-xs text-gray-400">{formatDate(comment.created_at)}</span>
+                    </div>
+                    <p className="text-gray-700 text-sm">{comment.content}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </motion.div>
     </div>
   )
 }

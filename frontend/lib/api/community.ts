@@ -368,3 +368,148 @@ export async function getCommunitySummary(): Promise<CommunitySummary> {
   if (!res.ok) throw new Error('Failed to fetch community summary')
   return res.json()
 }
+
+// ============ 게시판 (Posts) Types & Functions ============
+
+export interface Post {
+  id: number
+  user_id: number
+  masked_name: string
+  title: string
+  content: string
+  category: string
+  tags: string[] | null
+  views: number
+  likes: number
+  comments_count: number
+  is_liked?: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface PostComment {
+  id: number
+  post_id: number
+  user_id: number
+  masked_name: string
+  content: string
+  created_at: string
+}
+
+export const POST_CATEGORIES: Record<string, string> = {
+  free: '자유',
+  tip: '블로그 팁',
+  question: '질문',
+  success: '성공 후기'
+}
+
+// 게시글 목록 조회
+export async function getPosts(
+  options?: {
+    category?: string
+    sort_by?: 'recent' | 'popular' | 'comments'
+    limit?: number
+    offset?: number
+    search?: string
+  }
+): Promise<{ posts: Post[]; categories: Record<string, string> }> {
+  const params = new URLSearchParams()
+  if (options?.category) params.set('category', options.category)
+  if (options?.sort_by) params.set('sort_by', options.sort_by)
+  if (options?.limit) params.set('limit', options.limit.toString())
+  if (options?.offset) params.set('offset', options.offset.toString())
+  if (options?.search) params.set('search', options.search)
+
+  const res = await fetch(`${API_BASE}/api/community/posts?${params}`)
+  if (!res.ok) throw new Error('Failed to fetch posts')
+  return res.json()
+}
+
+// 게시글 상세 조회
+export async function getPost(postId: number, userId?: number): Promise<Post> {
+  const params = userId ? `?user_id=${userId}` : ''
+  const res = await fetch(`${API_BASE}/api/community/posts/${postId}${params}`)
+  if (!res.ok) throw new Error('Failed to fetch post')
+  return res.json()
+}
+
+// 게시글 작성
+export async function createPost(
+  userId: number,
+  title: string,
+  content: string,
+  category: string = 'free',
+  tags?: string[]
+): Promise<{ success: boolean; post_id: number; message: string }> {
+  const res = await fetch(`${API_BASE}/api/community/posts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      user_id: userId,
+      title,
+      content,
+      category,
+      tags
+    })
+  })
+  if (!res.ok) throw new Error('Failed to create post')
+  return res.json()
+}
+
+// 게시글 수정
+export async function updatePost(
+  postId: number,
+  userId: number,
+  data: { title?: string; content?: string; category?: string; tags?: string[] }
+): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/api/community/posts/${postId}?user_id=${userId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  })
+  if (!res.ok) throw new Error('Failed to update post')
+  return res.json()
+}
+
+// 게시글 삭제
+export async function deletePost(postId: number, userId: number): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/api/community/posts/${postId}?user_id=${userId}`, {
+    method: 'DELETE'
+  })
+  if (!res.ok) throw new Error('Failed to delete post')
+  return res.json()
+}
+
+// 게시글 좋아요
+export async function likePost(postId: number, userId: number): Promise<{ success: boolean; message: string; likes: number }> {
+  const res = await fetch(`${API_BASE}/api/community/posts/${postId}/like?user_id=${userId}`, {
+    method: 'POST'
+  })
+  if (!res.ok) throw new Error('Failed to like post')
+  return res.json()
+}
+
+// 게시글 댓글 조회
+export async function getPostComments(postId: number): Promise<{ post_id: number; comments: PostComment[]; count: number }> {
+  const res = await fetch(`${API_BASE}/api/community/posts/${postId}/comments`)
+  if (!res.ok) throw new Error('Failed to fetch post comments')
+  return res.json()
+}
+
+// 게시글 댓글 작성
+export async function createPostComment(
+  postId: number,
+  userId: number,
+  content: string
+): Promise<{ success: boolean; comment_id: number; message: string }> {
+  const res = await fetch(`${API_BASE}/api/community/posts/${postId}/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      user_id: userId,
+      content
+    })
+  })
+  if (!res.ok) throw new Error('Failed to create comment')
+  return res.json()
+}
