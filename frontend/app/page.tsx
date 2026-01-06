@@ -414,6 +414,54 @@ export default function Home() {
               </TiltCard>
             </Link>
 
+            {/* 프리미엄 도구 - Wide */}
+            <Link href="/tools" className="col-span-12 md:col-span-6 group">
+              <TiltCard className="h-full">
+                <motion.div
+                  whileHover={{ scale: 1.01 }}
+                  className="relative h-full p-8 rounded-3xl bg-gradient-to-r from-violet-100 via-pink-100 to-orange-100 border border-violet-200/50 overflow-hidden shadow-xl shadow-violet-100/50"
+                >
+                  <div className="absolute -right-20 -top-20 w-64 h-64 bg-pink-200/30 rounded-full blur-[100px]" />
+                  <div className="relative flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-xl bg-white/80 flex items-center justify-center shadow-lg">
+                          <Sparkles className="w-5 h-5 text-violet-600" />
+                        </div>
+                        <span className="text-xs font-bold text-violet-600 bg-white/80 px-3 py-1 rounded-full">34개 도구</span>
+                      </div>
+                      <h3 className="text-2xl font-bold text-gray-900 mb-2">프리미엄 AI 도구</h3>
+                      <p className="text-gray-600">블로그 성장에 필요한 모든 것</p>
+                    </div>
+                    <ChevronRight className="w-8 h-8 text-gray-400 group-hover:translate-x-2 group-hover:text-violet-600 transition-all" />
+                  </div>
+                </motion.div>
+              </TiltCard>
+            </Link>
+
+            {/* 커뮤니티 */}
+            <Link href="/community" className="col-span-12 md:col-span-6 group">
+              <TiltCard className="h-full">
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  className="relative h-full p-8 rounded-3xl bg-gradient-to-br from-indigo-100 to-purple-100 border border-indigo-200/50 overflow-hidden shadow-xl shadow-indigo-100/50"
+                >
+                  <span className="absolute top-4 right-4 px-2 py-1 text-[10px] font-bold bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-full">NEW</span>
+                  <div className="absolute -right-10 -top-10 w-32 h-32 bg-purple-200/30 rounded-full blur-[50px]" />
+                  <div className="relative">
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-lg shadow-indigo-500/30">
+                      <Users className="w-7 h-7 text-white" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-gray-900 mb-2">커뮤니티</h3>
+                    <p className="text-gray-600 mb-6">실시간 활동 & 랭킹, 정보 공유</p>
+                    <div className="flex items-center gap-2">
+                      <span className="px-3 py-1 text-xs font-medium bg-indigo-500 text-white rounded-full">FREE</span>
+                    </div>
+                  </div>
+                </motion.div>
+              </TiltCard>
+            </Link>
+
             {/* 광고 최적화 - Medium */}
             <Link href="/ad-optimizer" className="col-span-12 md:col-span-6 group">
               <TiltCard className="h-full">
@@ -438,7 +486,7 @@ export default function Home() {
             </Link>
 
             {/* 통합 광고 */}
-            <Link href="/ad-optimizer/unified" className="col-span-6 md:col-span-4 group">
+            <Link href="/ad-optimizer/unified" className="col-span-6 md:col-span-3 group">
               <TiltCard className="h-full">
                 <motion.div
                   whileHover={{ scale: 1.02 }}
@@ -458,7 +506,7 @@ export default function Home() {
             </Link>
 
             {/* 대시보드 */}
-            <Link href="/dashboard" className="col-span-6 md:col-span-4 group">
+            <Link href="/dashboard" className="col-span-6 md:col-span-3 group">
               <TiltCard className="h-full">
                 <motion.div
                   whileHover={{ scale: 1.02 }}
@@ -473,51 +521,8 @@ export default function Home() {
               </TiltCard>
             </Link>
 
-            {/* 커뮤니티 */}
-            <Link href="/community" className="col-span-6 md:col-span-4 group">
-              <TiltCard className="h-full">
-                <motion.div
-                  whileHover={{ scale: 1.02 }}
-                  className="relative h-full p-6 rounded-3xl bg-gradient-to-br from-indigo-100 to-purple-100 border border-indigo-200/50 overflow-hidden shadow-xl shadow-indigo-100/50"
-                >
-                  <span className="absolute top-3 right-3 px-2 py-0.5 text-[9px] font-bold bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-full">NEW</span>
-                  <div className="absolute -right-10 -top-10 w-32 h-32 bg-purple-200/30 rounded-full blur-[50px]" />
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg shadow-indigo-500/30">
-                    <Users className="w-6 h-6 text-white" />
-                  </div>
-                  <h3 className="font-bold text-gray-900 mb-1">커뮤니티</h3>
-                  <p className="text-xs text-gray-600">실시간 활동 & 랭킹</p>
-                </motion.div>
-              </TiltCard>
-            </Link>
-
-            {/* 프리미엄 도구 - Wide */}
-            <Link href="/tools" className="col-span-12 md:col-span-8 group">
-              <TiltCard className="h-full">
-                <motion.div
-                  whileHover={{ scale: 1.01 }}
-                  className="relative h-full p-8 rounded-3xl bg-gradient-to-r from-violet-100 via-pink-100 to-orange-100 border border-violet-200/50 overflow-hidden shadow-xl shadow-violet-100/50"
-                >
-                  <div className="absolute -right-20 -top-20 w-64 h-64 bg-pink-200/30 rounded-full blur-[100px]" />
-                  <div className="relative flex items-center justify-between">
-                    <div>
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-xl bg-white/80 flex items-center justify-center shadow-lg">
-                          <Sparkles className="w-5 h-5 text-violet-600" />
-                        </div>
-                        <span className="text-xs font-bold text-violet-600 bg-white/80 px-3 py-1 rounded-full">34개 도구</span>
-                      </div>
-                      <h3 className="text-2xl font-bold text-gray-900 mb-2">프리미엄 AI 도구</h3>
-                      <p className="text-gray-600">블로그 성장에 필요한 모든 것</p>
-                    </div>
-                    <ChevronRight className="w-8 h-8 text-gray-400 group-hover:translate-x-2 group-hover:text-violet-600 transition-all" />
-                  </div>
-                </motion.div>
-              </TiltCard>
-            </Link>
-
             {/* Threads 자동화 */}
-            <Link href="/threads" className="col-span-6 md:col-span-4 group">
+            <Link href="/threads" className="col-span-6 md:col-span-3 group">
               <TiltCard className="h-full">
                 <motion.div
                   whileHover={{ scale: 1.02 }}
@@ -536,7 +541,7 @@ export default function Home() {
             </Link>
 
             {/* X (Twitter) 자동화 */}
-            <Link href="/x" className="col-span-6 md:col-span-4 group">
+            <Link href="/x" className="col-span-6 md:col-span-3 group">
               <TiltCard className="h-full">
                 <motion.div
                   whileHover={{ scale: 1.02 }}
@@ -555,7 +560,7 @@ export default function Home() {
             </Link>
 
             {/* AI 글쓰기 */}
-            <a href="https://doctor-voice-pro-ghwi.vercel.app/" target="_blank" rel="noopener noreferrer" className="col-span-6 md:col-span-4 group">
+            <a href="https://doctor-voice-pro-ghwi.vercel.app/" target="_blank" rel="noopener noreferrer" className="col-span-6 md:col-span-3 group">
               <TiltCard className="h-full">
                 <motion.div
                   whileHover={{ scale: 1.02 }}

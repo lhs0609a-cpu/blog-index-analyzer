@@ -560,10 +560,7 @@ export default function Dashboard() {
               </div>
 
               {/* Action Buttons */}
-              <div className="grid grid-cols-3 gap-2 mt-4">
-                <button className="py-2 px-3 rounded-xl bg-purple-100 text-purple-700 font-semibold hover:bg-purple-200 transition-colors text-sm">
-                  상세보기
-                </button>
+              <div className="grid grid-cols-2 gap-2 mt-4">
                 <button
                   onClick={(e) => handleRefreshBlog(blog.blog_id, e)}
                   disabled={refreshingBlogId === blog.blog_id}
