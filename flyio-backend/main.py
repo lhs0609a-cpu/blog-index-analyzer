@@ -139,6 +139,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Ad auto optimizer failed to start: {e}")
 
+    # Threads DB 초기화
+    try:
+        from database.threads_db import init_threads_db
+        init_threads_db()
+        logger.info("✅ Threads tables initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ Threads tables initialization failed: {e}")
+
     # Threads 자동 게시 스케줄러 시작
     try:
         from services.threads_auto_poster import threads_auto_poster
@@ -147,6 +155,22 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Threads auto poster failed to start: {e}")
 
+    # X (Twitter) DB 초기화
+    try:
+        from database.x_db import init_x_tables
+        init_x_tables()
+        logger.info("✅ X (Twitter) tables initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ X tables initialization failed: {e}")
+
+    # X 자동 게시 스케줄러 시작
+    try:
+        from services.x_auto_poster import start_auto_poster
+        start_auto_poster()
+        logger.info("✅ X auto poster started (every 1 min)")
+    except Exception as e:
+        logger.warning(f"⚠️ X auto poster failed to start: {e}")
+
     # Ad Optimization DB 초기화
     try:
         from database.ad_optimization_db import init_ad_optimization_tables
@@ -154,6 +178,14 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Ad optimization tables initialized")
     except Exception as e:
         logger.warning(f"⚠️ Ad optimization tables initialization failed: {e}")
+
+    # Community DB 초기화
+    try:
+        from database.community_db import init_community_tables
+        init_community_tables()
+        logger.info("✅ Community tables initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ Community tables initialization failed: {e}")
 
     # Redis 연결 초기화 (선택적)
     if settings.REDIS_URL:
@@ -200,6 +232,14 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Threads auto poster stopped")
     except Exception as e:
         logger.warning(f"⚠️ Threads auto poster shutdown issue: {e}")
+
+    # X 자동 게시 스케줄러 중지
+    try:
+        from services.x_auto_poster import stop_auto_poster
+        stop_auto_poster()
+        logger.info("✅ X auto poster stopped")
+    except Exception as e:
+        logger.warning(f"⚠️ X auto poster shutdown issue: {e}")
 
     # 백업 스케줄러 중지 및 마지막 백업 생성
     try:
@@ -303,6 +343,7 @@ from routers import ad_dashboard
 from routers import blue_ocean
 from routers import xp
 from routers import threads
+from routers import x as x_router
 from routers import optimization_monitor
 from routers import hourly_bidding
 from routers import anomaly_detection
@@ -311,6 +352,7 @@ from routers import creative_fatigue
 from routers import naver_quality
 from routers import budget_pacing
 from routers import funnel_bidding
+from routers import community
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
@@ -338,6 +380,7 @@ app.include_router(ad_dashboard.router)  # prefix already set in router
 app.include_router(blue_ocean.router, prefix="/api/blue-ocean", tags=["블루오션키워드"])
 app.include_router(xp.router, tags=["XP시스템"])
 app.include_router(threads.router, tags=["쓰레드자동화"])
+app.include_router(x_router.router, tags=["X자동화"])
 app.include_router(optimization_monitor.router, tags=["최적화모니터링"])
 app.include_router(hourly_bidding.router, tags=["시간대별입찰"])
 app.include_router(anomaly_detection.router, tags=["이상징후감지"])
@@ -346,6 +389,7 @@ app.include_router(creative_fatigue.router, tags=["크리에이티브피로도"]
 app.include_router(naver_quality.router, tags=["네이버품질지수"])
 app.include_router(budget_pacing.router, tags=["예산페이싱"])
 app.include_router(funnel_bidding.router, tags=["퍼널입찰"])
+app.include_router(community.router, tags=["커뮤니티"])
 
 
 if __name__ == "__main__":

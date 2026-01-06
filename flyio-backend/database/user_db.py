@@ -11,7 +11,13 @@ import os
 logger = logging.getLogger(__name__)
 
 # Database path - use persistent volume
-DATABASE_PATH = os.environ.get("DATABASE_PATH", "/app/data/blog_analyzer.db")
+# Windows 로컬 개발환경에서는 ./data 사용
+import sys
+if sys.platform == "win32":
+    _default_path = os.path.join(os.path.dirname(__file__), "..", "data", "blog_analyzer.db")
+else:
+    _default_path = "/data/blog_analyzer.db"
+DATABASE_PATH = os.environ.get("DATABASE_PATH", _default_path)
 
 
 class UserDB:

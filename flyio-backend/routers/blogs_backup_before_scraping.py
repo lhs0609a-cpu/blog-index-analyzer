@@ -915,94 +915,6 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
     return post_analysis
 
 
-async def scrape_blog_stats(blog_id: str) -> Dict:
-    """
-    실제 블로그 페이지를 스크래핑하여 정확한 통계 수집
-    - 총 글 수, 이웃 수, 방문자 수를 실제 페이지에서 추출
-    """
-    stats = {
-        "total_posts": None,
-        "neighbor_count": None,
-        "total_visitors": None,
-        "success": False,
-        "source": "scrape"
-    }
-
-    try:
-        headers = {
-            "User-Agent": random.choice(USER_AGENTS),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "ko-KR,ko;q=0.9",
-            "Referer": "https://m.blog.naver.com/",
-        }
-
-        timeout = httpx.Timeout(8.0, connect=3.0)
-        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-            # 모바일 블로그 메인 페이지 접근
-            blog_url = f"https://m.blog.naver.com/{blog_id}"
-            resp = await client.get(blog_url, headers=headers)
-
-            if resp.status_code == 200:
-                html = resp.text
-
-                # 1. 총 글 수 추출 (여러 패턴 시도)
-                # 패턴: "게시글 1,234" 또는 "포스트 1234" 또는 data-count="1234"
-                post_patterns = [
-                    r'게시글\s*(\d[\d,]*)',
-                    r'포스트\s*(\d[\d,]*)',
-                    r'전체글\s*\((\d[\d,]*)\)',
-                    r'"postCnt":\s*(\d+)',
-                    r'data-post-count="(\d+)"',
-                    r'글\s*(\d[\d,]*)\s*개',
-                ]
-                for pattern in post_patterns:
-                    match = re.search(pattern, html)
-                    if match:
-                        stats["total_posts"] = int(match.group(1).replace(',', ''))
-                        break
-
-                # 2. 이웃 수 추출
-                neighbor_patterns = [
-                    r'이웃\s*(\d[\d,]*)',
-                    r'"buddyCnt":\s*(\d+)',
-                    r'서로이웃\s*(\d[\d,]*)',
-                    r'data-buddy-count="(\d+)"',
-                ]
-                for pattern in neighbor_patterns:
-                    match = re.search(pattern, html)
-                    if match:
-                        stats["neighbor_count"] = int(match.group(1).replace(',', ''))
-                        break
-
-                # 3. 방문자 수 추출
-                visitor_patterns = [
-                    r'방문자\s*(\d[\d,]*)',
-                    r'"visitorcnt":\s*"?(\d+)"?',
-                    r'전체방문\s*(\d[\d,]*)',
-                    r'data-visitor="(\d+)"',
-                    r'총\s*방문\s*(\d[\d,]*)',
-                ]
-                for pattern in visitor_patterns:
-                    match = re.search(pattern, html, re.IGNORECASE)
-                    if match:
-                        stats["total_visitors"] = int(match.group(1).replace(',', ''))
-                        break
-
-                # 성공 여부 판단 (최소 1개 이상 추출)
-                if stats["total_posts"] or stats["neighbor_count"] or stats["total_visitors"]:
-                    stats["success"] = True
-                    logger.info(f"Blog scrape success: {blog_id} - posts={stats['total_posts']}, neighbors={stats['neighbor_count']}, visitors={stats['total_visitors']}")
-                else:
-                    logger.warning(f"Blog scrape: no stats found for {blog_id}")
-
-    except httpx.TimeoutException:
-        logger.warning(f"Blog scrape timeout: {blog_id}")
-    except Exception as e:
-        logger.warning(f"Blog scrape error for {blog_id}: {e}")
-
-    return stats
-
-
 async def analyze_blog(blog_id: str) -> Dict:
     """Analyze a single blog - FAST version using API only (no Playwright)"""
     # 캐시 확인 (성능 개선)
@@ -1039,19 +951,7 @@ async def analyze_blog(blog_id: str) -> Dict:
     }
 
     try:
-        # ===== 1단계: 실제 블로그 페이지 스크래핑 시도 =====
-        scraped_stats = await scrape_blog_stats(blog_id)
-        if scraped_stats["success"]:
-            analysis_data["data_sources"].append("scrape")
-            if scraped_stats["total_posts"]:
-                stats["total_posts"] = scraped_stats["total_posts"]
-            if scraped_stats["neighbor_count"]:
-                stats["neighbor_count"] = scraped_stats["neighbor_count"]
-            if scraped_stats["total_visitors"]:
-                stats["total_visitors"] = scraped_stats["total_visitors"]
-            logger.info(f"Using scraped data for {blog_id}")
-
-        # ===== 2단계: RSS 기반 데이터 수집 (보완/폴백) =====
+        # ===== RSS 기반 데이터 수집 (네이버 API 차단 대응) =====
         headers = {
             "User-Agent": random.choice(USER_AGENTS),
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -1061,7 +961,7 @@ async def analyze_blog(blog_id: str) -> Dict:
         # 타임아웃 공격적 설정: 연결 2초, 읽기 5초 (빠른 실패 → 재시도)
         timeout = httpx.Timeout(5.0, connect=2.0)
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, limits=httpx.Limits(max_connections=30)) as client:
-            # RSS에서 블로그 정보 추출 (스크래핑 실패 시 폴백)
+            # RSS에서 블로그 정보 추출 (가장 신뢰할 수 있는 소스)
             try:
                 rss_url = f"https://rss.blog.naver.com/{blog_id}.xml"
                 resp = await client.get(rss_url, headers=headers)
@@ -1071,22 +971,21 @@ async def analyze_blog(blog_id: str) -> Dict:
                     items = soup.find_all('item')
 
                     if items:
-                        if "rss" not in analysis_data["data_sources"]:
-                            analysis_data["data_sources"].append("rss")
+                        analysis_data["data_sources"].append("rss")
 
-                        # 포스트 수 - 스크래핑 데이터가 없을 때만 RSS 추정 사용
-                        if not stats["total_posts"]:
-                            rss_count = len(items)
-                            if rss_count >= 48:
-                                stats["total_posts"] = get_consistent_value(blog_id, 200, 500, "posts")
-                            elif rss_count >= 30:
-                                stats["total_posts"] = get_consistent_value(blog_id, 100, 200, "posts")
-                            elif rss_count >= 10:
-                                stats["total_posts"] = get_consistent_value(blog_id, 50, 100, "posts")
-                            else:
-                                stats["total_posts"] = rss_count * 2
+                        # 포스트 수 추정 (RSS는 최대 50개 제공)
+                        rss_count = len(items)
+                        if rss_count >= 48:
+                            # RSS가 꽉 차면 활발한 블로그로 추정
+                            stats["total_posts"] = get_consistent_value(blog_id, 200, 500, "posts")
+                        elif rss_count >= 30:
+                            stats["total_posts"] = get_consistent_value(blog_id, 100, 200, "posts")
+                        elif rss_count >= 10:
+                            stats["total_posts"] = get_consistent_value(blog_id, 50, 100, "posts")
+                        else:
+                            stats["total_posts"] = rss_count * 2
 
-                        # 평균 글 길이 계산 (처음 5개) - 항상 RSS에서 가져옴
+                        # 평균 글 길이 계산 (처음 5개)
                         total_len = 0
                         valid_items = 0
                         for item in items[:5]:
@@ -1341,18 +1240,11 @@ async def analyze_blog(blog_id: str) -> Dict:
 
             total_score = base_score + extra_bonus
 
-            # 데이터 소스에 따른 신뢰도 보정
-            # - scrape 있음: 실제 데이터 → 패널티 없음
-            # - rss만 있음: 추정 데이터 → 10% 패널티
-            # - 데이터 없음: 기본값 25점
+            # Penalty if no data sources
             if not analysis_data["data_sources"]:
                 total_score = 25
-            elif "scrape" in analysis_data["data_sources"]:
-                # 실제 스크래핑 데이터 있음 → 패널티 없음
-                pass
             elif len(analysis_data["data_sources"]) == 1:
-                # RSS만 있음 → 10% 패널티 (기존 30%에서 완화)
-                total_score = total_score * 0.9
+                total_score = total_score * 0.7
 
             index["total_score"] = min(round(total_score, 1), 100)
 

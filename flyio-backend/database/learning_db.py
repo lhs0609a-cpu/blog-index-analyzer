@@ -9,7 +9,12 @@ import json
 import os
 
 # Use persistent volume path for database
-DATABASE_PATH = "/app/data/blog_analyzer.db"
+# Windows 로컬 개발환경에서는 ./data 사용
+import sys
+if sys.platform == "win32":
+    DATABASE_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "blog_analyzer.db")
+else:
+    DATABASE_PATH = "/data/blog_analyzer.db"
 
 @contextmanager
 def get_db():

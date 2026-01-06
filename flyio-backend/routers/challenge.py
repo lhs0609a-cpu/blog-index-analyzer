@@ -1354,8 +1354,12 @@ async def complete(
                 # 파일명 생성
                 proof_filename = f"proof_{current_user['id']}_{request.day_number}_{request.mission_id}_{uuid.uuid4().hex[:8]}.jpg"
 
-                # 저장 경로
-                proof_dir = "/app/data/proofs"
+                # 저장 경로 (Windows/Linux 호환)
+                import sys
+                if sys.platform == "win32":
+                    proof_dir = os.path.join(os.path.dirname(__file__), "..", "data", "proofs")
+                else:
+                    proof_dir = "/data/proofs"
                 os.makedirs(proof_dir, exist_ok=True)
 
                 # 파일 저장

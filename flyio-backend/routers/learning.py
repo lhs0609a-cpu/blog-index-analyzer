@@ -331,6 +331,11 @@ async def get_deviation_analysis():
         all_deviations = np.array(all_deviations)
         overall_deviation = float(np.mean(all_deviations))
 
+        # 전체 상관관계 계산
+        all_actual_ranks = np.array([s['actual_rank'] for s in all_sample_details])
+        all_predicted_ranks = np.array([s['predicted_rank'] for s in all_sample_details])
+        correlation = spearmanr(all_actual_ranks, all_predicted_ranks)[0] if len(all_sample_details) > 2 else 0
+
         # 순위 예측 정확도
         rank_accuracy = {
             "perfect_match": round(float(np.mean(all_deviations == 0) * 100), 1),
@@ -369,28 +374,29 @@ async def get_deviation_analysis():
 
         # ===== 5. 가중치 영향 분석 =====
         # 상위권(1-3위)과 하위권(10-13위) 비교
+        actual_ranks = np.array([s['actual_rank'] for s in all_sample_details])
         top_mask = actual_ranks <= 3
         bottom_mask = actual_ranks >= 10
 
         weight_impact = {
             "c_rank": {
-                "top_avg": round(float(np.mean([s['c_rank_score'] for i, s in enumerate(sample_details) if top_mask[i]])) if np.sum(top_mask) > 0 else 0, 1),
-                "bottom_avg": round(float(np.mean([s['c_rank_score'] for i, s in enumerate(sample_details) if bottom_mask[i]])) if np.sum(bottom_mask) > 0 else 0, 1),
+                "top_avg": round(float(np.mean([s['c_rank_score'] for i, s in enumerate(all_sample_details) if top_mask[i]])) if np.sum(top_mask) > 0 else 0, 1),
+                "bottom_avg": round(float(np.mean([s['c_rank_score'] for i, s in enumerate(all_sample_details) if bottom_mask[i]])) if np.sum(bottom_mask) > 0 else 0, 1),
                 "current_weight": current_weights.get('c_rank', {}).get('weight', 0.5)
             },
             "dia": {
-                "top_avg": round(float(np.mean([s['dia_score'] for i, s in enumerate(sample_details) if top_mask[i]])) if np.sum(top_mask) > 0 else 0, 1),
-                "bottom_avg": round(float(np.mean([s['dia_score'] for i, s in enumerate(sample_details) if bottom_mask[i]])) if np.sum(bottom_mask) > 0 else 0, 1),
+                "top_avg": round(float(np.mean([s['dia_score'] for i, s in enumerate(all_sample_details) if top_mask[i]])) if np.sum(top_mask) > 0 else 0, 1),
+                "bottom_avg": round(float(np.mean([s['dia_score'] for i, s in enumerate(all_sample_details) if bottom_mask[i]])) if np.sum(bottom_mask) > 0 else 0, 1),
                 "current_weight": current_weights.get('dia', {}).get('weight', 0.5)
             },
             "post_count": {
-                "top_avg": round(float(np.mean([s['post_count'] for i, s in enumerate(sample_details) if top_mask[i]])) if np.sum(top_mask) > 0 else 0, 0),
-                "bottom_avg": round(float(np.mean([s['post_count'] for i, s in enumerate(sample_details) if bottom_mask[i]])) if np.sum(bottom_mask) > 0 else 0, 0),
+                "top_avg": round(float(np.mean([s['post_count'] for i, s in enumerate(all_sample_details) if top_mask[i]])) if np.sum(top_mask) > 0 else 0, 0),
+                "bottom_avg": round(float(np.mean([s['post_count'] for i, s in enumerate(all_sample_details) if bottom_mask[i]])) if np.sum(bottom_mask) > 0 else 0, 0),
                 "current_weight": current_weights.get('extra_factors', {}).get('post_count', 0.15)
             },
             "neighbor_count": {
-                "top_avg": round(float(np.mean([s['neighbor_count'] for i, s in enumerate(sample_details) if top_mask[i]])) if np.sum(top_mask) > 0 else 0, 0),
-                "bottom_avg": round(float(np.mean([s['neighbor_count'] for i, s in enumerate(sample_details) if bottom_mask[i]])) if np.sum(bottom_mask) > 0 else 0, 0),
+                "top_avg": round(float(np.mean([s['neighbor_count'] for i, s in enumerate(all_sample_details) if top_mask[i]])) if np.sum(top_mask) > 0 else 0, 0),
+                "bottom_avg": round(float(np.mean([s['neighbor_count'] for i, s in enumerate(all_sample_details) if bottom_mask[i]])) if np.sum(bottom_mask) > 0 else 0, 0),
                 "current_weight": current_weights.get('extra_factors', {}).get('neighbor_count', 0.10)
             }
         }
@@ -405,16 +411,12 @@ async def get_deviation_analysis():
 
         # ===== 6. 키워드별 분석 =====
         keyword_stats = {}
-        for s in sample_details:
+        for s in all_sample_details:
             kw = s['keyword']
             if kw not in keyword_stats:
                 keyword_stats[kw] = {'count': 0, 'deviations': []}
             keyword_stats[kw]['count'] += 1
-
-        # 각 키워드의 평균 괴리율 계산
-        for i, s in enumerate(sample_details):
-            kw = s['keyword']
-            keyword_stats[kw]['deviations'].append(rank_differences[i])
+            keyword_stats[kw]['deviations'].append(s['deviation'])
 
         keyword_analysis = []
         for kw, data in keyword_stats.items():

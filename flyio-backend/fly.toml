@@ -1,5 +1,5 @@
 app = "naverpay-delivery-tracker"
-primary_region = "nrt"
+primary_region = "sin"
 
 [build]
 
@@ -12,8 +12,8 @@ primary_region = "nrt"
   processes = ["app"]
 
 [mounts]
-  source = "blog_data"
-  destination = "/app/data"
+  source = "blog_data_restore"
+  destination = "/data"
 
 [[vm]]
   memory = '1gb'

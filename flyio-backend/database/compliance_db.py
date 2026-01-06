@@ -10,7 +10,7 @@ from enum import Enum
 from pathlib import Path
 
 # Database path
-DATA_DIR = Path("/app/data") if Path("/app/data").exists() else Path("./data")
+DATA_DIR = Path("/data") if Path("/data").exists() else Path("./data")
 DATA_DIR.mkdir(exist_ok=True)
 DB_PATH = DATA_DIR / "compliance.db"
 
