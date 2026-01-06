@@ -209,6 +209,29 @@ export async function completeSubscriptionPayment(
   return response.data
 }
 
+// 정기결제 등록 (빌링키 발급 + 첫 결제 + 구독 활성화)
+export async function registerBilling(
+  userId: number | string,
+  customerKey: string,
+  authKey: string,
+  orderId: string,
+  amount: number,
+  planType: PlanType,
+  billingCycle: 'monthly' | 'yearly'
+): Promise<{ success: boolean; message: string; subscription: Subscription; payment: any }> {
+  const response = await apiClient.post('/api/payment/billing/register', {
+    customer_key: customerKey,
+    auth_key: authKey,
+    order_id: orderId,
+    amount: amount,
+    plan_type: planType,
+    billing_cycle: billingCycle
+  }, {
+    params: { user_id: userId }
+  })
+  return response.data
+}
+
 export async function getPaymentHistory(
   userId: number | string,
   limit: number = 10

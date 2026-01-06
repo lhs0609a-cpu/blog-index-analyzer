@@ -30,12 +30,7 @@ def get_cipher():
 
 def get_ad_db_path():
     """DB 경로"""
-    import sys
-    if sys.platform == "win32":
-        default_dir = os.path.join(os.path.dirname(__file__), "..", "data")
-    else:
-        default_dir = "/data"
-    data_dir = getattr(settings, 'DATA_DIR', default_dir)
+    data_dir = getattr(settings, 'DATA_DIR', '/data')
     # 디렉토리가 없으면 생성
     if not os.path.exists(data_dir):
         os.makedirs(data_dir, exist_ok=True)

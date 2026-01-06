@@ -10,14 +10,8 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# DB 경로 - Windows/Linux 호환
-import sys
-import os
-if sys.platform == "win32":
-    _data_dir = Path(os.path.dirname(__file__)).parent / "data"
-else:
-    _data_dir = Path("/data")
-DB_PATH = _data_dir / "threads_automation.db"
+# DB 경로
+DB_PATH = Path("/data/threads_automation.db")
 
 def get_db_connection():
     """DB 연결"""

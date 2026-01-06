@@ -49,11 +49,11 @@ export default function UsageIndicator({ compact = false, showUpgrade = true }: 
   }
 
   const keywordUsed = usage?.keyword_searches.used || 0
-  const keywordLimit = usage?.keyword_searches.limit || 8
+  const keywordLimit = usage?.keyword_searches.limit || 3
   const keywordRemaining = usage?.keyword_searches.remaining ?? 0
 
   const analysisUsed = usage?.blog_analyses.used || 0
-  const analysisLimit = usage?.blog_analyses.limit || 2
+  const analysisLimit = usage?.blog_analyses.limit || 1
   const analysisRemaining = usage?.blog_analyses.remaining ?? 0
 
   const isUnlimited = keywordLimit === -1

@@ -239,6 +239,114 @@ async def issue_billing_key(
         raise HTTPException(status_code=500, detail="결제 서버 연결에 실패했습니다")
 
 
+class BillingRegisterRequest(BaseModel):
+    customer_key: str
+    auth_key: str
+    order_id: str
+    amount: int
+    plan_type: str
+    billing_cycle: str = "monthly"
+
+
+@router.post("/billing/register")
+async def register_billing(
+    request: BillingRegisterRequest,
+    user_id: int = Query(..., description="사용자 ID")
+):
+    """
+    정기결제 등록 - authKey로 빌링키 발급 후 첫 결제 및 구독 활성화
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            # 1. 빌링키 발급
+            logger.info(f"Issuing billing key for user {user_id}, customerKey: {request.customer_key}")
+            billing_response = await client.post(
+                f"{TOSS_API_URL}/billing/authorizations/issue",
+                headers=get_toss_headers(),
+                json={
+                    "customerKey": request.customer_key,
+                    "authKey": request.auth_key
+                }
+            )
+
+            if billing_response.status_code != 200:
+                error_data = billing_response.json()
+                logger.error(f"Billing key issue failed: {error_data}")
+                raise HTTPException(
+                    status_code=billing_response.status_code,
+                    detail=error_data.get("message", "빌링키 발급에 실패했습니다")
+                )
+
+            billing_data = billing_response.json()
+            billing_key = billing_data.get("billingKey")
+            logger.info(f"Billing key issued successfully: {billing_key[:20]}...")
+
+            # 2. 빌링키로 첫 결제 진행
+            plan = PlanType(request.plan_type)
+            order_name = f"블랭크 {PLAN_LIMITS[plan]['name']} 플랜 ({request.billing_cycle})"
+
+            logger.info(f"Processing first billing payment: {request.amount}원")
+            payment_response = await client.post(
+                f"{TOSS_API_URL}/billing/{billing_key}",
+                headers=get_toss_headers(),
+                json={
+                    "customerKey": request.customer_key,
+                    "amount": request.amount,
+                    "orderId": request.order_id,
+                    "orderName": order_name
+                }
+            )
+
+            if payment_response.status_code != 200:
+                error_data = payment_response.json()
+                logger.error(f"Billing payment failed: {error_data}")
+                raise HTTPException(
+                    status_code=payment_response.status_code,
+                    detail=error_data.get("message", "결제에 실패했습니다")
+                )
+
+            payment_data = payment_response.json()
+            payment_key = payment_data.get("paymentKey")
+            logger.info(f"Billing payment successful: paymentKey={payment_key}")
+
+            # 3. 결제 내역 저장
+            create_payment(user_id, request.order_id, request.amount, payment_key, "completed")
+
+            # 4. 구독 업그레이드
+            subscription = upgrade_subscription(
+                user_id=user_id,
+                plan_type=request.plan_type,
+                billing_cycle=request.billing_cycle,
+                payment_key=payment_key,
+                customer_key=request.customer_key
+            )
+
+            logger.info(f"Subscription upgraded: user={user_id}, plan={request.plan_type}")
+
+            return {
+                "success": True,
+                "message": f"{PLAN_LIMITS[plan]['name']} 플랜이 활성화되었습니다",
+                "subscription": subscription,
+                "payment": {
+                    "payment_key": payment_key,
+                    "order_id": request.order_id,
+                    "amount": request.amount,
+                    "card_company": billing_data.get("card", {}).get("company"),
+                    "card_number": billing_data.get("card", {}).get("number"),
+                    "approved_at": payment_data.get("approvedAt")
+                }
+            }
+
+    except HTTPException:
+        raise
+    except httpx.RequestError as e:
+        logger.error(f"Billing register request error: {e}")
+        raise HTTPException(status_code=500, detail="결제 서버 연결에 실패했습니다")
+    except Exception as e:
+        logger.error(f"Billing register error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/billing/pay")
 async def billing_payment(
     request: BillingPaymentRequest,

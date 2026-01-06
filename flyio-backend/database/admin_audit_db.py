@@ -8,14 +8,8 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any
 import json
 import logging
-import os
-import sys
 
-# Windows 로컬 개발환경에서는 ./data 사용
-if sys.platform == "win32":
-    DATABASE_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "blog_analyzer.db")
-else:
-    DATABASE_PATH = "/data/blog_analyzer.db"
+DATABASE_PATH = "/app/data/blog_analyzer.db"
 
 logger = logging.getLogger(__name__)
 

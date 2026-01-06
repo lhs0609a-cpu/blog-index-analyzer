@@ -13,13 +13,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# 데이터베이스 경로 - /data 볼륨에 저장 (영속적)
-# Windows 로컬 개발환경에서는 ./data 사용
-import sys
-if sys.platform == "win32":
-    DATA_DIR = os.environ.get("DATA_DIR", os.path.join(os.path.dirname(__file__), "..", "data"))
-else:
-    DATA_DIR = os.environ.get("DATA_DIR", "/data")
+# 데이터베이스 경로 - /app/data 볼륨에 저장 (영속적)
+DATA_DIR = os.environ.get("DATA_DIR", "/app/data")
 os.makedirs(DATA_DIR, exist_ok=True)
 DB_PATH = os.path.join(DATA_DIR, "subscription.db")
 
@@ -37,8 +32,8 @@ PLAN_LIMITS = {
         "name": "무료",
         "price_monthly": 0,
         "price_yearly": 0,
-        "keyword_search_daily": 8,
-        "blog_analysis_daily": 2,
+        "keyword_search_daily": 3,
+        "blog_analysis_daily": 1,
         "search_results_count": 5,
         "history_days": 0,
         "competitor_compare": 0,

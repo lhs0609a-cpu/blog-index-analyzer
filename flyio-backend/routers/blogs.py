@@ -1088,25 +1088,20 @@ async def analyze_blog(blog_id: str) -> Dict:
 
             # Content Score (콘텐츠 품질) - 0~100
             content_score = 50  # Base
-            # RSS description은 요약이라 실제 글 길이의 10-15% 정도만 포함
-            # 따라서 RSS 길이 × 6~8 정도가 실제 글 길이에 가까움
-            avg_len = analysis_data.get("avg_post_length") or 0
-            if avg_len > 0 and avg_len < 500:
-                # RSS 요약문이 짧으면 실제 글 길이로 보정 (약 6~8배)
-                avg_len = avg_len * 7
-
-            if avg_len >= 3000:
-                content_score = 95
-            elif avg_len >= 2000:
-                content_score = 85
-            elif avg_len >= 1500:
-                content_score = 75
-            elif avg_len >= 1000:
-                content_score = 65
-            elif avg_len >= 500:
-                content_score = 50
-            else:
-                content_score = 35
+            if analysis_data["avg_post_length"]:
+                avg_len = analysis_data["avg_post_length"]
+                if avg_len >= 3000:
+                    content_score = 95
+                elif avg_len >= 2000:
+                    content_score = 85
+                elif avg_len >= 1500:
+                    content_score = 75
+                elif avg_len >= 1000:
+                    content_score = 65
+                elif avg_len >= 500:
+                    content_score = 50
+                else:
+                    content_score = 35
 
             # Chain Score (연결성) - 0~100
             chain_score = 50  # Base
@@ -1244,28 +1239,28 @@ async def analyze_blog(blog_id: str) -> Dict:
             if not analysis_data["data_sources"]:
                 total_score = 25
             elif len(analysis_data["data_sources"]) == 1:
-                total_score = total_score * 0.7
+                total_score = max(total_score * 0.7, 30)
 
             index["total_score"] = min(round(total_score, 1), 100)
 
-            # Calculate level (1-10) - 5점 단위로 세분화
-            if total_score >= 45:
+            # Calculate level (1-10)
+            if total_score >= 90:
                 index["level"] = 10
-            elif total_score >= 40:
+            elif total_score >= 80:
                 index["level"] = 9
-            elif total_score >= 35:
+            elif total_score >= 70:
                 index["level"] = 8
-            elif total_score >= 32:
+            elif total_score >= 60:
                 index["level"] = 7
-            elif total_score >= 29:
+            elif total_score >= 50:
                 index["level"] = 6
-            elif total_score >= 26:
+            elif total_score >= 40:
                 index["level"] = 5
-            elif total_score >= 23:
+            elif total_score >= 30:
                 index["level"] = 4
             elif total_score >= 20:
                 index["level"] = 3
-            elif total_score >= 15:
+            elif total_score >= 10:
                 index["level"] = 2
             else:
                 index["level"] = 1

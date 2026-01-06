@@ -6,7 +6,7 @@ import { motion } from 'framer-motion'
 import { CreditCard, Lock, ArrowLeft, Loader2, CheckCircle, Calendar, Shield, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
-import { confirmPayment, completeSubscriptionPayment, type PlanType } from '@/lib/api/subscription'
+import { registerBilling, type PlanType } from '@/lib/api/subscription'
 import toast from 'react-hot-toast'
 
 // 토스페이먼츠 클라이언트 키 (라이브) - 자동결제(빌링)용 / MID: bill_nsmard045
@@ -45,23 +45,33 @@ function PaymentContent() {
 
     setIsProcessing(true)
     try {
-      // 1. 빌링키 발급 확인 및 첫 결제 진행 (백엔드에서 처리)
-      await confirmPayment(user.id, authKey, orderId, amount)
+      // 빌링키 발급 + 첫 결제 + 구독 활성화 (백엔드에서 한번에 처리)
+      const result = await registerBilling(
+        user.id,
+        customerKey,
+        authKey,
+        orderId,
+        amount,
+        planType,
+        billingCycle
+      )
 
-      // 2. 구독 완료 처리
-      await completeSubscriptionPayment(user.id, authKey, orderId, planType, billingCycle)
+      if (result.success) {
+        setIsComplete(true)
+        toast.success('정기결제 등록이 완료되었습니다!')
 
-      setIsComplete(true)
-      toast.success('정기결제 등록이 완료되었습니다!')
+        // 3초 후 대시보드로 이동
+        setTimeout(() => {
+          router.push('/dashboard/subscription')
+        }, 3000)
+      } else {
+        toast.error(result.message || '정기결제 등록 중 오류가 발생했습니다')
+      }
 
-      // 3초 후 대시보드로 이동
-      setTimeout(() => {
-        router.push('/dashboard/subscription')
-      }, 3000)
-
-    } catch (error) {
+    } catch (error: any) {
       console.error('Billing registration failed:', error)
-      toast.error('정기결제 등록 중 오류가 발생했습니다')
+      const errorMessage = error?.response?.data?.detail || '정기결제 등록 중 오류가 발생했습니다'
+      toast.error(errorMessage)
     } finally {
       setIsProcessing(false)
     }
