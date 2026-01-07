@@ -24,13 +24,13 @@ jobs:
             cd ~/blog-index-analyzer
             git pull origin main
             cd flyio-backend
-            docker build -t blog-backend .
-            docker stop blog-backend || true
-            docker rm blog-backend || true
+            docker build -t blog-api .
+            docker stop blog-analyzer-api || true
+            docker rm blog-analyzer-api || true
             docker run -d \
-              --name blog-backend \
+              --name blog-analyzer-api \
               -p 8000:8000 \
               --env-file .env \
               --restart unless-stopped \
-              blog-backend
+              blog-api
             echo "Deployment completed at $(date)"
