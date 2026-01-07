@@ -865,11 +865,13 @@ function KeywordSearchContent() {
   }
 
   const getLevelColor = (level: number) => {
-    if (level === 1) return 'bg-gray-400'
-    if (level >= 2 && level <= 8) return 'bg-blue-400'
-    if (level >= 9 && level <= 11) return 'bg-purple-400'
-    if (level >= 12 && level <= 15) return 'bg-pink-500'
-    return 'bg-gray-300'
+    if (level <= 1) return 'bg-gray-400'
+    if (level <= 3) return 'bg-slate-500'      // 입문
+    if (level <= 6) return 'bg-blue-500'       // 성장기
+    if (level <= 9) return 'bg-indigo-500'     // 준최적화
+    if (level <= 12) return 'bg-purple-500'    // 최적화
+    if (level <= 14) return 'bg-pink-500'      // 챌린저/그랜드마스터
+    return 'bg-gradient-to-r from-amber-400 to-orange-500' // 마스터 (Lv.15)
   }
 
   const getScoreColor = (score: number) => {

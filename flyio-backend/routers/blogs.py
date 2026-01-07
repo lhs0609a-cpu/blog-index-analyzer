@@ -1356,36 +1356,48 @@ async def analyze_blog(blog_id: str) -> Dict:
 
             index["total_score"] = min(round(total_score, 1), 100)
 
-            # Calculate level (1-10) - 5점 단위로 세분화
-            if total_score >= 45:
+            # Calculate level (1-15) - 고득점 블로그 세분화
+            if total_score >= 70:
+                index["level"] = 15
+            elif total_score >= 66:
+                index["level"] = 14
+            elif total_score >= 62:
+                index["level"] = 13
+            elif total_score >= 58:
+                index["level"] = 12
+            elif total_score >= 54:
+                index["level"] = 11
+            elif total_score >= 50:
                 index["level"] = 10
-            elif total_score >= 40:
+            elif total_score >= 45:
                 index["level"] = 9
-            elif total_score >= 35:
+            elif total_score >= 40:
                 index["level"] = 8
-            elif total_score >= 32:
+            elif total_score >= 35:
                 index["level"] = 7
-            elif total_score >= 29:
+            elif total_score >= 30:
                 index["level"] = 6
-            elif total_score >= 26:
+            elif total_score >= 25:
                 index["level"] = 5
-            elif total_score >= 23:
-                index["level"] = 4
             elif total_score >= 20:
-                index["level"] = 3
+                index["level"] = 4
             elif total_score >= 15:
+                index["level"] = 3
+            elif total_score >= 10:
                 index["level"] = 2
             else:
                 index["level"] = 1
 
             # Set grade based on level
             grade_map = {
-                10: "최적화1", 9: "최적화2", 8: "최적화3",
-                7: "준최적화1", 6: "준최적화2", 5: "준최적화3",
-                4: "성장기1", 3: "성장기2", 2: "성장기3", 1: "초보"
+                15: "마스터", 14: "그랜드마스터", 13: "챌린저",
+                12: "최적화1", 11: "최적화2", 10: "최적화3",
+                9: "준최적화1", 8: "준최적화2", 7: "준최적화3",
+                6: "성장기1", 5: "성장기2", 4: "성장기3",
+                3: "입문1", 2: "입문2", 1: "초보"
             }
             index["grade"] = grade_map.get(index["level"], "")
-            index["level_category"] = "최적화" if index["level"] >= 8 else "준최적화" if index["level"] >= 5 else "성장기"
+            index["level_category"] = "마스터" if index["level"] >= 13 else "최적화" if index["level"] >= 10 else "준최적화" if index["level"] >= 7 else "성장기" if index["level"] >= 4 else "입문"
             index["percentile"] = min(index["total_score"], 99)
 
             # Store detailed breakdown
