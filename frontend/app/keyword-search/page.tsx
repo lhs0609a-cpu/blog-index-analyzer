@@ -315,7 +315,8 @@ function KeywordSearchContent() {
     if (!searchKeyword.trim()) return
 
     // 로그인한 사용자인 경우 사용량 체크 및 차감
-    if (isAuthenticated && user?.id) {
+    // 관리자는 사용량 제한 없음
+    if (isAuthenticated && user?.id && !user?.is_admin) {
       try {
         const usageCheck = await checkUsageLimit(user.id, 'keyword_search')
         if (!usageCheck.allowed) {
@@ -414,6 +415,7 @@ function KeywordSearchContent() {
   // 멀티 키워드 검색 핸들러
   const handleMultiKeywordSearch = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log('[MultiKeyword] Search started, input:', keywordsInput)
 
     // 입력된 키워드 파싱 (쉼표, 줄바꿈, 공백으로 구분)
     const keywords = keywordsInput
@@ -422,8 +424,11 @@ function KeywordSearchContent() {
       .filter(k => k.length > 0)
       .slice(0, maxKeywords) // 플랜별 동적 제한
 
+    console.log('[MultiKeyword] Parsed keywords:', keywords)
+
     if (keywords.length === 0) {
       setError('최소 1개 이상의 키워드를 입력하세요')
+      console.log('[MultiKeyword] No keywords, returning')
       return
     }
 
@@ -433,7 +438,8 @@ function KeywordSearchContent() {
     }
 
     // 로그인한 사용자인 경우 사용량 체크 및 차감 (멀티 검색은 1회로 처리)
-    if (isAuthenticated && user?.id) {
+    // 관리자는 사용량 제한 없음
+    if (isAuthenticated && user?.id && !user?.is_admin) {
       try {
         const usageCheck = await checkUsageLimit(user.id, 'keyword_search')
         if (!usageCheck.allowed) {
@@ -449,6 +455,7 @@ function KeywordSearchContent() {
     }
 
     // 초기 상태 설정
+    console.log('[MultiKeyword] Setting initial statuses for', keywords.length, 'keywords')
     const initialStatuses: KeywordSearchStatus[] = keywords.map(keyword => ({
       keyword,
       status: 'pending',
@@ -461,6 +468,7 @@ function KeywordSearchContent() {
     setKeywordStatuses(initialStatuses)
     setIsAnalyzing(true)
     setError('')
+    console.log('[MultiKeyword] isAnalyzing set to true, starting search...')
 
     // 동시 요청 수 제한 (서버 과부하 방지)
     // 각 키워드당 ~40-50개의 HTTP 요청이 발생하므로 동시 요청을 3개로 제한
@@ -537,8 +545,16 @@ function KeywordSearchContent() {
       await Promise.all(executing)
     }
 
-    await processWithConcurrencyLimit()
-    setIsAnalyzing(false)
+    try {
+      await processWithConcurrencyLimit()
+      console.log('[MultiKeyword] All searches completed')
+    } catch (err) {
+      console.error('[MultiKeyword] Error during search:', err)
+      setError(err instanceof Error ? err.message : '검색 중 오류가 발생했습니다')
+    } finally {
+      setIsAnalyzing(false)
+      console.log('[MultiKeyword] isAnalyzing set to false')
+    }
 
     // 첫 번째 키워드에 대해 연관 키워드 조회 및 학습 데이터 수집
     const firstKeyword = keywords[0]
