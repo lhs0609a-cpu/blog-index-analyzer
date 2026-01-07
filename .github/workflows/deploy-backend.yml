@@ -33,4 +33,23 @@ jobs:
               --env-file .env \
               --restart unless-stopped \
               blog-api
+
+            # Update Caddyfile with CORS headers
+            sudo tee /etc/caddy/Caddyfile > /dev/null << 'CADDYEOF'
+            api.blrank.co.kr {
+                reverse_proxy localhost:8000
+
+                header {
+                    Access-Control-Allow-Origin *
+                    Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+                    Access-Control-Allow-Headers *
+                    Access-Control-Max-Age 3600
+                }
+
+                @options method OPTIONS
+                respond @options 204
+            }
+            CADDYEOF
+
+            sudo systemctl reload caddy
             echo "Deployment completed at $(date)"
