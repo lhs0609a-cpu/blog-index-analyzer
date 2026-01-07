@@ -27,7 +27,7 @@ import { PLAN_INFO } from '@/lib/features/featureAccess'
 import Tutorial, { toolsTutorialSteps } from '@/components/Tutorial'
 import ToolTutorial, { shouldShowToolTutorial } from '@/components/ToolTutorial'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
 
 type TabType = 'title' | 'blueocean' | 'writing' | 'insight' | 'prediction' | 'report' | 'hashtag' | 'timing' | 'youtube' | 'lowquality' | 'backup' | 'campaign' | 'ranktrack' | 'clone' | 'comment' | 'algorithm' | 'lifespan' | 'refresh' | 'related' | 'mentor' | 'trend' | 'revenue' | 'roadmap' | 'secretkw' | 'datalab' | 'shopping' | 'place' | 'news' | 'cafe' | 'naverView' | 'influencer' | 'searchAnalysis' | 'kin' | 'smartstore' | 'keywordAnalysis'
 

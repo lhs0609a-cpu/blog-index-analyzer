@@ -51,7 +51,7 @@ interface Recommendation {
   difficulty: string;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://naverpay-delivery-tracker.fly.dev";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.blrank.co.kr";
 
 const QUALITY_LEVEL_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   excellent: { label: "우수", color: "text-green-600", bg: "bg-green-100" },

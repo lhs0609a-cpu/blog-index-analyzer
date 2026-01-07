@@ -367,7 +367,11 @@
       "Bash(\"C:\\\\Users\\\\lhs06\\\\.fly\\\\bin\\\\flyctl.exe\" deploy --strategy immediate --wait-timeout 300)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nchore: Disable auto-learning and update configurations\n\n- Disable auto-learning service for server stability\n- Update frontend .gitignore to exclude .env*.local files\n- Update local Claude settings\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(/c/Users/u/.fly/bin/flyctl.exe logs:*)",
-      "Bash(\"C:\\\\Users\\\\lhs06\\\\.fly\\\\bin\\\\flyctl.exe\" logs -a naverpay-delivery-tracker -n)"
+      "Bash(\"C:\\\\Users\\\\lhs06\\\\.fly\\\\bin\\\\flyctl.exe\" logs -a naverpay-delivery-tracker -n)",
+      "Bash(\"C:\\\\Users\\\\lhs06\\\\.fly\\\\bin\\\\flyctl.exe\" machines list -a naverpay-delivery-tracker)",
+      "Bash(\"C:\\\\Users\\\\lhs06\\\\.fly\\\\bin\\\\flyctl.exe\" machine stop 286e235fd914d8 -a naverpay-delivery-tracker --signal KILL)",
+      "Bash(git grep:*)",
+      "Bash(powershell -Command \"Get-ChildItem -Recurse -Include *.ts,*.tsx,*.js | ForEach-Object { \\(Get-Content $_FullName -Raw\\) -replace ''https://naverpay-delivery-tracker.fly.dev'', ''https://api.blrank.co.kr'' | Set-Content $_FullName -NoNewline }\")"
     ],
     "deny": [],
     "ask": []

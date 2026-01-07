@@ -17,7 +17,7 @@ import {
   FEATURE_DESCRIPTIONS,
 } from "@/components/ad-optimizer/PlatformSupportBanner"
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
 
 // 페이싱 상태별 스타일
 const STATUS_STYLES: Record<string, { bg: string; text: string; icon: any }> = {

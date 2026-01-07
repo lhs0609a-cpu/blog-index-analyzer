@@ -19,7 +19,7 @@ import {
   PlatformBadge,
 } from "@/components/ad-optimizer/PlatformSupportBanner"
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
 
 // 퍼널 단계별 스타일
 const STAGE_STYLES: Record<string, { bg: string; text: string; border: string; icon: any; gradient: string }> = {

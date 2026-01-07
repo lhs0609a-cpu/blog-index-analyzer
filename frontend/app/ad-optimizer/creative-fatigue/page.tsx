@@ -48,7 +48,7 @@ interface Recommendation {
   budget_impact: string;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://naverpay-delivery-tracker.fly.dev";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.blrank.co.kr";
 
 const FATIGUE_LEVEL_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   fresh: { label: "신선함", color: "text-green-600", bg: "bg-green-100" },
