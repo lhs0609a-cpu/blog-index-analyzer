@@ -314,6 +314,14 @@ function KeywordSearchContent() {
   const performSearch = useCallback(async (searchKeyword: string) => {
     if (!searchKeyword.trim()) return
 
+    // 즉시 로딩 상태 표시 (사용자 피드백)
+    setLoading(true)
+    setError('')
+    setResults(null)
+    setMyBlogResult(null)
+    setProgress(0)
+    setProgressMessage('검색 준비 중...')
+
     // 로그인한 사용자인 경우 사용량 체크 및 차감
     // 관리자는 사용량 제한 없음
     if (isAuthenticated && user?.id && !user?.is_admin) {
@@ -321,21 +329,21 @@ function KeywordSearchContent() {
         const usageCheck = await checkUsageLimit(user.id, 'keyword_search')
         if (!usageCheck.allowed) {
           toast.error(`일일 키워드 검색 한도(${usageCheck.limit}회)에 도달했습니다. 업그레이드를 고려해주세요.`)
+          setLoading(false)
+          setProgress(0)
+          setProgressMessage('')
           return
         }
-        // 사용량 차감
-        await incrementUsage(user.id, 'keyword_search')
+        // 사용량 차감 (백그라운드에서 처리)
+        incrementUsage(user.id, 'keyword_search').catch(err => {
+          console.error('Usage tracking error:', err)
+        })
       } catch (err) {
-        console.error('Usage tracking error:', err)
-        // 사용량 추적 실패 시에도 검색은 진행
+        console.error('Usage check error:', err)
+        // 사용량 체크 실패 시에도 검색은 진행
       }
     }
 
-    setLoading(true)
-    setError('')
-    setResults(null)
-    setMyBlogResult(null)
-    setProgress(0)
     setProgressMessage('블로그 검색 중...')
 
     try {
@@ -437,6 +445,20 @@ function KeywordSearchContent() {
       return
     }
 
+    // 즉시 분석 상태로 전환 (사용자 피드백)
+    console.log('[MultiKeyword] Setting initial statuses for', keywords.length, 'keywords')
+    const initialStatuses: KeywordSearchStatus[] = keywords.map(keyword => ({
+      keyword,
+      status: 'pending' as const,
+      progress: 0,
+      result: null,
+      error: null,
+      startTime: Date.now()
+    }))
+    setKeywordStatuses(initialStatuses)
+    setIsAnalyzing(true)
+    setError('')
+
     // 로그인한 사용자인 경우 사용량 체크 및 차감 (멀티 검색은 1회로 처리)
     // 관리자는 사용량 제한 없음
     if (isAuthenticated && user?.id && !user?.is_admin) {
@@ -444,31 +466,19 @@ function KeywordSearchContent() {
         const usageCheck = await checkUsageLimit(user.id, 'keyword_search')
         if (!usageCheck.allowed) {
           toast.error(`일일 키워드 검색 한도(${usageCheck.limit}회)에 도달했습니다. 업그레이드를 고려해주세요.`)
+          setIsAnalyzing(false)
+          setKeywordStatuses([])
           return
         }
-        // 사용량 차감
-        await incrementUsage(user.id, 'keyword_search')
+        // 사용량 차감 (백그라운드에서 처리)
+        incrementUsage(user.id, 'keyword_search').catch(err => {
+          console.error('Usage tracking error:', err)
+        })
       } catch (err) {
-        console.error('Usage tracking error:', err)
-        // 사용량 추적 실패 시에도 검색은 진행
+        console.error('Usage check error:', err)
+        // 사용량 체크 실패 시에도 검색은 진행
       }
     }
-
-    // 초기 상태 설정
-    console.log('[MultiKeyword] Setting initial statuses for', keywords.length, 'keywords')
-    const initialStatuses: KeywordSearchStatus[] = keywords.map(keyword => ({
-      keyword,
-      status: 'pending',
-      progress: 0,
-      result: null,
-      error: null,
-      startTime: Date.now()
-    }))
-
-    setKeywordStatuses(initialStatuses)
-    setIsAnalyzing(true)
-    setError('')
-    console.log('[MultiKeyword] isAnalyzing set to true, starting search...')
 
     // 동시 요청 수 제한 (서버 과부하 방지)
     // 각 키워드당 ~40-50개의 HTTP 요청이 발생하므로 동시 요청을 3개로 제한
