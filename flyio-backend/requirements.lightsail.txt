@@ -1,0 +1,10 @@
+# AWS Lightsail / Supabase 추가 패키지
+
+# Supabase Python 클라이언트
+supabase>=2.0.0
+
+# PostgreSQL 직접 연결
+psycopg2-binary>=2.9.0
+
+# 추가 유틸리티
+aiohttp>=3.9.0

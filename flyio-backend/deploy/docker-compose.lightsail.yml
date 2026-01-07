@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.lightsail
+    container_name: blog-analyzer-api
+    ports:
+      - "8000:8000"
+    environment:
+      # Supabase 연결
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+
+      # JWT 설정
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=10080
+
+      # 서버 설정
+      - ENVIRONMENT=production
+      - DEBUG=false
+    volumes:
+      # 임시 데이터 (Playwright 캐시 등)
+      - app_data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 900M
+        reservations:
+          memory: 512M
+
+volumes:
+  app_data:
+    driver: local
