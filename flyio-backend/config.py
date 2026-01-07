@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Blog Index Analyzer"
     APP_ENV: str = "development"
     DEBUG: bool = True
-    API_VERSION: str = "v1"
+    API_VERSION: str = "v2.2.0"  # Level system 1-15 deployed
 
     # Server
     HOST: str = "0.0.0.0"
