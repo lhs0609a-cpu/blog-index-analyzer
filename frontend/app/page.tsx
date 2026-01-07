@@ -176,6 +176,16 @@ export default function Home() {
               ) : isAuthenticated ? (
                 <div className="flex items-center gap-3">
                   <UsageIndicator />
+                  <Link href="/pricing" className="hidden md:block">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-violet-600 transition-colors flex items-center gap-1.5"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      요금제
+                    </motion.button>
+                  </Link>
                   <span className="hidden md:block text-sm font-medium text-gray-600">
                     {user?.name}님
                   </span>
@@ -377,137 +387,6 @@ export default function Home() {
             ))}
           </div>
         </Marquee>
-      </section>
-
-      {/* Pricing Section */}
-      <section className="py-16 relative">
-        <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mb-10"
-          >
-            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-violet-100 border border-violet-200 text-sm font-medium text-violet-700 mb-4">
-              <CreditCard className="w-4 h-4" />
-              PRICING
-            </span>
-            <h2 className="text-3xl md:text-4xl font-black text-gray-900">
-              합리적인 <span className="bg-gradient-to-r from-violet-600 to-pink-600 bg-clip-text text-transparent">요금제</span>
-            </h2>
-          </motion.div>
-
-          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            {/* Free Plan */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0 }}
-              className="relative p-6 rounded-3xl bg-white border border-gray-200 shadow-xl"
-            >
-              <div className="text-center mb-6">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gray-100 mb-4">
-                  <Zap className="w-6 h-6 text-gray-600" />
-                </div>
-                <h3 className="text-xl font-bold text-gray-900">무료</h3>
-                <div className="mt-2">
-                  <span className="text-3xl font-black text-gray-900">₩0</span>
-                  <span className="text-gray-500 text-sm">/월</span>
-                </div>
-              </div>
-              <ul className="space-y-3 mb-6">
-                {['키워드 검색 8회/일', '블로그 분석 2회/일', '기본 분석 리포트'].map((item, i) => (
-                  <li key={i} className="flex items-center gap-2 text-sm text-gray-600">
-                    <Check className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-              <Link href="/register" className="block">
-                <button className="w-full py-3 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors">
-                  무료로 시작
-                </button>
-              </Link>
-            </motion.div>
-
-            {/* Basic Plan */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.1 }}
-              className="relative p-6 rounded-3xl bg-gradient-to-br from-violet-50 to-pink-50 border-2 border-violet-300 shadow-xl scale-105"
-            >
-              <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 text-xs font-bold bg-gradient-to-r from-violet-600 to-pink-600 text-white rounded-full">
-                인기
-              </span>
-              <div className="text-center mb-6">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-violet-500 mb-4">
-                  <Star className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="text-xl font-bold text-gray-900">베이직</h3>
-                <div className="mt-2">
-                  <span className="text-3xl font-black text-violet-600">₩9,900</span>
-                  <span className="text-gray-500 text-sm">/월</span>
-                </div>
-              </div>
-              <ul className="space-y-3 mb-6">
-                {['키워드 검색 50회/일', '블로그 분석 20회/일', '상세 분석 리포트', 'AI 개선 추천'].map((item, i) => (
-                  <li key={i} className="flex items-center gap-2 text-sm text-gray-700">
-                    <Check className="w-4 h-4 text-violet-500 flex-shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-              <Link href="/pricing" className="block">
-                <button className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-600 to-pink-600 text-white font-semibold hover:opacity-90 transition-opacity shadow-lg shadow-violet-500/25">
-                  시작하기
-                </button>
-              </Link>
-            </motion.div>
-
-            {/* Pro Plan */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.2 }}
-              className="relative p-6 rounded-3xl bg-white border border-gray-200 shadow-xl"
-            >
-              <div className="text-center mb-6">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-pink-500 mb-4">
-                  <Crown className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="text-xl font-bold text-gray-900">프로</h3>
-                <div className="mt-2">
-                  <span className="text-3xl font-black text-gray-900">₩29,900</span>
-                  <span className="text-gray-500 text-sm">/월</span>
-                </div>
-              </div>
-              <ul className="space-y-3 mb-6">
-                {['무제한 검색 & 분석', '광고 최적화 도구', 'API 액세스', '우선 지원'].map((item, i) => (
-                  <li key={i} className="flex items-center gap-2 text-sm text-gray-600">
-                    <Check className="w-4 h-4 text-violet-500 flex-shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-              <Link href="/pricing" className="block">
-                <button className="w-full py-3 rounded-xl border border-violet-300 text-violet-600 font-semibold hover:bg-violet-50 transition-colors">
-                  자세히 보기
-                </button>
-              </Link>
-            </motion.div>
-          </div>
-
-          <div className="text-center mt-8">
-            <Link href="/pricing" className="inline-flex items-center gap-2 text-violet-600 hover:text-violet-700 font-medium">
-              모든 요금제 비교하기
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-        </div>
       </section>
 
       {/* Bento Grid Section */}
