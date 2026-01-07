@@ -1,4 +1,4 @@
-name: Deploy Backend to Fly.io
+name: Deploy Backend to AWS Lightsail
 
 on:
   push:
@@ -6,19 +6,30 @@ on:
       - main
     paths:
       - 'flyio-backend/**'
-  workflow_dispatch:
+      - '.github/workflows/deploy-backend.yml'
 
 jobs:
   deploy:
-    name: Deploy to Fly.io
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-
-      - name: Deploy to Fly.io
-        run: flyctl deploy --remote-only
-        working-directory: ./flyio-backend
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Deploy to Lightsail
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ${{ secrets.LIGHTSAIL_USERNAME }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          script: |
+            cd ~/blog-index-analyzer
+            git pull origin main
+            cd flyio-backend
+            docker build -t blog-backend .
+            docker stop blog-backend || true
+            docker rm blog-backend || true
+            docker run -d \
+              --name blog-backend \
+              -p 8000:8000 \
+              --env-file .env \
+              --restart unless-stopped \
+              blog-backend
+            echo "Deployment completed at $(date)"
