@@ -286,6 +286,14 @@ app.add_middleware(
 )
 
 
+# CORS 헤더 헬퍼 함수
+def get_cors_headers():
+    return {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+        "Access-Control-Allow-Headers": "*",
+    }
+
 # 422 Validation Error 상세 로깅
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -294,7 +302,28 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     logger.error(f"Request body: {exc.body if hasattr(exc, 'body') else 'N/A'}")
     return JSONResponse(
         status_code=422,
-        content={"detail": exc.errors()}
+        content={"detail": exc.errors()},
+        headers=get_cors_headers()
+    )
+
+# HTTP 예외 핸들러 (CORS 헤더 포함)
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    logger.error(f"HTTP error {exc.status_code} on {request.method} {request.url}: {exc.detail}")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=get_cors_headers()
+    )
+
+# 일반 예외 핸들러 (CORS 헤더 포함)
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled error on {request.method} {request.url}: {str(exc)}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+        headers=get_cors_headers()
     )
 
 
