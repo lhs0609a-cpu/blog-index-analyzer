@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # 설정
 # ==============================================
 AUTO_LEARNING_CONFIG = {
-    "enabled": True,                    # 자동 학습 활성화 여부
+    "enabled": False,                   # 자동 학습 비활성화 (서버 안정화를 위해)
     "interval_minutes": 10,             # 학습 주기 (분) - 5 → 10으로 변경 (서버 안정화)
     "keywords_per_cycle": 1,            # 한 번에 학습할 키워드 수
     "blogs_per_keyword": 5,             # 키워드당 분석할 블로그 수 (10 → 5로 감소)
