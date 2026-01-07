@@ -506,6 +506,116 @@ export default function PricingPage() {
               </tbody>
             </table>
           </div>
+
+          {/* 35개 도구 상세 비교 */}
+          <h3 className="text-xl font-bold text-center mt-12 mb-6">35개 프리미엄 도구</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50">
+                  <th className="text-left py-3 px-4">도구</th>
+                  <th className="text-center py-3 px-4">무료</th>
+                  <th className="text-center py-3 px-4">베이직</th>
+                  <th className="text-center py-3 px-4">프로</th>
+                  <th className="text-center py-3 px-4">비즈니스</th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* 기본 도구 - 무료 사용 가능 */}
+                <tr className="bg-green-50"><td colSpan={5} className="py-2 px-4 font-bold text-green-700">기본 도구</td></tr>
+                {[
+                  { name: '키워드 검색', free: '8회/일', basic: '50회/일', pro: '200회/일', biz: '무제한' },
+                  { name: '블로그 분석', free: '2회/일', basic: '20회/일', pro: '100회/일', biz: '무제한' },
+                  { name: 'AI 제목 생성', free: '3회/일', basic: '30회/일', pro: '무제한', biz: '무제한' },
+                  { name: '해시태그 추천', free: '3회/일', basic: '30회/일', pro: '무제한', biz: '무제한' },
+                  { name: '키워드 발굴', free: '2회/일', basic: '20회/일', pro: '100회/일', biz: '무제한' },
+                ].map((tool, i) => (
+                  <tr key={i} className="border-b border-gray-100">
+                    <td className="py-3 px-4">{tool.name}</td>
+                    <td className="text-center py-3 px-4 text-green-600">{tool.free}</td>
+                    <td className="text-center py-3 px-4">{tool.basic}</td>
+                    <td className="text-center py-3 px-4">{tool.pro}</td>
+                    <td className="text-center py-3 px-4">{tool.biz}</td>
+                  </tr>
+                ))}
+
+                {/* 베이직 전용 도구 */}
+                <tr className="bg-blue-50"><td colSpan={5} className="py-2 px-4 font-bold text-blue-700">베이직+ 도구</td></tr>
+                {[
+                  { name: 'AI 글쓰기', free: false, basic: '10회/일', pro: '50회/일', biz: '무제한' },
+                  { name: '블로그 인사이트', free: false, basic: true, pro: true, biz: true },
+                  { name: '노출 순위 예측', free: false, basic: '10회/일', pro: '50회/일', biz: '무제한' },
+                  { name: '최적 발행 시간', free: false, basic: true, pro: true, biz: true },
+                  { name: '유튜브 스크립트', free: false, basic: '5회/일', pro: '30회/일', biz: '무제한' },
+                  { name: '저품질 위험 감지', free: false, basic: true, pro: true, biz: true },
+                  { name: '블로그 백업', free: false, basic: '1회/월', pro: '무제한', biz: '무제한' },
+                  { name: '엑셀 내보내기', free: false, basic: true, pro: true, biz: true },
+                  { name: '히스토리 저장', free: false, basic: '30일', pro: '90일', biz: '무제한' },
+                ].map((tool, i) => (
+                  <tr key={i} className="border-b border-gray-100">
+                    <td className="py-3 px-4">{tool.name}</td>
+                    <td className="text-center py-3 px-4">{tool.free === false ? <span className="text-gray-300">✕</span> : tool.free}</td>
+                    <td className="text-center py-3 px-4">{tool.basic === true ? <span className="text-green-500">✓</span> : tool.basic}</td>
+                    <td className="text-center py-3 px-4">{tool.pro === true ? <span className="text-green-500">✓</span> : tool.pro}</td>
+                    <td className="text-center py-3 px-4">{tool.biz === true ? <span className="text-green-500">✓</span> : tool.biz}</td>
+                  </tr>
+                ))}
+
+                {/* 프로 전용 도구 */}
+                <tr className="bg-purple-50"><td colSpan={5} className="py-2 px-4 font-bold text-purple-700">프로+ 도구</td></tr>
+                {[
+                  { name: '체험단 매칭', free: false, basic: false, pro: true, biz: true },
+                  { name: '키워드 순위 추적', free: false, basic: false, pro: '10개', biz: '100개' },
+                  { name: '경쟁 블로그 클론 분석', free: false, basic: false, pro: '5회/일', biz: '무제한' },
+                  { name: '키워드 유형 분석', free: false, basic: false, pro: true, biz: true },
+                  { name: 'AI 댓글 답변', free: false, basic: false, pro: '20회/일', biz: '무제한' },
+                  { name: '알고리즘 변화 감지', free: false, basic: false, pro: true, biz: true },
+                  { name: '콘텐츠 수명 분석', free: false, basic: false, pro: true, biz: true },
+                  { name: '오래된 글 리프레시', free: false, basic: false, pro: true, biz: true },
+                  { name: '연관 글 추천', free: false, basic: false, pro: true, biz: true },
+                  { name: '멘토-멘티 매칭', free: false, basic: false, pro: true, biz: true },
+                  { name: '트렌드 키워드', free: false, basic: false, pro: true, biz: true },
+                  { name: '수익화 분석', free: false, basic: false, pro: true, biz: true },
+                  { name: '성장 로드맵', free: false, basic: false, pro: true, biz: true },
+                  { name: '비밀 키워드 발굴', free: false, basic: false, pro: '5회/일', biz: '무제한' },
+                  { name: '순위 알림', free: false, basic: false, pro: true, biz: true },
+                ].map((tool, i) => (
+                  <tr key={i} className="border-b border-gray-100">
+                    <td className="py-3 px-4">{tool.name}</td>
+                    <td className="text-center py-3 px-4">{tool.free === false ? <span className="text-gray-300">✕</span> : tool.free}</td>
+                    <td className="text-center py-3 px-4">{tool.basic === false ? <span className="text-gray-300">✕</span> : tool.basic === true ? <span className="text-green-500">✓</span> : tool.basic}</td>
+                    <td className="text-center py-3 px-4">{tool.pro === true ? <span className="text-green-500">✓</span> : tool.pro}</td>
+                    <td className="text-center py-3 px-4">{tool.biz === true ? <span className="text-green-500">✓</span> : tool.biz}</td>
+                  </tr>
+                ))}
+
+                {/* 비즈니스 전용 도구 */}
+                <tr className="bg-amber-50"><td colSpan={5} className="py-2 px-4 font-bold text-amber-700">비즈니스 전용</td></tr>
+                {[
+                  { name: '네이버 데이터랩 연동', free: false, basic: false, pro: false, biz: true },
+                  { name: '쇼핑 키워드 분석', free: false, basic: false, pro: false, biz: true },
+                  { name: '플레이스 분석', free: false, basic: false, pro: false, biz: true },
+                  { name: '뉴스/실시간 검색어', free: false, basic: false, pro: false, biz: true },
+                  { name: '카페 분석', free: false, basic: false, pro: false, biz: true },
+                  { name: 'VIEW 탭 분석', free: false, basic: false, pro: false, biz: true },
+                  { name: '인플루언서 분석', free: false, basic: false, pro: false, biz: true },
+                  { name: '통합검색 분석', free: false, basic: false, pro: false, biz: true },
+                  { name: '지식인 분석', free: false, basic: false, pro: false, biz: true },
+                  { name: '스마트스토어 연동', free: false, basic: false, pro: false, biz: true },
+                  { name: 'API 접근', free: false, basic: false, pro: false, biz: true },
+                  { name: '팀 협업 (10명)', free: false, basic: false, pro: false, biz: true },
+                ].map((tool, i) => (
+                  <tr key={i} className="border-b border-gray-100">
+                    <td className="py-3 px-4">{tool.name}</td>
+                    <td className="text-center py-3 px-4"><span className="text-gray-300">✕</span></td>
+                    <td className="text-center py-3 px-4"><span className="text-gray-300">✕</span></td>
+                    <td className="text-center py-3 px-4"><span className="text-gray-300">✕</span></td>
+                    <td className="text-center py-3 px-4"><span className="text-green-500">✓</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </motion.div>
 
         {/* 정기결제 상세 안내 - 토스페이먼츠 심사용 */}
