@@ -56,6 +56,9 @@ interface BlogIndexResult {
     title_has_keyword: boolean  // 제목에 키워드 포함
     post_age_days?: number  // 포스트 작성 후 경과일
   } | null
+  // 실제 노출 순위 관련 필드
+  display_rank?: number  // 실제 네이버 검색 결과 페이지에서의 노출 순위 (멀티미디어 슬롯 포함)
+  has_multimedia_above?: boolean  // 이 포스트 위에 멀티미디어(이미지/동영상) 슬롯이 있는지
   error?: string
 }
 
@@ -1763,8 +1766,16 @@ function KeywordSearchContent() {
                                 {status.result.results.map((blog, blogIndex) => (
                                   <tr key={blogIndex} className="hover:bg-gray-50 transition-colors">
                                     <td className="px-3 py-3 text-center">
-                                      <div className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-white font-bold text-xs">
-                                        {blog.rank}
+                                      <div className="flex flex-col items-center gap-0.5">
+                                        <div className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-white font-bold text-xs ${blog.display_rank && blog.display_rank !== blog.rank ? 'bg-gradient-to-br from-orange-500 to-red-500' : 'bg-gradient-to-br from-purple-500 to-pink-500'}`}>
+                                          {blog.display_rank || blog.rank}
+                                        </div>
+                                        {blog.display_rank && blog.display_rank !== blog.rank && (
+                                          <span className="text-[9px] text-gray-400">블로그 {blog.rank}위</span>
+                                        )}
+                                        {blog.has_multimedia_above && (
+                                          <span className="text-[8px] text-orange-500">📷 멀티미디어</span>
+                                        )}
                                       </div>
                                     </td>
                                     <td className="px-4 py-3">
@@ -2377,8 +2388,16 @@ function KeywordSearchContent() {
                       >
                         {/* Rank */}
                         <td className="px-3 py-3 text-center">
-                          <div className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-white font-bold text-xs">
-                            {idx + 1}
+                          <div className="flex flex-col items-center gap-0.5">
+                            <div className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-white font-bold text-xs ${blog.display_rank && blog.display_rank !== blog.rank ? 'bg-gradient-to-br from-orange-500 to-red-500' : 'bg-gradient-to-br from-purple-500 to-pink-500'}`}>
+                              {blog.display_rank || blog.rank}
+                            </div>
+                            {blog.display_rank && blog.display_rank !== blog.rank && (
+                              <span className="text-[9px] text-gray-400">블로그 {blog.rank}위</span>
+                            )}
+                            {blog.has_multimedia_above && (
+                              <span className="text-[8px] text-orange-500">📷 멀티미디어</span>
+                            )}
                           </div>
                         </td>
 

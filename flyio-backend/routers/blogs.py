@@ -166,6 +166,9 @@ class BlogResult(BaseModel):
     stats: Optional[BlogStats] = None
     index: Optional[BlogIndex] = None
     post_analysis: Optional[PostAnalysis] = None  # 포스트 콘텐츠 분석 결과
+    # 실제 노출 순위 관련 필드
+    display_rank: Optional[int] = None  # 실제 네이버 검색 결과 페이지에서의 노출 순위
+    has_multimedia_above: bool = False  # 이 포스트 위에 멀티미디어(이미지/동영상) 슬롯이 있는지
 
 
 class SearchInsights(BaseModel):
@@ -517,6 +520,104 @@ async def fetch_via_mobile_web(keyword: str, limit: int) -> List[Dict]:
         logger.error(f"Error with mobile web: {e}")
 
     return results
+
+
+async def fetch_display_ranks(keyword: str, blog_results: List[Dict]) -> Dict[str, Dict]:
+    """
+    PC 네이버 검색 결과를 스크래핑하여 실제 노출 순위 계산
+    블로그 포스트 외에 이미지/동영상 섹션도 카운트하여 실제 화면상 노출 순위 파악
+
+    Returns: {post_url: {"display_rank": int, "has_multimedia_above": bool}}
+    """
+    display_info = {}
+
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Referer": "https://search.naver.com/",
+        }
+
+        # PC 네이버 블로그 탭 검색
+        encoded_keyword = keyword.replace(' ', '+')
+        search_url = f"https://search.naver.com/search.naver?where=blog&query={encoded_keyword}"
+
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            response = await client.get(search_url, headers=headers)
+
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, 'html.parser')
+
+                # 검색 결과 컨테이너에서 모든 콘텐츠 블록 찾기
+                # 네이버 블로그 검색 결과는 .api_txt_lines (블로그 포스트) 및 기타 섹션으로 구성
+
+                display_rank = 0
+                multimedia_count = 0
+                found_posts = {}  # post_url -> display_rank
+
+                # 검색 결과 영역 찾기 (다양한 셀렉터 시도)
+                result_area = soup.find('div', {'id': 'main_pack'}) or soup.find('div', {'class': 'content_root'})
+
+                if result_area:
+                    # 모든 검색 결과 항목을 순서대로 순회
+                    # 블로그 포스트 링크들
+                    all_items = result_area.find_all(['li', 'div'], recursive=True)
+
+                    seen_urls = set()
+
+                    for item in all_items:
+                        # 이미지/동영상 섹션 감지
+                        item_class = ' '.join(item.get('class', []))
+
+                        # 멀티미디어 섹션 감지 (이미지 영역, 동영상 영역 등)
+                        if any(cls in item_class for cls in ['image_area', 'video_area', 'photo_bx', 'movie_bx']):
+                            multimedia_count += 1
+                            continue
+
+                        # 블로그 포스트 링크 찾기
+                        blog_links = item.find_all('a', href=re.compile(r'blog\.naver\.com/[^/]+/\d+'))
+
+                        for link in blog_links:
+                            post_url = link.get('href', '')
+
+                            # URL 정규화
+                            if post_url.startswith('//'):
+                                post_url = 'https:' + post_url
+                            elif not post_url.startswith('http'):
+                                post_url = 'https://' + post_url
+
+                            # 중복 제거
+                            if post_url in seen_urls:
+                                continue
+                            seen_urls.add(post_url)
+
+                            display_rank += 1
+                            found_posts[post_url] = {
+                                "display_rank": display_rank + multimedia_count,  # 멀티미디어 슬롯 고려
+                                "has_multimedia_above": multimedia_count > 0
+                            }
+
+                # blog_results의 post_url과 매칭
+                for blog in blog_results:
+                    post_url = blog.get('post_url', '')
+
+                    # 정확히 일치하는 URL 찾기
+                    if post_url in found_posts:
+                        display_info[post_url] = found_posts[post_url]
+                    else:
+                        # URL 변형 시도 (http/https, www 등)
+                        for found_url, info in found_posts.items():
+                            if found_url.replace('https://', '').replace('http://', '') == post_url.replace('https://', '').replace('http://', ''):
+                                display_info[post_url] = info
+                                break
+
+                logger.info(f"Display ranks fetched: {len(display_info)} matched out of {len(blog_results)} blogs, multimedia_count={multimedia_count}")
+
+    except Exception as e:
+        logger.error(f"Error fetching display ranks: {e}")
+
+    return display_info
 
 
 async def analyze_post(post_url: str, keyword: str) -> Dict:
@@ -2028,6 +2129,11 @@ async def search_keyword_with_tabs(
             timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         )
 
+    # 실제 노출 순위 조회 (블로그 분석과 병렬 실행 준비)
+    display_ranks_task = asyncio.create_task(fetch_display_ranks(keyword, search_results))
+
+    # (이후 코드에서 display_ranks_task 결과 사용)
+
     # ===== 병렬 처리로 블로그 분석 (속도 개선) =====
     results = []
     total_score = 0
@@ -2082,6 +2188,9 @@ async def search_keyword_with_tabs(
         for item in items_to_skip:
             analysis_results.append((item, {"stats": {}, "index": {}}, {}))
 
+        # 실제 노출 순위 결과 가져오기
+        display_ranks = await display_ranks_task
+
         for item, analysis, post_analysis_data in analysis_results:
             stats = analysis.get("stats", {})
             index = analysis.get("index", {})
@@ -2104,20 +2213,26 @@ async def search_keyword_with_tabs(
                     post_age_days=post_analysis_data.get("post_age_days")
                 )
 
+            # 실제 노출 순위 정보 가져오기
+            post_url = item["post_url"]
+            display_info = display_ranks.get(post_url, {})
+
             blog_result = BlogResult(
                 rank=item["rank"],
                 blog_id=item["blog_id"],
                 blog_name=item["blog_name"],
                 blog_url=item["blog_url"],
                 post_title=item["post_title"],
-                post_url=item["post_url"],
+                post_url=post_url,
                 post_date=item.get("post_date"),
                 thumbnail=item.get("thumbnail"),
                 tab_type=item["tab_type"],
                 smart_block_keyword=item.get("smart_block_keyword"),
                 stats=BlogStats(**stats) if stats else None,
                 index=BlogIndex(**index) if index else None,
-                post_analysis=post_analysis_obj
+                post_analysis=post_analysis_obj,
+                display_rank=display_info.get("display_rank"),
+                has_multimedia_above=display_info.get("has_multimedia_above", False)
             )
             results.append(blog_result)
 
@@ -2136,20 +2251,28 @@ async def search_keyword_with_tabs(
         results.sort(key=lambda x: x.rank)
     else:
         # 분석 없이 빠르게 결과 반환
+        # 실제 노출 순위 결과 가져오기
+        display_ranks = await display_ranks_task
+
         for item in search_results:
+            post_url = item["post_url"]
+            display_info = display_ranks.get(post_url, {})
+
             blog_result = BlogResult(
                 rank=item["rank"],
                 blog_id=item["blog_id"],
                 blog_name=item["blog_name"],
                 blog_url=item["blog_url"],
                 post_title=item["post_title"],
-                post_url=item["post_url"],
+                post_url=post_url,
                 post_date=item.get("post_date"),
                 thumbnail=item.get("thumbnail"),
                 tab_type=item["tab_type"],
                 smart_block_keyword=item.get("smart_block_keyword"),
                 stats=None,
-                index=None
+                index=None,
+                display_rank=display_info.get("display_rank"),
+                has_multimedia_above=display_info.get("has_multimedia_above", False)
             )
             results.append(blog_result)
 
