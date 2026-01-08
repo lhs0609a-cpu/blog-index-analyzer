@@ -48,6 +48,9 @@ RUN playwright install-deps chromium
 # 애플리케이션 코드 복사
 COPY . .
 
+# entrypoint.sh 실행 권한 재설정 (COPY로 덮어씌워졌을 수 있음)
+RUN chmod +x /app/entrypoint.sh
+
 # SQLite 데이터베이스 디렉토리 생성
 RUN mkdir -p /app/data
 
