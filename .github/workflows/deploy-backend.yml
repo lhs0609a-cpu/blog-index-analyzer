@@ -29,7 +29,7 @@ jobs:
             docker rm blog-analyzer-api || true
             docker run -d \
               --name blog-analyzer-api \
-              -p 8000:8000 \
+              -p 8000:8001 \
               --env-file .env \
               --restart unless-stopped \
               blog-api
