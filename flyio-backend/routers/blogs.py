@@ -1206,6 +1206,7 @@ async def analyze_blog(blog_id: str) -> Dict:
 
     # Additional analysis data
     analysis_data = {
+        "blog_name": None,  # 블로그 이름 (RSS에서 추출)
         "blog_age_days": None,
         "recent_activity": None,
         "has_profile_image": False,
@@ -1247,6 +1248,16 @@ async def analyze_blog(blog_id: str) -> Dict:
                 if resp.status_code == 200 and '<item>' in resp.text:
                     soup = BeautifulSoup(resp.text, 'xml')
                     items = soup.find_all('item')
+
+                    # RSS channel에서 블로그명 추출
+                    channel = soup.find('channel')
+                    if channel:
+                        title_elem = channel.find('title')
+                        if title_elem and title_elem.get_text(strip=True):
+                            blog_title = title_elem.get_text(strip=True)
+                            # 블로그 제목이 blog_id와 다를 경우에만 저장
+                            if blog_title and blog_title != blog_id:
+                                analysis_data["blog_name"] = blog_title
 
                     if items:
                         if "rss" not in analysis_data["data_sources"]:
@@ -1602,7 +1613,7 @@ async def analyze_blog(blog_id: str) -> Dict:
         logger.debug(traceback.format_exc())
 
     # 캐시에 저장 (성능 개선)
-    result = {"stats": stats, "index": index}
+    result = {"stats": stats, "index": index, "blog_name": analysis_data.get("blog_name")}
     set_blog_analysis_cache(blog_id, result)
     return result
 
@@ -2297,11 +2308,14 @@ async def search_keyword_with_tabs(
             post_url = item["post_url"]
             display_info = display_ranks.get(post_url, {})
 
+            # RSS에서 가져온 블로그명이 있으면 사용, 없으면 API 응답의 bloggername 사용
+            blog_name = analysis.get("blog_name") or item["blog_name"]
+
             blog_result = BlogResult(
                 rank=item["rank"],
                 original_rank=item.get("original_rank"),  # API 원본 순위 (다양성 필터 적용 전)
                 blog_id=item["blog_id"],
-                blog_name=item["blog_name"],
+                blog_name=blog_name,
                 blog_url=item["blog_url"],
                 post_title=item["post_title"],
                 post_url=post_url,

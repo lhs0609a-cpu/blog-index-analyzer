@@ -1779,7 +1779,12 @@ function KeywordSearchContent() {
                                     <td className="px-4 py-3">
                                       <div className="max-w-sm">
                                         <div className="flex items-center gap-2 mb-0.5">
-                                          <span className="font-semibold text-gray-800 text-sm truncate">{blog.blog_name}</span>
+                                          <div className="flex flex-col">
+                                            <span className="font-semibold text-gray-800 text-sm truncate">{blog.blog_name}</span>
+                                            {blog.blog_name !== blog.blog_id && (
+                                              <span className="text-[10px] text-gray-400">@{blog.blog_id}</span>
+                                            )}
+                                          </div>
                                           {blog.is_influencer && (
                                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-yellow-400 to-orange-500 text-white whitespace-nowrap">
                                               ⭐ 인플루언서
@@ -2400,7 +2405,12 @@ function KeywordSearchContent() {
                         <td className="px-4 py-3">
                           <div className="max-w-sm">
                             <div className="flex items-center gap-2 mb-0.5">
-                              <span className="font-semibold text-gray-800 text-sm truncate">{blog.blog_name}</span>
+                              <div className="flex flex-col">
+                                <span className="font-semibold text-gray-800 text-sm truncate">{blog.blog_name}</span>
+                                {blog.blog_name !== blog.blog_id && (
+                                  <span className="text-[10px] text-gray-400">@{blog.blog_id}</span>
+                                )}
+                              </div>
                               {blog.is_influencer && (
                                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-yellow-400 to-orange-500 text-white whitespace-nowrap">
                                   ⭐ 인플루언서
