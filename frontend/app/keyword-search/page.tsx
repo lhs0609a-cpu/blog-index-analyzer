@@ -16,6 +16,7 @@ import Tutorial, { keywordAnalysisTutorialSteps } from '@/components/Tutorial'
 
 interface BlogIndexResult {
   rank: number
+  original_rank?: number  // API 원본 순위 (다양성 필터 적용 전)
   blog_id: string
   blog_name: string
   blog_url: string
@@ -1767,14 +1768,11 @@ function KeywordSearchContent() {
                                   <tr key={blogIndex} className="hover:bg-gray-50 transition-colors">
                                     <td className="px-3 py-3 text-center">
                                       <div className="flex flex-col items-center gap-0.5">
-                                        <div className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-white font-bold text-xs ${blog.display_rank && blog.display_rank !== blog.rank ? 'bg-gradient-to-br from-orange-500 to-red-500' : 'bg-gradient-to-br from-purple-500 to-pink-500'}`}>
-                                          {blog.display_rank || blog.rank}
+                                        <div className="inline-flex items-center justify-center w-7 h-7 rounded-full text-white font-bold text-xs bg-gradient-to-br from-purple-500 to-pink-500">
+                                          {blog.rank}
                                         </div>
-                                        {blog.display_rank && blog.display_rank !== blog.rank && (
-                                          <span className="text-[9px] text-gray-400">블로그 {blog.rank}위</span>
-                                        )}
-                                        {blog.has_multimedia_above && (
-                                          <span className="text-[8px] text-orange-500">📷 멀티미디어</span>
+                                        {blog.original_rank && blog.original_rank !== blog.rank && (
+                                          <span className="text-[9px] text-orange-500">API {blog.original_rank}위</span>
                                         )}
                                       </div>
                                     </td>
@@ -2389,14 +2387,11 @@ function KeywordSearchContent() {
                         {/* Rank */}
                         <td className="px-3 py-3 text-center">
                           <div className="flex flex-col items-center gap-0.5">
-                            <div className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-white font-bold text-xs ${blog.display_rank && blog.display_rank !== blog.rank ? 'bg-gradient-to-br from-orange-500 to-red-500' : 'bg-gradient-to-br from-purple-500 to-pink-500'}`}>
-                              {blog.display_rank || blog.rank}
+                            <div className="inline-flex items-center justify-center w-7 h-7 rounded-full text-white font-bold text-xs bg-gradient-to-br from-purple-500 to-pink-500">
+                              {blog.rank}
                             </div>
-                            {blog.display_rank && blog.display_rank !== blog.rank && (
-                              <span className="text-[9px] text-gray-400">블로그 {blog.rank}위</span>
-                            )}
-                            {blog.has_multimedia_above && (
-                              <span className="text-[8px] text-orange-500">📷 멀티미디어</span>
+                            {blog.original_rank && blog.original_rank !== blog.rank && (
+                              <span className="text-[9px] text-orange-500">API {blog.original_rank}위</span>
                             )}
                           </div>
                         </td>

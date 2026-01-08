@@ -153,7 +153,8 @@ class BlogIndex(BaseModel):
 
 
 class BlogResult(BaseModel):
-    rank: int
+    rank: int  # 다양성 필터 적용 후 순위
+    original_rank: Optional[int] = None  # API 원본 순위 (다양성 필터 적용 전)
     blog_id: str
     blog_name: str
     blog_url: str
@@ -291,6 +292,74 @@ def extract_blog_id(url: str) -> str:
         if match:
             return match.group(1)
     return ""
+
+
+def apply_diversity_filter(search_results: List[Dict]) -> List[Dict]:
+    """
+    다양성 필터: 같은 블로거의 포스트가 연속으로 나오지 않도록 재배치
+    네이버 웹사이트처럼 다양한 블로거의 콘텐츠가 교차되도록 정렬
+
+    알고리즘:
+    1. 결과를 순회하면서 이전 블로거와 같으면 잠시 보류
+    2. 다른 블로거의 포스트를 먼저 배치
+    3. 보류된 포스트는 다음 기회에 삽입
+
+    Returns: 재배치된 결과 리스트 (원본 순위는 original_rank 필드에 보존)
+    """
+    if not search_results or len(search_results) <= 1:
+        return search_results
+
+    # 원본 순위 저장
+    for item in search_results:
+        item["original_rank"] = item["rank"]
+
+    reordered = []
+    pending = []  # 보류된 항목 (같은 블로거 연속 방지)
+    last_blog_id = None
+
+    remaining = list(search_results)
+
+    while remaining or pending:
+        placed = False
+
+        # remaining에서 last_blog_id와 다른 첫 번째 항목 찾기
+        for i, item in enumerate(remaining):
+            if item["blog_id"] != last_blog_id:
+                reordered.append(item)
+                last_blog_id = item["blog_id"]
+                remaining.pop(i)
+                placed = True
+                break
+
+        if not placed and remaining:
+            # 남은 것 중 모두 같은 블로거면, pending으로 이동
+            pending.append(remaining.pop(0))
+
+        # pending에서 배치 가능한 항목 찾기
+        if not placed and pending:
+            for i, item in enumerate(pending):
+                if item["blog_id"] != last_blog_id:
+                    reordered.append(item)
+                    last_blog_id = item["blog_id"]
+                    pending.pop(i)
+                    placed = True
+                    break
+
+        # 어떻게든 진행이 안 되면 (전부 같은 블로거) 강제 배치
+        if not placed and (remaining or pending):
+            if remaining:
+                reordered.append(remaining.pop(0))
+            elif pending:
+                reordered.append(pending.pop(0))
+            if reordered:
+                last_blog_id = reordered[-1]["blog_id"]
+
+    # 새로운 순위 부여
+    for idx, item in enumerate(reordered, 1):
+        item["rank"] = idx
+
+    logger.info(f"Diversity filter applied: {len(search_results)} items reordered")
+    return reordered
 
 
 async def fetch_naver_search_results(keyword: str, limit: int = 13) -> List[Dict]:
@@ -524,11 +593,19 @@ async def fetch_via_mobile_web(keyword: str, limit: int) -> List[Dict]:
 
 async def fetch_display_ranks(keyword: str, blog_results: List[Dict]) -> Dict[str, Dict]:
     """
-    PC 네이버 검색 결과를 스크래핑하여 실제 노출 순위 계산
-    블로그 포스트 외에 이미지/동영상 섹션도 카운트하여 실제 화면상 노출 순위 파악
+    실제 노출 순위 반환 (웹 스크래핑 비활성화됨)
 
-    Returns: {post_url: {"display_rank": int, "has_multimedia_above": bool}}
+    NOTE: 이전에는 PC 네이버 검색 결과를 스크래핑하여 멀티미디어 슬롯을 포함한
+    실제 노출 순위를 계산했으나, 봇 감지 위험으로 인해 비활성화됨.
+    대신 apply_diversity_filter()로 API 결과를 네이버 웹사이트처럼 재정렬함.
+
+    Returns: 빈 딕셔너리 (웹 스크래핑 비활성화)
     """
+    # 웹 스크래핑 비활성화 - 봇 감지 위험 회피
+    # 다양성 필터로 대체됨 (같은 블로거 연속 방지)
+    return {}
+
+    # ===== 아래는 비활성화된 웹 스크래핑 코드 (참조용) =====
     display_info = {}
 
     try:
@@ -2117,6 +2194,9 @@ async def search_keyword_with_tabs(
     # Fetch search results from Naver
     search_results = await fetch_naver_search_results(keyword, limit)
 
+    # 다양성 필터 적용: 같은 블로거가 연속으로 나오지 않도록 재배치
+    search_results = apply_diversity_filter(search_results)
+
     if not search_results:
         logger.warning(f"No search results found for: {keyword}")
         return KeywordSearchResponse(
@@ -2219,6 +2299,7 @@ async def search_keyword_with_tabs(
 
             blog_result = BlogResult(
                 rank=item["rank"],
+                original_rank=item.get("original_rank"),  # API 원본 순위 (다양성 필터 적용 전)
                 blog_id=item["blog_id"],
                 blog_name=item["blog_name"],
                 blog_url=item["blog_url"],
@@ -2260,6 +2341,7 @@ async def search_keyword_with_tabs(
 
             blog_result = BlogResult(
                 rank=item["rank"],
+                original_rank=item.get("original_rank"),  # API 원본 순위 (다양성 필터 적용 전)
                 blog_id=item["blog_id"],
                 blog_name=item["blog_name"],
                 blog_url=item["blog_url"],
