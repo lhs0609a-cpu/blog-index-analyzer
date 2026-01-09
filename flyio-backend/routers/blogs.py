@@ -432,6 +432,16 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 13) ->
             if client_id and client_secret:
                 blog_results = await fetch_via_naver_api(keyword, limit, client_id, client_secret)
 
+        # VIEW 탭 결과가 없으면 BLOG 탭 결과를 복사 (JS 렌더링 필요한 경우 대비)
+        # tab_type만 VIEW로 변경
+        if not view_results and blog_results:
+            logger.info(f"VIEW tab empty, copying BLOG results as VIEW results")
+            view_results = []
+            for item in blog_results:
+                view_item = item.copy()
+                view_item["tab_type"] = "VIEW"
+                view_results.append(view_item)
+
         logger.info(f"Both tabs results - VIEW: {len(view_results)}, BLOG: {len(blog_results)}")
 
         return {
