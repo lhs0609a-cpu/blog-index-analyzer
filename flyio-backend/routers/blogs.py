@@ -1706,6 +1706,7 @@ async def analyze_blog(blog_id: str) -> Dict:
                         analysis_data["category_count"] = get_consistent_value(blog_id, 2, 8, "category")
                         analysis_data["avg_post_length"] = get_consistent_value(blog_id, 800, 2000, "length")
                         analysis_data["recent_activity"] = get_consistent_value(blog_id, 1, 30, "activity")
+                        analysis_data["data_sources"].append("estimated")
                         logger.warning(f"Empty RSS for {blog_id}, using estimated values")
                 else:
                     # RSS 접근 실패 - 블로그 ID 기반 일관된 추정값 사용
@@ -1715,6 +1716,7 @@ async def analyze_blog(blog_id: str) -> Dict:
                     analysis_data["category_count"] = get_consistent_value(blog_id, 3, 10, "category_fail")
                     analysis_data["avg_post_length"] = get_consistent_value(blog_id, 1000, 2500, "length_fail")
                     analysis_data["recent_activity"] = get_consistent_value(blog_id, 1, 14, "activity_fail")
+                    analysis_data["data_sources"].append("estimated")
                     logger.warning(f"RSS failed for {blog_id}, using consistent estimated values")
 
             except Exception as e:
@@ -1726,6 +1728,7 @@ async def analyze_blog(blog_id: str) -> Dict:
                 analysis_data["category_count"] = get_consistent_value(blog_id, 3, 8, "category_error")
                 analysis_data["avg_post_length"] = get_consistent_value(blog_id, 1200, 2200, "length_error")
                 analysis_data["recent_activity"] = get_consistent_value(blog_id, 1, 21, "activity_error")
+                analysis_data["data_sources"].append("estimated")
 
             # ============================================
             # SCORE CALCULATION - Using learned weights
