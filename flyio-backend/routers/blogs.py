@@ -194,8 +194,12 @@ class KeywordSearchResponse(BaseModel):
     total_found: int
     analyzed_count: int
     successful_count: int
-    results: List[BlogResult]
-    insights: SearchInsights
+    results: List[BlogResult]  # 하위 호환성 유지 (기본적으로 BLOG 탭 결과)
+    view_results: List[BlogResult] = []  # VIEW 탭 (메인탭) 결과
+    blog_results: List[BlogResult] = []  # BLOG 탭 결과
+    insights: SearchInsights  # 통합 인사이트
+    view_insights: Optional[SearchInsights] = None  # VIEW 탭 전용 인사이트
+    blog_insights: Optional[SearchInsights] = None  # BLOG 탭 전용 인사이트
     timestamp: str
 
 
@@ -401,6 +405,47 @@ async def fetch_naver_search_results(keyword: str, limit: int = 13) -> List[Dict
     return results
 
 
+async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 13) -> Dict[str, List[Dict]]:
+    """Fetch search results from both VIEW tab and BLOG tab in parallel"""
+    logger.info(f"Fetching both tabs for keyword: {keyword}")
+
+    try:
+        # VIEW 탭과 BLOG 탭을 병렬로 조회
+        view_results, blog_results = await asyncio.gather(
+            fetch_via_view_tab_scraping(keyword, limit),
+            fetch_via_blog_tab_scraping(keyword, limit),
+            return_exceptions=True
+        )
+
+        # 예외 처리
+        if isinstance(view_results, Exception):
+            logger.error(f"VIEW tab scraping failed: {view_results}")
+            view_results = []
+        if isinstance(blog_results, Exception):
+            logger.error(f"BLOG tab scraping failed: {blog_results}")
+            blog_results = []
+
+        # BLOG 탭 결과가 없으면 fallback 시도
+        if not blog_results:
+            client_id = getattr(settings, 'NAVER_CLIENT_ID', None)
+            client_secret = getattr(settings, 'NAVER_CLIENT_SECRET', None)
+            if client_id and client_secret:
+                blog_results = await fetch_via_naver_api(keyword, limit, client_id, client_secret)
+
+        logger.info(f"Both tabs results - VIEW: {len(view_results)}, BLOG: {len(blog_results)}")
+
+        return {
+            "view_results": view_results,
+            "blog_results": blog_results
+        }
+
+    except Exception as e:
+        logger.error(f"Error fetching both tabs: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {"view_results": [], "blog_results": []}
+
+
 async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
     """Fetch blog results by scraping actual Naver blog tab (most accurate)"""
     results = []
@@ -519,6 +564,131 @@ async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
 
     except Exception as e:
         logger.error(f"Error with blog tab scraping: {e}")
+        import traceback
+        logger.debug(traceback.format_exc())
+
+    return results
+
+
+async def fetch_via_view_tab_scraping(keyword: str, limit: int) -> List[Dict]:
+    """Fetch results from Naver VIEW tab (통합검색 - 블로그, 카페 등 포함)"""
+    results = []
+
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+        }
+
+        from urllib.parse import quote
+        encoded_keyword = quote(keyword)
+        # VIEW 탭: where=view 파라미터 사용
+        search_url = f"https://search.naver.com/search.naver?where=view&query={encoded_keyword}"
+
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            response = await client.get(search_url, headers=headers)
+
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, 'html.parser')
+
+                # VIEW 탭 검색 결과 파싱
+                # 방법 1: view_wrap 또는 total_wrap 클래스
+                blog_items = soup.select('.view_wrap') or soup.select('.total_wrap')
+
+                if not blog_items:
+                    # 방법 2: api_txt_lines 클래스 (블로그 링크 포함)
+                    blog_items = soup.select('.api_txt_lines.total_tit')
+
+                if not blog_items:
+                    # 방법 3: 직접 블로그 링크 찾기
+                    blog_items = soup.select('a[href*="blog.naver.com"]')
+
+                logger.info(f"VIEW tab scraping found {len(blog_items)} items for: {keyword}")
+
+                rank = 0
+                seen_urls = set()
+
+                for item in blog_items:
+                    if rank >= limit:
+                        break
+
+                    try:
+                        # 포스트 URL 추출
+                        post_link = None
+                        if item.name == 'a':
+                            post_link = item
+                        else:
+                            # title_link 또는 다른 링크 찾기
+                            post_link = item.select_one('a.title_link') or item.select_one('a.api_txt_lines') or item.select_one('a[href*="blog.naver.com"]')
+
+                        if not post_link:
+                            continue
+
+                        post_url = post_link.get('href', '')
+                        if not post_url or 'blog.naver.com' not in post_url:
+                            continue
+
+                        # 중복 제거
+                        if post_url in seen_urls:
+                            continue
+                        seen_urls.add(post_url)
+
+                        # 블로그 ID 추출
+                        blog_id = extract_blog_id(post_url)
+                        if not blog_id:
+                            continue
+
+                        # 제목 추출
+                        title = post_link.get_text(strip=True)
+                        if not title:
+                            title_elem = item.select_one('.title_link') or item.select_one('.api_txt_lines')
+                            if title_elem:
+                                title = title_elem.get_text(strip=True)
+
+                        # HTML 태그 제거
+                        title = re.sub(r'<[^>]+>', '', title) if title else ""
+                        title = title.replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+
+                        # 블로거 이름 추출
+                        blog_name = blog_id
+                        name_elem = item.select_one('.name') or item.select_one('.sub_txt') or item.select_one('.user_info')
+                        if name_elem:
+                            blog_name = name_elem.get_text(strip=True).split('·')[0].strip()
+                            if not blog_name:
+                                blog_name = blog_id
+
+                        # 날짜 추출
+                        post_date = None
+                        date_elem = item.select_one('.sub_time') or item.select_one('.date')
+                        if date_elem:
+                            post_date = date_elem.get_text(strip=True)
+
+                        rank += 1
+                        results.append({
+                            "rank": rank,
+                            "blog_id": blog_id,
+                            "blog_name": blog_name,
+                            "blog_url": f"https://blog.naver.com/{blog_id}",
+                            "post_title": title if title else f"Post by {blog_name}",
+                            "post_url": post_url,
+                            "post_date": post_date,
+                            "thumbnail": None,
+                            "tab_type": "VIEW",  # VIEW 탭으로 표시
+                            "smart_block_keyword": keyword,
+                        })
+
+                    except Exception as e:
+                        logger.debug(f"Error parsing VIEW item: {e}")
+                        continue
+
+                logger.info(f"VIEW tab scraping returned {len(results)} results for: {keyword}")
+
+    except Exception as e:
+        logger.error(f"Error with VIEW tab scraping: {e}")
         import traceback
         logger.debug(traceback.format_exc())
 
@@ -2332,15 +2502,15 @@ async def search_keyword_with_tabs(
     except Exception as e:
         logger.debug(f"Could not add user search keyword: {e}")
 
-    # Fetch search results from Naver
-    search_results = await fetch_naver_search_results(keyword, limit)
+    # Fetch search results from both VIEW and BLOG tabs
+    both_tabs_results = await fetch_naver_search_results_both_tabs(keyword, limit)
+    view_search_results = both_tabs_results.get("view_results", [])
+    blog_search_results = both_tabs_results.get("blog_results", [])
 
-    # NOTE: 다양성 필터 제거 - 네이버 실제 검색 순서를 그대로 유지
-    # 이전에는 같은 블로거가 연속으로 나오지 않도록 재배치했으나,
-    # 실제 네이버 검색 결과와 다르게 표시되는 문제가 있어 제거함
-    # search_results = apply_diversity_filter(search_results)
+    # 하위 호환성: 기존 search_results는 BLOG 탭 결과 사용 (둘 다 없으면 VIEW 사용)
+    search_results = blog_search_results if blog_search_results else view_search_results
 
-    if not search_results:
+    if not search_results and not view_search_results:
         logger.warning(f"No search results found for: {keyword}")
         return KeywordSearchResponse(
             keyword=keyword,
@@ -2348,6 +2518,8 @@ async def search_keyword_with_tabs(
             analyzed_count=0,
             successful_count=0,
             results=[],
+            view_results=[],
+            blog_results=[],
             insights=SearchInsights(),
             timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         )
@@ -2621,13 +2793,74 @@ async def search_keyword_with_tabs(
     # 백그라운드 태스크로 실행 (응답을 기다리지 않음)
     asyncio.create_task(background_top_post_analysis())
 
+    # ===== VIEW 탭 결과 생성 (분석 정보 매핑) =====
+    # 분석된 블로그 정보를 blog_id로 매핑
+    analyzed_blogs = {r.blog_id: r for r in results}
+
+    view_results_final = []
+    for idx, item in enumerate(view_search_results):
+        blog_id = item.get("blog_id", "")
+        # 동일 블로그의 분석 정보가 있으면 재사용, 없으면 기본 정보만
+        if blog_id in analyzed_blogs:
+            existing = analyzed_blogs[blog_id]
+            view_result = BlogResult(
+                rank=idx + 1,  # VIEW 탭에서의 순위
+                blog_id=blog_id,
+                blog_name=item.get("blog_name", existing.blog_name),
+                blog_url=item.get("blog_url", existing.blog_url),
+                post_title=item.get("post_title", ""),
+                post_url=item.get("post_url", ""),
+                post_date=item.get("post_date"),
+                thumbnail=item.get("thumbnail"),
+                tab_type="VIEW",
+                stats=existing.stats,
+                index=existing.index,
+                post_analysis=None  # VIEW 탭은 별도 포스트 분석 없음
+            )
+        else:
+            view_result = BlogResult(
+                rank=idx + 1,
+                blog_id=blog_id,
+                blog_name=item.get("blog_name", blog_id),
+                blog_url=item.get("blog_url", f"https://blog.naver.com/{blog_id}"),
+                post_title=item.get("post_title", ""),
+                post_url=item.get("post_url", ""),
+                post_date=item.get("post_date"),
+                thumbnail=item.get("thumbnail"),
+                tab_type="VIEW",
+                stats=None,
+                index=None
+            )
+        view_results_final.append(view_result)
+
+    # BLOG 탭 결과 (분석된 results 사용)
+    blog_results_final = results
+
+    # VIEW 탭 인사이트 계산
+    view_analyzed = [r for r in view_results_final if r.index]
+    view_insights = SearchInsights(
+        average_score=round(sum(r.index.total_score for r in view_analyzed) / len(view_analyzed), 1) if view_analyzed else 0,
+        average_level=round(sum(r.index.level for r in view_analyzed) / len(view_analyzed), 1) if view_analyzed else 0,
+        average_posts=0,
+        average_neighbors=0,
+        top_level=max([r.index.level for r in view_analyzed], default=0),
+        top_score=max([r.index.total_score for r in view_analyzed], default=0),
+        score_distribution={},
+        common_patterns=[],
+        monthly_search_volume=monthly_search_volume
+    ) if view_results_final else None
+
     return KeywordSearchResponse(
         keyword=keyword,
         total_found=count,
         analyzed_count=analyzed_count,
         successful_count=count,
-        results=results,
-        insights=insights,
+        results=results,  # 하위 호환성: BLOG 탭 결과
+        view_results=view_results_final,  # VIEW 탭 결과
+        blog_results=blog_results_final,  # BLOG 탭 결과
+        insights=insights,  # 통합 인사이트 (BLOG 탭 기준)
+        view_insights=view_insights,  # VIEW 탭 인사이트
+        blog_insights=insights,  # BLOG 탭 인사이트 (통합과 동일)
         timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     )
 

@@ -85,8 +85,12 @@ interface KeywordSearchResponse {
   total_found: number
   analyzed_count: number
   successful_count: number
-  results: BlogIndexResult[]
-  insights: KeywordSearchInsights
+  results: BlogIndexResult[]  // 하위 호환성: BLOG 탭 결과
+  view_results?: BlogIndexResult[]  // VIEW 탭 (메인탭) 결과
+  blog_results?: BlogIndexResult[]  // BLOG 탭 결과
+  insights: KeywordSearchInsights  // 통합 인사이트
+  view_insights?: KeywordSearchInsights  // VIEW 탭 인사이트
+  blog_insights?: KeywordSearchInsights  // BLOG 탭 인사이트
   learning?: LearningData  // 학습 엔진 데이터
   timestamp: string
 }
@@ -259,6 +263,7 @@ function KeywordSearchContent() {
   const [keywordStatuses, setKeywordStatuses] = useState<KeywordSearchStatus[]>([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [activeTab, setActiveTab] = useState<string>('input')
+  const [selectedSearchTab, setSelectedSearchTab] = useState<{[keyword: string]: 'view' | 'blog'}>({})  // 키워드별 메인탭/블로그탭 선택
   // quickMode 제거 - 항상 전체 13개 블로그 분석
 
   // 단일 키워드 검색용 (하위 호환성)
@@ -1745,11 +1750,59 @@ function KeywordSearchContent() {
                           )}
                         </div>
 
+                        {/* Search Tab Selector (VIEW / BLOG) */}
+                        <div className="mb-4">
+                          <div className="flex gap-2 p-1 bg-gray-100 rounded-lg w-fit">
+                            <button
+                              onClick={() => setSelectedSearchTab(prev => ({ ...prev, [status.keyword]: 'view' }))}
+                              className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+                                (selectedSearchTab[status.keyword] || 'blog') === 'view'
+                                  ? 'bg-white text-purple-600 shadow-sm'
+                                  : 'text-gray-600 hover:text-gray-800'
+                              }`}
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                              메인탭 (VIEW)
+                              <span className="px-1.5 py-0.5 text-xs rounded-full bg-purple-100 text-purple-700">
+                                {status.result.view_results?.length || 0}
+                              </span>
+                            </button>
+                            <button
+                              onClick={() => setSelectedSearchTab(prev => ({ ...prev, [status.keyword]: 'blog' }))}
+                              className={`px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+                                (selectedSearchTab[status.keyword] || 'blog') === 'blog'
+                                  ? 'bg-white text-green-600 shadow-sm'
+                                  : 'text-gray-600 hover:text-gray-800'
+                              }`}
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+                              </svg>
+                              블로그탭 (BLOG)
+                              <span className="px-1.5 py-0.5 text-xs rounded-full bg-green-100 text-green-700">
+                                {status.result.blog_results?.length || status.result.results.length}
+                              </span>
+                            </button>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-2">
+                            {(selectedSearchTab[status.keyword] || 'blog') === 'view'
+                              ? '메인탭: 네이버 통합검색(VIEW) 결과입니다. 블로그, 카페 등이 혼합되어 표시됩니다.'
+                              : '블로그탭: 네이버 블로그 전용 탭 결과입니다. 블로그 포스팅만 표시됩니다.'}
+                          </p>
+                        </div>
+
                         {/* Blog Results Table */}
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                           <div className="overflow-x-auto">
                             <table className="w-full">
-                              <thead className="bg-gradient-to-r from-purple-50 to-pink-50 border-b-2 border-purple-200">
+                              <thead className={`border-b-2 ${
+                                (selectedSearchTab[status.keyword] || 'blog') === 'view'
+                                  ? 'bg-gradient-to-r from-purple-50 to-indigo-50 border-purple-200'
+                                  : 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-200'
+                              }`}>
                                 <tr>
                                   <th className="px-3 py-3 text-center text-xs font-bold text-gray-700 uppercase tracking-wider w-16">#</th>
                                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">블로그</th>
@@ -1764,11 +1817,18 @@ function KeywordSearchContent() {
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-100">
-                                {status.result.results.map((blog, blogIndex) => (
+                                {((selectedSearchTab[status.keyword] || 'blog') === 'view'
+                                  ? (status.result.view_results || [])
+                                  : (status.result.blog_results || status.result.results)
+                                ).map((blog, blogIndex) => (
                                   <tr key={blogIndex} className="hover:bg-gray-50 transition-colors">
                                     <td className="px-3 py-3 text-center">
                                       <div className="flex flex-col items-center gap-0.5">
-                                        <div className="inline-flex items-center justify-center w-7 h-7 rounded-full text-white font-bold text-xs bg-gradient-to-br from-purple-500 to-pink-500">
+                                        <div className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-white font-bold text-xs ${
+                                          (selectedSearchTab[status.keyword] || 'blog') === 'view'
+                                            ? 'bg-gradient-to-br from-purple-500 to-indigo-500'
+                                            : 'bg-gradient-to-br from-green-500 to-emerald-500'
+                                        }`}>
                                           {blog.rank}
                                         </div>
                                         {blog.original_rank && blog.original_rank !== blog.rank && (
