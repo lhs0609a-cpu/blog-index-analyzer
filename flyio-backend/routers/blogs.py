@@ -581,7 +581,46 @@ async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
 
 
 async def fetch_via_view_tab_scraping(keyword: str, limit: int) -> List[Dict]:
-    """Fetch results from Naver VIEW tab (통합검색 - 블로그, 카페 등 포함)"""
+    """Fetch results from Naver VIEW tab using Playwright (통합검색 - 블로그, 카페 등 포함)"""
+    try:
+        # Use Playwright-based scraper for JavaScript-rendered content
+        from services.blog_scraper import scrape_view_tab_results
+
+        logger.info(f"[VIEW] Using Playwright to scrape VIEW tab for: {keyword}")
+        raw_results = await scrape_view_tab_results(keyword, limit)
+
+        if not raw_results:
+            logger.info(f"[VIEW] Playwright scraping returned 0 results for: {keyword}")
+            return []
+
+        # Format results to match expected structure
+        results = []
+        for item in raw_results:
+            results.append({
+                "rank": item.get("rank", len(results) + 1),
+                "blog_id": item["blog_id"],
+                "blog_name": item["blog_id"],  # 이름은 나중에 분석에서 가져옴
+                "blog_url": item.get("blog_url", f"https://blog.naver.com/{item['blog_id']}"),
+                "post_title": item.get("post_title", ""),
+                "post_url": item["post_url"],
+                "post_date": None,
+                "thumbnail": None,
+                "tab_type": "VIEW",
+                "smart_block_keyword": keyword,
+            })
+
+        logger.info(f"[VIEW] Playwright scraping returned {len(results)} results for: {keyword}")
+        return results
+
+    except Exception as e:
+        logger.error(f"[VIEW] Error in Playwright scraping: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return []
+
+
+async def fetch_via_view_tab_scraping_http(keyword: str, limit: int) -> List[Dict]:
+    """[DEPRECATED] Fallback HTTP-based VIEW tab scraping (doesn't work well due to JS rendering)"""
     results = []
 
     try:
@@ -589,14 +628,10 @@ async def fetch_via_view_tab_scraping(keyword: str, limit: int) -> List[Dict]:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
             "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
         }
 
         from urllib.parse import quote
         encoded_keyword = quote(keyword)
-        # VIEW 탭: where=view 파라미터 사용
         search_url = f"https://search.naver.com/search.naver?where=view&query={encoded_keyword}"
 
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
@@ -604,17 +639,8 @@ async def fetch_via_view_tab_scraping(keyword: str, limit: int) -> List[Dict]:
 
             if response.status_code == 200:
                 html_text = response.text
-
-                # 디버그: HTML 길이와 blog.naver.com 포함 여부 확인
-                has_blog_links = 'blog.naver.com' in html_text
-                logger.info(f"VIEW tab HTML length: {len(html_text)}, contains blog.naver.com: {has_blog_links}")
-
-                # 정규표현식으로 블로그 포스팅 URL 직접 추출 (가장 안정적)
-                # 패턴: blog.naver.com/{blog_id}/{post_id}
                 post_url_pattern = re.compile(r'href="(https://blog\.naver\.com/([^/]+)/(\d+))"')
                 matches = post_url_pattern.findall(html_text)
-
-                logger.info(f"VIEW tab scraping found {len(matches)} blog post URLs for: {keyword}")
 
                 seen_urls = set()
                 rank = 0
@@ -627,7 +653,6 @@ async def fetch_via_view_tab_scraping(keyword: str, limit: int) -> List[Dict]:
                     blog_id = match[1]
                     post_id = match[2]
 
-                    # 중복 제거 (같은 포스팅은 한 번만)
                     if post_url in seen_urls:
                         continue
                     seen_urls.add(post_url)
@@ -636,9 +661,9 @@ async def fetch_via_view_tab_scraping(keyword: str, limit: int) -> List[Dict]:
                     results.append({
                         "rank": rank,
                         "blog_id": blog_id,
-                        "blog_name": blog_id,  # 이름은 나중에 분석에서 가져옴
+                        "blog_name": blog_id,
                         "blog_url": f"https://blog.naver.com/{blog_id}",
-                        "post_title": f"포스팅 #{post_id}",  # 제목은 분석에서 가져옴
+                        "post_title": f"포스팅 #{post_id}",
                         "post_url": post_url,
                         "post_date": None,
                         "thumbnail": None,
@@ -646,10 +671,8 @@ async def fetch_via_view_tab_scraping(keyword: str, limit: int) -> List[Dict]:
                         "smart_block_keyword": keyword,
                     })
 
-                logger.info(f"VIEW tab scraping returned {len(results)} results for: {keyword}")
                 return results
 
-                # Fallback: BeautifulSoup 방식 (위 방식이 실패할 경우)
                 soup = BeautifulSoup(html_text, 'html.parser')
 
                 # VIEW 탭 검색 결과 파싱

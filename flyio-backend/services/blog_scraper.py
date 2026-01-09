@@ -438,3 +438,113 @@ async def close_browser():
         except:
             pass
         _playwright = None
+
+
+async def scrape_view_tab_results(keyword: str, limit: int = 13) -> list:
+    """
+    Scrape Naver VIEW tab search results using Playwright
+    VIEW tab shows mixed content (blogs, cafes, etc.) in integrated search
+
+    Args:
+        keyword: Search keyword
+        limit: Maximum number of results to return
+
+    Returns:
+        List of blog results with blog_id, post_url, post_title, etc.
+    """
+    from urllib.parse import quote
+    results = []
+
+    try:
+        browser = await get_browser()
+        context = await browser.new_context(
+            viewport={'width': 1920, 'height': 1080},
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        )
+        page = await context.new_page()
+
+        encoded_keyword = quote(keyword)
+        search_url = f"https://search.naver.com/search.naver?where=view&query={encoded_keyword}"
+
+        logger.info(f"[Playwright] Navigating to VIEW tab: {search_url}")
+
+        await page.goto(search_url, wait_until='networkidle', timeout=30000)
+
+        # Wait for search results to load
+        await page.wait_for_selector('.view_wrap, .api_subject_bx', timeout=10000)
+        await asyncio.sleep(1)  # Additional wait for dynamic content
+
+        # Extract blog post links from VIEW tab
+        # VIEW tab uses different selectors than BLOG tab
+        blog_links = await page.evaluate('''() => {
+            const results = [];
+
+            // Method 1: Find all blog.naver.com links in the VIEW tab content area
+            const contentArea = document.querySelector('.view_wrap') || document.querySelector('#main_pack');
+            if (!contentArea) return results;
+
+            // Find all anchor tags with blog.naver.com URLs
+            const links = contentArea.querySelectorAll('a[href*="blog.naver.com"]');
+
+            const seen = new Set();
+            for (const link of links) {
+                const href = link.href;
+
+                // Skip non-post URLs (profiles, etc.)
+                const match = href.match(/blog\\.naver\\.com\\/([^\\/]+)\\/?(\\d+)?/);
+                if (!match || !match[2]) continue;  // Must have post ID
+
+                const blogId = match[1];
+                const postId = match[2];
+                const postUrl = `https://blog.naver.com/${blogId}/${postId}`;
+
+                // Skip duplicates
+                if (seen.has(postUrl)) continue;
+                seen.add(postUrl);
+
+                // Try to find title from nearby elements
+                let title = '';
+                const titleEl = link.closest('.total_wrap, .view_cont, .api_txt_lines')?.querySelector('.title_link, .api_txt_lines, .title');
+                if (titleEl) {
+                    title = titleEl.textContent?.trim() || '';
+                }
+                if (!title) {
+                    title = link.textContent?.trim() || '';
+                }
+
+                results.push({
+                    blog_id: blogId,
+                    post_id: postId,
+                    post_url: postUrl,
+                    post_title: title,
+                    tab_type: 'VIEW'
+                });
+            }
+
+            return results;
+        }''')
+
+        await context.close()
+
+        # Deduplicate and limit results
+        seen_urls = set()
+        for item in blog_links:
+            if len(results) >= limit:
+                break
+            if item['post_url'] not in seen_urls:
+                seen_urls.add(item['post_url'])
+                item['rank'] = len(results) + 1
+                item['blog_url'] = f"https://blog.naver.com/{item['blog_id']}"
+                results.append(item)
+
+        logger.info(f"[Playwright] VIEW tab scraping found {len(results)} blog posts for: {keyword}")
+        return results
+
+    except PlaywrightTimeout:
+        logger.warning(f"[Playwright] Timeout scraping VIEW tab for: {keyword}")
+        return []
+    except Exception as e:
+        logger.error(f"[Playwright] Error scraping VIEW tab: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return []
