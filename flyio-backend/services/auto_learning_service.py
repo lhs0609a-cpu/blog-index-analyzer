@@ -19,16 +19,16 @@ logger = logging.getLogger(__name__)
 # 설정
 # ==============================================
 AUTO_LEARNING_CONFIG = {
-    "enabled": False,                   # 자동 학습 비활성화 (서버 안정화를 위해)
-    "interval_minutes": 10,             # 학습 주기 (분) - 5 → 10으로 변경 (서버 안정화)
-    "keywords_per_cycle": 1,            # 한 번에 학습할 키워드 수
-    "blogs_per_keyword": 5,             # 키워드당 분석할 블로그 수 (10 → 5로 감소)
+    "enabled": True,                    # 자동 학습 활성화
+    "interval_minutes": 10,             # 학습 주기 (분)
+    "keywords_per_cycle": 2,            # 한 번에 학습할 키워드 수 (1 → 2)
+    "blogs_per_keyword": 10,            # 키워드당 분석할 블로그 수 (5 → 10으로 증가)
     "delay_between_keywords": 5.0,      # 키워드 간 대기 시간 (초)
-    "delay_between_blogs": 3.0,         # 블로그 간 대기 시간 (초) - 2 → 3으로 증가
+    "delay_between_blogs": 2.0,         # 블로그 간 대기 시간 (초) - 3 → 2로 감소 (학습 속도 향상)
     "auto_train_threshold": 50,         # 자동 훈련 트리거 샘플 수
     "quiet_hours_start": 2,             # 조용한 시간 시작 (서버 부하 감소)
     "quiet_hours_end": 6,               # 조용한 시간 끝
-    "quiet_hours_interval": 60,         # 조용한 시간대 학습 주기 (분)
+    "quiet_hours_interval": 30,         # 조용한 시간대 학습 주기 (분) - 60 → 30으로 감소
     "daily_training_hour": 3,           # 매일 대규모 훈련 시간 (UTC, 한국시간 12시)
     "daily_training_samples": 5000,     # 대규모 훈련 시 사용할 샘플 수
 }

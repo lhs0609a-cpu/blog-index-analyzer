@@ -18,6 +18,7 @@ from bs4 import BeautifulSoup
 
 from config import settings
 from database.learning_db import add_learning_sample, get_current_weights, save_current_weights, get_learning_samples
+from services.category_weights import detect_keyword_category, get_category_weights, merge_weights_with_category, get_category_optimization_tips
 from database.keyword_analysis_db import get_cached_related_keywords, cache_related_keywords
 from services.learning_engine import train_model, calculate_blog_score
 
@@ -1731,7 +1732,7 @@ async def analyze_blog(blog_id: str) -> Dict:
                 analysis_data["data_sources"].append("estimated")
 
             # ============================================
-            # SCORE CALCULATION - Using learned weights
+            # SCORE CALCULATION - Using category + learned weights
             # ============================================
 
             # Get learned weights from database
@@ -1739,6 +1740,11 @@ async def analyze_blog(blog_id: str) -> Dict:
                 learned_weights = get_current_weights()
             except:
                 learned_weights = None
+
+            # 키워드 카테고리 감지 및 가중치 병합
+            keyword_category = detect_keyword_category(keyword) if keyword else "default"
+            category_weights = merge_weights_with_category(learned_weights, keyword) if keyword else (learned_weights or {})
+            logger.debug(f"Using category weights for '{keyword}': category={keyword_category}")
 
             # ===== C-RANK SCORE CALCULATION =====
             # C-Rank: Context(주제집중도) + Content(콘텐츠품질) + Chain(연결성)
@@ -1798,9 +1804,9 @@ async def analyze_blog(blog_id: str) -> Dict:
                 else:
                     chain_score = 35
 
-            # C-Rank sub-weights (from learned or default)
-            if learned_weights and 'c_rank' in learned_weights:
-                c_sub = learned_weights['c_rank'].get('sub_weights', {})
+            # C-Rank sub-weights (from category weights)
+            if category_weights and 'c_rank' in category_weights:
+                c_sub = category_weights['c_rank'].get('sub_weights', {})
                 context_w = c_sub.get('context', 0.35)
                 content_w = c_sub.get('content', 0.40)
                 chain_w = c_sub.get('chain', 0.25)
@@ -1873,9 +1879,9 @@ async def analyze_blog(blog_id: str) -> Dict:
                 else:
                     accuracy_score = 30
 
-            # D.I.A. sub-weights (from learned or default)
-            if learned_weights and 'dia' in learned_weights:
-                d_sub = learned_weights['dia'].get('sub_weights', {})
+            # D.I.A. sub-weights (from category weights)
+            if category_weights and 'dia' in category_weights:
+                d_sub = category_weights['dia'].get('sub_weights', {})
                 depth_w = d_sub.get('depth', 0.33)
                 info_w = d_sub.get('information', 0.34)
                 acc_w = d_sub.get('accuracy', 0.33)
@@ -1884,15 +1890,19 @@ async def analyze_blog(blog_id: str) -> Dict:
 
             dia_score = (depth_score * depth_w + info_score * info_w + accuracy_score * acc_w)
 
-            # ===== FINAL SCORE with learned weights =====
-            if learned_weights:
-                c_rank_weight = learned_weights.get('c_rank', {}).get('weight', 0.50)
-                dia_weight = learned_weights.get('dia', {}).get('weight', 0.50)
-                extra_factors = learned_weights.get('extra_factors', {})
+            # ===== FINAL SCORE with category + learned weights =====
+            if category_weights:
+                c_rank_weight = category_weights.get('c_rank', {}).get('weight', 0.25)
+                dia_weight = category_weights.get('dia', {}).get('weight', 0.25)
+                content_weight = category_weights.get('content_factors', {}).get('weight', 0.50)
+                extra_factors = category_weights.get('extra_factors', {})
+                bonus_factors = category_weights.get('bonus_factors', {})
             else:
-                c_rank_weight = 0.50
-                dia_weight = 0.50
-                extra_factors = {'post_count': 0.15, 'neighbor_count': 0.10, 'visitor_count': 0.05}
+                c_rank_weight = 0.25
+                dia_weight = 0.25
+                content_weight = 0.50
+                extra_factors = {'post_count': 0.05, 'neighbor_count': 0.03, 'visitor_count': 0.02}
+                bonus_factors = {'has_map': 0.03, 'has_link': 0.02, 'video_count': 0.05, 'engagement': 0.05}
 
             # Base score from C-Rank and D.I.A.
             base_score = (c_rank_score * c_rank_weight + dia_score * dia_weight)
@@ -1970,7 +1980,7 @@ async def analyze_blog(blog_id: str) -> Dict:
             index["level_category"] = "마스터" if index["level"] >= 13 else "최적화" if index["level"] >= 10 else "준최적화" if index["level"] >= 7 else "성장기" if index["level"] >= 4 else "입문"
             index["percentile"] = min(index["total_score"], 99)
 
-            # Store detailed breakdown
+            # Store detailed breakdown with category info
             index["score_breakdown"] = {
                 "c_rank": round(c_rank_score * c_rank_weight, 1),
                 "dia": round(dia_score * dia_weight, 1),
@@ -1983,7 +1993,13 @@ async def analyze_blog(blog_id: str) -> Dict:
                     "depth": round(depth_score, 1),
                     "information": round(info_score, 1),
                     "accuracy": round(accuracy_score, 1)
-                }
+                },
+                "weights_used": {
+                    "c_rank": round(c_rank_weight, 2),
+                    "dia": round(dia_weight, 2),
+                    "content": round(content_weight, 2)
+                },
+                "keyword_category": keyword_category if keyword else "default"
             }
 
             logger.info(f"Blog {blog_id}: score={index['total_score']}, level={index['level']}, c_rank={c_rank_score:.1f}, dia={dia_score:.1f}, sources={analysis_data['data_sources']}")
@@ -3170,3 +3186,44 @@ async def get_score_breakdown(blog_id: str):
     except Exception as e:
         logger.error(f"Error getting score breakdown for {blog_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/keyword-category/{keyword}")
+async def get_keyword_category_info(keyword: str):
+    """
+    키워드에 대한 카테고리 분류 및 최적화 팁 제공
+
+    Returns:
+        category: 감지된 카테고리 (맛집, 의료, IT, 여행 등)
+        tips: 해당 카테고리에 맞는 최적화 팁 목록
+        focus_areas: 집중해야 할 영역
+        weights: 해당 카테고리에 적용되는 가중치
+    """
+    try:
+        category = detect_keyword_category(keyword)
+        tips_data = get_category_optimization_tips(keyword)
+        weights = get_category_weights(keyword)
+
+        return {
+            "success": True,
+            "keyword": keyword,
+            "category": category,
+            "category_label": tips_data.get("category", category),
+            "optimization_tips": tips_data.get("tips", []),
+            "focus_areas": tips_data.get("focus_areas", []),
+            "weights_applied": {
+                "c_rank": weights.get("c_rank", {}).get("weight", 0.25),
+                "dia": weights.get("dia", {}).get("weight", 0.25),
+                "content_factors": weights.get("content_factors", {}).get("weight", 0.50)
+            },
+            "content_factor_weights": weights.get("content_factors", {}).get("sub_weights", {}),
+            "bonus_factor_weights": weights.get("bonus_factors", {})
+        }
+    except Exception as e:
+        logger.error(f"Error getting keyword category for '{keyword}': {e}")
+        return {
+            "success": False,
+            "keyword": keyword,
+            "category": "default",
+            "error": str(e)
+        }

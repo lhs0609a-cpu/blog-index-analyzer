@@ -602,3 +602,227 @@ async def scrape_view_tab_results(keyword: str, limit: int = 13) -> list:
             except:
                 pass
         return []
+
+
+async def scrape_post_content_playwright(blog_id: str, post_no: str, keyword: str = "") -> Dict:
+    """
+    Playwright를 사용한 개별 포스트 상세 분석
+    HTTP 스크래핑보다 더 정확한 데이터 수집 가능
+
+    Returns:
+        post_analysis: {
+            content_length, image_count, video_count, keyword_count,
+            keyword_density, heading_count, paragraph_count, has_map,
+            has_link, like_count, comment_count, post_age_days,
+            title_has_keyword, data_fetched, fetch_method
+        }
+    """
+    from datetime import datetime
+
+    post_analysis = {
+        "post_url": f"https://blog.naver.com/{blog_id}/{post_no}",
+        "keyword": keyword,
+        "title_has_keyword": False,
+        "title_keyword_position": -1,
+        "content_length": 0,
+        "image_count": 0,
+        "video_count": 0,
+        "keyword_count": 0,
+        "keyword_density": 0.0,
+        "like_count": 0,
+        "comment_count": 0,
+        "post_age_days": None,
+        "has_map": False,
+        "has_link": False,
+        "heading_count": 0,
+        "paragraph_count": 0,
+        "data_fetched": False,
+        "fetch_method": "playwright"
+    }
+
+    global _browser, _playwright
+    context = None
+    page = None
+
+    try:
+        browser = await get_browser()
+        context = await browser.new_context(
+            viewport={'width': 1280, 'height': 900},
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        )
+        page = await context.new_page()
+
+        # Navigate to post
+        post_url = f"https://blog.naver.com/{blog_id}/{post_no}"
+        logger.info(f"[Playwright] Analyzing post: {post_url}")
+
+        await page.goto(post_url, wait_until='domcontentloaded', timeout=20000)
+        await asyncio.sleep(1)  # Wait for dynamic content
+
+        # Extract all content data using JavaScript
+        data = await page.evaluate('''(keyword) => {
+            const result = {
+                title: '',
+                contentText: '',
+                contentLength: 0,
+                imageCount: 0,
+                videoCount: 0,
+                headingCount: 0,
+                paragraphCount: 0,
+                hasMap: false,
+                hasLink: false,
+                likeCount: 0,
+                commentCount: 0,
+                postDate: ''
+            };
+
+            // Get iframe content if exists (네이버 블로그는 iframe 사용)
+            let mainFrame = document.querySelector('#mainFrame');
+            let doc = document;
+            if (mainFrame && mainFrame.contentDocument) {
+                doc = mainFrame.contentDocument;
+            }
+
+            // Title
+            const titleEl = doc.querySelector('.se-title-text, .pcol1, ._postTitleText, .tit_h3, #title_0');
+            if (titleEl) {
+                result.title = titleEl.textContent?.trim() || '';
+            }
+
+            // Content area
+            const contentEl = doc.querySelector('.se-main-container, #post-view, .post_ct, .__viewer_container, #postViewArea');
+            if (contentEl) {
+                result.contentText = contentEl.textContent || '';
+                result.contentLength = result.contentText.length;
+
+                // Images
+                const images = contentEl.querySelectorAll('img:not([src*="static"]):not([src*="icon"])');
+                result.imageCount = images.length;
+
+                // Videos
+                const videos = contentEl.querySelectorAll('iframe[src*="video"], iframe[src*="youtube"], .se-video, video');
+                result.videoCount = videos.length;
+
+                // Headings (소제목)
+                const headings = contentEl.querySelectorAll('h2, h3, h4, .se-section-title, .se-text-paragraph-align-center');
+                result.headingCount = headings.length;
+
+                // Paragraphs
+                const paragraphs = contentEl.querySelectorAll('p, .se-text-paragraph');
+                let validParagraphs = 0;
+                paragraphs.forEach(p => {
+                    if (p.textContent?.trim().length > 10) validParagraphs++;
+                });
+                result.paragraphCount = validParagraphs;
+
+                // Map
+                const maps = contentEl.querySelectorAll('.se-map, .se-place, iframe[src*="map"], .map_area');
+                result.hasMap = maps.length > 0;
+
+                // External links
+                const links = contentEl.querySelectorAll('a[href*="http"]');
+                for (const link of links) {
+                    if (!link.href.includes('naver.com') && !link.href.includes('naver.net')) {
+                        result.hasLink = true;
+                        break;
+                    }
+                }
+            }
+
+            // Like count
+            const likeEl = doc.querySelector('.u_likeit_list_count, .sympathy_count, ._sympathyCount, .btn_like_count');
+            if (likeEl) {
+                const num = likeEl.textContent?.match(/\\d+/);
+                if (num) result.likeCount = parseInt(num[0]);
+            }
+
+            // Comment count
+            const commentEl = doc.querySelector('.comment_count, ._commentCount, .cmt_count, .btn_comment_count');
+            if (commentEl) {
+                const num = commentEl.textContent?.match(/\\d+/);
+                if (num) result.commentCount = parseInt(num[0]);
+            }
+
+            // Post date
+            const dateEl = doc.querySelector('.se_publishDate, .se-date, ._postAddDate, .post_date, .date, time');
+            if (dateEl) {
+                result.postDate = dateEl.textContent?.trim() || dateEl.getAttribute('datetime') || '';
+            }
+
+            return result;
+        }''', keyword)
+
+        # Process results
+        post_analysis["content_length"] = data.get("contentLength", 0)
+        post_analysis["image_count"] = data.get("imageCount", 0)
+        post_analysis["video_count"] = data.get("videoCount", 0)
+        post_analysis["heading_count"] = data.get("headingCount", 0)
+        post_analysis["paragraph_count"] = data.get("paragraphCount", 0)
+        post_analysis["has_map"] = data.get("hasMap", False)
+        post_analysis["has_link"] = data.get("hasLink", False)
+        post_analysis["like_count"] = data.get("likeCount", 0)
+        post_analysis["comment_count"] = data.get("commentCount", 0)
+
+        # Title keyword check
+        title = data.get("title", "")
+        if title and keyword:
+            keyword_lower = keyword.lower().replace(" ", "")
+            title_lower = title.lower().replace(" ", "")
+            if keyword_lower in title_lower:
+                post_analysis["title_has_keyword"] = True
+                pos = title_lower.find(keyword_lower)
+                if pos == 0:
+                    post_analysis["title_keyword_position"] = 0
+                elif pos > len(title_lower) * 0.7:
+                    post_analysis["title_keyword_position"] = 2
+                else:
+                    post_analysis["title_keyword_position"] = 1
+
+        # Keyword count and density
+        content_text = data.get("contentText", "")
+        if content_text and keyword:
+            keyword_lower = keyword.lower().replace(" ", "")
+            content_lower = content_text.lower().replace(" ", "")
+            post_analysis["keyword_count"] = content_lower.count(keyword_lower)
+            if post_analysis["content_length"] > 0:
+                post_analysis["keyword_density"] = round(
+                    (post_analysis["keyword_count"] * 1000) / post_analysis["content_length"], 2
+                )
+
+        # Parse post date
+        post_date_str = data.get("postDate", "")
+        if post_date_str:
+            date_match = re.search(r'(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})', post_date_str)
+            if date_match:
+                try:
+                    y, m, d = int(date_match.group(1)), int(date_match.group(2)), int(date_match.group(3))
+                    post_date = datetime(y, m, d)
+                    post_analysis["post_age_days"] = (datetime.now() - post_date).days
+                except:
+                    pass
+
+        post_analysis["data_fetched"] = post_analysis["content_length"] > 0
+
+        logger.info(f"[Playwright] Post analyzed: {blog_id}/{post_no} - "
+                   f"length={post_analysis['content_length']}, imgs={post_analysis['image_count']}, "
+                   f"headings={post_analysis['heading_count']}, kw_count={post_analysis['keyword_count']}")
+
+    except PlaywrightTimeout:
+        logger.warning(f"[Playwright] Timeout analyzing post: {blog_id}/{post_no}")
+    except Exception as e:
+        logger.error(f"[Playwright] Error analyzing post: {e}")
+        import traceback
+        logger.debug(traceback.format_exc())
+    finally:
+        if page:
+            try:
+                await page.close()
+            except:
+                pass
+        if context:
+            try:
+                await context.close()
+            except:
+                pass
+
+    return post_analysis
