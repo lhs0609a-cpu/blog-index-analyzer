@@ -3,8 +3,8 @@
 
 const STORAGE_KEY = 'blog_analyzer_api_url';
 
-// AWS Lightsail 프로덕션 서버 URL
-const PRODUCTION_API_URL = 'https://api.blrank.co.kr';
+// Fly.io 프로덕션 서버 URL
+const PRODUCTION_API_URL = 'https://naverpay-delivery-tracker.fly.dev';
 // 로컬 개발 서버 URL
 const LOCAL_API_URL = 'http://localhost:8001';
 
