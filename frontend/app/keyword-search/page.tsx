@@ -2449,6 +2449,17 @@ function KeywordSearchContent() {
                   ? '메인탭: 네이버 통합검색(VIEW) 결과입니다. 블로그, 카페 등이 혼합되어 표시됩니다.'
                   : '블로그탭: 네이버 블로그 전용 탭 결과입니다. 블로그 포스팅만 표시됩니다.'}
               </p>
+              {/* Notice when VIEW and BLOG results are same */}
+              {results.view_results && results.blog_results &&
+               results.view_results.length > 0 && results.blog_results.length > 0 &&
+               results.view_results[0]?.blog_id === results.blog_results[0]?.blog_id && (
+                <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-xs text-amber-700 flex items-center gap-1">
+                    <span>⚠️</span>
+                    <span>현재 메인탭과 블로그탭 결과가 동일합니다. 네이버 VIEW 탭은 JavaScript로 렌더링되어 서버에서 직접 조회가 어렵습니다.</span>
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Blog Table */}
