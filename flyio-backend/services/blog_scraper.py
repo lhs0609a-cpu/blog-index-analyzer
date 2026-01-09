@@ -19,7 +19,29 @@ async def get_browser() -> Browser:
     """Get or create browser instance"""
     global _browser, _playwright
 
-    if _browser is None or not _browser.is_connected():
+    # Check if we need to create a new browser
+    need_new_browser = False
+
+    if _browser is None:
+        need_new_browser = True
+    else:
+        try:
+            if not _browser.is_connected():
+                need_new_browser = True
+        except Exception:
+            need_new_browser = True
+
+    if need_new_browser:
+        # Close existing playwright instance if any
+        if _playwright:
+            try:
+                await _playwright.stop()
+            except Exception:
+                pass
+            _playwright = None
+
+        _browser = None
+
         _playwright = await async_playwright().start()
         _browser = await _playwright.chromium.launch(
             headless=True,
@@ -453,15 +475,37 @@ async def scrape_view_tab_results(keyword: str, limit: int = 13) -> list:
         List of blog results with blog_id, post_url, post_title, etc.
     """
     from urllib.parse import quote
+    global _browser, _playwright
     results = []
+    context = None
+
+    # Retry logic for browser errors
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            browser = await get_browser()
+            context = await browser.new_context(
+                viewport={'width': 1920, 'height': 1080},
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            )
+            page = await context.new_page()
+            break  # Success, exit retry loop
+        except Exception as e:
+            logger.warning(f"[Playwright] Browser context error (attempt {attempt + 1}/{max_retries}): {e}")
+            # Reset browser for next attempt
+            _browser = None
+            if _playwright:
+                try:
+                    await _playwright.stop()
+                except:
+                    pass
+                _playwright = None
+            if attempt == max_retries - 1:
+                logger.error(f"[Playwright] Failed to create browser context after {max_retries} attempts")
+                return []
+            await asyncio.sleep(1)
 
     try:
-        browser = await get_browser()
-        context = await browser.new_context(
-            viewport={'width': 1920, 'height': 1080},
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        )
-        page = await context.new_page()
 
         encoded_keyword = quote(keyword)
         search_url = f"https://search.naver.com/search.naver?where=view&query={encoded_keyword}"
@@ -542,9 +586,19 @@ async def scrape_view_tab_results(keyword: str, limit: int = 13) -> list:
 
     except PlaywrightTimeout:
         logger.warning(f"[Playwright] Timeout scraping VIEW tab for: {keyword}")
+        if context:
+            try:
+                await context.close()
+            except:
+                pass
         return []
     except Exception as e:
         logger.error(f"[Playwright] Error scraping VIEW tab: {e}")
         import traceback
         logger.error(traceback.format_exc())
+        if context:
+            try:
+                await context.close()
+            except:
+                pass
         return []
