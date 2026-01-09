@@ -595,6 +595,10 @@ async def fetch_via_view_tab_scraping(keyword: str, limit: int) -> List[Dict]:
             if response.status_code == 200:
                 html_text = response.text
 
+                # 디버그: HTML 길이와 blog.naver.com 포함 여부 확인
+                has_blog_links = 'blog.naver.com' in html_text
+                logger.info(f"VIEW tab HTML length: {len(html_text)}, contains blog.naver.com: {has_blog_links}")
+
                 # 정규표현식으로 블로그 포스팅 URL 직접 추출 (가장 안정적)
                 # 패턴: blog.naver.com/{blog_id}/{post_id}
                 post_url_pattern = re.compile(r'href="(https://blog\.naver\.com/([^/]+)/(\d+))"')
