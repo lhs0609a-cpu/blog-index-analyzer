@@ -725,12 +725,12 @@ async def fetch_display_ranks(keyword: str, blog_results: List[Dict]) -> Dict[st
 
     NOTE: 이전에는 PC 네이버 검색 결과를 스크래핑하여 멀티미디어 슬롯을 포함한
     실제 노출 순위를 계산했으나, 봇 감지 위험으로 인해 비활성화됨.
-    대신 apply_diversity_filter()로 API 결과를 네이버 웹사이트처럼 재정렬함.
+    현재는 fetch_via_blog_tab_scraping()에서 가져온 순서를 그대로 사용.
 
     Returns: 빈 딕셔너리 (웹 스크래핑 비활성화)
     """
     # 웹 스크래핑 비활성화 - 봇 감지 위험 회피
-    # 다양성 필터로 대체됨 (같은 블로거 연속 방지)
+    # 블로그 탭 스크래핑 결과의 순서를 그대로 사용
     return {}
 
     # ===== 아래는 비활성화된 웹 스크래핑 코드 (참조용) =====
@@ -1807,11 +1807,14 @@ async def get_related_keywords_from_searchad(keyword: str) -> RelatedKeywordsRes
                     pc_search = kw.get("monthlyPcQcCnt", 0)
                     mobile_search = kw.get("monthlyMobileQcCnt", 0)
 
-                    # Handle "< 10" values
+                    # Handle "< 10" values (네이버 API는 10 미만일 때 "< 10" 문자열 반환)
+                    # 10 미만의 중간값인 5로 처리하되, 로그에 기록
                     if isinstance(pc_search, str) and "<" in pc_search:
-                        pc_search = 5
+                        pc_search = 5  # "< 10"은 1-9 범위이므로 중간값 5 사용
+                        logger.debug(f"PC search volume < 10 for keyword, using estimate: 5")
                     if isinstance(mobile_search, str) and "<" in mobile_search:
-                        mobile_search = 5
+                        mobile_search = 5  # "< 10"은 1-9 범위이므로 중간값 5 사용
+                        logger.debug(f"Mobile search volume < 10 for keyword, using estimate: 5")
 
                     try:
                         pc_search = int(pc_search) if pc_search else 0
@@ -1919,19 +1922,18 @@ async def get_related_keywords_from_autocomplete(keyword: str) -> RelatedKeyword
             except Exception as e:
                 logger.debug(f"Shopping suggest failed: {e}")
 
-            # Method 2: Generate common variations
+            # Method 2: Generate common variations (검색량 데이터 없이 키워드만 제공)
             common_suffixes = ["추천", "가격", "비용", "후기", "리뷰", "순위", "비교", "종류", "방법", "효과"]
-            common_prefixes = ["서울", "강남", "신촌", "홍대", "잠실", "분당"]
 
             for suffix in common_suffixes:
                 kw = f"{keyword} {suffix}"
                 if kw not in [r.keyword for r in related_keywords]:
                     related_keywords.append(RelatedKeyword(
                         keyword=kw,
-                        monthly_pc_search=random.randint(100, 5000),
-                        monthly_mobile_search=random.randint(500, 20000),
-                        monthly_total_search=random.randint(600, 25000),
-                        competition="중"
+                        monthly_pc_search=None,  # 실제 데이터 없음
+                        monthly_mobile_search=None,  # 실제 데이터 없음
+                        monthly_total_search=None,  # 실제 데이터 없음
+                        competition=None  # 실제 데이터 없음
                     ))
 
             # Method 3: Naver search autocomplete (backup)
@@ -2333,8 +2335,10 @@ async def search_keyword_with_tabs(
     # Fetch search results from Naver
     search_results = await fetch_naver_search_results(keyword, limit)
 
-    # 다양성 필터 적용: 같은 블로거가 연속으로 나오지 않도록 재배치
-    search_results = apply_diversity_filter(search_results)
+    # NOTE: 다양성 필터 제거 - 네이버 실제 검색 순서를 그대로 유지
+    # 이전에는 같은 블로거가 연속으로 나오지 않도록 재배치했으나,
+    # 실제 네이버 검색 결과와 다르게 표시되는 문제가 있어 제거함
+    # search_results = apply_diversity_filter(search_results)
 
     if not search_results:
         logger.warning(f"No search results found for: {keyword}")
