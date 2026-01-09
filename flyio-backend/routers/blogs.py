@@ -593,7 +593,50 @@ async def fetch_via_view_tab_scraping(keyword: str, limit: int) -> List[Dict]:
             response = await client.get(search_url, headers=headers)
 
             if response.status_code == 200:
-                soup = BeautifulSoup(response.text, 'html.parser')
+                html_text = response.text
+
+                # 정규표현식으로 블로그 포스팅 URL 직접 추출 (가장 안정적)
+                # 패턴: blog.naver.com/{blog_id}/{post_id}
+                post_url_pattern = re.compile(r'href="(https://blog\.naver\.com/([^/]+)/(\d+))"')
+                matches = post_url_pattern.findall(html_text)
+
+                logger.info(f"VIEW tab scraping found {len(matches)} blog post URLs for: {keyword}")
+
+                seen_urls = set()
+                rank = 0
+
+                for match in matches:
+                    if rank >= limit:
+                        break
+
+                    post_url = match[0]
+                    blog_id = match[1]
+                    post_id = match[2]
+
+                    # 중복 제거 (같은 포스팅은 한 번만)
+                    if post_url in seen_urls:
+                        continue
+                    seen_urls.add(post_url)
+
+                    rank += 1
+                    results.append({
+                        "rank": rank,
+                        "blog_id": blog_id,
+                        "blog_name": blog_id,  # 이름은 나중에 분석에서 가져옴
+                        "blog_url": f"https://blog.naver.com/{blog_id}",
+                        "post_title": f"포스팅 #{post_id}",  # 제목은 분석에서 가져옴
+                        "post_url": post_url,
+                        "post_date": None,
+                        "thumbnail": None,
+                        "tab_type": "VIEW",
+                        "smart_block_keyword": keyword,
+                    })
+
+                logger.info(f"VIEW tab scraping returned {len(results)} results for: {keyword}")
+                return results
+
+                # Fallback: BeautifulSoup 방식 (위 방식이 실패할 경우)
+                soup = BeautifulSoup(html_text, 'html.parser')
 
                 # VIEW 탭 검색 결과 파싱
                 # 방법 1: view_wrap 또는 total_wrap 클래스
