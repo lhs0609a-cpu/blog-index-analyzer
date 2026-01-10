@@ -1560,7 +1560,7 @@ async def scrape_blog_stats(blog_id: str) -> Dict:
     return stats
 
 
-async def analyze_blog(blog_id: str) -> Dict:
+async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
     """Analyze a single blog - FAST version using API only (no Playwright)"""
     # 캐시 확인 (성능 개선)
     cached = get_cached_blog_analysis(blog_id)
@@ -2646,7 +2646,7 @@ async def search_keyword_with_tabs(
             try:
                 # 블로그 분석 + 포스트 분석을 동시에 실행 (성능 개선)
                 analysis, post_analysis_result = await asyncio.gather(
-                    analyze_blog(item["blog_id"]),
+                    analyze_blog(item["blog_id"], keyword),
                     analyze_post(item["post_url"], keyword)
                 )
                 return item, analysis, post_analysis_result

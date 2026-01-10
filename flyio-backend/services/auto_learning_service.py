@@ -265,8 +265,8 @@ async def run_single_learning_cycle():
                         actual_rank = result["rank"]
                         post_url = result.get("post_url", "")
 
-                        # 블로그 분석
-                        analysis = await analyze_blog(blog_id)
+                        # 블로그 분석 (키워드 기반 카테고리 가중치 적용)
+                        analysis = await analyze_blog(blog_id, keyword)
                         stats = analysis.get("stats", {})
                         index = analysis.get("index", {})
                         breakdown = index.get("score_breakdown", {})
