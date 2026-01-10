@@ -53,18 +53,39 @@ function TiltCard({ children, className = "" }: { children: React.ReactNode; cla
   )
 }
 
-// Marquee 컴포넌트
+// Marquee 컴포넌트 - CSS 기반 무한 스크롤
 function Marquee({ children, speed = 30, direction = "left" }: { children: React.ReactNode; speed?: number; direction?: "left" | "right" }) {
   return (
     <div className="relative overflow-hidden whitespace-nowrap">
-      <motion.div
+      <div
         className="inline-flex gap-8"
-        animate={{ x: direction === "left" ? [0, -1000] : [-1000, 0] }}
-        transition={{ duration: speed, repeat: Infinity, ease: "linear" }}
+        style={{
+          animation: `marquee-${direction} ${speed}s linear infinite`,
+        }}
       >
         {children}
         {children}
-      </motion.div>
+        {children}
+        {children}
+      </div>
+      <style jsx>{`
+        @keyframes marquee-left {
+          0% {
+            transform: translateX(0%);
+          }
+          100% {
+            transform: translateX(-50%);
+          }
+        }
+        @keyframes marquee-right {
+          0% {
+            transform: translateX(-50%);
+          }
+          100% {
+            transform: translateX(0%);
+          }
+        }
+      `}</style>
     </div>
   )
 }

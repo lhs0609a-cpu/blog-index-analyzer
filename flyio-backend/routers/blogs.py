@@ -79,6 +79,102 @@ def get_consistent_value(blog_id: str, min_val: int, max_val: int, salt: str = "
     return rng.randint(min_val, max_val)
 
 
+def estimate_from_successful_results(blog_id: str, successful_results: list) -> Dict:
+    """
+    분석 성공한 블로그들의 평균을 기반으로 추정값 생성
+    크로스 추정: 같은 검색 결과에서 분석 성공한 블로그들의 데이터 활용
+
+    Args:
+        blog_id: 추정할 블로그 ID
+        successful_results: 분석 성공한 결과 리스트 [{stats, index}, ...]
+
+    Returns:
+        추정된 stats, index 딕셔너리
+    """
+    if not successful_results:
+        # 기본값 반환
+        return {
+            "stats": {
+                "total_posts": get_consistent_value(blog_id, 50, 150, "cross_posts"),
+                "neighbor_count": get_consistent_value(blog_id, 100, 500, "cross_neighbors"),
+                "total_visitors": get_consistent_value(blog_id, 50000, 200000, "cross_visitors"),
+            },
+            "index": {
+                "total_score": 25.0,
+                "level": 3,
+                "grade": "준최적화",
+                "level_category": "일반",
+                "percentile": 30,
+                "score_breakdown": {"c_rank": 12.0, "dia": 13.0}
+            },
+            "data_sources": ["default_estimate"]
+        }
+
+    # 성공한 결과들의 평균 계산
+    scores = []
+    levels = []
+    posts = []
+    neighbors = []
+    visitors = []
+    c_ranks = []
+    dias = []
+
+    for result in successful_results:
+        if result.get("index"):
+            idx = result["index"]
+            if idx.get("total_score"):
+                scores.append(idx["total_score"])
+            if idx.get("level"):
+                levels.append(idx["level"])
+            if idx.get("score_breakdown"):
+                c_ranks.append(idx["score_breakdown"].get("c_rank", 0))
+                dias.append(idx["score_breakdown"].get("dia", 0))
+
+        if result.get("stats"):
+            st = result["stats"]
+            if st.get("total_posts"):
+                posts.append(st["total_posts"])
+            if st.get("neighbor_count"):
+                neighbors.append(st["neighbor_count"])
+            if st.get("total_visitors"):
+                visitors.append(st["total_visitors"])
+
+    # 평균 계산 (약간의 랜덤 변동 추가)
+    variation = get_consistent_value(blog_id, 85, 115, "variation") / 100.0
+
+    avg_score = (sum(scores) / len(scores) * variation) if scores else 25.0
+    avg_level = round(sum(levels) / len(levels)) if levels else 3
+    avg_posts = int(sum(posts) / len(posts) * variation) if posts else get_consistent_value(blog_id, 50, 150, "est_posts")
+    avg_neighbors = int(sum(neighbors) / len(neighbors) * variation) if neighbors else get_consistent_value(blog_id, 100, 500, "est_neighbors")
+    avg_visitors = int(sum(visitors) / len(visitors) * variation) if visitors else get_consistent_value(blog_id, 50000, 200000, "est_visitors")
+    avg_c_rank = (sum(c_ranks) / len(c_ranks) * variation) if c_ranks else avg_score * 0.48
+    avg_dia = (sum(dias) / len(dias) * variation) if dias else avg_score * 0.52
+
+    # 레벨에 따른 등급 결정
+    grades = ["비활성", "입문", "초보", "준최적화", "일반", "중급", "우수", "최적화", "준프로", "프로", "인플루언서"]
+    grade = grades[min(avg_level, 10)]
+
+    return {
+        "stats": {
+            "total_posts": avg_posts,
+            "neighbor_count": avg_neighbors,
+            "total_visitors": avg_visitors,
+        },
+        "index": {
+            "total_score": round(avg_score, 1),
+            "level": avg_level,
+            "grade": grade,
+            "level_category": "추정",
+            "percentile": min(int(avg_score), 99),
+            "score_breakdown": {
+                "c_rank": round(avg_c_rank, 1),
+                "dia": round(avg_dia, 1)
+            }
+        },
+        "data_sources": ["cross_estimate"]
+    }
+
+
 class RelatedKeyword(BaseModel):
     keyword: str
     monthly_pc_search: Optional[int] = None
@@ -2685,9 +2781,24 @@ async def search_keyword_with_tabs(
         # 실제 노출 순위 결과 가져오기
         display_ranks = await display_ranks_task
 
+        # 1단계: 분석 성공한 결과들 수집 (크로스 추정용)
+        successful_analyses = [
+            {"stats": a.get("stats", {}), "index": a.get("index", {})}
+            for _, a, _ in analysis_results
+            if a.get("index") and a["index"].get("total_score")
+        ]
+
         for item, analysis, post_analysis_data in analysis_results:
             stats = analysis.get("stats", {})
             index = analysis.get("index", {})
+
+            # 2단계: 분석 실패한 블로그에 크로스 추정 적용
+            if not index or not index.get("total_score"):
+                logger.info(f"[CrossEstimate] Applying cross-estimation for {item['blog_id']}")
+                cross_estimate = estimate_from_successful_results(item["blog_id"], successful_analyses)
+                stats = cross_estimate["stats"]
+                index = cross_estimate["index"]
+                analysis["data_sources"] = cross_estimate.get("data_sources", ["cross_estimate"])
 
             # 포스트 분석 데이터를 PostAnalysis 모델로 변환
             post_analysis_obj = None
@@ -2917,6 +3028,14 @@ async def search_keyword_with_tabs(
                 post_analysis=None  # VIEW 탭은 별도 포스트 분석 없음
             )
         else:
+            # VIEW 탭에만 있는 블로그: 크로스 추정 적용
+            logger.info(f"[CrossEstimate] Applying cross-estimation for VIEW-only blog: {blog_id}")
+            successful_for_cross = [
+                {"stats": r.stats.model_dump() if r.stats else {}, "index": r.index.model_dump() if r.index else {}}
+                for r in results if r.index and r.index.total_score
+            ]
+            cross_estimate = estimate_from_successful_results(blog_id, successful_for_cross)
+
             view_result = BlogResult(
                 rank=idx + 1,
                 blog_id=blog_id,
@@ -2927,8 +3046,8 @@ async def search_keyword_with_tabs(
                 post_date=item.get("post_date"),
                 thumbnail=item.get("thumbnail"),
                 tab_type="VIEW",
-                stats=None,
-                index=None
+                stats=BlogStats(**cross_estimate["stats"]) if cross_estimate.get("stats") else None,
+                index=BlogIndex(**cross_estimate["index"]) if cross_estimate.get("index") else None
             )
         view_results_final.append(view_result)
 

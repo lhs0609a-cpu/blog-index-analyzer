@@ -64,6 +64,7 @@ async def scrape_blog_stats(blog_id: str) -> Dict:
     Returns: {total_posts, neighbor_count, total_visitors, blog_age_days, recent_activity, avg_post_length}
     """
     stats = {
+        "success": False,
         "total_posts": None,
         "neighbor_count": None,
         "total_visitors": None,
@@ -301,7 +302,29 @@ async def scrape_blog_stats(blog_id: str) -> Dict:
             except Exception as e:
                 logger.debug(f"Buddy API failed: {e}")
 
-        logger.info(f"Scraped {blog_id}: posts={stats['total_posts']}, neighbors={stats['neighbor_count']}, visitors={stats['total_visitors']}, sources={stats['data_sources']}")
+        # Fallback 3: PostList API (비공개 블로그도 접근 가능한 경우 있음)
+        if not stats["total_posts"]:
+            try:
+                postlist_url = f"https://blog.naver.com/PostListAsync.naver?blogId={blog_id}&currentPage=1&countPerPage=10"
+                await page.goto(postlist_url, wait_until="domcontentloaded", timeout=8000)
+                postlist_content = await page.content()
+
+                total_match = re.search(r'"totalCount"\s*:\s*(\d+)', postlist_content)
+                if total_match:
+                    count = int(total_match.group(1))
+                    if count > 0:
+                        stats["total_posts"] = count
+                        stats["data_sources"].append("postlist_api")
+                        logger.info(f"Found posts (PostList API) for {blog_id}: {count}")
+
+            except Exception as e:
+                logger.debug(f"PostList API failed: {e}")
+
+        # Mark success if any data was collected
+        if stats['total_posts'] or stats['neighbor_count'] or stats['total_visitors']:
+            stats['success'] = True
+
+        logger.info(f"Scraped {blog_id}: posts={stats['total_posts']}, neighbors={stats['neighbor_count']}, visitors={stats['total_visitors']}, sources={stats['data_sources']}, success={stats['success']}")
 
     except Exception as e:
         logger.error(f"Error scraping blog {blog_id}: {e}")
@@ -826,3 +849,234 @@ async def scrape_post_content_playwright(blog_id: str, post_no: str, keyword: st
                 pass
 
     return post_analysis
+
+
+async def extract_blog_info_from_post(blog_id: str, post_no: str) -> Dict:
+    """
+    개별 포스트 페이지에서 블로그 메타 정보 추출
+    비공개 블로그도 포스트는 접근 가능한 경우 활용
+
+    Returns:
+        {success, total_posts, neighbor_count, blog_name, data_sources}
+    """
+    result = {
+        "success": False,
+        "total_posts": None,
+        "neighbor_count": None,
+        "blog_name": None,
+        "data_sources": []
+    }
+
+    global _browser, _playwright
+    context = None
+    page = None
+
+    try:
+        browser = await get_browser()
+        context = await browser.new_context(
+            viewport={'width': 1920, 'height': 1080},
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        )
+        page = await context.new_page()
+
+        # Block unnecessary resources
+        await page.route("**/*.{png,jpg,jpeg,gif,svg,ico}", lambda route: route.abort())
+
+        post_url = f"https://blog.naver.com/{blog_id}/{post_no}"
+        logger.info(f"[PostPage] Extracting blog info from: {post_url}")
+
+        await page.goto(post_url, wait_until='domcontentloaded', timeout=15000)
+        await asyncio.sleep(1)
+
+        # Extract blog metadata from post page using JavaScript
+        data = await page.evaluate('''() => {
+            const result = {
+                blogName: '',
+                totalPosts: 0,
+                neighborCount: 0
+            };
+
+            // Get iframe content if exists
+            let doc = document;
+            const mainFrame = document.querySelector('#mainFrame');
+            if (mainFrame && mainFrame.contentDocument) {
+                doc = mainFrame.contentDocument;
+            }
+
+            // Blog name from profile area
+            const profileName = doc.querySelector('.nick, .blog-nick, .nick_txt, .blogger_name, .author, .area_writer .name');
+            if (profileName) {
+                result.blogName = profileName.textContent?.trim() || '';
+            }
+
+            // Total posts from category or sidebar
+            const postCountPatterns = [
+                /전체글\s*\(?(\d{1,3}(?:,\d{3})*)\)?/,
+                /전체\s*(\d{1,3}(?:,\d{3})*)\s*개/,
+                /글\s*(\d{1,3}(?:,\d{3})*)\s*개/
+            ];
+
+            const categoryArea = doc.querySelector('.category_list, .blog_category, .area_category, #categoryList');
+            if (categoryArea) {
+                const text = categoryArea.textContent || '';
+                for (const pattern of postCountPatterns) {
+                    const match = text.match(pattern);
+                    if (match) {
+                        result.totalPosts = parseInt(match[1].replace(/,/g, ''));
+                        break;
+                    }
+                }
+            }
+
+            // Neighbor count from profile area
+            const neighborPatterns = [
+                /이웃\s*(\d{1,3}(?:,\d{3})*)/,
+                /서로이웃\s*(\d{1,3}(?:,\d{3})*)/,
+                /buddyCnt["\s:]+(\d+)/
+            ];
+
+            const profileArea = doc.querySelector('.area_profile, .blog_profile, .profile_area, #profile');
+            if (profileArea) {
+                const text = profileArea.textContent || '';
+                for (const pattern of neighborPatterns) {
+                    const match = text.match(pattern);
+                    if (match) {
+                        result.neighborCount = parseInt(match[1].replace(/,/g, ''));
+                        break;
+                    }
+                }
+            }
+
+            // Also try full page content for JSON data
+            const fullContent = document.body?.innerHTML || '';
+
+            // Try JSON patterns in full content
+            const jsonPatterns = {
+                posts: [/"countPost"\s*:\s*(\d+)/, /"totalPostCount"\s*:\s*(\d+)/, /"postCnt"\s*:\s*(\d+)/],
+                neighbors: [/"countBuddy"\s*:\s*(\d+)/, /"buddyCnt"\s*:\s*(\d+)/]
+            };
+
+            if (!result.totalPosts) {
+                for (const pattern of jsonPatterns.posts) {
+                    const match = fullContent.match(pattern);
+                    if (match) {
+                        result.totalPosts = parseInt(match[1]);
+                        break;
+                    }
+                }
+            }
+
+            if (!result.neighborCount) {
+                for (const pattern of jsonPatterns.neighbors) {
+                    const match = fullContent.match(pattern);
+                    if (match) {
+                        result.neighborCount = parseInt(match[1]);
+                        break;
+                    }
+                }
+            }
+
+            return result;
+        }''')
+
+        if data.get('blogName'):
+            result['blog_name'] = data['blogName']
+            result['data_sources'].append('post_page_name')
+
+        if data.get('totalPosts') and data['totalPosts'] > 0:
+            result['total_posts'] = data['totalPosts']
+            result['data_sources'].append('post_page_posts')
+
+        if data.get('neighborCount') and data['neighborCount'] > 0:
+            result['neighbor_count'] = data['neighborCount']
+            result['data_sources'].append('post_page_neighbors')
+
+        if result['total_posts'] or result['neighbor_count']:
+            result['success'] = True
+
+        logger.info(f"[PostPage] Extracted from {blog_id}: posts={result['total_posts']}, neighbors={result['neighbor_count']}, success={result['success']}")
+
+    except PlaywrightTimeout:
+        logger.warning(f"[PostPage] Timeout extracting from post: {blog_id}/{post_no}")
+    except Exception as e:
+        logger.error(f"[PostPage] Error extracting blog info: {e}")
+        import traceback
+        logger.debug(traceback.format_exc())
+    finally:
+        if page:
+            try:
+                await page.close()
+            except:
+                pass
+        if context:
+            try:
+                await context.close()
+            except:
+                pass
+
+    return result
+
+
+async def fetch_post_list_api(blog_id: str) -> Dict:
+    """
+    PostListAsync API로 블로그 포스트 목록 조회
+    비공개 블로그도 접근 가능한 경우 있음
+
+    Returns:
+        {success, total_posts, recent_posts, data_sources}
+    """
+    result = {
+        "success": False,
+        "total_posts": None,
+        "recent_posts": [],
+        "data_sources": []
+    }
+
+    global _browser, _playwright
+    context = None
+    page = None
+
+    try:
+        browser = await get_browser()
+        context = await browser.new_context(
+            viewport={'width': 1280, 'height': 900},
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        )
+        page = await context.new_page()
+
+        # Try PostListAsync API
+        api_url = f"https://blog.naver.com/PostListAsync.naver?blogId={blog_id}&currentPage=1&countPerPage=10"
+        logger.info(f"[PostListAPI] Fetching: {api_url}")
+
+        await page.goto(api_url, wait_until='domcontentloaded', timeout=10000)
+        content = await page.content()
+
+        # Extract total post count
+        total_match = re.search(r'"totalCount"\s*:\s*(\d+)', content)
+        if total_match:
+            result['total_posts'] = int(total_match.group(1))
+            result['data_sources'].append('postlist_api')
+            result['success'] = True
+            logger.info(f"[PostListAPI] Found total posts for {blog_id}: {result['total_posts']}")
+
+        # Extract recent post IDs
+        post_ids = re.findall(r'"logNo"\s*:\s*(\d+)', content)
+        result['recent_posts'] = post_ids[:10]
+
+    except PlaywrightTimeout:
+        logger.warning(f"[PostListAPI] Timeout for {blog_id}")
+    except Exception as e:
+        logger.debug(f"[PostListAPI] Error for {blog_id}: {e}")
+    finally:
+        if page:
+            try:
+                await page.close()
+            except:
+                pass
+        if context:
+            try:
+                await context.close()
+            except:
+                pass
+
+    return result
