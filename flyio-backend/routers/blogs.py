@@ -522,12 +522,24 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 13) ->
             logger.error(f"BLOG tab scraping failed: {blog_results}")
             blog_results = []
 
-        # BLOG 탭 결과가 없으면 fallback 시도
+        # BLOG 탭 결과가 없으면 fallback 시도 (다단계 폴백)
         if not blog_results:
+            # Fallback 1: Naver API
             client_id = getattr(settings, 'NAVER_CLIENT_ID', None)
             client_secret = getattr(settings, 'NAVER_CLIENT_SECRET', None)
             if client_id and client_secret:
+                logger.info(f"BLOG tab empty, trying Naver API fallback for: {keyword}")
                 blog_results = await fetch_via_naver_api(keyword, limit, client_id, client_secret)
+
+        if not blog_results:
+            # Fallback 2: RSS
+            logger.info(f"Naver API empty, trying RSS fallback for: {keyword}")
+            blog_results = await fetch_via_rss(keyword, limit)
+
+        if not blog_results:
+            # Fallback 3: Mobile web scraping
+            logger.info(f"RSS empty, trying mobile web fallback for: {keyword}")
+            blog_results = await fetch_via_mobile_web(keyword, limit)
 
         # VIEW 탭 결과가 없으면 BLOG 탭 결과를 복사 (JS 렌더링 필요한 경우 대비)
         # tab_type만 VIEW로 변경

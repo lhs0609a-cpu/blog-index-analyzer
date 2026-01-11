@@ -251,7 +251,7 @@ async def generate_ai_title(
 
     try:
         # 1. 실제 상위 블로그 제목들 가져오기
-        top_blogs = await fetch_naver_search_results(keyword, display=10)
+        top_blogs = await fetch_naver_search_results(keyword, limit=10)
         top_titles = [blog.get("title", "").replace("<b>", "").replace("</b>", "") for blog in top_blogs[:10]]
 
         # 2. 월간 검색량 조회
@@ -464,7 +464,7 @@ async def discover_keywords(
             blog_competition = {"avg_score": 0, "avg_level": 0, "top_blogs": []}
             try:
                 if analyzed_count < 5:  # API 호출 제한
-                    top_blogs = await fetch_naver_search_results(kw_name, display=5)
+                    top_blogs = await fetch_naver_search_results(kw_name, limit=5)
                     if top_blogs:
                         scores = []
                         levels = []
@@ -2300,7 +2300,7 @@ async def track_rank(
 
     try:
         # 1. 키워드 검색 (실제 네이버 검색 결과)
-        search_results = await fetch_naver_search_results(keyword, display=50)
+        search_results = await fetch_naver_search_results(keyword, limit=50)
 
         # 2. 내 블로그 찾기
         current_rank = None
@@ -2629,7 +2629,7 @@ async def snipe_trend(
                     blog_count = 0
                     try:
                         if len(trends) < 5:  # API 호출 제한
-                            blog_results = await fetch_naver_search_results(keyword, display=10)
+                            blog_results = await fetch_naver_search_results(keyword, limit=10)
                             blog_count = len(blog_results)
                     except:
                         pass
