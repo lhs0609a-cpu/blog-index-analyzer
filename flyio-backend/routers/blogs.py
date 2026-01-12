@@ -624,37 +624,43 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 13) ->
 
 
 async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
-    """Fetch blog results by scraping actual Naver blog tab (most accurate)"""
-    results = []
+    """Fetch blog results by scraping actual Naver blog tab using Playwright (most accurate)"""
+    try:
+        # Playwright를 사용해서 JavaScript 렌더링된 결과 가져오기
+        from services.blog_scraper import scrape_blog_tab_results
 
+        logger.info(f"[BLOG] Using Playwright to scrape BLOG tab for: {keyword}")
+        results = await scrape_blog_tab_results(keyword, limit)
+
+        if results:
+            logger.info(f"[BLOG] Playwright scraping returned {len(results)} results for: {keyword}")
+            return results
+
+        logger.warning(f"[BLOG] Playwright returned 0 results, trying HTTP fallback for: {keyword}")
+    except Exception as e:
+        logger.error(f"[BLOG] Playwright scraping failed: {e}, trying HTTP fallback")
+
+    # Fallback: HTTP 요청 (Playwright 실패 시)
+    results = []
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
             "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
             "Referer": "https://search.naver.com/",
-            "sec-ch-ua": '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
-            "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": '"Windows"',
         }
 
         from urllib.parse import quote
         encoded_keyword = quote(keyword)
         search_url = f"https://search.naver.com/search.naver?where=blog&query={encoded_keyword}"
 
-        # 전역 HTTP 클라이언트 사용 (성능 개선)
         client = await get_http_client()
         response = await client.get(search_url, headers=headers)
 
         if response.status_code == 200:
             html_text = response.text
-            soup = BeautifulSoup(html_text, 'html.parser')
 
-            # ===== 방법 1: 정규식으로 직접 URL 추출 (가장 안정적) =====
-            # 네이버 검색 결과의 blog.naver.com 링크를 직접 추출
+            # 정규식으로 직접 URL 추출
             post_url_pattern = re.compile(r'href="(https://blog\.naver\.com/([^"/]+)/(\d+))"')
             url_matches = post_url_pattern.findall(html_text)
 
@@ -662,8 +668,6 @@ async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
             rank = 0
 
             if url_matches:
-                logger.info(f"Blog tab: Found {len(url_matches)} URLs via regex for: {keyword}")
-
                 for match in url_matches:
                     if rank >= limit:
                         break
@@ -672,13 +676,9 @@ async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
                     blog_id = match[1]
                     post_id = match[2]
 
-                    # 중복 제거
                     if post_url in seen_urls:
                         continue
                     seen_urls.add(post_url)
-
-                    # 제목 추출 시도 (URL 주변 텍스트에서)
-                    title = f"포스팅 #{post_id}"
 
                     rank += 1
                     results.append({
@@ -686,7 +686,7 @@ async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
                         "blog_id": blog_id,
                         "blog_name": blog_id,
                         "blog_url": f"https://blog.naver.com/{blog_id}",
-                        "post_title": title,
+                        "post_title": f"포스팅 #{post_id}",
                         "post_url": post_url,
                         "post_date": None,
                         "thumbnail": None,
@@ -694,128 +694,10 @@ async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
                         "smart_block_keyword": keyword,
                     })
 
-            # ===== 방법 2: CSS 선택자로 상세 정보 추출 (정규식 결과가 부족할 때) =====
-            if len(results) < limit:
-                # 2024-2025 네이버 UI 선택자들
-                selectors_to_try = [
-                    '.api_subject_bx',      # 새로운 API 기반 블록
-                    '.sp_blog .bx',         # 블로그 섹션 블록
-                    '.blog_wrap',           # 블로그 래퍼
-                    '.list_info',           # 리스트 정보
-                    '.total_wrap',          # 통합 래퍼
-                    '[data-cr-area="blg"]', # 블로그 영역 데이터 속성
-                    '.title_area',          # 제목 영역
-                ]
-
-                blog_items = []
-                for selector in selectors_to_try:
-                    items = soup.select(selector)
-                    if items and len(items) > len(blog_items):
-                        blog_items = items
-                        logger.debug(f"Blog tab: selector '{selector}' found {len(items)} items")
-
-                if blog_items:
-                    logger.info(f"Blog tab: CSS selector found {len(blog_items)} items for: {keyword}")
-
-                    for item in blog_items:
-                        if rank >= limit:
-                            break
-
-                        try:
-                            # 포스트 URL 추출 - 다양한 선택자 시도
-                            post_link = None
-                            link_selectors = [
-                                'a.title_link',
-                                'a.api_txt_lines',
-                                'a.title',
-                                'a[href*="blog.naver.com"]',
-                            ]
-
-                            for link_sel in link_selectors:
-                                post_link = item.select_one(link_sel)
-                                if post_link and 'blog.naver.com' in post_link.get('href', ''):
-                                    break
-
-                            if not post_link:
-                                # item 자체가 링크인 경우
-                                if item.name == 'a' and 'blog.naver.com' in item.get('href', ''):
-                                    post_link = item
-                                else:
-                                    continue
-
-                            post_url = post_link.get('href', '')
-                            if not post_url or 'blog.naver.com' not in post_url:
-                                continue
-
-                            # 중복 제거
-                            if post_url in seen_urls:
-                                continue
-                            seen_urls.add(post_url)
-
-                            # 블로그 ID 추출
-                            blog_id = extract_blog_id(post_url)
-                            if not blog_id:
-                                continue
-
-                            # 제목 추출
-                            title = post_link.get_text(strip=True)
-                            if not title:
-                                title_selectors = ['.title_link', '.api_txt_lines', '.title', 'strong']
-                                for t_sel in title_selectors:
-                                    title_elem = item.select_one(t_sel)
-                                    if title_elem:
-                                        title = title_elem.get_text(strip=True)
-                                        break
-
-                            # HTML 태그 제거
-                            title = re.sub(r'<[^>]+>', '', title) if title else ""
-                            title = title.replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
-
-                            # 블로거 이름 추출
-                            blog_name = blog_id
-                            name_selectors = ['.name', '.sub_txt', '.user_info', '.source_box', '.writer']
-                            for n_sel in name_selectors:
-                                name_elem = item.select_one(n_sel)
-                                if name_elem:
-                                    blog_name = name_elem.get_text(strip=True).split('·')[0].strip()
-                                    if blog_name:
-                                        break
-                            if not blog_name:
-                                blog_name = blog_id
-
-                            # 날짜 추출
-                            post_date = None
-                            date_selectors = ['.sub_time', '.date', '.time', '.datetime']
-                            for d_sel in date_selectors:
-                                date_elem = item.select_one(d_sel)
-                                if date_elem:
-                                    post_date = date_elem.get_text(strip=True)
-                                    break
-
-                            rank += 1
-                            results.append({
-                                "rank": rank,
-                                "blog_id": blog_id,
-                                "blog_name": blog_name,
-                                "blog_url": f"https://blog.naver.com/{blog_id}",
-                                "post_title": title if title else f"Post by {blog_name}",
-                                "post_url": post_url,
-                                "post_date": post_date,
-                                "thumbnail": None,
-                                "tab_type": "BLOG",
-                                "smart_block_keyword": keyword,
-                            })
-
-                        except Exception as e:
-                            logger.debug(f"Error parsing blog item: {e}")
-                            continue
-
-            logger.info(f"Blog tab scraping returned {len(results)} results for: {keyword}")
+            logger.info(f"[BLOG] HTTP fallback returned {len(results)} results for: {keyword}")
 
     except Exception as e:
-        logger.error(f"Error with blog tab scraping: {e}")
-        import traceback
-        logger.debug(traceback.format_exc())
+        logger.error(f"[BLOG] HTTP fallback also failed: {e}")
 
     return results
 

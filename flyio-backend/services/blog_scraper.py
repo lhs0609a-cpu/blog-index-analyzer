@@ -698,6 +698,189 @@ async def scrape_view_tab_results(keyword: str, limit: int = 13) -> list:
         return []
 
 
+async def scrape_blog_tab_results(keyword: str, limit: int = 13) -> list:
+    """
+    Scrape Naver BLOG tab search results using Playwright
+    BLOG tab shows only blog posts (no cafe, news, etc.)
+
+    Args:
+        keyword: Search keyword
+        limit: Maximum number of results to return
+
+    Returns:
+        List of blog results with blog_id, post_url, post_title, etc.
+    """
+    from urllib.parse import quote
+    global _browser, _playwright
+    results = []
+    context = None
+
+    # Retry logic for browser errors
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            browser = await get_browser()
+            context = await browser.new_context(
+                viewport={'width': 1920, 'height': 1080},
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+            )
+            page = await context.new_page()
+            break
+        except Exception as e:
+            logger.warning(f"[Playwright] Browser context error (attempt {attempt + 1}/{max_retries}): {e}")
+            _browser = None
+            if _playwright:
+                try:
+                    await _playwright.stop()
+                except:
+                    pass
+                _playwright = None
+            if attempt == max_retries - 1:
+                logger.error(f"[Playwright] Failed to create browser context after {max_retries} attempts")
+                return []
+            await asyncio.sleep(1)
+
+    try:
+        encoded_keyword = quote(keyword)
+        search_url = f"https://search.naver.com/search.naver?where=blog&query={encoded_keyword}"
+
+        logger.info(f"[Playwright] Navigating to BLOG tab: {search_url}")
+
+        await page.goto(search_url, wait_until='networkidle', timeout=30000)
+
+        # Wait for search results to load
+        try:
+            await page.wait_for_selector('.api_subject_bx, .sp_blog, #main_pack', timeout=10000)
+        except:
+            logger.warning(f"[Playwright] Initial selector not found for BLOG tab, continuing anyway")
+
+        await asyncio.sleep(1.5)
+
+        # Scroll down multiple times to load more results (lazy loading)
+        for i in range(3):
+            await page.evaluate(f'window.scrollTo(0, document.body.scrollHeight * {(i+1)/3})')
+            await asyncio.sleep(0.5)
+
+        # Extract blog post links using JavaScript
+        blog_links = await page.evaluate('''() => {
+            const results = [];
+            const seen = new Set();
+
+            // Method 1: Direct regex extraction from page HTML
+            const htmlContent = document.body.innerHTML;
+            const urlPattern = /href="(https:\\/\\/blog\\.naver\\.com\\/([^\\/"\s]+)\\/([0-9]+))"/g;
+            let match;
+
+            while ((match = urlPattern.exec(htmlContent)) !== null) {
+                const postUrl = match[1];
+                const blogId = match[2];
+                const postId = match[3];
+
+                if (seen.has(postUrl)) continue;
+                seen.add(postUrl);
+
+                results.push({
+                    blog_id: blogId,
+                    post_id: postId,
+                    post_url: postUrl,
+                    post_title: `포스팅 #${postId}`,
+                    tab_type: 'BLOG'
+                });
+            }
+
+            // Method 2: DOM traversal for better titles
+            const contentArea = document.querySelector('#main_pack') || document.body;
+            const links = contentArea.querySelectorAll('a[href*="blog.naver.com"]');
+
+            for (const link of links) {
+                const href = link.href;
+                const urlMatch = href.match(/blog\\.naver\\.com\\/([^\\/]+)\\/([0-9]+)/);
+                if (!urlMatch) continue;
+
+                const blogId = urlMatch[1];
+                const postId = urlMatch[2];
+                const postUrl = `https://blog.naver.com/${blogId}/${postId}`;
+
+                if (seen.has(postUrl)) {
+                    // Update title if better one found
+                    const existing = results.find(r => r.post_url === postUrl);
+                    if (existing && existing.post_title.startsWith('포스팅 #')) {
+                        let title = '';
+                        const parent = link.closest('.api_subject_bx, .sp_blog, .total_area, li');
+                        if (parent) {
+                            const titleEl = parent.querySelector('.api_txt_lines.total_tit, .title_link, .title, strong');
+                            if (titleEl) title = titleEl.textContent?.trim() || '';
+                        }
+                        if (!title) title = link.textContent?.trim() || '';
+                        if (title && title.length > 5 && !title.startsWith('포스팅 #')) {
+                            existing.post_title = title;
+                        }
+                    }
+                    continue;
+                }
+                seen.add(postUrl);
+
+                // Find title
+                let title = '';
+                const parent = link.closest('.api_subject_bx, .sp_blog, .total_area, li');
+                if (parent) {
+                    const titleEl = parent.querySelector('.api_txt_lines.total_tit, .title_link, .title, strong');
+                    if (titleEl) title = titleEl.textContent?.trim() || '';
+                }
+                if (!title) title = link.textContent?.trim() || '';
+                if (!title || title.length < 5) title = `포스팅 #${postId}`;
+
+                results.push({
+                    blog_id: blogId,
+                    post_id: postId,
+                    post_url: postUrl,
+                    post_title: title,
+                    tab_type: 'BLOG'
+                });
+            }
+
+            return results;
+        }''')
+
+        await context.close()
+
+        # Deduplicate and limit results
+        seen_urls = set()
+        for item in blog_links:
+            if len(results) >= limit:
+                break
+            if item['post_url'] not in seen_urls:
+                seen_urls.add(item['post_url'])
+                item['rank'] = len(results) + 1
+                item['blog_url'] = f"https://blog.naver.com/{item['blog_id']}"
+                item['post_date'] = None
+                item['thumbnail'] = None
+                item['smart_block_keyword'] = keyword
+                results.append(item)
+
+        logger.info(f"[Playwright] BLOG tab scraping found {len(results)} blog posts for: {keyword}")
+        return results
+
+    except PlaywrightTimeout:
+        logger.warning(f"[Playwright] Timeout scraping BLOG tab for: {keyword}")
+        if context:
+            try:
+                await context.close()
+            except:
+                pass
+        return []
+    except Exception as e:
+        logger.error(f"[Playwright] Error scraping BLOG tab: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        if context:
+            try:
+                await context.close()
+            except:
+                pass
+        return []
+
+
 async def scrape_post_content_playwright(blog_id: str, post_no: str, keyword: str = "") -> Dict:
     """
     Playwright를 사용한 개별 포스트 상세 분석
