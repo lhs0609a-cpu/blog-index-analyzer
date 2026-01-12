@@ -3,6 +3,10 @@
 - 구독 플랜 정의
 - 사용자 구독 상태 관리
 - 사용량 추적
+
+환경변수:
+- DATABASE_URL: PostgreSQL 연결 URL (Supabase 등)
+- 설정 안되면 SQLite 사용 (로컬 개발용)
 """
 import sqlite3
 import os
@@ -10,12 +14,24 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Any
 from enum import Enum
 import logging
+import sys
 
 logger = logging.getLogger(__name__)
 
-# 데이터베이스 경로 - /data 볼륨에 저장 (영속적)
-# Windows 로컬 개발환경에서는 ./data 사용
-import sys
+# ============ 데이터베이스 설정 ============
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+USE_POSTGRES = bool(DATABASE_URL)
+
+if USE_POSTGRES:
+    try:
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        logger.info("✅ PostgreSQL mode enabled (Supabase)")
+    except ImportError:
+        logger.error("❌ psycopg2 not installed. Run: pip install psycopg2-binary")
+        USE_POSTGRES = False
+
+# SQLite fallback 경로
 if sys.platform == "win32":
     DATA_DIR = os.environ.get("DATA_DIR", os.path.join(os.path.dirname(__file__), "..", "data"))
 else:
@@ -109,10 +125,58 @@ PLAN_LIMITS = {
 
 
 def get_connection():
-    """SQLite 연결"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    """데이터베이스 연결 (PostgreSQL 우선, SQLite fallback)"""
+    if USE_POSTGRES:
+        conn = psycopg2.connect(DATABASE_URL)
+        return conn
+    else:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+
+def execute_query(query: str, params: tuple = None, fetch: str = "all"):
+    """
+    통합 쿼리 실행 함수
+    - PostgreSQL: %s placeholder
+    - SQLite: ? placeholder
+    """
+    conn = get_connection()
+
+    if USE_POSTGRES:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        # SQLite ? -> PostgreSQL %s 변환
+        pg_query = query.replace("?", "%s")
+        # CURRENT_TIMESTAMP -> NOW() 변환
+        pg_query = pg_query.replace("CURRENT_TIMESTAMP", "NOW()")
+        cursor.execute(pg_query, params)
+    else:
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+
+    result = None
+    if fetch == "one":
+        row = cursor.fetchone()
+        result = dict(row) if row else None
+    elif fetch == "all":
+        rows = cursor.fetchall()
+        if USE_POSTGRES:
+            result = [dict(row) for row in rows]
+        else:
+            result = [dict(row) for row in rows]
+    elif fetch == "lastrowid":
+        if USE_POSTGRES:
+            # PostgreSQL은 RETURNING 사용 필요
+            result = cursor.fetchone()
+            result = result['id'] if result else None
+        else:
+            result = cursor.lastrowid
+    elif fetch == "rowcount":
+        result = cursor.rowcount
+
+    conn.commit()
+    conn.close()
+    return result
 
 
 def init_subscription_tables():
@@ -199,11 +263,13 @@ def init_subscription_tables():
 def get_user_subscription(user_id: int) -> Optional[Dict]:
     """사용자 구독 정보 조회"""
     conn = get_connection()
-    cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT * FROM subscriptions WHERE user_id = ?
-    """, (user_id,))
+    if USE_POSTGRES:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT * FROM subscriptions WHERE user_id = %s", (user_id,))
+    else:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM subscriptions WHERE user_id = ?", (user_id,))
 
     row = cursor.fetchone()
     conn.close()
@@ -221,21 +287,32 @@ def get_user_subscription(user_id: int) -> Optional[Dict]:
 def create_subscription(user_id: int, plan_type: str = "free") -> Dict:
     """구독 생성"""
     conn = get_connection()
-    cursor = conn.cursor()
 
     # 만료일 계산 (무료는 무제한, 유료는 30일)
     expires_at = None
     if plan_type != "free":
         expires_at = (datetime.now() + timedelta(days=30)).isoformat()
 
-    cursor.execute("""
-        INSERT INTO subscriptions (user_id, plan_type, expires_at)
-        VALUES (?, ?, ?)
-        ON CONFLICT(user_id) DO UPDATE SET
-            plan_type = excluded.plan_type,
-            expires_at = excluded.expires_at,
-            updated_at = CURRENT_TIMESTAMP
-    """, (user_id, plan_type, expires_at))
+    if USE_POSTGRES:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO subscriptions (user_id, plan_type, expires_at)
+            VALUES (%s, %s, %s)
+            ON CONFLICT(user_id) DO UPDATE SET
+                plan_type = EXCLUDED.plan_type,
+                expires_at = EXCLUDED.expires_at,
+                updated_at = NOW()
+        """, (user_id, plan_type, expires_at))
+    else:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO subscriptions (user_id, plan_type, expires_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                plan_type = excluded.plan_type,
+                expires_at = excluded.expires_at,
+                updated_at = CURRENT_TIMESTAMP
+        """, (user_id, plan_type, expires_at))
 
     conn.commit()
     conn.close()
@@ -252,7 +329,6 @@ def upgrade_subscription(
 ) -> Dict:
     """구독 업그레이드"""
     conn = get_connection()
-    cursor = conn.cursor()
 
     # 만료일 계산
     if billing_cycle == "yearly":
@@ -260,24 +336,44 @@ def upgrade_subscription(
     else:
         expires_at = datetime.now() + timedelta(days=30)
 
-    cursor.execute("""
-        UPDATE subscriptions
-        SET plan_type = ?,
-            billing_cycle = ?,
-            status = 'active',
-            expires_at = ?,
-            payment_key = ?,
-            customer_key = ?,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE user_id = ?
-    """, (plan_type, billing_cycle, expires_at.isoformat(), payment_key, customer_key, user_id))
-
-    if cursor.rowcount == 0:
-        # 구독이 없으면 생성
+    if USE_POSTGRES:
+        cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO subscriptions (user_id, plan_type, billing_cycle, expires_at, payment_key, customer_key)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (user_id, plan_type, billing_cycle, expires_at.isoformat(), payment_key, customer_key))
+            UPDATE subscriptions
+            SET plan_type = %s,
+                billing_cycle = %s,
+                status = 'active',
+                expires_at = %s,
+                payment_key = %s,
+                customer_key = %s,
+                updated_at = NOW()
+            WHERE user_id = %s
+        """, (plan_type, billing_cycle, expires_at.isoformat(), payment_key, customer_key, user_id))
+
+        if cursor.rowcount == 0:
+            cursor.execute("""
+                INSERT INTO subscriptions (user_id, plan_type, billing_cycle, expires_at, payment_key, customer_key)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (user_id, plan_type, billing_cycle, expires_at.isoformat(), payment_key, customer_key))
+    else:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE subscriptions
+            SET plan_type = ?,
+                billing_cycle = ?,
+                status = 'active',
+                expires_at = ?,
+                payment_key = ?,
+                customer_key = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = ?
+        """, (plan_type, billing_cycle, expires_at.isoformat(), payment_key, customer_key, user_id))
+
+        if cursor.rowcount == 0:
+            cursor.execute("""
+                INSERT INTO subscriptions (user_id, plan_type, billing_cycle, expires_at, payment_key, customer_key)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (user_id, plan_type, billing_cycle, expires_at.isoformat(), payment_key, customer_key))
 
     conn.commit()
     conn.close()
@@ -288,15 +384,25 @@ def upgrade_subscription(
 def cancel_subscription(user_id: int) -> bool:
     """구독 취소 (만료일까지 유지)"""
     conn = get_connection()
-    cursor = conn.cursor()
 
-    cursor.execute("""
-        UPDATE subscriptions
-        SET status = 'cancelled',
-            cancelled_at = CURRENT_TIMESTAMP,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE user_id = ?
-    """, (user_id,))
+    if USE_POSTGRES:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE subscriptions
+            SET status = 'cancelled',
+                cancelled_at = NOW(),
+                updated_at = NOW()
+            WHERE user_id = %s
+        """, (user_id,))
+    else:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE subscriptions
+            SET status = 'cancelled',
+                cancelled_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = ?
+        """, (user_id,))
 
     success = cursor.rowcount > 0
     conn.commit()
@@ -310,13 +416,18 @@ def cancel_subscription(user_id: int) -> bool:
 def get_today_usage(user_id: int) -> Dict:
     """오늘 사용량 조회"""
     conn = get_connection()
-    cursor = conn.cursor()
-
     today = datetime.now().strftime("%Y-%m-%d")
 
-    cursor.execute("""
-        SELECT * FROM daily_usage WHERE user_id = ? AND date = ?
-    """, (user_id, today))
+    if USE_POSTGRES:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("""
+            SELECT * FROM daily_usage WHERE user_id = %s AND date = %s
+        """, (user_id, today))
+    else:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM daily_usage WHERE user_id = ? AND date = ?
+        """, (user_id, today))
 
     row = cursor.fetchone()
     conn.close()
@@ -334,27 +445,44 @@ def get_today_usage(user_id: int) -> Dict:
 def increment_usage(user_id: int, usage_type: str) -> Dict:
     """사용량 증가"""
     conn = get_connection()
-    cursor = conn.cursor()
-
     today = datetime.now().strftime("%Y-%m-%d")
 
-    # UPSERT
-    if usage_type == "keyword_search":
-        cursor.execute("""
-            INSERT INTO daily_usage (user_id, date, keyword_searches)
-            VALUES (?, ?, 1)
-            ON CONFLICT(user_id, date) DO UPDATE SET
-                keyword_searches = keyword_searches + 1,
-                updated_at = CURRENT_TIMESTAMP
-        """, (user_id, today))
-    elif usage_type == "blog_analysis":
-        cursor.execute("""
-            INSERT INTO daily_usage (user_id, date, blog_analyses)
-            VALUES (?, ?, 1)
-            ON CONFLICT(user_id, date) DO UPDATE SET
-                blog_analyses = blog_analyses + 1,
-                updated_at = CURRENT_TIMESTAMP
-        """, (user_id, today))
+    if USE_POSTGRES:
+        cursor = conn.cursor()
+        if usage_type == "keyword_search":
+            cursor.execute("""
+                INSERT INTO daily_usage (user_id, date, keyword_searches)
+                VALUES (%s, %s, 1)
+                ON CONFLICT(user_id, date) DO UPDATE SET
+                    keyword_searches = daily_usage.keyword_searches + 1,
+                    updated_at = NOW()
+            """, (user_id, today))
+        elif usage_type == "blog_analysis":
+            cursor.execute("""
+                INSERT INTO daily_usage (user_id, date, blog_analyses)
+                VALUES (%s, %s, 1)
+                ON CONFLICT(user_id, date) DO UPDATE SET
+                    blog_analyses = daily_usage.blog_analyses + 1,
+                    updated_at = NOW()
+            """, (user_id, today))
+    else:
+        cursor = conn.cursor()
+        if usage_type == "keyword_search":
+            cursor.execute("""
+                INSERT INTO daily_usage (user_id, date, keyword_searches)
+                VALUES (?, ?, 1)
+                ON CONFLICT(user_id, date) DO UPDATE SET
+                    keyword_searches = keyword_searches + 1,
+                    updated_at = CURRENT_TIMESTAMP
+            """, (user_id, today))
+        elif usage_type == "blog_analysis":
+            cursor.execute("""
+                INSERT INTO daily_usage (user_id, date, blog_analyses)
+                VALUES (?, ?, 1)
+                ON CONFLICT(user_id, date) DO UPDATE SET
+                    blog_analyses = blog_analyses + 1,
+                    updated_at = CURRENT_TIMESTAMP
+            """, (user_id, today))
 
     conn.commit()
     conn.close()
@@ -414,14 +542,24 @@ def create_payment(
 ) -> Dict:
     """결제 내역 생성"""
     conn = get_connection()
-    cursor = conn.cursor()
 
-    cursor.execute("""
-        INSERT INTO payments (user_id, order_id, amount, payment_key, status)
-        VALUES (?, ?, ?, ?, ?)
-    """, (user_id, order_id, amount, payment_key, status))
+    if USE_POSTGRES:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("""
+            INSERT INTO payments (user_id, order_id, amount, payment_key, status)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
+        """, (user_id, order_id, amount, payment_key, status))
+        result = cursor.fetchone()
+        payment_id = result['id'] if result else None
+    else:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO payments (user_id, order_id, amount, payment_key, status)
+            VALUES (?, ?, ?, ?, ?)
+        """, (user_id, order_id, amount, payment_key, status))
+        payment_id = cursor.lastrowid
 
-    payment_id = cursor.lastrowid
     conn.commit()
     conn.close()
 
@@ -439,19 +577,33 @@ def update_payment(
 ) -> bool:
     """결제 내역 업데이트"""
     conn = get_connection()
-    cursor = conn.cursor()
 
-    cursor.execute("""
-        UPDATE payments
-        SET payment_key = ?,
-            status = ?,
-            payment_method = ?,
-            card_company = ?,
-            card_number = ?,
-            receipt_url = ?,
-            paid_at = CASE WHEN ? = 'completed' THEN CURRENT_TIMESTAMP ELSE paid_at END
-        WHERE order_id = ?
-    """, (payment_key, status, payment_method, card_company, card_number, receipt_url, status, order_id))
+    if USE_POSTGRES:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE payments
+            SET payment_key = %s,
+                status = %s,
+                payment_method = %s,
+                card_company = %s,
+                card_number = %s,
+                receipt_url = %s,
+                paid_at = CASE WHEN %s = 'completed' THEN NOW() ELSE paid_at END
+            WHERE order_id = %s
+        """, (payment_key, status, payment_method, card_company, card_number, receipt_url, status, order_id))
+    else:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE payments
+            SET payment_key = ?,
+                status = ?,
+                payment_method = ?,
+                card_company = ?,
+                card_number = ?,
+                receipt_url = ?,
+                paid_at = CASE WHEN ? = 'completed' THEN CURRENT_TIMESTAMP ELSE paid_at END
+            WHERE order_id = ?
+        """, (payment_key, status, payment_method, card_company, card_number, receipt_url, status, order_id))
 
     success = cursor.rowcount > 0
     conn.commit()
@@ -463,14 +615,23 @@ def update_payment(
 def get_payment_history(user_id: int, limit: int = 10) -> List[Dict]:
     """결제 내역 조회"""
     conn = get_connection()
-    cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT * FROM payments
-        WHERE user_id = ?
-        ORDER BY created_at DESC
-        LIMIT ?
-    """, (user_id, limit))
+    if USE_POSTGRES:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("""
+            SELECT * FROM payments
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+            LIMIT %s
+        """, (user_id, limit))
+    else:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM payments
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+        """, (user_id, limit))
 
     rows = cursor.fetchall()
     conn.close()
@@ -728,9 +889,14 @@ def get_revenue_stats(period: str = "30d") -> Dict:
 def get_payment_by_id(payment_id: int) -> Optional[Dict]:
     """결제 ID로 조회"""
     conn = get_connection()
-    cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM payments WHERE id = ?", (payment_id,))
+    if USE_POSTGRES:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT * FROM payments WHERE id = %s", (payment_id,))
+    else:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM payments WHERE id = ?", (payment_id,))
+
     row = cursor.fetchone()
     conn.close()
 
@@ -740,9 +906,14 @@ def get_payment_by_id(payment_id: int) -> Optional[Dict]:
 def get_payment_by_order_id(order_id: str) -> Optional[Dict]:
     """주문 ID로 결제 조회"""
     conn = get_connection()
-    cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM payments WHERE order_id = ?", (order_id,))
+    if USE_POSTGRES:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT * FROM payments WHERE order_id = %s", (order_id,))
+    else:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM payments WHERE order_id = ?", (order_id,))
+
     row = cursor.fetchone()
     conn.close()
 
@@ -752,14 +923,23 @@ def get_payment_by_order_id(order_id: str) -> Optional[Dict]:
 def cancel_payment_record(payment_id: int, cancel_reason: str = None) -> bool:
     """결제 취소 처리 (DB 레코드)"""
     conn = get_connection()
-    cursor = conn.cursor()
 
-    cursor.execute("""
-        UPDATE payments
-        SET status = 'cancelled',
-            cancelled_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-    """, (payment_id,))
+    if USE_POSTGRES:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE payments
+            SET status = 'cancelled',
+                cancelled_at = NOW()
+            WHERE id = %s
+        """, (payment_id,))
+    else:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE payments
+            SET status = 'cancelled',
+                cancelled_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (payment_id,))
 
     success = cursor.rowcount > 0
     conn.commit()
@@ -772,10 +952,18 @@ def get_payments_count() -> int:
     """전체 결제 건수"""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM payments")
-    count = cursor.fetchone()[0]
+
+    if USE_POSTGRES:
+        cursor.execute("SELECT COUNT(*) as count FROM payments")
+    else:
+        cursor.execute("SELECT COUNT(*) FROM payments")
+
+    result = cursor.fetchone()
     conn.close()
-    return count
+
+    if USE_POSTGRES:
+        return result[0] if result else 0
+    return result[0] if result else 0
 
 
 # 초기화
