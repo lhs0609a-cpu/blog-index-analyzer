@@ -18,6 +18,7 @@ from database.subscription_db import (
     upgrade_subscription,
     add_extra_credits,
     get_user_subscription,
+    get_payment_by_order_id,
     PLAN_LIMITS,
     PlanType
 )
@@ -309,8 +310,16 @@ async def register_billing(
             payment_key = payment_data.get("paymentKey")
             logger.info(f"Billing payment successful: paymentKey={payment_key}")
 
-            # 3. 결제 내역 저장
-            create_payment(user_id, request.order_id, request.amount, payment_key, "completed")
+            # 3. 결제 내역 저장 (기존 pending 결제가 있으면 업데이트, 없으면 새로 생성)
+            existing_payment = get_payment_by_order_id(request.order_id)
+            if existing_payment:
+                update_payment(
+                    order_id=request.order_id,
+                    payment_key=payment_key,
+                    status="completed"
+                )
+            else:
+                create_payment(user_id, request.order_id, request.amount, payment_key, "completed")
 
             # 4. 구독 업그레이드
             subscription = upgrade_subscription(

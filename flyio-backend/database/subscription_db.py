@@ -737,6 +737,18 @@ def get_payment_by_id(payment_id: int) -> Optional[Dict]:
     return dict(row) if row else None
 
 
+def get_payment_by_order_id(order_id: str) -> Optional[Dict]:
+    """주문 ID로 결제 조회"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM payments WHERE order_id = ?", (order_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    return dict(row) if row else None
+
+
 def cancel_payment_record(payment_id: int, cancel_reason: str = None) -> bool:
     """결제 취소 처리 (DB 레코드)"""
     conn = get_connection()
