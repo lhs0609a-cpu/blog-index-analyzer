@@ -286,14 +286,17 @@ async def register_billing(
             plan = PlanType(request.plan_type)
             order_name = f"블랭크 {PLAN_LIMITS[plan]['name']} 플랜 ({request.billing_cycle})"
 
-            logger.info(f"Processing first billing payment: {request.amount}원")
+            # 항상 새로운 order_id 생성 (토스에서 중복 방지)
+            new_order_id = f"BLANK_BILLING_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+
+            logger.info(f"Processing first billing payment: {request.amount}원, order_id: {new_order_id}")
             payment_response = await client.post(
                 f"{TOSS_API_URL}/billing/{billing_key}",
                 headers=get_toss_headers(),
                 json={
                     "customerKey": request.customer_key,
                     "amount": request.amount,
-                    "orderId": request.order_id,
+                    "orderId": new_order_id,
                     "orderName": order_name
                 }
             )
@@ -310,16 +313,8 @@ async def register_billing(
             payment_key = payment_data.get("paymentKey")
             logger.info(f"Billing payment successful: paymentKey={payment_key}")
 
-            # 3. 결제 내역 저장 (기존 pending 결제가 있으면 업데이트, 없으면 새로 생성)
-            existing_payment = get_payment_by_order_id(request.order_id)
-            if existing_payment:
-                update_payment(
-                    order_id=request.order_id,
-                    payment_key=payment_key,
-                    status="completed"
-                )
-            else:
-                create_payment(user_id, request.order_id, request.amount, payment_key, "completed")
+            # 3. 결제 내역 저장 (새로운 order_id로 생성)
+            create_payment(user_id, new_order_id, request.amount, payment_key, "completed")
 
             # 4. 구독 업그레이드
             subscription = upgrade_subscription(
@@ -338,7 +333,7 @@ async def register_billing(
                 "subscription": subscription,
                 "payment": {
                     "payment_key": payment_key,
-                    "order_id": request.order_id,
+                    "order_id": new_order_id,
                     "amount": request.amount,
                     "card_company": billing_data.get("card", {}).get("company"),
                     "card_number": billing_data.get("card", {}).get("number"),
