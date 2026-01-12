@@ -509,7 +509,7 @@ async def scrape_view_tab_results(keyword: str, limit: int = 13) -> list:
             browser = await get_browser()
             context = await browser.new_context(
                 viewport={'width': 1920, 'height': 1080},
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
             )
             page = await context.new_page()
             break  # Success, exit retry loop
@@ -537,55 +537,126 @@ async def scrape_view_tab_results(keyword: str, limit: int = 13) -> list:
 
         await page.goto(search_url, wait_until='networkidle', timeout=30000)
 
-        # Wait for search results to load
-        await page.wait_for_selector('.view_wrap, .api_subject_bx', timeout=10000)
-        await asyncio.sleep(1)  # Additional wait for dynamic content
+        # Wait for search results to load - try multiple selectors
+        try:
+            await page.wait_for_selector('.view_wrap, .api_subject_bx, #main_pack, .lst_view', timeout=10000)
+        except:
+            logger.warning(f"[Playwright] Initial selector not found, continuing anyway")
 
-        # Extract blog post links from VIEW tab
-        # VIEW tab uses different selectors than BLOG tab
+        await asyncio.sleep(1.5)  # Additional wait for dynamic content
+
+        # Scroll down to load more results (lazy loading)
+        await page.evaluate('window.scrollTo(0, document.body.scrollHeight / 2)')
+        await asyncio.sleep(0.5)
+
+        # Extract blog post links from VIEW tab using improved JavaScript
         blog_links = await page.evaluate('''() => {
             const results = [];
-
-            // Method 1: Find all blog.naver.com links in the VIEW tab content area
-            const contentArea = document.querySelector('.view_wrap') || document.querySelector('#main_pack');
-            if (!contentArea) return results;
-
-            // Find all anchor tags with blog.naver.com URLs
-            const links = contentArea.querySelectorAll('a[href*="blog.naver.com"]');
-
             const seen = new Set();
-            for (const link of links) {
-                const href = link.href;
 
-                // Skip non-post URLs (profiles, etc.)
-                const match = href.match(/blog\\.naver\\.com\\/([^\\/]+)\\/?(\\d+)?/);
-                if (!match || !match[2]) continue;  // Must have post ID
+            // ===== Method 1: Direct regex extraction from page HTML (most reliable) =====
+            const htmlContent = document.body.innerHTML;
+            const urlPattern = /href="(https:\\/\\/blog\\.naver\\.com\\/([^\\/"\s]+)\\/([0-9]+))"/g;
+            let match;
 
-                const blogId = match[1];
-                const postId = match[2];
-                const postUrl = `https://blog.naver.com/${blogId}/${postId}`;
+            while ((match = urlPattern.exec(htmlContent)) !== null) {
+                const postUrl = match[1];
+                const blogId = match[2];
+                const postId = match[3];
 
-                // Skip duplicates
                 if (seen.has(postUrl)) continue;
                 seen.add(postUrl);
-
-                // Try to find title from nearby elements
-                let title = '';
-                const titleEl = link.closest('.total_wrap, .view_cont, .api_txt_lines')?.querySelector('.title_link, .api_txt_lines, .title');
-                if (titleEl) {
-                    title = titleEl.textContent?.trim() || '';
-                }
-                if (!title) {
-                    title = link.textContent?.trim() || '';
-                }
 
                 results.push({
                     blog_id: blogId,
                     post_id: postId,
                     post_url: postUrl,
-                    post_title: title,
+                    post_title: `포스팅 #${postId}`,
                     tab_type: 'VIEW'
                 });
+            }
+
+            // ===== Method 2: DOM traversal for better titles (supplement) =====
+            const contentAreas = [
+                document.querySelector('#main_pack'),
+                document.querySelector('.view_wrap'),
+                document.querySelector('.lst_view'),
+                document.querySelector('.api_subject_bx'),
+                document.body
+            ].filter(Boolean);
+
+            for (const contentArea of contentAreas) {
+                // Find all anchor tags with blog.naver.com URLs
+                const links = contentArea.querySelectorAll('a[href*="blog.naver.com"]');
+
+                for (const link of links) {
+                    const href = link.href;
+
+                    // Skip non-post URLs (profiles, etc.)
+                    const urlMatch = href.match(/blog\\.naver\\.com\\/([^\\/]+)\\/([0-9]+)/);
+                    if (!urlMatch) continue;
+
+                    const blogId = urlMatch[1];
+                    const postId = urlMatch[2];
+                    const postUrl = `https://blog.naver.com/${blogId}/${postId}`;
+
+                    // Skip duplicates
+                    if (seen.has(postUrl)) {
+                        // Try to update title if we found a better one
+                        const existing = results.find(r => r.post_url === postUrl);
+                        if (existing && existing.post_title.startsWith('포스팅 #')) {
+                            // Try to find better title
+                            let title = '';
+                            const parentSelectors = ['.total_wrap', '.view_cont', '.api_txt_lines', '.title_area', '.bx', 'li'];
+                            for (const sel of parentSelectors) {
+                                const parent = link.closest(sel);
+                                if (parent) {
+                                    const titleEl = parent.querySelector('.title_link, .api_txt_lines.total_tit, .title, strong, h3');
+                                    if (titleEl) {
+                                        title = titleEl.textContent?.trim() || '';
+                                        if (title && title.length > 5) break;
+                                    }
+                                }
+                            }
+                            if (!title || title.length < 5) {
+                                title = link.textContent?.trim() || '';
+                            }
+                            if (title && title.length > 5 && !title.startsWith('포스팅 #')) {
+                                existing.post_title = title;
+                            }
+                        }
+                        continue;
+                    }
+                    seen.add(postUrl);
+
+                    // Try to find title from nearby elements
+                    let title = '';
+                    const parentSelectors = ['.total_wrap', '.view_cont', '.api_txt_lines', '.title_area', '.bx', 'li'];
+                    for (const sel of parentSelectors) {
+                        const parent = link.closest(sel);
+                        if (parent) {
+                            const titleEl = parent.querySelector('.title_link, .api_txt_lines.total_tit, .title, strong, h3');
+                            if (titleEl) {
+                                title = titleEl.textContent?.trim() || '';
+                                if (title && title.length > 5) break;
+                            }
+                        }
+                    }
+                    if (!title || title.length < 5) {
+                        title = link.textContent?.trim() || '';
+                    }
+                    if (!title || title.length < 5) {
+                        title = `포스팅 #${postId}`;
+                    }
+
+                    results.push({
+                        blog_id: blogId,
+                        post_id: postId,
+                        post_url: postUrl,
+                        post_title: title,
+                        tab_type: 'VIEW'
+                    });
+                }
             }
 
             return results;

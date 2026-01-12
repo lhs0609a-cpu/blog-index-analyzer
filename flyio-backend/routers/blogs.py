@@ -629,12 +629,16 @@ async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
 
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
             "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
             "Accept-Encoding": "gzip, deflate, br",
             "Connection": "keep-alive",
             "Upgrade-Insecure-Requests": "1",
+            "Referer": "https://search.naver.com/",
+            "sec-ch-ua": '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Windows"',
         }
 
         from urllib.parse import quote
@@ -646,97 +650,165 @@ async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
         response = await client.get(search_url, headers=headers)
 
         if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
+            html_text = response.text
+            soup = BeautifulSoup(html_text, 'html.parser')
 
-            # 네이버 블로그 탭 검색 결과 파싱
-            # 방법 1: list_info 클래스 (새로운 UI)
-            blog_items = soup.select('.list_info')
+            # ===== 방법 1: 정규식으로 직접 URL 추출 (가장 안정적) =====
+            # 네이버 검색 결과의 blog.naver.com 링크를 직접 추출
+            post_url_pattern = re.compile(r'href="(https://blog\.naver\.com/([^"/]+)/(\d+))"')
+            url_matches = post_url_pattern.findall(html_text)
 
-            if not blog_items:
-                # 방법 2: total_wrap 클래스 (이전 UI)
-                blog_items = soup.select('.total_wrap')
-
-            if not blog_items:
-                # 방법 3: 직접 링크 찾기
-                blog_items = soup.select('a[href*="blog.naver.com"]')
-
-            logger.info(f"Blog tab scraping found {len(blog_items)} items for: {keyword}")
-
-            rank = 0
             seen_urls = set()
+            rank = 0
 
-            for item in blog_items:
-                if rank >= limit:
-                    break
+            if url_matches:
+                logger.info(f"Blog tab: Found {len(url_matches)} URLs via regex for: {keyword}")
 
-                try:
-                    # 포스트 URL 추출
-                    post_link = None
-                    if item.name == 'a':
-                        post_link = item
-                    else:
-                        # title_link 또는 다른 링크 찾기
-                        post_link = item.select_one('a.title_link') or item.select_one('a.api_txt_lines') or item.select_one('a[href*="blog.naver.com"]')
+                for match in url_matches:
+                    if rank >= limit:
+                        break
 
-                    if not post_link:
-                        continue
-
-                    post_url = post_link.get('href', '')
-                    if not post_url or 'blog.naver.com' not in post_url:
-                        continue
+                    post_url = match[0]
+                    blog_id = match[1]
+                    post_id = match[2]
 
                     # 중복 제거
                     if post_url in seen_urls:
                         continue
                     seen_urls.add(post_url)
 
-                    # 블로그 ID 추출
-                    blog_id = extract_blog_id(post_url)
-                    if not blog_id:
-                        continue
-
-                    # 제목 추출
-                    title = post_link.get_text(strip=True)
-                    if not title:
-                        title_elem = item.select_one('.title_link') or item.select_one('.api_txt_lines')
-                        if title_elem:
-                            title = title_elem.get_text(strip=True)
-
-                    # HTML 태그 제거
-                    title = re.sub(r'<[^>]+>', '', title) if title else ""
-                    title = title.replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
-
-                    # 블로거 이름 추출
-                    blog_name = blog_id
-                    name_elem = item.select_one('.name') or item.select_one('.sub_txt') or item.select_one('.user_info')
-                    if name_elem:
-                        blog_name = name_elem.get_text(strip=True).split('·')[0].strip()
-                        if not blog_name:
-                            blog_name = blog_id
-
-                    # 날짜 추출
-                    post_date = None
-                    date_elem = item.select_one('.sub_time') or item.select_one('.date')
-                    if date_elem:
-                        post_date = date_elem.get_text(strip=True)
+                    # 제목 추출 시도 (URL 주변 텍스트에서)
+                    title = f"포스팅 #{post_id}"
 
                     rank += 1
                     results.append({
                         "rank": rank,
                         "blog_id": blog_id,
-                        "blog_name": blog_name,
+                        "blog_name": blog_id,
                         "blog_url": f"https://blog.naver.com/{blog_id}",
-                        "post_title": title if title else f"Post by {blog_name}",
+                        "post_title": title,
                         "post_url": post_url,
-                        "post_date": post_date,
+                        "post_date": None,
                         "thumbnail": None,
                         "tab_type": "BLOG",
                         "smart_block_keyword": keyword,
                     })
 
-                except Exception as e:
-                    logger.debug(f"Error parsing blog item: {e}")
-                    continue
+            # ===== 방법 2: CSS 선택자로 상세 정보 추출 (정규식 결과가 부족할 때) =====
+            if len(results) < limit:
+                # 2024-2025 네이버 UI 선택자들
+                selectors_to_try = [
+                    '.api_subject_bx',      # 새로운 API 기반 블록
+                    '.sp_blog .bx',         # 블로그 섹션 블록
+                    '.blog_wrap',           # 블로그 래퍼
+                    '.list_info',           # 리스트 정보
+                    '.total_wrap',          # 통합 래퍼
+                    '[data-cr-area="blg"]', # 블로그 영역 데이터 속성
+                    '.title_area',          # 제목 영역
+                ]
+
+                blog_items = []
+                for selector in selectors_to_try:
+                    items = soup.select(selector)
+                    if items and len(items) > len(blog_items):
+                        blog_items = items
+                        logger.debug(f"Blog tab: selector '{selector}' found {len(items)} items")
+
+                if blog_items:
+                    logger.info(f"Blog tab: CSS selector found {len(blog_items)} items for: {keyword}")
+
+                    for item in blog_items:
+                        if rank >= limit:
+                            break
+
+                        try:
+                            # 포스트 URL 추출 - 다양한 선택자 시도
+                            post_link = None
+                            link_selectors = [
+                                'a.title_link',
+                                'a.api_txt_lines',
+                                'a.title',
+                                'a[href*="blog.naver.com"]',
+                            ]
+
+                            for link_sel in link_selectors:
+                                post_link = item.select_one(link_sel)
+                                if post_link and 'blog.naver.com' in post_link.get('href', ''):
+                                    break
+
+                            if not post_link:
+                                # item 자체가 링크인 경우
+                                if item.name == 'a' and 'blog.naver.com' in item.get('href', ''):
+                                    post_link = item
+                                else:
+                                    continue
+
+                            post_url = post_link.get('href', '')
+                            if not post_url or 'blog.naver.com' not in post_url:
+                                continue
+
+                            # 중복 제거
+                            if post_url in seen_urls:
+                                continue
+                            seen_urls.add(post_url)
+
+                            # 블로그 ID 추출
+                            blog_id = extract_blog_id(post_url)
+                            if not blog_id:
+                                continue
+
+                            # 제목 추출
+                            title = post_link.get_text(strip=True)
+                            if not title:
+                                title_selectors = ['.title_link', '.api_txt_lines', '.title', 'strong']
+                                for t_sel in title_selectors:
+                                    title_elem = item.select_one(t_sel)
+                                    if title_elem:
+                                        title = title_elem.get_text(strip=True)
+                                        break
+
+                            # HTML 태그 제거
+                            title = re.sub(r'<[^>]+>', '', title) if title else ""
+                            title = title.replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+
+                            # 블로거 이름 추출
+                            blog_name = blog_id
+                            name_selectors = ['.name', '.sub_txt', '.user_info', '.source_box', '.writer']
+                            for n_sel in name_selectors:
+                                name_elem = item.select_one(n_sel)
+                                if name_elem:
+                                    blog_name = name_elem.get_text(strip=True).split('·')[0].strip()
+                                    if blog_name:
+                                        break
+                            if not blog_name:
+                                blog_name = blog_id
+
+                            # 날짜 추출
+                            post_date = None
+                            date_selectors = ['.sub_time', '.date', '.time', '.datetime']
+                            for d_sel in date_selectors:
+                                date_elem = item.select_one(d_sel)
+                                if date_elem:
+                                    post_date = date_elem.get_text(strip=True)
+                                    break
+
+                            rank += 1
+                            results.append({
+                                "rank": rank,
+                                "blog_id": blog_id,
+                                "blog_name": blog_name,
+                                "blog_url": f"https://blog.naver.com/{blog_id}",
+                                "post_title": title if title else f"Post by {blog_name}",
+                                "post_url": post_url,
+                                "post_date": post_date,
+                                "thumbnail": None,
+                                "tab_type": "BLOG",
+                                "smart_block_keyword": keyword,
+                            })
+
+                        except Exception as e:
+                            logger.debug(f"Error parsing blog item: {e}")
+                            continue
 
             logger.info(f"Blog tab scraping returned {len(results)} results for: {keyword}")
 
