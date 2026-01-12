@@ -3,8 +3,8 @@
 
 const STORAGE_KEY = 'blog_analyzer_api_url';
 
-// Fly.io 프로덕션 서버 URL
-const PRODUCTION_API_URL = 'https://naverpay-delivery-tracker.fly.dev';
+// AWS Lightsail 프로덕션 서버 URL
+const PRODUCTION_API_URL = 'https://api.blrank.co.kr';
 // 로컬 개발 서버 URL
 const LOCAL_API_URL = 'http://localhost:8001';
 
@@ -24,7 +24,7 @@ export function isProduction(): boolean {
 }
 
 export function getApiUrl(): string {
-  // 프로덕션 환경에서는 Fly.io 서버 사용
+  // 프로덕션 환경에서는 AWS Lightsail 서버 사용
   if (typeof window === 'undefined') {
     return isProduction() ? PRODUCTION_API_URL : LOCAL_API_URL;
   }
@@ -83,7 +83,7 @@ export async function checkHealth(baseUrl: string, timeoutMs: number = 10000): P
 }
 
 export async function autoDiscoverBackend(): Promise<string | null> {
-  // 프로덕션 환경에서는 Fly.io 서버 사용
+  // 프로덕션 환경에서는 AWS Lightsail 서버 사용
   if (isProduction()) {
     if (await checkHealth(PRODUCTION_API_URL, 10000)) {
       setApiUrl(PRODUCTION_API_URL);
