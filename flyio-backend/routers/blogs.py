@@ -603,6 +603,25 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 13) ->
                 view_item["tab_type"] = "VIEW"
                 view_results.append(view_item)
 
+        # ===== BLOG 탭 결과가 부족하면 VIEW 탭 결과로 보충 =====
+        # HTTP 요청은 5개만 가져오지만, Playwright VIEW 탭은 13개+ 가져옴
+        if len(blog_results) < limit and view_results:
+            logger.info(f"BLOG tab has {len(blog_results)} results, supplementing with VIEW tab results")
+            existing_urls = {item["post_url"] for item in blog_results}
+
+            for view_item in view_results:
+                if len(blog_results) >= limit:
+                    break
+                if view_item["post_url"] not in existing_urls:
+                    # VIEW 결과를 BLOG 형식으로 변환
+                    blog_item = view_item.copy()
+                    blog_item["tab_type"] = "BLOG"
+                    blog_item["rank"] = len(blog_results) + 1
+                    blog_results.append(blog_item)
+                    existing_urls.add(view_item["post_url"])
+
+            logger.info(f"BLOG tab now has {len(blog_results)} results after supplementing")
+
         logger.info(f"Both tabs results - VIEW: {len(view_results)}, BLOG: {len(blog_results)}")
 
         result = {
@@ -624,23 +643,9 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 13) ->
 
 
 async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
-    """Fetch blog results by scraping actual Naver blog tab using Playwright (most accurate)"""
-    try:
-        # Playwright를 사용해서 JavaScript 렌더링된 결과 가져오기
-        from services.blog_scraper import scrape_blog_tab_results
-
-        logger.info(f"[BLOG] Using Playwright to scrape BLOG tab for: {keyword}")
-        results = await scrape_blog_tab_results(keyword, limit)
-
-        if results:
-            logger.info(f"[BLOG] Playwright scraping returned {len(results)} results for: {keyword}")
-            return results
-
-        logger.warning(f"[BLOG] Playwright returned 0 results, trying HTTP fallback for: {keyword}")
-    except Exception as e:
-        logger.error(f"[BLOG] Playwright scraping failed: {e}, trying HTTP fallback")
-
-    # Fallback: HTTP 요청 (Playwright 실패 시)
+    """Fetch blog results using HTTP only (Playwright는 VIEW 탭에서만 사용)"""
+    # HTTP 요청만 사용 (Playwright 병렬 실행 충돌 방지)
+    # VIEW 탭에서 Playwright로 가져온 결과를 BLOG 탭에도 보충함
     results = []
     try:
         headers = {
@@ -694,10 +699,10 @@ async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
                         "smart_block_keyword": keyword,
                     })
 
-            logger.info(f"[BLOG] HTTP fallback returned {len(results)} results for: {keyword}")
+            logger.info(f"[BLOG] HTTP returned {len(results)} results for: {keyword}")
 
     except Exception as e:
-        logger.error(f"[BLOG] HTTP fallback also failed: {e}")
+        logger.error(f"[BLOG] HTTP request failed: {e}")
 
     return results
 
