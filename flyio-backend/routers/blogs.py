@@ -27,7 +27,27 @@ logger = logging.getLogger(__name__)
 
 # ===== 글로벌 동시 요청 제한 (서버 과부하 방지) =====
 # 여러 키워드 동시 분석 시에도 전체 요청 수 제한
-GLOBAL_SEMAPHORE = asyncio.Semaphore(30)  # 전체 동시 요청 최대 30개 (15 → 30 성능 개선)
+GLOBAL_SEMAPHORE = asyncio.Semaphore(50)  # 전체 동시 요청 최대 50개 (30 → 50 성능 개선)
+
+# ===== 전역 HTTP 클라이언트 (연결 풀링으로 성능 개선) =====
+# 매 요청마다 새 연결 대신 재사용하여 TCP 핸드셰이크 오버헤드 제거
+_HTTP_CLIENT: Optional[httpx.AsyncClient] = None
+
+async def get_http_client() -> httpx.AsyncClient:
+    """전역 HTTP 클라이언트 반환 (싱글톤 패턴)"""
+    global _HTTP_CLIENT
+    if _HTTP_CLIENT is None or _HTTP_CLIENT.is_closed:
+        _HTTP_CLIENT = httpx.AsyncClient(
+            timeout=httpx.Timeout(15.0, connect=5.0),  # 연결 5초, 전체 15초
+            limits=httpx.Limits(max_connections=100, max_keepalive_connections=50),
+            follow_redirects=True,
+            http2=True  # HTTP/2 지원으로 멀티플렉싱 활용
+        )
+    return _HTTP_CLIENT
+
+# ===== 검색 결과 캐시 (키워드별) =====
+SEARCH_RESULTS_CACHE: Dict[str, Dict] = {}
+SEARCH_CACHE_TTL = 300  # 5분 (검색 결과는 짧게 캐싱)
 
 # ===== 블로그 분석 캐시 (성능 개선) =====
 # TTL: 4시간 (같은 블로그 반복 분석 방지)
@@ -55,6 +75,33 @@ def set_blog_analysis_cache(blog_id: str, data: Dict):
             del BLOG_ANALYSIS_CACHE[key]
 
     BLOG_ANALYSIS_CACHE[blog_id] = {
+        "data": data,
+        "timestamp": time.time()
+    }
+
+def get_cached_search_results(keyword: str) -> Optional[Dict]:
+    """캐시된 검색 결과 조회"""
+    cache_key = keyword.lower().strip()
+    if cache_key in SEARCH_RESULTS_CACHE:
+        cached = SEARCH_RESULTS_CACHE[cache_key]
+        if time.time() - cached["timestamp"] < SEARCH_CACHE_TTL:
+            logger.debug(f"Search cache hit for: {keyword}")
+            return cached["data"]
+        else:
+            del SEARCH_RESULTS_CACHE[cache_key]
+    return None
+
+def set_search_results_cache(keyword: str, data: Dict):
+    """검색 결과 캐시 저장"""
+    cache_key = keyword.lower().strip()
+    # 캐시 크기 제한 (500개)
+    if len(SEARCH_RESULTS_CACHE) > 500:
+        sorted_keys = sorted(SEARCH_RESULTS_CACHE.keys(),
+                            key=lambda k: SEARCH_RESULTS_CACHE[k]["timestamp"])
+        for key in sorted_keys[:100]:
+            del SEARCH_RESULTS_CACHE[key]
+
+    SEARCH_RESULTS_CACHE[cache_key] = {
         "data": data,
         "timestamp": time.time()
     }
@@ -504,6 +551,11 @@ async def fetch_naver_search_results(keyword: str, limit: int = 13) -> List[Dict
 
 async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 13) -> Dict[str, List[Dict]]:
     """Fetch search results from both VIEW tab and BLOG tab in parallel"""
+    # 캐시 확인 (성능 개선 - 5분 TTL)
+    cached = get_cached_search_results(keyword)
+    if cached:
+        return cached
+
     logger.info(f"Fetching both tabs for keyword: {keyword}")
 
     try:
@@ -553,10 +605,16 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 13) ->
 
         logger.info(f"Both tabs results - VIEW: {len(view_results)}, BLOG: {len(blog_results)}")
 
-        return {
+        result = {
             "view_results": view_results,
             "blog_results": blog_results
         }
+
+        # 결과가 있으면 캐시에 저장 (성능 개선)
+        if view_results or blog_results:
+            set_search_results_cache(keyword, result)
+
+        return result
 
     except Exception as e:
         logger.error(f"Error fetching both tabs: {e}")
@@ -583,103 +641,104 @@ async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
         encoded_keyword = quote(keyword)
         search_url = f"https://search.naver.com/search.naver?where=blog&query={encoded_keyword}"
 
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-            response = await client.get(search_url, headers=headers)
+        # 전역 HTTP 클라이언트 사용 (성능 개선)
+        client = await get_http_client()
+        response = await client.get(search_url, headers=headers)
 
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.text, 'html.parser')
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
 
-                # 네이버 블로그 탭 검색 결과 파싱
-                # 방법 1: list_info 클래스 (새로운 UI)
-                blog_items = soup.select('.list_info')
+            # 네이버 블로그 탭 검색 결과 파싱
+            # 방법 1: list_info 클래스 (새로운 UI)
+            blog_items = soup.select('.list_info')
 
-                if not blog_items:
-                    # 방법 2: total_wrap 클래스 (이전 UI)
-                    blog_items = soup.select('.total_wrap')
+            if not blog_items:
+                # 방법 2: total_wrap 클래스 (이전 UI)
+                blog_items = soup.select('.total_wrap')
 
-                if not blog_items:
-                    # 방법 3: 직접 링크 찾기
-                    blog_items = soup.select('a[href*="blog.naver.com"]')
+            if not blog_items:
+                # 방법 3: 직접 링크 찾기
+                blog_items = soup.select('a[href*="blog.naver.com"]')
 
-                logger.info(f"Blog tab scraping found {len(blog_items)} items for: {keyword}")
+            logger.info(f"Blog tab scraping found {len(blog_items)} items for: {keyword}")
 
-                rank = 0
-                seen_urls = set()
+            rank = 0
+            seen_urls = set()
 
-                for item in blog_items:
-                    if rank >= limit:
-                        break
+            for item in blog_items:
+                if rank >= limit:
+                    break
 
-                    try:
-                        # 포스트 URL 추출
-                        post_link = None
-                        if item.name == 'a':
-                            post_link = item
-                        else:
-                            # title_link 또는 다른 링크 찾기
-                            post_link = item.select_one('a.title_link') or item.select_one('a.api_txt_lines') or item.select_one('a[href*="blog.naver.com"]')
+                try:
+                    # 포스트 URL 추출
+                    post_link = None
+                    if item.name == 'a':
+                        post_link = item
+                    else:
+                        # title_link 또는 다른 링크 찾기
+                        post_link = item.select_one('a.title_link') or item.select_one('a.api_txt_lines') or item.select_one('a[href*="blog.naver.com"]')
 
-                        if not post_link:
-                            continue
-
-                        post_url = post_link.get('href', '')
-                        if not post_url or 'blog.naver.com' not in post_url:
-                            continue
-
-                        # 중복 제거
-                        if post_url in seen_urls:
-                            continue
-                        seen_urls.add(post_url)
-
-                        # 블로그 ID 추출
-                        blog_id = extract_blog_id(post_url)
-                        if not blog_id:
-                            continue
-
-                        # 제목 추출
-                        title = post_link.get_text(strip=True)
-                        if not title:
-                            title_elem = item.select_one('.title_link') or item.select_one('.api_txt_lines')
-                            if title_elem:
-                                title = title_elem.get_text(strip=True)
-
-                        # HTML 태그 제거
-                        title = re.sub(r'<[^>]+>', '', title) if title else ""
-                        title = title.replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
-
-                        # 블로거 이름 추출
-                        blog_name = blog_id
-                        name_elem = item.select_one('.name') or item.select_one('.sub_txt') or item.select_one('.user_info')
-                        if name_elem:
-                            blog_name = name_elem.get_text(strip=True).split('·')[0].strip()
-                            if not blog_name:
-                                blog_name = blog_id
-
-                        # 날짜 추출
-                        post_date = None
-                        date_elem = item.select_one('.sub_time') or item.select_one('.date')
-                        if date_elem:
-                            post_date = date_elem.get_text(strip=True)
-
-                        rank += 1
-                        results.append({
-                            "rank": rank,
-                            "blog_id": blog_id,
-                            "blog_name": blog_name,
-                            "blog_url": f"https://blog.naver.com/{blog_id}",
-                            "post_title": title if title else f"Post by {blog_name}",
-                            "post_url": post_url,
-                            "post_date": post_date,
-                            "thumbnail": None,
-                            "tab_type": "BLOG",
-                            "smart_block_keyword": keyword,
-                        })
-
-                    except Exception as e:
-                        logger.debug(f"Error parsing blog item: {e}")
+                    if not post_link:
                         continue
 
-                logger.info(f"Blog tab scraping returned {len(results)} results for: {keyword}")
+                    post_url = post_link.get('href', '')
+                    if not post_url or 'blog.naver.com' not in post_url:
+                        continue
+
+                    # 중복 제거
+                    if post_url in seen_urls:
+                        continue
+                    seen_urls.add(post_url)
+
+                    # 블로그 ID 추출
+                    blog_id = extract_blog_id(post_url)
+                    if not blog_id:
+                        continue
+
+                    # 제목 추출
+                    title = post_link.get_text(strip=True)
+                    if not title:
+                        title_elem = item.select_one('.title_link') or item.select_one('.api_txt_lines')
+                        if title_elem:
+                            title = title_elem.get_text(strip=True)
+
+                    # HTML 태그 제거
+                    title = re.sub(r'<[^>]+>', '', title) if title else ""
+                    title = title.replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+
+                    # 블로거 이름 추출
+                    blog_name = blog_id
+                    name_elem = item.select_one('.name') or item.select_one('.sub_txt') or item.select_one('.user_info')
+                    if name_elem:
+                        blog_name = name_elem.get_text(strip=True).split('·')[0].strip()
+                        if not blog_name:
+                            blog_name = blog_id
+
+                    # 날짜 추출
+                    post_date = None
+                    date_elem = item.select_one('.sub_time') or item.select_one('.date')
+                    if date_elem:
+                        post_date = date_elem.get_text(strip=True)
+
+                    rank += 1
+                    results.append({
+                        "rank": rank,
+                        "blog_id": blog_id,
+                        "blog_name": blog_name,
+                        "blog_url": f"https://blog.naver.com/{blog_id}",
+                        "post_title": title if title else f"Post by {blog_name}",
+                        "post_url": post_url,
+                        "post_date": post_date,
+                        "thumbnail": None,
+                        "tab_type": "BLOG",
+                        "smart_block_keyword": keyword,
+                    })
+
+                except Exception as e:
+                    logger.debug(f"Error parsing blog item: {e}")
+                    continue
+
+            logger.info(f"Blog tab scraping returned {len(results)} results for: {keyword}")
 
     except Exception as e:
         logger.error(f"Error with blog tab scraping: {e}")
@@ -894,54 +953,55 @@ async def fetch_via_naver_api(keyword: str, limit: int, client_id: str, client_s
             "X-Naver-Client-Secret": client_secret,
         }
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(
-                "https://openapi.naver.com/v1/search/blog.json",
-                headers=headers,
-                params={
-                    "query": keyword,
-                    "display": min(limit, 100),
-                    "sort": "sim"  # relevance
-                }
-            )
+        # 전역 HTTP 클라이언트 사용 (성능 개선)
+        http_client = await get_http_client()
+        response = await http_client.get(
+            "https://openapi.naver.com/v1/search/blog.json",
+            headers=headers,
+            params={
+                "query": keyword,
+                "display": min(limit, 100),
+                "sort": "sim"  # relevance
+            }
+        )
 
-            if response.status_code == 200:
-                data = response.json()
-                items = data.get("items", [])
+        if response.status_code == 200:
+            data = response.json()
+            items = data.get("items", [])
 
-                for idx, item in enumerate(items[:limit]):
-                    # Extract blog ID from link
-                    link = item.get("link", "")
-                    blog_id = extract_blog_id(link)
+            for idx, item in enumerate(items[:limit]):
+                # Extract blog ID from link
+                link = item.get("link", "")
+                blog_id = extract_blog_id(link)
 
-                    if not blog_id:
-                        # Try to extract from blogger link
-                        blogger_link = item.get("bloggerlink", "")
-                        blog_id = extract_blog_id(blogger_link)
+                if not blog_id:
+                    # Try to extract from blogger link
+                    blogger_link = item.get("bloggerlink", "")
+                    blog_id = extract_blog_id(blogger_link)
 
-                    if not blog_id:
-                        continue
+                if not blog_id:
+                    continue
 
-                    # Clean title (remove HTML tags)
-                    title = re.sub(r'<[^>]+>', '', item.get("title", ""))
-                    title = title.replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+                # Clean title (remove HTML tags)
+                title = re.sub(r'<[^>]+>', '', item.get("title", ""))
+                title = title.replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
 
-                    results.append({
-                        "rank": idx + 1,
-                        "blog_id": blog_id,
-                        "blog_name": item.get("bloggername", blog_id),
-                        "blog_url": f"https://blog.naver.com/{blog_id}",
-                        "post_title": title,
-                        "post_url": link,
-                        "post_date": item.get("postdate"),
-                        "thumbnail": None,
-                        "tab_type": "VIEW",
-                        "smart_block_keyword": keyword,
-                    })
+                results.append({
+                    "rank": idx + 1,
+                    "blog_id": blog_id,
+                    "blog_name": item.get("bloggername", blog_id),
+                    "blog_url": f"https://blog.naver.com/{blog_id}",
+                    "post_title": title,
+                    "post_url": link,
+                    "post_date": item.get("postdate"),
+                    "thumbnail": None,
+                    "tab_type": "VIEW",
+                    "smart_block_keyword": keyword,
+                })
 
-                logger.info(f"Naver API returned {len(results)} results for: {keyword}")
-            else:
-                logger.error(f"Naver API error: {response.status_code} - {response.text}")
+            logger.info(f"Naver API returned {len(results)} results for: {keyword}")
+        else:
+            logger.error(f"Naver API error: {response.status_code} - {response.text}")
 
     except Exception as e:
         logger.error(f"Error with Naver API: {e}")
@@ -959,45 +1019,45 @@ async def fetch_via_rss(keyword: str, limit: int) -> List[Dict]:
             "Accept": "application/rss+xml, application/xml, text/xml",
         }
 
-        # Try Naver view RSS
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-            response = await client.get(
-                f"https://rss.blog.naver.com/search.xml?query={keyword}",
-                headers=headers
-            )
+        # 전역 HTTP 클라이언트 사용 (성능 개선)
+        client = await get_http_client()
+        response = await client.get(
+            f"https://rss.blog.naver.com/search.xml?query={keyword}",
+            headers=headers
+        )
 
-            if response.status_code == 200 and response.text:
-                soup = BeautifulSoup(response.text, 'xml')
-                items = soup.find_all('item')
+        if response.status_code == 200 and response.text:
+            soup = BeautifulSoup(response.text, 'xml')
+            items = soup.find_all('item')
 
-                for idx, item in enumerate(items[:limit]):
-                    link = item.find('link')
-                    link_url = link.get_text(strip=True) if link else ""
+            for idx, item in enumerate(items[:limit]):
+                link = item.find('link')
+                link_url = link.get_text(strip=True) if link else ""
 
-                    blog_id = extract_blog_id(link_url)
-                    if not blog_id:
-                        continue
+                blog_id = extract_blog_id(link_url)
+                if not blog_id:
+                    continue
 
-                    title_elem = item.find('title')
-                    title = title_elem.get_text(strip=True) if title_elem else ""
+                title_elem = item.find('title')
+                title = title_elem.get_text(strip=True) if title_elem else ""
 
-                    pub_date = item.find('pubDate')
-                    post_date = pub_date.get_text(strip=True) if pub_date else None
+                pub_date = item.find('pubDate')
+                post_date = pub_date.get_text(strip=True) if pub_date else None
 
-                    results.append({
-                        "rank": idx + 1,
-                        "blog_id": blog_id,
-                        "blog_name": blog_id,
-                        "blog_url": f"https://blog.naver.com/{blog_id}",
-                        "post_title": title,
-                        "post_url": link_url,
-                        "post_date": post_date,
-                        "thumbnail": None,
-                        "tab_type": "VIEW",
-                        "smart_block_keyword": keyword,
-                    })
+                results.append({
+                    "rank": idx + 1,
+                    "blog_id": blog_id,
+                    "blog_name": blog_id,
+                    "blog_url": f"https://blog.naver.com/{blog_id}",
+                    "post_title": title,
+                    "post_url": link_url,
+                    "post_date": post_date,
+                    "thumbnail": None,
+                    "tab_type": "VIEW",
+                    "smart_block_keyword": keyword,
+                })
 
-                logger.info(f"RSS returned {len(results)} results for: {keyword}")
+            logger.info(f"RSS returned {len(results)} results for: {keyword}")
 
     except Exception as e:
         logger.error(f"Error with RSS: {e}")
@@ -1020,57 +1080,58 @@ async def fetch_via_mobile_web(keyword: str, limit: int) -> List[Dict]:
         # Mobile Naver search
         search_url = f"https://m.search.naver.com/search.naver?where=m_blog&query={keyword}"
 
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-            response = await client.get(search_url, headers=headers)
+        # 전역 HTTP 클라이언트 사용 (성능 개선)
+        client = await get_http_client()
+        response = await client.get(search_url, headers=headers)
 
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.text, 'html.parser')
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
 
-                # Mobile layout selectors
-                # Try to find blog post links
-                blog_links = soup.find_all('a', href=re.compile(r'blog\.naver\.com/[^/]+/\d+'))
+            # Mobile layout selectors
+            # Try to find blog post links
+            blog_links = soup.find_all('a', href=re.compile(r'blog\.naver\.com/[^/]+/\d+'))
 
-                logger.info(f"Mobile scraping found {len(blog_links)} raw blog links")
+            logger.info(f"Mobile scraping found {len(blog_links)} raw blog links")
 
-                seen_urls = set()
-                rank = 0
+            seen_urls = set()
+            rank = 0
 
-                for a_tag in blog_links:
-                    post_url = a_tag.get('href', '')
+            for a_tag in blog_links:
+                post_url = a_tag.get('href', '')
 
-                    if post_url in seen_urls:
-                        continue
-                    seen_urls.add(post_url)
+                if post_url in seen_urls:
+                    continue
+                seen_urls.add(post_url)
 
-                    blog_id = extract_blog_id(post_url)
-                    if not blog_id:
-                        continue
+                blog_id = extract_blog_id(post_url)
+                if not blog_id:
+                    continue
 
-                    # Get title from link text or parent
-                    title = a_tag.get_text(strip=True)
-                    if not title or len(title) < 5:
-                        parent = a_tag.parent
-                        if parent:
-                            title = parent.get_text(strip=True)[:100]
+                # Get title from link text or parent
+                title = a_tag.get_text(strip=True)
+                if not title or len(title) < 5:
+                    parent = a_tag.parent
+                    if parent:
+                        title = parent.get_text(strip=True)[:100]
 
-                    rank += 1
-                    results.append({
-                        "rank": rank,
-                        "blog_id": blog_id,
-                        "blog_name": blog_id,
-                        "blog_url": f"https://blog.naver.com/{blog_id}",
-                        "post_title": title if title else f"Post by {blog_id}",
-                        "post_url": post_url,
-                        "post_date": None,
-                        "thumbnail": None,
-                        "tab_type": "VIEW",
-                        "smart_block_keyword": keyword,
-                    })
+                rank += 1
+                results.append({
+                    "rank": rank,
+                    "blog_id": blog_id,
+                    "blog_name": blog_id,
+                    "blog_url": f"https://blog.naver.com/{blog_id}",
+                    "post_title": title if title else f"Post by {blog_id}",
+                    "post_url": post_url,
+                    "post_date": None,
+                    "thumbnail": None,
+                    "tab_type": "VIEW",
+                    "smart_block_keyword": keyword,
+                })
 
-                    if rank >= limit:
-                        break
+                if rank >= limit:
+                    break
 
-                logger.info(f"Mobile web returned {len(results)} results for: {keyword}")
+            logger.info(f"Mobile web returned {len(results)} results for: {keyword}")
 
     except Exception as e:
         logger.error(f"Error with mobile web: {e}")
@@ -1724,393 +1785,392 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
             "Accept-Language": "ko-KR,ko;q=0.9",
         }
 
-        # 타임아웃 공격적 설정: 연결 2초, 읽기 5초 (빠른 실패 → 재시도)
-        timeout = httpx.Timeout(5.0, connect=2.0)
-        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, limits=httpx.Limits(max_connections=30)) as client:
-            # RSS에서 블로그 정보 추출 (스크래핑 실패 시 폴백)
-            try:
-                rss_url = f"https://rss.blog.naver.com/{blog_id}.xml"
-                resp = await client.get(rss_url, headers=headers)
+        # 전역 HTTP 클라이언트 사용 (성능 개선) + 개별 요청 타임아웃
+        client = await get_http_client()
+        # RSS에서 블로그 정보 추출 (스크래핑 실패 시 폴백)
+        try:
+            rss_url = f"https://rss.blog.naver.com/{blog_id}.xml"
+            resp = await client.get(rss_url, headers=headers, timeout=5.0)
 
-                if resp.status_code == 200 and '<item>' in resp.text:
-                    soup = BeautifulSoup(resp.text, 'xml')
-                    items = soup.find_all('item')
+            if resp.status_code == 200 and '<item>' in resp.text:
+                soup = BeautifulSoup(resp.text, 'xml')
+                items = soup.find_all('item')
 
-                    # RSS channel에서 블로그명 추출
-                    channel = soup.find('channel')
-                    if channel:
-                        title_elem = channel.find('title')
-                        if title_elem and title_elem.get_text(strip=True):
-                            blog_title = title_elem.get_text(strip=True)
-                            # 블로그 제목이 blog_id와 다를 경우에만 저장
-                            if blog_title and blog_title != blog_id:
-                                analysis_data["blog_name"] = blog_title
+                # RSS channel에서 블로그명 추출
+                channel = soup.find('channel')
+                if channel:
+                    title_elem = channel.find('title')
+                    if title_elem and title_elem.get_text(strip=True):
+                        blog_title = title_elem.get_text(strip=True)
+                        # 블로그 제목이 blog_id와 다를 경우에만 저장
+                        if blog_title and blog_title != blog_id:
+                            analysis_data["blog_name"] = blog_title
 
-                    if items:
-                        if "rss" not in analysis_data["data_sources"]:
-                            analysis_data["data_sources"].append("rss")
+                if items:
+                    if "rss" not in analysis_data["data_sources"]:
+                        analysis_data["data_sources"].append("rss")
 
-                        # 포스트 수 - 스크래핑 데이터가 없을 때만 RSS 추정 사용
-                        if not stats["total_posts"]:
-                            rss_count = len(items)
-                            if rss_count >= 48:
-                                stats["total_posts"] = get_consistent_value(blog_id, 200, 500, "posts")
-                            elif rss_count >= 30:
-                                stats["total_posts"] = get_consistent_value(blog_id, 100, 200, "posts")
-                            elif rss_count >= 10:
-                                stats["total_posts"] = get_consistent_value(blog_id, 50, 100, "posts")
-                            else:
-                                stats["total_posts"] = rss_count * 2
-
-                        # 평균 글 길이 계산 (처음 5개) - 항상 RSS에서 가져옴
-                        total_len = 0
-                        valid_items = 0
-                        for item in items[:5]:
-                            desc = item.find('description')
-                            if desc:
-                                content = desc.get_text(strip=True)
-                                total_len += len(content)
-                                valid_items += 1
-
-                        if valid_items > 0:
-                            analysis_data["avg_post_length"] = total_len // valid_items
-
-                        # 카테고리 수 추정 (고유 카테고리 개수)
-                        categories = set()
-                        for item in items:
-                            cat = item.find('category')
-                            if cat:
-                                categories.add(cat.get_text(strip=True))
-                        analysis_data["category_count"] = len(categories) if categories else 3
-
-                        # 최근 활동일 계산
-                        pub = items[0].find('pubDate')
-                        if pub:
-                            try:
-                                from email.utils import parsedate_to_datetime
-                                from datetime import datetime, timezone
-                                last = parsedate_to_datetime(pub.get_text())
-                                analysis_data["recent_activity"] = (datetime.now(timezone.utc) - last).days
-                            except:
-                                analysis_data["recent_activity"] = 7
-
-                        # 이웃 수 추정 (글 수와 활동성 기반)
-                        if stats["total_posts"] and stats["total_posts"] > 100:
-                            stats["neighbor_count"] = get_consistent_value(blog_id, 200, 800, "neighbors")
-                        elif stats["total_posts"] and stats["total_posts"] > 50:
-                            stats["neighbor_count"] = get_consistent_value(blog_id, 100, 300, "neighbors")
+                    # 포스트 수 - 스크래핑 데이터가 없을 때만 RSS 추정 사용
+                    if not stats["total_posts"]:
+                        rss_count = len(items)
+                        if rss_count >= 48:
+                            stats["total_posts"] = get_consistent_value(blog_id, 200, 500, "posts")
+                        elif rss_count >= 30:
+                            stats["total_posts"] = get_consistent_value(blog_id, 100, 200, "posts")
+                        elif rss_count >= 10:
+                            stats["total_posts"] = get_consistent_value(blog_id, 50, 100, "posts")
                         else:
-                            stats["neighbor_count"] = get_consistent_value(blog_id, 30, 150, "neighbors")
+                            stats["total_posts"] = rss_count * 2
 
-                        # 방문자 수 추정 (글 수 × 평균 방문)
-                        base_visitors = (stats["total_posts"] or 50) * get_consistent_value(blog_id, 500, 2000, "visitors")
-                        stats["total_visitors"] = base_visitors
+                    # 평균 글 길이 계산 (처음 5개) - 항상 RSS에서 가져옴
+                    total_len = 0
+                    valid_items = 0
+                    for item in items[:5]:
+                        desc = item.find('description')
+                        if desc:
+                            content = desc.get_text(strip=True)
+                            total_len += len(content)
+                            valid_items += 1
 
-                        logger.info(f"RSS analysis for {blog_id}: posts~{stats['total_posts']}, len={analysis_data['avg_post_length']}, cats={analysis_data['category_count']}")
+                    if valid_items > 0:
+                        analysis_data["avg_post_length"] = total_len // valid_items
+
+                    # 카테고리 수 추정 (고유 카테고리 개수)
+                    categories = set()
+                    for item in items:
+                        cat = item.find('category')
+                        if cat:
+                            categories.add(cat.get_text(strip=True))
+                    analysis_data["category_count"] = len(categories) if categories else 3
+
+                    # 최근 활동일 계산
+                    pub = items[0].find('pubDate')
+                    if pub:
+                        try:
+                            from email.utils import parsedate_to_datetime
+                            from datetime import datetime, timezone
+                            last = parsedate_to_datetime(pub.get_text())
+                            analysis_data["recent_activity"] = (datetime.now(timezone.utc) - last).days
+                        except:
+                            analysis_data["recent_activity"] = 7
+
+                    # 이웃 수 추정 (글 수와 활동성 기반)
+                    if stats["total_posts"] and stats["total_posts"] > 100:
+                        stats["neighbor_count"] = get_consistent_value(blog_id, 200, 800, "neighbors")
+                    elif stats["total_posts"] and stats["total_posts"] > 50:
+                        stats["neighbor_count"] = get_consistent_value(blog_id, 100, 300, "neighbors")
                     else:
-                        # RSS가 비어있는 경우 - 블로그 ID 기반 일관된 추정값 사용
-                        stats["total_posts"] = get_consistent_value(blog_id, 20, 80, "posts_empty")
-                        stats["neighbor_count"] = get_consistent_value(blog_id, 50, 200, "neighbors_empty")
-                        stats["total_visitors"] = get_consistent_value(blog_id, 10000, 100000, "visitors_empty")
-                        analysis_data["category_count"] = get_consistent_value(blog_id, 2, 8, "category")
-                        analysis_data["avg_post_length"] = get_consistent_value(blog_id, 800, 2000, "length")
-                        analysis_data["recent_activity"] = get_consistent_value(blog_id, 1, 30, "activity")
-                        analysis_data["data_sources"].append("estimated")
-                        logger.warning(f"Empty RSS for {blog_id}, using estimated values")
+                        stats["neighbor_count"] = get_consistent_value(blog_id, 30, 150, "neighbors")
+
+                    # 방문자 수 추정 (글 수 × 평균 방문)
+                    base_visitors = (stats["total_posts"] or 50) * get_consistent_value(blog_id, 500, 2000, "visitors")
+                    stats["total_visitors"] = base_visitors
+
+                    logger.info(f"RSS analysis for {blog_id}: posts~{stats['total_posts']}, len={analysis_data['avg_post_length']}, cats={analysis_data['category_count']}")
                 else:
-                    # RSS 접근 실패 - 블로그 ID 기반 일관된 추정값 사용
-                    stats["total_posts"] = get_consistent_value(blog_id, 30, 100, "posts_fail")
-                    stats["neighbor_count"] = get_consistent_value(blog_id, 50, 300, "neighbors_fail")
-                    stats["total_visitors"] = get_consistent_value(blog_id, 20000, 150000, "visitors_fail")
-                    analysis_data["category_count"] = get_consistent_value(blog_id, 3, 10, "category_fail")
-                    analysis_data["avg_post_length"] = get_consistent_value(blog_id, 1000, 2500, "length_fail")
-                    analysis_data["recent_activity"] = get_consistent_value(blog_id, 1, 14, "activity_fail")
+                    # RSS가 비어있는 경우 - 블로그 ID 기반 일관된 추정값 사용
+                    stats["total_posts"] = get_consistent_value(blog_id, 20, 80, "posts_empty")
+                    stats["neighbor_count"] = get_consistent_value(blog_id, 50, 200, "neighbors_empty")
+                    stats["total_visitors"] = get_consistent_value(blog_id, 10000, 100000, "visitors_empty")
+                    analysis_data["category_count"] = get_consistent_value(blog_id, 2, 8, "category")
+                    analysis_data["avg_post_length"] = get_consistent_value(blog_id, 800, 2000, "length")
+                    analysis_data["recent_activity"] = get_consistent_value(blog_id, 1, 30, "activity")
                     analysis_data["data_sources"].append("estimated")
-                    logger.warning(f"RSS failed for {blog_id}, using consistent estimated values")
-
-            except Exception as e:
-                logger.warning(f"RSS fetch error for {blog_id}: {e}")
-                # 오류 시 블로그 ID 기반 일관된 추정값 사용
-                stats["total_posts"] = get_consistent_value(blog_id, 40, 120, "posts_error")
-                stats["neighbor_count"] = get_consistent_value(blog_id, 80, 400, "neighbors_error")
-                stats["total_visitors"] = get_consistent_value(blog_id, 30000, 200000, "visitors_error")
-                analysis_data["category_count"] = get_consistent_value(blog_id, 3, 8, "category_error")
-                analysis_data["avg_post_length"] = get_consistent_value(blog_id, 1200, 2200, "length_error")
-                analysis_data["recent_activity"] = get_consistent_value(blog_id, 1, 21, "activity_error")
+                    logger.warning(f"Empty RSS for {blog_id}, using estimated values")
+            else:
+                # RSS 접근 실패 - 블로그 ID 기반 일관된 추정값 사용
+                stats["total_posts"] = get_consistent_value(blog_id, 30, 100, "posts_fail")
+                stats["neighbor_count"] = get_consistent_value(blog_id, 50, 300, "neighbors_fail")
+                stats["total_visitors"] = get_consistent_value(blog_id, 20000, 150000, "visitors_fail")
+                analysis_data["category_count"] = get_consistent_value(blog_id, 3, 10, "category_fail")
+                analysis_data["avg_post_length"] = get_consistent_value(blog_id, 1000, 2500, "length_fail")
+                analysis_data["recent_activity"] = get_consistent_value(blog_id, 1, 14, "activity_fail")
                 analysis_data["data_sources"].append("estimated")
+                logger.warning(f"RSS failed for {blog_id}, using consistent estimated values")
 
-            # ============================================
-            # SCORE CALCULATION - Using category + learned weights
-            # ============================================
+        except Exception as e:
+            logger.warning(f"RSS fetch error for {blog_id}: {e}")
+            # 오류 시 블로그 ID 기반 일관된 추정값 사용
+            stats["total_posts"] = get_consistent_value(blog_id, 40, 120, "posts_error")
+            stats["neighbor_count"] = get_consistent_value(blog_id, 80, 400, "neighbors_error")
+            stats["total_visitors"] = get_consistent_value(blog_id, 30000, 200000, "visitors_error")
+            analysis_data["category_count"] = get_consistent_value(blog_id, 3, 8, "category_error")
+            analysis_data["avg_post_length"] = get_consistent_value(blog_id, 1200, 2200, "length_error")
+            analysis_data["recent_activity"] = get_consistent_value(blog_id, 1, 21, "activity_error")
+            analysis_data["data_sources"].append("estimated")
 
-            # Get learned weights from database
-            try:
-                learned_weights = get_current_weights()
-            except:
-                learned_weights = None
+        # ============================================
+        # SCORE CALCULATION - Using category + learned weights
+        # ============================================
 
-            # 키워드 카테고리 감지 및 가중치 병합
-            keyword_category = detect_keyword_category(keyword) if keyword else "default"
-            category_weights = merge_weights_with_category(learned_weights, keyword) if keyword else (learned_weights or {})
-            logger.debug(f"Using category weights for '{keyword}': category={keyword_category}")
+        # Get learned weights from database
+        try:
+            learned_weights = get_current_weights()
+        except:
+            learned_weights = None
 
-            # ===== C-RANK SCORE CALCULATION =====
-            # C-Rank: Context(주제집중도) + Content(콘텐츠품질) + Chain(연결성)
+        # 키워드 카테고리 감지 및 가중치 병합
+        keyword_category = detect_keyword_category(keyword) if keyword else "default"
+        category_weights = merge_weights_with_category(learned_weights, keyword) if keyword else (learned_weights or {})
+        logger.debug(f"Using category weights for '{keyword}': category={keyword_category}")
 
-            # Context Score (주제 집중도) - 0~100
-            context_score = 50  # Base
-            if analysis_data["category_count"]:
-                # 카테고리가 적을수록 주제 집중도 높음 (1~3개 최적)
-                cats = analysis_data["category_count"]
-                if cats <= 3:
-                    context_score = 90
-                elif cats <= 5:
-                    context_score = 75
-                elif cats <= 10:
-                    context_score = 60
-                else:
-                    context_score = 40
+        # ===== C-RANK SCORE CALCULATION =====
+        # C-Rank: Context(주제집중도) + Content(콘텐츠품질) + Chain(연결성)
 
-            # Content Score (콘텐츠 품질) - 0~100
-            content_score = 50  # Base
-            # RSS description은 요약이라 실제 글 길이의 10-15% 정도만 포함
-            # 따라서 RSS 길이 × 6~8 정도가 실제 글 길이에 가까움
-            avg_len = analysis_data.get("avg_post_length") or 0
-            if avg_len > 0 and avg_len < 500:
-                # RSS 요약문이 짧으면 실제 글 길이로 보정 (약 6~8배)
-                avg_len = avg_len * 7
-
-            if avg_len >= 3000:
-                content_score = 95
-            elif avg_len >= 2000:
-                content_score = 85
-            elif avg_len >= 1500:
-                content_score = 75
-            elif avg_len >= 1000:
-                content_score = 65
-            elif avg_len >= 500:
-                content_score = 50
+        # Context Score (주제 집중도) - 0~100
+        context_score = 50  # Base
+        if analysis_data["category_count"]:
+            # 카테고리가 적을수록 주제 집중도 높음 (1~3개 최적)
+            cats = analysis_data["category_count"]
+            if cats <= 3:
+                context_score = 90
+            elif cats <= 5:
+                context_score = 75
+            elif cats <= 10:
+                context_score = 60
             else:
-                content_score = 35
+                context_score = 40
 
-            # Chain Score (연결성) - 0~100
-            chain_score = 50  # Base
-            if stats["neighbor_count"]:
-                neighbors = stats["neighbor_count"]
-                if neighbors >= 5000:
-                    chain_score = 95
-                elif neighbors >= 2000:
-                    chain_score = 85
-                elif neighbors >= 1000:
-                    chain_score = 75
-                elif neighbors >= 500:
-                    chain_score = 65
-                elif neighbors >= 200:
-                    chain_score = 55
-                elif neighbors >= 100:
-                    chain_score = 45
-                else:
-                    chain_score = 35
+        # Content Score (콘텐츠 품질) - 0~100
+        content_score = 50  # Base
+        # RSS description은 요약이라 실제 글 길이의 10-15% 정도만 포함
+        # 따라서 RSS 길이 × 6~8 정도가 실제 글 길이에 가까움
+        avg_len = analysis_data.get("avg_post_length") or 0
+        if avg_len > 0 and avg_len < 500:
+            # RSS 요약문이 짧으면 실제 글 길이로 보정 (약 6~8배)
+            avg_len = avg_len * 7
 
-            # C-Rank sub-weights (from category weights)
-            if category_weights and 'c_rank' in category_weights:
-                c_sub = category_weights['c_rank'].get('sub_weights', {})
-                context_w = c_sub.get('context', 0.35)
-                content_w = c_sub.get('content', 0.40)
-                chain_w = c_sub.get('chain', 0.25)
+        if avg_len >= 3000:
+            content_score = 95
+        elif avg_len >= 2000:
+            content_score = 85
+        elif avg_len >= 1500:
+            content_score = 75
+        elif avg_len >= 1000:
+            content_score = 65
+        elif avg_len >= 500:
+            content_score = 50
+        else:
+            content_score = 35
+
+        # Chain Score (연결성) - 0~100
+        chain_score = 50  # Base
+        if stats["neighbor_count"]:
+            neighbors = stats["neighbor_count"]
+            if neighbors >= 5000:
+                chain_score = 95
+            elif neighbors >= 2000:
+                chain_score = 85
+            elif neighbors >= 1000:
+                chain_score = 75
+            elif neighbors >= 500:
+                chain_score = 65
+            elif neighbors >= 200:
+                chain_score = 55
+            elif neighbors >= 100:
+                chain_score = 45
             else:
-                context_w, content_w, chain_w = 0.35, 0.40, 0.25
+                chain_score = 35
 
-            c_rank_score = (context_score * context_w + content_score * content_w + chain_score * chain_w)
+        # C-Rank sub-weights (from category weights)
+        if category_weights and 'c_rank' in category_weights:
+            c_sub = category_weights['c_rank'].get('sub_weights', {})
+            context_w = c_sub.get('context', 0.35)
+            content_w = c_sub.get('content', 0.40)
+            chain_w = c_sub.get('chain', 0.25)
+        else:
+            context_w, content_w, chain_w = 0.35, 0.40, 0.25
 
-            # ===== D.I.A. SCORE CALCULATION =====
-            # D.I.A.: Depth(깊이) + Information(정보성) + Accuracy(정확성)
+        c_rank_score = (context_score * context_w + content_score * content_w + chain_score * chain_w)
 
-            # Depth Score (분석 깊이) - 0~100
-            depth_score = 50  # Base
-            if stats["total_posts"]:
-                posts = stats["total_posts"]
-                if posts >= 2000:
-                    depth_score = 95
-                elif posts >= 1000:
-                    depth_score = 85
-                elif posts >= 500:
-                    depth_score = 75
-                elif posts >= 200:
-                    depth_score = 65
-                elif posts >= 100:
-                    depth_score = 55
-                elif posts >= 50:
-                    depth_score = 45
-                else:
-                    depth_score = 35
+        # ===== D.I.A. SCORE CALCULATION =====
+        # D.I.A.: Depth(깊이) + Information(정보성) + Accuracy(정확성)
 
-            # Information Score (정보성) - 0~100
-            info_score = 50  # Base
-            # 최근 활동 기반 (활발한 블로그 = 정보 업데이트)
-            if analysis_data["recent_activity"] is not None:
-                days = analysis_data["recent_activity"]
-                if days <= 1:
-                    info_score = 95
-                elif days <= 3:
-                    info_score = 85
-                elif days <= 7:
-                    info_score = 75
-                elif days <= 14:
-                    info_score = 65
-                elif days <= 30:
-                    info_score = 50
-                elif days <= 90:
-                    info_score = 35
-                else:
-                    info_score = 20
-
-            # Accuracy Score (신뢰도/정확성) - 0~100
-            accuracy_score = 50  # Base
-            # 방문자 수 기반 (많은 방문 = 신뢰도 검증)
-            if stats["total_visitors"]:
-                visitors = stats["total_visitors"]
-                if visitors >= 10000000:
-                    accuracy_score = 95
-                elif visitors >= 5000000:
-                    accuracy_score = 88
-                elif visitors >= 1000000:
-                    accuracy_score = 80
-                elif visitors >= 500000:
-                    accuracy_score = 70
-                elif visitors >= 100000:
-                    accuracy_score = 60
-                elif visitors >= 50000:
-                    accuracy_score = 50
-                elif visitors >= 10000:
-                    accuracy_score = 40
-                else:
-                    accuracy_score = 30
-
-            # D.I.A. sub-weights (from category weights)
-            if category_weights and 'dia' in category_weights:
-                d_sub = category_weights['dia'].get('sub_weights', {})
-                depth_w = d_sub.get('depth', 0.33)
-                info_w = d_sub.get('information', 0.34)
-                acc_w = d_sub.get('accuracy', 0.33)
+        # Depth Score (분석 깊이) - 0~100
+        depth_score = 50  # Base
+        if stats["total_posts"]:
+            posts = stats["total_posts"]
+            if posts >= 2000:
+                depth_score = 95
+            elif posts >= 1000:
+                depth_score = 85
+            elif posts >= 500:
+                depth_score = 75
+            elif posts >= 200:
+                depth_score = 65
+            elif posts >= 100:
+                depth_score = 55
+            elif posts >= 50:
+                depth_score = 45
             else:
-                depth_w, info_w, acc_w = 0.33, 0.34, 0.33
+                depth_score = 35
 
-            dia_score = (depth_score * depth_w + info_score * info_w + accuracy_score * acc_w)
-
-            # ===== FINAL SCORE with category + learned weights =====
-            if category_weights:
-                c_rank_weight = category_weights.get('c_rank', {}).get('weight', 0.25)
-                dia_weight = category_weights.get('dia', {}).get('weight', 0.25)
-                content_weight = category_weights.get('content_factors', {}).get('weight', 0.50)
-                extra_factors = category_weights.get('extra_factors', {})
-                bonus_factors = category_weights.get('bonus_factors', {})
+        # Information Score (정보성) - 0~100
+        info_score = 50  # Base
+        # 최근 활동 기반 (활발한 블로그 = 정보 업데이트)
+        if analysis_data["recent_activity"] is not None:
+            days = analysis_data["recent_activity"]
+            if days <= 1:
+                info_score = 95
+            elif days <= 3:
+                info_score = 85
+            elif days <= 7:
+                info_score = 75
+            elif days <= 14:
+                info_score = 65
+            elif days <= 30:
+                info_score = 50
+            elif days <= 90:
+                info_score = 35
             else:
-                c_rank_weight = 0.25
-                dia_weight = 0.25
-                content_weight = 0.50
-                extra_factors = {'post_count': 0.05, 'neighbor_count': 0.03, 'visitor_count': 0.02}
-                bonus_factors = {'has_map': 0.03, 'has_link': 0.02, 'video_count': 0.05, 'engagement': 0.05}
+                info_score = 20
 
-            # Base score from C-Rank and D.I.A.
-            base_score = (c_rank_score * c_rank_weight + dia_score * dia_weight)
-
-            # Extra factor bonuses
-            extra_bonus = 0
-            if stats["total_posts"]:
-                post_bonus = min(stats["total_posts"] / 1000, 1.0) * extra_factors.get('post_count', 0.15) * 20
-                extra_bonus += post_bonus
-            if stats["neighbor_count"]:
-                neighbor_bonus = min(stats["neighbor_count"] / 1000, 1.0) * extra_factors.get('neighbor_count', 0.10) * 20
-                extra_bonus += neighbor_bonus
-            if stats["total_visitors"]:
-                visitor_bonus = min(stats["total_visitors"] / 1000000, 1.0) * extra_factors.get('visitor_count', 0.05) * 20
-                extra_bonus += visitor_bonus
-
-            total_score = base_score + extra_bonus
-
-            # 데이터 소스에 따른 신뢰도 보정
-            # - scrape 있음: 실제 데이터 → 패널티 없음
-            # - rss만 있음: 추정 데이터 → 10% 패널티
-            # - 데이터 없음: 기본값 25점
-            if not analysis_data["data_sources"]:
-                total_score = 25
-            elif "scrape" in analysis_data["data_sources"]:
-                # 실제 스크래핑 데이터 있음 → 패널티 없음
-                pass
-            elif len(analysis_data["data_sources"]) == 1:
-                # RSS만 있음 → 10% 패널티 (기존 30%에서 완화)
-                total_score = total_score * 0.9
-
-            index["total_score"] = min(round(total_score, 1), 100)
-
-            # Calculate level (1-15) - 고득점 블로그 세분화
-            if total_score >= 70:
-                index["level"] = 15
-            elif total_score >= 66:
-                index["level"] = 14
-            elif total_score >= 62:
-                index["level"] = 13
-            elif total_score >= 58:
-                index["level"] = 12
-            elif total_score >= 54:
-                index["level"] = 11
-            elif total_score >= 50:
-                index["level"] = 10
-            elif total_score >= 45:
-                index["level"] = 9
-            elif total_score >= 40:
-                index["level"] = 8
-            elif total_score >= 35:
-                index["level"] = 7
-            elif total_score >= 30:
-                index["level"] = 6
-            elif total_score >= 25:
-                index["level"] = 5
-            elif total_score >= 20:
-                index["level"] = 4
-            elif total_score >= 15:
-                index["level"] = 3
-            elif total_score >= 10:
-                index["level"] = 2
+        # Accuracy Score (신뢰도/정확성) - 0~100
+        accuracy_score = 50  # Base
+        # 방문자 수 기반 (많은 방문 = 신뢰도 검증)
+        if stats["total_visitors"]:
+            visitors = stats["total_visitors"]
+            if visitors >= 10000000:
+                accuracy_score = 95
+            elif visitors >= 5000000:
+                accuracy_score = 88
+            elif visitors >= 1000000:
+                accuracy_score = 80
+            elif visitors >= 500000:
+                accuracy_score = 70
+            elif visitors >= 100000:
+                accuracy_score = 60
+            elif visitors >= 50000:
+                accuracy_score = 50
+            elif visitors >= 10000:
+                accuracy_score = 40
             else:
-                index["level"] = 1
+                accuracy_score = 30
 
-            # Set grade based on level
-            grade_map = {
-                15: "마스터", 14: "그랜드마스터", 13: "챌린저",
-                12: "최적화1", 11: "최적화2", 10: "최적화3",
-                9: "준최적화1", 8: "준최적화2", 7: "준최적화3",
-                6: "성장기1", 5: "성장기2", 4: "성장기3",
-                3: "입문1", 2: "입문2", 1: "초보"
-            }
-            index["grade"] = grade_map.get(index["level"], "")
-            index["level_category"] = "마스터" if index["level"] >= 13 else "최적화" if index["level"] >= 10 else "준최적화" if index["level"] >= 7 else "성장기" if index["level"] >= 4 else "입문"
-            index["percentile"] = min(index["total_score"], 99)
+        # D.I.A. sub-weights (from category weights)
+        if category_weights and 'dia' in category_weights:
+            d_sub = category_weights['dia'].get('sub_weights', {})
+            depth_w = d_sub.get('depth', 0.33)
+            info_w = d_sub.get('information', 0.34)
+            acc_w = d_sub.get('accuracy', 0.33)
+        else:
+            depth_w, info_w, acc_w = 0.33, 0.34, 0.33
 
-            # Store detailed breakdown with category info
-            index["score_breakdown"] = {
-                "c_rank": round(c_rank_score * c_rank_weight, 1),
-                "dia": round(dia_score * dia_weight, 1),
-                "c_rank_detail": {
-                    "context": round(context_score, 1),
-                    "content": round(content_score, 1),
-                    "chain": round(chain_score, 1)
-                },
-                "dia_detail": {
-                    "depth": round(depth_score, 1),
-                    "information": round(info_score, 1),
-                    "accuracy": round(accuracy_score, 1)
-                },
-                "weights_used": {
-                    "c_rank": round(c_rank_weight, 2),
-                    "dia": round(dia_weight, 2),
-                    "content": round(content_weight, 2)
-                },
-                "keyword_category": keyword_category if keyword else "default"
-            }
+        dia_score = (depth_score * depth_w + info_score * info_w + accuracy_score * acc_w)
 
-            logger.info(f"Blog {blog_id}: score={index['total_score']}, level={index['level']}, c_rank={c_rank_score:.1f}, dia={dia_score:.1f}, sources={analysis_data['data_sources']}")
+        # ===== FINAL SCORE with category + learned weights =====
+        if category_weights:
+            c_rank_weight = category_weights.get('c_rank', {}).get('weight', 0.25)
+            dia_weight = category_weights.get('dia', {}).get('weight', 0.25)
+            content_weight = category_weights.get('content_factors', {}).get('weight', 0.50)
+            extra_factors = category_weights.get('extra_factors', {})
+            bonus_factors = category_weights.get('bonus_factors', {})
+        else:
+            c_rank_weight = 0.25
+            dia_weight = 0.25
+            content_weight = 0.50
+            extra_factors = {'post_count': 0.05, 'neighbor_count': 0.03, 'visitor_count': 0.02}
+            bonus_factors = {'has_map': 0.03, 'has_link': 0.02, 'video_count': 0.05, 'engagement': 0.05}
+
+        # Base score from C-Rank and D.I.A.
+        base_score = (c_rank_score * c_rank_weight + dia_score * dia_weight)
+
+        # Extra factor bonuses
+        extra_bonus = 0
+        if stats["total_posts"]:
+            post_bonus = min(stats["total_posts"] / 1000, 1.0) * extra_factors.get('post_count', 0.15) * 20
+            extra_bonus += post_bonus
+        if stats["neighbor_count"]:
+            neighbor_bonus = min(stats["neighbor_count"] / 1000, 1.0) * extra_factors.get('neighbor_count', 0.10) * 20
+            extra_bonus += neighbor_bonus
+        if stats["total_visitors"]:
+            visitor_bonus = min(stats["total_visitors"] / 1000000, 1.0) * extra_factors.get('visitor_count', 0.05) * 20
+            extra_bonus += visitor_bonus
+
+        total_score = base_score + extra_bonus
+
+        # 데이터 소스에 따른 신뢰도 보정
+        # - scrape 있음: 실제 데이터 → 패널티 없음
+        # - rss만 있음: 추정 데이터 → 10% 패널티
+        # - 데이터 없음: 기본값 25점
+        if not analysis_data["data_sources"]:
+            total_score = 25
+        elif "scrape" in analysis_data["data_sources"]:
+            # 실제 스크래핑 데이터 있음 → 패널티 없음
+            pass
+        elif len(analysis_data["data_sources"]) == 1:
+            # RSS만 있음 → 10% 패널티 (기존 30%에서 완화)
+            total_score = total_score * 0.9
+
+        index["total_score"] = min(round(total_score, 1), 100)
+
+        # Calculate level (1-15) - 고득점 블로그 세분화
+        if total_score >= 70:
+            index["level"] = 15
+        elif total_score >= 66:
+            index["level"] = 14
+        elif total_score >= 62:
+            index["level"] = 13
+        elif total_score >= 58:
+            index["level"] = 12
+        elif total_score >= 54:
+            index["level"] = 11
+        elif total_score >= 50:
+            index["level"] = 10
+        elif total_score >= 45:
+            index["level"] = 9
+        elif total_score >= 40:
+            index["level"] = 8
+        elif total_score >= 35:
+            index["level"] = 7
+        elif total_score >= 30:
+            index["level"] = 6
+        elif total_score >= 25:
+            index["level"] = 5
+        elif total_score >= 20:
+            index["level"] = 4
+        elif total_score >= 15:
+            index["level"] = 3
+        elif total_score >= 10:
+            index["level"] = 2
+        else:
+            index["level"] = 1
+
+        # Set grade based on level
+        grade_map = {
+            15: "마스터", 14: "그랜드마스터", 13: "챌린저",
+            12: "최적화1", 11: "최적화2", 10: "최적화3",
+            9: "준최적화1", 8: "준최적화2", 7: "준최적화3",
+            6: "성장기1", 5: "성장기2", 4: "성장기3",
+            3: "입문1", 2: "입문2", 1: "초보"
+        }
+        index["grade"] = grade_map.get(index["level"], "")
+        index["level_category"] = "마스터" if index["level"] >= 13 else "최적화" if index["level"] >= 10 else "준최적화" if index["level"] >= 7 else "성장기" if index["level"] >= 4 else "입문"
+        index["percentile"] = min(index["total_score"], 99)
+
+        # Store detailed breakdown with category info
+        index["score_breakdown"] = {
+            "c_rank": round(c_rank_score * c_rank_weight, 1),
+            "dia": round(dia_score * dia_weight, 1),
+            "c_rank_detail": {
+                "context": round(context_score, 1),
+                "content": round(content_score, 1),
+                "chain": round(chain_score, 1)
+            },
+            "dia_detail": {
+                "depth": round(depth_score, 1),
+                "information": round(info_score, 1),
+                "accuracy": round(accuracy_score, 1)
+            },
+            "weights_used": {
+                "c_rank": round(c_rank_weight, 2),
+                "dia": round(dia_weight, 2),
+                "content": round(content_weight, 2)
+            },
+            "keyword_category": keyword_category if keyword else "default"
+        }
+
+        logger.info(f"Blog {blog_id}: score={index['total_score']}, level={index['level']}, c_rank={c_rank_score:.1f}, dia={dia_score:.1f}, sources={analysis_data['data_sources']}")
 
     except Exception as e:
         logger.warning(f"Error analyzing blog {blog_id}: {e}")
@@ -2731,10 +2791,9 @@ async def search_keyword_with_tabs(
             timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         )
 
-    # 실제 노출 순위 조회 (블로그 분석과 병렬 실행 준비)
-    display_ranks_task = asyncio.create_task(fetch_display_ranks(keyword, search_results))
-
-    # (이후 코드에서 display_ranks_task 결과 사용)
+    # 실제 노출 순위 조회는 비활성화됨 (fetch_display_ranks가 빈 딕셔너리 반환)
+    # 불필요한 태스크 생성 제거로 성능 개선
+    display_ranks = {}
 
     # ===== 병렬 처리로 블로그 분석 (속도 개선) =====
     results = []
@@ -2767,15 +2826,14 @@ async def search_keyword_with_tabs(
                 logger.warning(f"Failed to analyze {item['blog_id']} after {max_retries + 1} attempts: {e}")
                 return item, {"stats": {}, "index": {}}, {}
 
-        # 동시에 최대 10개씩 분석 (키워드당) + 글로벌 제한 (5 → 10 성능 개선)
-        local_semaphore = asyncio.Semaphore(10)
+        # 동시에 최대 15개씩 분석 (키워드당) + 글로벌 제한 (10 → 15 성능 개선)
+        local_semaphore = asyncio.Semaphore(15)
 
         async def analyze_with_limit(item):
             # 글로벌 + 로컬 세마포어 모두 적용 (다중 키워드 동시 처리 시 과부하 방지)
             async with GLOBAL_SEMAPHORE:
                 async with local_semaphore:
-                    # 지연 최소화 (0.1-0.3 → 0-0.05초) - 성능 개선
-                    await asyncio.sleep(random.uniform(0, 0.05))
+                    # 지연 제거 - 세마포어로 충분히 제어됨 (성능 개선)
                     return await analyze_single(item)
 
         # 빠른 모드: 상위 N개만 분석, 나머지는 기본 정보만 표시
@@ -2790,8 +2848,7 @@ async def search_keyword_with_tabs(
         for item in items_to_skip:
             analysis_results.append((item, {"stats": {}, "index": {}}, {}))
 
-        # 실제 노출 순위 결과 가져오기
-        display_ranks = await display_ranks_task
+        # display_ranks는 이미 위에서 빈 딕셔너리로 설정됨 (성능 개선)
 
         # 1단계: 분석 성공한 결과들 수집 (크로스 추정용)
         successful_analyses = [
@@ -2872,8 +2929,7 @@ async def search_keyword_with_tabs(
         results.sort(key=lambda x: x.rank)
     else:
         # 분석 없이 빠르게 결과 반환
-        # 실제 노출 순위 결과 가져오기
-        display_ranks = await display_ranks_task
+        # display_ranks는 이미 빈 딕셔너리로 설정됨
 
         for item in search_results:
             post_url = item["post_url"]
