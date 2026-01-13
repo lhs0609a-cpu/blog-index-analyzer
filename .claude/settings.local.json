@@ -371,7 +371,20 @@
       "Bash(\"C:\\\\Users\\\\lhs06\\\\.fly\\\\bin\\\\flyctl.exe\" machines list -a naverpay-delivery-tracker)",
       "Bash(\"C:\\\\Users\\\\lhs06\\\\.fly\\\\bin\\\\flyctl.exe\" machine stop 286e235fd914d8 -a naverpay-delivery-tracker --signal KILL)",
       "Bash(git grep:*)",
-      "Bash(powershell -Command \"Get-ChildItem -Recurse -Include *.ts,*.tsx,*.js | ForEach-Object { \\(Get-Content $_FullName -Raw\\) -replace ''https://naverpay-delivery-tracker.fly.dev'', ''https://api.blrank.co.kr'' | Set-Content $_FullName -NoNewline }\")"
+      "Bash(powershell -Command \"Get-ChildItem -Recurse -Include *.ts,*.tsx,*.js | ForEach-Object { \\(Get-Content $_FullName -Raw\\) -replace ''https://naverpay-delivery-tracker.fly.dev'', ''https://api.blrank.co.kr'' | Set-Content $_FullName -NoNewline }\")",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:api.blrank.co.kr)",
+      "Bash(sqlite3:*)",
+      "Bash(flyctl apps:*)",
+      "Bash(flyctl machines start:*)",
+      "Bash(fly status:*)",
+      "Bash(aws:*)",
+      "WebFetch(domain:naver.github.io)",
+      "Bash(fly deploy:*)",
+      "Bash(fly logs:*)",
+      "Bash(fly ssh console:*)",
+      "Bash(Select-Object -First 50)",
+      "Bash(powershell.exe -Command \"\\(Invoke-RestMethod -Uri ''https://blog-index-analyzer.fly.dev/api/analyze-keyword?keyword=IT&count=1'' -TimeoutSec 30\\) | ConvertTo-Json -Depth 10\")"
     ],
     "deny": [],
     "ask": []
