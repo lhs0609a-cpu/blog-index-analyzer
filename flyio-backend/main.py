@@ -68,6 +68,41 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ User tables initialization failed: {e}")
 
+    # 관리자 계정 자동 설정
+    try:
+        from database.user_db import get_user_db
+        from passlib.context import CryptContext
+        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+        user_db = get_user_db()
+        admin_email = "lhs0609c@naver.com"
+        admin_password = "lhs0609c@naver.com"
+
+        existing_user = user_db.get_user_by_email(admin_email)
+        if existing_user:
+            # 기존 사용자를 관리자로 업그레이드
+            user_db.set_admin(existing_user["id"], True)
+            user_db.update_user(
+                existing_user["id"],
+                hashed_password=pwd_context.hash(admin_password),
+                plan="unlimited",
+                is_premium_granted=1
+            )
+            logger.info(f"✅ Admin user {admin_email} updated")
+        else:
+            # 새 관리자 계정 생성
+            hashed_password = pwd_context.hash(admin_password)
+            user_id = user_db.create_user(
+                email=admin_email,
+                hashed_password=hashed_password,
+                name="관리자"
+            )
+            user_db.set_admin(user_id, True)
+            user_db.update_user(user_id, plan="unlimited", is_premium_granted=1)
+            logger.info(f"✅ Admin user {admin_email} created")
+    except Exception as e:
+        logger.warning(f"⚠️ Admin user setup failed: {e}")
+
     # Usage tracking DB 초기화
     try:
         from database.usage_db import get_usage_db
