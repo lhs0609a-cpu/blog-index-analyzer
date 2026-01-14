@@ -37,7 +37,7 @@ ADMIN_SETUP_KEY = settings.SECRET_KEY
 # Request/Response models
 class GrantPremiumRequest(BaseModel):
     user_id: int
-    plan: str = 'unlimited'  # free, basic, pro, unlimited
+    plan: str = 'business'  # free, basic, pro, business
     memo: Optional[str] = None
 
 
@@ -822,7 +822,7 @@ async def bulk_upgrade_users(
     if len(request.user_ids) > 50:
         raise HTTPException(status_code=400, detail="한 번에 최대 50명까지 업그레이드 가능합니다")
 
-    if request.plan not in ['basic', 'pro', 'unlimited']:
+    if request.plan not in ['basic', 'pro', 'business']:
         raise HTTPException(status_code=400, detail="유효하지 않은 플랜입니다")
 
     user_db = get_user_db()

@@ -121,7 +121,7 @@ export default function AdminPage() {
   // Grant premium modal
   const [showGrantModal, setShowGrantModal] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
-  const [grantPlan, setGrantPlan] = useState('unlimited');
+  const [grantPlan, setGrantPlan] = useState('business');
   const [grantMemo, setGrantMemo] = useState('');
 
   // User detail modal
@@ -733,7 +733,7 @@ export default function AdminPage() {
       free: 'bg-gray-100 text-gray-700',
       basic: 'bg-blue-100 text-blue-700',
       pro: 'bg-purple-100 text-purple-700',
-      unlimited: 'bg-gradient-to-r from-orange-400 to-pink-500 text-white'
+      business: 'bg-gradient-to-r from-orange-400 to-pink-500 text-white'
     };
 
     return (
@@ -912,7 +912,7 @@ export default function AdminPage() {
                       {Object.entries(subscriptionStats.plan_distribution).map(([plan, count]) => (
                         <div key={plan} className="text-center">
                           <div className={`text-2xl font-bold ${
-                            plan === 'unlimited' ? 'text-purple-600' :
+                            plan === 'business' ? 'text-purple-600' :
                             plan === 'pro' ? 'text-blue-600' :
                             plan === 'basic' ? 'text-green-600' :
                             'text-gray-600'
@@ -932,7 +932,7 @@ export default function AdminPage() {
                             <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
                               <div
                                 className={`h-full rounded-full ${
-                                  plan === 'unlimited' ? 'bg-purple-500' :
+                                  plan === 'business' ? 'bg-purple-500' :
                                   plan === 'pro' ? 'bg-blue-500' :
                                   plan === 'basic' ? 'bg-green-500' :
                                   'bg-gray-400'
@@ -1165,7 +1165,7 @@ export default function AdminPage() {
                                   <button
                                     onClick={() => {
                                       setSelectedUserId(user.id);
-                                      setGrantPlan('unlimited');
+                                      setGrantPlan('business');
                                       setShowGrantModal(true);
                                     }}
                                     className="text-sm text-green-600 hover:text-green-800 font-medium"
@@ -1636,7 +1636,7 @@ export default function AdminPage() {
                 >
                   <option value="basic">Basic (일일 50회)</option>
                   <option value="pro">Pro (일일 200회)</option>
-                  <option value="unlimited">Unlimited (무제한)</option>
+                  <option value="business">Business (비즈니스)</option>
                 </select>
               </div>
 
@@ -1821,7 +1821,7 @@ export default function AdminPage() {
                 ) : (
                   <button
                     onClick={() => {
-                      setGrantPlan('unlimited');
+                      setGrantPlan('business');
                       setShowGrantModal(true);
                     }}
                     className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
@@ -1993,7 +1993,7 @@ export default function AdminPage() {
                 >
                   <option value="basic">Basic (일일 50회)</option>
                   <option value="pro">Pro (일일 200회)</option>
-                  <option value="unlimited">Unlimited (무제한)</option>
+                  <option value="business">Business (비즈니스)</option>
                 </select>
               </div>
 

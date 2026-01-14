@@ -85,7 +85,7 @@ async def lifespan(app: FastAPI):
             user_db.update_user(
                 existing_user["id"],
                 hashed_password=pwd_context.hash(admin_password),
-                plan="unlimited",
+                plan="business",
                 is_premium_granted=1
             )
             logger.info(f"✅ Admin user {admin_email} updated")
@@ -98,7 +98,7 @@ async def lifespan(app: FastAPI):
                 name="관리자"
             )
             user_db.set_admin(user_id, True)
-            user_db.update_user(user_id, plan="unlimited", is_premium_granted=1)
+            user_db.update_user(user_id, plan="business", is_premium_granted=1)
             logger.info(f"✅ Admin user {admin_email} created")
     except Exception as e:
         logger.warning(f"⚠️ Admin user setup failed: {e}")

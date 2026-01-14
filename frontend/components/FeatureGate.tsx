@@ -191,7 +191,7 @@ export function PlanBadge({ plan }: { plan: Plan }) {
     free: '',
     basic: 'bg-blue-100 text-blue-700 border-blue-200',
     pro: 'bg-purple-100 text-purple-700 border-purple-200',
-    unlimited: 'bg-gradient-to-r from-yellow-400 to-orange-500 text-white border-yellow-400'
+    business: 'bg-gradient-to-r from-yellow-400 to-orange-500 text-white border-yellow-400'
   }
 
   const icons: Record<Plan, React.ReactNode> = {
@@ -199,7 +199,7 @@ export function PlanBadge({ plan }: { plan: Plan }) {
     free: null,
     basic: <Sparkles className="w-3 h-3" />,
     pro: <Zap className="w-3 h-3" />,
-    unlimited: <Crown className="w-3 h-3" />
+    business: <Crown className="w-3 h-3" />
   }
 
   return (

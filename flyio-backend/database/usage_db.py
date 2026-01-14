@@ -30,7 +30,7 @@ class UsageDB:
         'free': 10,           # 무료회원: 하루 10회
         'basic': 50,          # 기본 구독: 하루 50회
         'pro': 200,           # 프로 구독: 하루 200회
-        'unlimited': -1,      # 무제한 (-1 = 무제한)
+        'business': -1,       # 비즈니스 (-1 = 무제한)
     }
 
     def __init__(self, db_path: str = DATABASE_PATH):

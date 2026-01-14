@@ -376,7 +376,7 @@ export default function AdOptimizerPage() {
                       <span className="relative flex items-center justify-center gap-2">
                         <Sparkles className="w-4 h-4" />
                         프로 플랜 시작하기
-                        <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">₩19,900/월</span>
+                        <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">₩29,900/월</span>
                       </span>
                     </Link>
                   </motion.div>

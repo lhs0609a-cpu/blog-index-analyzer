@@ -195,12 +195,12 @@ class UserDB:
                 """SELECT id, email, name, plan, is_premium_granted,
                           subscription_expires_at, granted_by, granted_at, memo, created_at
                    FROM users
-                   WHERE plan IN ('basic', 'pro', 'unlimited') OR is_premium_granted = 1
+                   WHERE plan IN ('basic', 'pro', 'business') OR is_premium_granted = 1
                    ORDER BY created_at DESC"""
             )
             return [dict(row) for row in cursor.fetchall()]
 
-    def grant_premium(self, user_id: int, admin_id: int, plan: str = 'unlimited', memo: str = None) -> bool:
+    def grant_premium(self, user_id: int, admin_id: int, plan: str = 'business', memo: str = None) -> bool:
         """Grant premium access to a user"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -324,13 +324,13 @@ class UserDB:
         if not user:
             return 'guest'
 
-        # Admin users always have unlimited access
+        # Admin users always have business access
         if user.get('is_admin'):
-            return 'unlimited'
+            return 'business'
 
         # Users with granted premium access
         if user.get('is_premium_granted'):
-            return user.get('plan', 'unlimited')
+            return user.get('plan', 'business')
 
         # Check subscription expiry
         expires_at = user.get('subscription_expires_at')

@@ -12,7 +12,7 @@ class Plan(str, Enum):
     FREE = "free"
     BASIC = "basic"
     PRO = "pro"
-    UNLIMITED = "unlimited"
+    BUSINESS = "business"
 
 
 class AccessLevel(str, Enum):
@@ -54,14 +54,14 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.LIMITED,
             Plan.BASIC: AccessLevel.LIMITED,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         },
         limits={
             Plan.GUEST: {"max_titles": 3},
             Plan.FREE: {"max_titles": 3},
             Plan.BASIC: {"max_titles": 10},
             Plan.PRO: {"max_titles": -1},  # unlimited
-            Plan.UNLIMITED: {"max_titles": -1}
+            Plan.BUSINESS: {"max_titles": -1}
         }
     ),
     "blueocean": FeatureConfig(
@@ -74,14 +74,14 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.LIMITED,
             Plan.BASIC: AccessLevel.LIMITED,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         },
         limits={
             Plan.GUEST: {"max_keywords": 5},
             Plan.FREE: {"max_keywords": 5},
             Plan.BASIC: {"max_keywords": 20},
             Plan.PRO: {"max_keywords": -1},
-            Plan.UNLIMITED: {"max_keywords": -1}
+            Plan.BUSINESS: {"max_keywords": -1}
         }
     ),
     "writing": FeatureConfig(
@@ -94,14 +94,14 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.LIMITED,
             Plan.BASIC: AccessLevel.FULL,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         },
         limits={
             Plan.GUEST: {"detail_level": "basic"},
             Plan.FREE: {"detail_level": "basic"},
             Plan.BASIC: {"detail_level": "detailed"},
             Plan.PRO: {"detail_level": "ai_enhanced"},
-            Plan.UNLIMITED: {"detail_level": "ai_enhanced"}
+            Plan.BUSINESS: {"detail_level": "ai_enhanced"}
         }
     ),
     "hashtag": FeatureConfig(
@@ -114,7 +114,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.FULL,
             Plan.BASIC: AccessLevel.FULL,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
     "timing": FeatureConfig(
@@ -127,7 +127,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.FULL,
             Plan.BASIC: AccessLevel.FULL,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
     "youtube": FeatureConfig(
@@ -140,7 +140,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.NONE,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
     "comment": FeatureConfig(
@@ -153,7 +153,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.FULL,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
 
@@ -168,7 +168,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.FULL,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
     "prediction": FeatureConfig(
@@ -181,14 +181,14 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.LIMITED,
             Plan.BASIC: AccessLevel.FULL,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         },
         limits={
             Plan.GUEST: {"show_tips": False},
             Plan.FREE: {"show_tips": False},
             Plan.BASIC: {"show_tips": True},
             Plan.PRO: {"show_tips": True},
-            Plan.UNLIMITED: {"show_tips": True}
+            Plan.BUSINESS: {"show_tips": True}
         }
     ),
     "report": FeatureConfig(
@@ -201,12 +201,12 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.LIMITED,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         },
         limits={
             Plan.BASIC: {"monthly_limit": 2},
             Plan.PRO: {"monthly_limit": -1},
-            Plan.UNLIMITED: {"monthly_limit": -1}
+            Plan.BUSINESS: {"monthly_limit": -1}
         }
     ),
     "lowquality": FeatureConfig(
@@ -219,14 +219,14 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.LIMITED,
             Plan.BASIC: AccessLevel.FULL,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         },
         limits={
             Plan.GUEST: {"detail_level": "basic", "checks": 3},
             Plan.FREE: {"detail_level": "basic", "checks": 3},
             Plan.BASIC: {"detail_level": "detailed", "checks": -1},
             Plan.PRO: {"detail_level": "ai_analysis", "checks": -1},
-            Plan.UNLIMITED: {"detail_level": "ai_analysis", "checks": -1}
+            Plan.BUSINESS: {"detail_level": "ai_analysis", "checks": -1}
         }
     ),
     "backup": FeatureConfig(
@@ -239,12 +239,12 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.LIMITED,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         },
         limits={
             Plan.BASIC: {"monthly_limit": 1},
             Plan.PRO: {"monthly_limit": -1},
-            Plan.UNLIMITED: {"monthly_limit": -1}
+            Plan.BUSINESS: {"monthly_limit": -1}
         }
     ),
     "campaign": FeatureConfig(
@@ -257,7 +257,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.FULL,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
     "ranktrack": FeatureConfig(
@@ -270,12 +270,12 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.LIMITED,
             Plan.PRO: AccessLevel.LIMITED,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         },
         limits={
             Plan.BASIC: {"max_keywords": 5},
             Plan.PRO: {"max_keywords": 50},
-            Plan.UNLIMITED: {"max_keywords": -1}
+            Plan.BUSINESS: {"max_keywords": -1}
         }
     ),
     "clone": FeatureConfig(
@@ -288,7 +288,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.NONE,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
     "algorithm": FeatureConfig(
@@ -301,7 +301,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.NONE,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
     "lifespan": FeatureConfig(
@@ -314,7 +314,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.FULL,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
     "refresh": FeatureConfig(
@@ -327,7 +327,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.FULL,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
     "related": FeatureConfig(
@@ -340,7 +340,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.FULL,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
     "roadmap": FeatureConfig(
@@ -353,7 +353,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.FULL,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
 
@@ -368,7 +368,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.NONE,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
     "trend": FeatureConfig(
@@ -381,7 +381,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.NONE,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
     "revenue": FeatureConfig(
@@ -394,7 +394,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.NONE,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
     "secretkw": FeatureConfig(
@@ -407,7 +407,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.NONE,
             Plan.PRO: AccessLevel.NONE,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
     "datalab": FeatureConfig(
@@ -420,7 +420,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.FULL,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
     "keywordSearch": FeatureConfig(
@@ -433,14 +433,14 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.LIMITED,
             Plan.BASIC: AccessLevel.LIMITED,
             Plan.PRO: AccessLevel.LIMITED,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         },
         limits={
             Plan.GUEST: {"max_keywords": 5, "tree_expansion": False},
             Plan.FREE: {"max_keywords": 10, "tree_expansion": False},
             Plan.BASIC: {"max_keywords": 30, "tree_expansion": True},
             Plan.PRO: {"max_keywords": 50, "tree_expansion": True},
-            Plan.UNLIMITED: {"max_keywords": 100, "tree_expansion": True}
+            Plan.BUSINESS: {"max_keywords": 100, "tree_expansion": True}
         }
     ),
 
@@ -455,7 +455,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.NONE,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
     "place": FeatureConfig(
@@ -468,7 +468,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.NONE,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
     "news": FeatureConfig(
@@ -481,7 +481,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.NONE,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
     "cafe": FeatureConfig(
@@ -494,7 +494,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.NONE,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
     "naverView": FeatureConfig(
@@ -507,7 +507,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.NONE,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
     "searchAnalysis": FeatureConfig(
@@ -520,7 +520,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.NONE,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
     "kin": FeatureConfig(
@@ -533,7 +533,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.NONE,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
 
@@ -548,7 +548,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.NONE,
             Plan.PRO: AccessLevel.NONE,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
     "smartstore": FeatureConfig(
@@ -561,7 +561,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.NONE,
             Plan.PRO: AccessLevel.NONE,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
 
@@ -576,7 +576,7 @@ FEATURES: Dict[str, FeatureConfig] = {
             Plan.FREE: AccessLevel.NONE,
             Plan.BASIC: AccessLevel.NONE,
             Plan.PRO: AccessLevel.FULL,
-            Plan.UNLIMITED: AccessLevel.FULL
+            Plan.BUSINESS: AccessLevel.FULL
         }
     ),
 }
@@ -616,24 +616,24 @@ def get_feature_access(feature_name: str, plan: str) -> Dict[str, Any]:
     # Add upgrade hints for limited or no access
     if access_level == AccessLevel.NONE:
         # Find minimum plan that has access
-        for p in [Plan.FREE, Plan.BASIC, Plan.PRO, Plan.UNLIMITED]:
+        for p in [Plan.FREE, Plan.BASIC, Plan.PRO, Plan.BUSINESS]:
             if feature.access.get(p, AccessLevel.NONE) != AccessLevel.NONE:
                 plan_names = {
                     Plan.FREE: "무료",
                     Plan.BASIC: "베이직",
                     Plan.PRO: "프로",
-                    Plan.UNLIMITED: "무제한"
+                    Plan.BUSINESS: "무제한"
                 }
                 result["upgrade_hint"] = f"{plan_names[p]} 플랜 이상에서 사용 가능합니다"
                 break
     elif access_level == AccessLevel.LIMITED:
         # Find plan with full access
-        for p in [Plan.BASIC, Plan.PRO, Plan.UNLIMITED]:
+        for p in [Plan.BASIC, Plan.PRO, Plan.BUSINESS]:
             if feature.access.get(p, AccessLevel.NONE) == AccessLevel.FULL:
                 plan_names = {
                     Plan.BASIC: "베이직",
                     Plan.PRO: "프로",
-                    Plan.UNLIMITED: "무제한"
+                    Plan.BUSINESS: "무제한"
                 }
                 result["upgrade_hint"] = f"{plan_names[p]} 플랜으로 업그레이드하면 제한 없이 사용할 수 있습니다"
                 break
@@ -667,6 +667,6 @@ def get_features_by_category() -> Dict[str, List[Dict[str, Any]]]:
 PLAN_PRICING = {
     Plan.FREE: {"price": 0, "name": "무료", "daily_limit": 10},
     Plan.BASIC: {"price": 9900, "name": "베이직", "daily_limit": 50},
-    Plan.PRO: {"price": 19900, "name": "프로", "daily_limit": 200},
-    Plan.UNLIMITED: {"price": 39900, "name": "무제한", "daily_limit": -1},
+    Plan.PRO: {"price": 29900, "name": "프로", "daily_limit": 200},
+    Plan.BUSINESS: {"price": 99900, "name": "비즈니스", "daily_limit": -1},
 }

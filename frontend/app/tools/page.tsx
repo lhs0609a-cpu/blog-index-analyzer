@@ -3262,7 +3262,7 @@ export default function ToolsPage() {
           </div>
 
           {/* 현재 플랜 안내 */}
-          {plan !== 'unlimited' && (
+          {plan !== 'business' && (
             <div className="glass rounded-2xl p-4 bg-gradient-to-r from-purple-50 to-pink-50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
