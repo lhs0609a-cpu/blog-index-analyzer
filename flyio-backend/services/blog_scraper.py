@@ -545,9 +545,17 @@ async def scrape_view_tab_results(keyword: str, limit: int = 13) -> list:
 
         await asyncio.sleep(1.5)  # Additional wait for dynamic content
 
-        # Scroll down to load more results (lazy loading)
-        await page.evaluate('window.scrollTo(0, document.body.scrollHeight / 2)')
-        await asyncio.sleep(0.5)
+        # Scroll down multiple times to load more results (lazy loading)
+        for i in range(7):
+            scroll_position = (i + 1) / 7
+            await page.evaluate(f'window.scrollTo(0, document.body.scrollHeight * {scroll_position})')
+            await asyncio.sleep(0.8)
+
+        # Scroll back to top and then to bottom for any missed content
+        await page.evaluate('window.scrollTo(0, 0)')
+        await asyncio.sleep(0.3)
+        await page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+        await asyncio.sleep(1)
 
         # Extract blog post links from VIEW tab using improved JavaScript
         blog_links = await page.evaluate('''() => {
@@ -757,9 +765,16 @@ async def scrape_blog_tab_results(keyword: str, limit: int = 13) -> list:
         await asyncio.sleep(1.5)
 
         # Scroll down multiple times to load more results (lazy loading)
-        for i in range(3):
-            await page.evaluate(f'window.scrollTo(0, document.body.scrollHeight * {(i+1)/3})')
-            await asyncio.sleep(0.5)
+        for i in range(7):
+            scroll_position = (i + 1) / 7
+            await page.evaluate(f'window.scrollTo(0, document.body.scrollHeight * {scroll_position})')
+            await asyncio.sleep(0.8)
+
+        # Scroll back to top and then to bottom for any missed content
+        await page.evaluate('window.scrollTo(0, 0)')
+        await asyncio.sleep(0.3)
+        await page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+        await asyncio.sleep(1)
 
         # Extract blog post links using JavaScript
         blog_links = await page.evaluate('''() => {
