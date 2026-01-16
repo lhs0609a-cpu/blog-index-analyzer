@@ -28,7 +28,7 @@ import httpx
 from services.keyword_analysis_service import keyword_analysis_service
 from services.safe_keyword_selector import (
     safe_keyword_selector, SafetyAnalysis, SafetyGrade,
-    RecommendationType, KeywordScope
+    RecommendationType, KeywordScope, SearchIntent
 )
 from config import settings
 
@@ -71,7 +71,7 @@ class BlueOceanKeyword:
     tips: List[str]                 # 공략 팁
 
     # 2024-12 추가: 안전 분석 결과
-    keyword_scope: str = "전국"             # 키워드 범위 (지역/광역/전국)
+    keyword_scope: str = "전국"             # 키워드 범위 (지역/광역/전국/브랜드)
     raw_predicted_rank: int = 10            # 원본 예측 순위
     safety_margin: int = 0                  # 적용된 안전 마진
     adjusted_rank: int = 10                 # 보정된 순위
@@ -79,6 +79,20 @@ class BlueOceanKeyword:
     safety_grade: str = "보통"              # 안전 등급
     recommendation_type: str = "조건부추천"  # 추천 유형
     warnings: List[str] = field(default_factory=list)  # 경고 메시지
+
+    # 2025-01 추가: 브랜드/검색의도 분석
+    is_brand_keyword: bool = False          # 브랜드/병원명 키워드 여부
+    search_intent: str = "정보형"           # 검색 의도 (네비게이션/정보형/거래형/지역탐색)
+    has_official_blog: bool = False         # 공식 블로그 존재 여부
+    official_blog_rank: Optional[int] = None  # 공식 블로그 순위
+
+    # 2025-01 추가: 정밀 경쟁도 분석
+    content_relevance_score: float = 0.0    # 콘텐츠 적합도 점수 (0-100)
+    freshness_score: float = 0.0            # 최신성 점수 (0-100, 높을수록 최신 글 많음)
+    engagement_score: float = 0.0           # 참여도 점수 (0-100)
+    total_competition_score: float = 0.0    # 종합 경쟁도 점수 (0-100, 높을수록 경쟁 치열)
+    competition_difficulty: str = "보통"     # 경쟁 난이도 (매우쉬움/쉬움/보통/어려움/매우어려움)
+    competition_insights: List[str] = field(default_factory=list)  # 경쟁도 인사이트
 
 
 @dataclass
@@ -326,17 +340,43 @@ class BlueOceanService:
                         influencer_count = 0
                         content_lengths = []
                         image_counts = []
+                        blog_names = []  # 공식 블로그 감지용
+                        posts_data = []  # 경쟁도 정밀 분석용
 
                         for blog in search_result.results[:10]:
                             if blog.index:
                                 scores.append(blog.index.total_score)
                             if blog.is_influencer:
                                 influencer_count += 1
+
+                            # 포스트 분석 데이터 수집
+                            post_data = {}
                             if blog.post_analysis:
                                 if blog.post_analysis.content_length:
                                     content_lengths.append(blog.post_analysis.content_length)
                                 if blog.post_analysis.image_count:
                                     image_counts.append(blog.post_analysis.image_count)
+
+                                # 경쟁도 분석용 데이터
+                                post_data = {
+                                    'title_has_keyword': blog.post_analysis.title_has_keyword,
+                                    'keyword_density': blog.post_analysis.keyword_density,
+                                    'keyword_count': blog.post_analysis.keyword_count,
+                                    'post_age_days': blog.post_analysis.post_age_days,
+                                    'like_count': blog.post_analysis.like_count,
+                                    'comment_count': blog.post_analysis.comment_count,
+                                    'content_length': blog.post_analysis.content_length,
+                                    'image_count': blog.post_analysis.image_count,
+                                }
+                            posts_data.append(post_data)
+
+                            # 블로그 이름 수집 (공식 블로그 감지용)
+                            if hasattr(blog, 'blog_name') and blog.blog_name:
+                                blog_names.append(blog.blog_name)
+                            elif hasattr(blog, 'title') and blog.title:
+                                blog_names.append(blog.title)
+                            else:
+                                blog_names.append("")
 
                         if not scores:
                             return None
@@ -373,7 +413,7 @@ class BlueOceanService:
                         avg_content_length = int(sum(content_lengths) / len(content_lengths)) if content_lengths else 2500
                         avg_image_count = int(sum(image_counts) / len(image_counts)) if image_counts else 20
 
-                        # 2024-12: 안전 분석 추가
+                        # 2024-12: 안전 분석 추가 (2025-01: 브랜드/공식블로그/정밀경쟁도 감지 추가)
                         safety_analysis = None
                         if my_blog_score:
                             safety_analysis = safe_keyword_selector.analyze_keyword_safety(
@@ -381,12 +421,19 @@ class BlueOceanService:
                                 my_score=my_blog_score,
                                 top10_scores=scores,
                                 search_volume=kw_data.monthly_total_search,
-                                influencer_count=influencer_count
+                                influencer_count=influencer_count,
+                                top10_blog_names=blog_names,  # 공식 블로그 감지용
+                                posts_data=posts_data  # 정밀 경쟁도 분석용
                             )
 
                             # 안전 분석 기반으로 진입 가능성 재계산
                             # 피드백 반영: 7위 이하는 진입 어려움으로 표시
-                            if safety_analysis.adjusted_rank <= 3:
+
+                            # 2025-01: 브랜드 키워드는 무조건 진입 매우 어려움
+                            if safety_analysis.is_brand_keyword or safety_analysis.scope == KeywordScope.BRAND:
+                                entry_chance = EntryChance.VERY_LOW
+                                entry_percentage = 5  # 사실상 불가능
+                            elif safety_analysis.adjusted_rank <= 3:
                                 entry_chance = EntryChance.HIGH
                                 entry_percentage = min(90, entry_percentage + 10)
                             elif safety_analysis.adjusted_rank <= 6:
@@ -439,7 +486,19 @@ class BlueOceanService:
                             safety_score=safety_analysis.safety_score if safety_analysis else 0.0,
                             safety_grade=safety_analysis.safety_grade.value if safety_analysis else "보통",
                             recommendation_type=safety_analysis.recommendation.value if safety_analysis else "조건부추천",
-                            warnings=safety_analysis.warnings if safety_analysis else []
+                            warnings=safety_analysis.warnings if safety_analysis else [],
+                            # 2025-01 추가: 브랜드/검색의도 분석
+                            is_brand_keyword=safety_analysis.is_brand_keyword if safety_analysis else False,
+                            search_intent=safety_analysis.search_intent.value if safety_analysis else "정보형",
+                            has_official_blog=safety_analysis.has_official_blog if safety_analysis else False,
+                            official_blog_rank=safety_analysis.official_blog_rank if safety_analysis else None,
+                            # 2025-01 추가: 정밀 경쟁도 분석
+                            content_relevance_score=safety_analysis.content_relevance_score if safety_analysis else 0.0,
+                            freshness_score=safety_analysis.freshness_score if safety_analysis else 0.0,
+                            engagement_score=safety_analysis.engagement_score if safety_analysis else 0.0,
+                            total_competition_score=safety_analysis.total_competition_score if safety_analysis else 0.0,
+                            competition_difficulty=safety_analysis.competition_difficulty if safety_analysis else "보통",
+                            competition_insights=safety_analysis.competition_analysis.insights if (safety_analysis and safety_analysis.competition_analysis) else []
                         )
 
                     except Exception as e:

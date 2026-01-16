@@ -541,14 +541,19 @@ def get_performance_summary(user_id: int, days: int = 7) -> dict:
     row = cursor.fetchone()
     result = dict(row) if row else {}
 
-    # CTR, ROAS 계산
-    if result.get("total_impressions", 0) > 0:
-        result["avg_ctr"] = result["total_clicks"] / result["total_impressions"]
+    # CTR, ROAS 계산 (None 값 처리)
+    total_impressions = result.get("total_impressions") or 0
+    total_clicks = result.get("total_clicks") or 0
+    total_cost = result.get("total_cost") or 0
+    total_revenue = result.get("total_revenue") or 0
+
+    if total_impressions > 0:
+        result["avg_ctr"] = total_clicks / total_impressions
     else:
         result["avg_ctr"] = 0
 
-    if result.get("total_cost", 0) > 0:
-        result["roas"] = (result.get("total_revenue", 0) / result["total_cost"]) * 100
+    if total_cost > 0:
+        result["roas"] = (total_revenue / total_cost) * 100
     else:
         result["roas"] = 0
 

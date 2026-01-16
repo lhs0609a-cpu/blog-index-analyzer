@@ -21,6 +21,12 @@ from dataclasses import dataclass, field
 from enum import Enum
 import numpy as np
 
+from services.competition_analyzer import (
+    competition_analyzer, CompetitionAnalysisResult,
+    CompetitionDifficulty, ContentRelevanceScore,
+    FreshnessScore, EngagementScore, BlogScoreAnalysis
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -33,6 +39,15 @@ class KeywordScope(str, Enum):
     LOCAL = "지역"      # 지역 키워드 (예: 강남역 한의원)
     REGIONAL = "광역"   # 광역 키워드 (예: 서울 한의원)
     NATIONAL = "전국"   # 전국 키워드 (예: 허리디스크 치료)
+    BRAND = "브랜드"    # 브랜드/병원명 키워드 (예: 로담한의원) - 신규 추가
+
+
+class SearchIntent(str, Enum):
+    """검색 의도 (Search Intent)"""
+    NAVIGATIONAL = "네비게이션"  # 특정 브랜드/병원 찾기 (예: 로담한의원)
+    INFORMATIONAL = "정보형"     # 정보 탐색 (예: 허리디스크 증상)
+    TRANSACTIONAL = "거래형"     # 예약/구매 의도 (예: 강남 피부과 예약)
+    LOCAL_SEARCH = "지역탐색"    # 지역 내 서비스 탐색 (예: 홍대 여드름)
 
 
 class SafetyGrade(str, Enum):
@@ -71,6 +86,29 @@ LOCAL_PATTERNS = {
         '성북', '노원', '분당', '판교', '일산', '수원', '안양', '부천',
         '인천', '의정부', '위례', '해운대', '서면', '동래', '남포동', '센텀',
         '홍대', '신촌', '이대', '건대', '잠실', '삼성', '역삼', '선릉',
+    ],
+    # 의료/미용 서비스 키워드 (지역명과 결합 시 지역 키워드로 인식)
+    'medical_services': [
+        # 피부과/미용 관련
+        '여드름', '흉터', '모공', '기미', '주근깨', '잡티', '피부관리', '피부시술',
+        '레이저', '리프팅', '보톡스', '필러', '쁘띠성형', '피부재생', '여드름흉터',
+        '색소침착', '홍조', '아토피', '건선', '두피', '탈모',
+        # 다이어트/체형 관련
+        '다이어트', '다이어트한약', '비만', '체형관리', '지방분해', '슬리밍',
+        '한방다이어트', '식이조절', '체중감량',
+        # 한의원 관련
+        '한약', '침', '뜸', '부항', '추나', '한방', '보약', '공진단', '경옥고',
+        '사상체질', '체질', '한방치료',
+        # 통증/재활 관련
+        '통증', '디스크', '허리', '목', '어깨', '무릎', '관절', '척추', '체형교정',
+        '자세교정', '도수치료', '물리치료', '재활',
+        # 기타 의료 서비스
+        '교정', '임플란트', '치아', '라식', '라섹', '시력교정', '눈', '코', '안면',
+        '성형', '쌍꺼풀', '코성형', '지방흡입', '가슴성형',
+        # 산부인과/비뇨기과 관련
+        '산부인과', '임신', '출산', '난임', '비뇨기과', '남성', '여성',
+        # 검진 관련
+        '건강검진', '종합검진', '내시경', 'MRI', 'CT',
     ]
 }
 
@@ -79,6 +117,30 @@ REGIONAL_PATTERNS = {
     'prefixes': [
         '서울', '경기', '인천', '부산', '대구', '대전', '광주', '울산', '세종',
         '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'
+    ]
+}
+
+# 브랜드/병원명 키워드 감지 패턴
+BRAND_PATTERNS = {
+    # 병원/의원 시설 접미사
+    'facility_suffixes': [
+        '한의원', '의원', '병원', '치과', '클리닉', '센터', '피부과', '안과',
+        '이비인후과', '정형외과', '내과', '외과', '산부인과', '비뇨기과',
+        '정신건강의학과', '신경과', '재활의학과', '소아과', '성형외과',
+    ],
+    # 지역명이 아닌 일반적인 브랜드명 접두사 패턴 (2글자 이상의 한글)
+    # 이 패턴에 해당하면서 facility_suffix로 끝나면 브랜드 키워드
+    'exclude_prefixes': [
+        # 지역명은 제외 (LOCAL_PATTERNS과 REGIONAL_PATTERNS의 prefixes)
+    ],
+    # 브랜드 키워드로 확정하는 특수 패턴
+    'brand_indicators': [
+        # "OO의OO" 형태 (예: 바른몸의원, 이쁜이치과)
+        r'^[가-힣]{2,}의[가-힣]{2,}(의원|치과|한의원|병원)$',
+        # 영문 포함 (예: Dr.Kim치과)
+        r'^[A-Za-z]+.*?(의원|치과|한의원|병원)$',
+        # 숫자 포함 (예: 365한의원)
+        r'^[0-9]+.*?(의원|치과|한의원|병원)$',
     ]
 }
 
@@ -127,6 +189,20 @@ class SafetyAnalysis:
     is_guaranteed_top5: bool = False
     guaranteed_top5_reasons: List[str] = field(default_factory=list)
 
+    # 검색 의도 분석 (신규 추가)
+    search_intent: SearchIntent = SearchIntent.INFORMATIONAL
+    is_brand_keyword: bool = False           # 브랜드/병원명 키워드 여부
+    has_official_blog: bool = False          # 공식 블로그 존재 여부
+    official_blog_rank: Optional[int] = None  # 공식 블로그 순위
+
+    # 2025-01 추가: 정밀 경쟁도 분석
+    competition_analysis: Optional[CompetitionAnalysisResult] = None
+    content_relevance_score: float = 0.0     # 콘텐츠 적합도 점수
+    freshness_score: float = 0.0             # 최신성 점수
+    engagement_score: float = 0.0            # 참여도 점수
+    total_competition_score: float = 0.0     # 종합 경쟁도 점수
+    competition_difficulty: str = "보통"      # 경쟁 난이도
+
 
 class SafeKeywordSelector:
     """안전 키워드 선별기"""
@@ -140,6 +216,181 @@ class SafeKeywordSelector:
             re.compile(p, re.IGNORECASE)
             for p in LOCAL_PATTERNS['patterns']
         ]
+        # 브랜드 패턴 컴파일
+        self._brand_patterns = [
+            re.compile(p, re.IGNORECASE)
+            for p in BRAND_PATTERNS.get('brand_indicators', [])
+        ]
+
+    # ==============================================
+    # 브랜드/병원명 키워드 감지
+    # ==============================================
+
+    def is_brand_keyword(self, keyword: str) -> bool:
+        """
+        키워드가 브랜드/병원명인지 감지
+
+        브랜드 키워드 예: 로담한의원, 바른정형외과, 예쁨주의치과
+        - 지역명이 아닌 고유명사 + 시설 접미사 조합
+        - 공식 블로그가 상위 고정되어 일반 블로거가 진입하기 어려움
+
+        Returns:
+            True if 브랜드 키워드
+        """
+        keyword_lower = keyword.lower().strip()
+
+        # 1. 시설 접미사로 끝나는지 확인
+        has_facility_suffix = False
+        matched_suffix = None
+        for suffix in BRAND_PATTERNS['facility_suffixes']:
+            if keyword_lower.endswith(suffix):
+                has_facility_suffix = True
+                matched_suffix = suffix
+                break
+
+        if not has_facility_suffix:
+            return False
+
+        # 2. 접두사 부분 추출 (시설명 제외)
+        prefix = keyword_lower
+        if matched_suffix:
+            prefix = keyword_lower[:-len(matched_suffix)]
+
+        # 3. 지역명으로 시작하면 브랜드가 아님
+        all_location_prefixes = (
+            LOCAL_PATTERNS['prefixes'] +
+            REGIONAL_PATTERNS['prefixes']
+        )
+
+        for loc_prefix in all_location_prefixes:
+            if prefix.startswith(loc_prefix.lower()):
+                return False
+
+        # 4. 특수 브랜드 패턴 체크 (영문, 숫자 포함 등)
+        for pattern in self._brand_patterns:
+            if pattern.match(keyword_lower):
+                return True
+
+        # 5. 일반적인 브랜드 키워드 판별
+        # 접두사가 2글자 이상의 한글이고 지역명이 아니면 브랜드로 판정
+        # 예: "로담한의원" → "로담" (2글자, 지역명 아님) → 브랜드
+        if len(prefix) >= 2 and re.match(r'^[가-힣]+$', prefix):
+            # 추가 검증: 일반 명사가 아닌지 확인
+            common_prefixes = [
+                '좋은', '바른', '새로운', '큰', '작은', '예쁜', '건강한',
+                '행복한', '밝은', '튼튼', '아름다운', '참', '진',
+                '동네', '우리', '가족', '사랑', '믿음', '정성',
+            ]
+            # 일반 형용사/명사로만 시작하면 브랜드로 추정
+            if any(prefix.startswith(cp) for cp in common_prefixes):
+                return True
+            # 그 외 지역명이 아닌 2-4글자 접두사 → 브랜드 가능성 높음
+            if 2 <= len(prefix) <= 6:
+                return True
+
+        return False
+
+    def classify_search_intent(self, keyword: str, is_brand: bool, scope: KeywordScope) -> SearchIntent:
+        """
+        검색 의도 분류
+
+        Args:
+            keyword: 검색 키워드
+            is_brand: 브랜드 키워드 여부
+            scope: 키워드 범위
+
+        Returns:
+            SearchIntent: 검색 의도
+        """
+        keyword_lower = keyword.lower().strip()
+
+        # 1. 브랜드 키워드 → 네비게이션
+        if is_brand:
+            return SearchIntent.NAVIGATIONAL
+
+        # 2. 지역 키워드 → 지역탐색
+        if scope in [KeywordScope.LOCAL, KeywordScope.REGIONAL]:
+            # 예약/가격 관련 키워드 포함 시 거래형
+            transaction_keywords = ['예약', '가격', '비용', '할인', '이벤트', '상담']
+            if any(tk in keyword_lower for tk in transaction_keywords):
+                return SearchIntent.TRANSACTIONAL
+            return SearchIntent.LOCAL_SEARCH
+
+        # 3. 거래형 키워드 체크
+        transaction_keywords = ['예약', '구매', '신청', '가격', '비용', '견적']
+        if any(tk in keyword_lower for tk in transaction_keywords):
+            return SearchIntent.TRANSACTIONAL
+
+        # 4. 기본: 정보형
+        return SearchIntent.INFORMATIONAL
+
+    # ==============================================
+    # 공식 블로그 감지
+    # ==============================================
+
+    def _detect_official_blog(
+        self,
+        keyword: str,
+        blog_names: List[str]
+    ) -> Tuple[bool, Optional[int]]:
+        """
+        상위 블로그 목록에서 공식 블로그 감지
+
+        공식 블로그 판별 기준:
+        1. 블로그 이름에 키워드(병원명)가 포함된 경우
+        2. 블로그 이름이 "OO병원", "OO의원", "OO한의원" 등으로 끝나는 경우
+        3. 블로그 이름에 "공식", "official" 등이 포함된 경우
+
+        Args:
+            keyword: 검색 키워드
+            blog_names: 상위 블로그 이름 리스트
+
+        Returns:
+            (공식 블로그 존재 여부, 공식 블로그 순위)
+        """
+        if not blog_names:
+            return False, None
+
+        keyword_lower = keyword.lower().strip()
+
+        # 키워드에서 시설 접미사 제거하여 브랜드명 추출
+        brand_name = keyword_lower
+        for suffix in BRAND_PATTERNS['facility_suffixes']:
+            if keyword_lower.endswith(suffix):
+                brand_name = keyword_lower[:-len(suffix)]
+                break
+
+        for idx, blog_name in enumerate(blog_names):
+            if not blog_name:
+                continue
+
+            blog_name_lower = blog_name.lower().strip()
+
+            # 1. 키워드(브랜드명)가 블로그 이름에 포함
+            if brand_name and len(brand_name) >= 2:
+                if brand_name in blog_name_lower:
+                    return True, idx + 1
+
+            # 2. 전체 키워드가 블로그 이름에 포함
+            if keyword_lower in blog_name_lower:
+                return True, idx + 1
+
+            # 3. "공식", "official" 포함
+            if '공식' in blog_name_lower or 'official' in blog_name_lower:
+                return True, idx + 1
+
+            # 4. 블로그 이름이 병원/의원으로 끝나면서 키워드와 유사
+            for suffix in ['병원', '의원', '한의원', '치과', '클리닉']:
+                if blog_name_lower.endswith(suffix):
+                    # 블로그 이름에서 브랜드 부분 추출
+                    blog_brand = blog_name_lower[:-len(suffix)]
+                    # 키워드 브랜드와 비슷한지 확인 (80% 이상 일치)
+                    if blog_brand and brand_name:
+                        # 간단한 유사도 체크
+                        if blog_brand in brand_name or brand_name in blog_brand:
+                            return True, idx + 1
+
+        return False, None
 
     # ==============================================
     # 키워드 범위 분류
@@ -147,32 +398,46 @@ class SafeKeywordSelector:
 
     def classify_scope(self, keyword: str) -> KeywordScope:
         """
-        키워드가 지역/광역/전국인지 분류
+        키워드가 브랜드/지역/광역/전국인지 분류
 
-        지역 키워드: 특정 지역 + 시설 (예: 강남역 한의원)
+        브랜드 키워드: 특정 병원/브랜드명 (예: 로담한의원) - 공식블로그가 상위 고정
+        지역 키워드: 특정 지역 + 시설/서비스 (예: 강남역 한의원, 홍대여드름)
         광역 키워드: 시/도 단위 (예: 서울 한의원)
         전국 키워드: 지역 없는 일반 (예: 허리디스크 치료)
         """
         keyword_lower = keyword.lower().strip()
 
-        # 1. 지역 키워드 패턴 체크
+        # 0. 브랜드 키워드 체크 (가장 먼저!) - 로담한의원 등
+        if self.is_brand_keyword(keyword):
+            return KeywordScope.BRAND
+
+        # 1. 지역 키워드 패턴 체크 (정규식)
         for pattern in self._local_patterns:
             if pattern.search(keyword_lower):
                 return KeywordScope.LOCAL
 
-        # 접두사 체크
+        # 2. 접두사 + 시설/서비스 체크 (확장된 로직)
         for prefix in LOCAL_PATTERNS['prefixes']:
             if keyword_lower.startswith(prefix):
-                # 병원/의원 관련 키워드인지 확인
+                # 2-1. 병원/의원 관련 키워드 체크
                 if any(h in keyword_lower for h in ['병원', '의원', '한의원', '치과', '클리닉', '센터']):
                     return KeywordScope.LOCAL
 
-        # 2. 광역 키워드 체크
+                # 2-2. 의료/미용 서비스 키워드 체크 (새로 추가)
+                # "홍대여드름", "신촌여드름흉터", "위례다이어트한약" 등 인식
+                if any(service in keyword_lower for service in LOCAL_PATTERNS.get('medical_services', [])):
+                    return KeywordScope.LOCAL
+
+        # 3. 광역 키워드 체크
         for prefix in REGIONAL_PATTERNS['prefixes']:
             if keyword_lower.startswith(prefix):
-                return KeywordScope.REGIONAL
+                # 광역도 서비스 키워드와 결합 시 광역으로 분류
+                if any(h in keyword_lower for h in ['병원', '의원', '한의원', '치과', '클리닉', '센터']):
+                    return KeywordScope.REGIONAL
+                if any(service in keyword_lower for service in LOCAL_PATTERNS.get('medical_services', [])):
+                    return KeywordScope.REGIONAL
 
-        # 3. 기본: 전국 키워드
+        # 4. 기본: 전국 키워드
         return KeywordScope.NATIONAL
 
     # ==============================================
@@ -183,7 +448,8 @@ class SafeKeywordSelector:
         self,
         scope: KeywordScope,
         top10_std: float,
-        influencer_count: int
+        influencer_count: int,
+        has_official_blog: bool = False
     ) -> int:
         """
         안전 마진 계산 (5위 보장 시스템용 강화 버전)
@@ -193,8 +459,14 @@ class SafeKeywordSelector:
         피드백 반영:
         - 전국 키워드 7위 예측 → 실제 10위권 밖 (오차 +3~4)
         - 5위 보장을 위해 더 보수적인 마진 적용
+        - 브랜드 키워드는 매우 높은 마진 적용 (사실상 진입 불가)
         """
         margin = 0
+
+        # 0. 브랜드 키워드는 매우 높은 마진 (공식 블로그가 상위 고정)
+        if scope == KeywordScope.BRAND:
+            margin = 10  # 사실상 상위노출 불가능
+            return margin
 
         # 1. 키워드 범위별 기본 마진 (강화됨)
         if scope == KeywordScope.LOCAL:
@@ -221,7 +493,11 @@ class SafeKeywordSelector:
         elif influencer_count >= 1:
             margin += 1
 
-        return min(margin, 8)  # 최대 8까지 (더 보수적)
+        # 4. 공식 블로그 존재 시 추가 마진
+        if has_official_blog:
+            margin += 2
+
+        return min(margin, 10)  # 최대 10까지
 
     # ==============================================
     # 예측 순위 계산
@@ -330,6 +606,10 @@ class SafeKeywordSelector:
             },
             KeywordScope.NATIONAL: {
                 1: 80, 2: 70, 3: 60, 4: 45, 5: 35, 6: 25, 7: 15, 8: 10
+            },
+            # 브랜드 키워드는 신뢰도 매우 낮음 (공식 블로그가 상위 고정)
+            KeywordScope.BRAND: {
+                1: 20, 2: 15, 3: 10, 4: 5, 5: 5, 6: 5, 7: 5, 8: 5
             }
         }
 
@@ -376,17 +656,30 @@ class SafeKeywordSelector:
         safety_grade: SafetyGrade,
         adjusted_rank: int,
         scope: KeywordScope,
-        score_gap: float
+        score_gap: float,
+        is_brand: bool = False,
+        has_official_blog: bool = False
     ) -> Tuple[RecommendationType, List[str]]:
         """
         추천 유형 및 이유 결정
 
         핵심 규칙:
+        - 브랜드 키워드 → 무조건 회피 (공식 블로그가 상위 고정)
         - 전국 키워드 7위 이하 → 비추천/회피
         - 지역 키워드는 8위까지 허용
         - 점수 여유가 충분해야 안전
         """
         reasons = []
+
+        # 0. 브랜드 키워드 → 무조건 회피
+        if scope == KeywordScope.BRAND or is_brand:
+            reasons.append("🏢 브랜드/병원명 키워드 - 공식 블로그가 상위 고정")
+            reasons.append("일반 블로거가 상위노출하기 매우 어렵습니다")
+            return RecommendationType.AVOID, reasons
+
+        # 0-1. 공식 블로그 존재 시 경고
+        if has_official_blog:
+            reasons.append("⚠️ 해당 키워드에 공식 블로그가 상위에 있습니다")
 
         # 1. 조정된 순위 기반 1차 필터
         if scope == KeywordScope.NATIONAL:
@@ -407,7 +700,7 @@ class SafeKeywordSelector:
                 reasons.append(f"광역 키워드 {adjusted_rank}위 예측 - 진입 어려움")
                 return RecommendationType.NOT_RECOMMEND, reasons
 
-        else:  # LOCAL
+        elif scope == KeywordScope.LOCAL:
             # 지역 키워드: 8위 이내 추천
             if adjusted_rank > 10:
                 reasons.append(f"지역 키워드지만 {adjusted_rank}위 예측 - 경쟁 치열")
@@ -531,7 +824,11 @@ class SafeKeywordSelector:
         my_score: float,
         top10_scores: List[float],
         search_volume: int = 0,
-        influencer_count: int = 0
+        influencer_count: int = 0,
+        top10_blog_names: List[str] = None,
+        has_official_blog: bool = False,
+        official_blog_rank: int = None,
+        posts_data: List[Dict] = None
     ) -> SafetyAnalysis:
         """
         키워드 안전성 종합 분석
@@ -542,6 +839,10 @@ class SafeKeywordSelector:
             top10_scores: 상위 10개 블로그 점수 리스트
             search_volume: 월간 검색량
             influencer_count: 상위 10개 중 인플루언서 수
+            top10_blog_names: 상위 10개 블로그 이름 (공식 블로그 감지용)
+            has_official_blog: 공식 블로그 존재 여부 (외부에서 전달)
+            official_blog_rank: 공식 블로그 순위 (외부에서 전달)
+            posts_data: 상위 포스트 분석 데이터 (경쟁도 정밀 분석용)
 
         Returns:
             SafetyAnalysis: 종합 안전성 분석 결과
@@ -556,14 +857,31 @@ class SafeKeywordSelector:
         score_gap = my_score - top10_min
         score_buffer = (score_gap / top10_min * 100) if top10_min > 0 else 0
 
-        # 1. 키워드 범위 분류
+        # 0. 브랜드 키워드 체크 (신규)
+        is_brand = self.is_brand_keyword(keyword)
+
+        # 1. 키워드 범위 분류 (브랜드 포함)
         scope = self.classify_scope(keyword)
+
+        # 1-1. 검색 의도 분류 (신규)
+        search_intent = self.classify_search_intent(keyword, is_brand, scope)
+
+        # 1-2. 공식 블로그 감지 (블로그 이름 기반)
+        if not has_official_blog and top10_blog_names:
+            detected_official, detected_rank = self._detect_official_blog(
+                keyword, top10_blog_names
+            )
+            if detected_official:
+                has_official_blog = True
+                official_blog_rank = detected_rank
 
         # 2. 원본 예측 순위
         raw_predicted_rank = self.calculate_predicted_rank(my_score, top10_scores)
 
-        # 3. 안전 마진 계산
-        safety_margin = self.calculate_safety_margin(scope, top10_std, influencer_count)
+        # 3. 안전 마진 계산 (브랜드/공식 블로그 반영)
+        safety_margin = self.calculate_safety_margin(
+            scope, top10_std, influencer_count, has_official_blog
+        )
 
         # 4. 보정된 순위
         adjusted_rank = raw_predicted_rank + safety_margin
@@ -573,15 +891,20 @@ class SafeKeywordSelector:
             my_score, top10_scores, scope, adjusted_rank, influencer_count
         )
 
+        # 브랜드 키워드는 안전 지수 대폭 감소
+        if is_brand or scope == KeywordScope.BRAND:
+            safety_score = min(safety_score, 15)  # 최대 15점
+
         # 6. 안전 등급
         safety_grade = self.get_safety_grade(safety_score)
 
         # 7. 예측 신뢰도
         confidence = breakdown.get('confidence', 50)
 
-        # 8. 추천 유형 결정
+        # 8. 추천 유형 결정 (브랜드/공식 블로그 반영)
         recommendation, reasons = self.determine_recommendation(
-            safety_grade, adjusted_rank, scope, score_gap
+            safety_grade, adjusted_rank, scope, score_gap,
+            is_brand=is_brand, has_official_blog=has_official_blog
         )
 
         # 9. 팁 생성
@@ -589,13 +912,63 @@ class SafeKeywordSelector:
             recommendation, scope, adjusted_rank, score_gap, top10_avg
         )
 
+        # 브랜드 키워드 전용 팁 추가
+        if is_brand or scope == KeywordScope.BRAND:
+            tips = [
+                "🚫 브랜드/병원명 키워드는 상위노출이 매우 어렵습니다",
+                "💡 해당 병원의 공식 블로그가 항상 상위에 노출됩니다",
+                "🔍 지역+서비스 키워드로 대체하세요 (예: 강남 여드름 치료)",
+            ] + tips
+
         # 10. 경고 생성
         warnings = self.generate_warnings(
             scope, raw_predicted_rank, adjusted_rank, influencer_count, top10_std
         )
 
+        # 브랜드 키워드 경고 추가
+        if is_brand or scope == KeywordScope.BRAND:
+            warnings.insert(0, "🏢 브랜드/병원명 키워드 감지 - 상위노출 불가능")
+
         # 고점자 수 계산
         high_scorer_count = sum(1 for s in top10_scores if s >= 70)
+
+        # 11. 정밀 경쟁도 분석 (posts_data가 있을 때만)
+        comp_analysis = None
+        content_relevance_score = 0.0
+        freshness_score = 0.0
+        engagement_score = 0.0
+        total_competition_score = 0.0
+        competition_difficulty = "보통"
+
+        if posts_data:
+            try:
+                comp_analysis = competition_analyzer.analyze(
+                    keyword=keyword,
+                    blog_scores=top10_scores,
+                    posts_data=posts_data,
+                    my_score=my_score
+                )
+
+                content_relevance_score = comp_analysis.content_relevance.score
+                freshness_score = comp_analysis.freshness.score
+                engagement_score = comp_analysis.engagement.score
+                total_competition_score = comp_analysis.total_competition_score
+                competition_difficulty = comp_analysis.difficulty.value
+
+                # 경쟁도 분석 기반 추가 경고/팁
+                warnings.extend(comp_analysis.warnings)
+                tips.extend(comp_analysis.recommendations)
+
+                # 경쟁도가 높으면 안전 점수 추가 감소
+                if total_competition_score >= 70:
+                    safety_score = max(0, safety_score - 15)
+                    safety_grade = self.get_safety_grade(safety_score)
+                elif total_competition_score >= 55:
+                    safety_score = max(0, safety_score - 8)
+                    safety_grade = self.get_safety_grade(safety_score)
+
+            except Exception as e:
+                logger.warning(f"Competition analysis failed for {keyword}: {e}")
 
         # 11. 5위 보장 여부 판정
         is_guaranteed_top5, guaranteed_top5_reasons = self.check_guaranteed_top5(
@@ -633,7 +1006,19 @@ class SafeKeywordSelector:
             search_volume=search_volume,
             warnings=warnings,
             is_guaranteed_top5=is_guaranteed_top5,
-            guaranteed_top5_reasons=guaranteed_top5_reasons
+            guaranteed_top5_reasons=guaranteed_top5_reasons,
+            # 검색 의도 분석
+            search_intent=search_intent,
+            is_brand_keyword=is_brand,
+            has_official_blog=has_official_blog,
+            official_blog_rank=official_blog_rank,
+            # 정밀 경쟁도 분석
+            competition_analysis=comp_analysis,
+            content_relevance_score=content_relevance_score,
+            freshness_score=freshness_score,
+            engagement_score=engagement_score,
+            total_competition_score=total_competition_score,
+            competition_difficulty=competition_difficulty
         )
 
     # ==============================================
@@ -886,7 +1271,8 @@ def analyze_keyword_for_blog(
     blog_score: float,
     top10_scores: List[float],
     search_volume: int = 0,
-    influencer_count: int = 0
+    influencer_count: int = 0,
+    top10_blog_names: List[str] = None
 ) -> Dict:
     """
     블로그 기준 키워드 안전성 분석 (API용 헬퍼)
@@ -899,7 +1285,8 @@ def analyze_keyword_for_blog(
         my_score=blog_score,
         top10_scores=top10_scores,
         search_volume=search_volume,
-        influencer_count=influencer_count
+        influencer_count=influencer_count,
+        top10_blog_names=top10_blog_names
     )
 
     return {
@@ -938,5 +1325,12 @@ def analyze_keyword_for_blog(
         'guaranteed_top5': {
             'is_guaranteed': analysis.is_guaranteed_top5,
             'reasons': analysis.guaranteed_top5_reasons
+        },
+        # 신규 필드들
+        'search_intent': analysis.search_intent.value,
+        'is_brand_keyword': analysis.is_brand_keyword,
+        'official_blog': {
+            'detected': analysis.has_official_blog,
+            'rank': analysis.official_blog_rank
         }
     }
