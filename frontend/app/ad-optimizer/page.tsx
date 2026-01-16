@@ -376,7 +376,7 @@ export default function AdOptimizerPage() {
                       <span className="relative flex items-center justify-center gap-2">
                         <Sparkles className="w-4 h-4" />
                         프로 플랜 시작하기
-                        <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">₩29,900/월</span>
+                        <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">₩19,900/월</span>
                       </span>
                     </Link>
                   </motion.div>
@@ -1962,7 +1962,7 @@ export default function AdOptimizerPage() {
                             />
                             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500">원</span>
                           </div>
-                          <p className="mt-1 text-xs text-green-600">고객 1명의 평균 생애 가치 (예: 월 9,900원 × 6개월 = 59,400원)</p>
+                          <p className="mt-1 text-xs text-green-600">고객 1명의 평균 생애 가치 (예: 월 19,900원 × 6개월 = 119,400원)</p>
                         </div>
                       </div>
                       <div className="mt-3 p-3 bg-white/60 rounded-lg">

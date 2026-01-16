@@ -62,8 +62,8 @@ const DEFAULT_PLANS: PlanInfo[] = [
   {
     type: 'pro',
     name: '프로',
-    price_monthly: 29900,
-    price_yearly: 287000,
+    price_monthly: 19900,
+    price_yearly: 191000,
     features: {
       keyword_search_daily: 200,
       blog_analysis_daily: 100,
@@ -79,8 +79,8 @@ const DEFAULT_PLANS: PlanInfo[] = [
   {
     type: 'business',
     name: '비즈니스',
-    price_monthly: 99900,
-    price_yearly: 959000,
+    price_monthly: 49900,
+    price_yearly: 479000,
     features: {
       keyword_search_daily: -1,
       blog_analysis_daily: -1,

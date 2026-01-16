@@ -69,8 +69,8 @@ PLAN_LIMITS = {
     },
     PlanType.BASIC: {
         "name": "베이직",
-        "price_monthly": 4900,
-        "price_yearly": 47000,
+        "price_monthly": 9900,
+        "price_yearly": 95000,
         "keyword_search_daily": 30,
         "blog_analysis_daily": 10,
         "search_results_count": 10,
@@ -87,8 +87,8 @@ PLAN_LIMITS = {
     },
     PlanType.PRO: {
         "name": "프로",
-        "price_monthly": 9900,
-        "price_yearly": 95000,
+        "price_monthly": 19900,
+        "price_yearly": 191000,
         "keyword_search_daily": 100,
         "blog_analysis_daily": 50,
         "search_results_count": 20,
@@ -105,8 +105,8 @@ PLAN_LIMITS = {
     },
     PlanType.BUSINESS: {
         "name": "비즈니스",
-        "price_monthly": 29900,
-        "price_yearly": 287000,
+        "price_monthly": 49900,
+        "price_yearly": 479000,
         "keyword_search_daily": -1,  # 무제한
         "blog_analysis_daily": -1,   # 무제한
         "search_results_count": 50,

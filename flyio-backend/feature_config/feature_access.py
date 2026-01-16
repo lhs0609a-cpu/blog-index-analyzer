@@ -667,6 +667,6 @@ def get_features_by_category() -> Dict[str, List[Dict[str, Any]]]:
 PLAN_PRICING = {
     Plan.FREE: {"price": 0, "name": "무료", "daily_limit": 10},
     Plan.BASIC: {"price": 9900, "name": "베이직", "daily_limit": 50},
-    Plan.PRO: {"price": 29900, "name": "프로", "daily_limit": 200},
-    Plan.BUSINESS: {"price": 99900, "name": "비즈니스", "daily_limit": -1},
+    Plan.PRO: {"price": 19900, "name": "프로", "daily_limit": 200},
+    Plan.BUSINESS: {"price": 49900, "name": "비즈니스", "daily_limit": -1},
 }

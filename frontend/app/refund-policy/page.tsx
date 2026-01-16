@@ -344,18 +344,18 @@ export default function RefundPolicyPage() {
             </h3>
             <div className="space-y-4 text-gray-700">
               <div className="bg-gray-50 rounded-lg p-4">
-                <h4 className="font-semibold mb-3">월간 정기결제 (프로 플랜 29,900원) 환불 예시</h4>
+                <h4 className="font-semibold mb-3">월간 정기결제 (프로 플랜 19,900원) 환불 예시</h4>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between py-2 border-b">
                     <span>결제 후 3일째 환불 신청 (7일 이내)</span>
-                    <span className="font-semibold text-green-600">29,900원 전액 환불</span>
+                    <span className="font-semibold text-green-600">19,900원 전액 환불</span>
                   </div>
                   <div className="flex justify-between py-2 border-b">
                     <div>
                       <span>결제 후 10일째 환불 신청</span>
-                      <p className="text-xs text-gray-500">계산: 29,900 - (10일 × 997원)</p>
+                      <p className="text-xs text-gray-500">계산: 19,900 - (10일 × 663원)</p>
                     </div>
-                    <span className="font-semibold text-orange-600">19,930원 환불</span>
+                    <span className="font-semibold text-orange-600">13,270원 환불</span>
                   </div>
                   <div className="flex justify-between py-2">
                     <span>결제 후 20일째 환불 신청 (50% 초과)</span>
@@ -363,23 +363,23 @@ export default function RefundPolicyPage() {
                   </div>
                 </div>
                 <p className="text-xs text-gray-500 mt-3">
-                  * 일일이용료 = 29,900원 ÷ 30일 ≒ 997원
+                  * 일일이용료 = 19,900원 ÷ 30일 ≒ 663원
                 </p>
               </div>
 
               <div className="bg-gray-50 rounded-lg p-4">
-                <h4 className="font-semibold mb-3">연간 정기결제 (프로 플랜 287,000원) 환불 예시</h4>
+                <h4 className="font-semibold mb-3">연간 정기결제 (프로 플랜 191,000원) 환불 예시</h4>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between py-2 border-b">
                     <span>결제 후 5일째 환불 신청 (7일 이내)</span>
-                    <span className="font-semibold text-green-600">287,000원 전액 환불</span>
+                    <span className="font-semibold text-green-600">191,000원 전액 환불</span>
                   </div>
                   <div className="flex justify-between py-2 border-b">
                     <div>
                       <span>결제 후 2개월 10일째 환불 신청</span>
-                      <p className="text-xs text-gray-500">계산: 287,000 - (2개월 × 29,900) - (10일 × 997)</p>
+                      <p className="text-xs text-gray-500">계산: 191,000 - (2개월 × 19,900) - (10일 × 663)</p>
                     </div>
-                    <span className="font-semibold text-orange-600">217,230원 환불</span>
+                    <span className="font-semibold text-orange-600">144,570원 환불</span>
                   </div>
                   <div className="flex justify-between py-2">
                     <span>결제 후 7개월째 환불 신청 (50% 초과)</span>
@@ -387,7 +387,7 @@ export default function RefundPolicyPage() {
                   </div>
                 </div>
                 <p className="text-xs text-gray-500 mt-3">
-                  * 연간 결제도 월간 요금(29,900원) 기준으로 일할 계산
+                  * 연간 결제도 월간 요금(19,900원) 기준으로 일할 계산
                 </p>
               </div>
             </div>
