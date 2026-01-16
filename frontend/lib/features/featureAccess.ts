@@ -36,8 +36,8 @@ export const PLAN_INFO: Record<Plan, { name: string; price: number; dailyLimit: 
   guest: { name: '비회원', price: 0, dailyLimit: 5, badge: '' },
   free: { name: '무료', price: 0, dailyLimit: 10, badge: '' },
   basic: { name: '베이직', price: 9900, dailyLimit: 50, badge: 'Basic' },
-  pro: { name: '프로', price: 29900, dailyLimit: 200, badge: 'Pro' },
-  business: { name: '비즈니스', price: 99900, dailyLimit: -1, badge: 'Business' }
+  pro: { name: '프로', price: 19900, dailyLimit: 200, badge: 'Pro' },
+  business: { name: '비즈니스', price: 49900, dailyLimit: -1, badge: 'Business' }
 }
 
 // All 34 Features
