@@ -24,7 +24,9 @@ else:
     BACKUP_DIR = "/data/backups"
     DATABASE_PATH = "/data/blog_analyzer.db"
 MAX_BACKUPS = 48  # 48시간 분량 (매시간 백업)
+MAX_JSON_BACKUPS = 4  # JSON 백업은 4개만 유지 (24시간 분량, 6시간마다)
 BACKUP_INTERVAL_SECONDS = 3600  # 1시간마다
+DISK_WARNING_THRESHOLD_MB = 100  # 100MB 이하면 경고
 
 
 def ensure_backup_dir():
@@ -61,24 +63,135 @@ def create_backup() -> Optional[str]:
         return None
 
 
+def get_disk_free_space_mb() -> float:
+    """백업 디렉토리의 남은 디스크 공간 (MB)"""
+    try:
+        if sys.platform == "win32":
+            import ctypes
+            free_bytes = ctypes.c_ulonglong(0)
+            ctypes.windll.kernel32.GetDiskFreeSpaceExW(
+                ctypes.c_wchar_p(BACKUP_DIR), None, None, ctypes.pointer(free_bytes)
+            )
+            return free_bytes.value / (1024 * 1024)
+        else:
+            stat = os.statvfs(BACKUP_DIR)
+            return (stat.f_bavail * stat.f_frsize) / (1024 * 1024)
+    except Exception as e:
+        logger.error(f"Failed to get disk space: {e}")
+        return -1
+
+
 def cleanup_old_backups():
     """오래된 백업 파일 정리 (MAX_BACKUPS 유지)"""
     try:
         ensure_backup_dir()
-        backups = sorted([
+
+        # 1. DB 백업 파일 정리
+        db_backups = sorted([
             f for f in os.listdir(BACKUP_DIR)
             if f.startswith("backup_") and f.endswith(".db")
         ])
 
-        # 오래된 백업 삭제
-        while len(backups) > MAX_BACKUPS:
-            old_backup = backups.pop(0)
+        while len(db_backups) > MAX_BACKUPS:
+            old_backup = db_backups.pop(0)
             old_path = os.path.join(BACKUP_DIR, old_backup)
-            os.remove(old_path)
-            logger.info(f"Removed old backup: {old_backup}")
+            try:
+                os.remove(old_path)
+                logger.info(f"Removed old backup: {old_backup}")
+            except Exception as e:
+                logger.warning(f"Failed to remove {old_backup}: {e}")
+
+        # 2. DB Journal 파일 정리 (backup과 쌍이 없는 것들 삭제)
+        for f in os.listdir(BACKUP_DIR):
+            if f.endswith(".db-journal"):
+                db_name = f.replace("-journal", "")
+                if db_name not in db_backups:
+                    try:
+                        os.remove(os.path.join(BACKUP_DIR, f))
+                        logger.info(f"Removed orphan journal: {f}")
+                    except Exception as e:
+                        logger.warning(f"Failed to remove journal {f}: {e}")
+
+        # 3. JSON 백업 파일 정리 (MAX_JSON_BACKUPS 유지)
+        cleanup_old_json_backups()
+
+        # 4. 디스크 공간 체크
+        free_space = get_disk_free_space_mb()
+        if 0 < free_space < DISK_WARNING_THRESHOLD_MB:
+            logger.warning(f"⚠️ Low disk space: {free_space:.1f}MB remaining")
+            # 긴급 정리: 추가로 백업 삭제
+            emergency_cleanup()
 
     except Exception as e:
         logger.error(f"Cleanup failed: {e}")
+
+
+def cleanup_old_json_backups():
+    """오래된 JSON 백업 파일 정리 (MAX_JSON_BACKUPS 유지)"""
+    try:
+        ensure_backup_dir()
+
+        json_backups = sorted([
+            f for f in os.listdir(BACKUP_DIR)
+            if f.startswith("learning_data_") and f.endswith(".json")
+        ])
+
+        while len(json_backups) > MAX_JSON_BACKUPS:
+            old_json = json_backups.pop(0)
+            old_path = os.path.join(BACKUP_DIR, old_json)
+            try:
+                os.remove(old_path)
+                logger.info(f"Removed old JSON backup: {old_json}")
+            except Exception as e:
+                logger.warning(f"Failed to remove JSON {old_json}: {e}")
+
+    except Exception as e:
+        logger.error(f"JSON cleanup failed: {e}")
+
+
+def emergency_cleanup():
+    """긴급 디스크 공간 확보 - 백업 수를 절반으로 줄임"""
+    try:
+        logger.warning("🚨 Emergency cleanup triggered due to low disk space")
+
+        # DB 백업을 절반으로
+        db_backups = sorted([
+            f for f in os.listdir(BACKUP_DIR)
+            if f.startswith("backup_") and f.endswith(".db")
+        ])
+
+        target_count = max(6, len(db_backups) // 2)  # 최소 6개는 유지
+        while len(db_backups) > target_count:
+            old_backup = db_backups.pop(0)
+            try:
+                os.remove(os.path.join(BACKUP_DIR, old_backup))
+                # 관련 journal도 삭제
+                journal_path = os.path.join(BACKUP_DIR, old_backup + "-journal")
+                if os.path.exists(journal_path):
+                    os.remove(journal_path)
+                logger.info(f"Emergency removed: {old_backup}")
+            except Exception:
+                pass
+
+        # JSON 백업을 2개로
+        json_backups = sorted([
+            f for f in os.listdir(BACKUP_DIR)
+            if f.startswith("learning_data_") and f.endswith(".json")
+        ])
+
+        while len(json_backups) > 2:
+            old_json = json_backups.pop(0)
+            try:
+                os.remove(os.path.join(BACKUP_DIR, old_json))
+                logger.info(f"Emergency removed JSON: {old_json}")
+            except Exception:
+                pass
+
+        free_space = get_disk_free_space_mb()
+        logger.info(f"After emergency cleanup: {free_space:.1f}MB free")
+
+    except Exception as e:
+        logger.error(f"Emergency cleanup failed: {e}")
 
 
 def export_to_json() -> Optional[str]:
@@ -126,6 +239,10 @@ def export_to_json() -> Optional[str]:
             json.dump(export_data, f, ensure_ascii=False, indent=2, default=str)
 
         logger.info(f"JSON export created: {json_path}")
+
+        # 오래된 JSON 백업 정리
+        cleanup_old_json_backups()
+
         return json_path
 
     except Exception as e:

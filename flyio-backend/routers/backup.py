@@ -12,7 +12,10 @@ from services.backup_service import (
     export_to_json,
     get_backup_list,
     get_backup_status,
-    restore_from_backup
+    restore_from_backup,
+    cleanup_old_backups,
+    cleanup_old_json_backups,
+    get_disk_free_space_mb
 )
 
 router = APIRouter()
@@ -33,6 +36,8 @@ class BackupStatusResponse(BaseModel):
     backup_dir: str
     max_backups: int
     interval_hours: float
+    disk_free_mb: Optional[float] = None
+    json_backup_count: Optional[int] = None
 
 
 class BackupResponse(BaseModel):
@@ -48,9 +53,11 @@ async def backup_status():
     - 자동 백업 활성화 여부
     - 백업 개수
     - 최신 백업 정보
+    - 디스크 공간
     """
     try:
         status = get_backup_status()
+        status["disk_free_mb"] = get_disk_free_space_mb()
         return BackupStatusResponse(**status)
     except Exception as e:
         logger.error(f"Failed to get backup status: {e}")
@@ -142,4 +149,27 @@ async def restore_backup(filename: str):
             )
     except Exception as e:
         logger.error(f"Failed to restore backup: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/cleanup", response_model=BackupResponse)
+async def cleanup_backups():
+    """
+    수동 백업 정리
+    - 오래된 DB 백업 삭제
+    - 오래된 JSON 백업 삭제
+    - orphan journal 파일 삭제
+    """
+    try:
+        before_space = get_disk_free_space_mb()
+        cleanup_old_backups()
+        after_space = get_disk_free_space_mb()
+        freed = after_space - before_space if before_space > 0 and after_space > 0 else 0
+
+        return BackupResponse(
+            success=True,
+            message=f"백업 정리 완료. {freed:.1f}MB 확보됨. 현재 여유 공간: {after_space:.1f}MB"
+        )
+    except Exception as e:
+        logger.error(f"Failed to cleanup backups: {e}")
         raise HTTPException(status_code=500, detail=str(e))
