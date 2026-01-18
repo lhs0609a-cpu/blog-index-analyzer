@@ -2,50 +2,63 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Import Pretendard font */
+/* Toss Product Sans 대신 Pretendard 사용 */
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css');
 
 @layer base {
   :root {
-    /* Gen-Z / Y2K inspired color palette */
-    --background: 250 30% 98%;
-    --foreground: 250 20% 10%;
+    /* Toss Color System */
+    --background: 0 0% 100%;
+    --background-secondary: 220 14% 97%;
+    --foreground: 222 47% 11%;
 
-    /* Neon/Cyber colors */
-    --neon-violet: 270 100% 65%;
-    --neon-pink: 330 100% 65%;
-    --neon-blue: 220 100% 60%;
-    --neon-cyan: 180 100% 50%;
-    --neon-green: 150 100% 50%;
-    --neon-orange: 25 100% 55%;
-    --neon-yellow: 50 100% 50%;
+    /* Toss Blue */
+    --toss-blue: 216 100% 50%;
+    --toss-blue-light: 213 100% 59%;
+    --toss-blue-dark: 216 100% 40%;
+    --toss-blue-50: 213 100% 97%;
+    --toss-blue-100: 213 100% 94%;
 
-    /* Instagram/Meta gradient colors */
-    --instagram-purple: 262 100% 63%;
-    --instagram-pink: 330 100% 71%;
-    --instagram-orange: 25 100% 61%;
-    --instagram-yellow: 45 100% 51%;
+    /* Gray Scale */
+    --gray-50: 220 14% 97%;
+    --gray-100: 220 13% 91%;
+    --gray-200: 220 13% 84%;
+    --gray-300: 216 12% 68%;
+    --gray-400: 218 11% 55%;
+    --gray-500: 220 9% 43%;
+    --gray-600: 215 14% 34%;
+    --gray-700: 217 19% 27%;
+    --gray-800: 215 28% 17%;
+    --gray-900: 221 39% 11%;
 
-    /* Card and UI elements */
+    /* Semantic Colors */
+    --success: 160 84% 39%;
+    --success-light: 158 64% 92%;
+    --warning: 43 100% 50%;
+    --warning-light: 48 100% 92%;
+    --error: 0 84% 60%;
+    --error-light: 0 86% 95%;
+
+    /* Card and UI */
     --card: 0 0% 100%;
-    --card-foreground: 250 20% 10%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 250 20% 10%;
+    --popover-foreground: 222 47% 11%;
 
-    /* Primary (Vibrant Violet) */
-    --primary: 270 91% 65%;
+    /* Primary (Toss Blue) */
+    --primary: 216 100% 50%;
     --primary-foreground: 0 0% 100%;
 
-    /* Secondary (Hot Pink) */
-    --secondary: 330 90% 60%;
-    --secondary-foreground: 0 0% 100%;
+    /* Secondary */
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 47% 11%;
 
     /* Muted */
-    --muted: 250 20% 96%;
-    --muted-foreground: 250 10% 45%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 43%;
 
     /* Accent */
-    --accent: 330 90% 60%;
+    --accent: 216 100% 50%;
     --accent-foreground: 0 0% 100%;
 
     /* Destructive */
@@ -53,32 +66,45 @@
     --destructive-foreground: 0 0% 100%;
 
     /* Border */
-    --border: 250 20% 92%;
-    --input: 250 20% 92%;
-    --ring: 270 91% 65%;
-    --radius: 1.25rem;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 216 100% 50%;
+    --radius: 0.75rem;
   }
 
   .dark {
-    --background: 250 30% 5%;
+    --background: 222 47% 6%;
+    --background-secondary: 222 47% 9%;
     --foreground: 0 0% 98%;
-    --card: 250 30% 8%;
+
+    --gray-50: 222 47% 9%;
+    --gray-100: 222 40% 14%;
+    --gray-200: 222 35% 20%;
+    --gray-300: 220 25% 35%;
+    --gray-400: 218 15% 50%;
+    --gray-500: 220 10% 65%;
+    --gray-600: 215 12% 75%;
+    --gray-700: 217 15% 82%;
+    --gray-800: 215 20% 88%;
+    --gray-900: 221 25% 94%;
+
+    --card: 222 47% 9%;
     --card-foreground: 0 0% 98%;
-    --popover: 250 30% 8%;
+    --popover: 222 47% 9%;
     --popover-foreground: 0 0% 98%;
-    --primary: 270 91% 65%;
+    --primary: 213 100% 59%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 330 90% 60%;
-    --secondary-foreground: 0 0% 100%;
-    --muted: 250 30% 15%;
-    --muted-foreground: 250 10% 65%;
-    --accent: 330 90% 60%;
+    --secondary: 222 40% 14%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 222 40% 14%;
+    --muted-foreground: 220 10% 65%;
+    --accent: 213 100% 59%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 62% 30%;
+    --destructive: 0 62% 50%;
     --destructive-foreground: 0 0% 100%;
-    --border: 250 30% 18%;
-    --input: 250 30% 18%;
-    --ring: 270 91% 65%;
+    --border: 222 35% 20%;
+    --input: 222 35% 20%;
+    --ring: 213 100% 59%;
   }
 }
 
@@ -91,390 +117,270 @@
     @apply bg-background text-foreground antialiased;
     font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
+    letter-spacing: -0.02em;
   }
 
   html {
     @apply scroll-smooth;
   }
+
+  /* Toss-style headings */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold tracking-tight;
+  }
 }
 
 @layer utilities {
-  /* === GRADIENTS === */
+  /* === TOSS GRADIENTS === */
 
-  /* Instagram gradient */
-  .instagram-gradient {
-    background: linear-gradient(
-      135deg,
-      hsl(var(--neon-violet)),
-      hsl(var(--neon-pink)),
-      hsl(var(--neon-orange))
-    );
+  /* Primary gradient - subtle blue */
+  .toss-gradient {
+    background: linear-gradient(135deg, #0064FF 0%, #3182F6 100%);
   }
 
-  /* Cyberpunk gradient */
-  .cyber-gradient {
-    background: linear-gradient(
-      135deg,
-      hsl(var(--neon-cyan)),
-      hsl(var(--neon-violet)),
-      hsl(var(--neon-pink))
-    );
+  /* Soft gradient background */
+  .toss-bg-gradient {
+    background: linear-gradient(180deg, #F7F8FA 0%, #FFFFFF 100%);
   }
 
-  /* Sunset gradient */
-  .sunset-gradient {
-    background: linear-gradient(
-      135deg,
-      hsl(var(--neon-pink)),
-      hsl(var(--neon-orange)),
-      hsl(var(--neon-yellow))
-    );
+  /* Card gradient on hover */
+  .toss-card-gradient {
+    background: linear-gradient(180deg, #FFFFFF 0%, #F7F8FA 100%);
   }
 
-  /* Aurora gradient */
-  .aurora-gradient {
-    background: linear-gradient(
-      135deg,
-      hsl(var(--neon-green)),
-      hsl(var(--neon-cyan)),
-      hsl(var(--neon-violet))
-    );
+  /* === TOSS CARDS === */
+
+  .toss-card {
+    @apply bg-white rounded-2xl border border-gray-100;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   }
 
-  /* Mesh gradient background */
-  .mesh-gradient {
-    background:
-      radial-gradient(at 40% 20%, hsl(var(--neon-violet) / 0.3) 0px, transparent 50%),
-      radial-gradient(at 80% 0%, hsl(var(--neon-pink) / 0.3) 0px, transparent 50%),
-      radial-gradient(at 0% 50%, hsl(var(--neon-cyan) / 0.2) 0px, transparent 50%),
-      radial-gradient(at 80% 50%, hsl(var(--neon-orange) / 0.2) 0px, transparent 50%),
-      radial-gradient(at 0% 100%, hsl(var(--neon-violet) / 0.2) 0px, transparent 50%),
-      hsl(var(--background));
+  .toss-card-elevated {
+    @apply bg-white rounded-2xl border border-gray-100;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
   }
 
-  /* Subtle mesh */
-  .mesh-gradient-subtle {
-    background:
-      radial-gradient(at 40% 20%, hsl(var(--neon-violet) / 0.08) 0px, transparent 50%),
-      radial-gradient(at 80% 0%, hsl(var(--neon-pink) / 0.08) 0px, transparent 50%),
-      radial-gradient(at 0% 100%, hsl(var(--neon-cyan) / 0.06) 0px, transparent 50%),
-      hsl(var(--background));
+  .toss-card-hover {
+    @apply bg-white rounded-2xl border border-gray-100 transition-all duration-200;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   }
 
-  /* === GLASSMORPHISM === */
+  .toss-card-hover:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+  }
 
+  /* Glass effect - Toss style (subtle) */
   .glass {
-    @apply bg-white/70 backdrop-blur-2xl border border-white/40 shadow-xl;
+    @apply bg-white/80 backdrop-blur-xl border border-gray-200/50;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
   }
 
   .glass-card {
-    @apply bg-white/60 backdrop-blur-2xl border border-white/30 shadow-2xl;
+    @apply bg-white/90 backdrop-blur-xl border border-gray-100;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
   }
 
-  .glass-dark {
-    @apply bg-black/30 backdrop-blur-2xl border border-white/10;
+  /* === TOSS BUTTONS === */
+
+  .toss-btn {
+    @apply inline-flex items-center justify-center font-semibold rounded-xl transition-all duration-200;
+    @apply focus:outline-none focus:ring-2 focus:ring-offset-2;
   }
 
-  .glass-violet {
-    @apply bg-violet-500/10 backdrop-blur-2xl border border-violet-500/20;
+  .toss-btn-primary {
+    @apply toss-btn px-6 py-3 bg-[#0064FF] text-white;
+    @apply hover:bg-[#0050CC] active:bg-[#003D99];
+    @apply focus:ring-[#0064FF]/50;
   }
 
-  .glass-pink {
-    @apply bg-pink-500/10 backdrop-blur-2xl border border-pink-500/20;
+  .toss-btn-secondary {
+    @apply toss-btn px-6 py-3 bg-gray-100 text-gray-900;
+    @apply hover:bg-gray-200 active:bg-gray-300;
+    @apply focus:ring-gray-500/30;
   }
 
-  /* === TEXT EFFECTS === */
+  .toss-btn-ghost {
+    @apply toss-btn px-6 py-3 bg-transparent text-gray-700;
+    @apply hover:bg-gray-100 active:bg-gray-200;
+  }
 
-  /* Animated gradient text */
+  .toss-btn-outline {
+    @apply toss-btn px-6 py-3 bg-white text-[#0064FF] border-2 border-[#0064FF];
+    @apply hover:bg-[#0064FF]/5 active:bg-[#0064FF]/10;
+    @apply focus:ring-[#0064FF]/50;
+  }
+
+  /* Legacy support - map old classes to new */
+  .btn-neon {
+    @apply toss-btn-primary;
+  }
+
+  .btn-glass {
+    @apply toss-btn-secondary;
+  }
+
+  .instagram-gradient {
+    background: linear-gradient(135deg, #0064FF 0%, #3182F6 100%);
+  }
+
+  /* === TOSS TEXT === */
+
   .gradient-text {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(
-      135deg,
-      hsl(var(--neon-violet)),
-      hsl(var(--neon-pink)),
-      hsl(var(--neon-orange))
-    );
-    animation: gradient-shift 4s ease infinite;
-    background-size: 200% auto;
+    background: linear-gradient(135deg, #0064FF 0%, #3182F6 100%);
   }
 
-  .gradient-text-cyber {
-    @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(
-      90deg,
-      hsl(var(--neon-cyan)),
-      hsl(var(--neon-violet)),
-      hsl(var(--neon-pink)),
-      hsl(var(--neon-cyan))
-    );
-    animation: gradient-shift 3s linear infinite;
-    background-size: 300% auto;
+  .toss-title {
+    @apply text-gray-900 font-bold tracking-tight;
   }
 
-  @keyframes gradient-shift {
-    0%, 100% {
-      background-position: 0% center;
-    }
-    50% {
-      background-position: 100% center;
-    }
+  .toss-subtitle {
+    @apply text-gray-600 font-medium;
   }
 
-  /* === GLOW EFFECTS === */
-
-  .glow-violet {
-    box-shadow: 0 0 20px hsl(var(--neon-violet) / 0.4),
-                0 0 40px hsl(var(--neon-violet) / 0.2),
-                0 0 60px hsl(var(--neon-violet) / 0.1);
+  .toss-body {
+    @apply text-gray-700;
   }
 
-  .glow-pink {
-    box-shadow: 0 0 20px hsl(var(--neon-pink) / 0.4),
-                0 0 40px hsl(var(--neon-pink) / 0.2),
-                0 0 60px hsl(var(--neon-pink) / 0.1);
+  .toss-caption {
+    @apply text-gray-500 text-sm;
   }
 
-  .glow-cyan {
-    box-shadow: 0 0 20px hsl(var(--neon-cyan) / 0.4),
-                0 0 40px hsl(var(--neon-cyan) / 0.2),
-                0 0 60px hsl(var(--neon-cyan) / 0.1);
+  /* === TOSS INPUTS === */
+
+  .toss-input {
+    @apply w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200;
+    @apply text-gray-900 placeholder:text-gray-400;
+    @apply focus:outline-none focus:border-[#0064FF] focus:ring-2 focus:ring-[#0064FF]/20;
+    @apply transition-all duration-200;
   }
 
-  .text-glow {
-    text-shadow: 0 0 10px hsl(var(--neon-violet) / 0.5),
-                 0 0 20px hsl(var(--neon-violet) / 0.3),
-                 0 0 40px hsl(var(--neon-violet) / 0.2);
+  .toss-input:hover:not(:focus) {
+    @apply border-gray-300 bg-gray-100;
+  }
+
+  .input-trendy {
+    @apply toss-input;
+  }
+
+  /* === TOSS BADGES === */
+
+  .toss-badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold;
+  }
+
+  .toss-badge-blue {
+    @apply toss-badge bg-[#0064FF]/10 text-[#0064FF];
+  }
+
+  .toss-badge-gray {
+    @apply toss-badge bg-gray-100 text-gray-600;
+  }
+
+  .toss-badge-green {
+    @apply toss-badge bg-emerald-50 text-emerald-600;
+  }
+
+  .toss-badge-red {
+    @apply toss-badge bg-red-50 text-red-600;
+  }
+
+  .toss-badge-yellow {
+    @apply toss-badge bg-amber-50 text-amber-600;
+  }
+
+  /* Legacy badges */
+  .badge-neon {
+    @apply toss-badge-blue;
+  }
+
+  .badge-gradient {
+    @apply toss-badge bg-[#0064FF] text-white;
+  }
+
+  .badge-glass {
+    @apply toss-badge-gray;
+  }
+
+  /* === TOSS SECTIONS === */
+
+  .toss-section {
+    @apply bg-gray-50 rounded-3xl p-6 md:p-8;
+  }
+
+  .toss-section-white {
+    @apply bg-white rounded-3xl p-6 md:p-8 border border-gray-100;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   }
 
   /* === ANIMATIONS === */
 
-  /* Floating animation */
   .float {
     animation: float 6s ease-in-out infinite;
   }
 
   @keyframes float {
-    0%, 100% {
-      transform: translateY(0px);
-    }
-    50% {
-      transform: translateY(-20px);
-    }
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
   }
 
-  /* Pulse glow */
-  .pulse-glow {
-    animation: pulse-glow 2s ease-in-out infinite;
-  }
-
-  @keyframes pulse-glow {
-    0%, 100% {
-      box-shadow: 0 0 20px hsl(var(--neon-violet) / 0.4);
-    }
-    50% {
-      box-shadow: 0 0 40px hsl(var(--neon-violet) / 0.8),
-                  0 0 60px hsl(var(--neon-pink) / 0.4);
-    }
-  }
-
-  /* Shine effect */
-  .shine {
-    position: relative;
-    overflow: hidden;
-  }
-
-  .shine::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(255, 255, 255, 0.3),
-      transparent
-    );
-    animation: shine 3s infinite;
-  }
-
-  @keyframes shine {
-    0% {
-      left: -100%;
-    }
-    50%, 100% {
-      left: 100%;
-    }
-  }
-
-  /* Bounce in */
-  .bounce-in {
-    animation: bounce-in 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-  }
-
-  @keyframes bounce-in {
-    0% {
-      transform: scale(0);
-      opacity: 0;
-    }
-    50% {
-      transform: scale(1.1);
-    }
-    100% {
-      transform: scale(1);
-      opacity: 1;
-    }
-  }
-
-  /* Slide up */
   .slide-up {
-    animation: slide-up 0.5s ease-out;
+    animation: slide-up 0.4s ease-out;
   }
 
   @keyframes slide-up {
-    0% {
-      transform: translateY(20px);
-      opacity: 0;
-    }
-    100% {
-      transform: translateY(0);
-      opacity: 1;
-    }
+    0% { transform: translateY(16px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
   }
 
-  /* Wiggle */
-  .wiggle {
-    animation: wiggle 0.5s ease-in-out;
+  .fade-in {
+    animation: fade-in 0.3s ease-out;
   }
 
-  @keyframes wiggle {
-    0%, 100% { transform: rotate(0deg); }
-    25% { transform: rotate(-5deg); }
-    75% { transform: rotate(5deg); }
+  @keyframes fade-in {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
   }
 
-  /* Scale pop */
-  .scale-pop {
-    transition: transform 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  .scale-in {
+    animation: scale-in 0.2s ease-out;
   }
 
-  .scale-pop:hover {
-    transform: scale(1.05);
+  @keyframes scale-in {
+    0% { transform: scale(0.95); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
   }
 
-  .scale-pop:active {
-    transform: scale(0.95);
+  /* Hover scale */
+  .toss-hover {
+    @apply transition-all duration-200;
   }
 
-  /* === CARDS === */
-
-  /* Card hover effect */
-  .card-hover {
-    @apply transition-all duration-300;
+  .toss-hover:hover {
+    @apply -translate-y-0.5;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
   }
 
-  .card-hover:hover {
-    @apply -translate-y-2 shadow-2xl;
-    box-shadow: 0 25px 50px -12px hsl(var(--neon-violet) / 0.25);
+  .toss-hover:active {
+    @apply translate-y-0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
   }
 
-  /* Trendy card */
-  .card-trendy {
-    @apply relative overflow-hidden rounded-3xl bg-white/70 backdrop-blur-xl border border-white/40;
-    @apply transition-all duration-500;
+  /* Skeleton loader - Toss style */
+  .skeleton {
+    @apply bg-gray-100 rounded-lg animate-pulse;
   }
 
-  .card-trendy::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      135deg,
-      hsl(var(--neon-violet) / 0.1),
-      hsl(var(--neon-pink) / 0.05),
-      transparent
-    );
-    opacity: 0;
-    transition: opacity 0.5s;
+  .shimmer {
+    animation: shimmer 2s infinite;
+    background: linear-gradient(90deg, #f0f0f0 0%, #fafafa 50%, #f0f0f0 100%);
+    background-size: 1000px 100%;
   }
 
-  .card-trendy:hover::before {
-    opacity: 1;
-  }
-
-  .card-trendy:hover {
-    @apply -translate-y-2 border-violet-300/50;
-    box-shadow: 0 25px 50px -12px hsl(var(--neon-violet) / 0.3);
-  }
-
-  /* === BUTTONS === */
-
-  /* Neon button */
-  .btn-neon {
-    @apply relative px-8 py-4 rounded-2xl font-bold text-white overflow-hidden;
-    @apply transition-all duration-300;
-    background: linear-gradient(135deg, hsl(var(--neon-violet)), hsl(var(--neon-pink)));
-  }
-
-  .btn-neon:hover {
-    @apply scale-105;
-    box-shadow: 0 0 30px hsl(var(--neon-violet) / 0.5),
-                0 0 60px hsl(var(--neon-pink) / 0.3);
-  }
-
-  .btn-neon:active {
-    @apply scale-95;
-  }
-
-  /* Glass button */
-  .btn-glass {
-    @apply px-6 py-3 rounded-2xl font-semibold;
-    @apply bg-white/80 backdrop-blur-xl border border-white/40;
-    @apply transition-all duration-300;
-    @apply hover:bg-white/90 hover:scale-105 hover:shadow-xl;
-    @apply active:scale-95;
-  }
-
-  /* Outline neon button */
-  .btn-outline-neon {
-    @apply px-6 py-3 rounded-2xl font-semibold;
-    @apply bg-transparent border-2 border-violet-500/50 text-violet-600;
-    @apply transition-all duration-300;
-    @apply hover:bg-violet-500 hover:text-white hover:border-violet-500;
-    @apply hover:shadow-lg hover:shadow-violet-500/30;
-  }
-
-  /* === INPUTS === */
-
-  .input-trendy {
-    @apply w-full px-5 py-4 rounded-2xl;
-    @apply bg-white/70 backdrop-blur-xl border-2 border-gray-200/50;
-    @apply focus:border-violet-500 focus:ring-4 focus:ring-violet-500/20;
-    @apply transition-all duration-300 outline-none;
-    @apply placeholder:text-gray-400;
-  }
-
-  .input-trendy:focus {
-    @apply bg-white;
-  }
-
-  /* === BADGES === */
-
-  .badge-neon {
-    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold;
-    @apply bg-violet-500/10 text-violet-600 border border-violet-500/20;
-  }
-
-  .badge-gradient {
-    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold;
-    background: linear-gradient(135deg, hsl(var(--neon-violet)), hsl(var(--neon-pink)));
-    @apply text-white;
-  }
-
-  .badge-glass {
-    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold;
-    @apply bg-white/80 backdrop-blur-xl border border-white/40 text-gray-700;
+  @keyframes shimmer {
+    0% { background-position: -1000px 0; }
+    100% { background-position: 1000px 0; }
   }
 
   /* === SCROLLBAR === */
@@ -488,93 +394,81 @@
     display: none;
   }
 
-  /* Custom scrollbar */
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
 
   .custom-scrollbar::-webkit-scrollbar-track {
-    background: hsl(var(--muted));
-    border-radius: 3px;
+    @apply bg-gray-100 rounded;
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: linear-gradient(135deg, hsl(var(--neon-violet)), hsl(var(--neon-pink)));
-    border-radius: 3px;
+    @apply bg-gray-300 rounded hover:bg-gray-400;
   }
 
-  /* === LOADING === */
+  /* === TOSS DIVIDER === */
 
-  .shimmer {
-    animation: shimmer 2s infinite;
-    background: linear-gradient(
-      90deg,
-      hsl(var(--muted)) 0%,
-      hsl(var(--background)) 50%,
-      hsl(var(--muted)) 100%
-    );
-    background-size: 1000px 100%;
+  .toss-divider {
+    @apply h-px bg-gray-100 my-4;
   }
 
-  @keyframes shimmer {
-    0% {
-      background-position: -1000px 0;
-    }
-    100% {
-      background-position: 1000px 0;
-    }
+  .toss-divider-thick {
+    @apply h-2 bg-gray-50 my-6;
   }
 
-  /* Skeleton loader */
-  .skeleton {
-    @apply bg-gray-200/50 rounded-xl animate-pulse;
+  /* === TOSS LIST === */
+
+  .toss-list-item {
+    @apply flex items-center justify-between py-4 px-4 -mx-4 rounded-xl;
+    @apply hover:bg-gray-50 transition-colors cursor-pointer;
   }
 
-  /* === DECORATIVE === */
+  /* === LEGACY SUPPORT (for existing components) === */
 
-  /* Blob shapes */
-  .blob {
-    border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
-    animation: blob-morph 8s ease-in-out infinite;
+  /* Map old violet/pink classes to Toss blue */
+  .card-hover {
+    @apply toss-card-hover;
   }
 
-  @keyframes blob-morph {
-    0%, 100% {
-      border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
-    }
-    50% {
-      border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%;
-    }
+  .card-trendy {
+    @apply toss-card-elevated;
   }
 
-  /* Grain texture overlay */
-  .grain {
-    position: relative;
+  /* Glow effects - removed for Toss clean style */
+  .glow-violet, .glow-pink, .glow-cyan, .text-glow, .pulse-glow {
+    /* No glow in Toss style */
   }
 
-  .grain::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-    opacity: 0.03;
-    pointer-events: none;
+  /* Keep mesh gradient but make it subtle blue */
+  .mesh-gradient {
+    background:
+      radial-gradient(at 40% 20%, rgba(0, 100, 255, 0.03) 0px, transparent 50%),
+      radial-gradient(at 80% 0%, rgba(49, 130, 246, 0.03) 0px, transparent 50%),
+      radial-gradient(at 0% 50%, rgba(0, 100, 255, 0.02) 0px, transparent 50%),
+      hsl(var(--background));
+  }
+
+  .mesh-gradient-subtle {
+    background:
+      radial-gradient(at 40% 20%, rgba(0, 100, 255, 0.02) 0px, transparent 50%),
+      radial-gradient(at 80% 0%, rgba(49, 130, 246, 0.02) 0px, transparent 50%),
+      hsl(var(--background));
   }
 }
 
-/* Smooth transitions for everything */
-* {
-  @apply transition-colors duration-200;
-}
-
-/* Selection color */
+/* Selection color - Toss Blue */
 ::selection {
-  background: hsl(var(--neon-violet) / 0.3);
-  color: hsl(var(--foreground));
+  background: rgba(0, 100, 255, 0.15);
+  color: inherit;
 }
 
-/* Focus visible */
+/* Focus visible - Toss style */
 :focus-visible {
-  @apply outline-none ring-2 ring-violet-500 ring-offset-2;
+  @apply outline-none ring-2 ring-[#0064FF] ring-offset-2;
+}
+
+/* Smooth transitions */
+* {
+  @apply transition-colors duration-150;
 }

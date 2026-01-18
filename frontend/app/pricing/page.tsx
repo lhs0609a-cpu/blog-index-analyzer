@@ -17,10 +17,10 @@ const planIcons: Record<PlanType, React.ReactNode> = {
 }
 
 const planColors: Record<PlanType, string> = {
-  free: 'from-gray-500 to-gray-600',
-  basic: 'from-blue-500 to-cyan-500',
-  pro: 'from-purple-500 to-pink-500',
-  business: 'from-orange-500 to-red-500'
+  free: 'from-gray-400 to-gray-500',
+  basic: 'from-[#3182F6] to-[#5CA3FF]',
+  pro: 'from-[#0064FF] to-[#3182F6]',
+  business: 'from-[#0050CC] to-[#0064FF]'
 }
 
 // 기본 플랜 데이터 (API 실패 시 fallback)
@@ -182,9 +182,9 @@ export default function PricingPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-purple-600 mx-auto mb-4" />
+          <Loader2 className="w-12 h-12 animate-spin text-[#0064FF] mx-auto mb-4" />
           <p className="text-gray-600">플랜 정보를 불러오는 중...</p>
         </div>
       </div>
@@ -192,7 +192,7 @@ export default function PricingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 py-12 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-gray-50 py-12 px-4">
       <div className="container mx-auto max-w-7xl">
         {/* Back Button */}
         <Link href="/">
@@ -219,7 +219,7 @@ export default function PricingPage() {
             블랭크와 함께 블로그를 성장시키세요
           </p>
           {/* 정기결제 안내 - 토스페이먼츠 심사용 */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-100 text-purple-700 rounded-full text-sm mb-4">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-[#0064FF] rounded-full text-sm mb-4">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -232,7 +232,7 @@ export default function PricingPage() {
               onClick={() => setBillingCycle('monthly')}
               className={`px-6 py-2 rounded-full font-semibold transition-all ${
                 billingCycle === 'monthly'
-                  ? 'instagram-gradient text-white'
+                  ? 'toss-gradient text-white'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -242,7 +242,7 @@ export default function PricingPage() {
               onClick={() => setBillingCycle('yearly')}
               className={`px-6 py-2 rounded-full font-semibold transition-all ${
                 billingCycle === 'yearly'
-                  ? 'instagram-gradient text-white'
+                  ? 'toss-gradient text-white'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -271,12 +271,12 @@ export default function PricingPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
                 className={`relative glass rounded-3xl p-6 ${
-                  isPro ? 'ring-2 ring-purple-500 shadow-xl' : ''
+                  isPro ? 'ring-2 ring-[#0064FF] shadow-xl' : ''
                 } ${isCurrentPlan ? 'ring-2 ring-green-500' : ''}`}
               >
                 {isPro && (
                   <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                    <span className="px-4 py-1 bg-purple-500 text-white text-sm font-bold rounded-full">
+                    <span className="px-4 py-1 bg-[#0064FF] text-white text-sm font-bold rounded-full">
                       가장 인기
                     </span>
                   </div>
@@ -387,7 +387,7 @@ export default function PricingPage() {
                     isCurrentPlan
                       ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                       : isPro
-                      ? 'instagram-gradient text-white hover:shadow-lg'
+                      ? 'toss-gradient text-white hover:shadow-lg'
                       : 'bg-gray-900 text-white hover:bg-gray-800'
                   } disabled:opacity-50`}
                 >
@@ -516,7 +516,7 @@ export default function PricingPage() {
                 ))}
 
                 {/* 프리미엄 전용 */}
-                <tr className="bg-purple-50"><td colSpan={5} className="py-2 px-4 font-bold text-purple-700">프리미엄 전용</td></tr>
+                <tr className="bg-purple-50"><td colSpan={5} className="py-2 px-4 font-bold text-[#0064FF]">프리미엄 전용</td></tr>
                 {[
                   { name: '광고 최적화', free: false, basic: false, pro: true, biz: true },
                 ].map((tool, i) => (
@@ -543,8 +543,8 @@ export default function PricingPage() {
           <h2 className="text-2xl font-bold text-center mb-6">정기결제 서비스 안내</h2>
           <div className="grid md:grid-cols-3 gap-6">
             <div className="text-center p-4">
-              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                <svg className="w-6 h-6 text-[#0064FF]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
               </div>
@@ -575,7 +575,7 @@ export default function PricingPage() {
               <h3 className="font-bold mb-2">환불 정책</h3>
               <p className="text-sm text-gray-600">
                 7일 이내 전액 환불 가능<br/>
-                <Link href="/refund-policy" className="text-purple-600 hover:underline">
+                <Link href="/refund-policy" className="text-[#0064FF] hover:underline transition-colors">
                   자세한 환불정책 보기 →
                 </Link>
               </p>
@@ -608,7 +608,7 @@ export default function PricingPage() {
               <p className="text-gray-600 text-sm">
                 결제 후 7일 이내 전액 환불이 가능합니다.
                 7일 이후에는 남은 기간에 대해 일할 계산하여 환불해드립니다.{' '}
-                <Link href="/refund-policy" className="text-purple-600 hover:underline">
+                <Link href="/refund-policy" className="text-[#0064FF] hover:underline transition-colors">
                   자세히 보기
                 </Link>
               </p>
@@ -637,11 +637,11 @@ export default function PricingPage() {
           className="mt-12 text-center text-sm text-gray-500"
         >
           <div className="flex justify-center gap-4 flex-wrap">
-            <Link href="/terms" className="hover:text-purple-600">이용약관</Link>
+            <Link href="/terms" className="hover:text-[#0064FF]">이용약관</Link>
             <span>|</span>
-            <Link href="/refund-policy" className="hover:text-purple-600">환불정책</Link>
+            <Link href="/refund-policy" className="hover:text-[#0064FF]">환불정책</Link>
             <span>|</span>
-            <a href="mailto:lhs0609c@naver.com" className="hover:text-purple-600">문의하기</a>
+            <a href="mailto:lhs0609c@naver.com" className="hover:text-[#0064FF]">문의하기</a>
           </div>
         </motion.div>
       </div>
