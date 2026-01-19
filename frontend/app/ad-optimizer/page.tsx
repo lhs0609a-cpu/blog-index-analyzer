@@ -194,10 +194,10 @@ export default function AdOptimizerPage() {
   // 프로 플랜 미만 사용자 접근 제한 - 프리미엄 유도 팝업
   if (isLocked) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 overflow-hidden relative">
+      <div className="min-h-screen bg-slate-950 pt-24 flex items-center justify-center p-4 overflow-hidden relative">
         {/* 모던 배경 */}
         <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950" />
-        <div className="absolute top-0 right-0 w-96 h-96 bg-violet-600 opacity-10 rounded-full blur-3xl" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-[#0064FF] opacity-5 rounded-full blur-3xl" />
         <div className="absolute bottom-0 left-0 w-80 h-80 bg-blue-600 opacity-10 rounded-full blur-3xl" />
 
         <motion.div
@@ -217,7 +217,7 @@ export default function AdOptimizerPage() {
                 transition={{ delay: 0.3, type: 'spring', stiffness: 200 }}
                 className="relative mx-auto w-16 h-16 mb-6"
               >
-                <div className="w-full h-full bg-gradient-to-br from-violet-500 via-blue-500 to-cyan-500 rounded-2xl flex items-center justify-center shadow-lg">
+                <div className="w-full h-full bg-gradient-to-br from-[#0064FF] via-[#3182F6] to-[#4A9AF6] rounded-2xl flex items-center justify-center shadow-lg">
                   <Zap className="w-8 h-8 text-white" />
                 </div>
               </motion.div>
@@ -345,7 +345,7 @@ export default function AdOptimizerPage() {
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <div className="flex -space-x-2">
-                      {['from-violet-500 to-purple-600', 'from-blue-500 to-cyan-500', 'from-emerald-500 to-green-500'].map((gradient, i) => (
+                      {['from-[#0064FF] to-[#3182F6]', 'from-blue-500 to-cyan-500', 'from-emerald-500 to-green-500'].map((gradient, i) => (
                         <div key={i} className={`w-7 h-7 bg-gradient-to-br ${gradient} rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] font-bold text-white`}>
                           {['K', 'L', 'P'][i]}
                         </div>
@@ -371,8 +371,8 @@ export default function AdOptimizerPage() {
                       href="/pricing"
                       className="relative block w-full py-4 text-center rounded-xl font-semibold text-white overflow-hidden group"
                     >
-                      <div className="absolute inset-0 bg-gradient-to-r from-violet-600 via-blue-600 to-cyan-600" />
-                      <div className="absolute inset-0 bg-gradient-to-r from-violet-500 via-blue-500 to-cyan-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-[#0064FF] via-[#3182F6] to-[#4A9AF6]" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-[#0064FF] via-[#3182F6] to-[#4A9AF6] opacity-0 group-hover:opacity-100 transition-opacity" />
                       <span className="relative flex items-center justify-center gap-2">
                         <Sparkles className="w-4 h-4" />
                         프로 플랜 시작하기
@@ -854,15 +854,12 @@ export default function AdOptimizerPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 pt-20">
       {/* 헤더 */}
-      <header className="bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50">
+      <header className="bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-[72px] z-40">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Link href="/tools" className="text-gray-500 hover:text-gray-700">
-                ← 도구로 돌아가기
-              </Link>
               <div className="w-px h-6 bg-gray-300" />
               <div className="flex items-center gap-2">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
@@ -1290,8 +1287,8 @@ export default function AdOptimizerPage() {
                 className="bg-white rounded-2xl p-6 shadow-sm"
               >
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
-                    <MousePointer className="w-5 h-5 text-purple-600" />
+                  <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                    <MousePointer className="w-5 h-5 text-[#0064FF]" />
                   </div>
                   <span className="text-sm text-gray-500">CTR 개선</span>
                 </div>
@@ -1503,7 +1500,7 @@ export default function AdOptimizerPage() {
                         </div>
                         <div className="text-right">
                           <p className="text-sm text-gray-500">기회점수</p>
-                          <p className="font-semibold text-purple-600">{(kw.opportunity_score * 100).toFixed(0)}</p>
+                          <p className="font-semibold text-[#0064FF]">{(kw.opportunity_score * 100).toFixed(0)}</p>
                         </div>
                         <div className="text-right">
                           <p className="text-sm text-gray-500">추천입찰가</p>
@@ -1587,8 +1584,8 @@ export default function AdOptimizerPage() {
                 className="bg-white rounded-2xl p-6 shadow-sm"
               >
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
-                    <Target className="w-5 h-5 text-purple-600" />
+                  <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                    <Target className="w-5 h-5 text-[#0064FF]" />
                   </div>
                   <span className="text-sm text-gray-500">전략</span>
                 </div>
@@ -1672,7 +1669,7 @@ export default function AdOptimizerPage() {
 
                   <button
                     onClick={() => setActiveTab('discover')}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-purple-500 hover:bg-purple-600 text-white rounded-xl font-medium transition-colors"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#0064FF] hover:bg-[#0052D4] text-white rounded-xl font-medium transition-colors"
                   >
                     <Sparkles className="w-4 h-4" />
                     키워드 발굴하기
@@ -1797,7 +1794,7 @@ export default function AdOptimizerPage() {
                   <button
                     onClick={discoverKeywords}
                     disabled={isDiscovering}
-                    className="flex items-center gap-2 px-6 py-3 bg-purple-500 hover:bg-purple-600 text-white rounded-xl font-medium transition-colors disabled:opacity-50"
+                    className="flex items-center gap-2 px-6 py-3 bg-[#0064FF] hover:bg-[#0052D4] text-white rounded-xl font-medium transition-colors disabled:opacity-50"
                   >
                     {isDiscovering ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -1840,7 +1837,7 @@ export default function AdOptimizerPage() {
                           </td>
                           <td className="py-3 text-right">{formatCurrency(kw.suggested_bid)}</td>
                           <td className="py-3 text-right">{(kw.relevance_score * 100).toFixed(0)}%</td>
-                          <td className="py-3 text-right font-semibold text-purple-600">
+                          <td className="py-3 text-right font-semibold text-[#0064FF]">
                             {kw.potential_score.toFixed(1)}
                           </td>
                         </tr>
@@ -2141,13 +2138,13 @@ export default function AdOptimizerPage() {
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                         log.log_type === 'optimization_start' ? 'bg-green-100' :
                         log.log_type === 'optimization_stop' ? 'bg-red-100' :
-                        log.log_type === 'keyword_discovery' ? 'bg-purple-100' :
+                        log.log_type === 'keyword_discovery' ? 'bg-blue-100' :
                         log.log_type === 'keyword_evaluation' ? 'bg-orange-100' :
                         'bg-blue-100'
                       }`}>
                         {log.log_type === 'optimization_start' ? <Play className="w-4 h-4 text-green-600" /> :
                          log.log_type === 'optimization_stop' ? <Pause className="w-4 h-4 text-red-600" /> :
-                         log.log_type === 'keyword_discovery' ? <Sparkles className="w-4 h-4 text-purple-600" /> :
+                         log.log_type === 'keyword_discovery' ? <Sparkles className="w-4 h-4 text-[#0064FF]" /> :
                          log.log_type === 'keyword_evaluation' ? <Filter className="w-4 h-4 text-orange-600" /> :
                          <Activity className="w-4 h-4 text-blue-600" />}
                       </div>

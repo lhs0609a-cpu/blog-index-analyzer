@@ -100,21 +100,10 @@ export default function AnalyzePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 py-20">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-blue-100 pt-24 pb-12">
       {showConfetti && <Confetti width={width} height={height} recycle={false} numberOfPieces={200} />}
 
       <div className="container mx-auto px-4">
-        {/* Back Button */}
-        <motion.button
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          onClick={() => router.back()}
-          className="mb-6 flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-white/50 rounded-lg transition-all"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          <span className="font-medium">뒤로가기</span>
-        </motion.button>
-
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -155,7 +144,7 @@ export default function AnalyzePage() {
                   onChange={(e) => setBlogId(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleAnalyze()}
                   placeholder="블로그 ID 입력 (예: example_blog)"
-                  className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none text-lg transition-all"
+                  className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-[#0064FF] focus:outline-none text-lg transition-all"
                   disabled={isAnalyzing}
                 />
               </div>
@@ -180,7 +169,7 @@ export default function AnalyzePage() {
             </div>
 
             <div className="mt-4 text-sm text-gray-500">
-              💡 <strong>예시:</strong> blog.naver.com/<span className="text-purple-600 font-semibold">example_blog</span> → example_blog 입력
+              💡 <strong>예시:</strong> blog.naver.com/<span className="text-[#0064FF] font-semibold">example_blog</span> → example_blog 입력
             </div>
           </motion.div>
 
@@ -226,7 +215,7 @@ export default function AnalyzePage() {
                       transition={{ delay: index * 0.5 }}
                       className="flex items-center gap-3"
                     >
-                      <div className="w-2 h-2 rounded-full bg-purple-500" />
+                      <div className="w-2 h-2 rounded-full bg-[#0064FF]" />
                       <span className="text-gray-700">{step}</span>
                     </motion.div>
                   ))}
@@ -246,7 +235,7 @@ export default function AnalyzePage() {
               >
                 {/* Score Card */}
                 <div className="glass rounded-3xl p-8 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-purple-400/10 rounded-full blur-3xl" />
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-[#0064FF]/10 rounded-full blur-3xl" />
 
                   <div className="relative flex items-center justify-between">
                     <div>
@@ -276,7 +265,7 @@ export default function AnalyzePage() {
                             return 'Challenger'
                           })()}
                         </div>
-                        <div className="text-3xl font-bold text-gray-900 mb-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-purple-100 to-pink-100">
+                        <div className="text-3xl font-bold text-gray-900 mb-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-[#0064FF]/10 to-[#3182F6]/10">
                           Lv.{result.index.level}
                         </div>
 
@@ -287,8 +276,8 @@ export default function AnalyzePage() {
                             {[
                               { range: '1', label: 'Lv.1', color: 'bg-gray-400', textColor: 'text-gray-700', bgActive: 'bg-gray-50' },
                               { range: '2-8', label: 'Lv.2~8', color: 'bg-blue-500', textColor: 'text-blue-600', bgActive: 'bg-blue-50' },
-                              { range: '9-11', label: 'Lv.9~11', color: 'bg-purple-500', textColor: 'text-purple-600', bgActive: 'bg-purple-50' },
-                              { range: '12-15', label: 'Lv.12~15', color: 'bg-gradient-to-r from-pink-500 to-rose-500', textColor: 'text-pink-600', bgActive: 'bg-pink-50' },
+                              { range: '9-11', label: 'Lv.9~11', color: 'bg-[#0064FF]', textColor: 'text-[#0064FF]', bgActive: 'bg-blue-50' },
+                              { range: '12-15', label: 'Lv.12~15', color: 'bg-gradient-to-r from-[#0064FF] to-[#3182F6]', textColor: 'text-[#0064FF]', bgActive: 'bg-blue-50' },
                             ].map((tier) => {
                               const currentLevel = result.index.level
                               const isActive = (tier.range === '1' && currentLevel === 1) ||
@@ -301,7 +290,7 @@ export default function AnalyzePage() {
                                   key={tier.range}
                                   className={`text-center py-6 px-3 rounded-3xl transition-all duration-300 ${
                                     isActive
-                                      ? `${tier.bgActive} shadow-2xl scale-110 ring-3 ring-purple-400 border-2 border-purple-200`
+                                      ? `${tier.bgActive} shadow-2xl scale-110 ring-3 ring-[#0064FF] border-2 border-blue-200`
                                       : 'bg-gray-100/60 opacity-60'
                                   }`}
                                 >
@@ -312,7 +301,7 @@ export default function AnalyzePage() {
 
                                   {isActive && (
                                     <div className="mt-3">
-                                      <span className="text-xs font-bold text-white bg-purple-500 px-3 py-1 rounded-full">
+                                      <span className="text-xs font-bold text-white bg-[#0064FF] px-3 py-1 rounded-full">
                                         현재 티어
                                       </span>
                                     </div>
@@ -328,8 +317,8 @@ export default function AnalyzePage() {
                             <div className="h-5 bg-gray-200 rounded-full overflow-hidden flex shadow-inner">
                               <div className="w-[6.67%] bg-gray-400" /> {/* Lv.1 */}
                               <div className="w-[46.67%] bg-gradient-to-r from-blue-400 to-blue-500" /> {/* Lv.2-8 */}
-                              <div className="w-[20%] bg-gradient-to-r from-purple-400 to-purple-500" /> {/* Lv.9-11 */}
-                              <div className="w-[26.67%] bg-gradient-to-r from-pink-400 via-pink-500 to-rose-500" /> {/* Lv.12-15 */}
+                              <div className="w-[20%] bg-gradient-to-r from-[#0064FF] to-[#3182F6]" /> {/* Lv.9-11 */}
+                              <div className="w-[26.67%] bg-gradient-to-r from-[#0064FF] via-[#3182F6] to-[#4A9AF8]" /> {/* Lv.12-15 */}
                             </div>
 
                             {/* 현재 레벨 마커 */}
@@ -373,16 +362,16 @@ export default function AnalyzePage() {
                                   level <= 9 ? { nextTier: 'Platinum', color: 'text-teal-700', bg: 'bg-teal-100' } :
                                   level <= 11 ? { nextTier: 'Diamond', color: 'text-blue-700', bg: 'bg-blue-100' } :
                                   level <= 13 ? { nextTier: 'Challenger', color: 'text-orange-700', bg: 'bg-orange-100' } :
-                                  { nextTier: 'MAX', color: 'text-purple-700', bg: 'bg-purple-100' }
+                                  { nextTier: 'MAX', color: 'text-[#0064FF]', bg: 'bg-blue-100' }
 
                                 const pointsNeeded = Math.ceil((result.index.level + 1) * 6.67 - result.index.total_score)
 
                                 return (
-                                  <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl border border-purple-100 shadow-sm">
-                                    <span className="text-base text-purple-600">
+                                  <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-[#0064FF]/5 to-[#3182F6]/10 rounded-2xl border border-blue-100 shadow-sm">
+                                    <span className="text-base text-[#0064FF]">
                                       다음 티어까지 <span className="font-bold text-lg">{pointsNeeded}점</span> 필요
                                     </span>
-                                    <span className="text-purple-400 text-xl">→</span>
+                                    <span className="text-[#3182F6] text-xl">→</span>
                                     <span className={`text-lg font-bold ${nextTierInfo.color} ${nextTierInfo.bg} px-3 py-1 rounded-lg`}>
                                       {nextTierInfo.nextTier}
                                     </span>
@@ -422,7 +411,7 @@ export default function AnalyzePage() {
                 <div className="glass rounded-3xl p-8">
                   <div className="flex items-center justify-between mb-6">
                     <h3 className="text-2xl font-bold flex items-center gap-2">
-                      <TrendingUp className="w-6 h-6 text-purple-600" />
+                      <TrendingUp className="w-6 h-6 text-[#0064FF]" />
                       상세 점수
                     </h3>
                     <Link href={`/blog/${result.blog.blog_id}?tab=breakdown`}>
@@ -460,7 +449,7 @@ export default function AnalyzePage() {
                               <div className="font-semibold text-lg">{labels[key]}</div>
                               <div className="text-sm text-gray-500 mt-1">{descriptions[key]}</div>
                             </div>
-                            <span className="text-purple-600 font-bold text-xl">
+                            <span className="text-[#0064FF] font-bold text-xl">
                               {value.toFixed(1)}/100
                             </span>
                           </div>
@@ -482,7 +471,7 @@ export default function AnalyzePage() {
                 {result.daily_visitors && result.daily_visitors.length > 0 && (
                   <div className="glass rounded-3xl p-8">
                     <h3 className="text-2xl font-bold mb-6 flex items-center gap-2">
-                      <BarChart3 className="w-6 h-6 text-purple-600" />
+                      <BarChart3 className="w-6 h-6 text-[#0064FF]" />
                       일일 방문자 (최근 15일)
                     </h3>
 
@@ -521,14 +510,14 @@ export default function AnalyzePage() {
                             dataKey="visitors"
                             stroke="url(#colorGradient)"
                             strokeWidth={3}
-                            dot={{ fill: '#8b5cf6', r: 4 }}
+                            dot={{ fill: '#0064FF', r: 4 }}
                             activeDot={{ r: 6 }}
                           />
                           <defs>
                             <linearGradient id="colorGradient" x1="0" y1="0" x2="1" y2="0">
-                              <stop offset="0%" stopColor="#8b5cf6" />
-                              <stop offset="50%" stopColor="#ec4899" />
-                              <stop offset="100%" stopColor="#f97316" />
+                              <stop offset="0%" stopColor="#0064FF" />
+                              <stop offset="50%" stopColor="#3182F6" />
+                              <stop offset="100%" stopColor="#4A9AF8" />
                             </linearGradient>
                           </defs>
                         </LineChart>
@@ -541,7 +530,7 @@ export default function AnalyzePage() {
                 {result.recommendations.length > 0 && (
                   <div className="glass rounded-3xl p-8">
                     <h3 className="text-2xl font-bold mb-6 flex items-center gap-2">
-                      <Sparkles className="w-6 h-6 text-purple-600" />
+                      <Sparkles className="w-6 h-6 text-[#0064FF]" />
                       개선 권장사항
                     </h3>
 
@@ -552,14 +541,14 @@ export default function AnalyzePage() {
                           initial={{ opacity: 0, x: -20 }}
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: 0.8 + index * 0.1 }}
-                          className="p-6 rounded-2xl bg-purple-50 border-l-4 border-purple-500"
+                          className="p-6 rounded-2xl bg-blue-50 border-l-4 border-[#0064FF]"
                         >
-                          <div className="font-semibold text-purple-900 mb-3">{rec.message}</div>
+                          <div className="font-semibold text-blue-900 mb-3">{rec.message}</div>
                           {rec.actions && rec.actions.length > 0 && (
                             <ul className="space-y-2">
                               {rec.actions.map((action: string, i: number) => (
                                 <li key={i} className="flex items-start gap-2 text-gray-700">
-                                  <span className="text-purple-500 mt-1">•</span>
+                                  <span className="text-[#0064FF] mt-1">•</span>
                                   <span>{action}</span>
                                 </li>
                               ))}

@@ -151,17 +151,14 @@ export default function BlueOceanPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-teal-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-teal-50 pt-20">
       {/* Header */}
-      <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-50">
+      <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-[72px] z-40">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <Link href="/tools" className="flex items-center gap-2 text-gray-600 hover:text-gray-900">
-              <ArrowLeft className="w-5 h-5" />
-              <span>도구 목록</span>
-            </Link>
+            <div className="w-20" />
             <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
-              🌊 블루오션 키워드 발굴
+              블루오션 키워드 발굴
             </h1>
             <div className="w-20" />
           </div>
@@ -296,14 +293,14 @@ export default function BlueOceanPage() {
                       </div>
 
                       {result.my_blog_score && (
-                        <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 mb-4">
+                        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
                           <div className="flex items-center gap-3">
-                            <div className="bg-purple-500 text-white rounded-full w-12 h-12 flex items-center justify-center font-bold">
+                            <div className="bg-[#0064FF] text-white rounded-full w-12 h-12 flex items-center justify-center font-bold">
                               Lv.{result.my_blog_level}
                             </div>
                             <div>
-                              <div className="font-bold text-purple-800">내 블로그 점수: {result.my_blog_score}점</div>
-                              <div className="text-sm text-purple-600">맞춤 진입 가능성이 계산되었습니다</div>
+                              <div className="font-bold text-[#0064FF]">내 블로그 점수: {result.my_blog_score}점</div>
+                              <div className="text-sm text-[#3182F6]">맞춤 진입 가능성이 계산되었습니다</div>
                             </div>
                           </div>
                         </div>
@@ -437,9 +434,9 @@ export default function BlueOceanPage() {
                         <div className="text-sm text-gray-600">월간 검색량</div>
                         <div className="text-xl font-bold text-blue-600">{formatNumber(selectedKeyword.search_volume)}</div>
                       </div>
-                      <div className="bg-purple-50 rounded-xl p-3">
+                      <div className="bg-blue-50 rounded-xl p-3">
                         <div className="text-sm text-gray-600">상위10 평균</div>
-                        <div className="text-xl font-bold text-purple-600">{selectedKeyword.top10_avg_score}점</div>
+                        <div className="text-xl font-bold text-[#3182F6]">{selectedKeyword.top10_avg_score}점</div>
                       </div>
                       <div className="bg-green-50 rounded-xl p-3">
                         <div className="text-sm text-gray-600">진입 확률</div>

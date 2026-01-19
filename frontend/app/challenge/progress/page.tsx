@@ -127,9 +127,9 @@ export default function ProgressPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-500 border-t-transparent mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent mx-auto mb-4"></div>
           <p className="text-gray-600">진행 현황을 불러오는 중...</p>
         </div>
       </div>
@@ -138,13 +138,13 @@ export default function ProgressPage() {
 
   if (!status) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 flex items-center justify-center px-4">
         <div className="text-center">
           <div className="text-6xl mb-4">📊</div>
           <h2 className="text-xl font-bold mb-2">아직 진행 중인 챌린지가 없어요</h2>
           <p className="text-gray-600 mb-6">먼저 챌린지를 시작해주세요!</p>
           <Link href="/challenge">
-            <button className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-bold">
+            <button className="px-6 py-3 bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white rounded-xl font-bold">
               챌린지 시작하기
             </button>
           </Link>
@@ -156,7 +156,7 @@ export default function ProgressPage() {
   const levelProgress = profile ? ((profile.total_xp % 500) / 500) * 100 : 0
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 pb-24">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 pb-24">
       {/* 헤더 */}
       <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-lg border-b">
         <div className="max-w-2xl mx-auto px-4 py-4">
@@ -184,7 +184,7 @@ export default function ProgressPage() {
         >
           <div className="flex items-center gap-4 mb-4">
             <div className="relative">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#0064FF] to-[#3182F6] flex items-center justify-center">
                 <span className="text-2xl text-white font-bold">{profile?.level || 1}</span>
               </div>
               {/* 레벨 테두리 진행률 */}
@@ -210,8 +210,8 @@ export default function ProgressPage() {
                 />
                 <defs>
                   <linearGradient id="levelGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#a855f7" />
-                    <stop offset="100%" stopColor="#ec4899" />
+                    <stop offset="0%" stopColor="#0064FF" />
+                    <stop offset="100%" stopColor="#3182F6" />
                   </linearGradient>
                 </defs>
               </svg>
@@ -245,16 +245,16 @@ export default function ProgressPage() {
                 initial={{ width: 0 }}
                 animate={{ width: `${levelProgress}%` }}
                 transition={{ duration: 1 }}
-                className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"
+                className="h-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-full"
               />
             </div>
           </div>
 
           {/* 통계 */}
           <div className="grid grid-cols-4 gap-2">
-            <div className="text-center p-3 bg-purple-50 rounded-xl">
-              <Calendar className="w-5 h-5 text-purple-500 mx-auto mb-1" />
-              <div className="text-lg font-bold text-purple-600">{status.current_day}</div>
+            <div className="text-center p-3 bg-blue-50 rounded-xl">
+              <Calendar className="w-5 h-5 text-blue-500 mx-auto mb-1" />
+              <div className="text-lg font-bold text-[#0064FF]">{status.current_day}</div>
               <div className="text-xs text-gray-500">현재 일차</div>
             </div>
             <div className="text-center p-3 bg-green-50 rounded-xl">
@@ -284,14 +284,14 @@ export default function ProgressPage() {
         >
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold">전체 진행률</h3>
-            <span className="text-2xl font-bold text-purple-600">{status.progress_percent}%</span>
+            <span className="text-2xl font-bold text-[#0064FF]">{status.progress_percent}%</span>
           </div>
           <div className="h-4 bg-gray-100 rounded-full overflow-hidden mb-4">
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${status.progress_percent}%` }}
               transition={{ duration: 1, ease: 'easeOut' }}
-              className="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 rounded-full"
+              className="h-full bg-gradient-to-r from-[#0064FF] via-[#3182F6] to-blue-400 rounded-full"
             />
           </div>
           <div className="flex justify-between text-sm text-gray-500">
@@ -307,7 +307,7 @@ export default function ProgressPage() {
             onClick={() => setActiveTab('calendar')}
             className={`flex-1 py-3 rounded-xl font-bold transition-colors ${
               activeTab === 'calendar'
-                ? 'bg-purple-500 text-white'
+                ? 'bg-blue-500 text-white'
                 : 'bg-white text-gray-600 hover:bg-gray-50'
             }`}
           >
@@ -318,7 +318,7 @@ export default function ProgressPage() {
             onClick={() => setActiveTab('badges')}
             className={`flex-1 py-3 rounded-xl font-bold transition-colors ${
               activeTab === 'badges'
-                ? 'bg-purple-500 text-white'
+                ? 'bg-blue-500 text-white'
                 : 'bg-white text-gray-600 hover:bg-gray-50'
             }`}
           >
@@ -356,7 +356,7 @@ export default function ProgressPage() {
                 let icon = null
 
                 if (isToday) {
-                  bgColor = 'bg-purple-500'
+                  bgColor = 'bg-blue-500'
                   textColor = 'text-white'
                 } else if (dayData?.status === 'completed') {
                   bgColor = 'bg-green-100'
@@ -382,7 +382,7 @@ export default function ProgressPage() {
                     <span className={`text-sm font-bold ${textColor}`}>{day}</span>
                     {icon && <div className="absolute bottom-1">{icon}</div>}
                     {isToday && (
-                      <div className="absolute -bottom-1 w-1 h-1 rounded-full bg-purple-500"></div>
+                      <div className="absolute -bottom-1 w-1 h-1 rounded-full bg-blue-500"></div>
                     )}
                   </div>
                 )
@@ -392,7 +392,7 @@ export default function ProgressPage() {
             {/* 범례 */}
             <div className="flex flex-wrap gap-4 mt-6 text-xs text-gray-500">
               <div className="flex items-center gap-1">
-                <div className="w-4 h-4 rounded bg-purple-500"></div>
+                <div className="w-4 h-4 rounded bg-blue-500"></div>
                 <span>오늘</span>
               </div>
               <div className="flex items-center gap-1">
@@ -470,7 +470,7 @@ export default function ProgressPage() {
             </div>
 
             {/* 배지 카테고리별 설명 */}
-            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-5">
+            <div className="bg-gradient-to-br from-blue-50 to-sky-50 rounded-2xl p-5">
               <h3 className="font-bold mb-3">배지 획득 방법</h3>
               <div className="space-y-3 text-sm">
                 <div className="flex items-start gap-3">
@@ -492,8 +492,8 @@ export default function ProgressPage() {
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center shrink-0">
-                    <Star className="w-4 h-4 text-purple-500" />
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                    <Star className="w-4 h-4 text-blue-500" />
                   </div>
                   <div>
                     <div className="font-medium">마일스톤 배지</div>

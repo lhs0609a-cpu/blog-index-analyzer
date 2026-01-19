@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast'
 import BackendStatus from '../components/BackendStatus'
 import Footer from '../components/Footer'
 import XPWidget from '../components/XPWidget'
+import GlobalNav from '../components/GlobalNav'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -157,6 +158,7 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <BackendStatus />
+        <GlobalNav />
         <main className="min-h-screen">
           {children}
         </main>

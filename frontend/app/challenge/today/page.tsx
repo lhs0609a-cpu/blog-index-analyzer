@@ -242,9 +242,9 @@ export default function TodayMissionPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-500 border-t-transparent mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent mx-auto mb-4"></div>
           <p className="text-gray-600">오늘의 미션을 불러오는 중...</p>
         </div>
       </div>
@@ -253,13 +253,13 @@ export default function TodayMissionPage() {
 
   if (!todayData) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 flex items-center justify-center px-4">
         <div className="text-center">
           <div className="text-6xl mb-4">🚀</div>
           <h2 className="text-xl font-bold mb-2">챌린지를 시작해보세요!</h2>
           <p className="text-gray-600 mb-6">30일 동안 블로그 전문가로 성장하는 여정을 시작하세요.</p>
           <Link href="/challenge">
-            <button className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-bold">
+            <button className="px-6 py-3 bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white rounded-xl font-bold">
               챌린지 시작하기
             </button>
           </Link>
@@ -274,7 +274,7 @@ export default function TodayMissionPage() {
   const allCompleted = missions.every(m => m.completed)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 pb-24">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 pb-24">
       {/* 헤더 */}
       <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-lg border-b">
         <div className="max-w-2xl mx-auto px-4 py-4">
@@ -303,7 +303,7 @@ export default function TodayMissionPage() {
           <div className="flex items-center justify-between">
             {/* 레벨 & XP */}
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#0064FF] to-[#3182F6] flex items-center justify-center">
                 <span className="text-white font-bold">{profile?.level || 1}</span>
               </div>
               <div>
@@ -326,7 +326,7 @@ export default function TodayMissionPage() {
 
             {/* 진행률 */}
             <div className="text-center">
-              <div className="text-lg font-bold text-purple-600">{status.progress_percent}%</div>
+              <div className="text-lg font-bold text-[#0064FF]">{status.progress_percent}%</div>
               <div className="text-xs text-gray-500">진행률</div>
             </div>
           </div>
@@ -342,7 +342,7 @@ export default function TodayMissionPage() {
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${((profile.total_xp % 500) / 500) * 100}%` }}
-                  className="h-full bg-gradient-to-r from-purple-500 to-pink-500"
+                  className="h-full bg-gradient-to-r from-[#0064FF] to-[#3182F6]"
                 />
               </div>
             </div>
@@ -434,17 +434,17 @@ export default function TodayMissionPage() {
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-3">
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                    practicalMission.completed ? 'bg-green-100' : 'bg-purple-100'
+                    practicalMission.completed ? 'bg-green-100' : 'bg-blue-100'
                   }`}>
                     {practicalMission.completed ? (
                       <CheckCircle className="w-5 h-5 text-green-500" />
                     ) : (
-                      <Target className="w-5 h-5 text-purple-500" />
+                      <Target className="w-5 h-5 text-blue-500" />
                     )}
                   </div>
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-600 rounded-full">미션</span>
+                      <span className="text-xs px-2 py-0.5 bg-blue-100 text-[#0064FF] rounded-full">미션</span>
                       {practicalMission.completed && (
                         <span className="text-xs text-green-500 font-medium">완료!</span>
                       )}
@@ -478,7 +478,7 @@ export default function TodayMissionPage() {
                   whileTap={{ scale: 0.98 }}
                   onClick={() => openProofModal(practicalMission)}
                   disabled={!!completingMission}
-                  className="mt-4 w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="mt-4 w-full py-3 bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   <Camera className="w-4 h-4" />
                   인증하고 완료하기
@@ -656,8 +656,8 @@ export default function TodayMissionPage() {
               <div className="p-5 border-b sticky top-0 bg-white">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
-                      <Camera className="w-5 h-5 text-purple-500" />
+                    <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                      <Camera className="w-5 h-5 text-blue-500" />
                     </div>
                     <div>
                       <div className="text-xs text-gray-500">미션 인증</div>
@@ -714,11 +714,11 @@ export default function TodayMissionPage() {
                       </button>
                     </div>
                   ) : (
-                    <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-colors">
+                    <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors">
                       <div className="flex flex-col items-center justify-center pt-5 pb-6">
                         <Upload className="w-10 h-10 text-gray-400 mb-3" />
                         <p className="mb-2 text-sm text-gray-500">
-                          <span className="font-semibold text-purple-500">클릭하여 업로드</span>
+                          <span className="font-semibold text-blue-500">클릭하여 업로드</span>
                         </p>
                         <p className="text-xs text-gray-400">PNG, JPG (최대 5MB)</p>
                       </div>
@@ -741,7 +741,7 @@ export default function TodayMissionPage() {
                     value={missionNotes}
                     onChange={(e) => setMissionNotes(e.target.value)}
                     placeholder="오늘 미션을 수행하면서 느낀 점을 적어보세요..."
-                    className="w-full p-3 border rounded-xl resize-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="w-full p-3 border rounded-xl resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     rows={3}
                   />
                 </div>
@@ -754,7 +754,7 @@ export default function TodayMissionPage() {
                   whileTap={{ scale: 0.98 }}
                   onClick={() => handleCompleteMission(selectedMission, true)}
                   disabled={!!completingMission || !proofImage}
-                  className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-4 bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {completingMission === selectedMission.mission_id ? (
                     <>

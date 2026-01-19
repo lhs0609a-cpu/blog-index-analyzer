@@ -275,7 +275,7 @@ export default function XAutopilotPage() {
   );
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-black text-white pt-20">
       {/* 배경 그라데이션 */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-sky-600/20 rounded-full blur-3xl" />
@@ -285,11 +285,11 @@ export default function XAutopilotPage() {
 
       <div className="relative">
         {/* 네비게이션 */}
-        <nav className="border-b border-white/10 backdrop-blur-xl bg-black/50 sticky top-0 z-40">
+        <nav className="border-b border-white/10 backdrop-blur-xl bg-black/50 sticky top-[72px] z-40">
           <div className="max-w-6xl mx-auto px-4 py-4">
             <div className="flex items-center justify-between">
-              <Link href="/" className="flex items-center gap-3 group">
-                <div className="p-2 rounded-xl bg-white/10 group-hover:bg-white/20 transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-white/10">
                   <XLogo />
                 </div>
                 <div>
@@ -298,7 +298,7 @@ export default function XAutopilotPage() {
                   </h1>
                   <p className="text-xs text-white/40">by Platon Marketing</p>
                 </div>
-              </Link>
+              </div>
 
               <div className="flex items-center gap-3">
                 {/* 페르소나 관리 */}

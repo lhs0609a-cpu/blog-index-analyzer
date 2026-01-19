@@ -171,18 +171,18 @@ export default function AdDashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-950 pt-24 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-6">
+    <div className="min-h-screen bg-gray-950 text-white pt-24 p-6">
       {/* Header */}
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-[#0064FF] to-[#3182F6] bg-clip-text text-transparent">
             광고 최적화 대시보드
           </h1>
           <p className="text-gray-400 mt-1">
@@ -201,7 +201,7 @@ export default function AdDashboardPage() {
           <button
             onClick={runOptimizationNow}
             disabled={optimizing}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg hover:opacity-90 disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-lg hover:opacity-90 disabled:opacity-50"
           >
             {optimizing ? (
               <RefreshCw className="w-5 h-5 animate-spin" />
@@ -233,7 +233,7 @@ export default function AdDashboardPage() {
 
       {/* 연동된 계정 & 자동 최적화 토글 */}
       {accounts.length === 0 ? (
-        <div className="bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-700/30 rounded-xl p-8 mb-8 text-center">
+        <div className="bg-gradient-to-r from-[#0064FF]/20 to-[#3182F6]/20 border border-blue-700/30 rounded-xl p-8 mb-8 text-center">
           <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
             <Zap className="w-8 h-8 text-blue-400" />
           </div>
@@ -244,7 +244,7 @@ export default function AdDashboardPage() {
           </p>
           <a
             href="/ad-optimizer/unified"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg hover:opacity-90 font-medium"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-lg hover:opacity-90 font-medium"
           >
             <Settings className="w-5 h-5" />
             광고 계정 연동하기
@@ -259,7 +259,7 @@ export default function AdDashboardPage() {
       ) : (
         <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 mb-8">
           <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-            <Settings className="w-5 h-5 text-purple-400" />
+            <Settings className="w-5 h-5 text-[#0064FF]" />
             연동된 광고 계정
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -363,17 +363,17 @@ export default function AdDashboardPage() {
         </div>
 
         {/* ROAS 개선 */}
-        <div className="bg-gradient-to-br from-purple-900/40 to-purple-800/20 border border-purple-700/50 rounded-xl p-6">
+        <div className="bg-gradient-to-br from-[#0064FF]/30 to-[#3182F6]/15 border border-blue-600/50 rounded-xl p-6">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-purple-400 text-sm font-medium">ROAS 개선</span>
-            <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
-              <Target className="w-5 h-5 text-purple-400" />
+            <span className="text-[#0064FF] text-sm font-medium">ROAS 개선</span>
+            <div className="w-10 h-10 bg-[#0064FF]/15 rounded-lg flex items-center justify-center">
+              <Target className="w-5 h-5 text-[#0064FF]" />
             </div>
           </div>
-          <div className="text-3xl font-bold text-purple-300">
+          <div className="text-3xl font-bold text-[#3182F6]">
             {formatPercent(summary?.roi?.avg_roas_improvement || 0)}
           </div>
-          <p className="text-purple-400/70 text-sm mt-2">
+          <p className="text-[#0064FF]/70 text-sm mt-2">
             평균 ROAS 상승률
           </p>
         </div>
@@ -558,7 +558,7 @@ export default function AdDashboardPage() {
       </div>
 
       {/* Overall Stats */}
-      <div className="mt-8 bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-700/30 rounded-xl p-6">
+      <div className="mt-8 bg-gradient-to-r from-[#0064FF]/20 to-[#3182F6]/20 border border-blue-700/30 rounded-xl p-6">
         <h2 className="text-xl font-semibold mb-6">전체 광고 성과 요약</h2>
 
         <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
@@ -614,8 +614,8 @@ export default function AdDashboardPage() {
           </div>
 
           <div className="text-center">
-            <div className="w-12 h-12 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Target className="w-6 h-6 text-purple-400" />
+            <div className="w-12 h-12 bg-[#0064FF]/15 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Target className="w-6 h-6 text-[#0064FF]" />
             </div>
             <h3 className="font-medium mb-2">성과 분석</h3>
             <p className="text-sm text-gray-400">

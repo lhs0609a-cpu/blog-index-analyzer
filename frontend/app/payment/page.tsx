@@ -116,7 +116,7 @@ function PaymentContent() {
   // 결제 완료 화면
   if (isComplete) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#EBF4FF] via-[#F0F7FF] to-[#E8F3FF] flex items-center justify-center">
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -149,9 +149,9 @@ function PaymentContent() {
   // 처리 중 화면
   if (isProcessing) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#EBF4FF] via-[#F0F7FF] to-[#E8F3FF] flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-16 h-16 animate-spin text-purple-600 mx-auto mb-4" />
+          <Loader2 className="w-16 h-16 animate-spin text-[#0064FF] mx-auto mb-4" />
           <h1 className="text-2xl font-bold mb-2">정기결제 등록 중...</h1>
           <p className="text-gray-600">잠시만 기다려주세요</p>
         </div>
@@ -162,7 +162,7 @@ function PaymentContent() {
   // 결제 실패
   if (success === 'false') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#EBF4FF] via-[#F0F7FF] to-[#E8F3FF] flex items-center justify-center">
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -197,7 +197,7 @@ function PaymentContent() {
 
   // 결제 시작 화면 (빌링 전용)
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 py-12 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-[#EBF4FF] via-[#F0F7FF] to-[#E8F3FF] py-12 px-4">
       <div className="container mx-auto max-w-lg">
         {/* Back Button */}
         <Link href="/pricing">
@@ -226,12 +226,12 @@ function PaymentContent() {
           </div>
 
           {/* 정기결제 안내 */}
-          <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 mb-6">
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-6">
             <div className="flex items-start gap-3">
-              <RefreshCw className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
+              <RefreshCw className="w-5 h-5 text-[#0064FF] flex-shrink-0 mt-0.5" />
               <div className="text-sm">
-                <p className="font-semibold text-purple-800 mb-1">정기결제 서비스</p>
-                <p className="text-purple-700">
+                <p className="font-semibold text-[#0064FF] mb-1">정기결제 서비스</p>
+                <p className="text-[#3182F6]">
                   {billingCycle === 'yearly'
                     ? '결제일로부터 12개월(1년) 후 자동 갱신됩니다.'
                     : '결제일로부터 1개월(30일) 후 자동 갱신됩니다.'}
@@ -268,7 +268,7 @@ function PaymentContent() {
           {/* Benefits */}
           <div className="grid grid-cols-3 gap-3 mb-6">
             <div className="text-center p-3 bg-gray-50 rounded-xl">
-              <Calendar className="w-5 h-5 text-purple-600 mx-auto mb-1" />
+              <Calendar className="w-5 h-5 text-[#0064FF] mx-auto mb-1" />
               <p className="text-xs text-gray-600">자동 갱신</p>
             </div>
             <div className="text-center p-3 bg-gray-50 rounded-xl">
@@ -288,14 +288,14 @@ function PaymentContent() {
                 type="checkbox"
                 checked={agreedToTerms}
                 onChange={(e) => setAgreedToTerms(e.target.checked)}
-                className="mt-1 w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                className="mt-1 w-5 h-5 rounded border-gray-300 text-[#0064FF] focus:ring-[#0064FF]"
               />
               <span className="text-sm text-gray-600">
-                <Link href="/terms" className="text-purple-600 hover:underline" target="_blank">
+                <Link href="/terms" className="text-[#0064FF] hover:underline" target="_blank">
                   이용약관
                 </Link>
                 {' '}및{' '}
-                <Link href="/refund-policy" className="text-purple-600 hover:underline" target="_blank">
+                <Link href="/refund-policy" className="text-[#0064FF] hover:underline" target="_blank">
                   환불정책
                 </Link>
                 에 동의합니다. 정기결제는 해지 전까지 자동으로 갱신됩니다.
@@ -337,11 +337,11 @@ function PaymentContent() {
           <p>정기결제 해지는 마이페이지에서 언제든 가능합니다.</p>
           <p>
             문의:{' '}
-            <a href="mailto:lhs0609c@naver.com" className="hover:text-purple-600">
+            <a href="mailto:lhs0609c@naver.com" className="hover:text-[#0064FF]">
               lhs0609c@naver.com
             </a>
             {' '}|{' '}
-            <a href="tel:010-8465-0609" className="hover:text-purple-600">
+            <a href="tel:010-8465-0609" className="hover:text-[#0064FF]">
               010-8465-0609
             </a>
           </p>
@@ -354,8 +354,8 @@ function PaymentContent() {
 export default function PaymentPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 flex items-center justify-center">
-        <Loader2 className="w-12 h-12 animate-spin text-purple-600" />
+      <div className="min-h-screen bg-gradient-to-br from-[#EBF4FF] via-[#F0F7FF] to-[#E8F3FF] flex items-center justify-center">
+        <Loader2 className="w-12 h-12 animate-spin text-[#0064FF]" />
       </div>
     }>
       <PaymentContent />

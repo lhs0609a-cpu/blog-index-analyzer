@@ -138,8 +138,8 @@ export default function ChallengePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-500 border-t-transparent"></div>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 pt-24 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
       </div>
     )
   }
@@ -147,14 +147,8 @@ export default function ChallengePage() {
   // 진행 중인 챌린지가 있으면
   if (status?.has_challenge && status.status?.status === 'active') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 py-12 px-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 pt-24 pb-12 px-4">
         <div className="max-w-4xl mx-auto">
-          {/* 뒤로가기 버튼 */}
-          <Link href="/" className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6">
-            <ArrowLeft className="w-5 h-5" />
-            <span className="font-medium">홈으로</span>
-          </Link>
-
           {/* 진행 중인 챌린지 카드 */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -163,7 +157,7 @@ export default function ChallengePage() {
           >
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#0064FF] to-[#3182F6] flex items-center justify-center">
                   <Rocket className="w-7 h-7 text-white" />
                 </div>
                 <div>
@@ -181,28 +175,28 @@ export default function ChallengePage() {
             <div className="mb-6">
               <div className="flex justify-between text-sm mb-2">
                 <span className="text-gray-600">진행률</span>
-                <span className="font-bold text-purple-600">{status.status.progress_percent}%</span>
+                <span className="font-bold text-[#0064FF]">{status.status.progress_percent}%</span>
               </div>
               <div className="h-4 bg-gray-100 rounded-full overflow-hidden">
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${status.status.progress_percent}%` }}
                   transition={{ duration: 1, ease: 'easeOut' }}
-                  className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"
+                  className="h-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-full"
                 />
               </div>
             </div>
 
             {/* 통계 */}
             <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="text-center p-4 bg-purple-50 rounded-2xl">
-                <Calendar className="w-6 h-6 text-purple-500 mx-auto mb-2" />
-                <div className="text-2xl font-bold text-purple-600">{status.status.current_day}</div>
+              <div className="text-center p-4 bg-blue-50 rounded-2xl">
+                <Calendar className="w-6 h-6 text-blue-500 mx-auto mb-2" />
+                <div className="text-2xl font-bold text-[#0064FF]">{status.status.current_day}</div>
                 <div className="text-sm text-gray-500">현재 일차</div>
               </div>
-              <div className="text-center p-4 bg-pink-50 rounded-2xl">
-                <CheckCircle className="w-6 h-6 text-pink-500 mx-auto mb-2" />
-                <div className="text-2xl font-bold text-pink-600">{status.status.completed_missions}</div>
+              <div className="text-center p-4 bg-sky-50 rounded-2xl">
+                <CheckCircle className="w-6 h-6 text-blue-400 mx-auto mb-2" />
+                <div className="text-2xl font-bold text-blue-500">{status.status.completed_missions}</div>
                 <div className="text-sm text-gray-500">완료 미션</div>
               </div>
               <div className="text-center p-4 bg-orange-50 rounded-2xl">
@@ -218,7 +212,7 @@ export default function ChallengePage() {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-2"
+                  className="w-full py-4 bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-2"
                 >
                   <Play className="w-5 h-5" />
                   오늘의 미션 하러가기
@@ -243,38 +237,30 @@ export default function ChallengePage() {
 
   // 챌린지 시작 전 - 소개 페이지
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50">
-      {/* 뒤로가기 버튼 */}
-      <div className="max-w-5xl mx-auto px-4 pt-6">
-        <Link href="/" className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900">
-          <ArrowLeft className="w-5 h-5" />
-          <span className="font-medium">홈으로</span>
-        </Link>
-      </div>
-
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 pt-24">
       {/* Hero Section */}
       <div className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-purple-600/10 to-pink-600/10"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0064FF]/10 to-[#3182F6]/10"></div>
         <div className="max-w-5xl mx-auto px-4 py-16 relative">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             className="text-center"
           >
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm rounded-full text-sm font-medium text-purple-600 mb-6">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm rounded-full text-sm font-medium text-[#0064FF] mb-6">
               <Sparkles className="w-4 h-4" />
               무료 회원도 참여 가능
             </div>
 
             <h1 className="text-4xl md:text-5xl font-black mb-4">
-              <span className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-[#0064FF] to-[#3182F6] bg-clip-text text-transparent">
                 30일 블로그 챌린지
               </span>
             </h1>
 
             <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
               블로그, 혼자하면 어렵지만<br />
-              <span className="font-bold text-purple-600">함께하면 쉬워집니다</span>
+              <span className="font-bold text-[#0064FF]">함께하면 쉬워집니다</span>
             </p>
 
             {/* 핵심 혜택 */}
@@ -302,7 +288,7 @@ export default function ChallengePage() {
               whileTap={{ scale: 0.95 }}
               onClick={handleStartChallenge}
               disabled={starting}
-              className="px-10 py-5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-2xl font-bold text-xl shadow-lg shadow-purple-500/30 flex items-center gap-3 mx-auto disabled:opacity-50"
+              className="px-10 py-5 bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white rounded-2xl font-bold text-xl shadow-lg shadow-[#0064FF]/20 flex items-center gap-3 mx-auto disabled:opacity-50"
             >
               {starting ? (
                 <>
@@ -325,7 +311,7 @@ export default function ChallengePage() {
             </motion.button>
 
             {!isAuthenticated && (
-              <p className="text-sm text-purple-600 mt-4 font-medium">
+              <p className="text-sm text-[#0064FF] mt-4 font-medium">
                 🔐 무료 회원 가입 후 참여할 수 있습니다
               </p>
             )}
@@ -350,8 +336,8 @@ export default function ChallengePage() {
               className={`text-center p-3 md:p-4 rounded-2xl ${
                 index === 0 ? 'bg-green-50 border-2 border-green-200' :
                 index === 1 ? 'bg-blue-50 border-2 border-blue-200' :
-                index === 2 ? 'bg-purple-50 border-2 border-purple-200' :
-                index === 3 ? 'bg-pink-50 border-2 border-pink-200' :
+                index === 2 ? 'bg-blue-50 border-2 border-blue-200' :
+                index === 3 ? 'bg-sky-50 border-2 border-sky-200' :
                 'bg-gradient-to-br from-yellow-50 to-orange-50 border-2 border-yellow-300'
               }`}
             >
@@ -389,8 +375,8 @@ export default function ChallengePage() {
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold ${
                     week.week === 1 ? 'bg-green-500' :
                     week.week === 2 ? 'bg-blue-500' :
-                    week.week === 3 ? 'bg-purple-500' :
-                    week.week === 4 ? 'bg-pink-500' :
+                    week.week === 3 ? 'bg-blue-500' :
+                    week.week === 4 ? 'bg-sky-500' :
                     'bg-orange-500'
                   }`}>
                     W{week.week}
@@ -442,7 +428,7 @@ export default function ChallengePage() {
       {/* 배지 미리보기 */}
       <div className="max-w-5xl mx-auto px-4 py-12">
         <h2 className="text-2xl font-bold text-center mb-8">
-          <Award className="inline w-7 h-7 text-purple-500 mr-2" />
+          <Award className="inline w-7 h-7 text-blue-500 mr-2" />
           획득 가능한 배지
         </h2>
 
@@ -466,7 +452,7 @@ export default function ChallengePage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-3xl p-8 text-center text-white"
+          className="bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-3xl p-8 text-center text-white"
         >
           <h3 className="text-2xl font-bold mb-4">준비되셨나요?</h3>
           <p className="mb-6 opacity-90">
@@ -477,7 +463,7 @@ export default function ChallengePage() {
             whileTap={{ scale: 0.95 }}
             onClick={handleStartChallenge}
             disabled={starting}
-            className="px-8 py-4 bg-white text-purple-600 rounded-2xl font-bold text-lg shadow-lg"
+            className="px-8 py-4 bg-white text-[#0064FF] rounded-2xl font-bold text-lg shadow-lg"
           >
             {starting ? '시작하는 중...' : '챌린지 시작하기'}
           </motion.button>

@@ -309,7 +309,7 @@ export default function PerformanceDetailPage() {
                 return (
                   <div
                     key={idx}
-                    className="flex-1 bg-gradient-to-t from-purple-600 to-purple-400 rounded-t hover:opacity-80 transition-opacity relative group"
+                    className="flex-1 bg-gradient-to-t from-[#0064FF] to-[#3182F6] rounded-t hover:opacity-80 transition-opacity relative group"
                     style={{ height: `${height}%` }}
                   >
                     <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 hidden group-hover:block bg-gray-800 px-2 py-1 rounded text-xs whitespace-nowrap">
@@ -336,7 +336,7 @@ export default function PerformanceDetailPage() {
           </div>
           <div className="text-center">
             <p className="text-sm text-gray-400">평균 CPA</p>
-            <p className="text-2xl font-bold text-purple-400">
+            <p className="text-2xl font-bold text-[#0064FF]">
               {formatCurrency(trends.reduce((sum, t) => sum + t.cpa, 0) / trends.length)}
             </p>
           </div>
@@ -359,7 +359,7 @@ export default function PerformanceDetailPage() {
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Eye className="w-5 h-5 text-purple-400" />
+            <Eye className="w-5 h-5 text-[#0064FF]" />
             키워드/광고별 성과 비교 (Before → After)
           </h2>
 
@@ -457,7 +457,7 @@ export default function PerformanceDetailPage() {
                     </span>
                   </td>
                   <td className="py-4 text-center">
-                    <span className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded-full text-xs">
+                    <span className="px-2 py-1 bg-[#0064FF]/15 text-[#0064FF] rounded-full text-xs">
                       {kw.optimization_count}회
                     </span>
                   </td>

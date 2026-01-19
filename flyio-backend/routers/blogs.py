@@ -2281,8 +2281,22 @@ async def get_related_keywords_from_searchad(keyword: str) -> RelatedKeywordsRes
 
 
 async def get_related_keywords_from_autocomplete(keyword: str) -> RelatedKeywordsResponse:
-    """Get related keywords from multiple sources (fallback)"""
+    """Get related keywords from multiple sources (fallback) - 최대 100개"""
     related_keywords = []
+    seen_keywords = set()
+
+    def add_keyword(kw: str):
+        """중복 제거하며 키워드 추가"""
+        kw = kw.strip()
+        if kw and kw != keyword and kw.lower() not in seen_keywords:
+            seen_keywords.add(kw.lower())
+            related_keywords.append(RelatedKeyword(
+                keyword=kw,
+                monthly_pc_search=None,
+                monthly_mobile_search=None,
+                monthly_total_search=None,
+                competition=None
+            ))
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -2293,7 +2307,32 @@ async def get_related_keywords_from_autocomplete(keyword: str) -> RelatedKeyword
                 "Referer": "https://search.naver.com/"
             }
 
-            # Method 1: Naver shopping suggest (often has related keywords)
+            # ===== Method 1: 네이버 검색 자동완성 (기본) =====
+            async def fetch_naver_ac(query: str):
+                try:
+                    resp = await client.get(
+                        "https://ac.search.naver.com/nx/ac",
+                        params={
+                            "q": query, "con": "1", "frm": "nv", "ans": "2",
+                            "r_format": "json", "r_enc": "UTF-8", "r_unicode": "0",
+                            "t_koreng": "1", "run": "2", "rev": "4", "q_enc": "UTF-8"
+                        },
+                        headers=headers
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        items = data.get("items", [[]])
+                        if items and len(items) > 0:
+                            for item in items[0][:20]:
+                                if isinstance(item, list) and len(item) > 0:
+                                    add_keyword(item[0])
+                except Exception as e:
+                    logger.debug(f"Naver AC failed for '{query}': {e}")
+
+            # 기본 키워드로 자동완성
+            await fetch_naver_ac(keyword)
+
+            # ===== Method 2: 네이버 쇼핑 자동완성 =====
             try:
                 shop_response = await client.get(
                     "https://ac.shopping.naver.com/ac",
@@ -2306,79 +2345,92 @@ async def get_related_keywords_from_autocomplete(keyword: str) -> RelatedKeyword
                     if items and len(items) > 0:
                         for item in items[0][:30]:
                             if isinstance(item, list) and len(item) > 0:
-                                kw = item[0]
-                                if kw and kw != keyword and kw not in [r.keyword for r in related_keywords]:
-                                    related_keywords.append(RelatedKeyword(
-                                        keyword=kw,
-                                        monthly_pc_search=None,
-                                        monthly_mobile_search=None,
-                                        monthly_total_search=None,
-                                        competition=None
-                                    ))
+                                add_keyword(item[0])
             except Exception as e:
                 logger.debug(f"Shopping suggest failed: {e}")
 
-            # Method 2: Generate common variations (검색량 데이터 없이 키워드만 제공)
-            common_suffixes = ["추천", "가격", "비용", "후기", "리뷰", "순위", "비교", "종류", "방법", "효과"]
+            # ===== Method 3: 다양한 접미사 조합으로 자동완성 확장 =====
+            common_suffixes = [
+                "추천", "가격", "비용", "후기", "리뷰", "순위", "비교", "종류", "방법", "효과",
+                "장점", "단점", "차이", "선택", "구매", "사용법", "팁", "정보", "브랜드", "인기"
+            ]
 
+            # 접미사 변형 키워드 추가
             for suffix in common_suffixes:
-                kw = f"{keyword} {suffix}"
-                if kw not in [r.keyword for r in related_keywords]:
-                    related_keywords.append(RelatedKeyword(
-                        keyword=kw,
-                        monthly_pc_search=None,  # 실제 데이터 없음
-                        monthly_mobile_search=None,  # 실제 데이터 없음
-                        monthly_total_search=None,  # 실제 데이터 없음
-                        competition=None  # 실제 데이터 없음
-                    ))
+                add_keyword(f"{keyword} {suffix}")
 
-            # Method 3: Naver search autocomplete (backup)
+            # 접미사로 추가 자동완성 검색 (병렬)
+            suffix_queries = [f"{keyword} {s}" for s in common_suffixes[:5]]  # 상위 5개만
+            import asyncio
+            await asyncio.gather(*[fetch_naver_ac(q) for q in suffix_queries], return_exceptions=True)
+
+            # ===== Method 4: 초성/글자 추가 자동완성 =====
+            korean_chars = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ']
+            char_queries = [f"{keyword} {c}" for c in korean_chars[:7]]  # 상위 7개만
+            await asyncio.gather(*[fetch_naver_ac(q) for q in char_queries], return_exceptions=True)
+
+            # ===== Method 5: 네이버 블로그 자동완성 =====
             try:
-                ac_response = await client.get(
+                blog_response = await client.get(
                     "https://ac.search.naver.com/nx/ac",
                     params={
-                        "q": keyword,
-                        "con": "1",
-                        "frm": "nv",
-                        "ans": "2",
-                        "r_format": "json",
-                        "r_enc": "UTF-8",
-                        "r_unicode": "0",
-                        "t_koreng": "1",
-                        "run": "2",
-                        "rev": "4",
-                        "q_enc": "UTF-8"
+                        "q": keyword, "con": "1", "frm": "blog", "ans": "2",
+                        "r_format": "json", "r_enc": "UTF-8", "q_enc": "UTF-8"
                     },
                     headers=headers
                 )
-                if ac_response.status_code == 200:
-                    data = ac_response.json()
+                if blog_response.status_code == 200:
+                    data = blog_response.json()
                     items = data.get("items", [[]])
                     if items and len(items) > 0:
                         for item in items[0][:20]:
                             if isinstance(item, list) and len(item) > 0:
-                                kw = item[0]
-                                if kw and kw != keyword and kw not in [r.keyword for r in related_keywords]:
-                                    related_keywords.append(RelatedKeyword(
-                                        keyword=kw,
-                                        monthly_pc_search=None,
-                                        monthly_mobile_search=None,
-                                        monthly_total_search=None,
-                                        competition=None
-                                    ))
+                                add_keyword(item[0])
             except Exception as e:
-                logger.debug(f"AC suggest failed: {e}")
+                logger.debug(f"Blog AC failed: {e}")
 
-        # Limit to 100 keywords
+            # ===== Method 6: 네이버 뉴스 자동완성 =====
+            try:
+                news_response = await client.get(
+                    "https://ac.search.naver.com/nx/ac",
+                    params={
+                        "q": keyword, "con": "1", "frm": "news", "ans": "2",
+                        "r_format": "json", "r_enc": "UTF-8", "q_enc": "UTF-8"
+                    },
+                    headers=headers
+                )
+                if news_response.status_code == 200:
+                    data = news_response.json()
+                    items = data.get("items", [[]])
+                    if items and len(items) > 0:
+                        for item in items[0][:20]:
+                            if isinstance(item, list) and len(item) > 0:
+                                add_keyword(item[0])
+            except Exception as e:
+                logger.debug(f"News AC failed: {e}")
+
+            # ===== Method 7: 추가 접미사 변형 (목표 100개 미달 시) =====
+            if len(related_keywords) < 100:
+                extra_suffixes = [
+                    "best", "top", "1위", "맛집", "병원", "의원", "샵", "센터",
+                    "2025", "2026", "최신", "신제품", "할인", "이벤트", "무료",
+                    "전문", "업체", "서비스", "온라인", "오프라인"
+                ]
+                for suffix in extra_suffixes:
+                    if len(related_keywords) >= 100:
+                        break
+                    add_keyword(f"{keyword} {suffix}")
+
+        # 100개로 제한
         related_keywords = related_keywords[:100]
 
         return RelatedKeywordsResponse(
             success=True,
             keyword=keyword,
-            source="combined",
+            source="autocomplete",
             total_count=len(related_keywords),
             keywords=related_keywords,
-            message=f"검색광고 API 미설정. {len(related_keywords)}개 연관키워드 (자동완성+변형)" if related_keywords else None
+            message=f"네이버 자동완성 기반 {len(related_keywords)}개 연관키워드 (검색량 데이터 없음)"
         )
 
     except Exception as e:

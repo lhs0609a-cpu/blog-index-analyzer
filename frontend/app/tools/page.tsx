@@ -1123,13 +1123,13 @@ export default function ToolsPage() {
   // 핵심 기능만 유지 (8개)
   const tabs = [
     // 콘텐츠 제작
-    { id: 'title' as TabType, label: 'AI 제목', icon: PenTool, color: 'from-violet-500 to-purple-500', category: 'content' },
+    { id: 'title' as TabType, label: 'AI 제목', icon: PenTool, color: 'from-[#0064FF] to-[#3182F6]', category: 'content' },
     { id: 'blueocean' as TabType, label: '키워드 발굴', icon: Compass, color: 'from-cyan-500 to-blue-500', category: 'content' },
     { id: 'writing' as TabType, label: '글쓰기', icon: FileText, color: 'from-emerald-500 to-teal-500', category: 'content' },
     { id: 'hashtag' as TabType, label: '해시태그', icon: Hash, color: 'from-green-500 to-emerald-500', category: 'content' },
     // 분석 & 추적
-    { id: 'clone' as TabType, label: '블로그 분석', icon: Scan, color: 'from-fuchsia-500 to-purple-600', category: 'analysis' },
-    { id: 'keywordAnalysis' as TabType, label: '키워드 분석', icon: Tags, color: 'from-indigo-500 to-purple-500', category: 'analysis' },
+    { id: 'clone' as TabType, label: '블로그 분석', icon: Scan, color: 'from-[#0064FF] to-[#3182F6]', category: 'analysis' },
+    { id: 'keywordAnalysis' as TabType, label: '키워드 분석', icon: Tags, color: 'from-[#0064FF] to-[#3182F6]', category: 'analysis' },
     { id: 'ranktrack' as TabType, label: '순위 추적', icon: Activity, color: 'from-teal-500 to-cyan-500', category: 'analysis' },
     { id: 'trend' as TabType, label: '트렌드', icon: Radio, color: 'from-red-500 to-orange-500', category: 'analysis' },
   ]
@@ -2898,29 +2898,17 @@ export default function ToolsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 py-8 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 pt-24 pb-8 px-4">
       <div className="container mx-auto max-w-6xl">
-        {/* Back Button */}
-        <Link href="/">
-          <motion.button
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="mb-6 flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-white/50 rounded-lg transition-all"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            <span className="font-medium">홈으로</span>
-          </motion.button>
-        </Link>
-
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-8"
         >
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-purple-100 to-pink-100 mb-4">
-            <Crown className="w-5 h-5 text-purple-600" />
-            <span className="text-sm font-semibold text-purple-700">프리미엄 도구</span>
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-100 to-sky-100 mb-4">
+            <Crown className="w-5 h-5 text-[#0064FF]" />
+            <span className="text-sm font-semibold text-[#0064FF]">프리미엄 도구</span>
           </div>
           <h1 className="text-4xl font-bold mb-2">
             <span className="gradient-text">블로그 성장 도구</span>
@@ -2972,7 +2960,7 @@ export default function ToolsPage() {
                   {/* 사용 방법 */}
                   <div className="mb-6">
                     <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-sm">1</span>
+                      <span className="w-6 h-6 rounded-full bg-blue-100 text-[#0064FF] flex items-center justify-center text-sm">1</span>
                       사용 방법
                     </h3>
                     <div className="space-y-2">
@@ -3038,7 +3026,7 @@ export default function ToolsPage() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.6 }}
             onClick={() => setShowGuide(true)}
-            className="w-14 h-14 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg hover:shadow-xl hover:scale-110 transition-all flex items-center justify-center group"
+            className="w-14 h-14 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white shadow-lg hover:shadow-xl hover:scale-110 transition-all flex items-center justify-center group"
           >
             <Info className="w-6 h-6" />
             <span className="absolute right-full mr-3 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
@@ -3057,7 +3045,7 @@ export default function ToolsPage() {
           {/* 콘텐츠 제작 */}
           <div id="section-content" className="glass rounded-2xl p-4">
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-2 h-2 rounded-full bg-purple-500" />
+              <div className="w-2 h-2 rounded-full bg-[#0064FF]" />
               <span className="text-sm font-bold text-gray-700">콘텐츠 제작</span>
             </div>
             <div className="grid grid-cols-4 gap-2">
@@ -3072,7 +3060,7 @@ export default function ToolsPage() {
                       isLocked
                         ? 'bg-gray-100/80 text-gray-400 cursor-not-allowed'
                         : activeTab === tab.id
-                        ? `bg-gradient-to-br ${tab.color} text-white shadow-lg shadow-purple-500/20 scale-105`
+                        ? `bg-gradient-to-br ${tab.color} text-white shadow-lg shadow-[#0064FF]/20 scale-105`
                         : 'bg-white/60 hover:bg-white hover:shadow-md text-gray-600 hover:scale-105'
                     }`}
                   >
@@ -3086,7 +3074,7 @@ export default function ToolsPage() {
                         {badge.label}
                       </div>
                     )}
-                    <tab.icon className={`w-5 h-5 ${isLocked ? 'opacity-50' : activeTab === tab.id ? '' : 'group-hover:text-purple-500'}`} />
+                    <tab.icon className={`w-5 h-5 ${isLocked ? 'opacity-50' : activeTab === tab.id ? '' : 'group-hover:text-[#0064FF]'}`} />
                     <span className="text-[10px] font-medium truncate w-full text-center">{tab.label}</span>
                   </button>
                 )
@@ -3147,20 +3135,20 @@ export default function ToolsPage() {
 
           {/* 현재 플랜 안내 */}
           {plan !== 'business' && (
-            <div className="glass rounded-2xl p-4 bg-gradient-to-r from-purple-50 to-pink-50">
+            <div className="glass rounded-2xl p-4 bg-gradient-to-r from-blue-50 to-sky-50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Crown className="w-5 h-5 text-purple-500" />
+                  <Crown className="w-5 h-5 text-[#0064FF]" />
                   <div>
                     <p className="text-sm text-gray-600">
-                      현재 <span className="font-bold text-purple-600">{PLAN_INFO[plan].name}</span> 플랜 이용 중
+                      현재 <span className="font-bold text-[#0064FF]">{PLAN_INFO[plan].name}</span> 플랜 이용 중
                     </p>
                     <p className="text-xs text-gray-500">잠금된 기능은 업그레이드 후 이용할 수 있습니다</p>
                   </div>
                 </div>
                 <Link
                   href="/pricing"
-                  className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm font-bold rounded-xl hover:shadow-lg transition-all"
+                  className="px-4 py-2 bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white text-sm font-bold rounded-xl hover:shadow-lg transition-all"
                 >
                   업그레이드
                 </Link>
@@ -3183,7 +3171,7 @@ export default function ToolsPage() {
               <div className="glass rounded-3xl p-8">
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
-                    <div className="p-3 rounded-xl bg-gradient-to-r from-violet-500 to-purple-500">
+                    <div className="p-3 rounded-xl bg-gradient-to-r from-[#0064FF] to-[#3182F6]">
                       <PenTool className="w-6 h-6 text-white" />
                     </div>
                     <div>
@@ -3193,7 +3181,7 @@ export default function ToolsPage() {
                   </div>
                   <button
                     onClick={() => setShowGuide(true)}
-                    className="flex items-center gap-2 px-4 py-2 text-purple-600 hover:bg-purple-50 rounded-xl transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 text-[#0064FF] hover:bg-blue-50 rounded-xl transition-colors"
                   >
                     <Info className="w-5 h-5" />
                     <span className="text-sm font-medium">사용법</span>
@@ -3209,14 +3197,14 @@ export default function ToolsPage() {
                       onChange={(e) => setTitleKeyword(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && handleTitleGenerate()}
                       placeholder="주제 키워드 입력 (예: 제주도 맛집, 육아 꿀팁)"
-                      className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
+                      className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-[#0064FF] focus:outline-none"
                       disabled={titleLoading}
                     />
                   </div>
                   <button
                     onClick={handleTitleGenerate}
                     disabled={titleLoading}
-                    className="px-8 py-4 rounded-xl bg-gradient-to-r from-violet-500 to-purple-500 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                    className="px-8 py-4 rounded-xl bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
                   >
                     {titleLoading ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
@@ -3241,7 +3229,7 @@ export default function ToolsPage() {
                       </h3>
                       <button
                         onClick={handleTitleGenerate}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-100 text-purple-700 font-medium hover:bg-purple-200 transition-colors"
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-100 text-[#0064FF] font-medium hover:bg-blue-200 transition-colors"
                       >
                         <RefreshCw className="w-4 h-4" />
                         다시 생성
@@ -3271,12 +3259,12 @@ export default function ToolsPage() {
                               {i + 1}
                             </div>
                             <div className="flex-1">
-                              <div className="font-medium text-gray-800 group-hover:text-purple-600 transition-colors">
+                              <div className="font-medium text-gray-800 group-hover:text-[#0064FF] transition-colors">
                                 {item.title}
                               </div>
                               <div className="flex items-center gap-3 mt-1">
-                                <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded">{item.type}</span>
-                                <span className="text-xs px-2 py-0.5 bg-pink-100 text-pink-700 rounded">{item.emotion}</span>
+                                <span className="text-xs px-2 py-0.5 bg-blue-100 text-[#0064FF] rounded">{item.type}</span>
+                                <span className="text-xs px-2 py-0.5 bg-sky-100 text-sky-700 rounded">{item.emotion}</span>
                               </div>
                             </div>
                           </div>
@@ -3400,7 +3388,7 @@ export default function ToolsPage() {
                               <div className="text-xs text-gray-500">경쟁도</div>
                             </div>
                             <div className="bg-white/50 rounded-lg p-2">
-                              <div className="font-bold text-purple-600">{item.opportunity}</div>
+                              <div className="font-bold text-[#0064FF]">{item.opportunity}</div>
                               <div className="text-xs text-gray-500">기회지수</div>
                             </div>
                           </div>
@@ -3828,7 +3816,7 @@ export default function ToolsPage() {
             >
               <div className="glass rounded-3xl p-8">
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="p-3 rounded-xl bg-gradient-to-r from-fuchsia-500 to-purple-600">
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-[#0064FF] to-[#3182F6]">
                     <Scan className="w-6 h-6 text-white" />
                   </div>
                   <div>
@@ -3846,14 +3834,14 @@ export default function ToolsPage() {
                       onChange={(e) => setCloneBlogUrl(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && handleCloneAnalysis()}
                       placeholder="분석할 블로그 URL 또는 ID 입력"
-                      className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-fuchsia-500 focus:outline-none"
+                      className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-[#0064FF] focus:outline-none"
                       disabled={cloneLoading}
                     />
                   </div>
                   <button
                     onClick={handleCloneAnalysis}
                     disabled={cloneLoading}
-                    className="px-8 py-4 rounded-xl bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                    className="px-8 py-4 rounded-xl bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white font-semibold hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
                   >
                     {cloneLoading ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
@@ -3873,29 +3861,29 @@ export default function ToolsPage() {
                     className="space-y-6"
                   >
                     {/* 블로그 개요 */}
-                    <div className="bg-gradient-to-r from-fuchsia-50 to-purple-50 rounded-2xl p-6">
+                    <div className="bg-gradient-to-r from-blue-50 to-sky-50 rounded-2xl p-6">
                       <h3 className="font-bold text-lg mb-4">블로그 개요</h3>
                       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                         <div className="text-center p-3 bg-white rounded-xl">
-                          <div className="text-2xl font-bold text-fuchsia-600">{cloneResult.overview.totalPosts}</div>
+                          <div className="text-2xl font-bold text-[#0064FF]">{cloneResult.overview.totalPosts}</div>
                           <div className="text-xs text-gray-500">총 게시글</div>
                         </div>
                         <div className="text-center p-3 bg-white rounded-xl">
-                          <div className="text-2xl font-bold text-fuchsia-600">{cloneResult.overview.avgPostLength}</div>
+                          <div className="text-2xl font-bold text-[#0064FF]">{cloneResult.overview.avgPostLength}</div>
                           <div className="text-xs text-gray-500">평균 글자수</div>
                         </div>
                         <div className="text-center p-3 bg-white rounded-xl">
-                          <div className="text-2xl font-bold text-fuchsia-600">{cloneResult.overview.postingFrequency}</div>
+                          <div className="text-2xl font-bold text-[#0064FF]">{cloneResult.overview.postingFrequency}</div>
                           <div className="text-xs text-gray-500">발행 빈도</div>
                         </div>
                         <div className="text-center p-3 bg-white rounded-xl">
-                          <div className="text-2xl font-bold text-fuchsia-600">{cloneResult.overview.blogScore}점</div>
+                          <div className="text-2xl font-bold text-[#0064FF]">{cloneResult.overview.blogScore}점</div>
                           <div className="text-xs text-gray-500">블로그 지수</div>
                         </div>
                         <div className="text-center p-3 bg-white rounded-xl">
                           <div className="flex flex-wrap justify-center gap-1">
                             {cloneResult.overview.mainCategories.map((cat, i) => (
-                              <span key={i} className="text-xs px-2 py-0.5 bg-fuchsia-100 text-fuchsia-700 rounded">{cat}</span>
+                              <span key={i} className="text-xs px-2 py-0.5 bg-blue-100 text-[#0064FF] rounded">{cat}</span>
                             ))}
                           </div>
                           <div className="text-xs text-gray-500 mt-1">주요 카테고리</div>
@@ -3906,17 +3894,17 @@ export default function ToolsPage() {
                     {/* 성공 전략 분석 */}
                     <div className="bg-white rounded-2xl p-6">
                       <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                        <Lightbulb className="w-5 h-5 text-fuchsia-500" />
+                        <Lightbulb className="w-5 h-5 text-[#0064FF]" />
                         성공 전략 분석
                       </h3>
                       <div className="space-y-4">
                         {cloneResult.strategy.map((item, i) => (
                           <div key={i} className="p-4 bg-gray-50 rounded-xl">
                             <div className="flex items-center gap-2 mb-2">
-                              <span className="px-2 py-0.5 bg-fuchsia-100 text-fuchsia-700 rounded text-sm font-medium">{item.category}</span>
+                              <span className="px-2 py-0.5 bg-blue-100 text-[#0064FF] rounded text-sm font-medium">{item.category}</span>
                             </div>
                             <div className="font-medium text-gray-800 mb-1">{item.insight}</div>
-                            <div className="text-sm text-fuchsia-600 flex items-center gap-1">
+                            <div className="text-sm text-[#0064FF] flex items-center gap-1">
                               <Zap className="w-4 h-4" />
                               {item.actionItem}
                             </div>
@@ -3932,12 +3920,12 @@ export default function ToolsPage() {
                         {cloneResult.topKeywords.map((kw, i) => (
                           <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                             <div className="flex items-center gap-3">
-                              <span className="w-6 h-6 rounded-full bg-fuchsia-500 text-white flex items-center justify-center text-sm font-bold">{i + 1}</span>
+                              <span className="w-6 h-6 rounded-full bg-[#0064FF] text-white flex items-center justify-center text-sm font-bold">{i + 1}</span>
                               <span className="font-medium">{kw.keyword}</span>
                             </div>
                             <div className="flex items-center gap-4 text-sm">
                               <span className="text-gray-500">{kw.count}개 글</span>
-                              <span className="text-fuchsia-600 font-bold">평균 {kw.avgRank}위</span>
+                              <span className="text-[#0064FF] font-bold">평균 {kw.avgRank}위</span>
                             </div>
                           </div>
                         ))}
@@ -3957,7 +3945,7 @@ export default function ToolsPage() {
                               </div>
                               <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                                 <div
-                                  className="h-full bg-gradient-to-r from-fuchsia-500 to-purple-500 rounded-full"
+                                  className="h-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-full"
                                   style={{ width: `${pattern.percentage}%` }}
                                 />
                               </div>

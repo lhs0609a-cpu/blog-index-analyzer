@@ -708,7 +708,7 @@ export default function AdminPage() {
       'grant_premium': 'bg-green-100 text-green-700',
       'revoke_premium': 'bg-red-100 text-red-700',
       'extend_subscription': 'bg-blue-100 text-blue-700',
-      'set_admin': 'bg-purple-100 text-purple-700'
+      'set_admin': 'bg-blue-100 text-blue-700'
     };
     return colors[actionType] || 'bg-gray-100 text-gray-700';
   };
@@ -732,8 +732,8 @@ export default function AdminPage() {
     const colors: Record<string, string> = {
       free: 'bg-gray-100 text-gray-700',
       basic: 'bg-blue-100 text-blue-700',
-      pro: 'bg-purple-100 text-purple-700',
-      business: 'bg-gradient-to-r from-orange-400 to-pink-500 text-white'
+      pro: 'bg-blue-100 text-blue-700',
+      business: 'bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white'
     };
 
     return (
@@ -746,7 +746,7 @@ export default function AdminPage() {
 
   if (!token) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 pt-24 flex items-center justify-center">
         <div className="bg-white rounded-xl shadow-lg p-8 max-w-md text-center">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -755,7 +755,7 @@ export default function AdminPage() {
           </div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">로그인이 필요합니다</h2>
           <p className="text-gray-600 mb-6">관리자 페이지에 접근하려면 로그인해주세요.</p>
-          <Link href="/login" className="inline-block px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+          <Link href="/login" className="inline-block px-6 py-3 bg-[#0064FF] text-white rounded-lg hover:bg-blue-700 transition-colors">
             로그인하기
           </Link>
         </div>
@@ -764,17 +764,12 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 pt-20">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200">
+      <header className="bg-white border-b border-gray-200 sticky top-[72px] z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-4">
-              <Link href="/" className="text-gray-500 hover:text-gray-700">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-              </Link>
               <h1 className="text-xl font-bold text-gray-900">관리자 대시보드</h1>
             </div>
             <div className="flex items-center gap-4">
@@ -838,7 +833,7 @@ export default function AdminPage() {
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                   activeTab === tab.id
-                    ? 'border-purple-500 text-purple-600'
+                    ? 'border-[#0064FF] text-[#0064FF]'
                     : tab.highlight
                     ? 'border-transparent text-orange-500 hover:text-orange-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -854,7 +849,7 @@ export default function AdminPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0064FF]"></div>
           </div>
         ) : (
           <>
@@ -869,7 +864,7 @@ export default function AdminPage() {
                   </div>
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <div className="text-sm text-gray-500 mb-1">프리미엄 사용자</div>
-                    <div className="text-3xl font-bold text-purple-600">{premiumUsers.length}</div>
+                    <div className="text-3xl font-bold text-[#0064FF]">{premiumUsers.length}</div>
                   </div>
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <div className="text-sm text-gray-500 mb-1">오늘 게스트 요청</div>
@@ -912,7 +907,7 @@ export default function AdminPage() {
                       {Object.entries(subscriptionStats.plan_distribution).map(([plan, count]) => (
                         <div key={plan} className="text-center">
                           <div className={`text-2xl font-bold ${
-                            plan === 'business' ? 'text-purple-600' :
+                            plan === 'business' ? 'text-[#0064FF]' :
                             plan === 'pro' ? 'text-blue-600' :
                             plan === 'basic' ? 'text-green-600' :
                             'text-gray-600'
@@ -932,7 +927,7 @@ export default function AdminPage() {
                             <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
                               <div
                                 className={`h-full rounded-full ${
-                                  plan === 'business' ? 'bg-purple-500' :
+                                  plan === 'business' ? 'bg-[#0064FF]' :
                                   plan === 'pro' ? 'bg-blue-500' :
                                   plan === 'basic' ? 'bg-green-500' :
                                   'bg-gray-400'
@@ -1030,12 +1025,12 @@ export default function AdminPage() {
                       onChange={(e) => setSearchQuery(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && searchUsers()}
                       placeholder="이메일 또는 이름으로 검색"
-                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <button
                       onClick={searchUsers}
                       disabled={isSearching}
-                      className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 transition-colors"
+                      className="px-6 py-2 bg-[#0064FF] text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
                     >
                       {isSearching ? '검색 중...' : '검색'}
                     </button>
@@ -1073,7 +1068,7 @@ export default function AdminPage() {
                               type="checkbox"
                               checked={selectedUserIds.length === users.length && users.length > 0}
                               onChange={selectAllUsers}
-                              className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                              className="rounded border-gray-300 text-[#0064FF] focus:ring-blue-500"
                             />
                           </th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">이메일</th>
@@ -1093,7 +1088,7 @@ export default function AdminPage() {
                                 type="checkbox"
                                 checked={selectedUserIds.includes(user.id)}
                                 onChange={() => toggleUserSelection(user.id)}
-                                className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                                className="rounded border-gray-300 text-[#0064FF] focus:ring-blue-500"
                               />
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-900">
@@ -1110,7 +1105,7 @@ export default function AdminPage() {
                               {user.plan === 'free' ? (
                                 <span className="text-gray-400">-</span>
                               ) : user.is_premium_granted ? (
-                                <span className="text-purple-600">🎁 부여</span>
+                                <span className="text-[#0064FF]">🎁 부여</span>
                               ) : (
                                 <span className="text-green-600">💳 결제</span>
                               )}
@@ -1127,7 +1122,7 @@ export default function AdminPage() {
                                   {user.remaining_days}일
                                 </span>
                               ) : (
-                                <span className="text-purple-600">무제한</span>
+                                <span className="text-[#0064FF]">무제한</span>
                               )}
                             </td>
                             <td className="px-4 py-3 text-sm">
@@ -1153,7 +1148,7 @@ export default function AdminPage() {
                                   상세
                                 </button>
                                 {user.is_admin ? (
-                                  <span className="text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded">전체 접근</span>
+                                  <span className="text-xs text-[#0064FF] bg-blue-50 px-2 py-1 rounded">전체 접근</span>
                                 ) : user.is_premium_granted ? (
                                   <button
                                     onClick={() => revokePremium(user.id)}
@@ -1357,7 +1352,7 @@ export default function AdminPage() {
                     </div>
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                       <div className="text-sm text-gray-500 mb-1">전체 매출</div>
-                      <div className="text-2xl font-bold text-purple-600">
+                      <div className="text-2xl font-bold text-[#0064FF]">
                         ₩{revenueStats.total_revenue.toLocaleString()}
                       </div>
                       <div className="text-xs text-gray-400 mt-1">{revenueStats.total_transactions}건</div>
@@ -1415,7 +1410,7 @@ export default function AdminPage() {
                           setPaymentsFilter(e.target.value);
                           fetchPayments(e.target.value);
                         }}
-                        className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="all">전체</option>
                         <option value="completed">완료</option>
@@ -1520,7 +1515,7 @@ export default function AdminPage() {
                         setLogsFilter(e.target.value);
                         fetchAuditLogs(0, e.target.value);
                       }}
-                      className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="all">전체</option>
                       <option value="grant_premium">프리미엄 부여</option>
@@ -1632,7 +1627,7 @@ export default function AdminPage() {
                 <select
                   value={grantPlan}
                   onChange={(e) => setGrantPlan(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="basic">Basic (일일 50회)</option>
                   <option value="pro">Pro (일일 200회)</option>
@@ -1647,7 +1642,7 @@ export default function AdminPage() {
                   value={grantMemo}
                   onChange={(e) => setGrantMemo(e.target.value)}
                   placeholder="예: 베타 테스터, 협찬 등"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
@@ -1665,7 +1660,7 @@ export default function AdminPage() {
               </button>
               <button
                 onClick={grantPremium}
-                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                className="flex-1 px-4 py-2 bg-[#0064FF] text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 권한 부여
               </button>
@@ -1803,12 +1798,12 @@ export default function AdminPage() {
                   onClick={() => {
                     setShowSetAdminModal(true);
                   }}
-                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                  className="flex-1 px-4 py-2 bg-[#0064FF] text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   관리자 설정
                 </button>
                 {userDetail.user.is_admin ? (
-                  <div className="flex-1 px-4 py-2 bg-purple-100 text-purple-700 rounded-lg text-center">
+                  <div className="flex-1 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg text-center">
                     관리자 (전체 접근)
                   </div>
                 ) : userDetail.user.is_premium_granted ? (
@@ -1962,7 +1957,7 @@ export default function AdminPage() {
                 className={`flex-1 px-4 py-2 text-white rounded-lg transition-colors ${
                   userDetail.user.is_admin
                     ? 'bg-red-600 hover:bg-red-700'
-                    : 'bg-purple-600 hover:bg-purple-700'
+                    : 'bg-[#0064FF] hover:bg-blue-700'
                 }`}
               >
                 {userDetail.user.is_admin ? '관리자 해제' : '관리자 부여'}

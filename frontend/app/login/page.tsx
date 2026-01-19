@@ -57,20 +57,20 @@ export default function LoginPage() {
       <div
         className="fixed pointer-events-none z-0 w-[600px] h-[600px] rounded-full opacity-30 blur-[120px] transition-all duration-200"
         style={{
-          background: 'radial-gradient(circle, rgba(139, 92, 246, 0.4) 0%, rgba(236, 72, 153, 0.2) 50%, transparent 70%)',
+          background: 'radial-gradient(circle, rgba(0, 100, 255, 0.15) 0%, rgba(49, 130, 246, 0.08) 50%, transparent 70%)',
           left: mousePosition.x - 300,
           top: mousePosition.y - 300,
         }}
       />
 
       {/* Animated background grid */}
-      <div className="fixed inset-0 bg-[linear-gradient(rgba(139,92,246,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.05)_1px,transparent_1px)] bg-[size:80px_80px]" />
+      <div className="fixed inset-0 bg-[linear-gradient(rgba(0,100,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(0,100,255,0.02)_1px,transparent_1px)] bg-[size:80px_80px]" />
 
       {/* Floating orbs */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <motion.div
           className="absolute top-20 left-[10%] w-[350px] h-[350px] rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%)' }}
+          style={{ background: 'radial-gradient(circle, rgba(0, 100, 255, 0.08) 0%, transparent 70%)' }}
           animate={{
             y: [0, -30, 0],
             scale: [1, 1.1, 1],
@@ -79,7 +79,7 @@ export default function LoginPage() {
         />
         <motion.div
           className="absolute bottom-20 right-[10%] w-[400px] h-[400px] rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(236, 72, 153, 0.12) 0%, transparent 70%)' }}
+          style={{ background: 'radial-gradient(circle, rgba(49, 130, 246, 0.08) 0%, transparent 70%)' }}
           animate={{
             y: [0, 30, 0],
             scale: [1, 1.15, 1],
@@ -111,12 +111,12 @@ export default function LoginPage() {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: "spring", delay: 0.1 }}
-            className="inline-flex p-4 rounded-2xl bg-gradient-to-br from-violet-500 to-pink-500 mb-6 shadow-lg shadow-violet-200/50"
+            className="inline-flex p-4 rounded-2xl bg-[#0064FF] mb-6 shadow-lg shadow-blue-100/50"
           >
             <Sparkles className="w-8 h-8 text-white" />
           </motion.div>
           <h1 className="text-4xl font-black mb-3">
-            <span className="bg-gradient-to-r from-violet-600 via-pink-600 to-orange-500 bg-clip-text text-transparent">로그인</span>
+            <span className="text-[#0064FF]">로그인</span>
           </h1>
           <p className="text-gray-500">
             블랭크에서 블로그를 관리하고 분석하세요
@@ -131,7 +131,7 @@ export default function LoginPage() {
           className="relative"
         >
           {/* Card glow effect */}
-          <div className="absolute -inset-0.5 bg-gradient-to-r from-violet-400 via-pink-400 to-orange-400 rounded-3xl blur opacity-20" />
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-3xl blur opacity-20" />
 
           <div className="relative backdrop-blur-2xl bg-white/80 border border-gray-200/50 rounded-3xl p-8 shadow-xl shadow-gray-200/50">
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -141,13 +141,13 @@ export default function LoginPage() {
                   이메일
                 </label>
                 <div className="relative group">
-                  <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-violet-500 transition-colors" />
+                  <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-[#0064FF] transition-colors" />
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="your@email.com"
-                    className="w-full pl-12 pr-4 py-4 rounded-xl bg-gray-50/50 border border-gray-200 focus:border-violet-400 focus:ring-2 focus:ring-violet-200 focus:outline-none transition-all text-gray-900 placeholder:text-gray-400"
+                    className="w-full pl-12 pr-4 py-4 rounded-xl bg-gray-50/50 border border-gray-200 focus:border-[#0064FF] focus:ring-2 focus:ring-[#0064FF]/20 focus:outline-none transition-all text-gray-900 placeholder:text-gray-400"
                     disabled={isLoading}
                   />
                 </div>
@@ -159,13 +159,13 @@ export default function LoginPage() {
                   비밀번호
                 </label>
                 <div className="relative group">
-                  <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-violet-500 transition-colors" />
+                  <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-[#0064FF] transition-colors" />
                   <input
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-12 pr-12 py-4 rounded-xl bg-gray-50/50 border border-gray-200 focus:border-violet-400 focus:ring-2 focus:ring-violet-200 focus:outline-none transition-all text-gray-900 placeholder:text-gray-400"
+                    className="w-full pl-12 pr-12 py-4 rounded-xl bg-gray-50/50 border border-gray-200 focus:border-[#0064FF] focus:ring-2 focus:ring-[#0064FF]/20 focus:outline-none transition-all text-gray-900 placeholder:text-gray-400"
                     disabled={isLoading}
                   />
                   <button
@@ -184,7 +184,7 @@ export default function LoginPage() {
                 disabled={isLoading}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className="w-full py-4 px-6 rounded-xl bg-gradient-to-r from-violet-500 to-pink-500 text-white font-bold text-lg hover:shadow-lg hover:shadow-violet-300/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full py-4 px-6 rounded-xl bg-[#0064FF] text-white font-bold text-lg hover:shadow-lg hover:shadow-[#0064FF]/20 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isLoading ? (
                   <>
@@ -211,7 +211,7 @@ export default function LoginPage() {
             <div className="text-center">
               <p className="text-gray-500">
                 계정이 없으신가요?{' '}
-                <Link href="/register" className="font-semibold text-violet-600 hover:text-violet-500 transition-colors">
+                <Link href="/register" className="font-semibold text-[#0064FF] hover:text-[#3182F6] transition-colors">
                   회원가입
                 </Link>
               </p>

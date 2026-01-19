@@ -22,7 +22,7 @@ import {
 // 활동 타입별 아이콘 및 색상
 const ACTIVITY_CONFIG: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
   keyword_search: { icon: <Search className="w-4 h-4" />, color: 'text-blue-600', bg: 'bg-blue-100' },
-  blog_analysis: { icon: <TrendingUp className="w-4 h-4" />, color: 'text-purple-600', bg: 'bg-purple-100' },
+  blog_analysis: { icon: <TrendingUp className="w-4 h-4" />, color: 'text-[#0064FF]', bg: 'bg-blue-100' },
   ranking_success: { icon: <Trophy className="w-4 h-4" />, color: 'text-yellow-600', bg: 'bg-yellow-100' },
   level_up: { icon: <Star className="w-4 h-4" />, color: 'text-orange-600', bg: 'bg-orange-100' },
   share_insight: { icon: <MessageSquare className="w-4 h-4" />, color: 'text-green-600', bg: 'bg-green-100' },
@@ -80,9 +80,9 @@ export default function CommunityPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-[#3182F6]/10 pt-24 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <div className="w-16 h-16 border-4 border-[#0064FF] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-gray-600">커뮤니티 로딩 중...</p>
         </div>
       </div>
@@ -90,13 +90,13 @@ export default function CommunityPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-[#3182F6]/10 pt-20">
       {/* 헤더 */}
-      <header className="bg-white/80 backdrop-blur-sm border-b border-gray-100 sticky top-0 z-40">
+      <header className="bg-white/80 backdrop-blur-sm border-b border-gray-100 sticky top-[72px] z-40">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 bg-gradient-to-br from-[#0064FF] to-[#3182F6] rounded-xl flex items-center justify-center">
                 <Users className="w-5 h-5 text-white" />
               </div>
               <div>
@@ -135,11 +135,11 @@ export default function CommunityPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-6 text-white mb-6"
+            className="bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-2xl p-6 text-white mb-6"
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-purple-200 text-sm">내 포인트</p>
+                <p className="text-blue-200 text-sm">내 포인트</p>
                 <div className="flex items-center gap-3 mt-1">
                   <span className="text-3xl font-bold">{myPoints.total_points.toLocaleString()}P</span>
                   <span className="text-2xl">{LEVEL_ICONS[myPoints.level_name] || '🥉'}</span>
@@ -147,13 +147,13 @@ export default function CommunityPage() {
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-purple-200 text-sm">연속 접속</p>
+                <p className="text-blue-200 text-sm">연속 접속</p>
                 <p className="text-2xl font-bold">{myPoints.streak_days}일 🔥</p>
               </div>
             </div>
             {myPoints.level_info.next_level_points && (
               <div className="mt-4">
-                <div className="flex justify-between text-sm text-purple-200 mb-1">
+                <div className="flex justify-between text-sm text-blue-200 mb-1">
                   <span>다음 레벨까지</span>
                   <span>{myPoints.level_info.next_level_points - myPoints.total_points}P 남음</span>
                 </div>
@@ -211,7 +211,7 @@ export default function CommunityPage() {
               onClick={() => setActiveTab(tab.id as any)}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all whitespace-nowrap ${
                 activeTab === tab.id
-                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-200'
+                  ? 'bg-[#0064FF] text-white shadow-lg shadow-blue-200'
                   : 'bg-white text-gray-600 hover:bg-gray-50'
               }`}
             >
@@ -270,7 +270,7 @@ function StatsCard({
 }) {
   const colorClasses: Record<string, { bg: string; text: string; icon: string }> = {
     blue: { bg: 'bg-blue-50', text: 'text-blue-600', icon: 'bg-blue-100' },
-    purple: { bg: 'bg-purple-50', text: 'text-purple-600', icon: 'bg-purple-100' },
+    purple: { bg: 'bg-blue-50', text: 'text-[#0064FF]', icon: 'bg-blue-100' },
     yellow: { bg: 'bg-yellow-50', text: 'text-yellow-600', icon: 'bg-yellow-100' },
     red: { bg: 'bg-red-50', text: 'text-red-600', icon: 'bg-red-100' }
   }
@@ -373,7 +373,7 @@ function ActivityFeedSection({ activities }: { activities: ActivityFeedItem[] })
                   <div className="flex flex-col items-end gap-1">
                     <span className="text-xs text-gray-400">{formatTime(item.created_at)}</span>
                     {item.points_earned > 0 && (
-                      <span className="text-xs font-medium text-purple-600">+{item.points_earned}P</span>
+                      <span className="text-xs font-medium text-[#0064FF]">+{item.points_earned}P</span>
                     )}
                   </div>
                 </div>
@@ -388,7 +388,7 @@ function ActivityFeedSection({ activities }: { activities: ActivityFeedItem[] })
           <button
             onClick={loadMore}
             disabled={isLoadingMore}
-            className="w-full py-2 text-sm text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+            className="w-full py-2 text-sm text-[#0064FF] hover:bg-blue-50 rounded-lg transition-colors"
           >
             {isLoadingMore ? '로딩 중...' : '더 보기'}
           </button>
@@ -493,7 +493,7 @@ function LeaderboardSection({ topUsers }: { topUsers: LeaderboardEntry[] }) {
                 </div>
               </div>
               <div className="text-right">
-                <p className="font-bold text-purple-600">
+                <p className="font-bold text-[#0064FF]">
                   {(period === 'weekly' ? entry.weekly_points : period === 'monthly' ? entry.monthly_points : entry.total_points).toLocaleString()}P
                 </p>
               </div>
@@ -597,7 +597,7 @@ function InsightsSection({ userId }: { userId?: number }) {
             value={newInsight}
             onChange={(e) => setNewInsight(e.target.value)}
             placeholder="블로그 운영 팁이나 인사이트를 공유해보세요 (최소 10자)"
-            className="w-full p-3 border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-full p-3 border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-[#0064FF] focus:border-transparent"
             rows={3}
           />
           <div className="flex justify-between items-center mt-2">
@@ -605,7 +605,7 @@ function InsightsSection({ userId }: { userId?: number }) {
             <button
               onClick={handleSubmit}
               disabled={isSubmitting || newInsight.length < 10}
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-purple-700 transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-[#0064FF] text-white rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#0052CC] transition-colors flex items-center gap-2"
             >
               <Send className="w-4 h-4" />
               공유하기
@@ -637,12 +637,12 @@ function InsightsSection({ userId }: { userId?: number }) {
                   <div className="flex items-center gap-4 mt-3">
                     <button
                       onClick={() => handleLike(insight.id)}
-                      className="flex items-center gap-1 text-sm text-gray-500 hover:text-purple-600 transition-colors"
+                      className="flex items-center gap-1 text-sm text-gray-500 hover:text-[#0064FF] transition-colors"
                     >
                       <ThumbsUp className="w-4 h-4" />
                       {insight.likes}
                     </button>
-                    <button className="flex items-center gap-1 text-sm text-gray-500 hover:text-purple-600 transition-colors">
+                    <button className="flex items-center gap-1 text-sm text-gray-500 hover:text-[#0064FF] transition-colors">
                       <MessageSquare className="w-4 h-4" />
                       {insight.comments_count}
                     </button>
@@ -798,7 +798,7 @@ function PointsGuideCard() {
   return (
     <div className="bg-white rounded-2xl p-4 border border-gray-100">
       <h3 className="font-bold text-gray-900 flex items-center gap-2 mb-4">
-        <Zap className="w-5 h-5 text-purple-600" />
+        <Zap className="w-5 h-5 text-[#0064FF]" />
         포인트 획득 방법
       </h3>
 
@@ -809,7 +809,7 @@ function PointsGuideCard() {
               <span className="text-gray-400">{item.icon}</span>
               <span className="text-sm">{item.action}</span>
             </div>
-            <span className="text-sm font-bold text-purple-600">+{item.points}P</span>
+            <span className="text-sm font-bold text-[#0064FF]">+{item.points}P</span>
           </div>
         ))}
       </div>
@@ -886,14 +886,14 @@ function PostsSection({ userId, isAuthenticated }: { userId?: number; isAuthenti
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <PenSquare className="w-5 h-5 text-indigo-600" />
+            <PenSquare className="w-5 h-5 text-[#0064FF]" />
             <h2 className="font-bold text-gray-900">게시판</h2>
           </div>
 
           {isAuthenticated && (
             <button
               onClick={() => setShowWriteModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-indigo-200 transition-all"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white rounded-xl font-medium hover:shadow-lg hover:shadow-blue-200 transition-all"
             >
               <Plus className="w-4 h-4" />
               글쓰기
@@ -910,7 +910,7 @@ function PostsSection({ userId, isAuthenticated }: { userId?: number; isAuthenti
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="게시글 검색..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0064FF] focus:border-transparent"
             />
           </div>
         </form>
@@ -921,7 +921,7 @@ function PostsSection({ userId, isAuthenticated }: { userId?: number; isAuthenti
             onClick={() => setCategory(null)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               category === null
-                ? 'bg-indigo-100 text-indigo-700'
+                ? 'bg-blue-100 text-[#0064FF]'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
@@ -933,7 +933,7 @@ function PostsSection({ userId, isAuthenticated }: { userId?: number; isAuthenti
               onClick={() => setCategory(key)}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 category === key
-                  ? 'bg-indigo-100 text-indigo-700'
+                  ? 'bg-blue-100 text-[#0064FF]'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
@@ -974,7 +974,7 @@ function PostsSection({ userId, isAuthenticated }: { userId?: number; isAuthenti
             {isAuthenticated && (
               <button
                 onClick={() => setShowWriteModal(true)}
-                className="mt-3 text-indigo-600 hover:text-indigo-700 font-medium"
+                className="mt-3 text-[#0064FF] hover:text-[#0052CC] font-medium"
               >
                 첫 번째 글을 작성해보세요!
               </button>
@@ -997,7 +997,7 @@ function PostsSection({ userId, isAuthenticated }: { userId?: number; isAuthenti
                       <span className={`px-2 py-0.5 text-xs rounded-full ${
                         post.category === 'tip' ? 'bg-green-100 text-green-700' :
                         post.category === 'question' ? 'bg-yellow-100 text-yellow-700' :
-                        post.category === 'success' ? 'bg-purple-100 text-purple-700' :
+                        post.category === 'success' ? 'bg-blue-100 text-blue-700' :
                         'bg-gray-100 text-gray-600'
                       }`}>
                         {POST_CATEGORIES[post.category] || '자유'}
@@ -1009,7 +1009,7 @@ function PostsSection({ userId, isAuthenticated }: { userId?: number; isAuthenti
                     {post.tags && post.tags.length > 0 && (
                       <div className="flex gap-1 mt-2">
                         {post.tags.slice(0, 3).map((tag, i) => (
-                          <span key={i} className="text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
+                          <span key={i} className="text-xs text-[#0064FF] bg-blue-50 px-2 py-0.5 rounded">
                             #{tag}
                           </span>
                         ))}
@@ -1143,7 +1143,7 @@ function WritePostModal({
                   onClick={() => setCategory(key)}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     category === key
-                      ? 'bg-indigo-600 text-white'
+                      ? 'bg-[#0064FF] text-white'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
@@ -1161,7 +1161,7 @@ function WritePostModal({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="제목을 입력하세요"
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0064FF]"
               maxLength={100}
             />
           </div>
@@ -1173,7 +1173,7 @@ function WritePostModal({
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="내용을 입력하세요 (최소 10자)"
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[200px] resize-none"
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0064FF] min-h-[200px] resize-none"
               maxLength={5000}
             />
             <p className="text-xs text-gray-400 mt-1 text-right">{content.length}/5000</p>
@@ -1186,10 +1186,10 @@ function WritePostModal({
               {tags.map((tag) => (
                 <span
                   key={tag}
-                  className="flex items-center gap-1 px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm"
+                  className="flex items-center gap-1 px-3 py-1 bg-blue-100 text-[#0064FF] rounded-full text-sm"
                 >
                   #{tag}
-                  <button type="button" onClick={() => removeTag(tag)} className="hover:text-indigo-900">
+                  <button type="button" onClick={() => removeTag(tag)} className="hover:text-[#0052CC]">
                     <X className="w-3 h-3" />
                   </button>
                 </span>
@@ -1201,7 +1201,7 @@ function WritePostModal({
               onChange={(e) => setTagInput(e.target.value)}
               onKeyDown={handleAddTag}
               placeholder="태그 입력 후 Enter"
-              className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0064FF]"
               disabled={tags.length >= 5}
             />
           </div>
@@ -1222,7 +1222,7 @@ function WritePostModal({
           <button
             onClick={handleSubmit}
             disabled={isSubmitting || title.length < 2 || content.length < 10}
-            className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg transition-all"
+            className="flex-1 py-3 bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg transition-all"
           >
             {isSubmitting ? '게시 중...' : '게시하기'}
           </button>
@@ -1329,7 +1329,7 @@ function PostDetailModal({
             <span className={`px-2 py-0.5 text-xs rounded-full ${
               fullPost.category === 'tip' ? 'bg-green-100 text-green-700' :
               fullPost.category === 'question' ? 'bg-yellow-100 text-yellow-700' :
-              fullPost.category === 'success' ? 'bg-purple-100 text-purple-700' :
+              fullPost.category === 'success' ? 'bg-blue-100 text-blue-700' :
               'bg-gray-100 text-gray-600'
             }`}>
               {POST_CATEGORIES[fullPost.category] || '자유'}
@@ -1355,7 +1355,7 @@ function PostDetailModal({
           {fullPost.tags && fullPost.tags.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-4">
               {fullPost.tags.map((tag, i) => (
-                <span key={i} className="text-sm text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
+                <span key={i} className="text-sm text-[#0064FF] bg-blue-50 px-3 py-1 rounded-full">
                   #{tag}
                 </span>
               ))}
@@ -1373,7 +1373,7 @@ function PostDetailModal({
               disabled={!userId}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-colors ${
                 userId
-                  ? 'hover:bg-indigo-50 text-gray-600 hover:text-indigo-600'
+                  ? 'hover:bg-blue-50 text-gray-600 hover:text-[#0064FF]'
                   : 'text-gray-400 cursor-not-allowed'
               }`}
             >
@@ -1399,12 +1399,12 @@ function PostDetailModal({
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
                     placeholder="댓글을 입력하세요"
-                    className="flex-1 px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="flex-1 px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0064FF]"
                   />
                   <button
                     type="submit"
                     disabled={isSubmittingComment || !newComment.trim()}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-medium disabled:opacity-50 hover:bg-indigo-700 transition-colors"
+                    className="px-4 py-2 bg-[#0064FF] text-white rounded-xl font-medium disabled:opacity-50 hover:bg-[#0052CC] transition-colors"
                   >
                     <Send className="w-4 h-4" />
                   </button>

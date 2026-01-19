@@ -182,7 +182,7 @@ export default function PricingPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-gray-50 pt-24 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-[#0064FF] mx-auto mb-4" />
           <p className="text-gray-600">플랜 정보를 불러오는 중...</p>
@@ -192,20 +192,8 @@ export default function PricingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-gray-50 py-12 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-gray-50 pt-24 pb-12 px-4">
       <div className="container mx-auto max-w-7xl">
-        {/* Back Button */}
-        <Link href="/">
-          <motion.button
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="mb-8 flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-white/50 rounded-lg transition-all"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            <span className="font-medium">홈으로</span>
-          </motion.button>
-        </Link>
-
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}

@@ -113,7 +113,7 @@ export default function BlogDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#F0F7FF] via-[#E8F4FF] to-[#F5F9FF] pt-24 flex items-center justify-center">
         <div className="text-center">
           <motion.div
             animate={{ rotate: 360 }}
@@ -130,7 +130,7 @@ export default function BlogDetailPage() {
 
   if (!blogData) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#F0F7FF] via-[#E8F4FF] to-[#F5F9FF] pt-24 flex items-center justify-center">
         <div className="text-center">
           <div className="text-6xl mb-4">😢</div>
           <h2 className="text-2xl font-bold mb-2">블로그를 찾을 수 없습니다</h2>
@@ -224,19 +224,10 @@ export default function BlogDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50">
+    <div className="min-h-screen bg-gradient-to-br from-[#F0F7FF] via-[#E8F4FF] to-[#F5F9FF] pt-24">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
-          <Link href="/dashboard">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="p-3 rounded-full glass hover:bg-white/90 transition-all"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </motion.button>
-          </Link>
           <h1 className="text-2xl font-bold text-gray-800">블로그 프로필</h1>
         </div>
 
@@ -246,7 +237,7 @@ export default function BlogDetailPage() {
           animate={{ opacity: 1, y: 0 }}
           className="glass rounded-3xl p-8 mb-6 relative overflow-hidden"
         >
-          <div className="absolute top-0 right-0 w-96 h-96 bg-purple-400/10 rounded-full blur-3xl" />
+          <div className="absolute top-0 right-0 w-96 h-96 bg-[#0064FF]/10 rounded-full blur-3xl" />
 
           <div className="relative">
             {/* Top Section */}
@@ -269,9 +260,9 @@ export default function BlogDetailPage() {
                     href={displayData.blog.blog_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-2 rounded-full hover:bg-purple-100 transition-colors"
+                    className="p-2 rounded-full hover:bg-blue-100 transition-colors"
                   >
-                    <ExternalLink className="w-5 h-5 text-purple-600" />
+                    <ExternalLink className="w-5 h-5 text-[#0064FF]" />
                   </a>
                 </div>
                 <p className="text-gray-600 mb-1">@{displayData.blog.blog_id}</p>
@@ -336,11 +327,11 @@ export default function BlogDetailPage() {
                   </>
                 )}
               </button>
-              <button className="py-3 px-6 rounded-xl bg-purple-100 text-purple-700 font-semibold hover:bg-purple-200 transition-colors flex items-center gap-2">
+              <button className="py-3 px-6 rounded-xl bg-blue-100 text-[#0064FF] font-semibold hover:bg-blue-200 transition-colors flex items-center gap-2">
                 <Share2 className="w-5 h-5" />
                 공유
               </button>
-              <button className="py-3 px-6 rounded-xl bg-purple-100 text-purple-700 font-semibold hover:bg-purple-200 transition-colors">
+              <button className="py-3 px-6 rounded-xl bg-blue-100 text-[#0064FF] font-semibold hover:bg-blue-200 transition-colors">
                 <Bookmark className="w-5 h-5" />
               </button>
             </div>
@@ -355,7 +346,7 @@ export default function BlogDetailPage() {
           className="glass rounded-3xl p-8 mb-6"
         >
           <h3 className="text-2xl font-bold mb-6 flex items-center gap-2">
-            <BarChart3 className="w-6 h-6 text-purple-600" />
+            <BarChart3 className="w-6 h-6 text-[#0064FF]" />
             점수 상세
           </h3>
 
@@ -393,7 +384,7 @@ export default function BlogDetailPage() {
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: 0.3 + index * 0.1 }}
-                  className="text-center p-6 rounded-2xl bg-gradient-to-br from-white/80 to-purple-50/50 border border-purple-100"
+                  className="text-center p-6 rounded-2xl bg-gradient-to-br from-white/80 to-blue-50/50 border border-blue-100"
                 >
                   <div className="text-4xl mb-3">{icons[key]}</div>
                   <div className="text-2xl font-bold gradient-text mb-1">
@@ -461,7 +452,7 @@ export default function BlogDetailPage() {
                     className="bg-white rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer"
                   >
                     {/* Thumbnail */}
-                    <div className="aspect-square bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center text-8xl">
+                    <div className="aspect-square bg-gradient-to-br from-[#0064FF]/10 to-[#3182F6]/10 flex items-center justify-center text-8xl">
                       {post.thumbnail}
                     </div>
 
@@ -504,17 +495,17 @@ export default function BlogDetailPage() {
               className="glass rounded-b-3xl rounded-t-none p-8"
             >
               <div className="grid md:grid-cols-3 gap-6 mb-8">
-                <div className="text-center p-6 rounded-2xl bg-gradient-to-br from-purple-50 to-pink-50">
+                <div className="text-center p-6 rounded-2xl bg-gradient-to-br from-[#0064FF]/5 to-[#3182F6]/5">
                   <div className="text-3xl mb-2">❤️</div>
                   <div className="text-2xl font-bold gradient-text mb-1">{displayData.stats.avg_likes}</div>
                   <div className="text-sm text-gray-600">평균 좋아요</div>
                 </div>
-                <div className="text-center p-6 rounded-2xl bg-gradient-to-br from-pink-50 to-orange-50">
+                <div className="text-center p-6 rounded-2xl bg-gradient-to-br from-[#3182F6]/5 to-[#4A9DFF]/5">
                   <div className="text-3xl mb-2">💬</div>
                   <div className="text-2xl font-bold gradient-text mb-1">{displayData.stats.avg_comments}</div>
                   <div className="text-sm text-gray-600">평균 댓글</div>
                 </div>
-                <div className="text-center p-6 rounded-2xl bg-gradient-to-br from-orange-50 to-yellow-50">
+                <div className="text-center p-6 rounded-2xl bg-gradient-to-br from-[#4A9DFF]/5 to-[#6BB3FF]/5">
                   <div className="text-3xl mb-2">📊</div>
                   <div className="text-2xl font-bold gradient-text mb-1">{displayData.index.percentile}%</div>
                   <div className="text-sm text-gray-600">상위 백분율</div>
@@ -574,7 +565,7 @@ export default function BlogDetailPage() {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.1 }}
                       className={`flex items-center gap-6 p-6 rounded-2xl ${
-                        isLatest ? 'bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300' : 'bg-white'
+                        isLatest ? 'bg-gradient-to-r from-[#0064FF]/5 to-[#3182F6]/5 border-2 border-blue-300' : 'bg-white'
                       }`}
                     >
                       <div className="text-center min-w-[100px]">
@@ -634,7 +625,7 @@ export default function BlogDetailPage() {
             >
               {isLoadingBreakdown ? (
                 <div className="text-center py-12">
-                  <Loader2 className="w-12 h-12 animate-spin text-purple-600 mx-auto mb-4" />
+                  <Loader2 className="w-12 h-12 animate-spin text-[#0064FF] mx-auto mb-4" />
                   <p className="text-gray-600">상세 분석 데이터를 불러오는 중...</p>
                 </div>
               ) : breakdownData ? (
@@ -650,8 +641,8 @@ export default function BlogDetailPage() {
                   {breakdownData.breakdown?.c_rank && (
                     <div className="space-y-6">
                       <div className="flex items-center gap-3 mb-4">
-                        <div className="p-3 rounded-xl bg-gradient-to-r from-purple-100 to-pink-100">
-                          <Award className="w-6 h-6 text-purple-600" />
+                        <div className="p-3 rounded-xl bg-gradient-to-r from-[#0064FF]/10 to-[#3182F6]/10">
+                          <Award className="w-6 h-6 text-[#0064FF]" />
                         </div>
                         <div>
                           <h5 className="text-xl font-bold">C-Rank (출처 신뢰도)</h5>
@@ -669,10 +660,10 @@ export default function BlogDetailPage() {
                           </h6>
                           <div className="space-y-4">
                             {Object.entries(breakdownData.breakdown.c_rank.breakdown.context.details).map(([key, detail]: [string, any]) => (
-                              <div key={key} className="border-l-4 border-purple-300 pl-4 py-2">
+                              <div key={key} className="border-l-4 border-blue-300 pl-4 py-2">
                                 <div className="flex items-center justify-between mb-2">
                                   <span className="font-medium text-gray-700">{detail.description || key}</span>
-                                  <span className="text-purple-600 font-semibold">
+                                  <span className="text-[#0064FF] font-semibold">
                                     {detail.score}/{detail.max_score}
                                   </span>
                                 </div>
@@ -700,10 +691,10 @@ export default function BlogDetailPage() {
                           </h6>
                           <div className="space-y-4">
                             {Object.entries(breakdownData.breakdown.c_rank.breakdown.content.details).map(([key, detail]: [string, any]) => (
-                              <div key={key} className="border-l-4 border-pink-300 pl-4 py-2">
+                              <div key={key} className="border-l-4 border-[#3182F6] pl-4 py-2">
                                 <div className="flex items-center justify-between mb-2">
                                   <span className="font-medium text-gray-700">{detail.description || key}</span>
-                                  <span className="text-pink-600 font-semibold">
+                                  <span className="text-[#3182F6] font-semibold">
                                     {detail.score}/{detail.max_score}
                                   </span>
                                 </div>
@@ -722,8 +713,8 @@ export default function BlogDetailPage() {
                   {breakdownData.breakdown?.dia && (
                     <div className="space-y-6 mt-8">
                       <div className="flex items-center gap-3 mb-4">
-                        <div className="p-3 rounded-xl bg-gradient-to-r from-orange-100 to-yellow-100">
-                          <Sparkles className="w-6 h-6 text-orange-600" />
+                        <div className="p-3 rounded-xl bg-gradient-to-r from-[#0064FF]/20 to-[#3182F6]/20">
+                          <Sparkles className="w-6 h-6 text-[#0064FF]" />
                         </div>
                         <div>
                           <h5 className="text-xl font-bold">D.I.A. (문서 품질)</h5>
@@ -815,7 +806,7 @@ export default function BlogDetailPage() {
 
                   {/* Blog Info */}
                   {breakdownData.blog_info && (
-                    <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl p-6 mt-8">
+                    <div className="bg-gradient-to-r from-[#0064FF]/5 to-[#3182F6]/5 rounded-2xl p-6 mt-8">
                       <h6 className="font-semibold text-lg mb-4">분석 기준 정보</h6>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                         <div>

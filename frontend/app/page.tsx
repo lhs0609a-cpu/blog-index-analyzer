@@ -1,13 +1,12 @@
 'use client'
 
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion'
-import { Sparkles, TrendingUp, Zap, Award, BarChart3, LogOut, Search, BookOpen, ArrowRight, Building2, Mic, CreditCard, X, PenTool, Shield, Target, Star, Flame, Crown, ChevronRight, Play, Rocket, Heart, MousePointer, ArrowUpRight, Layers, Globe, Check, Users } from 'lucide-react'
+import { Sparkles, TrendingUp, Zap, Award, BarChart3, Search, BookOpen, ArrowRight, Building2, Mic, X, PenTool, Target, Star, Flame, Crown, ChevronRight, Play, Rocket, Heart, MousePointer, ArrowUpRight, Layers, Globe, Check, Users } from 'lucide-react'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, useRef } from 'react'
-import UsageIndicator from '@/components/UsageIndicator'
 
 // 3D 틸트 카드 컴포넌트
 function TiltCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
@@ -91,17 +90,14 @@ function Marquee({ children, speed = 30, direction = "left" }: { children: React
 }
 
 export default function Home() {
-  const { isAuthenticated, user, logout } = useAuthStore()
+  const { isAuthenticated } = useAuthStore()
   const router = useRouter()
-  const [mounted, setMounted] = useState(false)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [isSearching, setIsSearching] = useState(false)
   const [showAdPopup, setShowAdPopup] = useState(true)
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
 
   useEffect(() => {
-    setMounted(true)
-
     const handleMouseMove = (e: MouseEvent) => {
       setMousePosition({ x: e.clientX, y: e.clientY })
     }
@@ -118,12 +114,6 @@ export default function Home() {
     }
     setIsSearching(true)
     router.push(`/keyword-search?keyword=${encodeURIComponent(searchKeyword.trim())}`)
-  }
-
-  const handleLogout = () => {
-    logout()
-    toast.success('로그아웃되었습니다')
-    router.push('/')
   }
 
   return (
@@ -172,112 +162,8 @@ export default function Home() {
         />
       </div>
 
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50">
-        <div className="mx-4 mt-4">
-          <div className="backdrop-blur-2xl bg-white/70 border border-gray-200/50 rounded-2xl px-6 py-4 shadow-lg shadow-gray-200/50">
-            <div className="flex items-center justify-between">
-              {/* Logo */}
-              <Link href="/" className="flex items-center gap-3 group">
-                <motion.div
-                  className="relative w-10 h-10 rounded-xl overflow-hidden"
-                  whileHover={{ scale: 1.1, rotate: 5 }}
-                >
-                  <div className="absolute inset-0 bg-[#0064FF]" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Sparkles className="w-5 h-5 text-white" />
-                  </div>
-                </motion.div>
-                <span className="text-xl font-black text-[#0064FF]">블랭크</span>
-              </Link>
-
-              {/* Navigation */}
-              {!mounted ? (
-                <div className="w-32 h-10 bg-gray-200 rounded-full animate-pulse" />
-              ) : isAuthenticated ? (
-                <div className="flex items-center gap-3">
-                  <UsageIndicator />
-                  <Link href="/pricing" className="hidden md:block">
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-[#0064FF] transition-colors flex items-center gap-1.5"
-                    >
-                      <CreditCard className="w-4 h-4" />
-                      요금제
-                    </motion.button>
-                  </Link>
-                  <span className="hidden md:block text-sm font-medium text-gray-600">
-                    {user?.name}님
-                  </span>
-                  <Link href="/dashboard">
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="px-5 py-2.5 text-sm font-bold bg-[#0064FF] text-white rounded-xl hover:shadow-lg hover:shadow-[#0064FF]/20 transition-shadow"
-                    >
-                      대시보드
-                    </motion.button>
-                  </Link>
-                  {user?.is_admin && (
-                    <Link href="/admin">
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        className="p-2.5 rounded-xl bg-blue-50 border border-blue-100"
-                      >
-                        <Shield className="w-4 h-4 text-[#0064FF]" />
-                      </motion.button>
-                    </Link>
-                  )}
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={handleLogout}
-                    className="p-2.5 rounded-xl hover:bg-gray-100 transition-colors"
-                  >
-                    <LogOut className="w-4 h-4 text-gray-500" />
-                  </motion.button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <Link href="/pricing" className="hidden md:block">
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors flex items-center gap-2"
-                    >
-                      <CreditCard className="w-4 h-4" />
-                      요금제
-                    </motion.button>
-                  </Link>
-                  <Link href="/login">
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="px-5 py-2.5 text-sm font-medium border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors"
-                    >
-                      로그인
-                    </motion.button>
-                  </Link>
-                  <Link href="/register">
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="px-5 py-2.5 text-sm font-bold bg-[#0064FF] text-white rounded-xl hover:shadow-lg hover:shadow-[#0064FF]/20 transition-shadow"
-                    >
-                      시작하기
-                    </motion.button>
-                  </Link>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
       {/* Hero Section */}
-      <section className="relative pt-32 pb-16 md:pt-44 md:pb-24">
+      <section className="relative pt-28 pb-16 md:pt-36 md:pb-24">
         <div className="container mx-auto px-4">
           <div className="max-w-6xl mx-auto">
             {/* Main Content */}

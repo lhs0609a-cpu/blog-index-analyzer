@@ -86,18 +86,8 @@ export default function Dashboard() {
   const displayBlogs = filteredBlogs
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 pt-24">
       <div className="container mx-auto px-4 py-8">
-        {/* Back Button */}
-        <motion.button
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          onClick={() => router.push('/')}
-          className="mb-4 flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-white/50 rounded-lg transition-all"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          <span className="font-medium">홈으로</span>
-        </motion.button>
 
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -111,7 +101,7 @@ export default function Dashboard() {
           <div className="flex gap-3 flex-wrap">
             <Link
               href="/dashboard/rank-tracker"
-              className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold hover:shadow-lg transition-all duration-300"
+              className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white font-semibold hover:shadow-lg transition-all duration-300"
             >
               <Target className="w-5 h-5" />
               순위 추적
@@ -119,7 +109,7 @@ export default function Dashboard() {
             {user?.is_admin && (
               <Link
                 href="/dashboard/batch-learning"
-                className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold hover:shadow-lg transition-all duration-300"
+                className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white font-semibold hover:shadow-lg transition-all duration-300"
               >
                 <Sparkles className="w-5 h-5" />
                 대량 학습
@@ -136,7 +126,7 @@ export default function Dashboard() {
             )}
             <Link
               href="/keyword-search"
-              className="flex items-center gap-2 px-6 py-3 rounded-full bg-white border-2 border-purple-500 text-purple-600 font-semibold hover:shadow-lg transition-all duration-300"
+              className="flex items-center gap-2 px-6 py-3 rounded-full bg-white border-2 border-[#0064FF] text-[#0064FF] font-semibold hover:shadow-lg transition-all duration-300"
             >
               <Search className="w-5 h-5" />
               키워드 검색
@@ -155,7 +145,7 @@ export default function Dashboard() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="glass rounded-3xl p-8 mb-8 bg-gradient-to-br from-purple-50 to-pink-50"
+          className="glass rounded-3xl p-8 mb-8 bg-gradient-to-br from-blue-50 to-sky-50"
         >
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
@@ -179,8 +169,8 @@ export default function Dashboard() {
           <div className="grid md:grid-cols-3 gap-4">
             <div className="bg-white rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
-                  <Eye className="w-4 h-4 text-purple-600" />
+                <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                  <Eye className="w-4 h-4 text-[#0064FF]" />
                 </div>
                 <span className="font-semibold text-gray-700">상위 노출 분석</span>
               </div>
@@ -191,8 +181,8 @@ export default function Dashboard() {
 
             <div className="bg-white rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-pink-100 flex items-center justify-center">
-                  <TrendingUp className="w-4 h-4 text-pink-600" />
+                <div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center">
+                  <TrendingUp className="w-4 h-4 text-[#3182F6]" />
                 </div>
                 <span className="font-semibold text-gray-700">경쟁 인사이트</span>
               </div>
@@ -220,21 +210,21 @@ export default function Dashboard() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="glass rounded-3xl p-8 mb-8 bg-gradient-to-br from-purple-50 to-pink-50"
+          className="glass rounded-3xl p-8 mb-8 bg-gradient-to-br from-blue-50 to-sky-50"
         >
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] flex items-center justify-center">
                 <Target className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-purple-700">순위 추적</h2>
+                <h2 className="text-2xl font-bold text-[#0064FF]">순위 추적</h2>
                 <p className="text-sm text-gray-600">내 블로그 포스팅의 검색 순위를 실시간 추적하세요</p>
               </div>
             </div>
             <Link
               href="/dashboard/rank-tracker"
-              className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold hover:shadow-lg transition-all duration-300"
+              className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white font-semibold hover:shadow-lg transition-all duration-300"
             >
               <Target className="w-5 h-5" />
               순위 추적 시작
@@ -244,8 +234,8 @@ export default function Dashboard() {
           <div className="grid md:grid-cols-3 gap-4">
             <div className="bg-white rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
-                  <Search className="w-4 h-4 text-purple-600" />
+                <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                  <Search className="w-4 h-4 text-[#0064FF]" />
                 </div>
                 <span className="font-semibold text-gray-700">키워드 자동 추출</span>
               </div>
@@ -256,8 +246,8 @@ export default function Dashboard() {
 
             <div className="bg-white rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-pink-100 flex items-center justify-center">
-                  <TrendingUp className="w-4 h-4 text-pink-600" />
+                <div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center">
+                  <TrendingUp className="w-4 h-4 text-[#3182F6]" />
                 </div>
                 <span className="font-semibold text-gray-700">블로그탭 & VIEW탭</span>
               </div>
@@ -350,21 +340,21 @@ export default function Dashboard() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="glass rounded-3xl p-8 mb-8 bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 border border-indigo-100"
+          className="glass rounded-3xl p-8 mb-8 bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 border border-blue-100"
         >
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] flex items-center justify-center shadow-lg">
                 <Zap className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">통합 광고 최적화</h2>
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-[#0064FF] to-[#3182F6] bg-clip-text text-transparent">통합 광고 최적화</h2>
                 <p className="text-sm text-gray-600">모든 광고 플랫폼을 AI가 자동으로 최적화합니다</p>
               </div>
             </div>
             <Link
               href="/ad-optimizer/unified"
-              className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300"
+              className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300"
             >
               <Zap className="w-5 h-5" />
               시작하기
@@ -386,7 +376,7 @@ export default function Dashboard() {
 
             <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-white/50 hover:shadow-md transition-all">
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#3182F6] to-[#0064FF] flex items-center justify-center">
                   <Brain className="w-4 h-4 text-white" />
                 </div>
                 <span className="font-semibold text-gray-700">AI 자동 최적화</span>
@@ -410,7 +400,7 @@ export default function Dashboard() {
 
             <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-white/50 hover:shadow-md transition-all">
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#0064FF] to-[#3182F6] flex items-center justify-center">
                   <BarChart3 className="w-4 h-4 text-white" />
                 </div>
                 <span className="font-semibold text-gray-700">통합 리포트</span>
@@ -435,7 +425,7 @@ export default function Dashboard() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="블로그 검색..."
-              className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-transparent focus:border-purple-500 focus:outline-none transition-all"
+              className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-transparent focus:border-[#0064FF] focus:outline-none transition-all"
             />
           </div>
         </motion.div>
@@ -460,8 +450,8 @@ export default function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             className="bg-white rounded-3xl shadow-lg p-12 text-center"
           >
-            <div className="w-24 h-24 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Plus className="w-12 h-12 text-purple-600" />
+            <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Plus className="w-12 h-12 text-[#0064FF]" />
             </div>
             <h3 className="text-2xl font-bold mb-3">등록된 블로그가 없습니다</h3>
             <p className="text-gray-600 mb-6">
@@ -499,14 +489,14 @@ export default function Dashboard() {
 
                 <motion.div
                   whileHover={{ scale: 1.1 }}
-                  className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center cursor-pointer"
+                  className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center cursor-pointer"
                 >
-                  <Sparkles className="w-5 h-5 text-purple-600" />
+                  <Sparkles className="w-5 h-5 text-[#0064FF]" />
                 </motion.div>
               </div>
 
               {/* Level Badge */}
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-purple-100 to-pink-100 mb-4">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-100 to-sky-100 mb-4">
                 <span className="text-2xl font-bold gradient-text">
                   Level {blog.level}
                 </span>
@@ -594,10 +584,10 @@ export default function Dashboard() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: myBlogs.length * 0.1 }}
               whileHover={{ y: -5 }}
-              className="glass rounded-3xl p-6 flex flex-col items-center justify-center hover:shadow-2xl transition-all duration-300 cursor-pointer border-2 border-dashed border-purple-300"
+              className="glass rounded-3xl p-6 flex flex-col items-center justify-center hover:shadow-2xl transition-all duration-300 cursor-pointer border-2 border-dashed border-blue-300"
             >
-              <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center mb-4">
-                <Plus className="w-8 h-8 text-purple-600" />
+              <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mb-4">
+                <Plus className="w-8 h-8 text-[#0064FF]" />
               </div>
               <h3 className="font-bold text-lg mb-2">새 블로그 추가</h3>
               <p className="text-sm text-gray-500 text-center">
@@ -637,13 +627,13 @@ export default function Dashboard() {
                 label: '총 블로그',
                 value: totalBlogs,
                 icon: '📚',
-                color: 'purple'
+                color: 'blue'
               },
               {
                 label: '평균 레벨',
                 value: avgLevel,
                 icon: '⭐',
-                color: 'pink'
+                color: 'sky'
               },
               {
                 label: '총 방문자',
