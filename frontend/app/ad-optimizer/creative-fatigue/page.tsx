@@ -9,6 +9,7 @@ import {
   FEATURE_DESCRIPTIONS,
   PLATFORM_STYLES,
 } from "@/components/ad-optimizer/PlatformSupportBanner";
+import { ValuePropositionCompact } from "@/components/ad-optimizer/ValueProposition";
 
 interface FatigueSummary {
   total_creatives: number;
@@ -279,6 +280,11 @@ export default function CreativeFatiguePage() {
           {error}
         </div>
       )}
+
+      {/* Value Proposition */}
+      <div className="max-w-7xl mx-auto mb-6">
+        <ValuePropositionCompact type="creative" />
+      </div>
 
       {/* Platform Support Banner */}
       <div className="max-w-7xl mx-auto mb-6">

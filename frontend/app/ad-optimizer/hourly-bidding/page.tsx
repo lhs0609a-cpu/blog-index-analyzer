@@ -31,6 +31,7 @@ import {
   FEATURE_DESCRIPTIONS,
   PLATFORM_STYLES,
 } from "@/components/ad-optimizer/PlatformSupportBanner";
+import { ValuePropositionCompact } from "@/components/ad-optimizer/ValueProposition";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.blrank.co.kr";
 
@@ -379,6 +380,9 @@ export default function HourlyBiddingPage() {
             </button>
           </div>
         </div>
+
+        {/* Value Proposition */}
+        <ValuePropositionCompact type="hourly" />
 
         {/* Platform Support Banner */}
         <PlatformSupportBanner

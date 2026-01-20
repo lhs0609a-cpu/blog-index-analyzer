@@ -11,6 +11,7 @@ import {
   PLATFORM_STYLES,
   PlatformTabs,
 } from "@/components/ad-optimizer/PlatformSupportBanner";
+import { ValuePropositionCompact } from "@/components/ad-optimizer/ValueProposition";
 
 interface AnomalyAlert {
   id: number;
@@ -318,6 +319,9 @@ export default function AnomalyDetectionPage() {
             </button>
           </div>
         </div>
+
+        {/* Value Proposition */}
+        <ValuePropositionCompact type="anomaly" />
 
         {/* Platform Support Banner */}
         <PlatformSupportBanner

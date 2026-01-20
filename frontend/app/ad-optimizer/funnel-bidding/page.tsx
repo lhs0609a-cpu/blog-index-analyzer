@@ -18,6 +18,7 @@ import {
   PLATFORM_STYLES,
   PlatformBadge,
 } from "@/components/ad-optimizer/PlatformSupportBanner"
+import { ValuePropositionCompact } from "@/components/ad-optimizer/ValueProposition"
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
 
@@ -436,6 +437,9 @@ export default function FunnelBiddingPage() {
 
       {/* 메인 콘텐츠 */}
       <div className="max-w-7xl mx-auto px-4 py-6">
+        {/* Value Proposition */}
+        <ValuePropositionCompact type="funnel" />
+
         {/* Platform Support Banner */}
         <PlatformSupportBanner
           title={FEATURE_DESCRIPTIONS.funnelBidding.title}

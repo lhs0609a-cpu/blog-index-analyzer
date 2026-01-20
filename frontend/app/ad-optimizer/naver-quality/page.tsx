@@ -8,6 +8,7 @@ import {
   FEATURE_PLATFORMS,
   FEATURE_DESCRIPTIONS,
 } from "@/components/ad-optimizer/PlatformSupportBanner";
+import { ValuePropositionCompact } from "@/components/ad-optimizer/ValueProposition";
 
 interface QualitySummary {
   total_keywords: number;
@@ -254,6 +255,11 @@ export default function NaverQualityPage() {
           {error}
         </div>
       )}
+
+      {/* Value Proposition */}
+      <div className="max-w-7xl mx-auto mb-6">
+        <ValuePropositionCompact type="quality" />
+      </div>
 
       {/* Platform Support Banner */}
       <div className="max-w-7xl mx-auto mb-6">

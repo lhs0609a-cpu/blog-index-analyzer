@@ -12,6 +12,7 @@ import {
   PlatformCard,
   PlatformBadge,
 } from "@/components/ad-optimizer/PlatformSupportBanner";
+import { ValuePropositionCompact } from "@/components/ad-optimizer/ValueProposition";
 
 interface PlatformHealth {
   platform_id: string;
@@ -317,6 +318,9 @@ export default function BudgetReallocationPage() {
             새로고침
           </button>
         </div>
+
+        {/* Value Proposition */}
+        <ValuePropositionCompact type="budget" />
 
         {/* Platform Support Banner */}
         <PlatformSupportBanner

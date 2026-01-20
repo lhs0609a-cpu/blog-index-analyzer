@@ -16,6 +16,7 @@ import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import { useFeature } from '@/lib/features/useFeatureAccess'
 import Tutorial, { adOptimizerTutorialSteps } from '@/components/Tutorial'
+import ValueProposition from '@/components/ad-optimizer/ValueProposition'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
 
@@ -936,6 +937,9 @@ export default function AdOptimizerPage() {
             </button>
           ))}
         </div>
+
+        {/* Value Proposition - 계정 연동 탭일 때만 표시 */}
+        {activeTab === 'connect' && <ValueProposition type="main" />}
 
         {/* 계정 연동 탭 */}
         {activeTab === 'connect' && (
