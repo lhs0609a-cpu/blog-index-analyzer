@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 # ===== 글로벌 동시 요청 제한 (서버 과부하 방지) =====
 # 여러 키워드 동시 분석 시에도 전체 요청 수 제한
-GLOBAL_SEMAPHORE = asyncio.Semaphore(50)  # 전체 동시 요청 최대 50개 (30 → 50 성능 개선)
+GLOBAL_SEMAPHORE = asyncio.Semaphore(80)  # 전체 동시 요청 최대 80개 (50 → 80 성능 개선)
 
 # ===== 전역 HTTP 클라이언트 (연결 풀링으로 성능 개선) =====
 # 매 요청마다 새 연결 대신 재사용하여 TCP 핸드셰이크 오버헤드 제거
@@ -2142,18 +2142,19 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
     return result
 
 
-async def get_related_keywords_from_searchad(keyword: str) -> RelatedKeywordsResponse:
-    """Get related keywords and search volume from Naver Search Ad API"""
+async def get_related_keywords_from_searchad(keyword: str, retry_count: int = 0) -> RelatedKeywordsResponse:
+    """Get related keywords and search volume from Naver Search Ad API with retry logic"""
+    MAX_RETRIES = 2
 
-    # 1. 캐시 확인 (12시간 유효)
+    # 1. 캐시 확인 (24시간 유효)
     cached = get_cached_related_keywords(keyword)
     if cached:
-        logger.info(f"Cache hit for related keywords: {keyword}")
+        logger.info(f"[SearchAd] Cache hit for: {keyword}")
         return RelatedKeywordsResponse(**cached)
 
     # Check if API credentials are configured
     if not settings.NAVER_AD_API_KEY or not settings.NAVER_AD_SECRET_KEY or not settings.NAVER_AD_CUSTOMER_ID:
-        logger.warning("Naver Search Ad API credentials not configured")
+        logger.warning("[SearchAd] API credentials not configured")
         return RelatedKeywordsResponse(
             success=False,
             keyword=keyword,
@@ -2186,17 +2187,23 @@ async def get_related_keywords_from_searchad(keyword: str) -> RelatedKeywordsRes
             "showDetail": "1"
         }
 
+        logger.info(f"[SearchAd] Requesting keywords for: {keyword} (attempt {retry_count + 1})")
+
         async with httpx.AsyncClient(follow_redirects=True) as client:
             response = await client.get(
                 "https://api.searchad.naver.com/keywordstool",
                 headers=headers,
                 params=params,
-                timeout=30.0
+                timeout=10.0  # 30초 → 10초로 단축
             )
+
+            logger.info(f"[SearchAd] Response status: {response.status_code} for: {keyword}")
 
             if response.status_code == 200:
                 data = response.json()
                 keywords_data = data.get("keywordList", [])
+
+                logger.info(f"[SearchAd] Got {len(keywords_data)} keywords for: {keyword}")
 
                 related_keywords = []
                 for kw in keywords_data[:100]:  # Limit to 100 keywords
@@ -2204,13 +2211,10 @@ async def get_related_keywords_from_searchad(keyword: str) -> RelatedKeywordsRes
                     mobile_search = kw.get("monthlyMobileQcCnt", 0)
 
                     # Handle "< 10" values (네이버 API는 10 미만일 때 "< 10" 문자열 반환)
-                    # 10 미만의 중간값인 5로 처리하되, 로그에 기록
                     if isinstance(pc_search, str) and "<" in pc_search:
-                        pc_search = 5  # "< 10"은 1-9 범위이므로 중간값 5 사용
-                        logger.debug(f"PC search volume < 10 for keyword, using estimate: 5")
+                        pc_search = 5
                     if isinstance(mobile_search, str) and "<" in mobile_search:
-                        mobile_search = 5  # "< 10"은 1-9 범위이므로 중간값 5 사용
-                        logger.debug(f"Mobile search volume < 10 for keyword, using estimate: 5")
+                        mobile_search = 5
 
                     try:
                         pc_search = int(pc_search) if pc_search else 0
@@ -2241,7 +2245,7 @@ async def get_related_keywords_from_searchad(keyword: str) -> RelatedKeywordsRes
                 # Sort by total search volume
                 related_keywords.sort(key=lambda x: x.monthly_total_search or 0, reverse=True)
 
-                response = RelatedKeywordsResponse(
+                result = RelatedKeywordsResponse(
                     success=True,
                     keyword=keyword,
                     source="searchad",
@@ -2249,27 +2253,57 @@ async def get_related_keywords_from_searchad(keyword: str) -> RelatedKeywordsRes
                     keywords=related_keywords
                 )
 
-                # 캐시에 저장 (12시간)
+                # 캐시에 저장 (24시간)
                 try:
-                    cache_related_keywords(keyword, response.model_dump())
-                    logger.info(f"Cached related keywords for: {keyword}")
+                    cache_related_keywords(keyword, result.model_dump())
+                    logger.info(f"[SearchAd] Cached {len(related_keywords)} keywords for: {keyword}")
                 except Exception as cache_error:
-                    logger.warning(f"Failed to cache related keywords: {cache_error}")
+                    logger.warning(f"[SearchAd] Cache failed: {cache_error}")
 
-                return response
+                return result
+
+            elif response.status_code == 429:
+                # Rate limit - 재시도
+                logger.warning(f"[SearchAd] Rate limited (429) for: {keyword}")
+                if retry_count < MAX_RETRIES:
+                    await asyncio.sleep(1.0 * (retry_count + 1))  # 지수 백오프
+                    return await get_related_keywords_from_searchad(keyword, retry_count + 1)
+
+            elif response.status_code in [500, 502, 503, 504]:
+                # 서버 오류 - 재시도
+                logger.warning(f"[SearchAd] Server error ({response.status_code}) for: {keyword}")
+                if retry_count < MAX_RETRIES:
+                    await asyncio.sleep(0.5 * (retry_count + 1))
+                    return await get_related_keywords_from_searchad(keyword, retry_count + 1)
+
             else:
-                logger.error(f"Naver Search Ad API error: {response.status_code} - {response.text}")
-                return RelatedKeywordsResponse(
-                    success=False,
-                    keyword=keyword,
-                    source="searchad",
-                    total_count=0,
-                    keywords=[],
-                    message=f"API 오류: {response.status_code}"
-                )
+                logger.error(f"[SearchAd] API error {response.status_code}: {response.text[:200]}")
 
+            return RelatedKeywordsResponse(
+                success=False,
+                keyword=keyword,
+                source="searchad",
+                total_count=0,
+                keywords=[],
+                message=f"API 오류: {response.status_code}"
+            )
+
+    except httpx.TimeoutException:
+        logger.warning(f"[SearchAd] Timeout for: {keyword} (attempt {retry_count + 1})")
+        if retry_count < MAX_RETRIES:
+            return await get_related_keywords_from_searchad(keyword, retry_count + 1)
+        return RelatedKeywordsResponse(
+            success=False,
+            keyword=keyword,
+            source="searchad",
+            total_count=0,
+            keywords=[],
+            message="API 타임아웃"
+        )
     except Exception as e:
-        logger.error(f"Error fetching related keywords: {e}")
+        logger.error(f"[SearchAd] Error for {keyword}: {type(e).__name__}: {e}")
+        if retry_count < MAX_RETRIES:
+            return await get_related_keywords_from_searchad(keyword, retry_count + 1)
         return RelatedKeywordsResponse(
             success=False,
             keyword=keyword,
@@ -2837,8 +2871,8 @@ async def search_keyword_with_tabs(
                 logger.warning(f"Failed to analyze {item['blog_id']} after {max_retries + 1} attempts: {e}")
                 return item, {"stats": {}, "index": {}}, {}
 
-        # 동시에 최대 15개씩 분석 (키워드당) + 글로벌 제한 (10 → 15 성능 개선)
-        local_semaphore = asyncio.Semaphore(15)
+        # 동시에 최대 30개씩 분석 (키워드당) + 글로벌 제한 (15 → 30 성능 개선)
+        local_semaphore = asyncio.Semaphore(30)
 
         async def analyze_with_limit(item):
             # 글로벌 + 로컬 세마포어 모두 적용 (다중 키워드 동시 처리 시 과부하 방지)

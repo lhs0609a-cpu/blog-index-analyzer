@@ -220,8 +220,8 @@ def get_cached_related_keywords(keyword: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def cache_related_keywords(keyword: str, data: Dict[str, Any], ttl_hours: int = 12):
-    """연관 키워드 결과 캐싱 (12시간 기본)"""
+def cache_related_keywords(keyword: str, data: Dict[str, Any], ttl_hours: int = 24):
+    """연관 키워드 결과 캐싱 (24시간 기본)"""
     with get_db() as conn:
         cursor = conn.cursor()
         expires_at = datetime.now() + timedelta(hours=ttl_hours)
@@ -254,8 +254,8 @@ def get_cached_keyword_tree(cache_key: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def cache_keyword_tree(cache_key: str, data: Dict[str, Any], ttl_hours: int = 6):
-    """키워드 트리 결과 캐싱 (6시간 기본)"""
+def cache_keyword_tree(cache_key: str, data: Dict[str, Any], ttl_hours: int = 12):
+    """키워드 트리 결과 캐싱 (12시간 기본)"""
     with get_db() as conn:
         cursor = conn.cursor()
         expires_at = datetime.now() + timedelta(hours=ttl_hours)
