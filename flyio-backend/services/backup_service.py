@@ -23,8 +23,8 @@ if sys.platform == "win32":
 else:
     BACKUP_DIR = "/data/backups"
     DATABASE_PATH = "/data/blog_analyzer.db"
-MAX_BACKUPS = 48  # 48시간 분량 (매시간 백업)
-MAX_JSON_BACKUPS = 4  # JSON 백업은 4개만 유지 (24시간 분량, 6시간마다)
+MAX_BACKUPS = 12  # 12시간 분량 (매시간 백업) - 디스크 사용량 감소
+MAX_JSON_BACKUPS = 2  # JSON 백업은 2개만 유지 - 디스크 사용량 감소
 BACKUP_INTERVAL_SECONDS = 3600  # 1시간마다
 DISK_WARNING_THRESHOLD_MB = 100  # 100MB 이하면 경고
 

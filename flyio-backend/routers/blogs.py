@@ -50,9 +50,9 @@ SEARCH_RESULTS_CACHE: Dict[str, Dict] = {}
 SEARCH_CACHE_TTL = 300  # 5분 (검색 결과는 짧게 캐싱)
 
 # ===== 블로그 분석 캐시 (성능 개선) =====
-# TTL: 4시간 (같은 블로그 반복 분석 방지)
+# TTL: 1시간 (메모리 사용량 감소)
 BLOG_ANALYSIS_CACHE: Dict[str, Dict] = {}
-BLOG_CACHE_TTL = 14400  # 4시간 (1시간 → 4시간 성능 개선)
+BLOG_CACHE_TTL = 3600  # 1시간 (4시간 → 1시간 메모리 절약)
 
 def get_cached_blog_analysis(blog_id: str) -> Optional[Dict]:
     """캐시된 블로그 분석 결과 조회"""
@@ -66,12 +66,12 @@ def get_cached_blog_analysis(blog_id: str) -> Optional[Dict]:
 
 def set_blog_analysis_cache(blog_id: str, data: Dict):
     """블로그 분석 결과 캐시 저장"""
-    # 캐시 크기 제한 (1000개)
-    if len(BLOG_ANALYSIS_CACHE) > 1000:
+    # 캐시 크기 제한 (100개) - 메모리 사용량 감소
+    if len(BLOG_ANALYSIS_CACHE) > 100:
         # 가장 오래된 항목들 삭제
         sorted_keys = sorted(BLOG_ANALYSIS_CACHE.keys(),
                             key=lambda k: BLOG_ANALYSIS_CACHE[k]["timestamp"])
-        for key in sorted_keys[:200]:
+        for key in sorted_keys[:50]:
             del BLOG_ANALYSIS_CACHE[key]
 
     BLOG_ANALYSIS_CACHE[blog_id] = {
@@ -94,11 +94,11 @@ def get_cached_search_results(keyword: str) -> Optional[Dict]:
 def set_search_results_cache(keyword: str, data: Dict):
     """검색 결과 캐시 저장"""
     cache_key = keyword.lower().strip()
-    # 캐시 크기 제한 (500개)
-    if len(SEARCH_RESULTS_CACHE) > 500:
+    # 캐시 크기 제한 (100개) - 메모리 사용량 감소
+    if len(SEARCH_RESULTS_CACHE) > 100:
         sorted_keys = sorted(SEARCH_RESULTS_CACHE.keys(),
                             key=lambda k: SEARCH_RESULTS_CACHE[k]["timestamp"])
-        for key in sorted_keys[:100]:
+        for key in sorted_keys[:50]:
             del SEARCH_RESULTS_CACHE[key]
 
     SEARCH_RESULTS_CACHE[cache_key] = {

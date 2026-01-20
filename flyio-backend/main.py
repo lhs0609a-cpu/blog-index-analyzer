@@ -170,8 +170,8 @@ async def lifespan(app: FastAPI):
     # 광고 자동 최적화 스케줄러 시작
     try:
         from services.ad_auto_optimizer import ad_auto_optimizer
-        ad_auto_optimizer.start(interval_seconds=60)  # 1분마다 실행
-        logger.info("✅ Ad auto optimizer started (every 1 min)")
+        ad_auto_optimizer.start(interval_seconds=300)  # 5분마다 실행 (서버 부하 감소)
+        logger.info("✅ Ad auto optimizer started (every 5 min)")
     except Exception as e:
         logger.warning(f"⚠️ Ad auto optimizer failed to start: {e}")
 
@@ -186,8 +186,8 @@ async def lifespan(app: FastAPI):
     # Threads 자동 게시 스케줄러 시작
     try:
         from services.threads_auto_poster import threads_auto_poster
-        threads_auto_poster.start(interval_seconds=60)  # 1분마다 실행
-        logger.info("✅ Threads auto poster started (every 1 min)")
+        threads_auto_poster.start(interval_seconds=300)  # 5분마다 실행 (서버 부하 감소)
+        logger.info("✅ Threads auto poster started (every 5 min)")
     except Exception as e:
         logger.warning(f"⚠️ Threads auto poster failed to start: {e}")
 
