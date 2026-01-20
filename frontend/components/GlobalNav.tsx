@@ -40,7 +40,7 @@ const navItems = [
     label: 'AI 도구',
     href: '/tools',
     icon: Sparkles,
-    badge: '34개',
+    badge: '9개',
     badgeColor: 'bg-gray-100 text-gray-600',
     description: '프리미엄 AI 도구 모음'
   },

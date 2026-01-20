@@ -345,7 +345,7 @@ export default function Home() {
                         <div className="w-10 h-10 rounded-xl bg-white/80 flex items-center justify-center shadow-lg">
                           <Sparkles className="w-5 h-5 text-[#0064FF]" />
                         </div>
-                        <span className="text-xs font-bold text-[#0064FF] bg-white/80 px-3 py-1 rounded-full">34개 도구</span>
+                        <span className="text-xs font-bold text-[#0064FF] bg-white/80 px-3 py-1 rounded-full">9개 도구</span>
                       </div>
                       <h3 className="text-2xl font-bold text-gray-900 mb-2">프리미엄 AI 도구</h3>
                       <p className="text-gray-600">블로그 성장에 필요한 모든 것</p>
