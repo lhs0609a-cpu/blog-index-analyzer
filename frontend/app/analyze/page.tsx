@@ -100,7 +100,7 @@ export default function AnalyzePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-blue-100 pt-24 pb-12">
+    <div className="min-h-screen bg-[#fafafa] pt-24 pb-12">
       {showConfetti && <Confetti width={width} height={height} recycle={false} numberOfPieces={200} />}
 
       <div className="container mx-auto px-4">
@@ -115,7 +115,7 @@ export default function AnalyzePage() {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: "spring", duration: 0.5 }}
-              className="inline-flex p-4 rounded-full instagram-gradient mb-6"
+              className="inline-flex p-4 rounded-full bg-[#0064FF] mb-6 shadow-lg shadow-[#0064FF]/15"
             >
               <Sparkles className="w-8 h-8 text-white" />
             </motion.div>
@@ -133,7 +133,7 @@ export default function AnalyzePage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="glass rounded-3xl p-8 mb-8"
+            className="rounded-3xl p-8 mb-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50"
           >
             <div className="flex gap-4">
               <div className="relative flex-1">
@@ -152,7 +152,7 @@ export default function AnalyzePage() {
               <button
                 onClick={handleAnalyze}
                 disabled={isAnalyzing || !blogId.trim()}
-                className="px-8 py-4 rounded-2xl instagram-gradient text-white font-semibold hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-8 py-4 rounded-2xl bg-[#0064FF] text-white font-semibold hover:shadow-lg shadow-lg shadow-[#0064FF]/15 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isAnalyzing ? (
                   <>
@@ -180,12 +180,12 @@ export default function AnalyzePage() {
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
-                className="glass rounded-3xl p-12 text-center"
+                className="rounded-3xl p-12 text-center bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50"
               >
                 <motion.div
                   animate={{ rotate: 360 }}
                   transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                  className="inline-flex p-6 rounded-full instagram-gradient mb-6"
+                  className="inline-flex p-6 rounded-full bg-[#0064FF] mb-6 shadow-lg shadow-[#0064FF]/15"
                 >
                   <Sparkles className="w-12 h-12 text-white" />
                 </motion.div>
@@ -199,7 +199,7 @@ export default function AnalyzePage() {
                       <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: `${progress}%` }}
-                        className="absolute inset-y-0 left-0 instagram-gradient rounded-full"
+                        className="absolute inset-y-0 left-0 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-full"
                       />
                     </div>
                     <p className="text-center text-sm text-gray-600 mt-2">{progress}% 완료</p>
@@ -234,7 +234,7 @@ export default function AnalyzePage() {
                 className="space-y-6"
               >
                 {/* Score Card */}
-                <div className="glass rounded-3xl p-8 relative overflow-hidden">
+                <div className="rounded-3xl p-8 relative overflow-hidden bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50">
                   <div className="absolute top-0 right-0 w-64 h-64 bg-[#0064FF]/10 rounded-full blur-3xl" />
 
                   <div className="relative flex items-center justify-between">
@@ -249,7 +249,7 @@ export default function AnalyzePage() {
                       transition={{ type: "spring", delay: 0.3 }}
                       className="text-center"
                     >
-                      <div className="inline-flex p-8 rounded-full instagram-gradient shadow-2xl mb-6">
+                      <div className="inline-flex p-8 rounded-full bg-[#0064FF] shadow-2xl mb-6 shadow-[#0064FF]/25">
                         <Award className="w-16 h-16 text-white" />
                       </div>
                       <div className="mt-4">
@@ -408,14 +408,14 @@ export default function AnalyzePage() {
                 </div>
 
                 {/* Score Breakdown */}
-                <div className="glass rounded-3xl p-8">
+                <div className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50">
                   <div className="flex items-center justify-between mb-6">
                     <h3 className="text-2xl font-bold flex items-center gap-2">
                       <TrendingUp className="w-6 h-6 text-[#0064FF]" />
                       상세 점수
                     </h3>
                     <Link href={`/blog/${result.blog.blog_id}?tab=breakdown`}>
-                      <button className="px-6 py-3 rounded-xl instagram-gradient text-white font-semibold hover:shadow-lg transition-all flex items-center gap-2">
+                      <button className="px-6 py-3 rounded-xl bg-[#0064FF] text-white font-semibold hover:shadow-lg shadow-lg shadow-[#0064FF]/15 transition-all flex items-center gap-2">
                         <Sparkles className="w-5 h-5" />
                         상세 보기
                       </button>
@@ -458,7 +458,7 @@ export default function AnalyzePage() {
                               initial={{ width: 0 }}
                               animate={{ width: `${percentage}%` }}
                               transition={{ delay: 0.7 + index * 0.1, duration: 0.5 }}
-                              className="absolute inset-y-0 left-0 instagram-gradient rounded-full"
+                              className="absolute inset-y-0 left-0 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-full"
                             />
                           </div>
                         </motion.div>
@@ -469,7 +469,7 @@ export default function AnalyzePage() {
 
                 {/* Daily Visitors Chart */}
                 {result.daily_visitors && result.daily_visitors.length > 0 && (
-                  <div className="glass rounded-3xl p-8">
+                  <div className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50">
                     <h3 className="text-2xl font-bold mb-6 flex items-center gap-2">
                       <BarChart3 className="w-6 h-6 text-[#0064FF]" />
                       일일 방문자 (최근 15일)
@@ -528,7 +528,7 @@ export default function AnalyzePage() {
 
                 {/* Recommendations */}
                 {result.recommendations.length > 0 && (
-                  <div className="glass rounded-3xl p-8">
+                  <div className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50">
                     <h3 className="text-2xl font-bold mb-6 flex items-center gap-2">
                       <Sparkles className="w-6 h-6 text-[#0064FF]" />
                       개선 권장사항
@@ -562,7 +562,7 @@ export default function AnalyzePage() {
 
                 {/* Warnings */}
                 {result.warnings.length > 0 && (
-                  <div className="glass rounded-3xl p-8">
+                  <div className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50">
                     <h3 className="text-2xl font-bold mb-6 flex items-center gap-2">
                       <AlertCircle className="w-6 h-6 text-orange-600" />
                       주의사항
@@ -597,7 +597,7 @@ export default function AnalyzePage() {
                       setResult(null)
                       window.scrollTo({ top: 0, behavior: 'smooth' })
                     }}
-                    className="px-8 py-4 rounded-full instagram-gradient text-white font-semibold hover:shadow-xl transition-all duration-300"
+                    className="px-8 py-4 rounded-full bg-[#0064FF] text-white font-semibold hover:shadow-xl shadow-lg shadow-[#0064FF]/15 transition-all duration-300"
                   >
                     다른 블로그 분석하기
                   </button>

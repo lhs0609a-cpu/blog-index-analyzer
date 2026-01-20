@@ -182,7 +182,7 @@ export default function PricingPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-gray-50 pt-24 flex items-center justify-center">
+      <div className="min-h-screen bg-[#fafafa] pt-24 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-[#0064FF] mx-auto mb-4" />
           <p className="text-gray-600">플랜 정보를 불러오는 중...</p>
@@ -192,7 +192,7 @@ export default function PricingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-gray-50 pt-24 pb-12 px-4">
+    <div className="min-h-screen bg-[#fafafa] pt-24 pb-12 px-4">
       <div className="container mx-auto max-w-7xl">
         {/* Header */}
         <motion.div
@@ -215,12 +215,12 @@ export default function PricingPage() {
           </div>
 
           {/* Billing Toggle */}
-          <div className="inline-flex items-center gap-4 p-2 rounded-full glass">
+          <div className="inline-flex items-center gap-4 p-2 rounded-full bg-white shadow-lg shadow-gray-100/50">
             <button
               onClick={() => setBillingCycle('monthly')}
               className={`px-6 py-2 rounded-full font-semibold transition-all ${
                 billingCycle === 'monthly'
-                  ? 'toss-gradient text-white'
+                  ? 'bg-[#0064FF] text-white'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -230,7 +230,7 @@ export default function PricingPage() {
               onClick={() => setBillingCycle('yearly')}
               className={`px-6 py-2 rounded-full font-semibold transition-all ${
                 billingCycle === 'yearly'
-                  ? 'toss-gradient text-white'
+                  ? 'bg-[#0064FF] text-white'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
@@ -258,7 +258,7 @@ export default function PricingPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
-                className={`relative glass rounded-3xl p-6 ${
+                className={`relative rounded-3xl p-6 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50 ${
                   isPro ? 'ring-2 ring-[#0064FF] shadow-xl' : ''
                 } ${isCurrentPlan ? 'ring-2 ring-green-500' : ''}`}
               >
@@ -375,7 +375,7 @@ export default function PricingPage() {
                     isCurrentPlan
                       ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                       : isPro
-                      ? 'toss-gradient text-white hover:shadow-lg'
+                      ? 'bg-[#0064FF] text-white hover:shadow-lg shadow-lg shadow-[#0064FF]/15'
                       : 'bg-gray-900 text-white hover:bg-gray-800'
                   } disabled:opacity-50`}
                 >
@@ -402,7 +402,7 @@ export default function PricingPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="glass rounded-3xl p-8"
+          className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50"
         >
           <h2 className="text-2xl font-bold text-center mb-8">기능 비교</h2>
 
@@ -584,14 +584,14 @@ export default function PricingPage() {
           </p>
 
           <div className="grid md:grid-cols-2 gap-6 text-left max-w-4xl mx-auto">
-            <div className="glass rounded-2xl p-6">
+            <div className="rounded-2xl p-6 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-lg shadow-blue-100/50">
               <h3 className="font-bold mb-2">정기결제는 어떻게 작동하나요?</h3>
               <p className="text-gray-600 text-sm">
                 월간 결제 시 매월 같은 날짜에, 연간 결제 시 1년 후 같은 날짜에
                 등록된 결제수단으로 자동 결제됩니다. 해지는 언제든 가능합니다.
               </p>
             </div>
-            <div className="glass rounded-2xl p-6">
+            <div className="rounded-2xl p-6 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-lg shadow-blue-100/50">
               <h3 className="font-bold mb-2">환불 정책은 어떻게 되나요?</h3>
               <p className="text-gray-600 text-sm">
                 결제 후 7일 이내 전액 환불이 가능합니다.
@@ -601,14 +601,14 @@ export default function PricingPage() {
                 </Link>
               </p>
             </div>
-            <div className="glass rounded-2xl p-6">
+            <div className="rounded-2xl p-6 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-lg shadow-blue-100/50">
               <h3 className="font-bold mb-2">언제든 플랜을 변경할 수 있나요?</h3>
               <p className="text-gray-600 text-sm">
                 네, 언제든 업그레이드하거나 다운그레이드할 수 있습니다.
                 업그레이드 시 즉시 적용되며, 다운그레이드는 현재 결제 기간 종료 후 적용됩니다.
               </p>
             </div>
-            <div className="glass rounded-2xl p-6">
+            <div className="rounded-2xl p-6 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-lg shadow-blue-100/50">
               <h3 className="font-bold mb-2">결제 수단은 무엇이 있나요?</h3>
               <p className="text-gray-600 text-sm">
                 신용카드와 체크카드를 지원합니다.

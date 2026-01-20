@@ -86,7 +86,7 @@ export default function Dashboard() {
   const displayBlogs = filteredBlogs
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 pt-24">
+    <div className="min-h-screen bg-[#fafafa] pt-24">
       <div className="container mx-auto px-4 py-8">
 
         {/* Header */}
@@ -133,7 +133,7 @@ export default function Dashboard() {
             </Link>
             <Link
               href="/analyze"
-              className="flex items-center gap-2 px-6 py-3 rounded-full instagram-gradient text-white font-semibold hover:shadow-lg transition-all duration-300"
+              className="flex items-center gap-2 px-6 py-3 rounded-full bg-[#0064FF] text-white font-semibold hover:shadow-lg shadow-lg shadow-[#0064FF]/15 transition-all duration-300"
             >
               <Plus className="w-5 h-5" />
               블로그 추가
@@ -145,11 +145,11 @@ export default function Dashboard() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="glass rounded-3xl p-8 mb-8 bg-gradient-to-br from-blue-50 to-sky-50"
+          className="rounded-3xl p-8 mb-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50"
         >
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full instagram-gradient flex items-center justify-center">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] flex items-center justify-center shadow-lg shadow-[#0064FF]/15">
                 <TrendingUp className="w-6 h-6 text-white" />
               </div>
               <div>
@@ -159,7 +159,7 @@ export default function Dashboard() {
             </div>
             <Link
               href="/keyword-search"
-              className="flex items-center gap-2 px-6 py-3 rounded-full instagram-gradient text-white font-semibold hover:shadow-lg transition-all duration-300"
+              className="flex items-center gap-2 px-6 py-3 rounded-full bg-[#0064FF] text-white font-semibold hover:shadow-lg shadow-lg shadow-[#0064FF]/15 transition-all duration-300"
             >
               <Search className="w-5 h-5" />
               분석 시작
@@ -210,7 +210,7 @@ export default function Dashboard() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="glass rounded-3xl p-8 mb-8 bg-gradient-to-br from-blue-50 to-sky-50"
+          className="rounded-3xl p-8 mb-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50"
         >
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
@@ -275,7 +275,7 @@ export default function Dashboard() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="glass rounded-3xl p-8 mb-8 bg-gradient-to-br from-green-50 to-emerald-50"
+          className="rounded-3xl p-8 mb-8 bg-gradient-to-br from-green-50 to-white border border-green-100/50 shadow-xl shadow-green-100/50"
         >
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
@@ -340,7 +340,7 @@ export default function Dashboard() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="glass rounded-3xl p-8 mb-8 bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 border border-blue-100"
+          className="rounded-3xl p-8 mb-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50"
         >
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
@@ -416,7 +416,7 @@ export default function Dashboard() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="glass rounded-2xl p-4 mb-8"
+          className="rounded-2xl p-4 mb-8 bg-white border border-gray-200 shadow-lg shadow-gray-100/50"
         >
           <div className="relative">
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -437,7 +437,7 @@ export default function Dashboard() {
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                className="inline-flex p-6 rounded-full instagram-gradient mb-4"
+                className="inline-flex p-6 rounded-full bg-[#0064FF] mb-4 shadow-lg shadow-[#0064FF]/15"
               >
                 <Sparkles className="w-8 h-8 text-white" />
               </motion.div>
@@ -459,7 +459,7 @@ export default function Dashboard() {
             </p>
             <Link
               href="/analyze"
-              className="inline-flex items-center gap-2 px-8 py-4 rounded-full instagram-gradient text-white font-semibold hover:shadow-lg transition-all"
+              className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-[#0064FF] text-white font-semibold hover:shadow-lg shadow-lg shadow-[#0064FF]/15 transition-all"
             >
               <Plus className="w-5 h-5" />
               첫 번째 블로그 추가하기
@@ -474,11 +474,11 @@ export default function Dashboard() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
                 whileHover={{ y: -5 }}
-                className="glass rounded-3xl p-6 hover:shadow-2xl transition-all duration-300 cursor-pointer"
+                className="rounded-3xl p-6 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50 hover:shadow-2xl transition-all duration-300 cursor-pointer"
               >
               {/* Blog Header */}
               <div className="flex items-center gap-4 mb-6">
-                <div className="w-16 h-16 rounded-full instagram-gradient flex items-center justify-center text-3xl">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] flex items-center justify-center text-3xl shadow-lg shadow-[#0064FF]/15">
                   {blog.avatar}
                 </div>
 
@@ -554,7 +554,7 @@ export default function Dashboard() {
                 <button
                   onClick={(e) => handleRefreshBlog(blog.blog_id, e)}
                   disabled={refreshingBlogId === blog.blog_id}
-                  className="py-2 px-3 rounded-xl instagram-gradient text-white font-semibold hover:shadow-lg transition-all text-sm flex items-center justify-center gap-1 disabled:opacity-50"
+                  className="py-2 px-3 rounded-xl bg-[#0064FF] text-white font-semibold hover:shadow-lg shadow-lg shadow-[#0064FF]/15 transition-all text-sm flex items-center justify-center gap-1 disabled:opacity-50"
                 >
                   {refreshingBlogId === blog.blog_id ? (
                     <RefreshCw className="w-4 h-4 animate-spin" />
@@ -584,7 +584,7 @@ export default function Dashboard() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: myBlogs.length * 0.1 }}
               whileHover={{ y: -5 }}
-              className="glass rounded-3xl p-6 flex flex-col items-center justify-center hover:shadow-2xl transition-all duration-300 cursor-pointer border-2 border-dashed border-blue-300"
+              className="rounded-3xl p-6 flex flex-col items-center justify-center bg-white hover:shadow-2xl transition-all duration-300 cursor-pointer border-2 border-dashed border-blue-300"
             >
               <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mb-4">
                 <Plus className="w-8 h-8 text-[#0064FF]" />
@@ -654,7 +654,7 @@ export default function Dashboard() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.5 + index * 0.1 }}
-              className="glass rounded-2xl p-6 text-center hover:shadow-xl transition-all duration-300"
+              className="rounded-2xl p-6 text-center bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50 hover:shadow-2xl transition-all duration-300"
             >
               <div className="text-4xl mb-3">{stat.icon}</div>
               <div className="text-3xl font-bold gradient-text">{stat.value}</div>

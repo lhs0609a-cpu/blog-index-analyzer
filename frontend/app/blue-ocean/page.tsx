@@ -151,7 +151,7 @@ export default function BlueOceanPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-teal-50 pt-20">
+    <div className="min-h-screen bg-[#fafafa] pt-20">
       {/* Header */}
       <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-[72px] z-40">
         <div className="max-w-7xl mx-auto px-4 py-4">
@@ -170,7 +170,7 @@ export default function BlueOceanPage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-2xl shadow-xl p-6 mb-8"
+          className="rounded-3xl p-6 mb-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50"
         >
           <div className="text-center mb-6">
             <h2 className="text-2xl font-bold text-gray-800 mb-2">

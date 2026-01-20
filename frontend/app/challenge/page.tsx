@@ -138,7 +138,7 @@ export default function ChallengePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 pt-24 flex items-center justify-center">
+      <div className="min-h-screen bg-[#fafafa] pt-24 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
       </div>
     )
@@ -147,13 +147,13 @@ export default function ChallengePage() {
   // 진행 중인 챌린지가 있으면
   if (status?.has_challenge && status.status?.status === 'active') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 pt-24 pb-12 px-4">
+      <div className="min-h-screen bg-[#fafafa] pt-24 pb-12 px-4">
         <div className="max-w-4xl mx-auto">
           {/* 진행 중인 챌린지 카드 */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-3xl shadow-xl p-8 mb-8"
+            className="rounded-3xl p-8 mb-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50"
           >
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
@@ -237,7 +237,7 @@ export default function ChallengePage() {
 
   // 챌린지 시작 전 - 소개 페이지
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 pt-24">
+    <div className="min-h-screen bg-[#fafafa] pt-24">
       {/* Hero Section */}
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-[#0064FF]/10 to-[#3182F6]/10"></div>

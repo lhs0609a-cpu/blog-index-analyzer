@@ -113,12 +113,12 @@ export default function BlogDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#F0F7FF] via-[#E8F4FF] to-[#F5F9FF] pt-24 flex items-center justify-center">
+      <div className="min-h-screen bg-[#fafafa] pt-24 flex items-center justify-center">
         <div className="text-center">
           <motion.div
             animate={{ rotate: 360 }}
             transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-            className="inline-flex p-6 rounded-full instagram-gradient mb-4"
+            className="inline-flex p-6 rounded-full bg-[#0064FF] mb-4 shadow-lg shadow-[#0064FF]/15"
           >
             <Sparkles className="w-12 h-12 text-white" />
           </motion.div>
@@ -130,13 +130,13 @@ export default function BlogDetailPage() {
 
   if (!blogData) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#F0F7FF] via-[#E8F4FF] to-[#F5F9FF] pt-24 flex items-center justify-center">
+      <div className="min-h-screen bg-[#fafafa] pt-24 flex items-center justify-center">
         <div className="text-center">
           <div className="text-6xl mb-4">😢</div>
           <h2 className="text-2xl font-bold mb-2">블로그를 찾을 수 없습니다</h2>
           <p className="text-gray-600 mb-6">블로그 ID를 확인해주세요</p>
           <Link href="/analyze">
-            <button className="px-8 py-4 rounded-full instagram-gradient text-white font-semibold hover:shadow-xl transition-all">
+            <button className="px-8 py-4 rounded-full bg-[#0064FF] text-white font-semibold hover:shadow-xl shadow-lg shadow-[#0064FF]/15 transition-all">
               블로그 분석하기
             </button>
           </Link>
@@ -224,7 +224,7 @@ export default function BlogDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#F0F7FF] via-[#E8F4FF] to-[#F5F9FF] pt-24">
+    <div className="min-h-screen bg-[#fafafa] pt-24">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
@@ -247,7 +247,7 @@ export default function BlogDetailPage() {
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ type: "spring", delay: 0.2 }}
-                className="w-32 h-32 rounded-full instagram-gradient flex items-center justify-center text-6xl shadow-xl"
+                className="w-32 h-32 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] flex items-center justify-center text-6xl shadow-xl shadow-[#0064FF]/25"
               >
                 {displayData.blog.blog_name[0] || '📝'}
               </motion.div>
@@ -295,7 +295,7 @@ export default function BlogDetailPage() {
                 transition={{ type: "spring", delay: 0.3 }}
                 className="text-center"
               >
-                <div className="inline-flex p-6 rounded-full instagram-gradient mb-3">
+                <div className="inline-flex p-6 rounded-full bg-[#0064FF] mb-3 shadow-lg shadow-[#0064FF]/15">
                   <Award className="w-12 h-12 text-white" />
                 </div>
                 <div className="text-4xl font-bold gradient-text mb-1">
@@ -313,7 +313,7 @@ export default function BlogDetailPage() {
               <button
                 onClick={handleReanalyze}
                 disabled={isReanalyzing}
-                className="flex-1 py-3 px-6 rounded-xl instagram-gradient text-white font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 py-3 px-6 rounded-xl bg-[#0064FF] text-white font-semibold hover:shadow-lg shadow-lg shadow-[#0064FF]/15 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isReanalyzing ? (
                   <>
@@ -396,7 +396,7 @@ export default function BlogDetailPage() {
                       initial={{ width: 0 }}
                       animate={{ width: `${percentage}%` }}
                       transition={{ delay: 0.5 + index * 0.1, duration: 0.8 }}
-                      className="absolute inset-y-0 left-0 instagram-gradient rounded-full"
+                      className="absolute inset-y-0 left-0 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-full"
                     />
                   </div>
                 </motion.div>
@@ -419,7 +419,7 @@ export default function BlogDetailPage() {
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
                   activeTab === tab.id
-                    ? 'instagram-gradient text-white'
+                    ? 'bg-[#0064FF] text-white shadow-lg shadow-[#0064FF]/15'
                     : 'text-gray-600 hover:bg-white/50'
                 }`}
               >
@@ -530,7 +530,7 @@ export default function BlogDetailPage() {
                   >
                     <div className="flex items-start justify-between mb-2">
                       <h5 className="font-bold text-lg">{tip.title}</h5>
-                      <span className="px-3 py-1 rounded-full text-xs font-semibold instagram-gradient text-white">
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-[#0064FF] text-white">
                         {tip.impact}
                       </span>
                     </div>
@@ -571,7 +571,7 @@ export default function BlogDetailPage() {
                       <div className="text-center min-w-[100px]">
                         <div className="text-sm text-gray-600 mb-1">{record.date}</div>
                         {isLatest && (
-                          <span className="inline-block px-2 py-1 rounded-full text-xs font-semibold instagram-gradient text-white">
+                          <span className="inline-block px-2 py-1 rounded-full text-xs font-semibold bg-[#0064FF] text-white">
                             최신
                           </span>
                         )}
@@ -603,7 +603,7 @@ export default function BlogDetailPage() {
                             initial={{ width: 0 }}
                             animate={{ width: `${record.score}%` }}
                             transition={{ delay: 0.2 + index * 0.1, duration: 0.8 }}
-                            className="absolute inset-y-0 left-0 instagram-gradient rounded-full"
+                            className="absolute inset-y-0 left-0 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-full"
                           />
                         </div>
                       </div>
@@ -834,7 +834,7 @@ export default function BlogDetailPage() {
                   <p className="text-gray-600 mb-4">상세 분석 데이터가 없습니다</p>
                   <button
                     onClick={loadBreakdownData}
-                    className="px-6 py-3 rounded-xl instagram-gradient text-white font-semibold hover:shadow-lg transition-all"
+                    className="px-6 py-3 rounded-xl bg-[#0064FF] text-white font-semibold hover:shadow-lg shadow-lg shadow-[#0064FF]/15 transition-all"
                   >
                     다시 불러오기
                   </button>
