@@ -25,7 +25,7 @@ import {
 import AdOptimizerTutorial, { TutorialStartButton } from '@/components/ad-optimizer/AdOptimizerTutorial'
 import { FeatureHelpCard, QuickStartGuide } from '@/components/ad-optimizer/FeatureHelpCard'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
 
 // 대시보드 탭 타입
 type DashboardTab = 'overview' | 'platforms' | 'budget' | 'insights'

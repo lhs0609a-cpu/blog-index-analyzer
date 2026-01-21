@@ -12,7 +12,7 @@ import {
 import { useAuthStore } from '@/lib/stores/auth'
 import toast from 'react-hot-toast'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
 
 interface CalendarDay {
   day: number

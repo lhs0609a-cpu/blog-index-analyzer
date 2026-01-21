@@ -10,7 +10,7 @@ import {
 import Link from 'next/link'
 import Tutorial, { blueOceanTutorialSteps } from '@/components/Tutorial'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
 
 interface BlueOceanKeyword {
   keyword: string

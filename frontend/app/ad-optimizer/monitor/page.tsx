@@ -11,7 +11,7 @@ import {
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
 
 interface OptimizationAction {
   id: number

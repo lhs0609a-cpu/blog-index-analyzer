@@ -18,7 +18,7 @@ import { useFeature } from '@/lib/features/useFeatureAccess'
 import Tutorial, { adOptimizerTutorialSteps } from '@/components/Tutorial'
 import ValueProposition from '@/components/ad-optimizer/ValueProposition'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
 
 // 타입 정의
 interface DashboardStats {
