@@ -23,9 +23,9 @@ if sys.platform == "win32":
 else:
     BACKUP_DIR = "/data/backups"
     DATABASE_PATH = "/data/blog_analyzer.db"
-MAX_BACKUPS = 12  # 12시간 분량 (매시간 백업) - 디스크 사용량 감소
+MAX_BACKUPS = 8  # 16시간 분량 (2시간마다 백업) - 디스크 사용량 감소
 MAX_JSON_BACKUPS = 2  # JSON 백업은 2개만 유지 - 디스크 사용량 감소
-BACKUP_INTERVAL_SECONDS = 3600  # 1시간마다
+BACKUP_INTERVAL_SECONDS = 7200  # 2시간마다 (리소스 절약)
 DISK_WARNING_THRESHOLD_MB = 100  # 100MB 이하면 경고
 
 
@@ -395,10 +395,10 @@ class BackupScheduler:
         logger.info("Backup scheduler started")
 
     def stop(self):
-        """백업 스케줄러 중지"""
+        """백업 스케줄러 중지 (즉시)"""
         self.running = False
         if self.thread:
-            self.thread.join(timeout=5)
+            self.thread.join(timeout=2)  # 빠른 종료
         logger.info("Backup scheduler stopped")
 
     def _run_scheduler(self):

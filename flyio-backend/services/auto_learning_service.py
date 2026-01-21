@@ -20,15 +20,15 @@ logger = logging.getLogger(__name__)
 # ==============================================
 AUTO_LEARNING_CONFIG = {
     "enabled": True,                    # 자동 학습 활성화
-    "interval_minutes": 10,             # 학습 주기 (분)
-    "keywords_per_cycle": 2,            # 한 번에 학습할 키워드 수 (1 → 2)
-    "blogs_per_keyword": 10,            # 키워드당 분석할 블로그 수 (5 → 10으로 증가)
+    "interval_minutes": 15,             # 학습 주기 (분) - 10 → 15로 증가 (서버 부하 감소)
+    "keywords_per_cycle": 2,            # 한 번에 학습할 키워드 수
+    "blogs_per_keyword": 8,             # 키워드당 분석할 블로그 수 (10 → 8로 감소)
     "delay_between_keywords": 5.0,      # 키워드 간 대기 시간 (초)
-    "delay_between_blogs": 2.0,         # 블로그 간 대기 시간 (초) - 3 → 2로 감소 (학습 속도 향상)
+    "delay_between_blogs": 2.5,         # 블로그 간 대기 시간 (초) - 2 → 2.5로 증가 (안정성)
     "auto_train_threshold": 50,         # 자동 훈련 트리거 샘플 수
     "quiet_hours_start": 2,             # 조용한 시간 시작 (서버 부하 감소)
     "quiet_hours_end": 6,               # 조용한 시간 끝
-    "quiet_hours_interval": 30,         # 조용한 시간대 학습 주기 (분) - 60 → 30으로 감소
+    "quiet_hours_interval": 45,         # 조용한 시간대 학습 주기 (분) - 30 → 45로 증가
     "daily_training_hour": 3,           # 매일 대규모 훈련 시간 (UTC, 한국시간 12시)
     "daily_training_samples": 5000,     # 대규모 훈련 시 사용할 샘플 수
 }
@@ -542,11 +542,11 @@ class AutoLearningScheduler:
         logger.info("[AutoLearn] Scheduler started")
 
     def stop(self):
-        """스케줄러 중지"""
+        """스케줄러 중지 (즉시)"""
         self.running = False
         auto_learning_state["is_enabled"] = False
         if self.thread:
-            self.thread.join(timeout=10)
+            self.thread.join(timeout=2)  # 빠른 종료
         logger.info("[AutoLearn] Scheduler stopped")
 
     def enable(self):

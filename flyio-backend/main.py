@@ -151,19 +151,19 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Keyword analysis tables initialization failed: {e}")
 
-    # 자동 백업 스케줄러 시작
+    # 자동 백업 스케줄러 시작 (2시간마다 - 리소스 절약)
     try:
         from services.backup_service import backup_scheduler
         backup_scheduler.start()
-        logger.info("✅ Backup scheduler started (hourly backups)")
+        logger.info("✅ Backup scheduler started (every 2 hours)")
     except Exception as e:
         logger.warning(f"⚠️ Backup scheduler failed to start: {e}")
 
-    # 자동 학습 스케줄러 시작
+    # 자동 학습 스케줄러 시작 (3분마다 - 리소스 절약)
     try:
         from services.auto_learning_service import auto_learning_scheduler
         auto_learning_scheduler.start()
-        logger.info("✅ Auto learning scheduler started (every 1 min)")
+        logger.info("✅ Auto learning scheduler started (every 3 min)")
     except Exception as e:
         logger.warning(f"⚠️ Auto learning scheduler failed to start: {e}")
 
@@ -242,63 +242,34 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Shutdown
-    logger.info(f"🛑 {settings.APP_NAME} shutting down...")
+    # Shutdown - 빠른 종료 (타임아웃 방지)
+    logger.info(f"🛑 {settings.APP_NAME} shutting down (fast mode)...")
 
-    # 자동 학습 스케줄러 중지
-    try:
-        from services.auto_learning_service import auto_learning_scheduler
-        auto_learning_scheduler.stop()
-        logger.info("✅ Auto learning scheduler stopped")
-    except Exception as e:
-        logger.warning(f"⚠️ Auto learning scheduler shutdown issue: {e}")
+    # 모든 스케줄러 빠르게 중지 (wait=False로 즉시 종료)
+    schedulers_to_stop = [
+        ("auto_learning_scheduler", "services.auto_learning_service"),
+        ("ad_auto_optimizer", "services.ad_auto_optimizer"),
+        ("threads_auto_poster", "services.threads_auto_poster"),
+        ("backup_scheduler", "services.backup_service"),
+    ]
 
-    # 광고 자동 최적화 스케줄러 중지
-    try:
-        from services.ad_auto_optimizer import ad_auto_optimizer
-        ad_auto_optimizer.stop()
-        logger.info("✅ Ad auto optimizer stopped")
-    except Exception as e:
-        logger.warning(f"⚠️ Ad auto optimizer shutdown issue: {e}")
-
-    # Threads 자동 게시 스케줄러 중지
-    try:
-        from services.threads_auto_poster import threads_auto_poster
-        threads_auto_poster.stop()
-        logger.info("✅ Threads auto poster stopped")
-    except Exception as e:
-        logger.warning(f"⚠️ Threads auto poster shutdown issue: {e}")
+    for scheduler_name, module_name in schedulers_to_stop:
+        try:
+            module = __import__(module_name, fromlist=[scheduler_name])
+            scheduler = getattr(module, scheduler_name, None)
+            if scheduler and hasattr(scheduler, 'stop'):
+                scheduler.stop()
+        except Exception as e:
+            logger.warning(f"⚠️ {scheduler_name} stop issue: {e}")
 
     # X 자동 게시 스케줄러 중지
     try:
         from services.x_auto_poster import stop_auto_poster
         stop_auto_poster()
-        logger.info("✅ X auto poster stopped")
-    except Exception as e:
-        logger.warning(f"⚠️ X auto poster shutdown issue: {e}")
+    except Exception:
+        pass
 
-    # 백업 스케줄러 중지 및 마지막 백업 생성
-    try:
-        from services.backup_service import backup_scheduler, create_backup
-        backup_scheduler.stop()
-        create_backup()  # 종료 전 마지막 백업
-        logger.info("✅ Backup scheduler stopped, final backup created")
-    except Exception as e:
-        logger.warning(f"⚠️ Backup scheduler shutdown issue: {e}")
-
-    # 데이터베이스 연결 종료
-    try:
-        # SQLite는 자동으로 연결 종료
-        logger.info("✅ Database connections closed")
-    except Exception as e:
-        logger.error(f"❌ Error closing database: {e}")
-
-    # Redis 연결 종료 (필요 시)
-    if settings.REDIS_URL:
-        try:
-            logger.info("⚠️ Redis connection closed (if applicable)")
-        except Exception as e:
-            logger.warning(f"⚠️ Error closing Redis: {e}")
+    logger.info("✅ All schedulers stopped")
 
 
 # FastAPI 앱 생성
