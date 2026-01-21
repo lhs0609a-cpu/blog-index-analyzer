@@ -549,7 +549,7 @@ async def fetch_naver_search_results(keyword: str, limit: int = 13) -> List[Dict
     return results
 
 
-async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 13) -> Dict[str, List[Dict]]:
+async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 20) -> Dict[str, List[Dict]]:
     """Fetch search results from both VIEW tab and BLOG tab in parallel"""
     # 캐시 확인 (성능 개선 - 5분 TTL)
     cached = get_cached_search_results(keyword)
@@ -2791,7 +2791,7 @@ async def get_related_keywords_tree(
 @router.post("/search-keyword-with-tabs")
 async def search_keyword_with_tabs(
     keyword: str = Query(..., description="검색할 키워드"),
-    limit: int = Query(13, description="결과 개수"),
+    limit: int = Query(20, description="결과 개수 (기본 20개)"),
     analyze_content: bool = Query(True, description="콘텐츠 분석 여부"),
     quick_mode: bool = Query(False, description="빠른 모드 (상위 5개만 분석)")
 ):
