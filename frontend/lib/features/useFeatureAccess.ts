@@ -15,7 +15,7 @@ import {
   getAllFeaturesForPlan
 } from './featureAccess'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev'
 
 interface UseFeatureAccessReturn {
   // Current user's plan

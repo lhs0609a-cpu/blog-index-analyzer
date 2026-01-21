@@ -414,7 +414,7 @@ export const useXPStore = create<XPState>()(
       },
 
       syncWithServer: async (userId: string) => {
-        const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
+        const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev'
         const state = get()
 
         try {
