@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -18,7 +18,7 @@ import { useFeature } from '@/lib/features/useFeatureAccess'
 import Tutorial, { adOptimizerTutorialSteps } from '@/components/Tutorial'
 import ValueProposition from '@/components/ad-optimizer/ValueProposition'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev'
 
 // 타입 정의
 interface DashboardStats {

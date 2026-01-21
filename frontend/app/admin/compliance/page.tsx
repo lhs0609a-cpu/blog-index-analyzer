@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
@@ -11,7 +11,7 @@ import {
 import { useAuthStore } from '@/lib/stores/auth'
 import toast from 'react-hot-toast'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev'
 
 interface FeatureRisk {
   feature_name: string

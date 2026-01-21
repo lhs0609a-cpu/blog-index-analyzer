@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -84,7 +84,7 @@ export default function AdDashboardPage() {
   const [togglingPlatform, setTogglingPlatform] = useState<string | null>(null);
   const userId = 1; // TODO: 실제 사용자 ID
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr';
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev';
 
   useEffect(() => {
     fetchDashboardData();

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -75,7 +75,7 @@ export default function PerformanceDetailPage() {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
   const userId = 1;
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr';
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev';
 
   const fetchPerformanceData = useCallback(async () => {
     try {

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -33,7 +33,7 @@ import {
 } from "@/components/ad-optimizer/PlatformSupportBanner";
 import { ValuePropositionCompact } from "@/components/ad-optimizer/ValueProposition";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.blrank.co.kr";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://naverpay-delivery-tracker.fly.dev";
 
 // 시간대별 기본 아이콘
 const getTimeIcon = (hour: number) => {

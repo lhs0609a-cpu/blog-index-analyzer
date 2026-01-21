@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
@@ -18,7 +18,7 @@ import {
 } from "@/components/ad-optimizer/PlatformSupportBanner"
 import { ValuePropositionCompact } from "@/components/ad-optimizer/ValueProposition"
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://naverpay-delivery-tracker.fly.dev'
 
 // 페이싱 상태별 스타일
 const STATUS_STYLES: Record<string, { bg: string; text: string; icon: any }> = {
