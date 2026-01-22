@@ -200,25 +200,6 @@ export function useAllExperiments(): AllExperimentsResult {
 }
 
 /**
- * 조건부 렌더링을 위한 헬퍼 컴포넌트
- */
-interface ABTestVariantProps {
-  experimentId: string;
-  variant: string;
-  children: React.ReactNode;
-}
-
-export function ABTestVariant({ experimentId, variant: targetVariant, children }: ABTestVariantProps) {
-  const { variant, isLoading } = useABTest(experimentId);
-
-  if (isLoading || variant !== targetVariant) {
-    return null;
-  }
-
-  return <>{children}</>;
-}
-
-/**
  * A/B 테스트 실험 ID 상수
  */
 export const EXPERIMENTS = {

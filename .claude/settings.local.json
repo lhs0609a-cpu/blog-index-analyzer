@@ -15,7 +15,9 @@
       "Bash(# 프론트엔드 상태 확인 curl -s http://localhost:3006)",
       "Bash(# 프론트엔드/백엔드 프로세스 상태 확인 echo \"\"=== 실행 중인 서버 ===\"\" netstat -ano)",
       "Bash(npm install:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }
