@@ -276,6 +276,18 @@ export default function XAutopilotPage() {
 
   return (
     <div className="min-h-screen bg-black text-white pt-20">
+      {/* BETA 경고 배너 */}
+      <div className="bg-gradient-to-r from-orange-500/20 via-amber-500/20 to-orange-500/20 border-b border-orange-500/30">
+        <div className="max-w-6xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-center gap-3 text-center">
+            <span className="px-2 py-0.5 bg-orange-500 text-white text-xs font-bold rounded">BETA</span>
+            <p className="text-orange-200 text-sm">
+              이 기능은 현재 베타 테스트 중입니다. 일부 기능이 제한되거나 변경될 수 있습니다.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* 배경 그라데이션 */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-sky-600/20 rounded-full blur-3xl" />

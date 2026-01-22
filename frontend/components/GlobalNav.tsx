@@ -56,17 +56,17 @@ const navItems = [
     label: '광고 최적화',
     href: '/ad-optimizer',
     icon: Target,
-    badge: 'HOT',
-    badgeColor: 'bg-red-500 text-white',
-    description: '네이버 광고 분석 및 최적화'
+    badge: 'BETA',
+    badgeColor: 'bg-orange-500 text-white',
+    description: '네이버 광고 분석 및 최적화 (개발 중)'
   },
   {
     label: '통합 광고',
     href: '/ad-dashboard',
     icon: Megaphone,
-    badge: 'PRO',
-    badgeColor: 'bg-purple-500 text-white',
-    description: '멀티 플랫폼 광고 관리'
+    badge: 'BETA',
+    badgeColor: 'bg-orange-500 text-white',
+    description: '멀티 플랫폼 광고 관리 (개발 중)'
   },
   {
     label: '대시보드',
@@ -82,8 +82,8 @@ const snsItems = [
     label: 'Threads',
     href: '/threads',
     icon: MessageCircle,
-    badge: 'NEW',
-    badgeColor: 'bg-green-500 text-white',
+    badge: 'BETA',
+    badgeColor: 'bg-orange-500 text-white',
     bgColor: 'bg-gradient-to-br from-gray-800 to-gray-900'
   },
   {
@@ -94,8 +94,8 @@ const snsItems = [
         <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
       </svg>
     ),
-    badge: 'NEW',
-    badgeColor: 'bg-green-500 text-white',
+    badge: 'BETA',
+    badgeColor: 'bg-orange-500 text-white',
     bgColor: 'bg-black'
   }
 ]
@@ -191,7 +191,7 @@ export default function GlobalNav() {
                   >
                     <PenTool className="w-4 h-4" />
                     <span>SNS 자동화</span>
-                    <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-green-500 text-white">NEW</span>
+                    <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-orange-500 text-white">BETA</span>
                     <ChevronRight className="w-3 h-3 transition-transform group-hover:rotate-90" />
                   </motion.button>
 

@@ -506,14 +506,15 @@ export default function PricingPage() {
                 {/* 프리미엄 전용 */}
                 <tr className="bg-purple-50"><td colSpan={5} className="py-2 px-4 font-bold text-[#0064FF]">프리미엄 전용</td></tr>
                 {[
-                  { name: '광고 최적화', free: false, basic: false, pro: true, biz: true },
+                  { name: '블루오션 키워드', free: '제한', basic: '무제한', pro: '무제한', biz: '무제한' },
+                  { name: 'AI 글쓰기 가이드', free: '제한', basic: '무제한', pro: '무제한', biz: '무제한' },
                 ].map((tool, i) => (
                   <tr key={i} className="border-b border-gray-100">
                     <td className="py-3 px-4">{tool.name}</td>
-                    <td className="text-center py-3 px-4"><span className="text-gray-300">✕</span></td>
-                    <td className="text-center py-3 px-4"><span className="text-gray-300">✕</span></td>
-                    <td className="text-center py-3 px-4">{tool.pro === true ? <span className="text-green-500">✓</span> : tool.pro}</td>
-                    <td className="text-center py-3 px-4">{tool.biz === true ? <span className="text-green-500">✓</span> : tool.biz}</td>
+                    <td className="text-center py-3 px-4">{tool.free}</td>
+                    <td className="text-center py-3 px-4">{tool.basic}</td>
+                    <td className="text-center py-3 px-4">{tool.pro}</td>
+                    <td className="text-center py-3 px-4">{tool.biz}</td>
                   </tr>
                 ))}
               </tbody>

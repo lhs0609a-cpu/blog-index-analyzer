@@ -856,6 +856,18 @@ export default function AdOptimizerPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 pt-20">
+      {/* BETA 경고 배너 */}
+      <div className="bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-orange-500/10 border-b border-orange-300/50">
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-center gap-3 text-center">
+            <span className="px-2 py-0.5 bg-orange-500 text-white text-xs font-bold rounded">BETA</span>
+            <p className="text-orange-700 text-sm">
+              이 기능은 현재 베타 테스트 중입니다. 실제 광고 API 연동은 준비 중이며, 일부 기능이 제한될 수 있습니다.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* 헤더 */}
       <header className="bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-[72px] z-40">
         <div className="max-w-7xl mx-auto px-4 py-4">

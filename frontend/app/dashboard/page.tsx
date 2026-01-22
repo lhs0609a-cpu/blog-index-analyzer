@@ -335,29 +335,37 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        {/* 통합광고 최적화 섹션 */}
+        {/* 통합광고 최적화 섹션 - BETA */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="rounded-3xl p-8 mb-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50"
+          className="rounded-3xl p-8 mb-8 bg-gradient-to-br from-orange-50 to-white border border-orange-100/50 shadow-xl shadow-orange-100/50 relative overflow-hidden"
         >
+          {/* BETA 배너 */}
+          <div className="absolute top-4 right-4">
+            <span className="px-3 py-1 bg-orange-500 text-white text-xs font-bold rounded-full">
+              BETA - 개발 중
+            </span>
+          </div>
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] flex items-center justify-center shadow-lg">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-orange-400 to-orange-500 flex items-center justify-center shadow-lg">
                 <Zap className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold bg-gradient-to-r from-[#0064FF] to-[#3182F6] bg-clip-text text-transparent">통합 광고 최적화</h2>
-                <p className="text-sm text-gray-600">모든 광고 플랫폼을 AI가 자동으로 최적화합니다</p>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-2xl font-bold bg-gradient-to-r from-orange-500 to-orange-600 bg-clip-text text-transparent">통합 광고 최적화</h2>
+                </div>
+                <p className="text-sm text-gray-600">모든 광고 플랫폼을 AI가 자동으로 최적화합니다 (준비 중)</p>
               </div>
             </div>
             <Link
               href="/ad-optimizer/unified"
-              className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300"
+              className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-orange-400 to-orange-500 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300"
             >
               <Zap className="w-5 h-5" />
-              시작하기
+              미리보기
             </Link>
           </div>
 
@@ -448,22 +456,77 @@ export default function Dashboard() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-3xl shadow-lg p-12 text-center"
+            className="bg-gradient-to-br from-blue-50 to-white rounded-3xl border border-blue-100/50 shadow-xl shadow-blue-100/50 p-12"
           >
-            <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Plus className="w-12 h-12 text-[#0064FF]" />
-            </div>
-            <h3 className="text-2xl font-bold mb-3">등록된 블로그가 없습니다</h3>
-            <p className="text-gray-600 mb-6">
-              {searchQuery ? '검색 결과가 없습니다. 다른 키워드로 검색해보세요.' : '블로그를 추가하고 지수를 확인해보세요!'}
-            </p>
-            <Link
-              href="/analyze"
-              className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-[#0064FF] text-white font-semibold hover:shadow-lg shadow-lg shadow-[#0064FF]/15 transition-all"
-            >
-              <Plus className="w-5 h-5" />
-              첫 번째 블로그 추가하기
-            </Link>
+            {searchQuery ? (
+              <div className="text-center">
+                <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <Search className="w-12 h-12 text-gray-400" />
+                </div>
+                <h3 className="text-2xl font-bold mb-3">검색 결과가 없습니다</h3>
+                <p className="text-gray-600 mb-6">다른 키워드로 검색해보세요.</p>
+              </div>
+            ) : (
+              <>
+                <div className="text-center mb-10">
+                  <div className="w-24 h-24 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-[#0064FF]/20">
+                    <Sparkles className="w-12 h-12 text-white" />
+                  </div>
+                  <h3 className="text-3xl font-bold mb-3">블랭크에 오신 것을 환영합니다! 👋</h3>
+                  <p className="text-gray-600 text-lg">
+                    3단계만 따라하면 블로그 성장 전략을 세울 수 있어요
+                  </p>
+                </div>
+
+                {/* 시작 가이드 */}
+                <div className="grid md:grid-cols-3 gap-6 mb-10">
+                  <div className="bg-white rounded-2xl p-6 border border-blue-100 hover:shadow-lg transition-all">
+                    <div className="w-12 h-12 rounded-full bg-[#0064FF] text-white flex items-center justify-center text-xl font-bold mb-4">1</div>
+                    <h4 className="font-bold text-lg mb-2">블로그 분석하기</h4>
+                    <p className="text-gray-600 text-sm mb-4">
+                      내 블로그 ID를 입력하면 40개 이상의 지표로 현재 상태를 진단해드려요
+                    </p>
+                    <Link href="/analyze" className="text-[#0064FF] font-semibold text-sm hover:underline">
+                      분석 시작하기 →
+                    </Link>
+                  </div>
+
+                  <div className="bg-white rounded-2xl p-6 border border-blue-100 hover:shadow-lg transition-all">
+                    <div className="w-12 h-12 rounded-full bg-[#3182F6] text-white flex items-center justify-center text-xl font-bold mb-4">2</div>
+                    <h4 className="font-bold text-lg mb-2">키워드 검색하기</h4>
+                    <p className="text-gray-600 text-sm mb-4">
+                      목표 키워드를 검색하면 상위 노출 블로그들의 공통 패턴을 알려드려요
+                    </p>
+                    <Link href="/keyword-search" className="text-[#0064FF] font-semibold text-sm hover:underline">
+                      키워드 검색하기 →
+                    </Link>
+                  </div>
+
+                  <div className="bg-white rounded-2xl p-6 border border-blue-100 hover:shadow-lg transition-all">
+                    <div className="w-12 h-12 rounded-full bg-sky-500 text-white flex items-center justify-center text-xl font-bold mb-4">3</div>
+                    <h4 className="font-bold text-lg mb-2">AI 도구 활용하기</h4>
+                    <p className="text-gray-600 text-sm mb-4">
+                      블루오션 키워드 발굴, AI 글쓰기 가이드 등 9가지 도구를 활용하세요
+                    </p>
+                    <Link href="/tools" className="text-[#0064FF] font-semibold text-sm hover:underline">
+                      AI 도구 보기 →
+                    </Link>
+                  </div>
+                </div>
+
+                {/* CTA */}
+                <div className="text-center">
+                  <Link
+                    href="/analyze"
+                    className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-[#0064FF] text-white font-semibold hover:shadow-lg shadow-lg shadow-[#0064FF]/15 transition-all text-lg"
+                  >
+                    <Plus className="w-5 h-5" />
+                    첫 번째 블로그 분석하기
+                  </Link>
+                  <p className="text-gray-500 text-sm mt-4">무료로 바로 시작할 수 있어요</p>
+                </div>
+              </>
+            )}
           </motion.div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
