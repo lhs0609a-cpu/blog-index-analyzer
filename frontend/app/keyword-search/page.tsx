@@ -374,7 +374,7 @@ function KeywordSearchContent() {
       }, 3000)
 
       const response = await fetch(
-        `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(searchKeyword)}&limit=13&analyze_content=true&quick_mode=false`,
+        `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(searchKeyword)}&limit=20&analyze_content=true&quick_mode=false`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -503,7 +503,7 @@ function KeywordSearchContent() {
         )
 
         const response = await fetch(
-          `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(keyword)}&limit=13&analyze_content=true&quick_mode=false`,
+          `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(keyword)}&limit=20&analyze_content=true&quick_mode=false`,
           {
             method: 'POST',
             headers: {
@@ -1035,7 +1035,7 @@ function KeywordSearchContent() {
       }, 500)
 
       const response = await fetch(
-        `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(clickedKeyword)}&limit=13&analyze_content=true&quick_mode=false`,
+        `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(clickedKeyword)}&limit=20&analyze_content=true&quick_mode=false`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

@@ -485,7 +485,7 @@ async def close_browser():
         _playwright = None
 
 
-async def scrape_view_tab_results(keyword: str, limit: int = 13) -> list:
+async def scrape_view_tab_results(keyword: str, limit: int = 20) -> list:
     """
     Scrape Naver VIEW tab search results using Playwright
     VIEW tab shows mixed content (blogs, cafes, etc.) in integrated search
@@ -546,10 +546,11 @@ async def scrape_view_tab_results(keyword: str, limit: int = 13) -> list:
         await asyncio.sleep(1.5)  # Additional wait for dynamic content
 
         # Scroll down multiple times to load more results (lazy loading)
-        for i in range(7):
-            scroll_position = (i + 1) / 7
+        # Increased from 7 to 12 for more results
+        for i in range(12):
+            scroll_position = (i + 1) / 12
             await page.evaluate(f'window.scrollTo(0, document.body.scrollHeight * {scroll_position})')
-            await asyncio.sleep(0.8)
+            await asyncio.sleep(0.5)
 
         # Scroll back to top and then to bottom for any missed content
         await page.evaluate('window.scrollTo(0, 0)')
@@ -706,7 +707,7 @@ async def scrape_view_tab_results(keyword: str, limit: int = 13) -> list:
         return []
 
 
-async def scrape_blog_tab_results(keyword: str, limit: int = 13) -> list:
+async def scrape_blog_tab_results(keyword: str, limit: int = 20) -> list:
     """
     Scrape Naver BLOG tab search results using Playwright
     BLOG tab shows only blog posts (no cafe, news, etc.)
@@ -765,10 +766,11 @@ async def scrape_blog_tab_results(keyword: str, limit: int = 13) -> list:
         await asyncio.sleep(1.5)
 
         # Scroll down multiple times to load more results (lazy loading)
-        for i in range(7):
-            scroll_position = (i + 1) / 7
+        # Increased from 7 to 12 for more results
+        for i in range(12):
+            scroll_position = (i + 1) / 12
             await page.evaluate(f'window.scrollTo(0, document.body.scrollHeight * {scroll_position})')
-            await asyncio.sleep(0.8)
+            await asyncio.sleep(0.5)
 
         # Scroll back to top and then to bottom for any missed content
         await page.evaluate('window.scrollTo(0, 0)')
