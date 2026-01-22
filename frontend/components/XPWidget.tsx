@@ -40,8 +40,8 @@ export default function XPWidget() {
 
   return (
     <>
-      {/* 플로팅 XP 위젯 */}
-      <div className="fixed bottom-6 left-6 z-50">
+      {/* 플로팅 XP 위젯 - 모바일에서는 하단 네비 위에 배치 */}
+      <div className="fixed bottom-6 left-6 z-50 md:bottom-6 max-md:bottom-24">
         <AnimatePresence>
           {isExpanded && (
             <motion.div
@@ -83,6 +83,45 @@ export default function XPWidget() {
                 </div>
               )}
 
+              {/* 연속 접속 스트릭 강조 */}
+              {loginStreak > 0 && (
+                <div className="mb-3 bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-3 border border-orange-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">🔥</span>
+                      <div>
+                        <div className="font-bold text-orange-700">{loginStreak}일 연속 접속!</div>
+                        <div className="text-xs text-orange-500">
+                          {loginStreak >= 7 ? '1주일 달성! 대단해요!' :
+                           loginStreak >= 3 ? '잘하고 있어요!' :
+                           '연속 접속 보너스 XP 획득 중'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-bold text-orange-600">+{loginStreak * 10} XP</div>
+                      <div className="text-xs text-orange-400">매일 보너스</div>
+                    </div>
+                  </div>
+                  {/* 7일 스트릭 프로그레스 */}
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5, 6, 7].map((day) => (
+                      <div
+                        key={day}
+                        className={`flex-1 h-2 rounded-full ${
+                          day <= loginStreak
+                            ? 'bg-gradient-to-r from-orange-400 to-amber-400'
+                            : 'bg-gray-200'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <div className="mt-1 text-xs text-orange-400 text-right">
+                    {loginStreak < 7 ? `7일 달성시 특별 보상!` : '🎉 특별 보상 획득!'}
+                  </div>
+                </div>
+              )}
+
               {/* 보유 보상 */}
               <div className="flex gap-2 mb-3">
                 {bonusAnalysis > 0 && (
@@ -95,12 +134,6 @@ export default function XPWidget() {
                   <div className="flex-1 bg-purple-50 rounded-lg p-2 text-center">
                     <div className="text-lg">👑</div>
                     <div className="text-xs text-purple-500">프로 체험 중</div>
-                  </div>
-                )}
-                {loginStreak >= 3 && (
-                  <div className="flex-1 bg-orange-50 rounded-lg p-2 text-center">
-                    <div className="text-lg font-bold text-orange-600">{loginStreak}</div>
-                    <div className="text-xs text-orange-500">연속 접속</div>
                   </div>
                 )}
               </div>

@@ -161,7 +161,7 @@ export default function RootLayout({
         <ClientProviders>
           <BackendStatus />
           <GlobalNav />
-          <main className="min-h-screen">
+          <main className="min-h-screen pb-20 md:pb-0">
             {children}
           </main>
           <Footer />

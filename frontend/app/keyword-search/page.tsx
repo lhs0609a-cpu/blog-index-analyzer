@@ -6,7 +6,7 @@ import { ConnectionIndicator } from '@/components/ConnectionIndicator'
 import { getApiUrl } from '@/lib/api/apiConfig'
 import * as Tabs from '@radix-ui/react-tabs'
 import { motion } from 'framer-motion'
-import { Check, Loader2, X, TrendingUp, TrendingDown, ArrowLeft } from 'lucide-react'
+import { Check, Loader2, X, TrendingUp, TrendingDown, ArrowLeft, Filter, Star, Lock } from 'lucide-react'
 import { useAuthStore } from '@/lib/stores/auth'
 import { incrementUsage, checkUsageLimit } from '@/lib/api/subscription'
 import { useFeatureAccess } from '@/lib/features/useFeatureAccess'
@@ -277,6 +277,9 @@ function KeywordSearchContent() {
   const [myBlogId, setMyBlogId] = useState('')
   const [myBlogAnalyzing, setMyBlogAnalyzing] = useState<{[keyword: string]: boolean}>({})
   const [myBlogResults, setMyBlogResults] = useState<{[keyword: string]: MyBlogAnalysis}>({})
+
+  // Pro 킬러 기능: 상위 노출 가능 키워드 필터
+  const [showRankableOnly, setShowRankableOnly] = useState(false)
 
   // 하위 호환성을 위한 단일 결과
   const [myBlogResult, setMyBlogResult] = useState<MyBlogAnalysis | null>(null)
@@ -1316,9 +1319,94 @@ function KeywordSearchContent() {
         {/* Multi-Keyword Results - Tab UI */}
         {keywordStatuses.length > 0 && (
           <Tabs.Root id="keyword-analysis-results" value={activeTab} onValueChange={setActiveTab} className="w-full">
+            {/* Pro 킬러 기능: 상위 노출 가능 키워드 필터 */}
+            {Object.keys(myBlogResults).length > 0 && (
+              <div className="mb-4 p-4 bg-gradient-to-r from-[#0064FF]/5 to-[#3182F6]/5 rounded-xl border border-blue-200">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-[#0064FF]/10">
+                      <Star className="w-5 h-5 text-[#0064FF]" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900">상위 노출 가능성 분석</h4>
+                      <p className="text-sm text-gray-600">
+                        {(() => {
+                          const rankableCount = Object.values(myBlogResults).filter(r => r.competitiveness.probability >= 60).length
+                          const totalCount = Object.keys(myBlogResults).length
+                          return (
+                            <>
+                              <span className="font-semibold text-green-600">{rankableCount}개</span> 키워드에서 상위 노출 가능성 높음
+                              <span className="text-gray-400 mx-2">|</span>
+                              전체 {totalCount}개 분석 완료
+                            </>
+                          )
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 필터 토글 */}
+                  <button
+                    onClick={() => setShowRankableOnly(!showRankableOnly)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                      showRankableOnly
+                        ? 'bg-[#0064FF] text-white shadow-lg shadow-[#0064FF]/20'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:border-[#0064FF]'
+                    }`}
+                  >
+                    <Filter className="w-4 h-4" />
+                    {showRankableOnly ? '전체 보기' : '노출 가능만 보기'}
+                  </button>
+                </div>
+
+                {/* 상위 노출 가능 키워드 요약 (펼침) */}
+                {showRankableOnly && (
+                  <div className="mt-4 pt-4 border-t border-blue-200">
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(myBlogResults)
+                        .filter(([_, result]) => result.competitiveness.probability >= 60)
+                        .sort((a, b) => b[1].competitiveness.probability - a[1].competitiveness.probability)
+                        .map(([keyword, result]) => (
+                          <button
+                            key={keyword}
+                            onClick={() => setActiveTab(keyword)}
+                            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                              activeTab === keyword
+                                ? 'bg-[#0064FF] text-white'
+                                : 'bg-white text-gray-700 hover:bg-blue-50'
+                            }`}
+                          >
+                            {keyword}
+                            <span className={`ml-2 ${
+                              result.competitiveness.probability >= 80 ? 'text-green-500' : 'text-blue-500'
+                            }`}>
+                              {result.competitiveness.probability}%
+                            </span>
+                          </button>
+                        ))}
+                      {Object.values(myBlogResults).filter(r => r.competitiveness.probability >= 60).length === 0 && (
+                        <p className="text-sm text-gray-500">
+                          현재 분석된 키워드 중 상위 노출 가능성이 높은 키워드가 없습니다.
+                          블로그 지수를 높이거나 경쟁이 낮은 키워드를 찾아보세요.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Tab Navigation */}
             <Tabs.List className="flex flex-wrap gap-2 mb-6 bg-white rounded-lg p-2 shadow-sm border border-gray-200">
-              {keywordStatuses.map((status, index) => (
+              {keywordStatuses
+                .filter(status => {
+                  // 필터가 활성화되어 있고 내 블로그 결과가 있으면 노출 가능한 것만 표시
+                  if (showRankableOnly && myBlogResults[status.keyword]) {
+                    return myBlogResults[status.keyword].competitiveness.probability >= 60
+                  }
+                  return true
+                })
+                .map((status, index) => (
                 <Tabs.Trigger
                   key={index}
                   value={status.keyword}

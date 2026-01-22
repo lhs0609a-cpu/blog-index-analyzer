@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, Loader2, Sparkles, TrendingUp, Award, Zap, AlertCircle, BarChart3, ArrowLeft } from 'lucide-react'
+import { Search, Loader2, Sparkles, TrendingUp, Award, Zap, AlertCircle, BarChart3, ArrowLeft, Target, PenTool, Lightbulb, ChevronRight, Lock, HelpCircle } from 'lucide-react'
 import Confetti from 'react-confetti'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -23,6 +23,10 @@ export default function AnalyzePage() {
   const [showConfetti, setShowConfetti] = useState(false)
   const [progress, setProgress] = useState(0)
   const { width, height } = useWindowSize()
+
+  // 무료 플랜 체크 (비로그인 또는 free 플랜)
+  const isPremium = isAuthenticated && user?.plan && user.plan !== 'free'
+  const isFreeUser = !isPremium
 
   const handleAnalyze = async () => {
     if (!blogId.trim()) {
@@ -407,12 +411,12 @@ export default function AnalyzePage() {
                   </div>
                 </div>
 
-                {/* Score Breakdown */}
+                {/* Score Breakdown - 용어 쉽게 변경 + 툴팁 */}
                 <div className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50">
                   <div className="flex items-center justify-between mb-6">
                     <h3 className="text-2xl font-bold flex items-center gap-2">
                       <TrendingUp className="w-6 h-6 text-[#0064FF]" />
-                      상세 점수
+                      핵심 지표 분석
                     </h3>
                     <Link href={`/blog/${result.blog.blog_id}?tab=breakdown`}>
                       <button className="px-6 py-3 rounded-xl bg-[#0064FF] text-white font-semibold hover:shadow-lg shadow-lg shadow-[#0064FF]/15 transition-all flex items-center gap-2">
@@ -422,20 +426,24 @@ export default function AnalyzePage() {
                     </Link>
                   </div>
 
-                  <div className="space-y-4">
+                  <div className="space-y-6">
                     {Object.entries(result.index.score_breakdown).map(([key, value]: [string, any], index) => {
-                      const labels: Record<string, string> = {
-                        c_rank: 'C-Rank (출처 신뢰도)',
-                        dia: 'D.I.A. (문서 품질)'
+                      const labels: Record<string, { name: string; simple: string; tooltip: string }> = {
+                        c_rank: {
+                          name: '네이버 신뢰점수',
+                          simple: '블로그 신뢰도',
+                          tooltip: '네이버가 블로그를 얼마나 신뢰하는지 나타내는 점수입니다. 주제 일관성, 콘텐츠 품질, 활동 이력, 운영자 신뢰도를 종합 평가합니다.'
+                        },
+                        dia: {
+                          name: '문서 품질점수',
+                          simple: '글 퀄리티',
+                          tooltip: '개별 글의 품질을 평가하는 점수입니다. 주제 적합도, 경험/정보 풍부함, 독창성, 최신성을 기준으로 측정합니다.'
+                        }
                       }
 
-                      const descriptions: Record<string, string> = {
-                        c_rank: 'Context, Content, Chain, Creator',
-                        dia: '주제 적합도, 경험 정보, 충실성, 독창성, 적시성'
-                      }
-
-                      // 모든 점수를 100점 만점으로 통일
                       const percentage = value
+                      const scoreLevel = percentage >= 80 ? '최상' : percentage >= 60 ? '양호' : percentage >= 40 ? '보통' : '개선필요'
+                      const scoreColor = percentage >= 80 ? 'text-green-600' : percentage >= 60 ? 'text-blue-600' : percentage >= 40 ? 'text-yellow-600' : 'text-red-600'
 
                       return (
                         <motion.div
@@ -443,22 +451,42 @@ export default function AnalyzePage() {
                           initial={{ opacity: 0, x: -20 }}
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: 0.5 + index * 0.1 }}
+                          className="bg-white/50 rounded-2xl p-5"
                         >
-                          <div className="flex items-center justify-between mb-2">
-                            <div>
-                              <div className="font-semibold text-lg">{labels[key]}</div>
-                              <div className="text-sm text-gray-500 mt-1">{descriptions[key]}</div>
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-bold text-lg text-gray-900">{labels[key].name}</span>
+                                <div className="group relative">
+                                  <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                                  <div className="absolute left-0 bottom-full mb-2 w-72 p-3 bg-gray-900 text-white text-sm rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 shadow-xl">
+                                    {labels[key].tooltip}
+                                    <div className="absolute left-4 top-full border-8 border-transparent border-t-gray-900" />
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-sm text-gray-500">{labels[key].simple}</div>
                             </div>
-                            <span className="text-[#0064FF] font-bold text-xl">
-                              {value.toFixed(1)}/100
-                            </span>
+                            <div className="text-right">
+                              <div className="text-2xl font-bold text-[#0064FF]">
+                                {value.toFixed(0)}점
+                              </div>
+                              <div className={`text-sm font-medium ${scoreColor}`}>
+                                {scoreLevel}
+                              </div>
+                            </div>
                           </div>
-                          <div className="relative h-4 bg-gray-200 rounded-full overflow-hidden">
+                          <div className="relative h-3 bg-gray-200 rounded-full overflow-hidden">
                             <motion.div
                               initial={{ width: 0 }}
                               animate={{ width: `${percentage}%` }}
                               transition={{ delay: 0.7 + index * 0.1, duration: 0.5 }}
-                              className="absolute inset-y-0 left-0 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-full"
+                              className={`absolute inset-y-0 left-0 rounded-full ${
+                                percentage >= 80 ? 'bg-gradient-to-r from-green-500 to-green-400' :
+                                percentage >= 60 ? 'bg-gradient-to-r from-[#0064FF] to-[#3182F6]' :
+                                percentage >= 40 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
+                                'bg-gradient-to-r from-red-500 to-red-400'
+                              }`}
                             />
                           </div>
                         </motion.div>
@@ -467,15 +495,20 @@ export default function AnalyzePage() {
                   </div>
                 </div>
 
-                {/* Daily Visitors Chart */}
+                {/* Daily Visitors Chart - 무료 플랜 블러 처리 */}
                 {result.daily_visitors && result.daily_visitors.length > 0 && (
-                  <div className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50">
+                  <div className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50 relative overflow-hidden">
                     <h3 className="text-2xl font-bold mb-6 flex items-center gap-2">
                       <BarChart3 className="w-6 h-6 text-[#0064FF]" />
                       일일 방문자 (최근 15일)
+                      {isFreeUser && (
+                        <span className="ml-2 px-2 py-1 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">
+                          Pro 전용
+                        </span>
+                      )}
                     </h3>
 
-                    <div className="h-80">
+                    <div className={`h-80 ${isFreeUser ? 'blur-md select-none pointer-events-none' : ''}`}>
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={result.daily_visitors}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -523,19 +556,47 @@ export default function AnalyzePage() {
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
+
+                    {/* 무료 플랜 업그레이드 오버레이 */}
+                    {isFreeUser && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-white/30 backdrop-blur-[2px]">
+                        <div className="text-center p-8 max-w-sm">
+                          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-[#0064FF] to-[#3182F6] flex items-center justify-center">
+                            <Lock className="w-8 h-8 text-white" />
+                          </div>
+                          <h4 className="text-xl font-bold text-gray-900 mb-2">
+                            상세 방문자 추이 확인
+                          </h4>
+                          <p className="text-gray-600 text-sm mb-4">
+                            Pro 플랜에서 일일 방문자 추이를 확인하고 블로그 성장 패턴을 분석하세요
+                          </p>
+                          <Link href="/pricing">
+                            <button className="px-6 py-3 bg-[#0064FF] text-white font-semibold rounded-xl hover:shadow-lg shadow-lg shadow-[#0064FF]/15 transition-all">
+                              Pro 플랜 알아보기
+                            </button>
+                          </Link>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {/* Recommendations */}
+                {/* Recommendations - 무료 플랜은 1개만 표시 */}
                 {result.recommendations.length > 0 && (
-                  <div className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50">
+                  <div className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50 relative overflow-hidden">
                     <h3 className="text-2xl font-bold mb-6 flex items-center gap-2">
                       <Sparkles className="w-6 h-6 text-[#0064FF]" />
                       개선 권장사항
+                      {isFreeUser && result.recommendations.length > 1 && (
+                        <span className="ml-2 text-sm font-normal text-gray-500">
+                          (1/{result.recommendations.length}개 표시)
+                        </span>
+                      )}
                     </h3>
 
                     <div className="space-y-4">
-                      {result.recommendations.map((rec: any, index: number) => (
+                      {/* 무료 플랜: 첫 번째 권장사항만 표시 */}
+                      {(isFreeUser ? result.recommendations.slice(0, 1) : result.recommendations).map((rec: any, index: number) => (
                         <motion.div
                           key={index}
                           initial={{ opacity: 0, x: -20 }}
@@ -556,6 +617,34 @@ export default function AnalyzePage() {
                           )}
                         </motion.div>
                       ))}
+
+                      {/* 무료 플랜: 나머지 권장사항 블러 처리 */}
+                      {isFreeUser && result.recommendations.length > 1 && (
+                        <div className="relative">
+                          <div className="blur-md select-none pointer-events-none">
+                            <div className="p-6 rounded-2xl bg-blue-50 border-l-4 border-gray-300">
+                              <div className="font-semibold text-gray-400 mb-3">추가 개선 권장사항이 있습니다...</div>
+                              <div className="space-y-2">
+                                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="bg-white/90 rounded-xl p-4 shadow-lg text-center">
+                              <Lock className="w-5 h-5 text-[#0064FF] mx-auto mb-2" />
+                              <p className="text-sm text-gray-700 mb-2">
+                                +{result.recommendations.length - 1}개 권장사항 더보기
+                              </p>
+                              <Link href="/pricing">
+                                <button className="text-sm text-[#0064FF] font-medium hover:underline">
+                                  Pro 플랜 업그레이드 →
+                                </button>
+                              </Link>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -583,6 +672,109 @@ export default function AnalyzePage() {
                     </div>
                   </div>
                 )}
+
+                {/* 다음 액션 - P0 핵심 기능 */}
+                <div className="rounded-3xl p-8 bg-gradient-to-br from-[#0064FF]/5 to-blue-50 border-2 border-[#0064FF]/20 shadow-xl">
+                  <h3 className="text-2xl font-bold mb-2 flex items-center gap-2">
+                    <Target className="w-6 h-6 text-[#0064FF]" />
+                    지금 바로 할 수 있는 액션
+                  </h3>
+                  <p className="text-gray-600 mb-6">분석 결과를 바탕으로 추천드리는 다음 단계입니다</p>
+
+                  <div className="grid md:grid-cols-3 gap-4">
+                    {/* 액션 1: 키워드 검색 */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 1.0 }}
+                      whileHover={{ scale: 1.02 }}
+                      className="bg-white rounded-2xl p-6 border border-gray-100 hover:border-[#0064FF]/30 hover:shadow-lg transition-all cursor-pointer"
+                    >
+                      <Link href="/keyword-search" className="block">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#0064FF] to-[#3182F6] flex items-center justify-center mb-4">
+                          <Search className="w-6 h-6 text-white" />
+                        </div>
+                        <h4 className="font-bold text-lg mb-2">키워드 경쟁력 분석</h4>
+                        <p className="text-sm text-gray-600 mb-4">
+                          {result.index.level >= 5
+                            ? '현재 레벨에서 상위 노출 가능한 키워드를 찾아보세요'
+                            : '경쟁이 낮은 블루오션 키워드부터 공략하세요'
+                          }
+                        </p>
+                        <div className="flex items-center text-[#0064FF] font-medium text-sm">
+                          키워드 검색하기 <ChevronRight className="w-4 h-4 ml-1" />
+                        </div>
+                      </Link>
+                    </motion.div>
+
+                    {/* 액션 2: AI 글쓰기 */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 1.1 }}
+                      whileHover={{ scale: 1.02 }}
+                      className="bg-white rounded-2xl p-6 border border-gray-100 hover:border-[#0064FF]/30 hover:shadow-lg transition-all cursor-pointer"
+                    >
+                      <Link href="/tools" className="block">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-4">
+                          <PenTool className="w-6 h-6 text-white" />
+                        </div>
+                        <h4 className="font-bold text-lg mb-2">AI 글쓰기 도움</h4>
+                        <p className="text-sm text-gray-600 mb-4">
+                          {result.index.score_breakdown.dia < 60
+                            ? '문서 품질을 높이는 글쓰기 가이드를 받아보세요'
+                            : 'AI로 더 빠르게 고품질 콘텐츠를 작성하세요'
+                          }
+                        </p>
+                        <div className="flex items-center text-purple-600 font-medium text-sm">
+                          AI 도구 보기 <ChevronRight className="w-4 h-4 ml-1" />
+                        </div>
+                      </Link>
+                    </motion.div>
+
+                    {/* 액션 3: 상세 분석 */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 1.2 }}
+                      whileHover={{ scale: 1.02 }}
+                      className="bg-white rounded-2xl p-6 border border-gray-100 hover:border-[#0064FF]/30 hover:shadow-lg transition-all cursor-pointer"
+                    >
+                      <Link href={`/blog/${result.blog.blog_id}?tab=breakdown`} className="block">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center mb-4">
+                          <Lightbulb className="w-6 h-6 text-white" />
+                        </div>
+                        <h4 className="font-bold text-lg mb-2">상세 점수 분석</h4>
+                        <p className="text-sm text-gray-600 mb-4">
+                          어떤 부분에서 점수를 잃고 있는지 구체적으로 확인하세요
+                        </p>
+                        <div className="flex items-center text-amber-600 font-medium text-sm">
+                          상세 분석 보기 <ChevronRight className="w-4 h-4 ml-1" />
+                        </div>
+                      </Link>
+                    </motion.div>
+                  </div>
+
+                  {/* 레벨별 맞춤 팁 */}
+                  <div className="mt-6 p-4 bg-white/80 rounded-xl border border-blue-100">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 rounded-lg bg-[#0064FF]/10">
+                        <Sparkles className="w-5 h-5 text-[#0064FF]" />
+                      </div>
+                      <div>
+                        <h5 className="font-bold text-gray-900 mb-1">
+                          Lv.{result.index.level} 맞춤 성장 전략
+                        </h5>
+                        <p className="text-sm text-gray-600">
+                          {result.index.level <= 3 && '기초 다지기 단계입니다. 꾸준한 포스팅과 이웃 활동으로 블로그 신뢰도를 쌓아보세요. 주 2-3회 포스팅을 목표로 해보세요.'}
+                          {result.index.level >= 4 && result.index.level <= 6 && '성장 가속 단계입니다. 특정 주제에 집중하여 전문성을 높이고, 검색 유입을 늘려보세요. 키워드 분석 도구를 적극 활용하세요.'}
+                          {result.index.level >= 7 && result.index.level <= 9 && '경쟁력 확보 단계입니다. 상위 노출 키워드를 공략하고, 콘텐츠 품질을 더욱 높여보세요. 방문자 유입 분석도 중요합니다.'}
+                          {result.index.level >= 10 && '전문가 단계입니다. 브랜딩과 수익화를 고민해보세요. 다양한 채널 연동으로 영향력을 확장할 수 있습니다.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
                 {/* CTA */}
                 <motion.div

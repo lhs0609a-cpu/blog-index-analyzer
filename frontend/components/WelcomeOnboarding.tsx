@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Sparkles, Search, BarChart3, Zap, ArrowRight, CheckCircle2 } from 'lucide-react'
+import { X, Sparkles, Search, BarChart3, Zap, ArrowRight, CheckCircle2, Award, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 
 interface WelcomeOnboardingProps {
@@ -50,10 +50,17 @@ export default function WelcomeOnboarding({ onComplete }: WelcomeOnboardingProps
       ]
     },
     {
+      icon: <Award className="w-12 h-12 text-white" />,
+      iconBg: 'from-purple-500 to-pink-500',
+      title: '이런 분석 결과를 받아보세요',
+      description: '블로그 ID 하나로 네이버가 당신의 블로그를 어떻게 평가하는지 알 수 있어요.',
+      preview: true  // 미리보기 플래그
+    },
+    {
       icon: <Search className="w-12 h-12 text-white" />,
       iconBg: 'from-[#3182F6] to-sky-500',
       title: '블로그 분석하기',
-      description: '네이버 블로그 ID만 입력하면 C-Rank, D.I.A. 등\n40개 이상의 지표로 블로그 상태를 진단해드려요.',
+      description: '네이버 블로그 ID만 입력하면 네이버 신뢰점수, 문서 품질점수 등\n40개 이상의 지표로 블로그 상태를 진단해드려요.',
       action: {
         label: '블로그 분석하러 가기',
         href: '/analyze'
@@ -161,6 +168,59 @@ export default function WelcomeOnboarding({ onComplete }: WelcomeOnboardingProps
                         <span className="text-gray-700">{feature}</span>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {/* 분석 결과 미리보기 (Preview step) */}
+                {(currentStepData as any).preview && (
+                  <div className="mt-4 space-y-3">
+                    {/* 미니 결과 카드 */}
+                    <div className="bg-gradient-to-br from-blue-50 to-white rounded-xl p-4 border border-blue-100">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] flex items-center justify-center text-white text-sm font-bold">
+                            예
+                          </div>
+                          <div>
+                            <div className="font-bold text-sm">예시 블로그</div>
+                            <div className="text-xs text-gray-500">@example_blog</div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-2xl font-black bg-gradient-to-r from-[#0064FF] to-[#3182F6] bg-clip-text text-transparent">
+                            Lv.7
+                          </div>
+                          <div className="text-xs text-gray-500">Gold</div>
+                        </div>
+                      </div>
+
+                      {/* 점수 바 */}
+                      <div className="space-y-2">
+                        <div>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-gray-600">네이버 신뢰점수</span>
+                            <span className="text-[#0064FF] font-semibold">72점</span>
+                          </div>
+                          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="h-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-full" style={{ width: '72%' }} />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-gray-600">문서 품질점수</span>
+                            <span className="text-[#3182F6] font-semibold">68점</span>
+                          </div>
+                          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="h-full bg-gradient-to-r from-[#3182F6] to-sky-400 rounded-full" style={{ width: '68%' }} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <TrendingUp className="w-4 h-4 text-green-500" />
+                      <span>레벨별 맞춤 성장 전략도 함께 제공됩니다</span>
+                    </div>
                   </div>
                 )}
 
