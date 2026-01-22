@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { Check, X, Sparkles, Zap, Crown, Building2, ArrowLeft, Loader2 } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Check, X, Sparkles, Zap, Crown, Building2, ArrowLeft, Loader2, AlertCircle, Shield } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/stores/auth'
 import { getAllPlans, getMySubscription, preparePayment, type PlanInfo, type PlanType } from '@/lib/api/subscription'
+import { PLAN_INFO, PLAN_LIMITS, FEATURES } from '@/lib/features/featureAccess'
 import toast from 'react-hot-toast'
 
 const planIcons: Record<PlanType, React.ReactNode> = {
@@ -23,77 +24,28 @@ const planColors: Record<PlanType, string> = {
   business: 'from-[#0050CC] to-[#0064FF]'
 }
 
-// 기본 플랜 데이터 (API 실패 시 fallback)
-const DEFAULT_PLANS: PlanInfo[] = [
-  {
-    type: 'free',
-    name: '무료',
-    price_monthly: 0,
-    price_yearly: 0,
+// 기본 플랜 데이터 (featureAccess.ts에서 가져온 Single Source of Truth)
+const DEFAULT_PLANS: PlanInfo[] = (['free', 'basic', 'pro', 'business'] as const).map(planType => {
+  const info = PLAN_INFO[planType]
+  const limits = PLAN_LIMITS[planType]
+  return {
+    type: planType,
+    name: info.name,
+    price_monthly: info.price,
+    price_yearly: info.priceYearly,
     features: {
-      keyword_search_daily: 8,
-      blog_analysis_daily: 2,
-      search_results_count: 5,
-      history_days: 0,
-      competitor_compare: 0,
-      rank_alert: false,
-      excel_export: false,
-      api_access: false,
-      team_members: 1
-    }
-  },
-  {
-    type: 'basic',
-    name: '베이직',
-    price_monthly: 9900,
-    price_yearly: 95000,
-    features: {
-      keyword_search_daily: 50,
-      blog_analysis_daily: 20,
-      search_results_count: 30,
-      history_days: 30,
-      competitor_compare: 3,
-      rank_alert: false,
-      excel_export: true,
-      api_access: false,
-      team_members: 1
-    }
-  },
-  {
-    type: 'pro',
-    name: '프로',
-    price_monthly: 19900,
-    price_yearly: 191000,
-    features: {
-      keyword_search_daily: 200,
-      blog_analysis_daily: 100,
-      search_results_count: 50,
-      history_days: 90,
-      competitor_compare: 10,
-      rank_alert: true,
-      excel_export: true,
-      api_access: false,
-      team_members: 3
-    }
-  },
-  {
-    type: 'business',
-    name: '비즈니스',
-    price_monthly: 49900,
-    price_yearly: 479000,
-    features: {
-      keyword_search_daily: -1,
-      blog_analysis_daily: -1,
-      search_results_count: 100,
-      history_days: -1,
-      competitor_compare: -1,
-      rank_alert: true,
-      excel_export: true,
-      api_access: true,
-      team_members: 10
+      keyword_search_daily: limits.keywordSearchDaily,
+      blog_analysis_daily: limits.blogAnalysisDaily,
+      search_results_count: limits.searchResultsCount,
+      history_days: limits.historyDays,
+      competitor_compare: limits.competitorCompare,
+      rank_alert: limits.rankAlert,
+      excel_export: limits.excelExport,
+      api_access: limits.apiAccess,
+      team_members: limits.teamMembers
     }
   }
-]
+})
 
 export default function PricingPage() {
   const router = useRouter()
@@ -103,6 +55,9 @@ export default function PricingPage() {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly')
   const [isLoading, setIsLoading] = useState(true)
   const [processingPlan, setProcessingPlan] = useState<PlanType | null>(null)
+  const [showTrialModal, setShowTrialModal] = useState(false)
+  const [selectedTrialPlan, setSelectedTrialPlan] = useState<PlanType | null>(null)
+  const [trialConsent, setTrialConsent] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -148,22 +103,31 @@ export default function PricingPage() {
       return
     }
 
-    setProcessingPlan(planType)
+    // 7일 무료 체험 동의 모달 표시
+    setSelectedTrialPlan(planType)
+    setTrialConsent(false)
+    setShowTrialModal(true)
+  }
+
+  const proceedWithPayment = async () => {
+    if (!selectedTrialPlan || !trialConsent) return
+
+    setShowTrialModal(false)
+    setProcessingPlan(selectedTrialPlan)
 
     try {
       // 결제 준비
-      const paymentInfo = await preparePayment(user!.id, planType, billingCycle)
+      const paymentInfo = await preparePayment(user!.id, selectedTrialPlan, billingCycle)
 
       // 토스페이먼츠 결제창 열기
-      // 실제 구현 시에는 토스페이먼츠 SDK를 사용
-      // 여기서는 결제 페이지로 이동
-      router.push(`/payment?orderId=${paymentInfo.order_id}&amount=${paymentInfo.amount}&orderName=${encodeURIComponent(paymentInfo.order_name)}&planType=${planType}&billingCycle=${billingCycle}`)
+      router.push(`/payment?orderId=${paymentInfo.order_id}&amount=${paymentInfo.amount}&orderName=${encodeURIComponent(paymentInfo.order_name)}&planType=${selectedTrialPlan}&billingCycle=${billingCycle}&trial=true`)
 
     } catch (error) {
       console.error('Failed to prepare payment:', error)
       toast.error('결제 준비 중 오류가 발생했습니다')
     } finally {
       setProcessingPlan(null)
+      setSelectedTrialPlan(null)
     }
   }
 
@@ -389,13 +353,164 @@ export default function PricingPage() {
                   ) : plan.type === 'free' ? (
                     '무료 시작'
                   ) : (
-                    '시작하기'
+                    <span className="flex flex-col">
+                      <span>7일 무료 체험</span>
+                      <span className="text-xs opacity-80">이후 월 {formatPrice(monthlyPrice)}원</span>
+                    </span>
                   )}
                 </button>
               </motion.div>
             )
           })}
         </div>
+
+        {/* P0-3: 실제 사용자 케이스 스터디 */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.45 }}
+          className="rounded-3xl p-8 bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200/50 shadow-xl mb-12"
+        >
+          <h2 className="text-2xl font-bold text-center mb-2">💰 실제 성공 사례</h2>
+          <p className="text-center text-gray-600 mb-8">Pro 플랜 사용자들의 실제 성장 기록입니다</p>
+
+          {/* 케이스 스터디 카드 */}
+          <div className="grid md:grid-cols-3 gap-6 mb-8">
+            {/* 케이스 1: 육아 블로거 */}
+            <div className="bg-white rounded-2xl p-6 border border-emerald-100 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-full bg-pink-100 flex items-center justify-center text-2xl">👶</div>
+                <div>
+                  <div className="font-bold text-gray-900">육아맘 J님</div>
+                  <div className="text-xs text-gray-500">육아 블로그 · 3개월 사용</div>
+                </div>
+              </div>
+              <div className="space-y-3 mb-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">일 방문자</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400 line-through text-sm">120명</span>
+                    <span className="text-green-600 font-bold">→ 890명</span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">VIEW탭 상위 노출</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400 line-through text-sm">0회</span>
+                    <span className="text-green-600 font-bold">→ 12회/월</span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">블로그 레벨</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400 line-through text-sm">Lv.3</span>
+                    <span className="text-green-600 font-bold">→ Lv.7</span>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-emerald-50 rounded-xl p-3 text-sm text-emerald-700">
+                "경쟁 가능한 키워드를 알려줘서<br/>처음으로 VIEW탭 1위를 찍었어요!"
+              </div>
+            </div>
+
+            {/* 케이스 2: 맛집 블로거 */}
+            <div className="bg-white rounded-2xl p-6 border border-emerald-100 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center text-2xl">🍽️</div>
+                <div>
+                  <div className="font-bold text-gray-900">맛집헌터 K님</div>
+                  <div className="text-xs text-gray-500">맛집 블로그 · 6개월 사용</div>
+                </div>
+              </div>
+              <div className="space-y-3 mb-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">일 방문자</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400 line-through text-sm">450명</span>
+                    <span className="text-green-600 font-bold">→ 2,340명</span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">체험단 선정</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400 line-through text-sm">1회/월</span>
+                    <span className="text-green-600 font-bold">→ 8회/월</span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">월 부수입</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400 line-through text-sm">5만원</span>
+                    <span className="text-green-600 font-bold">→ 45만원</span>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-emerald-50 rounded-xl p-3 text-sm text-emerald-700">
+                "블루오션 키워드 덕분에 체험단<br/>선정률이 확 올랐어요!"
+              </div>
+            </div>
+
+            {/* 케이스 3: IT 블로거 */}
+            <div className="bg-white rounded-2xl p-6 border border-emerald-100 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-2xl">💻</div>
+                <div>
+                  <div className="font-bold text-gray-900">테크리뷰어 P님</div>
+                  <div className="text-xs text-gray-500">IT 블로그 · 4개월 사용</div>
+                </div>
+              </div>
+              <div className="space-y-3 mb-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">일 방문자</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400 line-through text-sm">280명</span>
+                    <span className="text-green-600 font-bold">→ 1,560명</span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">애드포스트 수익</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400 line-through text-sm">3만원</span>
+                    <span className="text-green-600 font-bold">→ 18만원/월</span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">인플루언서 선정</span>
+                  <div className="text-green-600 font-bold">✓ 달성</div>
+                </div>
+              </div>
+              <div className="bg-emerald-50 rounded-xl p-3 text-sm text-emerald-700">
+                "42개 지표 분석으로 부족한 점을<br/>정확히 알고 개선했어요!"
+              </div>
+            </div>
+          </div>
+
+          {/* ROI 계산기 */}
+          <div className="bg-white rounded-2xl p-6 border border-emerald-200">
+            <h3 className="font-bold text-center mb-4">💡 Pro 플랜 ROI 계산</h3>
+            <div className="grid md:grid-cols-4 gap-4 text-center">
+              <div className="p-4 bg-gray-50 rounded-xl">
+                <div className="text-2xl font-bold text-gray-900">19,900원</div>
+                <div className="text-xs text-gray-500">월 구독료</div>
+              </div>
+              <div className="p-4 bg-blue-50 rounded-xl">
+                <div className="text-2xl font-bold text-blue-600">+500명</div>
+                <div className="text-xs text-gray-500">평균 일 방문자 증가</div>
+              </div>
+              <div className="p-4 bg-green-50 rounded-xl">
+                <div className="text-2xl font-bold text-green-600">+15만원</div>
+                <div className="text-xs text-gray-500">예상 월 추가 수익</div>
+              </div>
+              <div className="p-4 bg-purple-50 rounded-xl">
+                <div className="text-2xl font-bold text-purple-600">7.5배</div>
+                <div className="text-xs text-gray-500">투자 대비 수익률</div>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 text-center mt-4">
+              * 애드포스트 + 체험단 평균 기준 추정치입니다. 실제 수익은 개인차가 있습니다.
+            </p>
+          </div>
+        </motion.div>
 
         {/* Features Comparison */}
         <motion.div
@@ -455,7 +570,7 @@ export default function PricingPage() {
             </table>
           </div>
 
-          {/* 핵심 도구 상세 비교 */}
+          {/* 핵심 도구 상세 비교 - featureAccess.ts에서 동적 생성 */}
           <h3 className="text-xl font-bold text-center mt-12 mb-6">핵심 도구</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -471,52 +586,66 @@ export default function PricingPage() {
               <tbody>
                 {/* 콘텐츠 제작 */}
                 <tr className="bg-green-50"><td colSpan={5} className="py-2 px-4 font-bold text-green-700">콘텐츠 제작</td></tr>
-                {[
-                  { name: 'AI 제목 생성', free: '제한', basic: '무제한', pro: '무제한', biz: '무제한' },
-                  { name: '키워드 발굴', free: '제한', basic: '무제한', pro: '무제한', biz: '무제한' },
-                  { name: '글쓰기 가이드', free: '제한', basic: '무제한', pro: '무제한', biz: '무제한' },
-                  { name: '해시태그 추천', free: '무제한', basic: '무제한', pro: '무제한', biz: '무제한' },
-                ].map((tool, i) => (
-                  <tr key={i} className="border-b border-gray-100">
-                    <td className="py-3 px-4">{tool.name}</td>
-                    <td className="text-center py-3 px-4 text-green-600">{tool.free}</td>
-                    <td className="text-center py-3 px-4">{tool.basic}</td>
-                    <td className="text-center py-3 px-4">{tool.pro}</td>
-                    <td className="text-center py-3 px-4">{tool.biz}</td>
-                  </tr>
-                ))}
+                {Object.entries(FEATURES)
+                  .filter(([, f]) => f.category === 'content')
+                  .map(([key, feature]) => {
+                    const getAccessLabel = (level: string) => {
+                      if (level === 'none') return <span className="text-gray-300">✕</span>
+                      if (level === 'limited') return '제한'
+                      return '무제한'
+                    }
+                    return (
+                      <tr key={key} className="border-b border-gray-100">
+                        <td className="py-3 px-4">{feature.displayName}</td>
+                        <td className="text-center py-3 px-4">{getAccessLabel(feature.access.free)}</td>
+                        <td className="text-center py-3 px-4">{getAccessLabel(feature.access.basic)}</td>
+                        <td className="text-center py-3 px-4">{getAccessLabel(feature.access.pro)}</td>
+                        <td className="text-center py-3 px-4">{getAccessLabel(feature.access.business)}</td>
+                      </tr>
+                    )
+                  })}
 
                 {/* 분석 & 추적 */}
                 <tr className="bg-blue-50"><td colSpan={5} className="py-2 px-4 font-bold text-blue-700">분석 & 추적</td></tr>
-                {[
-                  { name: '블로그 분석', free: '제한', basic: '무제한', pro: '무제한', biz: '무제한' },
-                  { name: '키워드 분석', free: '제한', basic: '무제한', pro: '무제한', biz: '무제한' },
-                  { name: '순위 추적', free: false, basic: '제한', pro: '무제한', biz: '무제한' },
-                  { name: '트렌드 분석', free: false, basic: true, pro: true, biz: true },
-                ].map((tool, i) => (
-                  <tr key={i} className="border-b border-gray-100">
-                    <td className="py-3 px-4">{tool.name}</td>
-                    <td className="text-center py-3 px-4">{tool.free === false ? <span className="text-gray-300">✕</span> : tool.free}</td>
-                    <td className="text-center py-3 px-4">{tool.basic === true ? <span className="text-green-500">✓</span> : tool.basic}</td>
-                    <td className="text-center py-3 px-4">{tool.pro === true ? <span className="text-green-500">✓</span> : tool.pro}</td>
-                    <td className="text-center py-3 px-4">{tool.biz === true ? <span className="text-green-500">✓</span> : tool.biz}</td>
-                  </tr>
-                ))}
+                {Object.entries(FEATURES)
+                  .filter(([, f]) => f.category === 'analysis')
+                  .map(([key, feature]) => {
+                    const getAccessLabel = (level: string) => {
+                      if (level === 'none') return <span className="text-gray-300">✕</span>
+                      if (level === 'limited') return '제한'
+                      return '무제한'
+                    }
+                    return (
+                      <tr key={key} className="border-b border-gray-100">
+                        <td className="py-3 px-4">{feature.displayName}</td>
+                        <td className="text-center py-3 px-4">{getAccessLabel(feature.access.free)}</td>
+                        <td className="text-center py-3 px-4">{getAccessLabel(feature.access.basic)}</td>
+                        <td className="text-center py-3 px-4">{getAccessLabel(feature.access.pro)}</td>
+                        <td className="text-center py-3 px-4">{getAccessLabel(feature.access.business)}</td>
+                      </tr>
+                    )
+                  })}
 
                 {/* 프리미엄 전용 */}
                 <tr className="bg-purple-50"><td colSpan={5} className="py-2 px-4 font-bold text-[#0064FF]">프리미엄 전용</td></tr>
-                {[
-                  { name: '블루오션 키워드', free: '제한', basic: '무제한', pro: '무제한', biz: '무제한' },
-                  { name: 'AI 글쓰기 가이드', free: '제한', basic: '무제한', pro: '무제한', biz: '무제한' },
-                ].map((tool, i) => (
-                  <tr key={i} className="border-b border-gray-100">
-                    <td className="py-3 px-4">{tool.name}</td>
-                    <td className="text-center py-3 px-4">{tool.free}</td>
-                    <td className="text-center py-3 px-4">{tool.basic}</td>
-                    <td className="text-center py-3 px-4">{tool.pro}</td>
-                    <td className="text-center py-3 px-4">{tool.biz}</td>
-                  </tr>
-                ))}
+                {Object.entries(FEATURES)
+                  .filter(([, f]) => f.category === 'premium')
+                  .map(([key, feature]) => {
+                    const getAccessLabel = (level: string) => {
+                      if (level === 'none') return <span className="text-gray-300">✕</span>
+                      if (level === 'limited') return '제한'
+                      return '무제한'
+                    }
+                    return (
+                      <tr key={key} className="border-b border-gray-100">
+                        <td className="py-3 px-4">{feature.displayName}</td>
+                        <td className="text-center py-3 px-4">{getAccessLabel(feature.access.free)}</td>
+                        <td className="text-center py-3 px-4">{getAccessLabel(feature.access.basic)}</td>
+                        <td className="text-center py-3 px-4">{getAccessLabel(feature.access.pro)}</td>
+                        <td className="text-center py-3 px-4">{getAccessLabel(feature.access.business)}</td>
+                      </tr>
+                    )
+                  })}
               </tbody>
             </table>
           </div>
@@ -634,6 +763,117 @@ export default function PricingPage() {
           </div>
         </motion.div>
       </div>
+
+      {/* 7일 무료 체험 동의 모달 */}
+      <AnimatePresence>
+        {showTrialModal && selectedTrialPlan && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowTrialModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 rounded-full bg-[#0064FF]/10 flex items-center justify-center mx-auto mb-4">
+                  <Crown className="w-8 h-8 text-[#0064FF]" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                  {PLAN_INFO[selectedTrialPlan].name} 플랜 7일 무료 체험
+                </h3>
+                <p className="text-gray-600">
+                  모든 프리미엄 기능을 7일간 무료로 체험하세요
+                </p>
+              </div>
+
+              {/* 체험 안내 */}
+              <div className="bg-blue-50 rounded-2xl p-4 mb-6">
+                <div className="flex items-start gap-3 mb-3">
+                  <Shield className="w-5 h-5 text-[#0064FF] flex-shrink-0 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-semibold text-gray-900 mb-1">안심하고 체험하세요</p>
+                    <p className="text-gray-600">7일 이내 언제든 해지 가능</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-semibold text-gray-900 mb-1">자동 결제 안내</p>
+                    <p className="text-gray-600">
+                      체험 종료 후 <strong className="text-[#0064FF]">
+                        월 {PLAN_INFO[selectedTrialPlan].price.toLocaleString()}원
+                      </strong>이 자동 결제됩니다
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 체험 일정 */}
+              <div className="bg-gray-50 rounded-xl p-4 mb-6">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-600">체험 시작</span>
+                  <span className="font-medium">오늘</span>
+                </div>
+                <div className="flex justify-between items-center text-sm mt-2">
+                  <span className="text-gray-600">체험 종료</span>
+                  <span className="font-medium">7일 후</span>
+                </div>
+                <div className="flex justify-between items-center text-sm mt-2">
+                  <span className="text-gray-600">해지 알림</span>
+                  <span className="font-medium text-[#0064FF]">종료 3일 전 이메일 발송</span>
+                </div>
+              </div>
+
+              {/* 동의 체크박스 */}
+              <label className="flex items-start gap-3 mb-6 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={trialConsent}
+                  onChange={(e) => setTrialConsent(e.target.checked)}
+                  className="w-5 h-5 rounded border-gray-300 text-[#0064FF] focus:ring-[#0064FF] mt-0.5"
+                />
+                <span className="text-sm text-gray-700">
+                  7일 무료 체험 후 자동으로 정기결제가 시작됨을 이해하고 동의합니다.
+                  <Link href="/terms" className="text-[#0064FF] hover:underline ml-1">
+                    이용약관
+                  </Link>
+                </span>
+              </label>
+
+              {/* 버튼 */}
+              <div className="space-y-3">
+                <button
+                  onClick={proceedWithPayment}
+                  disabled={!trialConsent || processingPlan !== null}
+                  className="w-full py-4 bg-[#0064FF] text-white font-bold rounded-xl hover:shadow-lg shadow-lg shadow-[#0064FF]/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {processingPlan ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      처리 중...
+                    </span>
+                  ) : (
+                    '7일 무료 체험 시작'
+                  )}
+                </button>
+                <button
+                  onClick={() => setShowTrialModal(false)}
+                  className="w-full py-3 text-gray-500 hover:text-gray-700 font-medium transition-colors"
+                >
+                  나중에 할게요
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

@@ -6,7 +6,7 @@ const STORAGE_KEY = 'blog_analyzer_api_url';
 // AWS Lightsail 프로덕션 서버 URL
 const PRODUCTION_API_URL = 'https://api.blrank.co.kr';
 // 로컬 개발 서버 URL
-const LOCAL_API_URL = 'http://localhost:8001';
+const LOCAL_API_URL = 'http://localhost:8000';
 
 // 현재 API URL을 저장하는 변수 (메모리)
 let currentApiUrl: string | null = null;

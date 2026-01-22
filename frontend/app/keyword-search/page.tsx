@@ -6,13 +6,19 @@ import { ConnectionIndicator } from '@/components/ConnectionIndicator'
 import { getApiUrl } from '@/lib/api/apiConfig'
 import * as Tabs from '@radix-ui/react-tabs'
 import { motion } from 'framer-motion'
-import { Check, Loader2, X, TrendingUp, TrendingDown, ArrowLeft, Filter, Star, Lock } from 'lucide-react'
+import { Check, Loader2, X, TrendingUp, TrendingDown, ArrowLeft, Filter, Star, Lock, PenTool } from 'lucide-react'
+import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
+import { useBlogContextStore } from '@/lib/stores/blogContext'
+import { useXPStore } from '@/lib/stores/xp'
 import { incrementUsage, checkUsageLimit } from '@/lib/api/subscription'
 import { useFeatureAccess } from '@/lib/features/useFeatureAccess'
 import { PLAN_INFO } from '@/lib/features/featureAccess'
 import toast from 'react-hot-toast'
 import Tutorial, { keywordAnalysisTutorialSteps } from '@/components/Tutorial'
+import UpgradeModal from '@/components/UpgradeModal'
+import TrialExpiryBanner from '@/components/TrialExpiryBanner'
+import CompetitorRadarChart from '@/components/CompetitorRadarChart'
 
 interface BlogIndexResult {
   rank: number
@@ -252,6 +258,12 @@ function KeywordSearchContent() {
   // 인증 상태
   const { isAuthenticated, user } = useAuthStore()
 
+  // 이전 분석 컨텍스트 (페이지간 연동)
+  const { lastAnalysisResult, lastAnalyzedBlogId, isAnalysisRecent } = useBlogContextStore()
+
+  // XP 시스템 - 일일 미션
+  const { completeMission } = useXPStore()
+
   // 플랜별 기능 접근
   const { getAccess, plan } = useFeatureAccess()
   const keywordSearchAccess = getAccess('keywordSearch')
@@ -273,8 +285,15 @@ function KeywordSearchContent() {
   const [progress, setProgress] = useState(0)
   const [progressMessage, setProgressMessage] = useState('')
 
-  // 내 블로그 비교 관련 (키워드별로 관리)
+  // 내 블로그 비교 관련 (키워드별로 관리) - 이전 분석 결과로 자동 설정
   const [myBlogId, setMyBlogId] = useState('')
+
+  // 이전 분석 결과가 있으면 자동으로 블로그 ID 설정
+  useEffect(() => {
+    if (lastAnalyzedBlogId && isAnalysisRecent(60) && !myBlogId) {
+      setMyBlogId(lastAnalyzedBlogId)
+    }
+  }, [lastAnalyzedBlogId, isAnalysisRecent, myBlogId])
   const [myBlogAnalyzing, setMyBlogAnalyzing] = useState<{[keyword: string]: boolean}>({})
   const [myBlogResults, setMyBlogResults] = useState<{[keyword: string]: MyBlogAnalysis}>({})
 
@@ -286,6 +305,10 @@ function KeywordSearchContent() {
 
   // 상세 분석 모달 관련
   const [showBreakdownModal, setShowBreakdownModal] = useState(false)
+
+  // P0-4: 일일 한도 초과 시 업그레이드 모달
+  const [showLimitModal, setShowLimitModal] = useState(false)
+  const [usageLimitInfo, setUsageLimitInfo] = useState<{ current: number; limit: number } | null>(null)
   const [selectedBlogId, setSelectedBlogId] = useState<string | null>(null)
   const [breakdownData, setBreakdownData] = useState<any | null>(null)
   const [loadingBreakdown, setLoadingBreakdown] = useState(false)
@@ -339,7 +362,9 @@ function KeywordSearchContent() {
       try {
         const usageCheck = await checkUsageLimit(user.id, 'keyword_search')
         if (!usageCheck.allowed) {
-          toast.error(`일일 키워드 검색 한도(${usageCheck.limit}회)에 도달했습니다. 업그레이드를 고려해주세요.`)
+          // P0-4: 풀스크린 업그레이드 모달 표시
+          setUsageLimitInfo({ current: usageCheck.used || usageCheck.limit, limit: usageCheck.limit })
+          setShowLimitModal(true)
           setLoading(false)
           setProgress(0)
           setProgressMessage('')
@@ -395,6 +420,9 @@ function KeywordSearchContent() {
       setResults(data)
       fetchRelatedKeywords(searchKeyword)
       collectLearningData(searchKeyword, data)
+
+      // 일일 미션 완료
+      completeMission('keyword')
     } catch (err) {
       setError(err instanceof Error ? err.message : '검색 중 오류가 발생했습니다')
     } finally {
@@ -476,7 +504,9 @@ function KeywordSearchContent() {
       try {
         const usageCheck = await checkUsageLimit(user.id, 'keyword_search')
         if (!usageCheck.allowed) {
-          toast.error(`일일 키워드 검색 한도(${usageCheck.limit}회)에 도달했습니다. 업그레이드를 고려해주세요.`)
+          // P0-4: 풀스크린 업그레이드 모달 표시
+          setUsageLimitInfo({ current: usageCheck.used || usageCheck.limit, limit: usageCheck.limit })
+          setShowLimitModal(true)
           setIsAnalyzing(false)
           setKeywordStatuses([])
           return
@@ -1178,6 +1208,11 @@ function KeywordSearchContent() {
 
       {/* Content */}
       <div className="max-w-4xl mx-auto p-4">
+        {/* P1-4: 체험 만료 알림 배너 */}
+        <div className="mb-6">
+          <TrialExpiryBanner />
+        </div>
+
         {/* Info Banner */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <div className="flex items-start gap-3">
@@ -2353,15 +2388,38 @@ function KeywordSearchContent() {
 
             {/* 결과 헤더 */}
             <div className="bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white rounded-xl shadow-lg border border-blue-300 p-4 mb-6">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-2">
                   <span className="text-2xl">📊</span>
                   <span className="font-bold text-lg">분석 결과</span>
+                  <span className="text-sm bg-white/20 px-3 py-1 rounded-full">
+                    총 {results.results.length}개 블로그
+                  </span>
                 </div>
-                <span className="text-sm bg-white/20 px-3 py-1 rounded-full">
-                  총 {results.results.length}개 블로그
-                </span>
+                {/* P1-3: 키워드→글쓰기 연결 버튼 */}
+                <Link
+                  href={`/tools?keyword=${encodeURIComponent(results.keyword)}&action=write`}
+                  className="flex items-center gap-2 px-4 py-2 bg-white text-[#0064FF] rounded-lg font-bold text-sm hover:shadow-lg transition-all"
+                >
+                  <PenTool className="w-4 h-4" />
+                  이 키워드로 글쓰기 가이드
+                </Link>
               </div>
+            </div>
+
+            {/* P2-1: 경쟁자 비교 레이더 차트 */}
+            <div className="mb-6">
+              <CompetitorRadarChart
+                competitors={results.results}
+                myBlog={myBlogResult ? {
+                  blog_id: myBlogResult.blog_id,
+                  blog_name: myBlogResult.blog_name,
+                  rank: 0,
+                  index: myBlogResult.index,
+                  stats: myBlogResult.stats
+                } : null}
+                keyword={results.keyword}
+              />
             </div>
 
             {/* 인사이트 섹션 */}
@@ -3479,6 +3537,15 @@ function KeywordSearchContent() {
         steps={keywordAnalysisTutorialSteps}
         tutorialKey="keyword-search"
         showGameElements={true}
+      />
+
+      {/* P0-4: 일일 한도 초과 시 업그레이드 모달 */}
+      <UpgradeModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        feature="keyword_search"
+        currentUsage={usageLimitInfo?.current}
+        maxUsage={usageLimitInfo?.limit}
       />
     </div>
   )

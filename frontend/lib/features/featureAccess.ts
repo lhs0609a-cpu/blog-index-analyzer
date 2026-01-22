@@ -30,12 +30,77 @@ export const CATEGORIES: Record<string, string> = {
 }
 
 // Plan Info
-export const PLAN_INFO: Record<Plan, { name: string; price: number; dailyLimit: number; badge: string }> = {
-  guest: { name: '비회원', price: 0, dailyLimit: 5, badge: '' },
-  free: { name: '무료', price: 0, dailyLimit: 10, badge: '' },
-  basic: { name: '베이직', price: 9900, dailyLimit: 50, badge: 'Basic' },
-  pro: { name: '프로', price: 19900, dailyLimit: 200, badge: 'Pro' },
-  business: { name: '비즈니스', price: 49900, dailyLimit: -1, badge: 'Business' }
+export const PLAN_INFO: Record<Plan, { name: string; price: number; priceYearly: number; dailyLimit: number; badge: string }> = {
+  guest: { name: '비회원', price: 0, priceYearly: 0, dailyLimit: 5, badge: '' },
+  free: { name: '무료', price: 0, priceYearly: 0, dailyLimit: 10, badge: '' },
+  basic: { name: '베이직', price: 9900, priceYearly: 95000, dailyLimit: 50, badge: 'Basic' },
+  pro: { name: '프로', price: 19900, priceYearly: 191000, dailyLimit: 200, badge: 'Pro' },
+  business: { name: '비즈니스', price: 49900, priceYearly: 479000, dailyLimit: -1, badge: 'Business' }
+}
+
+// Plan-level limits (for pricing page display)
+export interface PlanLimits {
+  keywordSearchDaily: number
+  blogAnalysisDaily: number
+  searchResultsCount: number
+  historyDays: number
+  competitorCompare: number
+  rankAlert: boolean
+  excelExport: boolean
+  apiAccess: boolean
+  teamMembers: number
+}
+
+export const PLAN_LIMITS: Record<Exclude<Plan, 'guest'>, PlanLimits> = {
+  free: {
+    keywordSearchDaily: 8,
+    blogAnalysisDaily: 2,
+    searchResultsCount: 5,
+    historyDays: 0,
+    competitorCompare: 0,
+    rankAlert: false,
+    excelExport: false,
+    apiAccess: false,
+    teamMembers: 1
+  },
+  basic: {
+    keywordSearchDaily: 50,
+    blogAnalysisDaily: 20,
+    searchResultsCount: 30,
+    historyDays: 30,
+    competitorCompare: 3,
+    rankAlert: false,
+    excelExport: true,
+    apiAccess: false,
+    teamMembers: 1
+  },
+  pro: {
+    keywordSearchDaily: 200,
+    blogAnalysisDaily: 100,
+    searchResultsCount: 50,
+    historyDays: 90,
+    competitorCompare: 10,
+    rankAlert: true,
+    excelExport: true,
+    apiAccess: false,
+    teamMembers: 3
+  },
+  business: {
+    keywordSearchDaily: -1,
+    blogAnalysisDaily: -1,
+    searchResultsCount: 100,
+    historyDays: -1,
+    competitorCompare: -1,
+    rankAlert: true,
+    excelExport: true,
+    apiAccess: true,
+    teamMembers: 10
+  }
+}
+
+// Helper to get plan limits for pricing display
+export function getPlanLimits(plan: Exclude<Plan, 'guest'>): PlanLimits {
+  return PLAN_LIMITS[plan]
 }
 
 // Core Features (8 + extras)

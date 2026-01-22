@@ -223,6 +223,30 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Community tables initialization failed: {e}")
 
+    # A/B Test DB 초기화
+    try:
+        from database.ab_test_db import get_ab_test_db
+        get_ab_test_db()
+        logger.info("✅ A/B test tables initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ A/B test tables initialization failed: {e}")
+
+    # Recommendation DB 초기화
+    try:
+        from database.recommendation_db import get_recommendation_db
+        get_recommendation_db()
+        logger.info("✅ Recommendation tables initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ Recommendation tables initialization failed: {e}")
+
+    # Notification DB 초기화
+    try:
+        from database.notification_db import get_notification_db
+        get_notification_db()
+        logger.info("✅ Notification tables initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ Notification tables initialization failed: {e}")
+
     # Redis 연결 초기화 (선택적)
     if settings.REDIS_URL:
         try:
@@ -389,6 +413,10 @@ from routers import naver_quality
 from routers import budget_pacing
 from routers import funnel_bidding
 from routers import community
+from routers import social_proof
+from routers import ab_test
+from routers import recommendation
+from routers import notification
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
@@ -426,6 +454,10 @@ app.include_router(naver_quality.router, tags=["네이버품질지수"])
 app.include_router(budget_pacing.router, tags=["예산페이싱"])
 app.include_router(funnel_bidding.router, tags=["퍼널입찰"])
 app.include_router(community.router, tags=["커뮤니티"])
+app.include_router(social_proof.router, tags=["소셜프루프"])
+app.include_router(ab_test.router, tags=["A/B테스트"])
+app.include_router(recommendation.router, tags=["추천시스템"])
+app.include_router(notification.router, tags=["알림시스템"])
 
 
 if __name__ == "__main__":

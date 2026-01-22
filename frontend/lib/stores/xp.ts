@@ -212,6 +212,27 @@ interface PurchasedReward {
   remaining?: number
 }
 
+// 일일 미션 정의
+export interface DailyMission {
+  id: string
+  name: string
+  description: string
+  icon: string
+  xpReward: number
+  type: 'login' | 'analyze' | 'keyword' | 'post_read'
+}
+
+export const DAILY_MISSIONS: DailyMission[] = [
+  { id: 'login', name: '오늘 접속하기', description: '서비스에 로그인하면 완료!', icon: '👋', xpReward: 10, type: 'login' },
+  { id: 'analyze', name: '블로그 1회 분석', description: '블로그 분석을 1회 실행하세요', icon: '🔍', xpReward: 20, type: 'analyze' },
+  { id: 'keyword', name: '키워드 검색 1회', description: '키워드 검색을 1회 실행하세요', icon: '🔑', xpReward: 15, type: 'keyword' },
+]
+
+interface DailyMissionState {
+  date: string
+  completedMissions: string[]
+}
+
 interface XPState {
   totalXP: number
   currentXP: number // 사용 가능한 XP
@@ -222,6 +243,7 @@ interface XPState {
   premiumTrialUntil: string | null // 프리미엄 체험 만료일
   lastLoginDate: string | null
   loginStreak: number
+  dailyMissionState: DailyMissionState // 일일 미션 상태
 
   // Actions
   earnXP: (amount: number, source?: string) => void
@@ -234,6 +256,8 @@ interface XPState {
   useBonusAnalysis: () => boolean
   isPremiumTrialActive: () => boolean
   recordLogin: () => void
+  completeMission: (missionId: string) => boolean
+  getCompletedMissions: () => string[]
   syncWithServer: (userId: string) => Promise<void>
 }
 
@@ -249,6 +273,7 @@ export const useXPStore = create<XPState>()(
       premiumTrialUntil: null,
       lastLoginDate: null,
       loginStreak: 0,
+      dailyMissionState: { date: '', completedMissions: [] },
 
       earnXP: (amount: number, source?: string) => {
         set((state) => {
@@ -384,7 +409,14 @@ export const useXPStore = create<XPState>()(
       recordLogin: () => {
         const now = new Date()
         const today = now.toISOString().split('T')[0]
-        const { lastLoginDate, loginStreak, earnXP } = get()
+        const { lastLoginDate, loginStreak, earnXP, completeMission, dailyMissionState } = get()
+
+        // 날짜가 바뀌면 일일 미션 초기화
+        if (dailyMissionState.date !== today) {
+          set({
+            dailyMissionState: { date: today, completedMissions: [] }
+          })
+        }
 
         if (lastLoginDate === today) return // 이미 오늘 로그인함
 
@@ -405,12 +437,65 @@ export const useXPStore = create<XPState>()(
         // 로그인 보너스 XP
         earnXP(5, 'daily_login')
 
-        // 연속 로그인 보너스
-        if (newStreak === 7) {
-          earnXP(50, '7day_streak')
+        // 연속 로그인 보너스 (마일스톤)
+        if (newStreak === 3) {
+          earnXP(30, '3day_streak')
+        } else if (newStreak === 7) {
+          earnXP(100, '7day_streak')
+        } else if (newStreak === 14) {
+          earnXP(200, '14day_streak')
         } else if (newStreak === 30) {
-          earnXP(200, '30day_streak')
+          earnXP(500, '30day_streak')
         }
+
+        // 로그인 미션 자동 완료
+        completeMission('login')
+      },
+
+      completeMission: (missionId: string) => {
+        const today = new Date().toISOString().split('T')[0]
+        const { dailyMissionState, earnXP } = get()
+
+        // 날짜 확인 및 초기화
+        if (dailyMissionState.date !== today) {
+          set({
+            dailyMissionState: { date: today, completedMissions: [] }
+          })
+        }
+
+        // 이미 완료한 미션인지 확인
+        const currentState = get().dailyMissionState
+        if (currentState.completedMissions.includes(missionId)) {
+          return false
+        }
+
+        // 미션 찾기
+        const mission = DAILY_MISSIONS.find(m => m.id === missionId)
+        if (!mission) return false
+
+        // 미션 완료 처리
+        set({
+          dailyMissionState: {
+            date: today,
+            completedMissions: [...currentState.completedMissions, missionId]
+          }
+        })
+
+        // XP 지급
+        earnXP(mission.xpReward, `mission_${missionId}`)
+
+        return true
+      },
+
+      getCompletedMissions: () => {
+        const today = new Date().toISOString().split('T')[0]
+        const { dailyMissionState } = get()
+
+        if (dailyMissionState.date !== today) {
+          return []
+        }
+
+        return dailyMissionState.completedMissions
       },
 
       syncWithServer: async (userId: string) => {
@@ -463,7 +548,8 @@ export const useXPStore = create<XPState>()(
         bonusAnalysis: state.bonusAnalysis,
         premiumTrialUntil: state.premiumTrialUntil,
         lastLoginDate: state.lastLoginDate,
-        loginStreak: state.loginStreak
+        loginStreak: state.loginStreak,
+        dailyMissionState: state.dailyMissionState
       })
     }
   )
