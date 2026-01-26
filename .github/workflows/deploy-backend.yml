@@ -21,6 +21,16 @@ jobs:
           key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
           command_timeout: 30m
           script: |
+            # 스왑 파일 설정 (없으면 생성)
+            if [ ! -f /swapfile ]; then
+              sudo fallocate -l 2G /swapfile
+              sudo chmod 600 /swapfile
+              sudo mkswap /swapfile
+              sudo swapon /swapfile
+              echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+              echo "Swap file created"
+            fi
+
             cd ~/blog-index-analyzer
             git pull origin main
             cd flyio-backend
@@ -32,6 +42,8 @@ jobs:
               -p 8000:8001 \
               --env-file .env \
               --restart unless-stopped \
+              --memory=1500m \
+              --memory-swap=2g \
               blog-api
 
             # Update Caddyfile (CORS handled by FastAPI)
