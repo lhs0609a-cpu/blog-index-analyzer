@@ -20,12 +20,14 @@ jobs:
           NAVER_AD_CUSTOMER_ID: ${{ secrets.NAVER_AD_CUSTOMER_ID }}
           NAVER_AD_API_KEY: ${{ secrets.NAVER_AD_API_KEY }}
           NAVER_AD_SECRET_KEY: ${{ secrets.NAVER_AD_SECRET_KEY }}
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
         with:
           host: ${{ secrets.LIGHTSAIL_HOST }}
           username: ${{ secrets.LIGHTSAIL_USERNAME }}
           key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
           command_timeout: 30m
-          envs: NAVER_AD_CUSTOMER_ID,NAVER_AD_API_KEY,NAVER_AD_SECRET_KEY
+          envs: NAVER_AD_CUSTOMER_ID,NAVER_AD_API_KEY,NAVER_AD_SECRET_KEY,NAVER_CLIENT_ID,NAVER_CLIENT_SECRET
           script: |
             # 스왑 파일 설정 (없으면 생성)
             if [ ! -f /swapfile ]; then
@@ -52,6 +54,15 @@ jobs:
               echo "NAVER_AD_API_KEY=$NAVER_AD_API_KEY" >> .env
               echo "NAVER_AD_SECRET_KEY=$NAVER_AD_SECRET_KEY" >> .env
               echo "Naver Ad API credentials updated"
+            fi
+
+            # 네이버 Open API (검색 API) 자격 증명 추가
+            if [ -n "$NAVER_CLIENT_ID" ]; then
+              sed -i '/^NAVER_CLIENT_ID=/d' .env 2>/dev/null || true
+              sed -i '/^NAVER_CLIENT_SECRET=/d' .env 2>/dev/null || true
+              echo "NAVER_CLIENT_ID=$NAVER_CLIENT_ID" >> .env
+              echo "NAVER_CLIENT_SECRET=$NAVER_CLIENT_SECRET" >> .env
+              echo "Naver Open API credentials updated"
             fi
 
             docker build -t blog-api .
