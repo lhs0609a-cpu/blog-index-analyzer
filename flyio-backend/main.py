@@ -159,19 +159,19 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Backup scheduler failed to start: {e}")
 
-    # 자동 학습 스케줄러 시작 (3분마다 - 리소스 절약)
+    # 자동 학습 스케줄러 시작 (비활성화 - 메모리 절약, 필요시 API로 수동 활성화)
     try:
         from services.auto_learning_service import auto_learning_scheduler
-        auto_learning_scheduler.start()
-        logger.info("✅ Auto learning scheduler started (every 3 min)")
+        # auto_learning_scheduler.start()  # 메모리 절약을 위해 비활성화
+        logger.info("⚠️ Auto learning scheduler DISABLED (memory optimization)")
     except Exception as e:
         logger.warning(f"⚠️ Auto learning scheduler failed to start: {e}")
 
     # 광고 자동 최적화 스케줄러 시작
     try:
         from services.ad_auto_optimizer import ad_auto_optimizer
-        ad_auto_optimizer.start(interval_seconds=300)  # 5분마다 실행 (서버 부하 감소)
-        logger.info("✅ Ad auto optimizer started (every 5 min)")
+        ad_auto_optimizer.start(interval_seconds=900)  # 15분마다 실행 (메모리 절약)
+        logger.info("✅ Ad auto optimizer started (every 15 min)")
     except Exception as e:
         logger.warning(f"⚠️ Ad auto optimizer failed to start: {e}")
 
@@ -186,8 +186,8 @@ async def lifespan(app: FastAPI):
     # Threads 자동 게시 스케줄러 시작
     try:
         from services.threads_auto_poster import threads_auto_poster
-        threads_auto_poster.start(interval_seconds=300)  # 5분마다 실행 (서버 부하 감소)
-        logger.info("✅ Threads auto poster started (every 5 min)")
+        threads_auto_poster.start(interval_seconds=900)  # 15분마다 실행 (메모리 절약)
+        logger.info("✅ Threads auto poster started (every 15 min)")
     except Exception as e:
         logger.warning(f"⚠️ Threads auto poster failed to start: {e}")
 
@@ -203,7 +203,7 @@ async def lifespan(app: FastAPI):
     try:
         from services.x_auto_poster import start_auto_poster
         start_auto_poster()
-        logger.info("✅ X auto poster started (every 1 min)")
+        logger.info("✅ X auto poster started (every 5 min)")
     except Exception as e:
         logger.warning(f"⚠️ X auto poster failed to start: {e}")
 

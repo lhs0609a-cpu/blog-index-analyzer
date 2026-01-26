@@ -19,18 +19,18 @@ logger = logging.getLogger(__name__)
 # 설정
 # ==============================================
 AUTO_LEARNING_CONFIG = {
-    "enabled": True,                    # 자동 학습 활성화
-    "interval_minutes": 15,             # 학습 주기 (분) - 10 → 15로 증가 (서버 부하 감소)
-    "keywords_per_cycle": 2,            # 한 번에 학습할 키워드 수
-    "blogs_per_keyword": 8,             # 키워드당 분석할 블로그 수 (10 → 8로 감소)
-    "delay_between_keywords": 5.0,      # 키워드 간 대기 시간 (초)
-    "delay_between_blogs": 2.5,         # 블로그 간 대기 시간 (초) - 2 → 2.5로 증가 (안정성)
-    "auto_train_threshold": 50,         # 자동 훈련 트리거 샘플 수
-    "quiet_hours_start": 2,             # 조용한 시간 시작 (서버 부하 감소)
-    "quiet_hours_end": 6,               # 조용한 시간 끝
-    "quiet_hours_interval": 45,         # 조용한 시간대 학습 주기 (분) - 30 → 45로 증가
+    "enabled": False,                   # 자동 학습 비활성화 (메모리 절약) - 수동으로 활성화 가능
+    "interval_minutes": 60,             # 학습 주기 (분) - 15 → 60으로 증가 (서버 부하 대폭 감소)
+    "keywords_per_cycle": 1,            # 한 번에 학습할 키워드 수 (2 → 1로 감소)
+    "blogs_per_keyword": 5,             # 키워드당 분석할 블로그 수 (8 → 5로 감소)
+    "delay_between_keywords": 10.0,     # 키워드 간 대기 시간 (초) - 5 → 10으로 증가
+    "delay_between_blogs": 5.0,         # 블로그 간 대기 시간 (초) - 2.5 → 5로 증가 (메모리 회복 시간)
+    "auto_train_threshold": 100,        # 자동 훈련 트리거 샘플 수 (50 → 100으로 증가)
+    "quiet_hours_start": 0,             # 조용한 시간 시작 (항상 저부하 모드)
+    "quiet_hours_end": 8,               # 조용한 시간 끝
+    "quiet_hours_interval": 120,        # 조용한 시간대 학습 주기 (분) - 45 → 120으로 증가
     "daily_training_hour": 3,           # 매일 대규모 훈련 시간 (UTC, 한국시간 12시)
-    "daily_training_samples": 5000,     # 대규모 훈련 시 사용할 샘플 수
+    "daily_training_samples": 2000,     # 대규모 훈련 시 사용할 샘플 수 (5000 → 2000으로 감소)
 }
 
 # 학습 상태

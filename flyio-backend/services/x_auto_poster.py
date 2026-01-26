@@ -88,8 +88,8 @@ async def auto_poster_loop():
         except Exception as e:
             logger.error(f"X Auto Poster error: {e}")
 
-        # 1분마다 체크
-        await asyncio.sleep(60)
+        # 5분마다 체크 (메모리 절약)
+        await asyncio.sleep(300)
 
     logger.info("X Auto Poster stopped")
 

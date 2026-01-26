@@ -1,6 +1,7 @@
 """
 Playwright-based blog scraper for accurate data collection
 Uses headless browser to bypass API restrictions
+Memory optimized for low-resource servers (2GB RAM)
 """
 import asyncio
 import re
@@ -13,6 +14,10 @@ logger = logging.getLogger(__name__)
 # Global browser instance for reuse
 _browser: Optional[Browser] = None
 _playwright = None
+
+# 동시 Playwright 요청 제한 (메모리 보호)
+_active_contexts = 0
+_MAX_CONTEXTS = 2  # 최대 동시 컨텍스트 수 (메모리 절약)
 
 
 async def get_browser() -> Browser:
@@ -50,10 +55,21 @@ async def get_browser() -> Browser:
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
-                '--single-process'
+                '--single-process',
+                '--disable-extensions',
+                '--disable-background-networking',
+                '--disable-sync',
+                '--disable-translate',
+                '--no-first-run',
+                '--disable-default-apps',
+                '--disable-popup-blocking',
+                '--disable-background-timer-throttling',
+                '--disable-renderer-backgrounding',
+                '--disable-device-discovery-notifications',
+                '--js-flags=--max-old-space-size=256',  # JS 힙 메모리 제한 256MB
             ]
         )
-        logger.info("Browser instance created")
+        logger.info("Browser instance created (memory optimized)")
 
     return _browser
 
@@ -63,6 +79,8 @@ async def scrape_blog_stats(blog_id: str) -> Dict:
     Scrape blog statistics using Playwright
     Returns: {total_posts, neighbor_count, total_visitors, blog_age_days, recent_activity, avg_post_length}
     """
+    global _active_contexts
+
     stats = {
         "success": False,
         "total_posts": None,
@@ -76,8 +94,15 @@ async def scrape_blog_stats(blog_id: str) -> Dict:
         "data_sources": []
     }
 
+    # 동시 요청 제한 체크
+    if _active_contexts >= _MAX_CONTEXTS:
+        logger.warning(f"[Playwright] Too many active contexts ({_active_contexts}), skipping {blog_id}")
+        return stats
+
+    _active_contexts += 1
     browser = None
     page = None
+    context = None
 
     try:
         browser = await get_browser()
@@ -342,6 +367,7 @@ async def scrape_blog_stats(blog_id: str) -> Dict:
                 await context.close()
             except:
                 pass
+        _active_contexts -= 1
 
     return stats
 

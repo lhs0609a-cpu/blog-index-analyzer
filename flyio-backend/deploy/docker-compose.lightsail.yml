@@ -40,9 +40,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 900M
+          memory: 1500M
         reservations:
-          memory: 512M
+          memory: 800M
 
 volumes:
   app_data:
