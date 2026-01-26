@@ -550,7 +550,7 @@ async def fetch_naver_search_results(keyword: str, limit: int = 13) -> List[Dict
 
 
 async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 20) -> Dict[str, List[Dict]]:
-    """Fetch search results from both VIEW tab and BLOG tab in parallel"""
+    """Fetch search results from both VIEW tab and BLOG tab sequentially (메모리 최적화)"""
     # 캐시 확인 (성능 개선 - 5분 TTL)
     cached = get_cached_search_results(keyword)
     if cached:
@@ -559,19 +559,27 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 20) ->
     logger.info(f"Fetching both tabs for keyword: {keyword}")
 
     try:
-        # VIEW 탭과 BLOG 탭을 병렬로 조회
-        view_results, blog_results = await asyncio.gather(
-            fetch_via_view_tab_scraping(keyword, limit),
-            fetch_via_blog_tab_scraping(keyword, limit),
-            return_exceptions=True
-        )
+        # ===== 순차 실행으로 변경 (Playwright 메모리 경쟁 방지) =====
+        # 2GB RAM 서버에서 두 개의 Playwright가 동시에 실행되면 메모리 부족 발생
 
-        # 예외 처리
-        if isinstance(view_results, Exception):
-            logger.error(f"VIEW tab scraping failed: {view_results}")
+        # 1단계: VIEW 탭 먼저 스크래핑 (Playwright)
+        view_results = []
+        try:
+            logger.info(f"Step 1: Scraping VIEW tab for: {keyword}")
+            view_results = await fetch_via_view_tab_scraping(keyword, limit)
+            logger.info(f"VIEW tab returned {len(view_results)} results")
+        except Exception as e:
+            logger.error(f"VIEW tab scraping failed: {e}")
             view_results = []
-        if isinstance(blog_results, Exception):
-            logger.error(f"BLOG tab scraping failed: {blog_results}")
+
+        # 2단계: BLOG 탭 스크래핑 (Playwright + HTTP fallback)
+        blog_results = []
+        try:
+            logger.info(f"Step 2: Scraping BLOG tab for: {keyword}")
+            blog_results = await fetch_via_blog_tab_scraping(keyword, limit)
+            logger.info(f"BLOG tab returned {len(blog_results)} results")
+        except Exception as e:
+            logger.error(f"BLOG tab scraping failed: {e}")
             blog_results = []
 
         # BLOG 탭 결과가 없으면 fallback 시도 (다단계 폴백)
