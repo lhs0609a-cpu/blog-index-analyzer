@@ -643,51 +643,75 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 20) ->
 
 
 async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
-    """Fetch blog results using HTTP only (Playwright는 VIEW 탭에서만 사용)"""
-    # HTTP 요청만 사용 (Playwright 병렬 실행 충돌 방지)
-    # VIEW 탭에서 Playwright로 가져온 결과를 BLOG 탭에도 보충함
+    """Fetch blog results using Playwright (JS 렌더링 지원) with HTTP fallback"""
     results = []
+
+    # 1. Playwright로 먼저 시도 (JS 렌더링된 전체 결과 가져오기)
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Referer": "https://search.naver.com/",
-        }
+        from services.blog_scraper import scrape_blog_tab_results
 
-        from urllib.parse import quote
-        encoded_keyword = quote(keyword)
-        search_url = f"https://search.naver.com/search.naver?where=blog&query={encoded_keyword}"
+        logger.info(f"[BLOG] Using Playwright to scrape BLOG tab for: {keyword}")
+        raw_results = await scrape_blog_tab_results(keyword, limit)
 
-        client = await get_http_client()
-        response = await client.get(search_url, headers=headers)
+        if raw_results:
+            for item in raw_results:
+                results.append({
+                    "rank": item.get("rank", len(results) + 1),
+                    "blog_id": item["blog_id"],
+                    "blog_name": item["blog_id"],
+                    "blog_url": item.get("blog_url", f"https://blog.naver.com/{item['blog_id']}"),
+                    "post_title": item.get("post_title", ""),
+                    "post_url": item["post_url"],
+                    "post_date": None,
+                    "thumbnail": None,
+                    "tab_type": "BLOG",
+                    "smart_block_keyword": keyword,
+                })
+            logger.info(f"[BLOG] Playwright returned {len(results)} results for: {keyword}")
+            if len(results) >= limit:
+                return results
 
-        if response.status_code == 200:
-            html_text = response.text
+    except Exception as e:
+        logger.warning(f"[BLOG] Playwright scraping failed: {e}")
 
-            # 정규식으로 직접 URL 추출
-            post_url_pattern = re.compile(r'href="(https://blog\.naver\.com/([^"/]+)/(\d+))"')
-            url_matches = post_url_pattern.findall(html_text)
+    # 2. Playwright 결과가 부족하면 HTTP fallback으로 보충
+    if len(results) < limit:
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Referer": "https://search.naver.com/",
+            }
 
-            seen_urls = set()
-            rank = 0
+            from urllib.parse import quote
+            encoded_keyword = quote(keyword)
+            search_url = f"https://search.naver.com/search.naver?where=blog&query={encoded_keyword}"
 
-            if url_matches:
+            client = await get_http_client()
+            response = await client.get(search_url, headers=headers)
+
+            if response.status_code == 200:
+                html_text = response.text
+                post_url_pattern = re.compile(r'href="(https://blog\.naver\.com/([^"/]+)/(\d+))"')
+                url_matches = post_url_pattern.findall(html_text)
+
+                existing_urls = {r["post_url"] for r in results}
+
                 for match in url_matches:
-                    if rank >= limit:
+                    if len(results) >= limit:
                         break
 
                     post_url = match[0]
                     blog_id = match[1]
                     post_id = match[2]
 
-                    if post_url in seen_urls:
+                    if post_url in existing_urls:
                         continue
-                    seen_urls.add(post_url)
+                    existing_urls.add(post_url)
 
-                    rank += 1
                     results.append({
-                        "rank": rank,
+                        "rank": len(results) + 1,
                         "blog_id": blog_id,
                         "blog_name": blog_id,
                         "blog_url": f"https://blog.naver.com/{blog_id}",
@@ -699,10 +723,10 @@ async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
                         "smart_block_keyword": keyword,
                     })
 
-            logger.info(f"[BLOG] HTTP returned {len(results)} results for: {keyword}")
+                logger.info(f"[BLOG] HTTP fallback added results, total: {len(results)} for: {keyword}")
 
-    except Exception as e:
-        logger.error(f"[BLOG] HTTP request failed: {e}")
+        except Exception as e:
+            logger.error(f"[BLOG] HTTP fallback failed: {e}")
 
     return results
 
