@@ -38,7 +38,8 @@ jobs:
             fi
 
             cd ~/blog-index-analyzer
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
             cd flyio-backend
 
             # 네이버 광고 API 자격 증명을 .env에 추가/업데이트
