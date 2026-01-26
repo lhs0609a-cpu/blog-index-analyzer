@@ -17,7 +17,7 @@ _playwright = None
 
 # 동시 Playwright 요청 제한 (메모리 보호)
 _active_contexts = 0
-_MAX_CONTEXTS = 2  # 최대 동시 컨텍스트 수 (메모리 절약)
+_MAX_CONTEXTS = 5  # 최대 동시 컨텍스트 수 (2 → 5로 증가)
 
 
 async def get_browser() -> Browser:
