@@ -7,6 +7,7 @@ on:
     paths:
       - 'flyio-backend/**'
       - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:  # 수동 실행 허용
 
 jobs:
   deploy:
@@ -15,11 +16,16 @@ jobs:
     steps:
       - name: Deploy to Lightsail
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          NAVER_AD_CUSTOMER_ID: ${{ secrets.NAVER_AD_CUSTOMER_ID }}
+          NAVER_AD_API_KEY: ${{ secrets.NAVER_AD_API_KEY }}
+          NAVER_AD_SECRET_KEY: ${{ secrets.NAVER_AD_SECRET_KEY }}
         with:
           host: ${{ secrets.LIGHTSAIL_HOST }}
           username: ${{ secrets.LIGHTSAIL_USERNAME }}
           key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
           command_timeout: 30m
+          envs: NAVER_AD_CUSTOMER_ID,NAVER_AD_API_KEY,NAVER_AD_SECRET_KEY
           script: |
             # 스왑 파일 설정 (없으면 생성)
             if [ ! -f /swapfile ]; then
@@ -34,6 +40,19 @@ jobs:
             cd ~/blog-index-analyzer
             git pull origin main
             cd flyio-backend
+
+            # 네이버 광고 API 자격 증명을 .env에 추가/업데이트
+            if [ -n "$NAVER_AD_CUSTOMER_ID" ]; then
+              # 기존 값 제거 후 새 값 추가
+              sed -i '/^NAVER_AD_CUSTOMER_ID=/d' .env 2>/dev/null || true
+              sed -i '/^NAVER_AD_API_KEY=/d' .env 2>/dev/null || true
+              sed -i '/^NAVER_AD_SECRET_KEY=/d' .env 2>/dev/null || true
+              echo "NAVER_AD_CUSTOMER_ID=$NAVER_AD_CUSTOMER_ID" >> .env
+              echo "NAVER_AD_API_KEY=$NAVER_AD_API_KEY" >> .env
+              echo "NAVER_AD_SECRET_KEY=$NAVER_AD_SECRET_KEY" >> .env
+              echo "Naver Ad API credentials updated"
+            fi
+
             docker build -t blog-api .
             docker stop blog-analyzer-api || true
             docker rm blog-analyzer-api || true
