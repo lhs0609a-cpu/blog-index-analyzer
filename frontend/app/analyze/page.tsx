@@ -20,6 +20,8 @@ import TrialExpiryBanner from '@/components/TrialExpiryBanner'
 import { AnimatedScore, AnimatedLevel, CircularProgress } from '@/components/AnimatedScore'
 import ShareResult from '@/components/ShareResult'
 import { LiveToastNotifications } from '@/components/SocialProofSystem'
+import { getLevelGrade, getGradeBadgeStyle, getLevelsToNextGrade } from '@/lib/utils/levelGrade'
+import TermTooltip from '@/components/TermTooltip'
 
 // P0-1: "그래서 뭐?" 문제 해결 - 점수 해석 & 예상 효과 컴포넌트
 function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywordSearch: () => void }) {
@@ -27,6 +29,10 @@ function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywo
   const totalScore = result.index.total_score
   const cRank = result.index.score_breakdown?.c_rank || 50
   const dia = result.index.score_breakdown?.dia || 50
+
+  // P2-1: 레벨 → 등급 변환
+  const gradeInfo = getLevelGrade(level)
+  const nextGradeInfo = getLevelsToNextGrade(level)
 
   // 레벨별 해석 데이터
   const levelInterpretation = {
@@ -65,12 +71,22 @@ function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywo
 
       {/* 핵심 해석 카드 */}
       <div className="grid md:grid-cols-3 gap-4 mb-6">
-        {/* 현재 위치 */}
+        {/* 현재 위치 - P2-1: 등급 표시 추가 */}
         <div className="bg-white rounded-2xl p-5 border border-emerald-100">
           <div className="text-sm text-gray-500 mb-1">전체 블로거 중</div>
-          <div className="text-3xl font-bold text-emerald-600 mb-1">{interpretation.percentile}</div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-3xl font-bold text-emerald-600">{interpretation.percentile}</span>
+            <span className={`px-2 py-1 rounded-lg text-sm font-bold ${getGradeBadgeStyle(gradeInfo.grade)}`}>
+              {gradeInfo.grade}
+            </span>
+          </div>
           <div className="text-sm text-gray-600">
-            Lv.{level} {interpretation.tier} 등급
+            Lv.{level} {gradeInfo.tier}
+            {nextGradeInfo && (
+              <span className="text-emerald-600 ml-1">
+                (+{nextGradeInfo.levelsNeeded}레벨 → {nextGradeInfo.nextGrade})
+              </span>
+            )}
           </div>
         </div>
 
@@ -101,7 +117,9 @@ function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywo
               <span className="font-bold text-blue-600">{Math.round(cRank)}</span>
             </div>
             <div>
-              <div className="font-semibold text-gray-800">블로그 신뢰도</div>
+              <TermTooltip term="c-rank">
+                <span className="font-semibold text-gray-800">C-Rank (블로그 신뢰도)</span>
+              </TermTooltip>
               <div className="text-gray-600">
                 {cRank >= 70 ? '네이버가 당신의 블로그를 신뢰합니다 ✓' :
                  cRank >= 50 ? '보통 수준입니다. 꾸준한 활동으로 올릴 수 있어요' :
@@ -114,7 +132,9 @@ function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywo
               <span className="font-bold text-purple-600">{Math.round(dia)}</span>
             </div>
             <div>
-              <div className="font-semibold text-gray-800">글 품질 점수</div>
+              <TermTooltip term="dia">
+                <span className="font-semibold text-gray-800">D.I.A. (글 품질 점수)</span>
+              </TermTooltip>
               <div className="text-gray-600">
                 {dia >= 70 ? '글 품질이 우수합니다 ✓' :
                  dia >= 50 ? '이미지 추가, 글 길이를 늘리면 +15점 이상 가능' :
@@ -519,6 +539,151 @@ function ConcreteRecommendations({ result, isFreeUser }: { result: any; isFreeUs
   )
 }
 
+// P1-4: 즉시 실행 가능한 액션 플랜 컴포넌트
+function NextStepActionPlan({ result }: { result: any }) {
+  const level = result.index.level
+  const cRank = result.index.score_breakdown?.c_rank || 50
+  const dia = result.index.score_breakdown?.dia || 50
+
+  // 레벨과 점수에 따른 맞춤 다음 단계
+  const getNextActions = () => {
+    const actions = []
+
+    // 1. 키워드 관련 액션 (항상 첫 번째)
+    if (level <= 5) {
+      actions.push({
+        icon: '🎯',
+        title: '경쟁 가능한 키워드 찾기',
+        description: `현재 레벨에서는 월 검색량 ${level * 500} 이하 키워드를 공략하세요`,
+        link: '/keyword-search',
+        linkText: '키워드 분석하기',
+        priority: 'high'
+      })
+    } else {
+      actions.push({
+        icon: '👑',
+        title: '블루오션 키워드 발굴',
+        description: '경쟁이 낮고 진입 가능성 높은 황금 키워드를 찾아보세요',
+        link: '/blue-ocean',
+        linkText: '블루오션 찾기',
+        priority: 'high'
+      })
+    }
+
+    // 2. 콘텐츠 품질 관련 (DIA 점수 기반)
+    if (dia < 60) {
+      actions.push({
+        icon: '✍️',
+        title: '다음 포스팅 가이드',
+        description: '글 2,000자 이상 + 이미지 5장 + 소제목 3개로 작성해보세요',
+        link: '/tools',
+        linkText: 'AI 글쓰기 도구',
+        priority: 'medium'
+      })
+    } else {
+      actions.push({
+        icon: '📈',
+        title: '순위 추적 시작',
+        description: '작성한 글이 검색 몇 위에 노출되는지 확인하세요',
+        link: '/dashboard/rank-tracker',
+        linkText: '순위 추적하기',
+        priority: 'medium'
+      })
+    }
+
+    // 3. 네트워크 관련 (C-Rank 기반)
+    if (cRank < 60) {
+      actions.push({
+        icon: '🤝',
+        title: '이웃 네트워크 확장',
+        description: '같은 주제 블로거 10명에게 이웃 신청하고 댓글로 소통하세요',
+        link: null,
+        linkText: null,
+        priority: 'low'
+      })
+    } else {
+      actions.push({
+        icon: '🏆',
+        title: '30일 챌린지 도전',
+        description: '체계적인 미션으로 한 달 만에 레벨업 하세요',
+        link: '/challenge',
+        linkText: '챌린지 시작',
+        priority: 'low'
+      })
+    }
+
+    return actions
+  }
+
+  const actions = getNextActions()
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.3 }}
+      className="rounded-3xl p-8 bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200/50 shadow-xl mb-8"
+    >
+      <h3 className="text-2xl font-bold mb-2 flex items-center gap-2">
+        <Zap className="w-6 h-6 text-orange-500" />
+        지금 바로 실행하세요
+      </h3>
+      <p className="text-sm text-gray-600 mb-6">분석 결과 기반 맞춤 다음 단계 3가지</p>
+
+      <div className="space-y-4">
+        {actions.map((action, idx) => (
+          <div
+            key={idx}
+            className={`bg-white rounded-xl p-5 border ${
+              action.priority === 'high' ? 'border-orange-300 shadow-md' :
+              action.priority === 'medium' ? 'border-orange-200' :
+              'border-gray-200'
+            }`}
+          >
+            <div className="flex items-start gap-4">
+              <div className="text-3xl">{action.icon}</div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-bold text-gray-900">{idx + 1}. {action.title}</span>
+                  {action.priority === 'high' && (
+                    <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs font-bold rounded-full">추천</span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-600 mb-3">{action.description}</p>
+                {action.link && (
+                  <Link
+                    href={action.link}
+                    className="inline-flex items-center gap-1 text-sm font-semibold text-orange-600 hover:text-orange-700"
+                  >
+                    {action.linkText}
+                    <ChevronRight className="w-4 h-4" />
+                  </Link>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 빠른 액션 버튼 */}
+      <div className="mt-6 flex flex-wrap gap-3">
+        <Link
+          href="/keyword-search"
+          className="flex-1 min-w-[140px] py-3 px-4 bg-orange-500 text-white rounded-xl font-bold text-center hover:bg-orange-600 transition-colors"
+        >
+          키워드 분석 →
+        </Link>
+        <Link
+          href="/dashboard"
+          className="flex-1 min-w-[140px] py-3 px-4 bg-white border border-orange-300 text-orange-600 rounded-xl font-bold text-center hover:bg-orange-50 transition-colors"
+        >
+          대시보드로 이동
+        </Link>
+      </div>
+    </motion.div>
+  )
+}
+
 // 40+ 지표 상세 분석 섹션
 function DetailedMetricsSection({ result, isFreeUser }: { result: any; isFreeUser: boolean }) {
   const [activeTab, setActiveTab] = useState<'core' | 'content' | 'activity' | 'growth'>('core')
@@ -917,8 +1082,7 @@ export default function AnalyzePage() {
         }
         // 사용량 차감
         await incrementUsage(user.id, 'blog_analysis')
-      } catch (err) {
-        console.error('Usage tracking error:', err)
+      } catch {
         // 사용량 추적 실패 시에도 분석은 진행
       }
     }
@@ -973,11 +1137,10 @@ export default function AnalyzePage() {
       } else {
         toast.error('분석 결과를 받지 못했습니다.')
       }
-    } catch (error: any) {
-      console.error('Analysis error:', error)
-
+    } catch (error) {
+      const axiosError = error as { response?: { data?: { detail?: string } }; message?: string }
       // 에러 유형별 메시지 분기
-      const errorMessage = error?.response?.data?.detail || error?.message || ''
+      const errorMessage = axiosError?.response?.data?.detail || axiosError?.message || ''
 
       if (errorMessage.includes('not found') || errorMessage.includes('404') || errorMessage.includes('존재하지 않')) {
         toast.error('존재하지 않는 블로그입니다. ID를 확인해주세요.')
@@ -1063,6 +1226,7 @@ export default function AnalyzePage() {
                   onChange={(e) => setBlogId(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleAnalyze()}
                   placeholder="블로그 ID 입력 (예: example_blog)"
+                  maxLength={50}
                   className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-[#0064FF] focus:outline-none text-lg transition-all"
                   disabled={isAnalyzing}
                 />
@@ -1505,6 +1669,9 @@ export default function AnalyzePage() {
 
                 {/* Recommendations - 구체적 수치 포함 */}
                 <ConcreteRecommendations result={result} isFreeUser={isFreeUser} />
+
+                {/* P1-4: 즉시 실행 가능한 액션 플랜 */}
+                <NextStepActionPlan result={result} />
 
                 {/* Warnings */}
                 {result.warnings.length > 0 && (

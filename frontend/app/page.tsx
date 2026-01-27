@@ -95,7 +95,9 @@ export default function Home() {
   const { isAuthenticated } = useAuthStore()
   const router = useRouter()
   const [keyword, setKeyword] = useState('')
+  const [blogId, setBlogId] = useState('')  // P1-3: 블로그 ID 입력
   const [isSearching, setIsSearching] = useState(false)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)  // P1-3: 블로그 분석 상태
   const [showAdPopup, setShowAdPopup] = useState(false)
 
   // P2: 프로모 팝업 3초 지연
@@ -115,6 +117,22 @@ export default function Home() {
     window.addEventListener('mousemove', handleMouseMove)
     return () => window.removeEventListener('mousemove', handleMouseMove)
   }, [])
+
+  // P1-3: 블로그 분석 핸들러 (즉시 체험)
+  const handleBlogAnalyze = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!blogId.trim()) {
+      toast.error('블로그 ID를 입력해주세요')
+      return
+    }
+    // blog.naver.com/ 형식에서 ID만 추출
+    let cleanBlogId = blogId.trim()
+    if (cleanBlogId.includes('blog.naver.com/')) {
+      cleanBlogId = cleanBlogId.split('blog.naver.com/')[1].split('/')[0].split('?')[0]
+    }
+    setIsAnalyzing(true)
+    router.push(`/analyze?blogId=${encodeURIComponent(cleanBlogId)}`)
+  }
 
   const handleKeywordSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -202,16 +220,16 @@ export default function Home() {
                 <span className="px-2 py-0.5 text-[10px] font-bold bg-gradient-to-r from-violet-500 to-pink-500 text-white rounded-full">v2.0</span>
               </motion.div>
 
-              {/* Main Title */}
+              {/* Main Title - P1-3: 더 직관적인 메시지 */}
               <motion.h1
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.1 }}
                 className="text-5xl md:text-7xl lg:text-8xl font-black mb-6 tracking-tight leading-[0.9]"
               >
-                <span className="block mb-2 text-gray-900">키워드 경쟁력</span>
+                <span className="block mb-2 text-gray-900">내 블로그</span>
                 <span className="relative inline-block">
-                  <span className="text-[#0064FF]">분석</span>
+                  <span className="text-[#0064FF]">상위 노출</span>
                   <motion.span
                     className="absolute -bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-full"
                     initial={{ scaleX: 0 }}
@@ -219,18 +237,19 @@ export default function Home() {
                     transition={{ delay: 0.8, duration: 0.6 }}
                   />
                 </span>
+                <span className="block mt-2 text-gray-900">될 수 있을까?</span>
               </motion.h1>
 
-              {/* Subtitle */}
+              {/* Subtitle - P1-3: 즉시 가치 전달 */}
               <motion.p
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
                 className="text-lg md:text-xl text-gray-600 mb-12 max-w-2xl mx-auto leading-relaxed"
               >
-                키워드 입력 한 번으로 <span className="text-[#0064FF] font-semibold">상위 10개</span> 블로그 분석
+                <span className="text-[#0064FF] font-semibold">3초</span> 만에 블로그 점수 확인
                 <br className="hidden md:block" />
-                내 블로그의 <span className="text-gray-900 font-semibold">진입 가능성</span>을 확인하세요
+                <span className="text-gray-900 font-semibold">11단계 레벨</span>로 성장 전략 수립
               </motion.p>
 
               {/* P2-4: 실시간 카운터 */}
@@ -243,55 +262,65 @@ export default function Home() {
                 <LiveCounter />
               </motion.div>
 
-              {/* Search Bar */}
+              {/* P1-3: 즉시 체험 - 블로그 분석 입력 (메인) */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.3 }}
                 className="max-w-2xl mx-auto mb-10"
               >
-                <form onSubmit={handleKeywordSearch} className="relative group">
+                <form onSubmit={handleBlogAnalyze} className="relative group">
                   <div className="absolute -inset-1 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-2xl blur-xl opacity-20 group-hover:opacity-40 transition-opacity" />
                   <div className="relative flex items-center bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-xl shadow-gray-200/50">
                     <div className="absolute left-5 text-gray-400">
-                      <Search className="w-5 h-5" />
+                      <Sparkles className="w-5 h-5" />
                     </div>
                     <input
                       type="text"
-                      value={keyword}
-                      onChange={(e) => setKeyword(e.target.value)}
-                      placeholder="검색할 키워드를 입력하세요 (예: 습진한의원)"
+                      value={blogId}
+                      onChange={(e) => setBlogId(e.target.value)}
+                      placeholder="블로그 ID 입력 (예: myblog123)"
+                      maxLength={100}
                       className="w-full px-5 py-5 pl-14 pr-36 bg-transparent text-gray-900 placeholder:text-gray-400 focus:outline-none"
-                      disabled={isSearching}
+                      disabled={isAnalyzing}
                     />
                     <button
                       type="submit"
-                      disabled={isSearching}
+                      disabled={isAnalyzing}
                       className="absolute right-2 px-6 py-3 rounded-xl bg-[#0064FF] text-white font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-[#0064FF]/15"
                     >
-                      {isSearching ? (
+                      {isAnalyzing ? (
                         <>
                           <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          검색중
+                          분석중
                         </>
                       ) : (
                         <>
-                          <Search className="w-4 h-4" />
-                          키워드 분석
+                          <Zap className="w-4 h-4" />
+                          무료 분석
                         </>
                       )}
                     </button>
                   </div>
                 </form>
 
-                {/* 블로그 분석 바로가기 */}
-                <div className="mt-4 text-center">
+                {/* 키워드 검색 바로가기 */}
+                <div className="mt-4 flex items-center justify-center gap-6 text-sm">
                   <Link
-                    href="/analyze"
-                    className="text-sm text-gray-500 hover:text-[#0064FF] transition-colors inline-flex items-center gap-1"
+                    href="/keyword-search"
+                    className="text-gray-500 hover:text-[#0064FF] transition-colors inline-flex items-center gap-1"
                   >
-                    <Zap className="w-4 h-4" />
-                    내 블로그 지수 분석하러 가기
+                    <Search className="w-4 h-4" />
+                    키워드 경쟁력 분석
+                    <ArrowRight className="w-3 h-3" />
+                  </Link>
+                  <span className="text-gray-300">|</span>
+                  <Link
+                    href="/blue-ocean"
+                    className="text-gray-500 hover:text-amber-500 transition-colors inline-flex items-center gap-1"
+                  >
+                    <Crown className="w-4 h-4" />
+                    블루오션 키워드 발굴
                     <ArrowRight className="w-3 h-3" />
                   </Link>
                 </div>

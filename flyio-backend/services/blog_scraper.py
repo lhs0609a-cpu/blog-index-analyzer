@@ -78,6 +78,12 @@ async def scrape_blog_stats(blog_id: str) -> Dict:
     """
     Scrape blog statistics using Playwright
     Returns: {total_posts, neighbor_count, total_visitors, blog_age_days, recent_activity, avg_post_length}
+
+    Error codes:
+    - PRIVATE_BLOG: 비공개 블로그
+    - NOT_FOUND: 존재하지 않는 블로그
+    - BLOCKED: 네이버 차단 (captcha)
+    - TIMEOUT: 응답 시간 초과
     """
     global _active_contexts
 
@@ -91,7 +97,9 @@ async def scrape_blog_stats(blog_id: str) -> Dict:
         "avg_post_length": None,
         "category_count": None,
         "has_profile_image": False,
-        "data_sources": []
+        "data_sources": [],
+        "error_code": None,
+        "error_message": None
     }
 
     # 동시 요청 제한 체크
@@ -123,13 +131,61 @@ async def scrape_blog_stats(blog_id: str) -> Dict:
         logger.info(f"Scraping blog: {blog_url}")
 
         try:
-            await page.goto(blog_url, wait_until="domcontentloaded", timeout=15000)
+            response = await page.goto(blog_url, wait_until="domcontentloaded", timeout=15000)
             await asyncio.sleep(1)  # Wait for dynamic content
+
+            # HTTP 상태 코드 확인
+            if response and response.status == 404:
+                stats["error_code"] = "NOT_FOUND"
+                stats["error_message"] = "존재하지 않는 블로그입니다. 블로그 ID를 확인해주세요."
+                logger.warning(f"Blog not found (404): {blog_id}")
+                return stats
+
         except PlaywrightTimeout:
             logger.warning(f"Timeout loading blog: {blog_id}")
+            stats["error_code"] = "TIMEOUT"
+            stats["error_message"] = "블로그 로딩 시간이 초과되었습니다. 잠시 후 다시 시도해주세요."
+            return stats
 
         # Get page content
         content = await page.content()
+
+        # ===== 비공개/존재하지 않는 블로그 감지 =====
+        private_patterns = [
+            r'비공개\s*블로그',
+            r'비공개로\s*설정',
+            r'이웃공개',
+            r'서로이웃공개',
+            r'블로그가\s*존재하지\s*않습니다',
+            r'삭제되었거나\s*존재하지\s*않는',
+            r'찾을\s*수\s*없는\s*페이지',
+            r'페이지를\s*찾을\s*수\s*없습니다',
+            r'접근\s*권한이\s*없습니다',
+            r'privateBlog',
+            r'"isPrivate"\s*:\s*true',
+        ]
+
+        for pattern in private_patterns:
+            if re.search(pattern, content, re.IGNORECASE):
+                stats["error_code"] = "PRIVATE_BLOG"
+                stats["error_message"] = "비공개 블로그이거나 접근 권한이 없습니다. 공개 블로그만 분석 가능합니다."
+                logger.warning(f"Private or inaccessible blog detected: {blog_id}")
+                return stats
+
+        # 네이버 차단 (captcha) 감지
+        if 'captcha' in content.lower() or 'recaptcha' in content.lower():
+            stats["error_code"] = "BLOCKED"
+            stats["error_message"] = "일시적으로 분석이 제한되었습니다. 5분 후 다시 시도해주세요."
+            logger.warning(f"Naver captcha detected for: {blog_id}")
+            return stats
+
+        # 블로그 메인 페이지가 아닌 경우 (리다이렉트 등)
+        current_url = page.url
+        if 'blog.naver.com' not in current_url:
+            stats["error_code"] = "NOT_FOUND"
+            stats["error_message"] = "존재하지 않는 블로그이거나 잘못된 블로그 ID입니다."
+            logger.warning(f"Redirected away from blog: {blog_id} -> {current_url}")
+            return stats
 
         # Extract total posts - multiple patterns
         post_patterns = [
@@ -569,20 +625,33 @@ async def scrape_view_tab_results(keyword: str, limit: int = 20) -> list:
         except:
             logger.warning(f"[Playwright] Initial selector not found, continuing anyway")
 
-        await asyncio.sleep(1.5)  # Additional wait for dynamic content
+        await asyncio.sleep(2)  # Additional wait for dynamic content
 
         # Scroll down multiple times to load more results (lazy loading)
-        # Increased from 7 to 12 for more results
-        for i in range(12):
-            scroll_position = (i + 1) / 12
+        # 스크롤 횟수 증가하여 더 많은 결과 로드 (12 → 15)
+        for i in range(15):
+            scroll_position = (i + 1) / 15
             await page.evaluate(f'window.scrollTo(0, document.body.scrollHeight * {scroll_position})')
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.6)
 
         # Scroll back to top and then to bottom for any missed content
         await page.evaluate('window.scrollTo(0, 0)')
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.5)
         await page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-        await asyncio.sleep(1)
+        await asyncio.sleep(1.5)
+
+        # "더보기" 버튼이 있으면 클릭하여 더 많은 결과 로드
+        try:
+            more_button = await page.query_selector('a.btn_more, button.btn_more, .api_more_wrap a')
+            if more_button:
+                await more_button.click()
+                await asyncio.sleep(2)
+                # 추가 스크롤
+                for i in range(5):
+                    await page.evaluate(f'window.scrollTo(0, document.body.scrollHeight * {(i+1)/5})')
+                    await asyncio.sleep(0.5)
+        except:
+            pass
 
         # Extract blog post links from VIEW tab using improved JavaScript
         blog_links = await page.evaluate('''() => {
@@ -789,20 +858,33 @@ async def scrape_blog_tab_results(keyword: str, limit: int = 20) -> list:
         except:
             logger.warning(f"[Playwright] Initial selector not found for BLOG tab, continuing anyway")
 
-        await asyncio.sleep(1.5)
+        await asyncio.sleep(2)
 
         # Scroll down multiple times to load more results (lazy loading)
-        # Increased from 7 to 12 for more results
-        for i in range(12):
-            scroll_position = (i + 1) / 12
+        # 스크롤 횟수 증가하여 더 많은 결과 로드 (12 → 15)
+        for i in range(15):
+            scroll_position = (i + 1) / 15
             await page.evaluate(f'window.scrollTo(0, document.body.scrollHeight * {scroll_position})')
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.6)
 
         # Scroll back to top and then to bottom for any missed content
         await page.evaluate('window.scrollTo(0, 0)')
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.5)
         await page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-        await asyncio.sleep(1)
+        await asyncio.sleep(1.5)
+
+        # "더보기" 버튼이 있으면 클릭하여 더 많은 결과 로드
+        try:
+            more_button = await page.query_selector('a.btn_more, button.btn_more, .api_more_wrap a')
+            if more_button:
+                await more_button.click()
+                await asyncio.sleep(2)
+                # 추가 스크롤
+                for i in range(5):
+                    await page.evaluate(f'window.scrollTo(0, document.body.scrollHeight * {(i+1)/5})')
+                    await asyncio.sleep(0.5)
+        except:
+            pass
 
         # Extract blog post links using JavaScript
         blog_links = await page.evaluate('''() => {

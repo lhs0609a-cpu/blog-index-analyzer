@@ -856,14 +856,25 @@ export default function AdOptimizerPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 pt-20">
-      {/* BETA 경고 배너 */}
+      {/* BETA 경고 배너 - 법적 면책 조항 포함 */}
       <div className="bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-orange-500/10 border-b border-orange-300/50">
-        <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-center gap-3 text-center">
-            <span className="px-2 py-0.5 bg-orange-500 text-white text-xs font-bold rounded">BETA</span>
-            <p className="text-orange-700 text-sm">
-              이 기능은 현재 베타 테스트 중입니다. 실제 광고 API 연동은 준비 중이며, 일부 기능이 제한될 수 있습니다.
-            </p>
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex flex-col items-center gap-2 text-center">
+            <div className="flex items-center gap-3">
+              <span className="px-2 py-0.5 bg-orange-500 text-white text-xs font-bold rounded animate-pulse">BETA</span>
+              <AlertTriangle className="w-4 h-4 text-orange-600" />
+              <p className="text-orange-700 text-sm font-semibold">
+                실험적 기능 - 테스트 목적으로만 사용하세요
+              </p>
+            </div>
+            <div className="max-w-3xl">
+              <p className="text-orange-600 text-xs leading-relaxed">
+                ⚠️ <strong>면책 조항:</strong> 이 기능은 현재 베타 테스트 중이며, 실제 광고 API 연동은 준비 중입니다.
+                표시되는 데이터는 시뮬레이션이며, <strong>실제 광고 성과를 보장하지 않습니다.</strong>
+                본 기능 사용으로 인한 광고비 손실, 성과 저하 등 어떠한 결과에 대해서도 서비스 제공자는 책임지지 않습니다.
+                실제 광고 운영은 전문가와 상담하시기 바랍니다.
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -1956,6 +1967,8 @@ export default function AdOptimizerPage() {
                           <div className="relative">
                             <input
                               type="number"
+                              min="0"
+                              max="10000000"
                               value={settings.target_cpa}
                               onChange={(e) => setSettings({ ...settings, target_cpa: Number(e.target.value) })}
                               className="w-full px-4 py-3 border border-green-200 rounded-xl focus:ring-2 focus:ring-green-500 bg-white"
@@ -1969,6 +1982,8 @@ export default function AdOptimizerPage() {
                           <div className="relative">
                             <input
                               type="number"
+                              min="0"
+                              max="100000000"
                               value={settings.conversion_value}
                               onChange={(e) => setSettings({ ...settings, conversion_value: Number(e.target.value) })}
                               className="w-full px-4 py-3 border border-green-200 rounded-xl focus:ring-2 focus:ring-green-500 bg-white"
@@ -1993,6 +2008,8 @@ export default function AdOptimizerPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">목표 ROAS (%)</label>
                   <input
                     type="number"
+                    min="0"
+                    max="10000"
                     value={settings.target_roas}
                     onChange={(e) => setSettings({ ...settings, target_roas: Number(e.target.value) })}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
@@ -2004,6 +2021,8 @@ export default function AdOptimizerPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">목표 순위</label>
                   <input
                     type="number"
+                    min="1"
+                    max="100"
                     value={settings.target_position}
                     onChange={(e) => setSettings({ ...settings, target_position: Number(e.target.value) })}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
@@ -2015,6 +2034,8 @@ export default function AdOptimizerPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">최대 입찰 변경폭 (%)</label>
                   <input
                     type="number"
+                    min="0"
+                    max="100"
                     value={settings.max_bid_change_ratio * 100}
                     onChange={(e) => setSettings({ ...settings, max_bid_change_ratio: Number(e.target.value) / 100 })}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
@@ -2026,6 +2047,8 @@ export default function AdOptimizerPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">최소 입찰가 (원)</label>
                   <input
                     type="number"
+                    min="0"
+                    max="100000000"
                     value={settings.min_bid}
                     onChange={(e) => setSettings({ ...settings, min_bid: Number(e.target.value) })}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
@@ -2037,6 +2060,8 @@ export default function AdOptimizerPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">최대 입찰가 (원)</label>
                   <input
                     type="number"
+                    min="0"
+                    max="100000000"
                     value={settings.max_bid}
                     onChange={(e) => setSettings({ ...settings, max_bid: Number(e.target.value) })}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
@@ -2049,6 +2074,8 @@ export default function AdOptimizerPage() {
                   <input
                     type="number"
                     step="0.01"
+                    min="0"
+                    max="1"
                     value={settings.min_ctr}
                     onChange={(e) => setSettings({ ...settings, min_ctr: Number(e.target.value) })}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
@@ -2060,6 +2087,8 @@ export default function AdOptimizerPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">전환 없이 최대 비용 (원)</label>
                   <input
                     type="number"
+                    min="0"
+                    max="100000000"
                     value={settings.max_cost_no_conv}
                     onChange={(e) => setSettings({ ...settings, max_cost_no_conv: Number(e.target.value) })}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
@@ -2071,6 +2100,8 @@ export default function AdOptimizerPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">최적화 주기 (초)</label>
                   <input
                     type="number"
+                    min="60"
+                    max="86400"
                     value={settings.optimization_interval}
                     onChange={(e) => setSettings({ ...settings, optimization_interval: Number(e.target.value) })}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
@@ -2082,6 +2113,8 @@ export default function AdOptimizerPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">평가 기간 (일)</label>
                   <input
                     type="number"
+                    min="1"
+                    max="365"
                     value={settings.evaluation_days}
                     onChange={(e) => setSettings({ ...settings, evaluation_days: Number(e.target.value) })}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"

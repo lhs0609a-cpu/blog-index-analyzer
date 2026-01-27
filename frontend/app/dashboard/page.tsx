@@ -10,6 +10,7 @@ import { refreshBlogAnalysis } from '@/lib/api/userBlogs'
 import { useAuthStore } from '@/lib/stores/auth'
 import type { BlogListItem } from '@/lib/types/api'
 import toast from 'react-hot-toast'
+import EmptyState from '@/components/EmptyState'
 
 export default function Dashboard() {
   const router = useRouter()
@@ -25,8 +26,7 @@ export default function Dashboard() {
       // 로그인한 사용자는 user.id 전달, 비로그인은 undefined
       const blogs = await getUserBlogs(user?.id)
       setMyBlogs(blogs)
-    } catch (error) {
-      console.error('Failed to load blogs:', error)
+    } catch {
       toast.error('블로그 목록을 불러오는데 실패했습니다')
     } finally {
       setIsLoading(false)
@@ -51,8 +51,7 @@ export default function Dashboard() {
       await refreshBlogAnalysis(user.id, blogId)
       toast.success('블로그 재분석이 완료되었습니다')
       loadBlogs()
-    } catch (error) {
-      console.error('Failed to refresh blog:', error)
+    } catch {
       toast.error('블로그 재분석에 실패했습니다')
     } finally {
       setRefreshingBlogId(null)
@@ -71,8 +70,7 @@ export default function Dashboard() {
       await deleteBlogFromList(blogId, user?.id)
       toast.success('블로그가 삭제되었습니다')
       loadBlogs()
-    } catch (error) {
-      console.error('Failed to delete blog:', error)
+    } catch {
       toast.error('블로그 삭제에 실패했습니다')
     }
   }
@@ -433,6 +431,7 @@ export default function Dashboard() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="블로그 검색..."
+              maxLength={100}
               className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-transparent focus:border-[#0064FF] focus:outline-none transition-all"
             />
           </div>
@@ -440,16 +439,38 @@ export default function Dashboard() {
 
         {/* Blog Grid */}
         {isLoading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
+          <div className="space-y-4">
+            {/* P3-1: 스켈레톤 로딩 UI */}
+            <div className="text-center mb-6">
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                className="inline-flex p-6 rounded-full bg-[#0064FF] mb-4 shadow-lg shadow-[#0064FF]/15"
+                className="inline-flex p-4 rounded-full bg-[#0064FF] mb-3 shadow-lg shadow-[#0064FF]/15"
               >
-                <Sparkles className="w-8 h-8 text-white" />
+                <Sparkles className="w-6 h-6 text-white" />
               </motion.div>
-              <p className="text-gray-600">블로그 목록을 불러오는 중...</p>
+              <p className="text-gray-600 text-sm">블로그 목록을 불러오는 중...</p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="bg-white rounded-2xl p-6 border border-gray-100 animate-pulse">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 bg-gray-200 rounded-full" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 bg-gray-200 rounded w-2/3" />
+                      <div className="h-3 bg-gray-200 rounded w-1/2" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[1, 2, 3].map((j) => (
+                      <div key={j} className="text-center p-2 bg-gray-50 rounded-lg">
+                        <div className="h-5 bg-gray-200 rounded w-12 mx-auto mb-1" />
+                        <div className="h-3 bg-gray-200 rounded w-10 mx-auto" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         ) : displayBlogs.length === 0 ? (
@@ -459,13 +480,13 @@ export default function Dashboard() {
             className="bg-gradient-to-br from-blue-50 to-white rounded-3xl border border-blue-100/50 shadow-xl shadow-blue-100/50 p-12"
           >
             {searchQuery ? (
-              <div className="text-center">
-                <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <Search className="w-12 h-12 text-gray-400" />
-                </div>
-                <h3 className="text-2xl font-bold mb-3">검색 결과가 없습니다</h3>
-                <p className="text-gray-600 mb-6">다른 키워드로 검색해보세요.</p>
-              </div>
+              <EmptyState
+                type="no-results"
+                title={`'${searchQuery}'에 대한 결과가 없어요`}
+                description="다른 키워드로 검색하거나, 새 블로그를 분석해보세요."
+                actionLabel="블로그 분석하기"
+                actionHref="/analyze"
+              />
             ) : (
               <>
                 <div className="text-center mb-10">

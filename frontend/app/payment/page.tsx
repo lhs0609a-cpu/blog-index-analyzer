@@ -68,9 +68,9 @@ function PaymentContent() {
         toast.error(result.message || '정기결제 등록 중 오류가 발생했습니다')
       }
 
-    } catch (error: any) {
-      console.error('Billing registration failed:', error)
-      const errorMessage = error?.response?.data?.detail || '정기결제 등록 중 오류가 발생했습니다'
+    } catch (error) {
+      const axiosError = error as { response?: { data?: { detail?: string } } }
+      const errorMessage = axiosError?.response?.data?.detail || '정기결제 등록 중 오류가 발생했습니다'
       toast.error(errorMessage)
     } finally {
       setIsProcessing(false)
@@ -279,6 +279,31 @@ function PaymentContent() {
               <Lock className="w-5 h-5 text-blue-600 mx-auto mb-1" />
               <p className="text-xs text-gray-600">안전 결제</p>
             </div>
+          </div>
+
+          {/* 환불 정책 요약 */}
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6">
+            <h3 className="font-semibold text-gray-800 text-sm mb-2 flex items-center gap-2">
+              <Shield className="w-4 h-4 text-green-600" />
+              환불 정책 안내
+            </h3>
+            <ul className="text-xs text-gray-600 space-y-1">
+              <li className="flex items-start gap-2">
+                <CheckCircle className="w-3 h-3 text-green-500 mt-0.5 flex-shrink-0" />
+                <span>결제 후 <strong>7일 이내</strong> 서비스 미사용 시 전액 환불</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle className="w-3 h-3 text-green-500 mt-0.5 flex-shrink-0" />
+                <span>7일 이후 또는 서비스 사용 시 <strong>일할 계산</strong>하여 환불</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle className="w-3 h-3 text-green-500 mt-0.5 flex-shrink-0" />
+                <span>정기결제 해지는 마이페이지에서 <strong>언제든 가능</strong></span>
+              </li>
+            </ul>
+            <Link href="/refund-policy" className="text-[#0064FF] text-xs hover:underline mt-2 inline-block" target="_blank">
+              환불 정책 전문 보기 →
+            </Link>
           </div>
 
           {/* Terms Agreement */}

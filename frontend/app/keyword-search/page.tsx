@@ -6,7 +6,7 @@ import { ConnectionIndicator } from '@/components/ConnectionIndicator'
 import { getApiUrl } from '@/lib/api/apiConfig'
 import * as Tabs from '@radix-ui/react-tabs'
 import { motion } from 'framer-motion'
-import { Check, Loader2, X, TrendingUp, TrendingDown, ArrowLeft, Filter, Star, Lock, PenTool } from 'lucide-react'
+import { Check, Loader2, X, TrendingUp, TrendingDown, ArrowLeft, Filter, Star, Lock, PenTool, Clock, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import { useBlogContextStore } from '@/lib/stores/blogContext'
@@ -285,6 +285,63 @@ function KeywordSearchContent() {
   const [progress, setProgress] = useState(0)
   const [progressMessage, setProgressMessage] = useState('')
 
+  // P2-3: 최근 검색어 저장 기능
+  const [recentKeywords, setRecentKeywords] = useState<string[]>([])
+  const RECENT_KEYWORDS_KEY = 'blank_recent_keywords'
+  const MAX_RECENT_KEYWORDS = 10
+
+  // 최근 검색어 로드
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(RECENT_KEYWORDS_KEY)
+      if (saved) {
+        setRecentKeywords(JSON.parse(saved))
+      }
+    } catch (e) {
+      console.error('Failed to load recent keywords:', e)
+    }
+  }, [])
+
+  // 최근 검색어 저장 함수
+  const saveRecentKeyword = (kw: string) => {
+    const trimmed = kw.trim()
+    if (!trimmed) return
+
+    setRecentKeywords(prev => {
+      const filtered = prev.filter(k => k !== trimmed)
+      const updated = [trimmed, ...filtered].slice(0, MAX_RECENT_KEYWORDS)
+      try {
+        localStorage.setItem(RECENT_KEYWORDS_KEY, JSON.stringify(updated))
+      } catch (e) {
+        console.error('Failed to save recent keywords:', e)
+      }
+      return updated
+    })
+  }
+
+  // 최근 검색어 삭제 함수
+  const removeRecentKeyword = (kw: string) => {
+    setRecentKeywords(prev => {
+      const updated = prev.filter(k => k !== kw)
+      try {
+        localStorage.setItem(RECENT_KEYWORDS_KEY, JSON.stringify(updated))
+      } catch (e) {
+        console.error('Failed to save recent keywords:', e)
+      }
+      return updated
+    })
+  }
+
+  // 최근 검색어 전체 삭제
+  const clearRecentKeywords = () => {
+    setRecentKeywords([])
+    try {
+      localStorage.removeItem(RECENT_KEYWORDS_KEY)
+    } catch (e) {
+      console.error('Failed to clear recent keywords:', e)
+    }
+  }
+
   // 내 블로그 비교 관련 (키워드별로 관리) - 이전 분석 결과로 자동 설정
   const [myBlogId, setMyBlogId] = useState('')
 
@@ -371,11 +428,10 @@ function KeywordSearchContent() {
           return
         }
         // 사용량 차감 (백그라운드에서 처리)
-        incrementUsage(user.id, 'keyword_search').catch(err => {
-          console.error('Usage tracking error:', err)
+        incrementUsage(user.id, 'keyword_search').catch(() => {
+          // 사용량 추적 실패는 무시
         })
-      } catch (err) {
-        console.error('Usage check error:', err)
+      } catch {
         // 사용량 체크 실패 시에도 검색은 진행
       }
     }
@@ -421,6 +477,9 @@ function KeywordSearchContent() {
       fetchRelatedKeywords(searchKeyword)
       collectLearningData(searchKeyword, data)
 
+      // P2-3: 최근 검색어 저장
+      saveRecentKeyword(searchKeyword)
+
       // 일일 미션 완료
       completeMission('keyword')
     } catch (err) {
@@ -443,12 +502,11 @@ function KeywordSearchContent() {
       if (response.ok) {
         const data = await response.json()
         setLearningStatus(data)
-        console.log('[Learning Status] Loaded:', data)
       } else {
-        console.log('[Learning Status] API not available')
+        // Learning API not available - expected in some environments
       }
     } catch (err) {
-      console.log('[Learning Status] Failed to fetch:', err)
+      // Learning status fetch failed - non-critical
     } finally {
       setLoadingLearningStatus(false)
     }
@@ -462,7 +520,6 @@ function KeywordSearchContent() {
   // 멀티 키워드 검색 핸들러
   const handleMultiKeywordSearch = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log('[MultiKeyword] Search started, input:', keywordsInput)
 
     // 입력된 키워드 파싱 (쉼표, 줄바꿈, 공백으로 구분)
     const keywords = keywordsInput
@@ -471,11 +528,8 @@ function KeywordSearchContent() {
       .filter(k => k.length > 0)
       .slice(0, maxKeywords) // 플랜별 동적 제한
 
-    console.log('[MultiKeyword] Parsed keywords:', keywords)
-
     if (keywords.length === 0) {
       setError('최소 1개 이상의 키워드를 입력하세요')
-      console.log('[MultiKeyword] No keywords, returning')
       return
     }
 
@@ -485,7 +539,6 @@ function KeywordSearchContent() {
     }
 
     // 즉시 분석 상태로 전환 (사용자 피드백)
-    console.log('[MultiKeyword] Setting initial statuses for', keywords.length, 'keywords')
     const initialStatuses: KeywordSearchStatus[] = keywords.map(keyword => ({
       keyword,
       status: 'pending' as const,
@@ -512,11 +565,10 @@ function KeywordSearchContent() {
           return
         }
         // 사용량 차감 (백그라운드에서 처리)
-        incrementUsage(user.id, 'keyword_search').catch(err => {
-          console.error('Usage tracking error:', err)
+        incrementUsage(user.id, 'keyword_search').catch(() => {
+          // 사용량 추적 실패는 무시
         })
-      } catch (err) {
-        console.error('Usage check error:', err)
+      } catch {
         // 사용량 체크 실패 시에도 검색은 진행
       }
     }
@@ -559,6 +611,9 @@ function KeywordSearchContent() {
               : status
           )
         )
+
+        // P2-3: 최근 검색어 저장
+        saveRecentKeyword(keyword)
       } catch (err) {
         // 에러 상태로 업데이트
         setKeywordStatuses(prev =>
@@ -598,13 +653,10 @@ function KeywordSearchContent() {
 
     try {
       await processWithConcurrencyLimit()
-      console.log('[MultiKeyword] All searches completed')
     } catch (err) {
-      console.error('[MultiKeyword] Error during search:', err)
       setError(err instanceof Error ? err.message : '검색 중 오류가 발생했습니다')
     } finally {
       setIsAnalyzing(false)
-      console.log('[MultiKeyword] isAnalyzing set to false')
     }
 
     // 첫 번째 키워드에 대해 연관 키워드 조회 및 학습 데이터 수집
@@ -650,13 +702,9 @@ function KeywordSearchContent() {
         throw new Error('Failed to load breakdown data')
       }
       const data = await response.json()
-      console.log('Breakdown data received:', data)
-      console.log('C-Rank data:', data?.breakdown?.c_rank)
-      console.log('D.I.A. data:', data?.breakdown?.dia)
       setBreakdownData(data)
-    } catch (error) {
-      console.error('Failed to load breakdown:', error)
-      alert('상세 분석 정보를 불러올 수 없습니다')
+    } catch {
+      toast.error('상세 분석 정보를 불러올 수 없습니다')
     } finally {
       setLoadingBreakdown(false)
     }
@@ -671,7 +719,7 @@ function KeywordSearchContent() {
   // 키워드별 내 블로그 분석
   const analyzeMyBlogForKeyword = async (keyword: string, keywordResults: KeywordSearchResponse) => {
     if (!myBlogId.trim()) {
-      alert('블로그 ID를 입력하세요')
+      toast.error('블로그 ID를 입력하세요')
       return
     }
 
@@ -778,7 +826,7 @@ function KeywordSearchContent() {
 
       setMyBlogResults(prev => ({ ...prev, [keyword]: analysis }))
     } catch (err) {
-      alert(err instanceof Error ? err.message : '분석 중 오류가 발생했습니다')
+      toast.error(err instanceof Error ? err.message : '분석 중 오류가 발생했습니다')
     } finally {
       setMyBlogAnalyzing(prev => ({ ...prev, [keyword]: false }))
     }
@@ -786,12 +834,12 @@ function KeywordSearchContent() {
 
   const analyzeMyBlog = async () => {
     if (!myBlogId.trim()) {
-      alert('블로그 ID를 입력하세요')
+      toast.error('블로그 ID를 입력하세요')
       return
     }
 
     if (!results || results.results.length === 0) {
-      alert('먼저 키워드 검색을 해주세요')
+      toast.error('먼저 키워드 검색을 해주세요')
       return
     }
 
@@ -899,7 +947,7 @@ function KeywordSearchContent() {
       setMyBlogResult(analysis)
       setMyBlogResults(prev => ({ ...prev, [results.keyword]: analysis }))
     } catch (err) {
-      alert(err instanceof Error ? err.message : '분석 중 오류가 발생했습니다')
+      toast.error(err instanceof Error ? err.message : '분석 중 오류가 발생했습니다')
     } finally {
       setMyBlogAnalyzing(prev => ({ ...prev, [results.keyword]: false }))
     }
@@ -954,20 +1002,16 @@ function KeywordSearchContent() {
       }).then(async (response) => {
         if (response.ok) {
           const data = await response.json()
-          console.log('[Learning] 데이터 수집 완료:', data)
           // 학습이 트리거되었으면 상태 새로고침
           if (data.learning_triggered) {
-            console.log('[Learning] 학습 완료, 상태 업데이트')
             fetchLearningStatus()
           }
         }
-      }).catch(err => {
+      }).catch(() => {
         // 실패해도 무시 (백그라운드 작업)
-        console.log('학습 데이터 수집 실패 (무시됨):', err)
       })
-    } catch (err) {
+    } catch {
       // 학습 데이터 수집 실패는 무시
-      console.log('학습 데이터 준비 실패 (무시됨):', err)
     }
   }
 
@@ -978,23 +1022,17 @@ function KeywordSearchContent() {
     try {
       const apiUrl = getApiUrl()
       const fullUrl = `${apiUrl}/api/blogs/related-keywords/${encodeURIComponent(searchKeyword)}`
-      console.log('[Related Keywords] Fetching from:', fullUrl)
 
       const response = await fetch(fullUrl)
-      console.log('[Related Keywords] Response status:', response.status, response.statusText)
 
       if (response.ok) {
         const data = await response.json()
-        console.log('[Related Keywords] Data received:', data)
         setRelatedKeywords(data)
       } else {
-        const errorText = await response.text()
-        console.error('[Related Keywords] API error:', response.status, errorText)
         // 빈 데이터 설정하여 "연관 키워드 없음" 메시지 표시
         setRelatedKeywords({ success: false, keyword: searchKeyword, source: '', total_count: 0, keywords: [], message: `API 오류: ${response.status}` })
       }
-    } catch (err) {
-      console.error('[Related Keywords] Fetch failed:', err)
+    } catch {
       // 빈 데이터 설정하여 "조회 실패" 메시지 표시
       setRelatedKeywords({ success: false, keyword: searchKeyword, source: '', total_count: 0, keywords: [], message: '연관 키워드 조회 실패' })
     } finally {
@@ -1028,8 +1066,7 @@ function KeywordSearchContent() {
       } else {
         toast.error('키워드 트리 조회에 실패했습니다.')
       }
-    } catch (err) {
-      console.error('[Keyword Tree] Fetch failed:', err)
+    } catch {
       toast.error('키워드 트리 조회 중 오류가 발생했습니다.')
     } finally {
       setLoadingKeywordTree(false)
@@ -1323,6 +1360,56 @@ function KeywordSearchContent() {
               <p className="mt-2 text-xs text-gray-500">
                 {keywordsInput.split(/[,\n]/).filter(k => k.trim()).length}/{maxKeywords} 키워드
               </p>
+
+              {/* P2-3: 최근 검색어 */}
+              {recentKeywords.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>최근 검색어</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={clearRecentKeywords}
+                      className="text-xs text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      전체 삭제
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {recentKeywords.slice(0, 8).map((kw) => (
+                      <div
+                        key={kw}
+                        className="group flex items-center gap-1 px-2.5 py-1 bg-gray-50 hover:bg-blue-50 rounded-full text-xs text-gray-600 hover:text-blue-600 transition-colors cursor-pointer"
+                      >
+                        <span
+                          onClick={() => {
+                            // 기존 입력에 추가 (쉼표 구분)
+                            const currentKeywords = keywordsInput.split(/[,\n]/).filter(k => k.trim())
+                            if (!currentKeywords.includes(kw)) {
+                              setKeywordsInput(prev => prev.trim() ? `${prev.trim()},${kw}` : kw)
+                            }
+                          }}
+                        >
+                          {kw}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            removeRecentKeyword(kw)
+                          }}
+                          className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-100 rounded-full transition-all"
+                        >
+                          <X className="w-3 h-3 text-gray-400 hover:text-red-500" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 전체 13개 블로그 분석 안내 */}
@@ -1718,6 +1805,7 @@ function KeywordSearchContent() {
                               value={myBlogId}
                               onChange={(e) => setMyBlogId(e.target.value)}
                               placeholder="내 블로그 ID 입력"
+                              maxLength={50}
                               className="flex-1 px-4 py-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-[#0064FF] focus:border-transparent bg-white"
                               disabled={myBlogAnalyzing[status.keyword]}
                             />
@@ -1867,6 +1955,17 @@ function KeywordSearchContent() {
 
                         {/* Blog Results Table */}
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                          {/* 결과 개수 표시 */}
+                          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                            <span className="text-sm font-medium text-gray-700">
+                              검색 결과: <span className="text-[#0064FF] font-bold">{(status.result.blog_results || status.result.results).length}개</span> 블로그
+                            </span>
+                            {(status.result.blog_results || status.result.results).length < 10 && (
+                              <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
+                                ℹ️ 해당 키워드의 검색 결과가 10개 미만입니다
+                              </span>
+                            )}
+                          </div>
                           <div className="overflow-x-auto">
                             <table className="w-full">
                               <thead className="border-b-2 bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
@@ -2138,6 +2237,7 @@ function KeywordSearchContent() {
                   value={keyword}
                   onChange={(e) => setKeyword(e.target.value)}
                   placeholder="예: 맛집, 여행, 육아"
+                  maxLength={100}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   disabled={loading}
                 />
@@ -2195,6 +2295,23 @@ function KeywordSearchContent() {
                 예상 소요 시간: 약 1분
               </p>
             </div>
+
+            {/* P3-1: 스켈레톤 미리보기 */}
+            <div className="mt-6 pt-6 border-t border-gray-100">
+              <p className="text-xs text-gray-500 mb-3 text-center">분석 결과 미리보기</p>
+              <div className="space-y-2 opacity-50">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg animate-pulse">
+                    <div className="w-8 h-8 bg-gray-200 rounded-full" />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-3 bg-gray-200 rounded w-1/3" />
+                      <div className="h-2 bg-gray-200 rounded w-1/2" />
+                    </div>
+                    <div className="w-12 h-6 bg-gray-200 rounded" />
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -2215,6 +2332,7 @@ function KeywordSearchContent() {
                 value={myBlogId}
                 onChange={(e) => setMyBlogId(e.target.value)}
                 placeholder="내 블로그 ID 입력"
+                maxLength={50}
                 className="flex-1 px-4 py-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-[#0064FF] focus:border-transparent bg-white"
                 disabled={Object.values(myBlogAnalyzing).some(v => v)}
               />
@@ -2805,12 +2923,12 @@ function KeywordSearchContent() {
                                   <th className="text-center py-3 px-4 font-semibold text-gray-700">경쟁도</th>
                                 </>
                               ) : (
-                                <th className="text-center py-3 px-4 font-semibold text-gray-500">
-                                  <span className="inline-flex items-center gap-1">
+                                <th className="text-center py-3 px-4 font-semibold text-gray-500" colSpan={4}>
+                                  <span className="inline-flex items-center gap-1 text-xs">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
-                                    검색량 데이터 없음
+                                    {relatedKeywords.source === 'autocomplete' ? '검색량 데이터 없음 (자동완성 모드)' : '검색량 데이터 없음'}
                                   </span>
                                 </th>
                               )}

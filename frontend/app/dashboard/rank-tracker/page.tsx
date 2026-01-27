@@ -17,10 +17,15 @@ import {
   XCircle,
   Loader2,
   ArrowLeft,
-  Target
+  Target,
+  Lock,
+  Zap,
+  Bell
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
+import EmptyState from '@/components/EmptyState'
 import {
   getTrackedBlogs,
   registerBlog,
@@ -34,6 +39,10 @@ import {
 export default function RankTrackerPage() {
   const router = useRouter()
   const { isAuthenticated, user } = useAuthStore()
+
+  // P1-2: 무료 사용자 접근 제한 (베이직 이상 필요)
+  const userPlan = user?.subscription?.plan_type || 'free'
+  const isFreePlan = userPlan === 'free'
 
   const [blogs, setBlogs] = useState<TrackedBlog[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -105,10 +114,11 @@ export default function RankTrackerPage() {
       setShowAddModal(false)
       setNewBlogId('')
       loadBlogs()
-    } catch (error: any) {
-      const detail = error.response?.data?.detail
+    } catch (error) {
+      const axiosError = error as { response?: { data?: { detail?: { error?: string; message?: string } } } }
+      const detail = axiosError.response?.data?.detail
       if (detail?.error === 'plan_limit_exceeded') {
-        toast.error(detail.message)
+        toast.error(detail.message || '블로그 등록에 실패했습니다.')
       } else {
         toast.error('블로그 등록에 실패했습니다.')
       }
@@ -128,7 +138,7 @@ export default function RankTrackerPage() {
       await deleteTrackedBlog(user.id, blogId)
       toast.success('블로그가 삭제되었습니다.')
       loadBlogs()
-    } catch (error) {
+    } catch {
       toast.error('블로그 삭제에 실패했습니다.')
     }
   }
@@ -144,9 +154,10 @@ export default function RankTrackerPage() {
       // 상태 폴링 시작
       const status = await getTaskStatus(result.task_id)
       setRunningTask(status)
-    } catch (error: any) {
-      const detail = error.response?.data?.detail
-      if (detail?.error === 'task_already_running') {
+    } catch (error) {
+      const axiosError = error as { response?: { data?: { detail?: { error?: string; message?: string; task_id?: string } } } }
+      const detail = axiosError.response?.data?.detail
+      if (detail?.error === 'task_already_running' && detail.task_id) {
         toast.error('이미 실행 중인 작업이 있습니다.')
         setRunningTask({ task_id: detail.task_id, status: 'running' } as TaskStatus)
       } else {
@@ -169,6 +180,52 @@ export default function RankTrackerPage() {
             로그인하기
           </button>
         </div>
+      </div>
+    )
+  }
+
+  // P1-2: 무료 사용자 차단 UI (베이직 이상 필요)
+  if (isFreePlan) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50 to-pink-50 pt-24 flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-gray-100 p-8 text-center"
+        >
+          <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+            <Lock className="w-8 h-8 text-white" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-3">
+            순위 추적은 유료 기능입니다
+          </h1>
+          <p className="text-gray-600 mb-6">
+            내 블로그 포스팅의 검색 순위를 실시간으로 추적하세요.
+            <br />
+            <strong>베이직 플랜</strong>부터 이용 가능합니다.
+          </p>
+          <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 mb-6 text-left">
+            <h3 className="font-semibold text-purple-800 mb-2 flex items-center gap-2">
+              <Target className="w-4 h-4" />
+              순위 추적 기능 혜택
+            </h3>
+            <ul className="text-sm text-purple-700 space-y-1">
+              <li>✓ 블로그탭 & VIEW탭 순위 실시간 확인</li>
+              <li>✓ 키워드별 순위 변동 히스토리</li>
+              <li>✓ 순위 변동 알림 (프로 이상)</li>
+              <li>✓ 경쟁 블로그 대비 분석</li>
+            </ul>
+          </div>
+          <Link href="/pricing">
+            <button className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2">
+              <Zap className="w-5 h-5" />
+              업그레이드하고 순위 추적하기
+            </button>
+          </Link>
+          <Link href="/dashboard" className="block mt-4 text-sm text-gray-500 hover:text-gray-700">
+            ← 대시보드로 돌아가기
+          </Link>
+        </motion.div>
       </div>
     )
   }
@@ -251,27 +308,15 @@ export default function RankTrackerPage() {
             <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
           </div>
         ) : blogs.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-2xl shadow-lg p-12 text-center"
-          >
-            <div className="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Search className="w-10 h-10 text-purple-600" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
-              등록된 블로그가 없습니다
-            </h3>
-            <p className="text-gray-600 mb-6">
-              블로그를 추가하고 순위를 추적해보세요
-            </p>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="px-6 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors"
-            >
-              첫 번째 블로그 추가하기
-            </button>
-          </motion.div>
+          <div className="bg-white rounded-2xl shadow-lg">
+            <EmptyState
+              type="no-tracking"
+              title="순위 추적을 시작해보세요"
+              description="블로그와 키워드를 등록하면 매일 자동으로 순위를 추적해드려요."
+              actionLabel="블로그 추가하기"
+              onAction={() => setShowAddModal(true)}
+            />
+          </div>
         ) : (
           <div className="grid gap-4">
             {blogs.map((blog, index) => (
@@ -378,6 +423,7 @@ export default function RankTrackerPage() {
                     value={newBlogId}
                     onChange={(e) => setNewBlogId(e.target.value)}
                     placeholder="예: myblog123"
+                    maxLength={50}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
                   />
                   <p className="mt-2 text-sm text-gray-500">

@@ -5,10 +5,12 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search, TrendingUp, Target, Sparkles, Crown,
   Gem, Medal, ChevronRight, AlertCircle, Info,
-  BarChart3, FileText, ImagePlus, Loader2, ArrowLeft
+  BarChart3, FileText, ImagePlus, Loader2, ArrowLeft, Lock, Zap
 } from 'lucide-react'
 import Link from 'next/link'
 import Tutorial, { blueOceanTutorialSteps } from '@/components/Tutorial'
+import { useAuthStore } from '@/lib/stores/auth'
+import TermTooltip from '@/components/TermTooltip'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
 
@@ -93,11 +95,62 @@ const ratingConfig = {
 }
 
 export default function BlueOceanPage() {
+  const { isAuthenticated, user } = useAuthStore()
   const [keyword, setKeyword] = useState('')
   const [myBlogId, setMyBlogId] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<BlueOceanAnalysis | null>(null)
   const [selectedKeyword, setSelectedKeyword] = useState<BlueOceanKeyword | null>(null)
+
+  // P1-2: 무료 사용자 접근 제한 (베이직 이상 필요)
+  const userPlan = user?.subscription?.plan_type || 'free'
+  const isFreePlan = userPlan === 'free'
+
+  // 무료 사용자 차단 UI
+  if (isFreePlan) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 pt-24 flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-gray-100 p-8 text-center"
+        >
+          <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center">
+            <Lock className="w-8 h-8 text-white" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-3">
+            블루오션 키워드는 유료 기능입니다
+          </h1>
+          <p className="text-gray-600 mb-6">
+            경쟁이 낮고 진입 가능성이 높은 황금 키워드를 발굴하세요.
+            <br />
+            <strong>베이직 플랜</strong>부터 이용 가능합니다.
+          </p>
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 text-left">
+            <h3 className="font-semibold text-amber-800 mb-2 flex items-center gap-2">
+              <Crown className="w-4 h-4" />
+              블루오션 기능 혜택
+            </h3>
+            <ul className="text-sm text-amber-700 space-y-1">
+              <li>✓ BOS(Blue Ocean Score) 점수로 진입 난이도 확인</li>
+              <li>✓ 황금/실버/브론즈 키워드 자동 분류</li>
+              <li>✓ 내 블로그 점수 대비 Gap 분석</li>
+              <li>✓ 권장 콘텐츠 스펙 (글자수, 이미지) 제공</li>
+            </ul>
+          </div>
+          <Link href="/pricing">
+            <button className="w-full py-3 rounded-xl bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2">
+              <Zap className="w-5 h-5" />
+              업그레이드하고 블루오션 발굴하기
+            </button>
+          </Link>
+          <Link href="/dashboard" className="block mt-4 text-sm text-gray-500 hover:text-gray-700">
+            ← 대시보드로 돌아가기
+          </Link>
+        </motion.div>
+      </div>
+    )
+  }
 
   const handleAnalyze = async () => {
     if (!keyword.trim()) return
@@ -195,6 +248,7 @@ export default function BlueOceanPage() {
                   onChange={(e) => setKeyword(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleAnalyze()}
                   placeholder="예: 다이어트, 피부과, 영어공부"
+                  maxLength={100}
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
@@ -209,6 +263,7 @@ export default function BlueOceanPage() {
                 value={myBlogId}
                 onChange={(e) => setMyBlogId(e.target.value)}
                 placeholder="예: myblog123"
+                maxLength={50}
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
@@ -320,7 +375,86 @@ export default function BlueOceanPage() {
                       <h3 className="font-bold text-gray-800">블루오션 키워드 목록</h3>
                     </div>
 
-                    <div className="overflow-x-auto">
+                    {/* P2-4: 모바일 카드 UI */}
+                    <div className="md:hidden p-4 space-y-3">
+                      {result.keywords.map((kw, idx) => {
+                        const config = getRatingConfig(kw.bos_rating)
+                        const Icon = config.icon
+
+                        return (
+                          <motion.div
+                            key={idx}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: idx * 0.05 }}
+                            onClick={() => setSelectedKeyword(kw)}
+                            className={`p-4 rounded-xl border-2 ${config.border} ${config.bg} cursor-pointer active:scale-[0.98] transition-transform`}
+                          >
+                            {/* 상단: 등급 배지 + BOS 점수 */}
+                            <div className="flex items-center justify-between mb-3">
+                              <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/80 border ${config.border}`}>
+                                <Icon className={`w-4 h-4 ${config.text}`} />
+                                <span className={`text-xs font-bold ${config.text}`}>{config.label}</span>
+                              </div>
+                              <div className={`text-2xl font-black ${
+                                kw.bos_score >= 80 ? 'text-yellow-600' :
+                                kw.bos_score >= 60 ? 'text-gray-700' :
+                                kw.bos_score >= 40 ? 'text-orange-600' : 'text-gray-500'
+                              }`}>
+                                {kw.bos_score}
+                                <span className="text-xs font-normal ml-0.5 text-gray-500">점</span>
+                              </div>
+                            </div>
+
+                            {/* 키워드 이름 */}
+                            <h4 className="font-bold text-gray-900 text-lg mb-3">{kw.keyword}</h4>
+
+                            {/* 주요 지표 그리드 */}
+                            <div className="grid grid-cols-3 gap-2 text-center">
+                              <div className="bg-white/60 rounded-lg py-2">
+                                <div className="text-xs text-gray-500 mb-0.5">검색량</div>
+                                <div className="text-sm font-bold text-blue-600">{formatNumber(kw.search_volume)}</div>
+                              </div>
+                              <div className="bg-white/60 rounded-lg py-2">
+                                <div className="text-xs text-gray-500 mb-0.5">평균점수</div>
+                                <div className="text-sm font-bold text-gray-700">{kw.top10_avg_score}</div>
+                              </div>
+                              <div className="bg-white/60 rounded-lg py-2">
+                                <div className="text-xs text-gray-500 mb-0.5">진입확률</div>
+                                <div className={`text-sm font-bold ${
+                                  kw.entry_percentage >= 70 ? 'text-green-600' :
+                                  kw.entry_percentage >= 50 ? 'text-yellow-600' :
+                                  kw.entry_percentage >= 20 ? 'text-orange-600' : 'text-red-600'
+                                }`}>{kw.entry_percentage}%</div>
+                              </div>
+                            </div>
+
+                            {/* 진입 확률 바 */}
+                            <div className="mt-3">
+                              <div className="w-full h-2 bg-white/80 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all ${
+                                    kw.entry_percentage >= 70 ? 'bg-green-500' :
+                                    kw.entry_percentage >= 50 ? 'bg-yellow-500' :
+                                    kw.entry_percentage >= 20 ? 'bg-orange-500' : 'bg-red-500'
+                                  }`}
+                                  style={{ width: `${kw.entry_percentage}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            {/* 탭하여 상세보기 힌트 */}
+                            <div className="mt-3 flex items-center justify-end text-xs text-gray-500">
+                              <span>탭하여 상세보기</span>
+                              <ChevronRight className="w-3 h-3 ml-0.5" />
+                            </div>
+                          </motion.div>
+                        )
+                      })}
+                    </div>
+
+                    {/* 데스크톱 테이블 UI */}
+                    <div className="hidden md:block overflow-x-auto">
                       <table className="w-full">
                         <thead className="bg-gray-50">
                           <tr>

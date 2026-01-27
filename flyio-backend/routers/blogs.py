@@ -1759,6 +1759,25 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
     try:
         # ===== 1단계: 실제 블로그 페이지 스크래핑 시도 =====
         scraped_stats = await scrape_blog_stats(blog_id)
+
+        # 에러 코드 확인 - 비공개/존재하지 않는 블로그 등
+        if scraped_stats.get("error_code"):
+            error_code = scraped_stats["error_code"]
+            error_message = scraped_stats.get("error_message", "블로그 분석에 실패했습니다.")
+
+            logger.warning(f"Blog analysis failed for {blog_id}: {error_code} - {error_message}")
+
+            return {
+                "blog_id": blog_id,
+                "success": False,
+                "error_code": error_code,
+                "error_message": error_message,
+                "stats": None,
+                "index": None,
+                "analysis": None,
+                "data_sources": ["error"]
+            }
+
         if scraped_stats["success"]:
             analysis_data["data_sources"].append("scrape")
             if scraped_stats["total_posts"]:
@@ -2531,6 +2550,29 @@ async def analyze_blog_endpoint(request: BlogAnalysisRequest):
         # Run blog analysis
         result = await analyze_blog(blog_id)
 
+        # 에러 응답 처리 (비공개 블로그, 존재하지 않는 블로그 등)
+        if result.get("error_code"):
+            error_code = result["error_code"]
+            error_message = result.get("error_message", "블로그 분석에 실패했습니다.")
+
+            # 에러 코드별 HTTP 상태 코드 매핑
+            status_code_map = {
+                "NOT_FOUND": 404,
+                "PRIVATE_BLOG": 403,
+                "BLOCKED": 429,
+                "TIMEOUT": 504
+            }
+            status_code = status_code_map.get(error_code, 400)
+
+            raise HTTPException(
+                status_code=status_code,
+                detail={
+                    "error_code": error_code,
+                    "message": error_message,
+                    "blog_id": blog_id
+                }
+            )
+
         stats = result.get("stats", {})
         index = result.get("index", {})
 
@@ -2698,11 +2740,21 @@ async def get_related_keywords(keyword: str):
     result = await get_related_keywords_from_searchad(keyword)
 
     if result.success and result.total_count > 0:
+        logger.info(f"[SearchAd] Successfully returned {result.total_count} keywords for: {keyword}")
         return result
 
+    # Log why we're falling back
+    fallback_reason = result.message if result.message else "No keywords returned"
+    logger.info(f"Falling back to autocomplete for: {keyword} (reason: {fallback_reason})")
+
     # Fallback to autocomplete
-    logger.info(f"Falling back to autocomplete for: {keyword}")
-    return await get_related_keywords_from_autocomplete(keyword)
+    autocomplete_result = await get_related_keywords_from_autocomplete(keyword)
+
+    # 메시지 업데이트: 왜 검색량 데이터가 없는지 설명
+    if autocomplete_result.total_count > 0:
+        autocomplete_result.message = f"자동완성 데이터 사용 (검색광고 API: {fallback_reason})"
+
+    return autocomplete_result
 
 
 @router.get("/related-keywords-tree/{keyword}", response_model=KeywordTreeResponse)
@@ -3491,3 +3543,81 @@ async def get_keyword_category_info(keyword: str):
             "category": "default",
             "error": str(e)
         }
+
+
+@router.get("/debug/searchad-status")
+async def debug_searchad_status():
+    """
+    네이버 검색광고 API 연동 상태 확인 (디버그용)
+
+    API 키 설정 여부와 간단한 테스트 호출을 수행합니다.
+    """
+    status = {
+        "credentials_configured": False,
+        "api_key_set": bool(settings.NAVER_AD_API_KEY),
+        "secret_key_set": bool(settings.NAVER_AD_SECRET_KEY),
+        "customer_id_set": bool(settings.NAVER_AD_CUSTOMER_ID),
+        "api_key_preview": settings.NAVER_AD_API_KEY[:8] + "..." if settings.NAVER_AD_API_KEY else None,
+        "customer_id_preview": settings.NAVER_AD_CUSTOMER_ID[:4] + "..." if settings.NAVER_AD_CUSTOMER_ID else None,
+        "test_result": None,
+        "error": None
+    }
+
+    # 모든 자격 증명이 설정되었는지 확인
+    if settings.NAVER_AD_API_KEY and settings.NAVER_AD_SECRET_KEY and settings.NAVER_AD_CUSTOMER_ID:
+        status["credentials_configured"] = True
+
+        # 테스트 API 호출
+        try:
+            timestamp = str(int(time.time() * 1000))
+            method = "GET"
+            uri = "/keywordstool"
+
+            signature = generate_signature(
+                timestamp, method, uri,
+                settings.NAVER_AD_SECRET_KEY
+            )
+
+            headers = {
+                "X-Timestamp": timestamp,
+                "X-API-KEY": settings.NAVER_AD_API_KEY,
+                "X-Customer": settings.NAVER_AD_CUSTOMER_ID,
+                "X-Signature": signature,
+                "Content-Type": "application/json"
+            }
+
+            params = {
+                "hintKeywords": "테스트",
+                "showDetail": "1"
+            }
+
+            async with httpx.AsyncClient(follow_redirects=True) as client:
+                response = await client.get(
+                    "https://api.searchad.naver.com/keywordstool",
+                    headers=headers,
+                    params=params,
+                    timeout=10.0
+                )
+
+                status["test_result"] = {
+                    "status_code": response.status_code,
+                    "success": response.status_code == 200
+                }
+
+                if response.status_code == 200:
+                    data = response.json()
+                    keyword_count = len(data.get("keywordList", []))
+                    status["test_result"]["keyword_count"] = keyword_count
+                    status["test_result"]["message"] = f"API 정상 작동 ({keyword_count}개 키워드 반환)"
+                else:
+                    status["test_result"]["response_text"] = response.text[:500]
+                    status["test_result"]["message"] = f"API 오류: {response.status_code}"
+
+        except httpx.TimeoutException:
+            status["error"] = "API 타임아웃 (10초 초과)"
+        except Exception as e:
+            status["error"] = f"{type(e).__name__}: {str(e)}"
+    else:
+        status["error"] = "API 자격 증명이 설정되지 않았습니다"
+
+    return status

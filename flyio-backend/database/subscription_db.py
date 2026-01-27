@@ -48,24 +48,27 @@ class PlanType(str, Enum):
 
 
 # 플랜별 제한 설정
+# P1-1: 무료 플랜 제한 강화 (결제 전환율 향상)
 PLAN_LIMITS = {
     PlanType.FREE: {
         "name": "무료",
         "price_monthly": 0,
         "price_yearly": 0,
-        "keyword_search_daily": 8,
-        "blog_analysis_daily": 2,
-        "search_results_count": 10,
+        "keyword_search_daily": 3,      # 8 → 3 (맛보기만)
+        "blog_analysis_daily": 1,       # 2 → 1 (한 번만)
+        "search_results_count": 5,      # 10 → 5 (제한된 결과)
         "history_days": 0,
         "competitor_compare": 0,
         "rank_alert": False,
         "excel_export": False,
         "api_access": False,
         "team_members": 1,
-        # 순위 추적 기능
-        "rank_tracking_blogs": 1,      # 추적 가능 블로그 수
-        "rank_check_daily": 1,         # 일일 순위 확인 횟수
-        "rank_history_days": 7,        # 순위 히스토리 보관 기간
+        # 순위 추적 기능 - 무료는 비활성화 (유료 전용)
+        "rank_tracking_blogs": 0,       # 1 → 0 (유료 전용)
+        "rank_check_daily": 0,          # 1 → 0 (유료 전용)
+        "rank_history_days": 0,         # 7 → 0 (유료 전용)
+        # 블루오션 기능 - 무료는 비활성화
+        "blue_ocean_daily": 0,          # 유료 전용
     },
     PlanType.BASIC: {
         "name": "베이직",
@@ -84,6 +87,8 @@ PLAN_LIMITS = {
         "rank_tracking_blogs": 3,
         "rank_check_daily": 5,
         "rank_history_days": 30,
+        # 블루오션 기능
+        "blue_ocean_daily": 5,          # 일 5회
     },
     PlanType.PRO: {
         "name": "프로",
@@ -102,6 +107,8 @@ PLAN_LIMITS = {
         "rank_tracking_blogs": 10,
         "rank_check_daily": 20,
         "rank_history_days": 90,
+        # 블루오션 기능
+        "blue_ocean_daily": 30,         # 일 30회
     },
     PlanType.BUSINESS: {
         "name": "비즈니스",
@@ -120,6 +127,8 @@ PLAN_LIMITS = {
         "rank_tracking_blogs": -1,   # 무제한
         "rank_check_daily": -1,      # 무제한
         "rank_history_days": -1,     # 무제한
+        # 블루오션 기능
+        "blue_ocean_daily": -1,      # 무제한
     },
 }
 

@@ -471,6 +471,49 @@
   @apply outline-none ring-2 ring-[#0064FF] ring-offset-2;
 }
 
+/* P3-4: 버튼 및 인터랙션 일관성 개선 */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  @apply outline-none ring-2 ring-[#0064FF]/50 ring-offset-2;
+  transition: box-shadow 0.15s ease-out;
+}
+
+/* 버튼 active 상태 일관성 */
+button:not(:disabled):active {
+  transform: scale(0.98);
+}
+
+/* 링크 hover 일관성 */
+a:not([class*="btn"]):not([class*="button"]):hover {
+  @apply text-[#0064FF];
+}
+
+/* 입력 필드 포커스 일관성 */
+input:not([type="checkbox"]):not([type="radio"]):focus,
+textarea:focus,
+select:focus {
+  @apply border-[#0064FF] ring-2 ring-[#0064FF]/20;
+}
+
+/* 체크박스/라디오 커스텀 스타일 */
+input[type="checkbox"]:checked,
+input[type="radio"]:checked {
+  @apply bg-[#0064FF] border-[#0064FF];
+}
+
+/* 스크롤 시 부드러운 스냅 */
+.scroll-snap-x {
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scroll-snap-item {
+  scroll-snap-align: start;
+}
+
 /* Smooth transitions */
 * {
   @apply transition-colors duration-150;
