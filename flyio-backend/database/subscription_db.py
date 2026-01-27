@@ -55,7 +55,7 @@ PLAN_LIMITS = {
         "price_yearly": 0,
         "keyword_search_daily": 8,
         "blog_analysis_daily": 2,
-        "search_results_count": 5,
+        "search_results_count": 10,
         "history_days": 0,
         "competitor_compare": 0,
         "rank_alert": False,

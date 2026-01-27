@@ -17,7 +17,14 @@
       "Bash(npm install:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(cat:*)",
+      "Bash(nslookup:*)",
+      "Bash(dig:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(nc:*)",
+      "Bash(ssh -o ConnectTimeout=5 -o BatchMode=yes ubuntu@43.203.106.129 echo \"connected\")"
     ]
   }
 }

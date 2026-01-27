@@ -591,7 +591,7 @@ function InsightsSection({ userId }: { userId?: number }) {
       </div>
 
       {/* 인사이트 작성 */}
-      {userId && (
+      {userId ? (
         <div className="p-4 border-b border-gray-100 bg-gray-50">
           <textarea
             value={newInsight}
@@ -611,6 +611,15 @@ function InsightsSection({ userId }: { userId?: number }) {
               공유하기
             </button>
           </div>
+        </div>
+      ) : (
+        <div className="p-4 border-b border-gray-100 bg-gray-50">
+          <a
+            href="/login"
+            className="block w-full p-3 text-center border border-gray-200 rounded-xl text-gray-500 hover:bg-gray-100 transition-colors"
+          >
+            로그인하고 인사이트 공유하기
+          </a>
         </div>
       )}
 
@@ -890,7 +899,7 @@ function PostsSection({ userId, isAuthenticated }: { userId?: number; isAuthenti
             <h2 className="font-bold text-gray-900">게시판</h2>
           </div>
 
-          {isAuthenticated && (
+          {isAuthenticated ? (
             <button
               onClick={() => setShowWriteModal(true)}
               className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white rounded-xl font-medium hover:shadow-lg hover:shadow-blue-200 transition-all"
@@ -898,6 +907,14 @@ function PostsSection({ userId, isAuthenticated }: { userId?: number; isAuthenti
               <Plus className="w-4 h-4" />
               글쓰기
             </button>
+          ) : (
+            <a
+              href="/login"
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-xl font-medium hover:bg-gray-200 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              로그인하고 글쓰기
+            </a>
           )}
         </div>
 

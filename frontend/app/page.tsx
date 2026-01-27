@@ -1,7 +1,7 @@
 'use client'
 
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion'
-import { Sparkles, TrendingUp, Zap, Award, BarChart3, Search, BookOpen, ArrowRight, Building2, Mic, X, PenTool, Target, Star, Flame, Crown, ChevronRight, Play, Rocket, Heart, MousePointer, ArrowUpRight, Layers, Globe, Check, Users, HelpCircle } from 'lucide-react'
+import { Sparkles, TrendingUp, Zap, Award, BarChart3, Search, BookOpen, ArrowRight, Building2, Mic, X, PenTool, Target, Star, Flame, Crown, ChevronRight, Play, Rocket, Heart, MousePointer, ArrowUpRight, Layers, Globe, Check, Users } from 'lucide-react'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import TrialExpiryBanner from '@/components/TrialExpiryBanner'
@@ -94,10 +94,9 @@ function Marquee({ children, speed = 30, direction = "left" }: { children: React
 export default function Home() {
   const { isAuthenticated } = useAuthStore()
   const router = useRouter()
-  const [blogId, setBlogId] = useState('')
-  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [keyword, setKeyword] = useState('')
+  const [isSearching, setIsSearching] = useState(false)
   const [showAdPopup, setShowAdPopup] = useState(false)
-  const [showIdHelp, setShowIdHelp] = useState(false)
 
   // P2: 프로모 팝업 3초 지연
   useEffect(() => {
@@ -117,14 +116,14 @@ export default function Home() {
     return () => window.removeEventListener('mousemove', handleMouseMove)
   }, [])
 
-  const handleBlogAnalysis = (e: React.FormEvent) => {
+  const handleKeywordSearch = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!blogId.trim()) {
-      toast.error('블로그 ID를 입력해주세요')
+    if (!keyword.trim()) {
+      toast.error('검색할 키워드를 입력해주세요')
       return
     }
-    setIsAnalyzing(true)
-    router.push(`/analyze?blogId=${encodeURIComponent(blogId.trim())}`)
+    setIsSearching(true)
+    router.push(`/keyword-search?keyword=${encodeURIComponent(keyword.trim())}`)
   }
 
   return (
@@ -210,9 +209,9 @@ export default function Home() {
                 transition={{ duration: 0.6, delay: 0.1 }}
                 className="text-5xl md:text-7xl lg:text-8xl font-black mb-6 tracking-tight leading-[0.9]"
               >
-                <span className="block mb-2 text-gray-900">블로그 지수를</span>
+                <span className="block mb-2 text-gray-900">키워드 경쟁력</span>
                 <span className="relative inline-block">
-                  <span className="text-[#0064FF]">한눈에</span>
+                  <span className="text-[#0064FF]">분석</span>
                   <motion.span
                     className="absolute -bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-full"
                     initial={{ scaleX: 0 }}
@@ -229,9 +228,9 @@ export default function Home() {
                 transition={{ duration: 0.5, delay: 0.2 }}
                 className="text-lg md:text-xl text-gray-600 mb-12 max-w-2xl mx-auto leading-relaxed"
               >
-                <span className="text-[#0064FF] font-semibold">40+</span> 지표 분석 · <span className="text-[#3182F6] font-semibold">11단계</span> 레벨 시스템
+                키워드 입력 한 번으로 <span className="text-[#0064FF] font-semibold">상위 10개</span> 블로그 분석
                 <br className="hidden md:block" />
-                인플루언서들이 선택한 <span className="text-gray-900 font-semibold">#1</span> 분석 도구
+                내 블로그의 <span className="text-gray-900 font-semibold">진입 가능성</span>을 확인하세요
               </motion.p>
 
               {/* P2-4: 실시간 카운터 */}
@@ -244,107 +243,58 @@ export default function Home() {
                 <LiveCounter />
               </motion.div>
 
-              {/* Search Bar with Help */}
+              {/* Search Bar */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.3 }}
                 className="max-w-2xl mx-auto mb-10"
               >
-                <form onSubmit={handleBlogAnalysis} className="relative group">
+                <form onSubmit={handleKeywordSearch} className="relative group">
                   <div className="absolute -inset-1 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-2xl blur-xl opacity-20 group-hover:opacity-40 transition-opacity" />
                   <div className="relative flex items-center bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-xl shadow-gray-200/50">
                     <div className="absolute left-5 text-gray-400">
-                      <Zap className="w-5 h-5" />
+                      <Search className="w-5 h-5" />
                     </div>
                     <input
                       type="text"
-                      value={blogId}
-                      onChange={(e) => setBlogId(e.target.value)}
-                      placeholder="blog.naver.com/ 뒤의 ID (예: businessinsider)"
+                      value={keyword}
+                      onChange={(e) => setKeyword(e.target.value)}
+                      placeholder="검색할 키워드를 입력하세요 (예: 습진한의원)"
                       className="w-full px-5 py-5 pl-14 pr-36 bg-transparent text-gray-900 placeholder:text-gray-400 focus:outline-none"
-                      disabled={isAnalyzing}
+                      disabled={isSearching}
                     />
                     <button
                       type="submit"
-                      disabled={isAnalyzing}
+                      disabled={isSearching}
                       className="absolute right-2 px-6 py-3 rounded-xl bg-[#0064FF] text-white font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-[#0064FF]/15"
                     >
-                      {isAnalyzing ? (
+                      {isSearching ? (
                         <>
                           <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          분석중
+                          검색중
                         </>
                       ) : (
                         <>
-                          <Zap className="w-4 h-4" />
-                          분석하기
+                          <Search className="w-4 h-4" />
+                          키워드 분석
                         </>
                       )}
                     </button>
                   </div>
                 </form>
 
-                {/* P1-2: 블로그 ID 찾기 도움말 */}
-                <div className="mt-3 text-center">
-                  <button
-                    type="button"
-                    onClick={() => setShowIdHelp(!showIdHelp)}
+                {/* 블로그 분석 바로가기 */}
+                <div className="mt-4 text-center">
+                  <Link
+                    href="/analyze"
                     className="text-sm text-gray-500 hover:text-[#0064FF] transition-colors inline-flex items-center gap-1"
                   >
-                    <HelpCircle className="w-4 h-4" />
-                    내 블로그 ID 찾는 법
-                  </button>
+                    <Zap className="w-4 h-4" />
+                    내 블로그 지수 분석하러 가기
+                    <ArrowRight className="w-3 h-3" />
+                  </Link>
                 </div>
-
-                {/* ID 찾기 가이드 */}
-                <AnimatePresence>
-                  {showIdHelp && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="mt-4 bg-white rounded-2xl p-5 border border-gray-200 shadow-lg"
-                    >
-                      <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-[#0064FF] text-white text-xs flex items-center justify-center">?</span>
-                        블로그 ID 찾는 방법
-                      </h4>
-                      <div className="space-y-3 text-sm">
-                        <div className="flex items-start gap-3">
-                          <span className="w-5 h-5 rounded-full bg-blue-100 text-[#0064FF] text-xs flex items-center justify-center flex-shrink-0 mt-0.5">1</span>
-                          <div>
-                            <p className="text-gray-700">내 블로그 주소 확인하기</p>
-                            <p className="text-gray-500 text-xs mt-1">
-                              예: <span className="text-[#0064FF]">https://blog.naver.com/<strong>myid123</strong></span>
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-3">
-                          <span className="w-5 h-5 rounded-full bg-blue-100 text-[#0064FF] text-xs flex items-center justify-center flex-shrink-0 mt-0.5">2</span>
-                          <div>
-                            <p className="text-gray-700">blog.naver.com/ <strong>뒤의 부분</strong>이 블로그 ID</p>
-                            <p className="text-gray-500 text-xs mt-1">
-                              위 예시에서는 <span className="font-bold text-[#0064FF]">myid123</span>이 블로그 ID입니다
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-3">
-                          <span className="w-5 h-5 rounded-full bg-green-100 text-green-600 text-xs flex items-center justify-center flex-shrink-0 mt-0.5">✓</span>
-                          <div>
-                            <p className="text-gray-700">입력창에 ID만 입력하면 끝!</p>
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => setShowIdHelp(false)}
-                        className="mt-4 w-full py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-                      >
-                        닫기
-                      </button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
               </motion.div>
 
               {/* Stats Row */}
@@ -355,9 +305,9 @@ export default function Home() {
                 className="flex flex-wrap items-center justify-center gap-8 md:gap-16"
               >
                 {[
-                  { value: '40+', label: '분석 지표', color: 'from-[#0064FF] to-[#3182F6]' },
-                  { value: '11단계', label: '레벨 시스템', color: 'from-[#3182F6] to-[#5CA3FF]' },
-                  { value: '실시간', label: '분석 제공', color: 'from-[#0064FF] to-[#0050CC]' },
+                  { value: '상위 10개', label: '블로그 분석', color: 'from-[#0064FF] to-[#3182F6]' },
+                  { value: '경쟁력', label: '진입 가능성', color: 'from-[#3182F6] to-[#5CA3FF]' },
+                  { value: '실시간', label: '검색량 조회', color: 'from-[#0064FF] to-[#0050CC]' },
                 ].map((stat, index) => (
                   <div key={index} className="flex items-center gap-3">
                     <div className={`w-1 h-10 rounded-full bg-gradient-to-b ${stat.color}`} />
@@ -377,7 +327,7 @@ export default function Home() {
       <section className="py-8 border-y border-gray-200 bg-white/50">
         <Marquee speed={40}>
           <div className="flex items-center gap-8 text-gray-500">
-            {['블로그 분석', '키워드 리서치', 'AI 글쓰기', '광고 최적화', '성장 가이드', '레벨 측정', 'VIEW 탭 분석', '경쟁 분석'].map((item, i) => (
+            {['키워드 리서치', '블로그 분석', 'AI 글쓰기', '광고 최적화', '성장 가이드', '레벨 측정', 'VIEW 탭 분석', '경쟁 분석'].map((item, i) => (
               <span key={i} className="flex items-center gap-3 text-lg font-medium">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#0064FF]" />
                 {item}
@@ -412,8 +362,8 @@ export default function Home() {
             viewport={{ once: true }}
             className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto"
           >
-            {/* 1. 블로그 분석 */}
-            <Link href="/analyze" className="group">
+            {/* 1. 키워드 분석 */}
+            <Link href="/keyword-search" className="group">
               <TiltCard className="h-full">
                 <motion.div
                   whileHover={{ scale: 1.02, y: -5 }}
@@ -422,16 +372,16 @@ export default function Home() {
                   <div className="absolute top-0 right-0 w-32 h-32 bg-blue-100/30 rounded-full blur-[60px]" />
                   <div className="relative">
                     <div className="w-16 h-16 rounded-2xl bg-[#0064FF] flex items-center justify-center mb-6 group-hover:scale-110 group-hover:rotate-3 transition-all shadow-lg shadow-[#0064FF]/25">
-                      <Zap className="w-8 h-8 text-white" />
+                      <Search className="w-8 h-8 text-white" />
                     </div>
                     <div className="flex items-center gap-2 mb-3">
-                      <span className="px-2 py-1 text-xs font-bold bg-[#0064FF] text-white rounded-full">무료 (일 2회)</span>
-                      <span className="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-full border border-gray-200">11단계 레벨</span>
+                      <span className="px-2 py-1 text-xs font-bold bg-[#0064FF] text-white rounded-full">무료 (일 8회)</span>
+                      <span className="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-full border border-gray-200">상위 10개 분석</span>
                     </div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2">블로그 분석</h3>
-                    <p className="text-gray-600 mb-4">블로그 ID만 입력하면 42개 지표를 즉시 분석합니다</p>
+                    <h3 className="text-2xl font-bold text-gray-900 mb-2">키워드 분석</h3>
+                    <p className="text-gray-600 mb-4">상위 노출 블로그를 분석하고 진입 가능성을 확인합니다</p>
                     <div className="flex items-center gap-2 text-[#0064FF] font-medium group-hover:gap-3 transition-all">
-                      <span>분석하러 가기</span>
+                      <span>키워드 검색하기</span>
                       <ArrowRight className="w-4 h-4" />
                     </div>
                   </div>
@@ -439,8 +389,8 @@ export default function Home() {
               </TiltCard>
             </Link>
 
-            {/* 2. 키워드 분석 */}
-            <Link href="/keyword-search" className="group">
+            {/* 2. 블로그 분석 */}
+            <Link href="/analyze" className="group">
               <TiltCard className="h-full">
                 <motion.div
                   whileHover={{ scale: 1.02, y: -5 }}
@@ -449,16 +399,16 @@ export default function Home() {
                   <div className="absolute top-0 right-0 w-32 h-32 bg-purple-100/30 rounded-full blur-[60px]" />
                   <div className="relative">
                     <div className="w-16 h-16 rounded-2xl bg-purple-500 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:rotate-3 transition-all shadow-lg shadow-purple-500/25">
-                      <Search className="w-8 h-8 text-white" />
+                      <Zap className="w-8 h-8 text-white" />
                     </div>
                     <div className="flex items-center gap-2 mb-3">
-                      <span className="px-2 py-1 text-xs font-bold bg-purple-500 text-white rounded-full">무료 (일 8회)</span>
-                      <span className="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-full border border-gray-200">경쟁 분석</span>
+                      <span className="px-2 py-1 text-xs font-bold bg-purple-500 text-white rounded-full">무료 (일 2회)</span>
+                      <span className="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-full border border-gray-200">11단계 레벨</span>
                     </div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2">키워드 분석</h3>
-                    <p className="text-gray-600 mb-4">상위 노출 가능한 키워드를 찾고 경쟁력을 분석합니다</p>
+                    <h3 className="text-2xl font-bold text-gray-900 mb-2">블로그 분석</h3>
+                    <p className="text-gray-600 mb-4">블로그 ID만 입력하면 42개 지표를 즉시 분석합니다</p>
                     <div className="flex items-center gap-2 text-purple-600 font-medium group-hover:gap-3 transition-all">
-                      <span>키워드 검색하기</span>
+                      <span>분석하러 가기</span>
                       <ArrowRight className="w-4 h-4" />
                     </div>
                   </div>

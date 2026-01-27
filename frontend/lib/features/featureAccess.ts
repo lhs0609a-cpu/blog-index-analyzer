@@ -55,7 +55,7 @@ export const PLAN_LIMITS: Record<Exclude<Plan, 'guest'>, PlanLimits> = {
   free: {
     keywordSearchDaily: 8,
     blogAnalysisDaily: 2,
-    searchResultsCount: 5,
+    searchResultsCount: 10,
     historyDays: 0,
     competitorCompare: 0,
     rankAlert: false,

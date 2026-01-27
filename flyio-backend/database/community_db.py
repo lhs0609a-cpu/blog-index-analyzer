@@ -227,6 +227,10 @@ POINT_VALUES = {
     "first_analysis": 30,
     "level_up": 50,
     "challenge_complete": 100,
+    # 커뮤니티 활동
+    "post_create": 15,       # 게시글 작성
+    "comment_create": 5,     # 댓글 작성
+    "post_liked": 3,         # 게시글 좋아요 받음
 }
 
 LEVEL_THRESHOLDS = [

@@ -524,3 +524,55 @@ async def create_post_comment_api(post_id: int, request: PostCommentRequest):
     add_points(request.user_id, "comment_create", "댓글 작성")
 
     return {"success": True, "comment_id": comment_id, "message": "댓글이 작성되었습니다"}
+
+
+# ============ 커뮤니티 자동화 API ============
+
+@router.post("/automation/initialize")
+async def initialize_community_api(admin_key: str = Query(...)):
+    """커뮤니티 초기화 (시드 데이터 생성) - 관리자 전용"""
+    # 간단한 관리자 키 검증
+    if admin_key != "blank-admin-2024":
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+
+    from services.community_automation import initialize_community
+    result = initialize_community()
+    return result
+
+
+@router.post("/automation/generate-daily")
+async def generate_daily_content_api(admin_key: str = Query(...)):
+    """일일 자동 콘텐츠 생성 - 관리자 전용"""
+    if admin_key != "blank-admin-2024":
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+
+    from services.community_automation import generate_daily_content
+    result = generate_daily_content()
+    return result
+
+
+@router.post("/automation/generate-posts")
+async def generate_posts_api(
+    count: int = Query(5, ge=1, le=20),
+    admin_key: str = Query(...)
+):
+    """게시글 생성 - 관리자 전용"""
+    if admin_key != "blank-admin-2024":
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+
+    from services.community_automation import generate_seed_posts
+    post_ids = generate_seed_posts(count)
+    return {"success": True, "posts_created": len(post_ids), "post_ids": post_ids}
+
+
+@router.post("/automation/generate-comments")
+async def generate_comments_api(
+    admin_key: str = Query(...)
+):
+    """댓글 생성 - 관리자 전용"""
+    if admin_key != "blank-admin-2024":
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+
+    from services.community_automation import generate_seed_comments
+    count = generate_seed_comments()
+    return {"success": True, "comments_created": count}
