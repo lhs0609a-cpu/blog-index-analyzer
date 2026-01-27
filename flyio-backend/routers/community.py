@@ -116,6 +116,25 @@ class RankingSuccessRequest(BaseModel):
     user_name: Optional[str] = None
 
 
+# ============ 커뮤니티 자동화 API (상단 배치) ============
+
+@router.get("/automation/test")
+async def automation_test():
+    """자동화 API 테스트 (상단 배치)"""
+    return {"status": "ok", "message": "automation_routes_loaded_at_top"}
+
+
+@router.post("/automation/init")
+async def init_community_api(admin_key: str = Query(...)):
+    """커뮤니티 초기화 - 관리자 전용"""
+    if admin_key != "blank-admin-2024":
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+
+    from services.community_automation import initialize_community
+    result = initialize_community()
+    return result
+
+
 # ============ 포인트 & 레벨 API ============
 
 @router.get("/points/{user_id}")
