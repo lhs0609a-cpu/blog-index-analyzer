@@ -65,7 +65,7 @@ jobs:
               echo "Naver Open API credentials updated"
             fi
 
-            docker build -t blog-api .
+            docker build --no-cache -t blog-api .
             docker stop blog-analyzer-api || true
             docker rm blog-analyzer-api || true
             docker run -d \
