@@ -576,3 +576,15 @@ async def generate_comments_api(
     from services.community_automation import generate_seed_comments
     count = generate_seed_comments()
     return {"success": True, "comments_created": count}
+
+
+# ============ 디버그 API ============
+
+@router.get("/debug/routes-check")
+async def debug_routes_check():
+    """라우트 로드 확인용 (배포 테스트)"""
+    return {
+        "status": "automation_routes_loaded",
+        "timestamp": datetime.now().isoformat(),
+        "message": "커뮤니티 자동화 라우트가 정상적으로 로드되었습니다."
+    }
