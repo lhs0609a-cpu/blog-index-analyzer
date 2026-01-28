@@ -584,8 +584,9 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 10) ->
 
         # 2단계: API 결과가 부족하면 HTTP 페이지네이션으로 보충
         if len(blog_results) < limit:
-            logger.info(f"Step 2: Supplementing with HTTP scraping for: {keyword}")
-            http_results = await fetch_via_blog_tab_scraping(keyword, limit)
+            logger.info(f"Step 2: Supplementing with HTTP scraping for: {keyword} (need {limit - len(blog_results)} more)")
+            # 필요한 것보다 더 많이 요청 (중복 제거 후에도 충분하도록)
+            http_results = await fetch_via_blog_tab_scraping(keyword, limit * 2)
             if http_results:
                 existing_urls = {item["post_url"] for item in blog_results}
                 for http_item in http_results:
@@ -704,7 +705,7 @@ async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
 
             # 페이지네이션: 네이버 블로그 검색은 start 파라미터로 페이지 이동
             # start=1 (1페이지), start=11 (2페이지), start=21 (3페이지) ...
-            max_pages = min(3, (limit - len(results)) // 10 + 1)  # 최대 3페이지
+            max_pages = min(5, (limit - len(results)) // 10 + 2)  # 최대 5페이지 (더 많이 시도)
 
             for page_num in range(max_pages):
                 if len(results) >= limit:
