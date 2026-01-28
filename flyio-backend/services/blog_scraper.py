@@ -628,17 +628,14 @@ async def scrape_view_tab_results(keyword: str, limit: int = 20) -> list:
         await asyncio.sleep(2)  # Additional wait for dynamic content
 
         # Scroll down multiple times to load more results (lazy loading)
-        # 스크롤 횟수 증가하여 더 많은 결과 로드 (12 → 15)
-        for i in range(15):
-            scroll_position = (i + 1) / 15
-            await page.evaluate(f'window.scrollTo(0, document.body.scrollHeight * {scroll_position})')
-            await asyncio.sleep(0.6)
+        # 스크롤 횟수 대폭 증가 (15 → 30) - 더 많은 결과 로드
+        for i in range(30):
+            await page.evaluate(f'window.scrollTo(0, document.body.scrollHeight * {(i+1)/30})')
+            await asyncio.sleep(0.3)
 
-        # Scroll back to top and then to bottom for any missed content
-        await page.evaluate('window.scrollTo(0, 0)')
-        await asyncio.sleep(0.5)
+        # Final scroll to absolute bottom
         await page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-        await asyncio.sleep(1.5)
+        await asyncio.sleep(2)
 
         # "더보기" 버튼이 있으면 클릭하여 더 많은 결과 로드
         try:
@@ -646,10 +643,10 @@ async def scrape_view_tab_results(keyword: str, limit: int = 20) -> list:
             if more_button:
                 await more_button.click()
                 await asyncio.sleep(2)
-                # 추가 스크롤
-                for i in range(5):
-                    await page.evaluate(f'window.scrollTo(0, document.body.scrollHeight * {(i+1)/5})')
-                    await asyncio.sleep(0.5)
+                # 추가 스크롤 (더 많이)
+                for i in range(10):
+                    await page.evaluate(f'window.scrollTo(0, document.body.scrollHeight * {(i+1)/10})')
+                    await asyncio.sleep(0.3)
         except:
             pass
 
@@ -861,17 +858,14 @@ async def scrape_blog_tab_results(keyword: str, limit: int = 20) -> list:
         await asyncio.sleep(2)
 
         # Scroll down multiple times to load more results (lazy loading)
-        # 스크롤 횟수 증가하여 더 많은 결과 로드 (12 → 15)
-        for i in range(15):
-            scroll_position = (i + 1) / 15
-            await page.evaluate(f'window.scrollTo(0, document.body.scrollHeight * {scroll_position})')
-            await asyncio.sleep(0.6)
+        # 스크롤 횟수 대폭 증가 (15 → 30) - 더 많은 결과 로드
+        for i in range(30):
+            await page.evaluate(f'window.scrollTo(0, document.body.scrollHeight * {(i+1)/30})')
+            await asyncio.sleep(0.3)
 
-        # Scroll back to top and then to bottom for any missed content
-        await page.evaluate('window.scrollTo(0, 0)')
-        await asyncio.sleep(0.5)
+        # Final scroll to absolute bottom
         await page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
-        await asyncio.sleep(1.5)
+        await asyncio.sleep(2)
 
         # "더보기" 버튼이 있으면 클릭하여 더 많은 결과 로드
         try:
@@ -879,10 +873,10 @@ async def scrape_blog_tab_results(keyword: str, limit: int = 20) -> list:
             if more_button:
                 await more_button.click()
                 await asyncio.sleep(2)
-                # 추가 스크롤
-                for i in range(5):
-                    await page.evaluate(f'window.scrollTo(0, document.body.scrollHeight * {(i+1)/5})')
-                    await asyncio.sleep(0.5)
+                # 추가 스크롤 (더 많이)
+                for i in range(10):
+                    await page.evaluate(f'window.scrollTo(0, document.body.scrollHeight * {(i+1)/10})')
+                    await asyncio.sleep(0.3)
         except:
             pass
 
