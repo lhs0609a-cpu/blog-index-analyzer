@@ -972,12 +972,14 @@ async def fetch_via_naver_api(keyword: str, limit: int, client_id: str, client_s
 
         # 전역 HTTP 클라이언트 사용 (성능 개선)
         http_client = await get_http_client()
+        # 네이버 블로그만 필터링하므로 3배 요청 (티스토리 등 제외됨)
+        request_limit = min(limit * 3, 100)
         response = await http_client.get(
             "https://openapi.naver.com/v1/search/blog.json",
             headers=headers,
             params={
                 "query": keyword,
-                "display": min(limit, 100),
+                "display": request_limit,
                 "sort": "sim"  # relevance
             }
         )
@@ -986,7 +988,11 @@ async def fetch_via_naver_api(keyword: str, limit: int, client_id: str, client_s
             data = response.json()
             items = data.get("items", [])
 
-            for idx, item in enumerate(items[:limit]):
+            for item in items:
+                # 충분한 결과가 모이면 중단
+                if len(results) >= limit:
+                    break
+
                 # Extract blog ID from link
                 link = item.get("link", "")
                 blog_id = extract_blog_id(link)
@@ -1004,7 +1010,7 @@ async def fetch_via_naver_api(keyword: str, limit: int, client_id: str, client_s
                 title = title.replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
 
                 results.append({
-                    "rank": idx + 1,
+                    "rank": len(results) + 1,
                     "blog_id": blog_id,
                     "blog_name": item.get("bloggername", blog_id),
                     "blog_url": f"https://blog.naver.com/{blog_id}",
