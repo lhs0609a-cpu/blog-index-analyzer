@@ -73,8 +73,9 @@ jobs:
               -p 8000:8001 \
               --env-file .env \
               --restart unless-stopped \
-              --memory=1500m \
-              --memory-swap=2g \
+              --memory=2g \
+              --memory-swap=3g \
+              --shm-size=512m \
               blog-api
 
             # Update Caddyfile (CORS handled by FastAPI)
