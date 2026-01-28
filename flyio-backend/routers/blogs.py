@@ -550,93 +550,108 @@ async def fetch_naver_search_results(keyword: str, limit: int = 10) -> List[Dict
 
 
 async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 10) -> Dict[str, List[Dict]]:
-    """Fetch search results from both VIEW tab and BLOG tab (네이버 API 우선)"""
+    """Fetch search results from both VIEW tab and BLOG tab - 다중 소스 병합으로 10개 결과 보장"""
     # 캐시 확인 (성능 개선 - 5분 TTL)
     cached = get_cached_search_results(keyword)
     if cached:
         return cached
 
-    logger.info(f"Fetching both tabs for keyword: {keyword}")
+    logger.info(f"Fetching both tabs for keyword: {keyword} (target: {limit} results)")
 
     try:
-        # ===== 네이버 API 우선 사용 (빠른 응답) =====
         blog_results = []
         view_results = []
+        all_urls = set()  # 모든 소스에서 중복 제거용
 
-        # 1단계: 네이버 API로 먼저 결과 가져오기 (빠름)
-        client_id = getattr(settings, 'NAVER_CLIENT_ID', None)
-        client_secret = getattr(settings, 'NAVER_CLIENT_SECRET', None)
-
-        if client_id and client_secret:
-            logger.info(f"Step 1: Using Naver API for: {keyword}")
-            api_results = await fetch_via_naver_api(keyword, limit, client_id, client_secret)
-            if api_results:
-                for item in api_results:
-                    item["tab_type"] = "BLOG"
-                blog_results = api_results
-                # VIEW 탭용 복사본 생성
-                view_results = []
-                for item in blog_results:
-                    view_item = item.copy()
-                    view_item["tab_type"] = "VIEW"
-                    view_results.append(view_item)
-                logger.info(f"Naver API returned {len(blog_results)} results for: {keyword}")
-
-        # 2단계: API 결과가 부족하면 HTTP 페이지네이션으로 보충
-        if len(blog_results) < limit:
-            logger.info(f"Step 2: Supplementing with HTTP scraping for: {keyword} (need {limit - len(blog_results)} more)")
-            # 필요한 것보다 더 많이 요청 (중복 제거 후에도 충분하도록)
-            http_results = await fetch_via_blog_tab_scraping(keyword, limit * 2)
-            if http_results:
-                existing_urls = {item["post_url"] for item in blog_results}
-                for http_item in http_results:
+        # ===== 1단계: Playwright VIEW 탭 (가장 많은 결과 - 스크롤로 lazy loading) =====
+        logger.info(f"Step 1: Playwright VIEW tab scraping for: {keyword}")
+        try:
+            playwright_results = await fetch_via_view_tab_scraping(keyword, limit * 2)
+            if playwright_results:
+                for item in playwright_results:
                     if len(blog_results) >= limit:
                         break
-                    if http_item["post_url"] not in existing_urls:
-                        http_item["rank"] = len(blog_results) + 1
-                        blog_results.append(http_item)
-                        existing_urls.add(http_item["post_url"])
-                logger.info(f"After HTTP supplement: {len(blog_results)} results")
+                    if item["post_url"] not in all_urls:
+                        item["tab_type"] = "BLOG"
+                        item["rank"] = len(blog_results) + 1
+                        blog_results.append(item)
+                        all_urls.add(item["post_url"])
+                logger.info(f"Playwright VIEW: {len(blog_results)} results after dedup")
+        except Exception as e:
+            logger.warning(f"Playwright VIEW failed: {e}")
 
-        # 3단계: 여전히 결과가 없으면 다른 fallback
-        if not blog_results:
-            logger.info(f"All sources empty, trying RSS fallback for: {keyword}")
-            blog_results = await fetch_via_rss(keyword, limit)
+        # ===== 2단계: 네이버 API (두 가지 정렬로 더 다양한 결과) =====
+        if len(blog_results) < limit:
+            client_id = getattr(settings, 'NAVER_CLIENT_ID', None)
+            client_secret = getattr(settings, 'NAVER_CLIENT_SECRET', None)
 
-        if not blog_results:
-            logger.info(f"RSS empty, trying mobile web fallback for: {keyword}")
-            blog_results = await fetch_via_mobile_web(keyword, limit)
+            if client_id and client_secret:
+                logger.info(f"Step 2: Naver API for: {keyword} (need {limit - len(blog_results)} more)")
+                api_results = await fetch_via_naver_api(keyword, limit * 2, client_id, client_secret)
+                if api_results:
+                    for item in api_results:
+                        if len(blog_results) >= limit:
+                            break
+                        if item["post_url"] not in all_urls:
+                            item["tab_type"] = "BLOG"
+                            item["rank"] = len(blog_results) + 1
+                            blog_results.append(item)
+                            all_urls.add(item["post_url"])
+                    logger.info(f"After Naver API: {len(blog_results)} results")
 
-        # VIEW 탭 결과가 없으면 BLOG 탭 결과를 복사 (JS 렌더링 필요한 경우 대비)
-        # tab_type만 VIEW로 변경
-        if not view_results and blog_results:
-            logger.info(f"VIEW tab empty, copying BLOG results as VIEW results")
-            view_results = []
-            for item in blog_results:
-                view_item = item.copy()
-                view_item["tab_type"] = "VIEW"
-                view_results.append(view_item)
+        # ===== 3단계: Playwright BLOG 탭 (스크롤로 추가 결과) =====
+        if len(blog_results) < limit:
+            logger.info(f"Step 3: Playwright BLOG tab for: {keyword} (need {limit - len(blog_results)} more)")
+            try:
+                blog_tab_results = await fetch_via_blog_tab_scraping(keyword, limit * 2)
+                if blog_tab_results:
+                    for item in blog_tab_results:
+                        if len(blog_results) >= limit:
+                            break
+                        if item["post_url"] not in all_urls:
+                            item["rank"] = len(blog_results) + 1
+                            blog_results.append(item)
+                            all_urls.add(item["post_url"])
+                    logger.info(f"After BLOG tab: {len(blog_results)} results")
+            except Exception as e:
+                logger.warning(f"BLOG tab scraping failed: {e}")
 
-        # ===== BLOG 탭 결과가 부족하면 VIEW 탭 결과로 보충 =====
-        # HTTP 요청은 5개만 가져오지만, Playwright VIEW 탭은 13개+ 가져옴
-        if len(blog_results) < limit and view_results:
-            logger.info(f"BLOG tab has {len(blog_results)} results, supplementing with VIEW tab results")
-            existing_urls = {item["post_url"] for item in blog_results}
+        # ===== 4단계: RSS fallback (아직 부족하면) =====
+        if len(blog_results) < limit:
+            logger.info(f"Step 4: RSS fallback for: {keyword} (need {limit - len(blog_results)} more)")
+            rss_results = await fetch_via_rss(keyword, limit * 2)
+            if rss_results:
+                for item in rss_results:
+                    if len(blog_results) >= limit:
+                        break
+                    if item["post_url"] not in all_urls:
+                        item["rank"] = len(blog_results) + 1
+                        blog_results.append(item)
+                        all_urls.add(item["post_url"])
+                logger.info(f"After RSS: {len(blog_results)} results")
 
-            for view_item in view_results:
-                if len(blog_results) >= limit:
-                    break
-                if view_item["post_url"] not in existing_urls:
-                    # VIEW 결과를 BLOG 형식으로 변환
-                    blog_item = view_item.copy()
-                    blog_item["tab_type"] = "BLOG"
-                    blog_item["rank"] = len(blog_results) + 1
-                    blog_results.append(blog_item)
-                    existing_urls.add(view_item["post_url"])
+        # ===== 5단계: Mobile web fallback (최후의 수단) =====
+        if len(blog_results) < limit:
+            logger.info(f"Step 5: Mobile web fallback for: {keyword} (need {limit - len(blog_results)} more)")
+            mobile_results = await fetch_via_mobile_web(keyword, limit * 2)
+            if mobile_results:
+                for item in mobile_results:
+                    if len(blog_results) >= limit:
+                        break
+                    if item["post_url"] not in all_urls:
+                        item["rank"] = len(blog_results) + 1
+                        blog_results.append(item)
+                        all_urls.add(item["post_url"])
+                logger.info(f"After mobile: {len(blog_results)} results")
 
-            logger.info(f"BLOG tab now has {len(blog_results)} results after supplementing")
+        # VIEW 탭 결과 생성 (BLOG 결과 복사)
+        view_results = []
+        for item in blog_results:
+            view_item = item.copy()
+            view_item["tab_type"] = "VIEW"
+            view_results.append(view_item)
 
-        logger.info(f"Both tabs results - VIEW: {len(view_results)}, BLOG: {len(blog_results)}")
+        logger.info(f"Final results - BLOG: {len(blog_results)}, VIEW: {len(view_results)} for: {keyword}")
 
         result = {
             "view_results": view_results,
@@ -962,8 +977,9 @@ async def fetch_via_view_tab_scraping_http(keyword: str, limit: int) -> List[Dic
 
 
 async def fetch_via_naver_api(keyword: str, limit: int, client_id: str, client_secret: str) -> List[Dict]:
-    """Fetch blog results using Naver Open API"""
+    """Fetch blog results using Naver Open API - 두 가지 정렬로 더 많은 결과 확보"""
     results = []
+    seen_urls = set()
 
     try:
         headers = {
@@ -973,59 +989,74 @@ async def fetch_via_naver_api(keyword: str, limit: int, client_id: str, client_s
 
         # 전역 HTTP 클라이언트 사용 (성능 개선)
         http_client = await get_http_client()
-        # 네이버 블로그만 필터링하므로 3배 요청 (티스토리 등 제외됨)
-        request_limit = min(limit * 3, 100)
-        response = await http_client.get(
-            "https://openapi.naver.com/v1/search/blog.json",
-            headers=headers,
-            params={
-                "query": keyword,
-                "display": request_limit,
-                "sort": "sim"  # relevance
-            }
-        )
+        # 네이버 블로그만 필터링하므로 5배 요청 (티스토리 등 제외됨)
+        request_limit = min(limit * 5, 100)
 
-        if response.status_code == 200:
-            data = response.json()
-            items = data.get("items", [])
+        # 두 가지 정렬로 요청하여 더 다양한 결과 확보 (관련성 + 날짜순)
+        sort_orders = ["sim", "date"]
 
-            for item in items:
-                # 충분한 결과가 모이면 중단
-                if len(results) >= limit:
-                    break
+        for sort_order in sort_orders:
+            if len(results) >= limit:
+                break
 
-                # Extract blog ID from link
-                link = item.get("link", "")
-                blog_id = extract_blog_id(link)
+            response = await http_client.get(
+                "https://openapi.naver.com/v1/search/blog.json",
+                headers=headers,
+                params={
+                    "query": keyword,
+                    "display": request_limit,
+                    "sort": sort_order
+                }
+            )
 
-                if not blog_id:
-                    # Try to extract from blogger link
-                    blogger_link = item.get("bloggerlink", "")
-                    blog_id = extract_blog_id(blogger_link)
+            if response.status_code == 200:
+                data = response.json()
+                items = data.get("items", [])
 
-                if not blog_id:
-                    continue
+                for item in items:
+                    # 충분한 결과가 모이면 중단
+                    if len(results) >= limit:
+                        break
 
-                # Clean title (remove HTML tags)
-                title = re.sub(r'<[^>]+>', '', item.get("title", ""))
-                title = title.replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+                    # Extract blog ID from link
+                    link = item.get("link", "")
 
-                results.append({
-                    "rank": len(results) + 1,
-                    "blog_id": blog_id,
-                    "blog_name": item.get("bloggername", blog_id),
-                    "blog_url": f"https://blog.naver.com/{blog_id}",
-                    "post_title": title,
-                    "post_url": link,
-                    "post_date": item.get("postdate"),
-                    "thumbnail": None,
-                    "tab_type": "VIEW",
-                    "smart_block_keyword": keyword,
-                })
+                    # 중복 URL 제외
+                    if link in seen_urls:
+                        continue
 
-            logger.info(f"Naver API returned {len(results)} results for: {keyword}")
-        else:
-            logger.error(f"Naver API error: {response.status_code} - {response.text}")
+                    blog_id = extract_blog_id(link)
+
+                    if not blog_id:
+                        # Try to extract from blogger link
+                        blogger_link = item.get("bloggerlink", "")
+                        blog_id = extract_blog_id(blogger_link)
+
+                    if not blog_id:
+                        continue
+
+                    seen_urls.add(link)
+
+                    # Clean title (remove HTML tags)
+                    title = re.sub(r'<[^>]+>', '', item.get("title", ""))
+                    title = title.replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+
+                    results.append({
+                        "rank": len(results) + 1,
+                        "blog_id": blog_id,
+                        "blog_name": item.get("bloggername", blog_id),
+                        "blog_url": f"https://blog.naver.com/{blog_id}",
+                        "post_title": title,
+                        "post_url": link,
+                        "post_date": item.get("postdate"),
+                        "thumbnail": None,
+                        "tab_type": "VIEW",
+                        "smart_block_keyword": keyword,
+                    })
+
+                logger.info(f"Naver API ({sort_order}) returned {len(results)} total results for: {keyword}")
+            else:
+                logger.error(f"Naver API error: {response.status_code} - {response.text}")
 
     except Exception as e:
         logger.error(f"Error with Naver API: {e}")
