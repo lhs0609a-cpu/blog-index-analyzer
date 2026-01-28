@@ -510,7 +510,7 @@ def apply_diversity_filter(search_results: List[Dict]) -> List[Dict]:
     return reordered
 
 
-async def fetch_naver_search_results(keyword: str, limit: int = 13) -> List[Dict]:
+async def fetch_naver_search_results(keyword: str, limit: int = 10) -> List[Dict]:
     """Fetch search results from Naver Blog Tab (actual search results)"""
     results = []
 
@@ -549,8 +549,8 @@ async def fetch_naver_search_results(keyword: str, limit: int = 13) -> List[Dict
     return results
 
 
-async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 20) -> Dict[str, List[Dict]]:
-    """Fetch search results from both VIEW tab and BLOG tab sequentially (메모리 최적화)"""
+async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 10) -> Dict[str, List[Dict]]:
+    """Fetch search results from both VIEW tab and BLOG tab (네이버 API 우선)"""
     # 캐시 확인 (성능 개선 - 5분 TTL)
     cached = get_cached_search_results(keyword)
     if cached:
@@ -559,45 +559,50 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 20) ->
     logger.info(f"Fetching both tabs for keyword: {keyword}")
 
     try:
-        # ===== 순차 실행으로 변경 (Playwright 메모리 경쟁 방지) =====
-        # 2GB RAM 서버에서 두 개의 Playwright가 동시에 실행되면 메모리 부족 발생
-
-        # 1단계: VIEW 탭 먼저 스크래핑 (Playwright)
-        view_results = []
-        try:
-            logger.info(f"Step 1: Scraping VIEW tab for: {keyword}")
-            view_results = await fetch_via_view_tab_scraping(keyword, limit)
-            logger.info(f"VIEW tab returned {len(view_results)} results")
-        except Exception as e:
-            logger.error(f"VIEW tab scraping failed: {e}")
-            view_results = []
-
-        # 2단계: BLOG 탭 스크래핑 (Playwright + HTTP fallback)
+        # ===== 네이버 API 우선 사용 (빠른 응답) =====
         blog_results = []
-        try:
-            logger.info(f"Step 2: Scraping BLOG tab for: {keyword}")
-            blog_results = await fetch_via_blog_tab_scraping(keyword, limit)
-            logger.info(f"BLOG tab returned {len(blog_results)} results")
-        except Exception as e:
-            logger.error(f"BLOG tab scraping failed: {e}")
-            blog_results = []
+        view_results = []
 
-        # BLOG 탭 결과가 없으면 fallback 시도 (다단계 폴백)
-        if not blog_results:
-            # Fallback 1: Naver API
-            client_id = getattr(settings, 'NAVER_CLIENT_ID', None)
-            client_secret = getattr(settings, 'NAVER_CLIENT_SECRET', None)
-            if client_id and client_secret:
-                logger.info(f"BLOG tab empty, trying Naver API fallback for: {keyword}")
-                blog_results = await fetch_via_naver_api(keyword, limit, client_id, client_secret)
+        # 1단계: 네이버 API로 먼저 결과 가져오기 (빠름)
+        client_id = getattr(settings, 'NAVER_CLIENT_ID', None)
+        client_secret = getattr(settings, 'NAVER_CLIENT_SECRET', None)
 
+        if client_id and client_secret:
+            logger.info(f"Step 1: Using Naver API for: {keyword}")
+            api_results = await fetch_via_naver_api(keyword, limit, client_id, client_secret)
+            if api_results:
+                for item in api_results:
+                    item["tab_type"] = "BLOG"
+                blog_results = api_results
+                # VIEW 탭용 복사본 생성
+                view_results = []
+                for item in blog_results:
+                    view_item = item.copy()
+                    view_item["tab_type"] = "VIEW"
+                    view_results.append(view_item)
+                logger.info(f"Naver API returned {len(blog_results)} results for: {keyword}")
+
+        # 2단계: API 결과가 부족하면 HTTP 페이지네이션으로 보충
+        if len(blog_results) < limit:
+            logger.info(f"Step 2: Supplementing with HTTP scraping for: {keyword}")
+            http_results = await fetch_via_blog_tab_scraping(keyword, limit)
+            if http_results:
+                existing_urls = {item["post_url"] for item in blog_results}
+                for http_item in http_results:
+                    if len(blog_results) >= limit:
+                        break
+                    if http_item["post_url"] not in existing_urls:
+                        http_item["rank"] = len(blog_results) + 1
+                        blog_results.append(http_item)
+                        existing_urls.add(http_item["post_url"])
+                logger.info(f"After HTTP supplement: {len(blog_results)} results")
+
+        # 3단계: 여전히 결과가 없으면 다른 fallback
         if not blog_results:
-            # Fallback 2: RSS
-            logger.info(f"Naver API empty, trying RSS fallback for: {keyword}")
+            logger.info(f"All sources empty, trying RSS fallback for: {keyword}")
             blog_results = await fetch_via_rss(keyword, limit)
 
         if not blog_results:
-            # Fallback 3: Mobile web scraping
             logger.info(f"RSS empty, trying mobile web fallback for: {keyword}")
             blog_results = await fetch_via_mobile_web(keyword, limit)
 
@@ -682,7 +687,7 @@ async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
     except Exception as e:
         logger.warning(f"[BLOG] Playwright scraping failed: {e}")
 
-    # 2. Playwright 결과가 부족하면 HTTP fallback으로 보충
+    # 2. Playwright 결과가 부족하면 HTTP fallback으로 보충 (페이지네이션 지원)
     if len(results) < limit:
         try:
             headers = {
@@ -694,44 +699,65 @@ async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
 
             from urllib.parse import quote
             encoded_keyword = quote(keyword)
-            search_url = f"https://search.naver.com/search.naver?where=blog&query={encoded_keyword}"
-
+            existing_urls = {r["post_url"] for r in results}
             client = await get_http_client()
-            response = await client.get(search_url, headers=headers)
 
-            if response.status_code == 200:
-                html_text = response.text
-                post_url_pattern = re.compile(r'href="(https://blog\.naver\.com/([^"/]+)/(\d+))"')
-                url_matches = post_url_pattern.findall(html_text)
+            # 페이지네이션: 네이버 블로그 검색은 start 파라미터로 페이지 이동
+            # start=1 (1페이지), start=11 (2페이지), start=21 (3페이지) ...
+            max_pages = min(3, (limit - len(results)) // 10 + 1)  # 최대 3페이지
 
-                existing_urls = {r["post_url"] for r in results}
+            for page_num in range(max_pages):
+                if len(results) >= limit:
+                    break
 
-                for match in url_matches:
-                    if len(results) >= limit:
+                start_index = page_num * 10 + 1
+                search_url = f"https://search.naver.com/search.naver?where=blog&query={encoded_keyword}&start={start_index}"
+
+                response = await client.get(search_url, headers=headers)
+
+                if response.status_code == 200:
+                    html_text = response.text
+                    post_url_pattern = re.compile(r'href="(https://blog\.naver\.com/([^"/]+)/(\d+))"')
+                    url_matches = post_url_pattern.findall(html_text)
+
+                    page_added = 0
+                    for match in url_matches:
+                        if len(results) >= limit:
+                            break
+
+                        post_url = match[0]
+                        blog_id = match[1]
+                        post_id = match[2]
+
+                        if post_url in existing_urls:
+                            continue
+                        existing_urls.add(post_url)
+
+                        results.append({
+                            "rank": len(results) + 1,
+                            "blog_id": blog_id,
+                            "blog_name": blog_id,
+                            "blog_url": f"https://blog.naver.com/{blog_id}",
+                            "post_title": f"포스팅 #{post_id}",
+                            "post_url": post_url,
+                            "post_date": None,
+                            "thumbnail": None,
+                            "tab_type": "BLOG",
+                            "smart_block_keyword": keyword,
+                        })
+                        page_added += 1
+
+                    logger.info(f"[BLOG] HTTP fallback page {page_num + 1}: added {page_added} results")
+
+                    # 페이지에서 새 결과가 없으면 중단
+                    if page_added == 0:
                         break
 
-                    post_url = match[0]
-                    blog_id = match[1]
-                    post_id = match[2]
+                    # 요청 간 짧은 대기 (봇 탐지 방지)
+                    if page_num < max_pages - 1:
+                        await asyncio.sleep(0.3)
 
-                    if post_url in existing_urls:
-                        continue
-                    existing_urls.add(post_url)
-
-                    results.append({
-                        "rank": len(results) + 1,
-                        "blog_id": blog_id,
-                        "blog_name": blog_id,
-                        "blog_url": f"https://blog.naver.com/{blog_id}",
-                        "post_title": f"포스팅 #{post_id}",
-                        "post_url": post_url,
-                        "post_date": None,
-                        "thumbnail": None,
-                        "tab_type": "BLOG",
-                        "smart_block_keyword": keyword,
-                    })
-
-                logger.info(f"[BLOG] HTTP fallback added results, total: {len(results)} for: {keyword}")
+            logger.info(f"[BLOG] HTTP fallback total: {len(results)} results for: {keyword}")
 
         except Exception as e:
             logger.error(f"[BLOG] HTTP fallback failed: {e}")
@@ -2875,9 +2901,9 @@ async def get_related_keywords_tree(
 @router.post("/search-keyword-with-tabs")
 async def search_keyword_with_tabs(
     keyword: str = Query(..., description="검색할 키워드"),
-    limit: int = Query(20, description="결과 개수 (기본 20개)"),
+    limit: int = Query(10, description="결과 개수 (기본 10개)"),
     analyze_content: bool = Query(True, description="콘텐츠 분석 여부"),
-    quick_mode: bool = Query(False, description="빠른 모드 (상위 5개만 분석)")
+    quick_mode: bool = Query(False, description="빠른 모드 (상위 10개만 분석)")
 ):
     """
     키워드로 블로그 검색 및 분석
@@ -2885,10 +2911,10 @@ async def search_keyword_with_tabs(
     네이버 VIEW 탭에서 블로그를 검색하고 각 블로그의 지수를 분석합니다.
 
     Args:
-        quick_mode: True일 경우 상위 5개 블로그만 분석 (속도 2-3배 향상)
+        quick_mode: True일 경우 상위 10개 블로그만 분석
     """
     # 빠른 모드: 분석할 블로그 수 제한
-    effective_limit = min(limit, 5) if quick_mode else limit
+    effective_limit = min(limit, 10) if quick_mode else limit
     logger.info(f"Searching keyword: {keyword}, limit: {effective_limit} (quick_mode={quick_mode})")
 
     # 사용자 검색 키워드를 학습 풀에 자동 추가 (높은 우선순위)
