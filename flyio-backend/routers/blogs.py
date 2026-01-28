@@ -703,7 +703,7 @@ async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
     except Exception as e:
         logger.warning(f"[BLOG] Playwright scraping failed: {e}")
 
-    # 2. Playwright 결과가 부족하면 HTTP fallback으로 보충 (페이지네이션 지원)
+    # 2. HTTP로 여러 페이지 크롤링 (Playwright 결과 보충)
     if len(results) < limit:
         try:
             headers = {
@@ -718,62 +718,70 @@ async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
             existing_urls = {r["post_url"] for r in results}
             client = await get_http_client()
 
-            # 페이지네이션: 네이버 블로그 검색은 start 파라미터로 페이지 이동
-            # start=1 (1페이지), start=11 (2페이지), start=21 (3페이지) ...
-            max_pages = min(5, (limit - len(results)) // 10 + 2)  # 최대 5페이지 (더 많이 시도)
+            # 페이지네이션: 두 가지 정렬(관련도순, 최신순)로 시도
+            sort_options = ["sim", "date"]  # 관련도순, 최신순
 
-            for page_num in range(max_pages):
+            for sort_opt in sort_options:
                 if len(results) >= limit:
                     break
 
-                start_index = page_num * 10 + 1
-                search_url = f"https://search.naver.com/search.naver?where=blog&query={encoded_keyword}&start={start_index}"
+                max_pages = 5
+                consecutive_empty = 0
 
-                response = await client.get(search_url, headers=headers)
-
-                if response.status_code == 200:
-                    html_text = response.text
-                    post_url_pattern = re.compile(r'href="(https://blog\.naver\.com/([^"/]+)/(\d+))"')
-                    url_matches = post_url_pattern.findall(html_text)
-
-                    page_added = 0
-                    for match in url_matches:
-                        if len(results) >= limit:
-                            break
-
-                        post_url = match[0]
-                        blog_id = match[1]
-                        post_id = match[2]
-
-                        if post_url in existing_urls:
-                            continue
-                        existing_urls.add(post_url)
-
-                        results.append({
-                            "rank": len(results) + 1,
-                            "blog_id": blog_id,
-                            "blog_name": blog_id,
-                            "blog_url": f"https://blog.naver.com/{blog_id}",
-                            "post_title": f"포스팅 #{post_id}",
-                            "post_url": post_url,
-                            "post_date": None,
-                            "thumbnail": None,
-                            "tab_type": "BLOG",
-                            "smart_block_keyword": keyword,
-                        })
-                        page_added += 1
-
-                    logger.info(f"[BLOG] HTTP fallback page {page_num + 1}: added {page_added} results")
-
-                    # 페이지에서 새 결과가 없으면 중단
-                    if page_added == 0:
+                for page_num in range(max_pages):
+                    if len(results) >= limit:
+                        break
+                    if consecutive_empty >= 2:
                         break
 
-                    # 요청 간 짧은 대기 (봇 탐지 방지)
-                    if page_num < max_pages - 1:
-                        await asyncio.sleep(0.3)
+                    start_index = page_num * 10 + 1
+                    search_url = f"https://search.naver.com/search.naver?where=blog&query={encoded_keyword}&start={start_index}&sm=tab_opt&sort={sort_opt}"
 
-            logger.info(f"[BLOG] HTTP fallback total: {len(results)} results for: {keyword}")
+                    response = await client.get(search_url, headers=headers)
+
+                    if response.status_code == 200:
+                        html_text = response.text
+                        post_url_pattern = re.compile(r'href="(https://blog\.naver\.com/([^"/]+)/(\d+))"')
+                        url_matches = post_url_pattern.findall(html_text)
+
+                        page_added = 0
+                        for match in url_matches:
+                            if len(results) >= limit:
+                                break
+
+                            post_url = match[0]
+                            blog_id = match[1]
+                            post_id = match[2]
+
+                            if post_url in existing_urls:
+                                continue
+                            existing_urls.add(post_url)
+
+                            results.append({
+                                "rank": len(results) + 1,
+                                "blog_id": blog_id,
+                                "blog_name": blog_id,
+                                "blog_url": f"https://blog.naver.com/{blog_id}",
+                                "post_title": f"포스팅 #{post_id}",
+                                "post_url": post_url,
+                                "post_date": None,
+                                "thumbnail": None,
+                                "tab_type": "BLOG",
+                                "smart_block_keyword": keyword,
+                            })
+                            page_added += 1
+
+                        logger.info(f"[BLOG] HTTP {sort_opt} page {page_num + 1}: +{page_added} (total: {len(results)})")
+
+                        if page_added == 0:
+                            consecutive_empty += 1
+                        else:
+                            consecutive_empty = 0
+
+                    # 요청 간 짧은 대기 (봇 탐지 방지)
+                    await asyncio.sleep(0.2)
+
+            logger.info(f"[BLOG] HTTP total: {len(results)} results for: {keyword}")
 
         except Exception as e:
             logger.error(f"[BLOG] HTTP fallback failed: {e}")
