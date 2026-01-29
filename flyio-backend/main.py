@@ -372,6 +372,13 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
+# 배포 테스트 엔드포인트 v4 - main.py에 직접 추가
+@app.get("/deployment-test-v4")
+async def deployment_test_v4():
+    """배포 확인용 테스트 엔드포인트 v4"""
+    return {"status": "v4 deployed from main.py", "unique_titles": True, "timestamp": "2026-01-29T09:10"}
+
+
 @app.get("/")
 async def root():
     """헬스 체크"""
