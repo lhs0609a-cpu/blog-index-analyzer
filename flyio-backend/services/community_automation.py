@@ -352,38 +352,13 @@ def clear_all_community_data():
 
 
 def _make_unique_title(base_title: str) -> str:
-    """고유 제목 생성 - 타임스탬프 기반으로 100% 고유성 보장"""
-    import time
+    """고유 제목 생성 - UUID 기반으로 100% 고유성 보장"""
+    import uuid
 
-    # 마이크로초 기반 고유 ID (항상 다름)
-    timestamp = int(time.time() * 1000000)
-    unique_num = timestamp % 1000000  # 6자리 숫자
+    # UUID로 완전 고유한 ID 생성
+    unique_id = uuid.uuid4().hex[:6]
 
-    # 자연스러운 접두사 (선택적)
-    prefixes = [
-        "", "",  # 50% 확률로 접두사 없음
-        "[질문] ", "[고민] ", "[공유] ", "[후기] ",
-        "드디어 ", "요즘 ", "솔직히 ", "진짜 ",
-    ]
-
-    # 자연스러운 접미사 + 고유 번호 (항상 포함)
-    suffix_patterns = [
-        f" #{unique_num}",
-        f" ({unique_num})",
-        f" - {unique_num}",
-        f" | {unique_num}",
-        f" [{unique_num}]",
-        f" ㅠㅠ #{unique_num % 10000}",
-        f" ㅎㅎ #{unique_num % 10000}",
-        f"... ({unique_num % 10000})",
-        f"! [{unique_num % 10000}]",
-        f" ({random.randint(1, 12)}월) {unique_num % 1000}",
-    ]
-
-    prefix = random.choice(prefixes)
-    suffix = random.choice(suffix_patterns)
-
-    return f"{prefix}{base_title}{suffix}"
+    return f"{base_title} #{unique_id}"
 
 
 def generate_seed_posts(count: int = 30) -> List[int]:
@@ -483,7 +458,7 @@ def initialize_community() -> Dict:
     return {
         "posts_created": len(post_ids),
         "comments_created": comments_count,
-        "message": "Community initialized v3 - unique titles with timestamp"
+        "message": "v5-uuid-titles"
     }
 
 
