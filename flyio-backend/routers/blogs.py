@@ -563,10 +563,10 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 10) ->
         view_results = []
         all_urls = set()  # 모든 소스에서 중복 제거용
 
-        # ===== 1단계: HTTP 스크래핑 (가장 안정적, 많은 결과) =====
-        logger.info(f"Step 1: HTTP scraping for: {keyword}")
+        # ===== 1단계: HTTP 전용 스크래핑 (Playwright 없이, 가장 안정적) =====
+        logger.info(f"Step 1: HTTP-only scraping for: {keyword}")
         try:
-            http_results = await fetch_via_blog_tab_scraping(keyword, limit * 2)
+            http_results = await fetch_via_http_only(keyword, limit * 2)
             if http_results:
                 for item in http_results:
                     if len(blog_results) >= limit:
@@ -576,9 +576,9 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 10) ->
                         item["rank"] = len(blog_results) + 1
                         blog_results.append(item)
                         all_urls.add(item["post_url"])
-                logger.info(f"HTTP scraping: {len(blog_results)} results")
+                logger.info(f"HTTP-only: {len(blog_results)} results")
         except Exception as e:
-            logger.warning(f"HTTP scraping failed: {e}")
+            logger.warning(f"HTTP-only scraping failed: {e}")
 
         # ===== 2단계: 네이버 API (두 가지 정렬로 추가 결과) =====
         if len(blog_results) < limit:
@@ -827,6 +827,88 @@ async def fetch_via_view_tab_scraping(keyword: str, limit: int) -> List[Dict]:
         import traceback
         logger.error(traceback.format_exc())
         return []
+
+
+async def fetch_via_http_only(keyword: str, limit: int) -> List[Dict]:
+    """HTTP 전용 블로그 검색 - Playwright 없이 직접 HTTP 요청"""
+    results = []
+    existing_urls = set()
+
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9",
+            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Referer": "https://search.naver.com/",
+        }
+
+        from urllib.parse import quote
+        encoded_keyword = quote(keyword)
+        client = await get_http_client()
+
+        # 두 가지 정렬로 검색 (관련도순, 최신순)
+        sort_options = ["sim", "date"]
+
+        for sort_opt in sort_options:
+            if len(results) >= limit:
+                break
+
+            # 각 정렬당 5페이지씩 시도
+            for page_num in range(5):
+                if len(results) >= limit:
+                    break
+
+                start_index = page_num * 10 + 1
+                search_url = f"https://search.naver.com/search.naver?where=blog&query={encoded_keyword}&start={start_index}&sm=tab_opt&sort={sort_opt}"
+
+                response = await client.get(search_url, headers=headers)
+
+                if response.status_code == 200:
+                    html_text = response.text
+                    # 단순 패턴으로 더 많은 URL 찾기
+                    post_url_pattern = re.compile(r'blog\.naver\.com/(\w+)/(\d+)')
+                    url_matches = post_url_pattern.findall(html_text)
+
+                    page_added = 0
+                    for match in url_matches:
+                        if len(results) >= limit:
+                            break
+
+                        blog_id = match[0]
+                        post_id = match[1]
+                        post_url = f"https://blog.naver.com/{blog_id}/{post_id}"
+
+                        if post_url in existing_urls:
+                            continue
+                        existing_urls.add(post_url)
+
+                        results.append({
+                            "rank": len(results) + 1,
+                            "blog_id": blog_id,
+                            "blog_name": blog_id,
+                            "blog_url": f"https://blog.naver.com/{blog_id}",
+                            "post_title": f"포스팅 #{post_id}",
+                            "post_url": post_url,
+                            "post_date": None,
+                            "thumbnail": None,
+                            "tab_type": "BLOG",
+                            "smart_block_keyword": keyword,
+                        })
+                        page_added += 1
+
+                    logger.info(f"[HTTP-ONLY] {sort_opt} page {page_num + 1}: +{page_added} (total: {len(results)})")
+
+                    if page_added == 0:
+                        break  # 더 이상 새 결과 없음
+
+                await asyncio.sleep(0.2)
+
+        logger.info(f"[HTTP-ONLY] Total: {len(results)} results for: {keyword}")
+
+    except Exception as e:
+        logger.error(f"[HTTP-ONLY] Failed: {e}")
+
+    return results
 
 
 async def fetch_via_view_tab_scraping_http(keyword: str, limit: int) -> List[Dict]:
