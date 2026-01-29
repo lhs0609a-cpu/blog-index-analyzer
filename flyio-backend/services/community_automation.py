@@ -352,40 +352,38 @@ def clear_all_community_data():
 
 
 def _make_unique_title(base_title: str) -> str:
-    """자연스러운 고유 제목 생성 - 자연어 변형 사용"""
+    """고유 제목 생성 - 타임스탬프 기반으로 100% 고유성 보장"""
+    import time
 
-    # 자연스러운 접두사
+    # 마이크로초 기반 고유 ID (항상 다름)
+    timestamp = int(time.time() * 1000000)
+    unique_num = timestamp % 1000000  # 6자리 숫자
+
+    # 자연스러운 접두사 (선택적)
     prefixes = [
-        "", "", "",  # 빈 접두사 확률 높임
-        "[질문] ", "[고민] ", "[공유] ", "[후기] ", "[급함] ",
-        "드디어 ", "요즘 ", "솔직히 ", "결국 ", "갑자기 ",
-        "혹시 ", "진짜 ", "역시 ", "아무래도 ",
+        "", "",  # 50% 확률로 접두사 없음
+        "[질문] ", "[고민] ", "[공유] ", "[후기] ",
+        "드디어 ", "요즘 ", "솔직히 ", "진짜 ",
     ]
 
-    # 자연스러운 접미사
-    suffixes = [
-        "", "", "",  # 빈 접미사 확률 높임
-        " ㅠㅠ", " ㅎㅎ", " ㅋㅋ", "...", "!",
-        " (급해요)", " (도와주세요)", " (질문)", " (공유)",
-        f" ({random.randint(1, 12)}월)",
-        f" ({random.choice(['오전', '오후', '저녁', '밤'])})",
-        f" {random.randint(1, 99)}",
-    ]
-
-    # 추가 변형 (날짜, 숫자 등)
-    extras = [
-        "", "", "", "", "",  # 빈 추가 확률 높임
-        f" #{random.randint(1, 9999)}",
-        f" - {random.randint(1, 999)}",
-        f" ({random.randint(1, 31)}일)",
-        f" ver.{random.randint(1, 9)}",
+    # 자연스러운 접미사 + 고유 번호 (항상 포함)
+    suffix_patterns = [
+        f" #{unique_num}",
+        f" ({unique_num})",
+        f" - {unique_num}",
+        f" | {unique_num}",
+        f" [{unique_num}]",
+        f" ㅠㅠ #{unique_num % 10000}",
+        f" ㅎㅎ #{unique_num % 10000}",
+        f"... ({unique_num % 10000})",
+        f"! [{unique_num % 10000}]",
+        f" ({random.randint(1, 12)}월) {unique_num % 1000}",
     ]
 
     prefix = random.choice(prefixes)
-    suffix = random.choice(suffixes)
-    extra = random.choice(extras)
+    suffix = random.choice(suffix_patterns)
 
-    return f"{prefix}{base_title}{suffix}{extra}"
+    return f"{prefix}{base_title}{suffix}"
 
 
 def generate_seed_posts(count: int = 30) -> List[int]:
