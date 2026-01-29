@@ -46,8 +46,10 @@ jobs:
             git reset --hard origin/main
             echo "=== After reset ==="
             git log --oneline -1
-            echo "=== Check file content ==="
-            grep "message" flyio-backend/services/community_automation.py | tail -3
+            echo "=== Check main.py deployment-test endpoint ==="
+            grep "deployment-test" flyio-backend/main.py | head -5
+            echo "=== Files modified ==="
+            ls -la flyio-backend/main.py flyio-backend/routers/community.py
             cd flyio-backend
 
             # 네이버 광고 API 자격 증명을 .env에 추가/업데이트
@@ -102,9 +104,17 @@ jobs:
             # 컨테이너 내부 파일 확인
             echo "=== Container file check ==="
             sleep 10
-            docker exec blog-analyzer-api cat /app/services/community_automation.py | grep "message" | tail -3
+            docker exec blog-analyzer-api cat /app/main.py | grep "deployment-test" | head -3
+
+            # community.py 라우트 확인
+            echo "=== Community routes check ==="
+            docker exec blog-analyzer-api grep "reset-and-generate" /app/routers/community.py | head -2
 
             # API 실제 응답 확인
             echo "=== API Response Test ==="
-            curl -s http://localhost:8000/deployment-test-v5 || echo "API test failed"
+            curl -s http://localhost:8000/deployment-test-v6 || echo "v6 test failed"
             curl -s http://localhost:8000/health || echo "Health check failed"
+
+            # 커뮤니티 API 테스트
+            echo "=== Community API test ==="
+            curl -s http://localhost:8000/api/community/automation/test-v3 || echo "test-v3 failed"
