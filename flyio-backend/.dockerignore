@@ -1,0 +1,30 @@
+# Python cache - 이전 버전의 .pyc 파일이 복사되는 것 방지
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environment
+venv/
+.venv/
+env/
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# Git
+.git/
+.gitignore
+
+# Test files
+test_*.json
+*.test.py
+pytest_cache/
+.pytest_cache/
+
+# Misc
+*.log
+*.tmp
