@@ -563,30 +563,47 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 10) ->
         view_results = []
         all_urls = set()  # 모든 소스에서 중복 제거용
 
-        # ===== 1단계: 네이버 공식 API (가장 안정적, 공식 API) =====
-        client_id = getattr(settings, 'NAVER_CLIENT_ID', None)
-        client_secret = getattr(settings, 'NAVER_CLIENT_SECRET', None)
+        # ===== 1단계: Playwright BLOG 탭 (가장 정확 - 네이버 블로그만 표시) =====
+        logger.info(f"Step 1: Playwright BLOG tab for: {keyword}")
+        try:
+            playwright_results = await fetch_via_blog_tab_scraping(keyword, limit * 2)
+            if playwright_results:
+                for item in playwright_results:
+                    if len(blog_results) >= limit:
+                        break
+                    if item["post_url"] not in all_urls:
+                        item["rank"] = len(blog_results) + 1
+                        blog_results.append(item)
+                        all_urls.add(item["post_url"])
+                logger.info(f"Playwright BLOG tab: {len(blog_results)} results")
+        except Exception as e:
+            logger.warning(f"Playwright BLOG tab failed: {e}")
 
-        if client_id and client_secret:
-            logger.info(f"Step 1: Naver API (official) for: {keyword}")
-            try:
-                api_results = await fetch_via_naver_api(keyword, limit * 3, client_id, client_secret)
-                if api_results:
-                    for item in api_results:
-                        if len(blog_results) >= limit:
-                            break
-                        if item["post_url"] not in all_urls:
-                            item["tab_type"] = "BLOG"
-                            item["rank"] = len(blog_results) + 1
-                            blog_results.append(item)
-                            all_urls.add(item["post_url"])
-                    logger.info(f"Naver API: {len(blog_results)} results")
-            except Exception as e:
-                logger.warning(f"Naver API failed: {e}")
-
-        # ===== 2단계: HTTP 전용 스크래핑 (보충) =====
+        # ===== 2단계: 네이버 공식 API (보충) =====
         if len(blog_results) < limit:
-            logger.info(f"Step 2: HTTP-only scraping for: {keyword} (need {limit - len(blog_results)} more)")
+            client_id = getattr(settings, 'NAVER_CLIENT_ID', None)
+            client_secret = getattr(settings, 'NAVER_CLIENT_SECRET', None)
+
+            if client_id and client_secret:
+                logger.info(f"Step 2: Naver API for: {keyword} (need {limit - len(blog_results)} more)")
+                try:
+                    api_results = await fetch_via_naver_api(keyword, limit * 3, client_id, client_secret)
+                    if api_results:
+                        for item in api_results:
+                            if len(blog_results) >= limit:
+                                break
+                            if item["post_url"] not in all_urls:
+                                item["tab_type"] = "BLOG"
+                                item["rank"] = len(blog_results) + 1
+                                blog_results.append(item)
+                                all_urls.add(item["post_url"])
+                        logger.info(f"After Naver API: {len(blog_results)} results")
+                except Exception as e:
+                    logger.warning(f"Naver API failed: {e}")
+
+        # ===== 3단계: HTTP 전용 스크래핑 (보충) =====
+        if len(blog_results) < limit:
+            logger.info(f"Step 3: HTTP-only scraping for: {keyword} (need {limit - len(blog_results)} more)")
             try:
                 http_results = await fetch_via_http_only(keyword, limit * 2)
                 if http_results:
@@ -601,23 +618,6 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 10) ->
                     logger.info(f"After HTTP-only: {len(blog_results)} results")
             except Exception as e:
                 logger.warning(f"HTTP-only scraping failed: {e}")
-
-        # ===== 3단계: Playwright VIEW 탭 (JS 렌더링 필요 시) =====
-        if len(blog_results) < limit:
-            logger.info(f"Step 3: Playwright VIEW tab for: {keyword} (need {limit - len(blog_results)} more)")
-            try:
-                playwright_results = await fetch_via_view_tab_scraping(keyword, limit * 2)
-                if playwright_results:
-                    for item in playwright_results:
-                        if len(blog_results) >= limit:
-                            break
-                        if item["post_url"] not in all_urls:
-                            item["rank"] = len(blog_results) + 1
-                            blog_results.append(item)
-                            all_urls.add(item["post_url"])
-                    logger.info(f"After Playwright VIEW: {len(blog_results)} results")
-            except Exception as e:
-                logger.warning(f"Playwright VIEW failed: {e}")
 
         # ===== 4단계: RSS fallback (아직 부족하면) =====
         if len(blog_results) < limit:
