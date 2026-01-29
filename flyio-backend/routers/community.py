@@ -597,6 +597,242 @@ async def generate_comments_api(
     return {"success": True, "comments_created": count}
 
 
+# ============ 대량 데이터 생성 API ============
+
+@router.post("/automation/bulk-generate")
+async def bulk_generate_api(
+    post_count: int = Query(10000, ge=100, le=50000),
+    avg_comments_min: int = Query(3, ge=1, le=10),
+    avg_comments_max: int = Query(15, ge=5, le=30),
+    admin_key: str = Query(...)
+):
+    """대량 커뮤니티 데이터 생성 - 관리자 전용
+
+    - post_count: 생성할 게시글 수 (기본 10000)
+    - avg_comments_min/max: 게시글당 평균 댓글 수 범위
+    """
+    if admin_key != "blank-admin-2024":
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+
+    from services.bulk_data_generator import generate_bulk_data
+
+    result = generate_bulk_data(
+        post_count=post_count,
+        avg_comments_per_post=(avg_comments_min, avg_comments_max),
+        use_ai=False
+    )
+
+    return {
+        "success": True,
+        **result
+    }
+
+
+@router.post("/automation/bulk-generate-async")
+async def bulk_generate_async_api(
+    post_count: int = Query(10000, ge=100, le=50000),
+    batch_size: int = Query(500, ge=100, le=1000),
+    admin_key: str = Query(...)
+):
+    """비동기 대량 데이터 생성 (서버 부하 분산) - 관리자 전용"""
+    if admin_key != "blank-admin-2024":
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+
+    from services.bulk_data_generator import generate_bulk_data_async
+    import asyncio
+
+    # 백그라운드 태스크로 실행
+    result = await generate_bulk_data_async(
+        post_count=post_count,
+        batch_size=batch_size,
+        delay_between_batches=0.5
+    )
+
+    return {
+        "success": True,
+        **result
+    }
+
+
+@router.get("/automation/bulk-status")
+async def bulk_status_api(admin_key: str = Query(...)):
+    """현재 데이터 현황 조회 - 관리자 전용"""
+    if admin_key != "blank-admin-2024":
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+
+    from database.community_db import get_db_connection
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # 게시글 통계
+    cursor.execute("SELECT COUNT(*) as count FROM posts WHERE is_deleted = FALSE")
+    post_count = cursor.fetchone()["count"]
+
+    # 카테고리별 분포
+    cursor.execute("""
+        SELECT category, COUNT(*) as count
+        FROM posts WHERE is_deleted = FALSE
+        GROUP BY category
+    """)
+    category_dist = {row["category"]: row["count"] for row in cursor.fetchall()}
+
+    # 댓글 통계
+    cursor.execute("SELECT COUNT(*) as count FROM post_comments WHERE is_deleted = FALSE")
+    comment_count = cursor.fetchone()["count"]
+
+    # 기간 분포
+    cursor.execute("""
+        SELECT
+            CASE
+                WHEN created_at >= datetime('now', '-7 days') THEN 'last_7_days'
+                WHEN created_at >= datetime('now', '-30 days') THEN 'last_30_days'
+                WHEN created_at >= datetime('now', '-90 days') THEN 'last_90_days'
+                ELSE 'older'
+            END as period,
+            COUNT(*) as count
+        FROM posts WHERE is_deleted = FALSE
+        GROUP BY period
+    """)
+    period_dist = {row["period"]: row["count"] for row in cursor.fetchall()}
+
+    conn.close()
+
+    return {
+        "total_posts": post_count,
+        "total_comments": comment_count,
+        "avg_comments_per_post": round(comment_count / max(post_count, 1), 2),
+        "category_distribution": category_dist,
+        "period_distribution": period_dist,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+# ============ 자연스러운 콘텐츠 자동 생성 API ============
+
+@router.get("/scheduler/status")
+async def scheduler_status_api(admin_key: str = Query(...)):
+    """콘텐츠 스케줄러 상태 조회 - 관리자 전용"""
+    if admin_key != "blank-admin-2024":
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+
+    from services.content_scheduler import get_scheduler
+    scheduler = get_scheduler()
+    return scheduler.get_status()
+
+
+@router.post("/scheduler/start")
+async def scheduler_start_api(admin_key: str = Query(...)):
+    """콘텐츠 스케줄러 시작 - 관리자 전용"""
+    if admin_key != "blank-admin-2024":
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+
+    from services.content_scheduler import get_scheduler
+    scheduler = get_scheduler()
+
+    if scheduler.is_running:
+        return {"success": False, "message": "스케줄러가 이미 실행 중입니다"}
+
+    scheduler.start()
+    return {"success": True, "message": "스케줄러가 시작되었습니다"}
+
+
+@router.post("/scheduler/stop")
+async def scheduler_stop_api(admin_key: str = Query(...)):
+    """콘텐츠 스케줄러 중지 - 관리자 전용"""
+    if admin_key != "blank-admin-2024":
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+
+    from services.content_scheduler import get_scheduler
+    scheduler = get_scheduler()
+
+    if not scheduler.is_running:
+        return {"success": False, "message": "스케줄러가 실행 중이 아닙니다"}
+
+    scheduler.stop()
+    return {"success": True, "message": "스케줄러가 중지되었습니다"}
+
+
+@router.post("/automation/generate-natural")
+async def generate_natural_content_api(
+    posts_count: int = Query(10, ge=1, le=50),
+    add_comments_to_existing: bool = Query(True),
+    admin_key: str = Query(...)
+):
+    """자연스러운 콘텐츠 수동 생성 - 관리자 전용
+
+    실제 사람처럼 비속어, 줄임말, 의심, 다양한 감정 표현 포함
+    """
+    if admin_key != "blank-admin-2024":
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+
+    from services.content_scheduler import run_manual_generation
+
+    result = await run_manual_generation(
+        posts_count=posts_count,
+        add_comments=add_comments_to_existing,
+    )
+
+    return {
+        "success": True,
+        **result,
+        "message": "자연스러운 콘텐츠가 생성되었습니다"
+    }
+
+
+@router.post("/automation/generate-initial-data")
+async def generate_initial_data_api(
+    target_posts: int = Query(10000, ge=100, le=50000),
+    batch_size: int = Query(100, ge=50, le=500),
+    admin_key: str = Query(...)
+):
+    """초기 대량 데이터 점진 생성 - 관리자 전용
+
+    서버 부하 최소화하며 1만개 이상 데이터 생성
+    배치 단위로 생성하여 서버 안정성 유지
+    """
+    if admin_key != "blank-admin-2024":
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+
+    from services.content_scheduler import generate_initial_data_gradually
+
+    result = await generate_initial_data_gradually(
+        target_posts=target_posts,
+        batch_size=batch_size,
+        delay_between_batches=1.0,
+    )
+
+    return {
+        "success": True,
+        **result
+    }
+
+
+@router.post("/automation/add-daily-content")
+async def add_daily_content_api(
+    posts_min: int = Query(15, ge=5, le=50),
+    posts_max: int = Query(30, ge=10, le=100),
+    comments_min: int = Query(3, ge=1, le=10),
+    comments_max: int = Query(12, ge=5, le=30),
+    admin_key: str = Query(...)
+):
+    """하루치 자연스러운 콘텐츠 생성 - 관리자 전용"""
+    if admin_key != "blank-admin-2024":
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+
+    from services.natural_content_generator import generate_daily_natural_content
+
+    result = generate_daily_natural_content(
+        posts_count=(posts_min, posts_max),
+        comments_per_post=(comments_min, comments_max),
+    )
+
+    return {
+        "success": True,
+        **result
+    }
+
+
 # ============ 디버그 API ============
 
 @router.get("/debug/routes-check")

@@ -3,31 +3,33 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>블로그 지수 분석기</title>
+  <title>Blrank 블로그 검색</title>
   <style>
     * {
+      box-sizing: border-box;
       margin: 0;
       padding: 0;
-      box-sizing: border-box;
     }
 
     body {
-      width: 400px;
-      padding: 20px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: #fff;
+      width: 360px;
+      min-height: 400px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f8f9fa;
+      color: #333;
     }
 
     .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 16px;
       text-align: center;
-      margin-bottom: 20px;
     }
 
     .header h1 {
-      font-size: 20px;
-      font-weight: 700;
-      margin-bottom: 5px;
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 4px;
     }
 
     .header p {
@@ -35,215 +37,179 @@
       opacity: 0.9;
     }
 
-    .card {
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(10px);
-      border-radius: 12px;
-      padding: 15px;
-      margin-bottom: 15px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
+    .content {
+      padding: 16px;
     }
 
-    .card h3 {
-      font-size: 14px;
-      margin-bottom: 10px;
+    .search-box {
       display: flex;
-      align-items: center;
-      gap: 5px;
+      gap: 8px;
+      margin-bottom: 16px;
     }
 
-    .stat-item {
-      display: flex;
-      justify-content: space-between;
-      padding: 8px 0;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .stat-item:last-child {
-      border-bottom: none;
-    }
-
-    .stat-label {
-      font-size: 13px;
-      opacity: 0.9;
-    }
-
-    .stat-value {
+    .search-box input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
       font-size: 14px;
-      font-weight: 600;
+      outline: none;
+      transition: border-color 0.2s;
     }
 
-    .input-group {
-      margin-bottom: 12px;
+    .search-box input:focus {
+      border-color: #667eea;
     }
 
-    .input-group label {
-      display: block;
-      font-size: 12px;
-      margin-bottom: 5px;
-      opacity: 0.9;
-    }
-
-    .input-group input {
-      width: 100%;
-      padding: 8px 12px;
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      border-radius: 6px;
-      background: rgba(255, 255, 255, 0.1);
-      color: #fff;
-      font-size: 13px;
-    }
-
-    .input-group input::placeholder {
-      color: rgba(255, 255, 255, 0.5);
-    }
-
-    button {
-      width: 100%;
-      padding: 12px;
+    .search-box button {
+      padding: 10px 16px;
+      background: #667eea;
+      color: white;
       border: none;
       border-radius: 8px;
-      background: rgba(255, 255, 255, 0.25);
-      color: #fff;
       font-size: 14px;
-      font-weight: 600;
       cursor: pointer;
-      transition: all 0.3s;
-      margin-bottom: 10px;
+      transition: background 0.2s;
     }
 
-    button:hover {
-      background: rgba(255, 255, 255, 0.35);
-      transform: translateY(-2px);
+    .search-box button:hover {
+      background: #5a6fd6;
     }
 
-    button:active {
-      transform: translateY(0);
-    }
-
-    button:disabled {
-      opacity: 0.5;
+    .search-box button:disabled {
+      background: #ccc;
       cursor: not-allowed;
     }
 
-    .btn-primary {
-      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    }
-
-    .btn-primary:hover {
-      background: linear-gradient(135deg, #f093fb 10%, #f5576c 110%);
-    }
-
     .status {
-      text-align: center;
-      padding: 10px;
+      background: white;
       border-radius: 8px;
-      font-size: 12px;
-      margin-bottom: 10px;
+      padding: 12px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      border: 1px solid #eee;
+    }
+
+    .status.loading {
+      color: #667eea;
     }
 
     .status.success {
-      background: rgba(72, 187, 120, 0.3);
+      color: #28a745;
     }
 
     .status.error {
-      background: rgba(245, 101, 101, 0.3);
+      color: #dc3545;
     }
 
-    .status.info {
-      background: rgba(66, 153, 225, 0.3);
+    .results {
+      background: white;
+      border-radius: 8px;
+      border: 1px solid #eee;
+      max-height: 250px;
+      overflow-y: auto;
     }
 
-    .hidden {
-      display: none;
+    .result-item {
+      padding: 10px 12px;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 13px;
     }
 
-    .loading {
-      text-align: center;
-      padding: 20px;
+    .result-item:last-child {
+      border-bottom: none;
     }
 
-    .spinner {
-      border: 3px solid rgba(255, 255, 255, 0.3);
+    .result-item .rank {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      background: #667eea;
+      color: white;
       border-radius: 50%;
-      border-top: 3px solid #fff;
-      width: 30px;
-      height: 30px;
-      animation: spin 1s linear infinite;
-      margin: 0 auto;
+      text-align: center;
+      line-height: 24px;
+      font-size: 11px;
+      margin-right: 8px;
     }
 
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
+    .result-item .blog-id {
+      font-weight: 500;
+    }
+
+    .actions {
+      margin-top: 16px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .actions button {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ddd;
+      background: white;
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .actions button:hover {
+      background: #f8f9fa;
+      border-color: #667eea;
+    }
+
+    .actions button.primary {
+      background: #28a745;
+      color: white;
+      border-color: #28a745;
+    }
+
+    .actions button.primary:hover {
+      background: #218838;
+    }
+
+    .footer {
+      padding: 12px 16px;
+      text-align: center;
+      font-size: 11px;
+      color: #999;
+      border-top: 1px solid #eee;
+    }
+
+    .footer a {
+      color: #667eea;
+      text-decoration: none;
     }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>📊 블로그 지수 분석기</h1>
-    <p>네이버 블로그 통계를 자동으로 수집합니다</p>
+    <h1>Blrank 블로그 검색</h1>
+    <p>네이버 블로그 순위를 분석합니다</p>
   </div>
 
-  <div id="statusMessage" class="status hidden"></div>
+  <div class="content">
+    <div class="search-box">
+      <input type="text" id="keyword" placeholder="키워드 입력 (예: 습진한의원)">
+      <button id="searchBtn">검색</button>
+    </div>
 
-  <!-- 자동 추출 섹션 -->
-  <div class="card">
-    <h3>🔍 자동 통계 추출</h3>
-    <p style="font-size: 12px; margin-bottom: 10px; opacity: 0.8;">
-      네이버 블로그 통계 페이지에서 자동으로 데이터를 추출합니다
-    </p>
-    <button id="extractBtn">현재 페이지에서 통계 추출</button>
-  </div>
+    <div class="status" id="status">
+      키워드를 입력하고 검색 버튼을 클릭하세요.
+    </div>
 
-  <!-- 수동 입력 섹션 -->
-  <div class="card">
-    <h3>✏️ 수동 입력</h3>
-    <div class="input-group">
-      <label>블로그 ID</label>
-      <input type="text" id="blogIdInput" placeholder="예: lhs0609c">
+    <div class="results" id="results" style="display: none;">
     </div>
-    <div class="input-group">
-      <label>전체 포스트 수</label>
-      <input type="number" id="postsInput" placeholder="예: 50">
-    </div>
-    <div class="input-group">
-      <label>총 방문자 수</label>
-      <input type="number" id="visitorsInput" placeholder="예: 10000">
-    </div>
-    <div class="input-group">
-      <label>이웃 수</label>
-      <input type="number" id="neighborsInput" placeholder="예: 30">
+
+    <div class="actions" id="actions" style="display: none;">
+      <button id="copyBtn">URL 복사</button>
+      <button id="sendBtn" class="primary">Blrank로 전송</button>
     </div>
   </div>
 
-  <!-- 추출된 데이터 표시 -->
-  <div id="statsCard" class="card hidden">
-    <h3>📋 추출된 통계</h3>
-    <div class="stat-item">
-      <span class="stat-label">블로그 ID</span>
-      <span class="stat-value" id="displayBlogId">-</span>
-    </div>
-    <div class="stat-item">
-      <span class="stat-label">포스트 수</span>
-      <span class="stat-value" id="displayPosts">-</span>
-    </div>
-    <div class="stat-item">
-      <span class="stat-label">방문자 수</span>
-      <span class="stat-value" id="displayVisitors">-</span>
-    </div>
-    <div class="stat-item">
-      <span class="stat-label">이웃 수</span>
-      <span class="stat-value" id="displayNeighbors">-</span>
-    </div>
-  </div>
-
-  <!-- 전송 버튼 -->
-  <button id="sendBtn" class="btn-primary" disabled>📤 분석 서버로 전송</button>
-
-  <div id="loadingDiv" class="loading hidden">
-    <div class="spinner"></div>
-    <p style="margin-top: 10px; font-size: 13px;">처리 중...</p>
+  <div class="footer">
+    <a href="https://blrank.co.kr" target="_blank">blrank.co.kr</a> 에서 상세 분석
   </div>
 
   <script src="popup.js"></script>

@@ -68,15 +68,20 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ User tables initialization failed: {e}")
 
-    # 관리자 계정 자동 설정
+    # 관리자 계정 자동 설정 (환경변수에서 읽음)
     try:
         from database.user_db import get_user_db
         from passlib.context import CryptContext
         pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
         user_db = get_user_db()
-        admin_email = "lhs0609c@naver.com"
-        admin_password = "lhs0609c@naver.com"
+        admin_email = os.getenv("ADMIN_EMAIL")
+        admin_password = os.getenv("ADMIN_PASSWORD")
+
+        # 환경변수가 설정되지 않으면 관리자 자동 생성 건너뛰기
+        if not admin_email or not admin_password:
+            logger.warning("⚠️ ADMIN_EMAIL or ADMIN_PASSWORD not set. Skipping auto admin creation.")
+            return
 
         existing_user = user_db.get_user_by_email(admin_email)
         if existing_user:
@@ -222,6 +227,15 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Community tables initialized")
     except Exception as e:
         logger.warning(f"⚠️ Community tables initialization failed: {e}")
+
+    # 커뮤니티 콘텐츠 자동 생성 스케줄러 시작
+    try:
+        from services.content_scheduler import get_scheduler
+        content_scheduler = get_scheduler()
+        content_scheduler.start()
+        logger.info("✅ Community content scheduler started")
+    except Exception as e:
+        logger.warning(f"⚠️ Community content scheduler failed to start: {e}")
 
     # A/B Test DB 초기화
     try:

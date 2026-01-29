@@ -107,6 +107,121 @@ def set_search_results_cache(keyword: str, data: Dict):
     }
 
 
+# ===== 크롬 확장 프로그램 결과 저장소 (메모리 캐시) =====
+EXTENSION_RESULTS_CACHE: Dict[str, Dict] = {}
+EXTENSION_CACHE_TTL = 600  # 10분
+
+
+class ExtensionResultsRequest(BaseModel):
+    """크롬 확장 프로그램 결과 요청"""
+    keyword: str
+    blogs: List[Dict]
+    source: str = "chrome_extension"
+    timestamp: Optional[str] = None
+
+
+@router.post("/extension-results")
+async def receive_extension_results(request: ExtensionResultsRequest):
+    """크롬 확장 프로그램에서 수집한 블로그 결과 저장"""
+    try:
+        keyword = request.keyword.strip().lower()
+        blogs = request.blogs
+
+        logger.info(f"[EXTENSION] Received {len(blogs)} blogs for '{keyword}'")
+
+        # 결과 정규화
+        normalized_blogs = []
+        seen_urls = set()
+
+        for blog in blogs:
+            post_url = blog.get("post_url", "")
+            if post_url in seen_urls:
+                continue
+            seen_urls.add(post_url)
+
+            blog_id = blog.get("blog_id", "")
+            if not blog_id:
+                # URL에서 blog_id 추출
+                match = re.search(r'blog\.naver\.com/(\w+)/(\d+)', post_url)
+                if match:
+                    blog_id = match.group(1)
+
+            if not blog_id:
+                continue
+
+            normalized_blogs.append({
+                "rank": len(normalized_blogs) + 1,
+                "blog_id": blog_id,
+                "blog_name": blog_id,
+                "blog_url": f"https://blog.naver.com/{blog_id}",
+                "post_title": blog.get("post_title", ""),
+                "post_url": post_url,
+                "post_date": None,
+                "thumbnail": None,
+                "tab_type": "BLOG",
+                "smart_block_keyword": request.keyword,
+                "source": "extension"
+            })
+
+        # 캐시에 저장
+        EXTENSION_RESULTS_CACHE[keyword] = {
+            "data": {
+                "view_results": normalized_blogs,
+                "blog_results": normalized_blogs
+            },
+            "timestamp": time.time(),
+            "source": request.source
+        }
+
+        # 메인 검색 캐시에도 저장 (다른 요청에서 활용)
+        set_search_results_cache(request.keyword, {
+            "view_results": normalized_blogs,
+            "blog_results": normalized_blogs
+        })
+
+        logger.info(f"[EXTENSION] Cached {len(normalized_blogs)} blogs for '{keyword}'")
+
+        return {
+            "success": True,
+            "keyword": request.keyword,
+            "received_count": len(blogs),
+            "saved_count": len(normalized_blogs),
+            "message": f"{len(normalized_blogs)}개 블로그가 저장되었습니다."
+        }
+
+    except Exception as e:
+        logger.error(f"[EXTENSION] Error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@router.get("/extension-results/{keyword}")
+async def get_extension_results(keyword: str):
+    """크롬 확장 프로그램으로 수집된 결과 조회"""
+    cache_key = keyword.strip().lower()
+
+    if cache_key in EXTENSION_RESULTS_CACHE:
+        cached = EXTENSION_RESULTS_CACHE[cache_key]
+        if time.time() - cached["timestamp"] < EXTENSION_CACHE_TTL:
+            return {
+                "success": True,
+                "keyword": keyword,
+                "data": cached["data"],
+                "source": cached.get("source", "extension"),
+                "cached": True
+            }
+
+    return {
+        "success": False,
+        "keyword": keyword,
+        "message": "확장 프로그램 결과가 없습니다. 확장 프로그램으로 검색해주세요."
+    }
+
+
 @router.get("/test-playwright")
 async def test_playwright_scraping(keyword: str = Query(...)):
     """Playwright BLOG tab 스크래핑 직접 테스트 (캐시 우회)"""
@@ -604,6 +719,16 @@ async def fetch_naver_search_results(keyword: str, limit: int = 10) -> List[Dict
 
 async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 10) -> Dict[str, List[Dict]]:
     """Fetch search results from both VIEW tab and BLOG tab - 다중 소스 병합으로 10개 결과 보장"""
+    # 0단계: 크롬 확장 프로그램 결과 확인 (가장 정확)
+    cache_key = keyword.strip().lower()
+    if cache_key in EXTENSION_RESULTS_CACHE:
+        ext_cached = EXTENSION_RESULTS_CACHE[cache_key]
+        if time.time() - ext_cached["timestamp"] < EXTENSION_CACHE_TTL:
+            ext_data = ext_cached["data"]
+            if len(ext_data.get("blog_results", [])) >= limit:
+                logger.info(f"[EXTENSION] Using extension results for '{keyword}': {len(ext_data['blog_results'])} blogs")
+                return ext_data
+
     # 캐시 확인 (성능 개선 - 5분 TTL)
     cached = get_cached_search_results(keyword)
     if cached:
