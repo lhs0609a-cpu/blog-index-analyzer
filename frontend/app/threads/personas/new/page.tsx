@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { toast } from 'react-hot-toast';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr';
 
@@ -36,7 +37,7 @@ export default function NewPersonaPage() {
     e.preventDefault();
 
     if (!persona.name) {
-      alert('페르소나 이름을 입력해주세요.');
+      toast.error('페르소나 이름을 입력해주세요.');
       return;
     }
 
@@ -49,14 +50,15 @@ export default function NewPersonaPage() {
       });
 
       if (res.ok) {
+        toast.success('페르소나가 생성되었습니다.');
         router.push('/threads?tab=personas');
       } else {
         const error = await res.json();
-        alert(`저장 실패: ${error.detail}`);
+        toast.error(`저장 실패: ${error.detail}`);
       }
     } catch (error) {
       console.error('Error saving persona:', error);
-      alert('저장 중 오류가 발생했습니다.');
+      toast.error('저장 중 오류가 발생했습니다.');
     }
     setSaving(false);
   };
@@ -133,6 +135,7 @@ export default function NewPersonaPage() {
                 onChange={(e) => setPersona({ ...persona, personality: e.target.value })}
                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 rows={2}
+                maxLength={500}
                 placeholder="예: 밝고 긍정적이며, 새로운 것에 호기심이 많음"
               />
             </div>
@@ -225,6 +228,7 @@ export default function NewPersonaPage() {
                 onChange={(e) => setPersona({ ...persona, background_story: e.target.value })}
                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 rows={4}
+                maxLength={2000}
                 placeholder="이 페르소나의 배경 이야기를 적어주세요. 더 자연스러운 콘텐츠 생성에 도움이 됩니다."
               />
             </div>

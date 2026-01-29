@@ -143,8 +143,9 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
 
       const status = await getTaskStatus(result.task_id)
       setTaskStatus(status)
-    } catch (error: any) {
-      const detail = error.response?.data?.detail
+    } catch (error) {
+      const axiosError = error as { response?: { data?: { detail?: { error?: string; message?: string } } } }
+      const detail = axiosError.response?.data?.detail
       if (detail?.error === 'task_already_running') {
         toast.error('이미 실행 중인 작업이 있습니다.')
       } else {
@@ -162,10 +163,11 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
       const filename = `blog_rank_report_${blogId}_${new Date().toISOString().split('T')[0]}.xlsx`
       downloadExcel(blob, filename)
       toast.success('Excel 파일이 다운로드되었습니다.')
-    } catch (error: any) {
-      const detail = error.response?.data?.detail
+    } catch (error) {
+      const axiosError = error as { response?: { data?: { detail?: { error?: string; message?: string } } } }
+      const detail = axiosError.response?.data?.detail
       if (detail?.error === 'feature_not_available') {
-        toast.error(detail.message)
+        toast.error(detail.message || 'Excel 다운로드에 실패했습니다.')
       } else {
         toast.error('Excel 다운로드에 실패했습니다.')
       }

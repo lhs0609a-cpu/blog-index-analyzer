@@ -3,7 +3,7 @@ Authentication router with JWT token support
 """
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
@@ -28,13 +28,13 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=Fals
 # Request/Response models
 class RegisterRequest(BaseModel):
     email: EmailStr
-    password: str
-    name: Optional[str] = None
+    password: str = Field(..., min_length=8, max_length=128, description="비밀번호 (8-128자)")
+    name: Optional[str] = Field(None, max_length=50, description="이름 (최대 50자)")
 
 
 class LoginRequest(BaseModel):
-    email: str
-    password: str
+    email: str = Field(..., max_length=254, description="이메일")
+    password: str = Field(..., min_length=1, max_length=128, description="비밀번호")
 
 
 class TokenResponse(BaseModel):
@@ -57,8 +57,8 @@ class UserResponse(BaseModel):
 
 
 class UpdateUserRequest(BaseModel):
-    name: Optional[str] = None
-    blog_id: Optional[str] = None
+    name: Optional[str] = Field(None, max_length=50, description="이름 (최대 50자)")
+    blog_id: Optional[str] = Field(None, max_length=50, description="블로그 ID (최대 50자)")
 
 
 # Helper functions

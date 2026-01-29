@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'react-hot-toast';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr';
 
@@ -175,12 +176,12 @@ export default function ThreadsPage() {
       if (data.success && data.auth_url) {
         window.location.href = data.auth_url;
       } else {
-        alert(data.detail || 'Threads 연결 URL을 가져올 수 없습니다.');
+        toast.error(data.detail || 'Threads 연결 URL을 가져올 수 없습니다.');
         setConnecting(false);
       }
     } catch (error) {
       console.error('Error getting auth URL:', error);
-      alert('서버 연결에 실패했습니다.');
+      toast.error('서버 연결에 실패했습니다.');
       setConnecting(false);
     }
   };
@@ -203,7 +204,7 @@ export default function ThreadsPage() {
 
   const createCampaign = async () => {
     if (!newCampaign.name || !newCampaign.brand_name) {
-      alert('캠페인 이름과 브랜드 이름은 필수입니다.');
+      toast.error('캠페인 이름과 브랜드 이름은 필수입니다.');
       return;
     }
 
@@ -227,13 +228,14 @@ export default function ThreadsPage() {
           duration_days: 90,
           persona_id: ''
         });
+        toast.success('캠페인이 생성되었습니다.');
         window.location.href = `/threads/campaigns/${data.campaign_id}`;
       } else {
-        alert('캠페인 생성에 실패했습니다.');
+        toast.error('캠페인 생성에 실패했습니다.');
       }
     } catch (error) {
       console.error('Error creating campaign:', error);
-      alert('캠페인 생성 중 오류가 발생했습니다.');
+      toast.error('캠페인 생성 중 오류가 발생했습니다.');
     }
     setCreating(false);
   };

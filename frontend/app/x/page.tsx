@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuthStore } from '@/lib/stores/auth';
+import { toast } from 'react-hot-toast';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr';
 
@@ -78,10 +80,13 @@ interface XAccount {
 }
 
 export default function XAutopilotPage() {
+  const { user } = useAuthStore();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [accounts, setAccounts] = useState<XAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
+
+  const userId = user?.id || 0;
 
   // 새 캠페인 생성 모달
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -130,8 +135,8 @@ export default function XAutopilotPage() {
         const data = await accountsRes.json();
         setAccounts(data.accounts || []);
       }
-    } catch (error) {
-      console.error('Error fetching data:', error);
+    } catch {
+      // 데이터 로드 실패 무시
     }
     setLoading(false);
   };
@@ -139,19 +144,17 @@ export default function XAutopilotPage() {
   const connectXAccount = async () => {
     setConnecting(true);
     try {
-      // 임시 user_id (실제로는 로그인된 사용자 ID 사용)
-      const res = await fetch(`${API_BASE}/api/x/auth/url?user_id=1`);
+      const res = await fetch(`${API_BASE}/api/x/auth/url?user_id=${userId}`);
       const data = await res.json();
 
       if (data.auth_url) {
         window.location.href = data.auth_url;
       } else {
-        alert(data.detail || 'X 연결 URL을 가져올 수 없습니다.');
+        toast.error(data.detail || 'X 연결 URL을 가져올 수 없습니다.');
         setConnecting(false);
       }
-    } catch (error) {
-      console.error('Error getting auth URL:', error);
-      alert('서버 연결에 실패했습니다.');
+    } catch {
+      toast.error('서버 연결에 실패했습니다.');
       setConnecting(false);
     }
   };
@@ -167,14 +170,14 @@ export default function XAutopilotPage() {
       if (res.ok) {
         setAccounts(prev => prev.filter(a => a.id !== accountId));
       }
-    } catch (error) {
-      console.error('Error disconnecting account:', error);
+    } catch {
+      // 연결 해제 실패 무시
     }
   };
 
   const createCampaign = async () => {
     if (!newCampaign.name || !newCampaign.brand_name) {
-      alert('캠페인 이름과 브랜드 이름은 필수입니다.');
+      toast.error('캠페인 이름과 브랜드 이름은 필수입니다.');
       return;
     }
 
@@ -183,7 +186,7 @@ export default function XAutopilotPage() {
       // 연결된 계정이 있으면 첫 번째 계정 사용
       const account_id = accounts.length > 0 ? accounts[0].id : undefined;
 
-      const res = await fetch(`${API_BASE}/api/x/campaigns?user_id=1`, {
+      const res = await fetch(`${API_BASE}/api/x/campaigns?user_id=${userId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -204,13 +207,13 @@ export default function XAutopilotPage() {
           duration_days: 90,
           content_style: 'casual'
         });
+        toast.success('캠페인이 생성되었습니다.');
         window.location.href = `/x/campaigns/${data.campaign_id}`;
       } else {
-        alert('캠페인 생성에 실패했습니다.');
+        toast.error('캠페인 생성에 실패했습니다.');
       }
-    } catch (error) {
-      console.error('Error creating campaign:', error);
-      alert('캠페인 생성 중 오류가 발생했습니다.');
+    } catch {
+      toast.error('캠페인 생성 중 오류가 발생했습니다.');
     }
     setCreating(false);
   };

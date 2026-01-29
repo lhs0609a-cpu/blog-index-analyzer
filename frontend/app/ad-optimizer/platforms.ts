@@ -515,8 +515,9 @@ export function getPlatformsByCategory(): Record<PlatformCategory, AdPlatform[]>
   return result
 }
 
-// 연동된 플랫폼 개수 (더미)
+// 연동된 플랫폼 개수
+// 현재는 네이버만 기본 연동 상태로 반환
+// 추후 실제 플랫폼 연동 상태 조회 API 연동 필요
 export function getConnectedPlatformsCount(): number {
-  // TODO: 실제 연동 상태 확인
-  return 1 // 네이버만 연동된 상태
+  return 1
 }

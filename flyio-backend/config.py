@@ -88,8 +88,8 @@ class Settings(BaseSettings):
         """Celery 결과 백엔드 URL"""
         return self.CELERY_RESULT_BACKEND or self.redis_url
 
-    # JWT Authentication
-    SECRET_KEY: str = "your-super-secret-key-change-in-production"
+    # JWT Authentication (SECRET_KEY must be set via environment variable)
+    SECRET_KEY: str = ""  # Required: Set via SECRET_KEY environment variable
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -188,21 +188,22 @@ def get_settings() -> Settings:
     """설정 싱글톤 인스턴스"""
     settings = Settings()
 
-    # 보안 경고: 프로덕션 환경에서 기본 SECRET_KEY 사용 감지
-    if settings.APP_ENV == "production" and settings.SECRET_KEY == "your-super-secret-key-change-in-production":
-        logger.critical(
-            "🔴 CRITICAL SECURITY WARNING: Using default SECRET_KEY in production! "
-            "Please set a unique SECRET_KEY in environment variables immediately. "
-            "This exposes your JWT tokens and user authentication!"
-        )
-        raise ValueError("Default SECRET_KEY is not allowed in production environment")
-
-    # 개발 환경에서도 경고
-    if settings.SECRET_KEY == "your-super-secret-key-change-in-production":
-        logger.warning(
-            "⚠️ WARNING: Using default SECRET_KEY. "
-            "Please set a unique SECRET_KEY in .env file for better security."
-        )
+    # SECRET_KEY 필수 검증
+    if not settings.SECRET_KEY or len(settings.SECRET_KEY) < 32:
+        if settings.APP_ENV == "production":
+            logger.critical(
+                "🔴 CRITICAL: SECRET_KEY is not set or too short! "
+                "Set SECRET_KEY environment variable (min 32 characters) before starting production server."
+            )
+            raise ValueError("SECRET_KEY environment variable is required in production (min 32 chars)")
+        else:
+            # 개발 환경에서는 임시 키 생성 후 경고
+            import secrets
+            settings.SECRET_KEY = secrets.token_hex(32)
+            logger.warning(
+                "⚠️ WARNING: SECRET_KEY not set. Generated temporary key for development. "
+                "Set SECRET_KEY in .env file for persistent sessions."
+            )
 
     return settings
 

@@ -74,7 +74,6 @@ export default function ChallengePage() {
             }
           } else if (statusRes.status === 401) {
             // 토큰 만료 - 로컬 스토리지 정리 (로그인 페이지로 리다이렉트하지 않고 비로그인 상태로 전환)
-            console.log('Challenge status: Authentication failed - clearing token')
             localStorage.removeItem('auth_token')
           }
         }

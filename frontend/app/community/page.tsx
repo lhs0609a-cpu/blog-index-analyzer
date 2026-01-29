@@ -58,8 +58,8 @@ export default function CommunityPage() {
         const points = await getUserPoints(user.id)
         setMyPoints(points)
       }
-    } catch (error) {
-      console.error('Failed to load community data:', error)
+    } catch {
+      // 커뮤니티 데이터 로드 실패 무시
     } finally {
       setIsLoading(false)
     }
@@ -304,8 +304,8 @@ function ActivityFeedSection({ activities }: { activities: ActivityFeedItem[] })
     try {
       const data = await getActivityFeed(50, feed.length)
       setFeed([...feed, ...data.feed])
-    } catch (error) {
-      console.error('Failed to load more:', error)
+    } catch {
+      // 추가 로드 실패 무시
     } finally {
       setIsLoadingMore(false)
     }
@@ -413,8 +413,8 @@ function LeaderboardSection({ topUsers }: { topUsers: LeaderboardEntry[] }) {
     try {
       const data = await getLeaderboard(period, 20)
       setLeaderboard(data.leaderboard)
-    } catch (error) {
-      console.error('Failed to load leaderboard:', error)
+    } catch {
+      // 리더보드 로드 실패 무시
     } finally {
       setIsLoading(false)
     }
@@ -522,8 +522,8 @@ function InsightsSection({ userId }: { userId?: number }) {
     try {
       const data = await getInsights({ sort_by: sortBy, limit: 20 })
       setInsights(data.insights)
-    } catch (error) {
-      console.error('Failed to load insights:', error)
+    } catch {
+      // 인사이트 로드 실패 무시
     } finally {
       setIsLoading(false)
     }
@@ -537,8 +537,8 @@ function InsightsSection({ userId }: { userId?: number }) {
       await createInsight(userId, newInsight.trim())
       setNewInsight('')
       loadInsights()
-    } catch (error) {
-      console.error('Failed to create insight:', error)
+    } catch {
+      // 인사이트 생성 실패 무시
     } finally {
       setIsSubmitting(false)
     }
@@ -551,8 +551,8 @@ function InsightsSection({ userId }: { userId?: number }) {
       setInsights(insights.map(i =>
         i.id === insightId ? { ...i, likes: i.likes + 1 } : i
       ))
-    } catch (error) {
-      console.error('Failed to like insight:', error)
+    } catch {
+      // 좋아요 실패 무시
     }
   }
 
@@ -597,6 +597,7 @@ function InsightsSection({ userId }: { userId?: number }) {
             value={newInsight}
             onChange={(e) => setNewInsight(e.target.value)}
             placeholder="블로그 운영 팁이나 인사이트를 공유해보세요 (최소 10자)"
+            maxLength={1000}
             className="w-full p-3 border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-[#0064FF] focus:border-transparent"
             rows={3}
           />
@@ -681,8 +682,8 @@ function TrendsSection({ keywords }: { keywords: TrendingKeyword[] }) {
     try {
       const data = await getTrendingKeywords(15)
       setTrends(data.keywords)
-    } catch (error) {
-      console.error('Failed to load trends:', error)
+    } catch {
+      // 트렌드 로드 실패 무시
     }
   }
 
@@ -856,8 +857,8 @@ function PostsSection({ userId, isAuthenticated }: { userId?: number; isAuthenti
         search: searchQuery || undefined
       })
       setPosts(data.posts)
-    } catch (error) {
-      console.error('Failed to load posts:', error)
+    } catch {
+      // 게시글 로드 실패 무시
     } finally {
       setIsLoading(false)
     }
@@ -927,6 +928,7 @@ function PostsSection({ userId, isAuthenticated }: { userId?: number; isAuthenti
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="게시글 검색..."
+              maxLength={100}
               className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0064FF] focus:border-transparent"
             />
           </div>
@@ -1218,6 +1220,7 @@ function WritePostModal({
               onChange={(e) => setTagInput(e.target.value)}
               onKeyDown={handleAddTag}
               placeholder="태그 입력 후 Enter"
+              maxLength={30}
               className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0064FF]"
               disabled={tags.length >= 5}
             />
@@ -1276,8 +1279,8 @@ function PostDetailModal({
     try {
       const data = await getPost(post.id, userId)
       setFullPost(data)
-    } catch (error) {
-      console.error('Failed to load post:', error)
+    } catch {
+      // 게시글 로드 실패 무시
     }
   }
 
@@ -1286,8 +1289,8 @@ function PostDetailModal({
     try {
       const data = await getPostComments(post.id)
       setComments(data.comments)
-    } catch (error) {
-      console.error('Failed to load comments:', error)
+    } catch {
+      // 댓글 로드 실패 무시
     } finally {
       setIsLoadingComments(false)
     }
@@ -1299,8 +1302,8 @@ function PostDetailModal({
       const result = await likePost(post.id, userId)
       setFullPost({ ...fullPost, likes: result.likes })
       onUpdate()
-    } catch (error) {
-      console.error('Failed to like post:', error)
+    } catch {
+      // 좋아요 실패 무시
     }
   }
 
@@ -1315,8 +1318,8 @@ function PostDetailModal({
       loadComments()
       setFullPost({ ...fullPost, comments_count: fullPost.comments_count + 1 })
       onUpdate()
-    } catch (error) {
-      console.error('Failed to create comment:', error)
+    } catch {
+      // 댓글 작성 실패 무시
     } finally {
       setIsSubmittingComment(false)
     }
@@ -1416,6 +1419,7 @@ function PostDetailModal({
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
                     placeholder="댓글을 입력하세요"
+                    maxLength={500}
                     className="flex-1 px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0064FF]"
                   />
                   <button

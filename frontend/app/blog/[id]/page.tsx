@@ -46,8 +46,7 @@ export default function BlogDetailPage() {
     try {
       const data = await getBlogDetails(blogId)
       setBlogData(data)
-    } catch (error) {
-      console.error('Failed to load blog data:', error)
+    } catch {
       toast.error('블로그 정보를 불러올 수 없습니다')
     } finally {
       setIsLoading(false)
@@ -63,8 +62,7 @@ export default function BlogDetailPage() {
       }
       const data = await response.json()
       setBreakdownData(data)
-    } catch (error) {
-      console.error('Failed to load breakdown data:', error)
+    } catch {
       toast.error('상세 분석 정보를 불러올 수 없습니다')
     } finally {
       setIsLoadingBreakdown(false)
@@ -103,8 +101,7 @@ export default function BlogDetailPage() {
       const analysisResult = await pollJobStatus(analysisResponse.job_id)
       setBlogData(analysisResult)
       toast.success('재분석이 완료되었습니다!')
-    } catch (error) {
-      console.error('Reanalysis error:', error)
+    } catch {
       toast.error('재분석 중 오류가 발생했습니다')
     } finally {
       setIsReanalyzing(false)

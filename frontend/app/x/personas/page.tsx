@@ -36,8 +36,8 @@ export default function XPersonasPage() {
         const data = await res.json();
         setPersonas(data.personas || []);
       }
-    } catch (error) {
-      console.error('Error fetching personas:', error);
+    } catch {
+      // 페르소나 로드 실패 무시
     }
     setLoading(false);
   };
@@ -53,8 +53,8 @@ export default function XPersonasPage() {
       if (res.ok) {
         setPersonas(prev => prev.filter(p => p.id !== personaId));
       }
-    } catch (error) {
-      console.error('Error deleting persona:', error);
+    } catch {
+      // 페르소나 삭제 실패 무시
     }
   };
 
@@ -189,7 +189,7 @@ export default function XPersonasPage() {
                       <div className="flex items-center gap-4 mb-4">
                         <div className="w-14 h-14 rounded-full bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-2xl font-bold">
                           {persona.avatar_url ? (
-                            <img src={persona.avatar_url} alt={persona.name} className="w-full h-full rounded-full object-cover" />
+                            <img src={persona.avatar_url} alt={persona.name} loading="lazy" className="w-full h-full rounded-full object-cover" />
                           ) : (
                             persona.name.charAt(0)
                           )}

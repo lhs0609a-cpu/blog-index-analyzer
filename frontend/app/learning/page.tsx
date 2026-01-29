@@ -143,8 +143,8 @@ export default function LearningDashboard() {
         setStats(data)
         setWeights(data.current_weights)
       }
-    } catch (err) {
-      console.error('Failed to load learning stats:', err)
+    } catch {
+      // 통계 로드 실패 무시
     }
   }, [API_URL])
 
@@ -156,8 +156,8 @@ export default function LearningDashboard() {
         const data = await response.json()
         setWeights(data.weights)
       }
-    } catch (err) {
-      console.error('Failed to load weights:', err)
+    } catch {
+      // 가중치 로드 실패 무시
     }
   }, [API_URL])
 
@@ -169,8 +169,8 @@ export default function LearningDashboard() {
         const data = await response.json()
         setSamples(data.samples || [])
       }
-    } catch (err) {
-      console.error('Failed to load samples:', err)
+    } catch {
+      // 샘플 로드 실패 무시
     }
   }, [API_URL])
 
@@ -182,8 +182,8 @@ export default function LearningDashboard() {
         const data = await response.json()
         setSearchHistory(data.history || [])
       }
-    } catch (err) {
-      console.error('Failed to load search history:', err)
+    } catch {
+      // 검색 이력 로드 실패 무시
     }
   }, [API_URL])
 

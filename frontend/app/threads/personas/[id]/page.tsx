@@ -3,6 +3,7 @@
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { toast } from 'react-hot-toast';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr';
 
@@ -61,14 +62,16 @@ export default function PersonaDetailPage({ params }: { params: Promise<{ id: st
       });
 
       if (res.ok) {
+        toast.success('페르소나가 수정되었습니다.');
         setPersona({ ...persona, ...editData } as Persona);
         setEditing(false);
       } else {
         const error = await res.json();
-        alert(`저장 실패: ${error.detail}`);
+        toast.error(`저장 실패: ${error.detail}`);
       }
     } catch (error) {
       console.error('Error saving persona:', error);
+      toast.error('저장 중 오류가 발생했습니다.');
     }
     setSaving(false);
   };
@@ -85,12 +88,14 @@ export default function PersonaDetailPage({ params }: { params: Promise<{ id: st
       });
 
       if (res.ok) {
+        toast.success('페르소나가 삭제되었습니다.');
         router.push('/threads?tab=personas');
       } else {
-        alert('삭제에 실패했습니다.');
+        toast.error('삭제에 실패했습니다.');
       }
     } catch (error) {
       console.error('Error deleting persona:', error);
+      toast.error('삭제 중 오류가 발생했습니다.');
     }
     setDeleting(false);
   };

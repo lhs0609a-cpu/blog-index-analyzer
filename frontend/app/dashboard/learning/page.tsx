@@ -184,16 +184,16 @@ export default function LearningEnginePage() {
 
       if (response.ok) {
         const result = await response.json()
-        alert(`학습 완료!\n정확도: ${result.initial_accuracy?.toFixed(1)}% → ${result.final_accuracy?.toFixed(1)}%\n향상도: ${result.improvement?.toFixed(1)}%`)
+        toast.success(`학습 완료! 정확도: ${result.initial_accuracy?.toFixed(1)}% → ${result.final_accuracy?.toFixed(1)}% (향상도: ${result.improvement?.toFixed(1)}%)`)
         fetchLearningStatus()
         fetchTrainingHistory()
       } else {
         const error = await response.json()
-        alert(error.detail || '학습 실행 실패')
+        toast.error(error.detail || '학습 실행 실패')
       }
     } catch (err) {
       console.error('학습 실행 오류:', err)
-      alert('학습 실행 중 오류가 발생했습니다. 네트워크 연결을 확인해주세요.')
+      toast.error('학습 실행 중 오류가 발생했습니다. 네트워크 연결을 확인해주세요.')
     } finally {
       setLoading(false)
     }

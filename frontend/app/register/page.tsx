@@ -61,9 +61,9 @@ export default function RegisterPage() {
       setAuth(response.user, response.access_token)
       toast.success(`환영합니다, ${response.user.name}님!`)
       router.push('/dashboard')
-    } catch (error: any) {
-      console.error('Register error:', error)
-      const message = error.response?.data?.detail || '회원가입에 실패했습니다'
+    } catch (error) {
+      const axiosError = error as { response?: { data?: { detail?: string } } }
+      const message = axiosError.response?.data?.detail || '회원가입에 실패했습니다'
       toast.error(message)
     } finally {
       setIsLoading(false)
@@ -174,6 +174,8 @@ export default function RegisterPage() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="홍길동"
+                    maxLength={50}
+                    autoComplete="name"
                     className="w-full pl-12 pr-4 py-4 rounded-xl bg-gray-50/50 border border-gray-200 focus:border-[#0064FF] focus:ring-2 focus:ring-[#0064FF]/20 focus:outline-none transition-all text-gray-900 placeholder:text-gray-400"
                     disabled={isLoading}
                   />
@@ -192,6 +194,8 @@ export default function RegisterPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="your@email.com"
+                    autoComplete="email"
+                    required
                     className="w-full pl-12 pr-4 py-4 rounded-xl bg-gray-50/50 border border-gray-200 focus:border-[#0064FF] focus:ring-2 focus:ring-[#0064FF]/20 focus:outline-none transition-all text-gray-900 placeholder:text-gray-400"
                     disabled={isLoading}
                   />
@@ -210,12 +214,16 @@ export default function RegisterPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
+                    autoComplete="new-password"
+                    required
+                    minLength={8}
                     className="w-full pl-12 pr-12 py-4 rounded-xl bg-gray-50/50 border border-gray-200 focus:border-[#0064FF] focus:ring-2 focus:ring-[#0064FF]/20 focus:outline-none transition-all text-gray-900 placeholder:text-gray-400"
                     disabled={isLoading}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
                     className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                   >
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -334,7 +342,7 @@ export default function RegisterPage() {
           className="text-center text-sm text-gray-400 mt-8"
         >
           회원가입하면 <Link href="/terms" className="font-semibold text-gray-500 hover:text-gray-600 transition-colors">이용약관</Link> 및{' '}
-          <Link href="/terms" className="font-semibold text-gray-500 hover:text-gray-600 transition-colors">개인정보 처리방침</Link>에 동의하게 됩니다.
+          <Link href="/privacy" className="font-semibold text-gray-500 hover:text-gray-600 transition-colors">개인정보 처리방침</Link>에 동의하게 됩니다.
         </motion.p>
       </div>
     </div>

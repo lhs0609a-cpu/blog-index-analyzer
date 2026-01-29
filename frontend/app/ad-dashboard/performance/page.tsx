@@ -6,6 +6,7 @@ import {
   BarChart2, Activity, Zap, Clock, ChevronDown,
   ArrowUpRight, ArrowDownRight, Minus, Eye
 } from 'lucide-react';
+import { useAuthStore } from '@/lib/stores/auth';
 
 interface KeywordPerformance {
   keyword_id: string;
@@ -66,6 +67,7 @@ interface PerformanceTrend {
 }
 
 export default function PerformanceDetailPage() {
+  const { user } = useAuthStore();
   const [keywords, setKeywords] = useState<KeywordPerformance[]>([]);
   const [logs, setLogs] = useState<OptimizationLog[]>([]);
   const [trends, setTrends] = useState<PerformanceTrend[]>([]);
@@ -74,7 +76,7 @@ export default function PerformanceDetailPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
-  const userId = 1;
+  const userId = user?.id || 0;
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr';
 
   const fetchPerformanceData = useCallback(async () => {

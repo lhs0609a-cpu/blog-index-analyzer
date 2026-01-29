@@ -24,7 +24,25 @@
       "Bash(gh run list:*)",
       "Bash(gh run view:*)",
       "Bash(nc:*)",
-      "Bash(ssh -o ConnectTimeout=5 -o BatchMode=yes ubuntu@43.203.106.129 echo \"connected\")"
+      "Bash(ssh -o ConnectTimeout=5 -o BatchMode=yes ubuntu@43.203.106.129 echo \"connected\")",
+      "WebFetch(domain:api.blrank.co.kr)",
+      "Bash(gh api:*)",
+      "Bash(gh workflow run:*)",
+      "Bash(gh run watch:*)",
+      "Bash(dir:*)",
+      "WebFetch(domain:search.naver.com)",
+      "WebSearch",
+      "Bash(fly secrets set:*)",
+      "Bash(fly deploy:*)",
+      "Bash(fly status:*)",
+      "Bash(fly logs:*)",
+      "Bash(find:*)",
+      "Bash(where:*)",
+      "Bash(pip install:*)",
+      "Bash(unzip:*)",
+      "Bash(iconv:*)",
+      "Bash(findstr:*)",
+      "Bash(ping:*)"
     ]
   }
 }

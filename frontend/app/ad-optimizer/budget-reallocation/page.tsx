@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuthStore } from "@/lib/stores/auth";
 import { getApiBaseUrl } from "@/lib/api";
 import Link from "next/link";
+import { toast } from "react-hot-toast";
 import {
   PlatformSupportBanner,
   FEATURE_PLATFORMS,
@@ -233,12 +234,15 @@ export default function BudgetReallocationPage() {
       });
 
       if (res.ok) {
-        alert("예산 재분배 계획이 적용되었습니다.");
+        toast.success("예산 재분배 계획이 적용되었습니다.");
         setPlan(null);
         fetchHistory();
+      } else {
+        toast.error("예산 재분배 계획 적용에 실패했습니다.");
       }
     } catch (err) {
       console.error("Failed to apply plan:", err);
+      toast.error("오류가 발생했습니다.");
     }
   };
 

@@ -4,12 +4,17 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { useAuthStore } from '@/lib/stores/auth';
+import { toast } from 'react-hot-toast';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr';
 
 export default function NewXPersonaPage() {
   const router = useRouter();
+  const { user } = useAuthStore();
   const [saving, setSaving] = useState(false);
+
+  const userId = user?.id || 0;
   const [interestInput, setInterestInput] = useState('');
   const [patternInput, setPatternInput] = useState('');
 
@@ -63,13 +68,13 @@ export default function NewXPersonaPage() {
     e.preventDefault();
 
     if (!formData.name) {
-      alert('페르소나 이름을 입력해주세요.');
+      toast.error('페르소나 이름을 입력해주세요.');
       return;
     }
 
     setSaving(true);
     try {
-      const res = await fetch(`${API_BASE}/api/x/personas?user_id=1`, {
+      const res = await fetch(`${API_BASE}/api/x/personas?user_id=${userId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -80,13 +85,14 @@ export default function NewXPersonaPage() {
 
       if (res.ok) {
         const data = await res.json();
+        toast.success('페르소나가 생성되었습니다.');
         router.push(`/x/personas/${data.persona_id}`);
       } else {
-        alert('페르소나 생성에 실패했습니다.');
+        toast.error('페르소나 생성에 실패했습니다.');
       }
     } catch (error) {
       console.error('Error creating persona:', error);
-      alert('페르소나 생성 중 오류가 발생했습니다.');
+      toast.error('페르소나 생성 중 오류가 발생했습니다.');
     }
     setSaving(false);
   };
@@ -164,6 +170,8 @@ export default function NewXPersonaPage() {
                     </label>
                     <input
                       type="number"
+                      min="1"
+                      max="120"
                       value={formData.age}
                       onChange={(e) => setFormData({ ...formData, age: e.target.value })}
                       className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
@@ -193,6 +201,7 @@ export default function NewXPersonaPage() {
                     onChange={(e) => setFormData({ ...formData, personality: e.target.value })}
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-sky-500/50 resize-none"
                     rows={2}
+                    maxLength={500}
                     placeholder="활발하고 친근하며, 전문적인 지식을 쉽게 설명하는 것을 좋아함"
                   />
                 </div>
@@ -206,6 +215,7 @@ export default function NewXPersonaPage() {
                     onChange={(e) => setFormData({ ...formData, background_story: e.target.value })}
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-sky-500/50 resize-none"
                     rows={3}
+                    maxLength={2000}
                     placeholder="스타트업에서 마케팅 팀장으로 5년간 일하며 다양한 브랜드를 성장시킨 경험이 있음..."
                   />
                 </div>

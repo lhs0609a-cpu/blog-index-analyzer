@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { getApiUrl } from '@/lib/api/apiConfig';
+import { toast } from 'react-hot-toast';
 
 interface HealthStatus {
   status: string;
@@ -221,7 +222,7 @@ export default function AdminPage() {
     // Clear expired token and redirect to login
     localStorage.removeItem('auth_token');
     setToken(null);
-    alert('로그인이 만료되었습니다. 다시 로그인해주세요.');
+    toast.error('로그인이 만료되었습니다. 다시 로그인해주세요.');
     window.location.href = '/login?redirect=/admin';
   }, []);
 
@@ -337,18 +338,18 @@ export default function AdminPage() {
       }
 
       if (response.ok) {
-        alert('프리미엄 권한이 부여되었습니다.');
+        toast.success('프리미엄 권한이 부여되었습니다.');
         setShowGrantModal(false);
         setSelectedUserId(null);
         setGrantMemo('');
         fetchAdminData(apiUrl, token);
       } else {
         const error = await response.json();
-        alert(`오류: ${error.detail}`);
+        toast.error(`오류: ${error.detail}`);
       }
     } catch (error) {
       console.error('Grant premium failed:', error);
-      alert('권한 부여에 실패했습니다.');
+      toast.error('권한 부여에 실패했습니다.');
     }
   };
 
@@ -371,7 +372,7 @@ export default function AdminPage() {
       }
 
       if (response.ok) {
-        alert('프리미엄 권한이 해제되었습니다.');
+        toast.success('프리미엄 권한이 해제되었습니다.');
         fetchAdminData(apiUrl, token);
       }
     } catch (error) {
@@ -435,7 +436,7 @@ export default function AdminPage() {
 
       if (response.ok) {
         const result = await response.json();
-        alert(`구독이 ${extendDays}일 연장되었습니다.\n새 만료일: ${new Date(result.new_expiry).toLocaleDateString('ko-KR')}`);
+        toast.success(`구독이 ${extendDays}일 연장되었습니다. 새 만료일: ${new Date(result.new_expiry).toLocaleDateString('ko-KR')}`);
         setShowExtendModal(false);
         setExtendDays(30);
         setExtendMemo('');
@@ -443,11 +444,11 @@ export default function AdminPage() {
         if (selectedUserId) fetchUserDetail(selectedUserId);
       } else {
         const error = await response.json();
-        alert(`오류: ${error.detail}`);
+        toast.error(`오류: ${error.detail}`);
       }
     } catch (error) {
       console.error('Extend subscription failed:', error);
-      alert('구독 연장에 실패했습니다.');
+      toast.error('구독 연장에 실패했습니다.');
     }
   };
 
@@ -474,17 +475,17 @@ export default function AdminPage() {
       }
 
       if (response.ok) {
-        alert(isAdmin ? '관리자 권한이 부여되었습니다.' : '관리자 권한이 해제되었습니다.');
+        toast.success(isAdmin ? '관리자 권한이 부여되었습니다.' : '관리자 권한이 해제되었습니다.');
         setShowSetAdminModal(false);
         fetchAdminData(apiUrl, token);
         if (selectedUserId) fetchUserDetail(selectedUserId);
       } else {
         const error = await response.json();
-        alert(`오류: ${error.detail}`);
+        toast.error(`오류: ${error.detail}`);
       }
     } catch (error) {
       console.error('Set admin status failed:', error);
-      alert('관리자 설정에 실패했습니다.');
+      toast.error('관리자 설정에 실패했습니다.');
     }
   };
 
@@ -620,16 +621,16 @@ export default function AdminPage() {
       }
 
       if (response.ok) {
-        alert('환불이 완료되었습니다.');
+        toast.success('환불이 완료되었습니다.');
         fetchPayments(paymentsFilter);
         fetchRevenueStats();
       } else {
         const error = await response.json();
-        alert(`환불 실패: ${error.detail}`);
+        toast.error(`환불 실패: ${error.detail}`);
       }
     } catch (error) {
       console.error('Refund failed:', error);
-      alert('환불 처리 중 오류가 발생했습니다.');
+      toast.error('환불 처리 중 오류가 발생했습니다.');
     }
   };
 
@@ -659,18 +660,18 @@ export default function AdminPage() {
 
       if (response.ok) {
         const result = await response.json();
-        alert(result.message);
+        toast.success(result.message);
         setShowBulkUpgradeModal(false);
         setSelectedUserIds([]);
         setBulkMemo('');
         fetchAdminData(apiUrl, token);
       } else {
         const error = await response.json();
-        alert(`오류: ${error.detail}`);
+        toast.error(`오류: ${error.detail}`);
       }
     } catch (error) {
       console.error('Bulk upgrade failed:', error);
-      alert('일괄 업그레이드에 실패했습니다.');
+      toast.error('일괄 업그레이드에 실패했습니다.');
     }
   };
 

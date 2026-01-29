@@ -3,6 +3,7 @@
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { toast } from 'react-hot-toast';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr';
 
@@ -110,14 +111,15 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
       });
 
       if (res.ok) {
+        toast.success('플랜이 생성되었습니다.');
         await fetchCampaignData();
       } else {
         const error = await res.json();
-        alert(`플랜 생성 실패: ${error.detail}`);
+        toast.error(`플랜 생성 실패: ${error.detail}`);
       }
     } catch (error) {
       console.error('Error generating plan:', error);
-      alert('플랜 생성 중 오류가 발생했습니다.');
+      toast.error('플랜 생성 중 오류가 발생했습니다.');
     }
     setGenerating(false);
   };
@@ -130,12 +132,14 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
       });
       if (res.ok) {
         setCampaign(prev => prev ? { ...prev, status } : null);
+        toast.success('캠페인 상태가 변경되었습니다.');
       } else {
         const error = await res.json();
-        alert(error.detail);
+        toast.error(error.detail);
       }
     } catch (error) {
       console.error('Error updating status:', error);
+      toast.error('상태 변경 중 오류가 발생했습니다.');
     }
   };
 

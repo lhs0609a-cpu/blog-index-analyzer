@@ -7,6 +7,8 @@ import {
   ChevronRight, AlertTriangle, CheckCircle, Clock,
   BarChart2, PieChart, Activity, Wallet
 } from 'lucide-react';
+import { useAuthStore } from '@/lib/stores/auth';
+import { toast } from 'react-hot-toast';
 
 interface DashboardSummary {
   summary: {
@@ -76,13 +78,14 @@ interface AdAccount {
 }
 
 export default function AdDashboardPage() {
+  const { user } = useAuthStore();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [bidChanges, setBidChanges] = useState<BidChange[]>([]);
   const [accounts, setAccounts] = useState<AdAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [optimizing, setOptimizing] = useState(false);
   const [togglingPlatform, setTogglingPlatform] = useState<string | null>(null);
-  const userId = 1; // TODO: 실제 사용자 ID
+  const userId = user?.id || 0;
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr';
 
@@ -147,11 +150,12 @@ export default function AdDashboardPage() {
       });
       if (res.ok) {
         const result = await res.json();
-        alert(`최적화 완료: ${result.message}`);
+        toast.success(`최적화 완료: ${result.message}`);
         fetchDashboardData();
       }
     } catch (error) {
       console.error('Optimization failed:', error);
+      toast.error('최적화 실행에 실패했습니다.');
     } finally {
       setOptimizing(false);
     }

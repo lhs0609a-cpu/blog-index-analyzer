@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'react-hot-toast';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr';
 
@@ -114,14 +115,14 @@ export default function XCampaignDetailPage() {
 
       if (res.ok) {
         const data = await res.json();
-        alert(`${data.created_count}개의 트윗이 생성되었습니다!`);
+        toast.success(`${data.created_count}개의 트윗이 생성되었습니다!`);
         fetchCampaignData();
       } else {
-        alert('콘텐츠 생성에 실패했습니다.');
+        toast.error('콘텐츠 생성에 실패했습니다.');
       }
     } catch (error) {
       console.error('Error generating content:', error);
-      alert('콘텐츠 생성 중 오류가 발생했습니다.');
+      toast.error('콘텐츠 생성 중 오류가 발생했습니다.');
     }
     setGenerating(false);
   };
@@ -136,12 +137,14 @@ export default function XCampaignDetailPage() {
 
       if (res.ok) {
         setCampaign(prev => prev ? { ...prev, status } : null);
+        toast.success('캠페인 상태가 변경되었습니다.');
       } else {
         const data = await res.json();
-        alert(data.detail || '상태 변경에 실패했습니다.');
+        toast.error(data.detail || '상태 변경에 실패했습니다.');
       }
     } catch (error) {
       console.error('Error updating status:', error);
+      toast.error('상태 변경 중 오류가 발생했습니다.');
     }
   };
 
@@ -154,12 +157,14 @@ export default function XCampaignDetailPage() {
       });
 
       if (res.ok) {
+        toast.success('캠페인이 삭제되었습니다.');
         router.push('/x');
       } else {
-        alert('캠페인 삭제에 실패했습니다.');
+        toast.error('캠페인 삭제에 실패했습니다.');
       }
     } catch (error) {
       console.error('Error deleting campaign:', error);
+      toast.error('캠페인 삭제 중 오류가 발생했습니다.');
     }
   };
 

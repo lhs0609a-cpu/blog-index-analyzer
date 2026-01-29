@@ -3,7 +3,7 @@
 - 블로그 저장, 조회, 삭제
 - 블로그 분석 히스토리
 """
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
 import logging
@@ -17,6 +17,7 @@ from database.user_blogs_db import (
     get_user_blogs_count
 )
 from routers.blogs import analyze_blog
+from routers.auth import get_current_user
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -63,10 +64,11 @@ class BlogHistoryResponse(BaseModel):
 # ============ API 엔드포인트 ============
 
 @router.get("/saved", response_model=BlogListResponse)
-async def get_saved_blogs(user_id: int = Query(..., description="사용자 ID")):
+async def get_saved_blogs(current_user: dict = Depends(get_current_user)):
     """
-    사용자가 저장한 블로그 목록 조회
+    사용자가 저장한 블로그 목록 조회 (인증 필요)
     """
+    user_id = current_user["id"]
     logger.info(f"Getting saved blogs for user: {user_id}")
 
     try:
@@ -102,12 +104,13 @@ async def get_saved_blogs(user_id: int = Query(..., description="사용자 ID"))
 @router.post("/save")
 async def save_blog(
     request: SaveBlogRequest,
-    user_id: int = Query(..., description="사용자 ID")
+    current_user: dict = Depends(get_current_user)
 ):
     """
-    블로그 저장 및 분석
+    블로그 저장 및 분석 (인증 필요)
     - 블로그를 분석하고 결과와 함께 저장
     """
+    user_id = current_user["id"]
     logger.info(f"Saving blog {request.blog_id} for user {user_id}")
 
     try:
@@ -164,11 +167,12 @@ async def save_blog(
 @router.delete("/{blog_id}")
 async def remove_saved_blog(
     blog_id: str,
-    user_id: int = Query(..., description="사용자 ID")
+    current_user: dict = Depends(get_current_user)
 ):
     """
-    저장된 블로그 삭제
+    저장된 블로그 삭제 (인증 필요)
     """
+    user_id = current_user["id"]
     logger.info(f"Deleting blog {blog_id} for user {user_id}")
 
     try:
@@ -189,11 +193,12 @@ async def remove_saved_blog(
 @router.post("/{blog_id}/refresh")
 async def refresh_blog_analysis(
     blog_id: str,
-    user_id: int = Query(..., description="사용자 ID")
+    current_user: dict = Depends(get_current_user)
 ):
     """
-    블로그 재분석
+    블로그 재분석 (인증 필요)
     """
+    user_id = current_user["id"]
     logger.info(f"Refreshing analysis for blog {blog_id}, user {user_id}")
 
     try:
@@ -257,12 +262,13 @@ async def refresh_blog_analysis(
 @router.get("/{blog_id}/history", response_model=BlogHistoryResponse)
 async def get_blog_analysis_history(
     blog_id: str,
-    user_id: int = Query(..., description="사용자 ID"),
+    current_user: dict = Depends(get_current_user),
     limit: int = Query(30, description="히스토리 개수")
 ):
     """
-    블로그 분석 히스토리 조회
+    블로그 분석 히스토리 조회 (인증 필요)
     """
+    user_id = current_user["id"]
     logger.info(f"Getting history for blog {blog_id}, user {user_id}")
 
     try:
@@ -284,11 +290,12 @@ async def get_blog_analysis_history(
 
 
 @router.get("/count")
-async def get_blogs_count(user_id: int = Query(..., description="사용자 ID")):
+async def get_blogs_count(current_user: dict = Depends(get_current_user)):
     """
-    사용자 저장 블로그 수 조회
+    사용자 저장 블로그 수 조회 (인증 필요)
     """
     try:
+        user_id = current_user["id"]
         count = get_user_blogs_count(user_id)
         return {"count": count}
     except Exception as e:

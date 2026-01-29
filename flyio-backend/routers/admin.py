@@ -96,6 +96,9 @@ async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     return current_user
 
 
+# Pagination 제한 상수
+MAX_PAGE_LIMIT = 500
+
 # Admin endpoints
 @router.get("/users")
 async def get_all_users(
@@ -104,6 +107,14 @@ async def get_all_users(
     admin: dict = Depends(require_admin)
 ):
     """Get all users (admin only)"""
+    # Pagination 제한 적용
+    if limit < 1:
+        limit = 100
+    if limit > MAX_PAGE_LIMIT:
+        limit = MAX_PAGE_LIMIT
+    if offset < 0:
+        offset = 0
+
     user_db = get_user_db()
     users = user_db.get_all_users(limit=limit, offset=offset)
     total = user_db.get_users_count()
@@ -356,7 +367,8 @@ async def get_expiring_users(
         logger.error(f"Error in get_expiring_users: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+        # 내부 오류 정보를 클라이언트에 노출하지 않음
+        raise HTTPException(status_code=500, detail="사용자 목록을 불러오는 중 오류가 발생했습니다")
 
 
 @router.get("/users/with-usage")
@@ -366,6 +378,10 @@ async def get_users_with_usage(
     admin: dict = Depends(require_admin)
 ):
     """Get all users with remaining days and today's usage (admin only)"""
+    # Pagination 제한 적용
+    limit = max(1, min(limit, MAX_PAGE_LIMIT))
+    offset = max(0, offset)
+
     try:
         logger.info(f"get_users_with_usage called with limit={limit}, offset={offset}")
         user_db = get_user_db()
@@ -625,18 +641,56 @@ class InitialAdminSetupRequest(BaseModel):
     setup_key: str
 
 
+# Rate limiting for admin setup (simple in-memory, reset on restart)
+_admin_setup_attempts: dict = {}
+_MAX_SETUP_ATTEMPTS = 5
+_LOCKOUT_MINUTES = 30
+
 @router.post("/setup/initial-admin")
 async def setup_initial_admin(request: InitialAdminSetupRequest):
     """
     초기 관리자 설정 (SECRET_KEY 필요)
     보안: SECRET_KEY를 알아야만 관리자 설정 가능
+    Rate limiting: 5회 실패 시 30분 차단
     """
+    from datetime import datetime, timedelta
+
+    # Rate limiting check
+    client_key = request.email.lower()
+    now = datetime.utcnow()
+
+    if client_key in _admin_setup_attempts:
+        attempts, lockout_until = _admin_setup_attempts[client_key]
+        if lockout_until and now < lockout_until:
+            remaining = int((lockout_until - now).total_seconds() / 60)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Too many attempts. Try again in {remaining} minutes."
+            )
+        if lockout_until and now >= lockout_until:
+            # Reset after lockout period
+            _admin_setup_attempts[client_key] = (0, None)
+
     # Verify setup key
     if request.setup_key != ADMIN_SETUP_KEY:
+        # Track failed attempt
+        attempts, _ = _admin_setup_attempts.get(client_key, (0, None))
+        attempts += 1
+        if attempts >= _MAX_SETUP_ATTEMPTS:
+            lockout_until = now + timedelta(minutes=_LOCKOUT_MINUTES)
+            _admin_setup_attempts[client_key] = (attempts, lockout_until)
+            logger.warning(f"Admin setup locked out for {client_key} until {lockout_until}")
+        else:
+            _admin_setup_attempts[client_key] = (attempts, None)
+
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid setup key"
         )
+
+    # Clear attempts on success
+    if client_key in _admin_setup_attempts:
+        del _admin_setup_attempts[client_key]
 
     user_db = get_user_db()
 
@@ -677,6 +731,10 @@ async def get_all_payments(
     admin: dict = Depends(require_admin)
 ):
     """모든 결제 내역 조회 (admin only)"""
+    # Pagination 제한 적용
+    limit = max(1, min(limit, MAX_PAGE_LIMIT))
+    offset = max(0, offset)
+
     result = get_all_payments_admin(
         limit=limit,
         offset=offset,
@@ -714,6 +772,9 @@ async def get_user_payment_history(
     admin: dict = Depends(require_admin)
 ):
     """특정 사용자의 결제 내역 조회 (admin only)"""
+    # Pagination 제한 적용
+    limit = max(1, min(limit, 100))
+
     user_db = get_user_db()
     user = user_db.get_user_by_id(user_id)
     if not user:

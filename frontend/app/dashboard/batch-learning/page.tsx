@@ -160,11 +160,11 @@ export default function BatchLearningPage() {
       });
 
       if (res.ok) {
-        alert('자동 학습 사이클이 시작되었습니다');
+        toast.success('자동 학습 사이클이 시작되었습니다');
         await fetchAutoLearningStatus();
       } else {
         const data = await res.json();
-        alert(data.detail || '실행 실패');
+        toast.error(data.detail || '실행 실패');
       }
     } catch (e) {
       console.error('Failed to trigger auto learning:', e);
@@ -294,7 +294,7 @@ export default function BatchLearningPage() {
 
       if (res.ok) {
         const data = await res.json();
-        alert(`${data.message}\n예상 소요 시간: ${Math.round(data.estimated_minutes)}분`);
+        toast.success(`${data.message} (예상 소요 시간: ${Math.round(data.estimated_minutes)}분)`);
         fetchStatus();
       } else {
         const errorData = await res.json();
@@ -318,11 +318,11 @@ export default function BatchLearningPage() {
 
       if (res.ok) {
         const data = await res.json();
-        alert(data.message);
+        toast.success(data.message);
         fetchStatus();
       }
     } catch (e) {
-      setError('중지 실패');
+      toast.error('중지 실패');
     }
   };
 

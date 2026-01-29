@@ -1973,9 +1973,9 @@ export default function ToolsPage() {
       })
 
       toast.success(`${data.analyzedPosts}개 글 분석 완료!`)
-    } catch (error: any) {
-      console.error('콘텐츠 수명 분석 오류:', error)
-      toast.error(error.message || '분석 중 오류가 발생했습니다')
+    } catch (error) {
+      const err = error as Error
+      toast.error(err.message || '분석 중 오류가 발생했습니다')
     } finally {
       setLifespanLoading(false)
     }

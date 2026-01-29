@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { toast } from 'react-hot-toast';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr';
 
@@ -113,7 +114,7 @@ export default function XPersonaDetailPage() {
 
   const handleSave = async () => {
     if (!formData.name) {
-      alert('페르소나 이름을 입력해주세요.');
+      toast.error('페르소나 이름을 입력해주세요.');
       return;
     }
 
@@ -129,14 +130,15 @@ export default function XPersonaDetailPage() {
       });
 
       if (res.ok) {
+        toast.success('페르소나가 수정되었습니다.');
         setEditing(false);
         fetchPersona();
       } else {
-        alert('페르소나 수정에 실패했습니다.');
+        toast.error('페르소나 수정에 실패했습니다.');
       }
     } catch (error) {
       console.error('Error updating persona:', error);
-      alert('페르소나 수정 중 오류가 발생했습니다.');
+      toast.error('페르소나 수정 중 오류가 발생했습니다.');
     }
     setSaving(false);
   };
@@ -150,12 +152,14 @@ export default function XPersonaDetailPage() {
       });
 
       if (res.ok) {
+        toast.success('페르소나가 삭제되었습니다.');
         router.push('/x/personas');
       } else {
-        alert('페르소나 삭제에 실패했습니다.');
+        toast.error('페르소나 삭제에 실패했습니다.');
       }
     } catch (error) {
       console.error('Error deleting persona:', error);
+      toast.error('페르소나 삭제 중 오류가 발생했습니다.');
     }
   };
 
