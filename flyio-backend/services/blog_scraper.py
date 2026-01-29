@@ -655,15 +655,16 @@ async def scrape_view_tab_results(keyword: str, limit: int = 20) -> list:
             const results = [];
             const seen = new Set();
 
-            // ===== Method 1: Direct regex extraction from page HTML (most reliable) =====
+            // ===== Method 1: Direct regex extraction from page HTML (페이지 전체에서 URL 추출) =====
             const htmlContent = document.body.innerHTML;
-            const urlPattern = /href="(https:\\/\\/blog\\.naver\\.com\\/([^\\/"\s]+)\\/([0-9]+))"/g;
+            // 단순 패턴으로 더 많은 URL 찾기 (href 안뿐만 아니라 JS 등에서도)
+            const urlPattern = /blog\\.naver\\.com\\/(\\w+)\\/(\\d+)/g;
             let match;
 
             while ((match = urlPattern.exec(htmlContent)) !== null) {
-                const postUrl = match[1];
-                const blogId = match[2];
-                const postId = match[3];
+                const blogId = match[1];
+                const postId = match[2];
+                const postUrl = `https://blog.naver.com/${blogId}/${postId}`;
 
                 if (seen.has(postUrl)) continue;
                 seen.add(postUrl);
@@ -885,15 +886,16 @@ async def scrape_blog_tab_results(keyword: str, limit: int = 20) -> list:
             const results = [];
             const seen = new Set();
 
-            // Method 1: Direct regex extraction from page HTML
+            // Method 1: Direct regex extraction from page HTML (페이지 전체에서 URL 추출)
             const htmlContent = document.body.innerHTML;
-            const urlPattern = /href="(https:\\/\\/blog\\.naver\\.com\\/([^\\/"\s]+)\\/([0-9]+))"/g;
+            // 단순 패턴으로 더 많은 URL 찾기
+            const urlPattern = /blog\\.naver\\.com\\/(\\w+)\\/(\\d+)/g;
             let match;
 
             while ((match = urlPattern.exec(htmlContent)) !== null) {
-                const postUrl = match[1];
-                const blogId = match[2];
-                const postId = match[3];
+                const blogId = match[1];
+                const postId = match[2];
+                const postUrl = `https://blog.naver.com/${blogId}/${postId}`;
 
                 if (seen.has(postUrl)) continue;
                 seen.add(postUrl);
