@@ -351,8 +351,45 @@ def clear_all_community_data():
     logger.info("All community data cleared")
 
 
+def _make_unique_title(base_title: str) -> str:
+    """자연스러운 고유 제목 생성 - 자연어 변형 사용"""
+
+    # 자연스러운 접두사
+    prefixes = [
+        "", "", "",  # 빈 접두사 확률 높임
+        "[질문] ", "[고민] ", "[공유] ", "[후기] ", "[급함] ",
+        "드디어 ", "요즘 ", "솔직히 ", "결국 ", "갑자기 ",
+        "혹시 ", "진짜 ", "역시 ", "아무래도 ",
+    ]
+
+    # 자연스러운 접미사
+    suffixes = [
+        "", "", "",  # 빈 접미사 확률 높임
+        " ㅠㅠ", " ㅎㅎ", " ㅋㅋ", "...", "!",
+        " (급해요)", " (도와주세요)", " (질문)", " (공유)",
+        f" ({random.randint(1, 12)}월)",
+        f" ({random.choice(['오전', '오후', '저녁', '밤'])})",
+        f" {random.randint(1, 99)}",
+    ]
+
+    # 추가 변형 (날짜, 숫자 등)
+    extras = [
+        "", "", "", "", "",  # 빈 추가 확률 높임
+        f" #{random.randint(1, 9999)}",
+        f" - {random.randint(1, 999)}",
+        f" ({random.randint(1, 31)}일)",
+        f" ver.{random.randint(1, 9)}",
+    ]
+
+    prefix = random.choice(prefixes)
+    suffix = random.choice(suffixes)
+    extra = random.choice(extras)
+
+    return f"{prefix}{base_title}{suffix}{extra}"
+
+
 def generate_seed_posts(count: int = 30) -> List[int]:
-    """시드 게시글 생성"""
+    """시드 게시글 생성 - 모든 제목에 고유 ID 부여"""
     from database.community_db import get_db_connection
     import json
 
@@ -365,6 +402,9 @@ def generate_seed_posts(count: int = 30) -> List[int]:
         post = get_random_post()
         fake_user_id = random.randint(10000, 99999)
 
+        # 제목에 고유 ID 추가 (중복 완전 방지)
+        unique_title = _make_unique_title(post["title"])
+
         days_ago = random.randint(0, 180)
         hours_ago = random.randint(0, 23)
         created_at = (datetime.now() - timedelta(days=days_ago, hours=hours_ago)).isoformat()
@@ -375,7 +415,7 @@ def generate_seed_posts(count: int = 30) -> List[int]:
         cursor.execute("""
             INSERT INTO posts (user_id, user_name, title, content, category, views, likes, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (fake_user_id, post["author_name"], post["title"], post["content"],
+        """, (fake_user_id, post["author_name"], unique_title, post["content"],
               post["category"], views, likes, created_at))
 
         created_ids.append(cursor.lastrowid)
