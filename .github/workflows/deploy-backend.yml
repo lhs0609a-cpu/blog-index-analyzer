@@ -71,9 +71,14 @@ jobs:
               echo "Naver Open API credentials updated"
             fi
 
-            docker build --no-cache -t blog-api .
+            # Docker 이미지 정리 (캐시 문제 해결)
             docker stop blog-analyzer-api || true
             docker rm blog-analyzer-api || true
+            docker rmi blog-api || true
+            docker builder prune -f || true
+
+            # Docker 이미지 빌드
+            docker build --no-cache --pull -t blog-api .
             docker run -d \
               --name blog-analyzer-api \
               -p 8000:8001 \
@@ -98,3 +103,8 @@ jobs:
             echo "=== Container file check ==="
             sleep 10
             docker exec blog-analyzer-api cat /app/services/community_automation.py | grep "message" | tail -3
+
+            # API 실제 응답 확인
+            echo "=== API Response Test ==="
+            curl -s http://localhost:8000/deployment-test-v5 || echo "API test failed"
+            curl -s http://localhost:8000/health || echo "Health check failed"
