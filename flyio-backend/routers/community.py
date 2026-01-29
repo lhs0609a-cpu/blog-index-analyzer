@@ -124,6 +124,12 @@ async def automation_test():
     return {"status": "ok", "message": "automation_routes_loaded_at_top"}
 
 
+@router.get("/automation/test-v3")
+async def test_deployment_v3():
+    """배포 테스트 v3 - 코드 적용 확인용"""
+    return {"status": "v3 deployed", "timestamp_titles": True, "message": "If you see this, v3 is deployed"}
+
+
 @router.post("/automation/init")
 async def init_community_api(admin_key: str = Query(...)):
     """커뮤니티 초기화 - 관리자 전용"""
