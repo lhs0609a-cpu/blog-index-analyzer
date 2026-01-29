@@ -483,7 +483,7 @@ def initialize_community() -> Dict:
     return {
         "posts_created": len(post_ids),
         "comments_created": comments_count,
-        "message": "Community initialized successfully with realistic content"
+        "message": "Community initialized v3 - unique titles with timestamp"
     }
 
 
