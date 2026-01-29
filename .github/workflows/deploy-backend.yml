@@ -93,3 +93,8 @@ jobs:
 
             sudo systemctl reload caddy
             echo "Deployment completed at $(date)"
+
+            # 컨테이너 내부 파일 확인
+            echo "=== Container file check ==="
+            sleep 10
+            docker exec blog-analyzer-api cat /app/services/community_automation.py | grep "message" | tail -3
