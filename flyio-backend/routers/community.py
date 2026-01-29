@@ -708,6 +708,49 @@ async def bulk_status_api(admin_key: str = Query(...)):
     }
 
 
+# ============ 현실적인 콘텐츠 생성 API ============
+
+@router.post("/automation/reset-and-generate-realistic")
+async def reset_and_generate_realistic_api(
+    post_count: int = Query(500, ge=10, le=2000),
+    comments_min: int = Query(2, ge=0, le=10),
+    comments_max: int = Query(8, ge=1, le=20),
+    admin_key: str = Query(...)
+):
+    """기존 데이터 삭제 후 현실적인 콘텐츠 생성 - 관리자 전용"""
+    if admin_key != "blank-admin-2024":
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+
+    from services.realistic_content_generator import clear_all_posts, generate_realistic_data
+
+    # 기존 데이터 삭제
+    clear_all_posts()
+
+    # 현실적인 데이터 생성
+    result = generate_realistic_data(
+        post_count=post_count,
+        comments_per_post=(comments_min, comments_max)
+    )
+
+    return {
+        "success": True,
+        **result,
+        "message": "기존 데이터 삭제 후 현실적인 콘텐츠 생성 완료"
+    }
+
+
+@router.post("/automation/clear-all-posts")
+async def clear_all_posts_api(admin_key: str = Query(...)):
+    """모든 게시글/댓글 삭제 - 관리자 전용"""
+    if admin_key != "blank-admin-2024":
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+
+    from services.realistic_content_generator import clear_all_posts
+    clear_all_posts()
+
+    return {"success": True, "message": "모든 게시글과 댓글이 삭제되었습니다"}
+
+
 # ============ 자연스러운 콘텐츠 자동 생성 API ============
 
 @router.get("/scheduler/status")
