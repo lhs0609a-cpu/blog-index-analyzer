@@ -106,6 +106,30 @@ def set_search_results_cache(keyword: str, data: Dict):
         "timestamp": time.time()
     }
 
+
+@router.get("/debug/playwright-test")
+async def debug_playwright_test(keyword: str = Query(...)):
+    """Playwright BLOG tab 스크래핑 직접 테스트 (캐시 우회)"""
+    try:
+        from services.blog_scraper import scrape_blog_tab_results
+
+        logger.info(f"[DEBUG] Testing Playwright for keyword: {keyword}")
+        results = await scrape_blog_tab_results(keyword, 20)
+
+        return {
+            "keyword": keyword,
+            "playwright_results": len(results),
+            "blogs": [{"blog_id": r.get("blog_id"), "post_url": r.get("post_url")} for r in results[:15]]
+        }
+    except Exception as e:
+        logger.error(f"[DEBUG] Playwright test failed: {e}")
+        import traceback
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
 # User agents for rotation
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
