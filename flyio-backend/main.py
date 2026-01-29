@@ -372,11 +372,11 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
-# 배포 테스트 엔드포인트 v5 - Docker 캐시 문제 확인용
-@app.get("/deployment-test-v5")
-async def deployment_test_v5():
-    """배포 확인용 테스트 엔드포인트 v5"""
-    return {"status": "v5-docker-prune", "timestamp": "2026-01-29T09:56"}
+# 배포 테스트 엔드포인트 v6 - 라우트 등록 확인용
+@app.get("/deployment-test-v6")
+async def deployment_test_v6():
+    """배포 확인용 테스트 엔드포인트 v6"""
+    return {"status": "v6-route-check", "timestamp": "2026-01-29T20:55"}
 
 
 @app.get("/")
