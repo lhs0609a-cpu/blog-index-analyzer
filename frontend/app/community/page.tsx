@@ -1114,7 +1114,6 @@ function PostsSection({ userId, isAuthenticated }: { userId?: number; isAuthenti
               </p>
             </div>
           )}
-        )}
       </div>
 
       {/* 글쓰기 모달 */}
