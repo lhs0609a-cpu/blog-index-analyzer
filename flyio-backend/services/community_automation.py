@@ -12,13 +12,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# 중복 방지용
-_used_titles: Set[str] = set()
-
-
-def reset_duplicates():
-    global _used_titles
-    _used_titles = set()
+# 중복 방지는 이제 DB에서 직접 확인
 
 
 # ============ 현실적인 닉네임 (200개+) ============
@@ -229,40 +223,53 @@ def get_random_blogger_name() -> str:
     return random.choice(BLOGGER_NAMES)
 
 
-def _get_existing_titles_from_db() -> Set[str]:
-    """DB에서 기존 제목들 조회"""
+def _check_title_exists_in_db(title: str) -> bool:
+    """DB에서 제목 중복 확인"""
     from database.community_db import get_db_connection
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT title FROM posts")
-        titles = {row['title'] for row in cursor.fetchall()}
+        cursor.execute("SELECT 1 FROM posts WHERE title = ? LIMIT 1", (title,))
+        exists = cursor.fetchone() is not None
         conn.close()
-        return titles
+        return exists
     except:
-        return set()
+        return False
 
 
-# 고유 제목 생성용 변형들
-TITLE_PREFIXES = [
-    "", "[후기] ", "[질문] ", "[공유] ", "[고민] ", "[정보] ",
-    "(급해요) ", "드디어 ", "결국 ", "갑자기 ", "요즘 ",
-    "솔직히 ", "진짜 ", "ㄹㅇ ", "혹시 ", "궁금한데 ",
-]
+def _generate_unique_title(base_title: str, attempt: int) -> str:
+    """고유한 제목 생성"""
+    if attempt == 0:
+        return base_title
 
-TITLE_SUFFIXES = [
-    "", "...", " ㅠㅠ", " ㅎㅎ", " ㅋㅋ", "!", "?", " (공유)",
-    " (질문)", " (급해요)", " (도와주세요)", " (후기)",
-    f" #{random.randint(1, 999)}", f" ({random.randint(1, 12)}월)",
-]
+    # 다양한 변형 패턴
+    patterns = [
+        lambda t: f"{t} ㅠㅠ",
+        lambda t: f"{t} ㅎㅎ",
+        lambda t: f"{t}...",
+        lambda t: f"{t}!",
+        lambda t: f"{t} (공유)",
+        lambda t: f"{t} (질문)",
+        lambda t: f"[후기] {t}",
+        lambda t: f"[고민] {t}",
+        lambda t: f"드디어 {t}",
+        lambda t: f"솔직히 {t}",
+        lambda t: f"요즘 {t}",
+        lambda t: f"{t} #{random.randint(1, 9999)}",
+        lambda t: f"{t} ({random.randint(1, 12)}월)",
+        lambda t: f"{t} - {random.randint(1, 999)}",
+        lambda t: f"[{random.randint(1, 999)}] {t}",
+    ]
+
+    if attempt < len(patterns):
+        return patterns[attempt](base_title)
+
+    # 더 많은 시도가 필요하면 랜덤 ID 추가
+    return f"{base_title} #{random.randint(10000, 99999)}"
 
 
 def get_random_post(category: str = None) -> Dict:
-    global _used_titles
-
-    # DB에서 기존 제목 가져오기 (캐싱)
-    if len(_used_titles) == 0:
-        _used_titles = _get_existing_titles_from_db()
+    """중복 없는 랜덤 게시글 생성"""
 
     if category is None:
         categories = ["free", "tip", "question", "success"]
@@ -270,55 +277,52 @@ def get_random_post(category: str = None) -> Dict:
         category = random.choices(categories, weights=weights)[0]
 
     templates = POST_TEMPLATES.get(category, POST_TEMPLATES["free"])
+    random.shuffle(templates)
 
-    # 여러 번 시도
-    for attempt in range(50):
-        template = random.choice(templates)
+    # 여러 템플릿과 변형 시도
+    for template in templates:
         base_title = template["title"]
 
-        # 고유 제목 생성
-        if attempt < 10:
-            # 처음엔 간단한 변형
-            suffix = random.choice(["", " ㅠㅠ", " ㅎㅎ", "...", "!", " (공유)", " (질문)"])
-            title = base_title + suffix
-        elif attempt < 30:
-            # 숫자 추가
-            title = f"{base_title} #{random.randint(1, 9999)}"
-        else:
-            # 더 복잡한 변형
-            prefix = random.choice(TITLE_PREFIXES)
-            suffix = random.choice(TITLE_SUFFIXES) + f"_{random.randint(1, 9999)}"
-            title = prefix + base_title + suffix
+        for attempt in range(20):
+            title = _generate_unique_title(base_title, attempt)
 
-        if title not in _used_titles:
-            _used_titles.add(title)
+            # DB에서 직접 중복 확인
+            if not _check_title_exists_in_db(title):
+                # 내용도 약간 변형
+                content = template["content"]
+                if random.random() < 0.3:
+                    extras = [
+                        "질문있으면 댓글 주세요",
+                        "다들 어떠세요?",
+                        "의견 부탁드려요",
+                        "조언 부탁해요",
+                        "공감하시면 좋아요 눌러주세요",
+                        "비슷한 경험 공유해주세요",
+                    ]
+                    content = content + f"\n\n(p.s. {random.choice(extras)})"
 
-            # 내용도 약간 변형
-            content = template["content"]
-            if random.random() < 0.3:
-                content = content + f"\n\n(p.s. {random.choice(['질문있으면 댓글 주세요', '다들 어떠세요?', '의견 부탁드려요', '조언 부탁해요'])})"
+                return {
+                    "title": title,
+                    "content": content,
+                    "category": category,
+                    "author_name": get_random_blogger_name()
+                }
 
-            return {
-                "title": title,
-                "content": content,
-                "category": category,
-                "author_name": get_random_blogger_name()
-            }
-
-    # 50번 시도 후에도 실패하면 완전히 새로운 제목 생성
-    unique_id = random.randint(10000, 99999)
-    dynamic_titles = [
-        f"블로그 일기 {unique_id}",
-        f"오늘의 기록 {unique_id}",
-        f"끄적끄적 {unique_id}",
-        f"블로그 이야기 {unique_id}",
-        f"하루 정리 {unique_id}",
-        f"소소한 이야기 {unique_id}",
+    # 모든 시도 실패 - 완전히 새로운 제목 생성
+    unique_id = random.randint(100000, 999999)
+    dynamic_contents = [
+        ("블로그 일상", "오늘도 블로그 열심히 하는 중\n\n다들 화이팅!"),
+        ("끄적끄적", "뭔가 쓰고 싶어서 왔어요\n\n다들 뭐하세요?"),
+        ("블로그 생각", "블로그하면서 드는 생각들\n\n다들 공감하시나요?"),
+        ("오늘의 기록", "오늘 하루 정리\n\n다들 좋은 하루 보내세요"),
+        ("소소한 이야기", "별거 아닌 이야기지만 공유해봐요\n\n다들 어떠세요?"),
     ]
 
+    base, content = random.choice(dynamic_contents)
+
     return {
-        "title": random.choice(dynamic_titles),
-        "content": "블로그 하면서 느끼는 점들 공유해요\n\n다들 어떠세요?",
+        "title": f"{base} {unique_id}",
+        "content": content,
         "category": category,
         "author_name": get_random_blogger_name()
     }
@@ -344,7 +348,6 @@ def clear_all_community_data():
     conn.commit()
     conn.close()
 
-    reset_duplicates()
     logger.info("All community data cleared")
 
 
