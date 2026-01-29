@@ -40,8 +40,14 @@ jobs:
             fi
 
             cd ~/blog-index-analyzer
+            echo "=== Before fetch ==="
+            git log --oneline -1
             git fetch origin main
             git reset --hard origin/main
+            echo "=== After reset ==="
+            git log --oneline -1
+            echo "=== Check file content ==="
+            grep "message" flyio-backend/services/community_automation.py | tail -3
             cd flyio-backend
 
             # 네이버 광고 API 자격 증명을 .env에 추가/업데이트
