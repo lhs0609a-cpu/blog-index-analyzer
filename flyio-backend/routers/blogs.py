@@ -1072,7 +1072,7 @@ async def fetch_via_view_tab_scraping_http(keyword: str, limit: int) -> List[Dic
 
 
 async def fetch_via_naver_api(keyword: str, limit: int, client_id: str, client_secret: str) -> List[Dict]:
-    """Fetch blog results using Naver Open API - 두 가지 정렬로 더 많은 결과 확보"""
+    """Fetch blog results using Naver Open API - 페이지네이션으로 충분한 네이버 블로그 확보"""
     results = []
     seen_urls = set()
 
@@ -1084,8 +1084,6 @@ async def fetch_via_naver_api(keyword: str, limit: int, client_id: str, client_s
 
         # 전역 HTTP 클라이언트 사용 (성능 개선)
         http_client = await get_http_client()
-        # 네이버 블로그만 필터링하므로 5배 요청 (티스토리 등 제외됨)
-        request_limit = min(limit * 5, 100)
 
         # 두 가지 정렬로 요청하여 더 다양한 결과 확보 (관련성 + 날짜순)
         sort_orders = ["sim", "date"]
@@ -1094,64 +1092,81 @@ async def fetch_via_naver_api(keyword: str, limit: int, client_id: str, client_s
             if len(results) >= limit:
                 break
 
-            response = await http_client.get(
-                "https://openapi.naver.com/v1/search/blog.json",
-                headers=headers,
-                params={
-                    "query": keyword,
-                    "display": request_limit,
-                    "sort": sort_order
-                }
-            )
+            # 페이지네이션: 각 정렬당 최대 5페이지 (100개씩 x 5 = 500개 검색)
+            for page in range(5):
+                if len(results) >= limit:
+                    break
 
-            if response.status_code == 200:
-                data = response.json()
-                items = data.get("items", [])
+                start_index = page * 100 + 1
+                response = await http_client.get(
+                    "https://openapi.naver.com/v1/search/blog.json",
+                    headers=headers,
+                    params={
+                        "query": keyword,
+                        "display": 100,  # 최대 100개
+                        "start": start_index,
+                        "sort": sort_order
+                    }
+                )
 
-                for item in items:
-                    # 충분한 결과가 모이면 중단
-                    if len(results) >= limit:
+                if response.status_code == 200:
+                    data = response.json()
+                    items = data.get("items", [])
+
+                    if not items:
+                        break  # 더 이상 결과 없음
+
+                    page_added = 0
+                    for item in items:
+                        # 충분한 결과가 모이면 중단
+                        if len(results) >= limit:
+                            break
+
+                        # Extract blog ID from link
+                        link = item.get("link", "")
+
+                        # 중복 URL 제외
+                        if link in seen_urls:
+                            continue
+
+                        blog_id = extract_blog_id(link)
+
+                        if not blog_id:
+                            # Try to extract from blogger link
+                            blogger_link = item.get("bloggerlink", "")
+                            blog_id = extract_blog_id(blogger_link)
+
+                        if not blog_id:
+                            continue
+
+                        seen_urls.add(link)
+
+                        # Clean title (remove HTML tags)
+                        title = re.sub(r'<[^>]+>', '', item.get("title", ""))
+                        title = title.replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+
+                        results.append({
+                            "rank": len(results) + 1,
+                            "blog_id": blog_id,
+                            "blog_name": item.get("bloggername", blog_id),
+                            "blog_url": f"https://blog.naver.com/{blog_id}",
+                            "post_title": title,
+                            "post_url": link,
+                            "post_date": item.get("postdate"),
+                            "thumbnail": None,
+                            "tab_type": "VIEW",
+                            "smart_block_keyword": keyword,
+                        })
+                        page_added += 1
+
+                    logger.info(f"Naver API ({sort_order}, page {page + 1}): +{page_added} naver blogs (total: {len(results)})")
+
+                    # 이 페이지에서 네이버 블로그를 못 찾으면 다음 페이지 시도 의미 없음
+                    if page_added == 0 and len(items) < 50:
                         break
-
-                    # Extract blog ID from link
-                    link = item.get("link", "")
-
-                    # 중복 URL 제외
-                    if link in seen_urls:
-                        continue
-
-                    blog_id = extract_blog_id(link)
-
-                    if not blog_id:
-                        # Try to extract from blogger link
-                        blogger_link = item.get("bloggerlink", "")
-                        blog_id = extract_blog_id(blogger_link)
-
-                    if not blog_id:
-                        continue
-
-                    seen_urls.add(link)
-
-                    # Clean title (remove HTML tags)
-                    title = re.sub(r'<[^>]+>', '', item.get("title", ""))
-                    title = title.replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
-
-                    results.append({
-                        "rank": len(results) + 1,
-                        "blog_id": blog_id,
-                        "blog_name": item.get("bloggername", blog_id),
-                        "blog_url": f"https://blog.naver.com/{blog_id}",
-                        "post_title": title,
-                        "post_url": link,
-                        "post_date": item.get("postdate"),
-                        "thumbnail": None,
-                        "tab_type": "VIEW",
-                        "smart_block_keyword": keyword,
-                    })
-
-                logger.info(f"Naver API ({sort_order}) returned {len(results)} total results for: {keyword}")
-            else:
-                logger.error(f"Naver API error: {response.status_code} - {response.text}")
+                else:
+                    logger.error(f"Naver API error: {response.status_code}")
+                    break
 
     except Exception as e:
         logger.error(f"Error with Naver API: {e}")
