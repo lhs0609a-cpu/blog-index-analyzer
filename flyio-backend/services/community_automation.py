@@ -93,6 +93,22 @@ POST_TEMPLATES = {
         {"title": "블로그 시작한지 100일", "content": "100일 됐네요\n포스팅 80개 정도 됨\n\n뭔가 기념할만한건 없지만 그래도 뿌듯"},
         {"title": "오늘 처음 댓글 받음", "content": "진짜 감동ㅠㅠ\n아무도 안 읽는줄 알았는데\n누군가 읽고 있었구나"},
         {"title": "이웃 신청 받으면 다 받아야함?", "content": "이웃 신청이 왔는데 광고블로그 같아요\n거절해도 되나요?\n\n다들 어떻게 하세요?"},
+
+        # 더 추가 - 일상/잡담
+        {"title": "블로그 하다가 포기한 사람", "content": "저 아는 사람 중에 블로그 시작했다가 한달만에 접은 사람 많음\n\n다들 얼마나 버티셨어요?"},
+        {"title": "맛집 글 쓰기 귀찮아짐", "content": "맛집 가면 사진부터 찍어야하고\n음식 식기 전에 빨리 찍어야하고\n솔직히 밥맛 없어질때 있음ㅋㅋ"},
+        {"title": "블로그 vs 유튜브", "content": "요즘 유튜브가 대세라는데\n블로그는 옛날거라고 하더라\n\n근데 난 글쓰는게 더 편함"},
+        {"title": "포스팅 수정하면 검색 순위 떨어짐?", "content": "예전에 쓴 글 수정하고 싶은데\n수정하면 순위 떨어진다는 말이 있어서\n\n실제로 그런가요?"},
+        {"title": "글감이 없어서 못씀", "content": "진짜 뭘 써야할지 모르겠다\n매일매일 글감 찾는게 제일 힘듦"},
+        {"title": "복사해간 사람 있음", "content": "내 글 그대로 복사해간 사람 발견함\n\n신고해야하나?\n아니면 그냥 냅둘까"},
+        {"title": "블로그 폰으로 하는 사람?", "content": "나 폰으로만 블로그 하는데\nPC로 하면 뭐가 다른가요?"},
+        {"title": "카테고리 정리 해야하는데", "content": "카테고리가 너무 지저분해짐\n근데 정리하려니까 귀찮고\n\n다들 카테고리 몇개예요?"},
+        {"title": "저품질 해제된 사람?", "content": "저품질 걸린지 2달째인데\n해제된 사람 있어요?\n어떻게 해야 풀리나요"},
+        {"title": "방문자수 0명인 날", "content": "오늘 방문자 0명이네요\n이런 날도 있구나\n\n다들 최저 방문자수 얼마예요?"},
+        {"title": "블로그 수익 현실", "content": "솔직히 말해서 6개월에 커피 한잔값도 안됨\n수익 목적으로 블로그 하면 안되는듯"},
+        {"title": "글쓰다가 날림", "content": "2시간동안 쓴 글 저장 안하고 날림\n자동저장 믿었는데 안됐음\n\n멘탈 나감"},
+        {"title": "사진 찍는거 귀찮음", "content": "글은 쉽게 쓰는데 사진 찍는게 제일 귀찮\n근데 사진 없으면 밋밋하고\n\n아 모르겠다"},
+        {"title": "이웃 정리해야하나", "content": "이웃이 300명인데 소통하는 사람은 10명도 안됨\n그냥 숫자만 많은 느낌"},
     ],
     "tip": [
         {"title": "초보때 몰랐던 것들", "content": "블로그 6개월차인데 초반에 삽질한거 공유\n\n1. 카테고리 너무 많이 만들지 마세요\n2. 처음부터 긴 글 쓰려고 하지 마세요\n3. 이웃 숫자보다 소통이 중요\n4. 매일 쓸 필요 없음"},
@@ -108,6 +124,17 @@ POST_TEMPLATES = {
         {"title": "초보한테 드리는 조언", "content": "블로그 8개월차가 드리는 조언\n\n1. 조급해하지 마세요\n2. 다른 블로그랑 비교 ㄴㄴ\n3. 꾸준함이 답임\n4. 즐기면서 하세요"},
         {"title": "이거 하나만 고치세요", "content": "초보분들 글 보면 공통적으로 하나가 부족함\n\n바로 사진 퀄리티\n\n글은 괜찮은데 사진이 너무 어둡거나 흔들림\n사진만 신경써도 확 달라져요"},
         {"title": "무료 툴 추천", "content": "제가 쓰는 무료 툴들 공유\n\n- 사진편집: 스냅시드\n- 썸네일: 미리캔버스\n- 키워드: 블랭크\n\n다 무료고 충분함"},
+
+        # 더 추가 - 팁
+        {"title": "제목 쓰는 팁", "content": "제목이 제일 중요함\n\n1. 키워드 앞에 넣기\n2. 너무 길면 안됨\n3. 궁금하게 만들기\n\n예) X: 오늘 먹은 맛있는 파스타\n예) O: 홍대 파스타 맛집 | 분위기 좋은 곳"},
+        {"title": "검색 유입 늘리는 법", "content": "검색 유입 늘리려면\n\n1. 네이버에서 사람들이 뭘 검색하는지 보기\n2. 검색량 있는 키워드 찾기\n3. 그 키워드로 글 쓰기\n\n단순한데 이게 핵심임"},
+        {"title": "맛집 글 잘 쓰는 법", "content": "맛집 글 구성 공유\n\n1. 썸네일: 음식 클로즈업\n2. 인트로: 간단한 위치/분위기\n3. 메뉴 소개\n4. 맛 평가 (솔직하게)\n5. 마무리: 영업정보"},
+        {"title": "조회수 높은 글 특징", "content": "내 글 중에 조회수 높은거 분석해봤음\n\n- 제목에 '후기' 들어간 글\n- 사진 많은 글\n- 길이가 긴 글\n\n짧은 일상글은 조회수 잘 안나옴"},
+        {"title": "저품질 안걸리는 법", "content": "저품질 무서워하는 분들 많은데\n\n1. 복붙 절대 ㄴㄴ\n2. 하루 3개 이상 ㄴㄴ\n3. 광고글만 쓰기 ㄴㄴ\n4. 비슷한 글 반복 ㄴㄴ\n\n이것만 지키면 웬만하면 안걸림"},
+        {"title": "이웃과 소통하는 법", "content": "이웃 늘리는건 쉬운데 소통하는 이웃 만들기가 어려움\n\n제가 하는 방법:\n- 먼저 댓글 달기\n- 진심으로 공감하기\n- 꾸준히 방문하기"},
+        {"title": "글 퀄리티 높이는 법", "content": "글 퀄리티 높이고 싶으면\n\n1. 사진 밝기 조절\n2. 문단 나누기\n3. 강조는 볼드로\n4. 마지막에 한번 더 읽어보기"},
+        {"title": "블로그 스킨 추천", "content": "네이버 기본 스킨보다 변경하는게 나음\n\n깔끔한 스킨으로 바꾸면 체류시간도 늘어남\n\n저는 심플한거 쓰는데 좋아요"},
+        {"title": "글 쓰기 전에 할 일", "content": "글 쓰기 전에 항상 하는 것\n\n1. 키워드 검색량 확인\n2. 상위 글들 어떻게 썼는지 확인\n3. 내가 쓸 차별점 생각\n\n그냥 바로 쓰면 상위노출 힘듦"},
     ],
     "question": [
         {"title": "이 정도면 괜찮은건가요?", "content": "블로그 3개월차입니다\n\n일평균 방문자 30명\n포스팅 60개\n이웃 80명\n\n이 정도면 평균인가요?"},
@@ -124,6 +151,20 @@ POST_TEMPLATES = {
         {"title": "카테고리 몇개가 적당해요?", "content": "지금 10개인데 너무 많은가요?\n줄여야 할까요?"},
         {"title": "예약발행 괜찮나요?", "content": "주말에 몰아쓰고 예약발행 하려는데\n예약발행이 검색에 불리하다는 말이 있어서요"},
         {"title": "이웃 몇명부터 효과있어요?", "content": "지금 50명인데 적은건가요?\n몇명 정도 되어야 소통이 활발해지나요?"},
+
+        # 더 추가 - 질문
+        {"title": "블로그 주제 바꿔도 되나요?", "content": "지금 맛집 블로그인데 여행으로 바꾸고 싶음\n주제 바꾸면 기존 글들 어떻게 되나요?"},
+        {"title": "해시태그 몇개가 적당해요?", "content": "해시태그 많이 넣으면 좋은건가요?\n아니면 적당히 넣어야 하나요?"},
+        {"title": "사진 몇장이 적당해요?", "content": "사진 많으면 좋다고 하는데\n너무 많아도 안좋다고 하고\n\n적당한게 몇장일까요?"},
+        {"title": "글 길이 얼마나 써야해요?", "content": "글이 너무 짧으면 안좋다고 하는데\n몇자 이상 써야 하나요?"},
+        {"title": "다른 블로그 인용해도 되나요?", "content": "다른 블로그 글 참고하고 싶은데\n인용하면 저품질 걸리나요?"},
+        {"title": "맛집 별점 솔직하게 써도 되나요?", "content": "솔직히 별로였던 맛집이 있는데\n그대로 쓰면 문제 안되나요?"},
+        {"title": "블로그 수익화 어떻게 해요?", "content": "애드센스 말고 다른 수익화 방법 있나요?\n체험단? 협찬?"},
+        {"title": "글 삭제하면 검색에 영향 있나요?", "content": "예전에 쓴 글 중에 별로인거 삭제하고 싶은데\n삭제하면 블로그에 안좋은가요?"},
+        {"title": "PC버전 vs 모바일버전 뭐가 나아요?", "content": "글 쓸 때 PC가 나은지 모바일이 나은지\n다들 어디서 쓰세요?"},
+        {"title": "스마트에디터 ONE 쓰시나요?", "content": "스마트에디터 ONE으로 바꾸라고 하는데\n기존거랑 뭐가 다른가요?"},
+        {"title": "블로그 홍보 어떻게 해요?", "content": "글 써도 아무도 안보는데\n어디서 홍보해야 하나요?"},
+        {"title": "서이추 거절해도 되나요?", "content": "이상한 사람이 서이추 보내면\n거절해도 되는건가요?"},
     ],
     "success": [
         {"title": "드디어 상위노출 됐어요!!", "content": "4개월만에 처음으로 상위노출 성공함ㅠㅠ\n\n'홍대 파스타 맛집' 키워드로 6위\n아직도 믿기지가 않음\n\n다들 포기하지 마세요!!"},
@@ -136,6 +177,18 @@ POST_TEMPLATES = {
         # 추가
         {"title": "드디어 레벨업!", "content": "레벨 7 달성!\n처음엔 3이었는데 6개월만에 7 됨\n\n다음은 9 목표"},
         {"title": "오늘 방문자 신기록", "content": "평소 100명대였는데 오늘 2000명 넘음\n뭔가 글 하나가 터진듯\n\n기분 좋다 ㅎㅎ"},
+
+        # 더 추가 - 성공
+        {"title": "검색 1위 찍음", "content": "내가 쓴 글이 검색 1위에 뜸\n\n믿기지가 않는데 진짜임\n\n기분 너무 좋다 ㅠㅠ"},
+        {"title": "이웃 200명 달성!", "content": "3개월만에 이웃 200명 됨\n\n소통하면서 천천히 늘린건데\n뿌듯하네요"},
+        {"title": "첫 원고료 받음", "content": "블로그 보고 원고 제의 들어와서\n처음으로 원고료 받았어요\n\n5만원인데 감격ㅠㅠ"},
+        {"title": "애드센스 드디어 승인!", "content": "5번 떨어지고 드디어 승인됨\n\n포스팅 60개, 방문자 하루 70명쯤 됐을 때 붙음"},
+        {"title": "3개월 꾸준히 한 결과", "content": "3개월 동안 매일 1포 했는데\n\n방문자: 10명 -> 150명\n이웃: 20명 -> 180명\n\n꾸준히 하면 된다"},
+        {"title": "첫 리뷰 제안 받음", "content": "업체에서 리뷰 제안이 왔어요\n\n아직 블로그 작은데 신기하네요\n열심히 해야겠다"},
+        {"title": "목표 달성!", "content": "올해 목표였던 포스팅 100개 달성!\n\n쉬운거 같으면서도 어려웠는데\n해냈다 뿌듯"},
+        {"title": "인기글 선정됨", "content": "내 글이 주제별 인기글에 떴음\n\n갑자기 방문자 폭발해서 뭔가 했더니\n인기글이었음 ㅎㅎ"},
+        {"title": "키워드 점령 성공", "content": "목표했던 키워드로 상위 5개 글이 다 내꺼가 됨\n\n처음엔 불가능할줄 알았는데 가능하네요"},
+        {"title": "블로그 6개월 성과", "content": "6개월 동안의 성과 정리\n\n- 포스팅: 120개\n- 방문자: 하루 200명\n- 이웃: 350명\n- 수익: 월 3만원\n\n아직 멀었지만 성장중"},
     ],
 }
 
@@ -176,8 +229,40 @@ def get_random_blogger_name() -> str:
     return random.choice(BLOGGER_NAMES)
 
 
+def _get_existing_titles_from_db() -> Set[str]:
+    """DB에서 기존 제목들 조회"""
+    from database.community_db import get_db_connection
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT title FROM posts")
+        titles = {row['title'] for row in cursor.fetchall()}
+        conn.close()
+        return titles
+    except:
+        return set()
+
+
+# 고유 제목 생성용 변형들
+TITLE_PREFIXES = [
+    "", "[후기] ", "[질문] ", "[공유] ", "[고민] ", "[정보] ",
+    "(급해요) ", "드디어 ", "결국 ", "갑자기 ", "요즘 ",
+    "솔직히 ", "진짜 ", "ㄹㅇ ", "혹시 ", "궁금한데 ",
+]
+
+TITLE_SUFFIXES = [
+    "", "...", " ㅠㅠ", " ㅎㅎ", " ㅋㅋ", "!", "?", " (공유)",
+    " (질문)", " (급해요)", " (도와주세요)", " (후기)",
+    f" #{random.randint(1, 999)}", f" ({random.randint(1, 12)}월)",
+]
+
+
 def get_random_post(category: str = None) -> Dict:
     global _used_titles
+
+    # DB에서 기존 제목 가져오기 (캐싱)
+    if len(_used_titles) == 0:
+        _used_titles = _get_existing_titles_from_db()
 
     if category is None:
         categories = ["free", "tip", "question", "success"]
@@ -185,28 +270,54 @@ def get_random_post(category: str = None) -> Dict:
         category = random.choices(categories, weights=weights)[0]
 
     templates = POST_TEMPLATES.get(category, POST_TEMPLATES["free"])
-    random.shuffle(templates)
 
-    for template in templates:
-        title = template["title"]
+    # 여러 번 시도
+    for attempt in range(50):
+        template = random.choice(templates)
+        base_title = template["title"]
 
-        # 변형 추가
-        variations = ["", " ㅠㅠ", " ㅎㅎ", "...", "!", " (질문)", " (공유)"]
-        title_var = title + random.choice(variations)
+        # 고유 제목 생성
+        if attempt < 10:
+            # 처음엔 간단한 변형
+            suffix = random.choice(["", " ㅠㅠ", " ㅎㅎ", "...", "!", " (공유)", " (질문)"])
+            title = base_title + suffix
+        elif attempt < 30:
+            # 숫자 추가
+            title = f"{base_title} #{random.randint(1, 9999)}"
+        else:
+            # 더 복잡한 변형
+            prefix = random.choice(TITLE_PREFIXES)
+            suffix = random.choice(TITLE_SUFFIXES) + f"_{random.randint(1, 9999)}"
+            title = prefix + base_title + suffix
 
-        if title_var not in _used_titles:
-            _used_titles.add(title_var)
+        if title not in _used_titles:
+            _used_titles.add(title)
+
+            # 내용도 약간 변형
+            content = template["content"]
+            if random.random() < 0.3:
+                content = content + f"\n\n(p.s. {random.choice(['질문있으면 댓글 주세요', '다들 어떠세요?', '의견 부탁드려요', '조언 부탁해요'])})"
 
             return {
-                "title": title_var,
-                "content": template["content"],
+                "title": title,
+                "content": content,
                 "category": category,
                 "author_name": get_random_blogger_name()
             }
 
-    # 모두 사용됨 - 동적 생성
+    # 50번 시도 후에도 실패하면 완전히 새로운 제목 생성
+    unique_id = random.randint(10000, 99999)
+    dynamic_titles = [
+        f"블로그 일기 {unique_id}",
+        f"오늘의 기록 {unique_id}",
+        f"끄적끄적 {unique_id}",
+        f"블로그 이야기 {unique_id}",
+        f"하루 정리 {unique_id}",
+        f"소소한 이야기 {unique_id}",
+    ]
+
     return {
-        "title": f"블로그 이야기 #{random.randint(1, 9999)}",
+        "title": random.choice(dynamic_titles),
         "content": "블로그 하면서 느끼는 점들 공유해요\n\n다들 어떠세요?",
         "category": category,
         "author_name": get_random_blogger_name()
