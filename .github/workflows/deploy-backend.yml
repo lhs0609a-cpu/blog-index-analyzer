@@ -98,7 +98,9 @@ jobs:
             }
             CADDYEOF
 
-            sudo systemctl reload caddy
+            # Restart both Caddy and nginx in case either is being used as reverse proxy
+            sudo systemctl reload caddy || true
+            sudo systemctl reload nginx || sudo nginx -s reload || true
             echo "Deployment completed at $(date)"
 
             # 컨테이너 내부 파일 확인
