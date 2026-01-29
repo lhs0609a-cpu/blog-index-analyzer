@@ -563,12 +563,12 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 10) ->
         view_results = []
         all_urls = set()  # 모든 소스에서 중복 제거용
 
-        # ===== 1단계: Playwright VIEW 탭 (가장 많은 결과 - 스크롤로 lazy loading) =====
-        logger.info(f"Step 1: Playwright VIEW tab scraping for: {keyword}")
+        # ===== 1단계: HTTP 스크래핑 (가장 안정적, 많은 결과) =====
+        logger.info(f"Step 1: HTTP scraping for: {keyword}")
         try:
-            playwright_results = await fetch_via_view_tab_scraping(keyword, limit * 2)
-            if playwright_results:
-                for item in playwright_results:
+            http_results = await fetch_via_blog_tab_scraping(keyword, limit * 2)
+            if http_results:
+                for item in http_results:
                     if len(blog_results) >= limit:
                         break
                     if item["post_url"] not in all_urls:
@@ -576,11 +576,11 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 10) ->
                         item["rank"] = len(blog_results) + 1
                         blog_results.append(item)
                         all_urls.add(item["post_url"])
-                logger.info(f"Playwright VIEW: {len(blog_results)} results after dedup")
+                logger.info(f"HTTP scraping: {len(blog_results)} results")
         except Exception as e:
-            logger.warning(f"Playwright VIEW failed: {e}")
+            logger.warning(f"HTTP scraping failed: {e}")
 
-        # ===== 2단계: 네이버 API (두 가지 정렬로 더 다양한 결과) =====
+        # ===== 2단계: 네이버 API (두 가지 정렬로 추가 결과) =====
         if len(blog_results) < limit:
             client_id = getattr(settings, 'NAVER_CLIENT_ID', None)
             client_secret = getattr(settings, 'NAVER_CLIENT_SECRET', None)
@@ -599,22 +599,22 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 10) ->
                             all_urls.add(item["post_url"])
                     logger.info(f"After Naver API: {len(blog_results)} results")
 
-        # ===== 3단계: Playwright BLOG 탭 (스크롤로 추가 결과) =====
+        # ===== 3단계: Playwright VIEW 탭 (JS 렌더링 필요 시) =====
         if len(blog_results) < limit:
-            logger.info(f"Step 3: Playwright BLOG tab for: {keyword} (need {limit - len(blog_results)} more)")
+            logger.info(f"Step 3: Playwright VIEW tab for: {keyword} (need {limit - len(blog_results)} more)")
             try:
-                blog_tab_results = await fetch_via_blog_tab_scraping(keyword, limit * 2)
-                if blog_tab_results:
-                    for item in blog_tab_results:
+                playwright_results = await fetch_via_view_tab_scraping(keyword, limit * 2)
+                if playwright_results:
+                    for item in playwright_results:
                         if len(blog_results) >= limit:
                             break
                         if item["post_url"] not in all_urls:
                             item["rank"] = len(blog_results) + 1
                             blog_results.append(item)
                             all_urls.add(item["post_url"])
-                    logger.info(f"After BLOG tab: {len(blog_results)} results")
+                    logger.info(f"After Playwright VIEW: {len(blog_results)} results")
             except Exception as e:
-                logger.warning(f"BLOG tab scraping failed: {e}")
+                logger.warning(f"Playwright VIEW failed: {e}")
 
         # ===== 4단계: RSS fallback (아직 부족하면) =====
         if len(blog_results) < limit:
