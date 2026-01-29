@@ -99,6 +99,7 @@ export default function Home() {
   const [isSearching, setIsSearching] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)  // P1-3: 블로그 분석 상태
   const [showAdPopup, setShowAdPopup] = useState(false)
+  const [searchMode, setSearchMode] = useState<'blog' | 'keyword'>('blog')  // 검색 모드 전환
 
   // P2: 프로모 팝업 3초 지연
   useEffect(() => {
@@ -262,65 +263,150 @@ export default function Home() {
                 <LiveCounter />
               </motion.div>
 
-              {/* P1-3: 즉시 체험 - 블로그 분석 입력 (메인) */}
+              {/* 검색 모드 전환 탭 + 입력 영역 */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.3 }}
                 className="max-w-2xl mx-auto mb-10"
               >
-                <form onSubmit={handleBlogAnalyze} className="relative group">
-                  <div className="absolute -inset-1 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-2xl blur-xl opacity-20 group-hover:opacity-40 transition-opacity" />
-                  <div className="relative flex items-center bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-xl shadow-gray-200/50">
-                    <div className="absolute left-5 text-gray-400">
-                      <Sparkles className="w-5 h-5" />
-                    </div>
-                    <input
-                      type="text"
-                      value={blogId}
-                      onChange={(e) => setBlogId(e.target.value)}
-                      placeholder="블로그 ID 입력 (예: myblog123)"
-                      maxLength={100}
-                      className="w-full px-5 py-5 pl-14 pr-36 bg-transparent text-gray-900 placeholder:text-gray-400 focus:outline-none"
-                      disabled={isAnalyzing}
-                    />
-                    <button
-                      type="submit"
-                      disabled={isAnalyzing}
-                      className="absolute right-2 px-6 py-3 rounded-xl bg-[#0064FF] text-white font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-[#0064FF]/15"
-                    >
-                      {isAnalyzing ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          분석중
-                        </>
-                      ) : (
-                        <>
-                          <Zap className="w-4 h-4" />
-                          무료 분석
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </form>
-
-                {/* 키워드 검색 바로가기 */}
-                <div className="mt-4 flex items-center justify-center gap-6 text-sm">
-                  <Link
-                    href="/keyword-search"
-                    className="text-gray-500 hover:text-[#0064FF] transition-colors inline-flex items-center gap-1"
+                {/* 탭 전환 버튼 */}
+                <div className="flex items-center justify-center gap-2 mb-4">
+                  <button
+                    onClick={() => setSearchMode('blog')}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
+                      searchMode === 'blog'
+                        ? 'bg-[#0064FF] text-white shadow-lg shadow-[#0064FF]/25'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    블로그 분석
+                  </button>
+                  <button
+                    onClick={() => setSearchMode('keyword')}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
+                      searchMode === 'keyword'
+                        ? 'bg-[#0064FF] text-white shadow-lg shadow-[#0064FF]/25'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
                   >
                     <Search className="w-4 h-4" />
-                    키워드 경쟁력 분석
-                    <ArrowRight className="w-3 h-3" />
-                  </Link>
-                  <span className="text-gray-300">|</span>
+                    키워드 검색
+                  </button>
+                </div>
+
+                {/* 블로그 분석 입력 */}
+                {searchMode === 'blog' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <form onSubmit={handleBlogAnalyze} className="relative group">
+                      <div className="absolute -inset-1 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-2xl blur-xl opacity-20 group-hover:opacity-40 transition-opacity" />
+                      <div className="relative flex items-center bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-xl shadow-gray-200/50">
+                        <div className="absolute left-5 text-gray-400">
+                          <Sparkles className="w-5 h-5" />
+                        </div>
+                        <input
+                          type="text"
+                          value={blogId}
+                          onChange={(e) => setBlogId(e.target.value)}
+                          placeholder="블로그 ID 입력 (예: myblog123)"
+                          maxLength={100}
+                          className="w-full px-5 py-5 pl-14 pr-36 bg-transparent text-gray-900 placeholder:text-gray-400 focus:outline-none"
+                          disabled={isAnalyzing}
+                        />
+                        <button
+                          type="submit"
+                          disabled={isAnalyzing}
+                          className="absolute right-2 px-6 py-3 rounded-xl bg-[#0064FF] text-white font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-[#0064FF]/15"
+                        >
+                          {isAnalyzing ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              분석중
+                            </>
+                          ) : (
+                            <>
+                              <Zap className="w-4 h-4" />
+                              무료 분석
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                    <p className="text-xs text-gray-400 mt-2 text-center">
+                      블로그 URL 또는 ID를 입력하면 11단계 레벨과 42개 지표를 분석합니다
+                    </p>
+                  </motion.div>
+                )}
+
+                {/* 키워드 검색 입력 */}
+                {searchMode === 'keyword' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <form onSubmit={handleKeywordSearch} className="relative group">
+                      <div className="absolute -inset-1 bg-gradient-to-r from-[#0064FF] to-purple-500 rounded-2xl blur-xl opacity-20 group-hover:opacity-40 transition-opacity" />
+                      <div className="relative flex items-center bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-xl shadow-gray-200/50">
+                        <div className="absolute left-5 text-gray-400">
+                          <Search className="w-5 h-5" />
+                        </div>
+                        <input
+                          type="text"
+                          value={keyword}
+                          onChange={(e) => setKeyword(e.target.value)}
+                          placeholder="키워드 입력 (예: 서울맛집, 다이어트)"
+                          maxLength={100}
+                          className="w-full px-5 py-5 pl-14 pr-36 bg-transparent text-gray-900 placeholder:text-gray-400 focus:outline-none"
+                          disabled={isSearching}
+                        />
+                        <button
+                          type="submit"
+                          disabled={isSearching}
+                          className="absolute right-2 px-6 py-3 rounded-xl bg-gradient-to-r from-[#0064FF] to-purple-500 text-white font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-purple-500/15"
+                        >
+                          {isSearching ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              검색중
+                            </>
+                          ) : (
+                            <>
+                              <Search className="w-4 h-4" />
+                              검색하기
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                    <p className="text-xs text-gray-400 mt-2 text-center">
+                      키워드를 입력하면 상위 10개 블로그와 경쟁력을 분석합니다
+                    </p>
+                  </motion.div>
+                )}
+
+                {/* 추가 기능 바로가기 */}
+                <div className="mt-6 flex items-center justify-center gap-6 text-sm">
                   <Link
                     href="/blue-ocean"
                     className="text-gray-500 hover:text-amber-500 transition-colors inline-flex items-center gap-1"
                   >
                     <Crown className="w-4 h-4" />
                     블루오션 키워드 발굴
+                    <ArrowRight className="w-3 h-3" />
+                  </Link>
+                  <span className="text-gray-300">|</span>
+                  <Link
+                    href="/tools"
+                    className="text-gray-500 hover:text-[#0064FF] transition-colors inline-flex items-center gap-1"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    AI 도구 모음
                     <ArrowRight className="w-3 h-3" />
                   </Link>
                 </div>
