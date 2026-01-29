@@ -1,3 +1,4 @@
+# Build timestamp: 2026-01-29T09:00
 FROM python:3.11-slim
 
 # 작업 디렉토리 설정
