@@ -842,21 +842,29 @@ function PostsSection({ userId, isAuthenticated }: { userId?: number; isAuthenti
   const [showWriteModal, setShowWriteModal] = useState(false)
   const [selectedPost, setSelectedPost] = useState<Post | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [hasMore, setHasMore] = useState(true)
+  const POSTS_PER_PAGE = 20
 
   useEffect(() => {
-    loadPosts()
+    setCurrentPage(1)
+    loadPosts(1)
   }, [category, sortBy])
 
-  const loadPosts = async () => {
+  const loadPosts = async (page: number = currentPage) => {
     setIsLoading(true)
     try {
+      const offset = (page - 1) * POSTS_PER_PAGE
       const data = await getPosts({
         category: category || undefined,
         sort_by: sortBy,
-        limit: 20,
+        limit: POSTS_PER_PAGE,
+        offset: offset,
         search: searchQuery || undefined
       })
       setPosts(data.posts)
+      setHasMore(data.posts.length === POSTS_PER_PAGE)
+      setCurrentPage(page)
     } catch {
       // 게시글 로드 실패 무시
     } finally {
@@ -866,7 +874,13 @@ function PostsSection({ userId, isAuthenticated }: { userId?: number; isAuthenti
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
-    loadPosts()
+    setCurrentPage(1)
+    loadPosts(1)
+  }
+
+  const handlePageChange = (page: number) => {
+    loadPosts(page)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handlePostCreated = () => {
@@ -1053,6 +1067,53 @@ function PostsSection({ userId, isAuthenticated }: { userId?: number; isAuthenti
               </motion.div>
             ))}
           </div>
+
+          {/* 페이지네이션 */}
+          {posts.length > 0 && (
+            <div className="p-4 border-t border-gray-100">
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1 || isLoading}
+                  className="px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-100 text-gray-600 hover:bg-gray-200"
+                >
+                  이전
+                </button>
+
+                {/* 페이지 번호 */}
+                {Array.from({ length: 5 }, (_, i) => {
+                  const pageNum = Math.max(1, currentPage - 2) + i
+                  if (pageNum < 1) return null
+                  if (!hasMore && pageNum > currentPage) return null
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => handlePageChange(pageNum)}
+                      disabled={isLoading}
+                      className={`w-10 h-10 rounded-lg text-sm font-medium transition-colors ${
+                        currentPage === pageNum
+                          ? 'bg-[#0064FF] text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  )
+                })}
+
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={!hasMore || isLoading}
+                  className="px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-gray-100 text-gray-600 hover:bg-gray-200"
+                >
+                  다음
+                </button>
+              </div>
+              <p className="text-center text-sm text-gray-500 mt-2">
+                {currentPage} 페이지
+              </p>
+            </div>
+          )}
         )}
       </div>
 
