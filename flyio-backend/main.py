@@ -1,6 +1,6 @@
 """
 FastAPI 메인 애플리케이션
-Version: 2.1.0 - Level system expanded to 1-15
+Version: 2.2.0 - Unique title generation for community posts
 """
 from fastapi import FastAPI, APIRouter, Request
 from fastapi.middleware.cors import CORSMiddleware
