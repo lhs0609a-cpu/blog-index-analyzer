@@ -741,7 +741,8 @@ async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
 
                     if response.status_code == 200:
                         html_text = response.text
-                        post_url_pattern = re.compile(r'href="(https://blog\.naver\.com/([^"/]+)/(\d+))"')
+                        # 단순 패턴으로 더 많은 URL 찾기 (href 안뿐만 아니라 JS 등에서도)
+                        post_url_pattern = re.compile(r'blog\.naver\.com/(\w+)/(\d+)')
                         url_matches = post_url_pattern.findall(html_text)
 
                         page_added = 0
@@ -749,9 +750,9 @@ async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
                             if len(results) >= limit:
                                 break
 
-                            post_url = match[0]
-                            blog_id = match[1]
-                            post_id = match[2]
+                            blog_id = match[0]
+                            post_id = match[1]
+                            post_url = f"https://blog.naver.com/{blog_id}/{post_id}"
 
                             if post_url in existing_urls:
                                 continue
@@ -848,7 +849,8 @@ async def fetch_via_view_tab_scraping_http(keyword: str, limit: int) -> List[Dic
 
             if response.status_code == 200:
                 html_text = response.text
-                post_url_pattern = re.compile(r'href="(https://blog\.naver\.com/([^/]+)/(\d+))"')
+                # 단순 패턴으로 더 많은 URL 찾기
+                post_url_pattern = re.compile(r'blog\.naver\.com/(\w+)/(\d+)')
                 matches = post_url_pattern.findall(html_text)
 
                 seen_urls = set()
@@ -858,9 +860,9 @@ async def fetch_via_view_tab_scraping_http(keyword: str, limit: int) -> List[Dic
                     if rank >= limit:
                         break
 
-                    post_url = match[0]
-                    blog_id = match[1]
-                    post_id = match[2]
+                    blog_id = match[0]
+                    post_id = match[1]
+                    post_url = f"https://blog.naver.com/{blog_id}/{post_id}"
 
                     if post_url in seen_urls:
                         continue
