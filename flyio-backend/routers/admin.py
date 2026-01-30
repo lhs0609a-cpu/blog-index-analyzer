@@ -952,6 +952,490 @@ async def bulk_upgrade_users(
     }
 
 
+# ============ Community Auto Generation ============
+
+import asyncio
+import random
+from datetime import datetime, timedelta
+
+# 자동 생성 상태
+_auto_gen_task = None
+_auto_gen_running = False
+
+# 한국 인터넷 감탄사/이모티콘
+REACTIONS = [
+    "ㅋㅋㅋ", "ㅋㅋㅋㅋ", "ㅋㅋㅋㅋㅋ", "ㅋㅋㅋㅋㅋㅋ", "ㅎㅎ", "ㅎㅎㅎ", "ㅎㅎㅎㅎ",
+    "ㅠㅠ", "ㅜㅜ", "ㅠㅜ", "ㅜㅠ", "ㅠㅠㅠ", "ㅜㅜㅜ", "ㅡㅡ", "ㅡ.ㅡ", ";;", ";;;",
+    "ㄷㄷ", "ㄷㄷㄷ", "ㄱㄱ", "ㄴㄴ", "ㅇㅇ", "ㅇㅋ", "ㄹㅇ", "ㅇㅈ", "ㄱㅇㄷ",
+    "헐", "헐ㅋㅋ", "대박", "미쳤다", "실화냐", "실화임?", "레전드", "ㄹㅇㅋㅋ",
+    "와", "오", "우와", "와씨", "아니", "진짜", "마자", "맞아", "인정", "ㅇㅈ요",
+    "ㄱㅅ", "ㄳ", "ㄱㅅㄱㅅ", "고마워", "땡큐", "ㅊㅋ", "ㅊㅊ", "축하",
+]
+
+# 비속어/욕설 (가벼운 수준)
+SLANG = [
+    "ㅅㅂ", "ㅆㅂ", "시발", "씨발", "ㅂㅅ", "병신", "ㅈㄹ", "지랄",
+    "ㄷㅊ", "닥쳐", "꺼져", "미친", "ㅁㅊ", "또라이", "븅신", "ㅄ",
+    "ㅈㄴ", "존나", "개", "개같은", "개빡", "빡치네", "열받네", "짜증",
+    "뭔씹", "ㅁㅊㄴ", "아씨", "에휴", "하아", "후",
+]
+
+# 줄임말
+ABBREVIATIONS = {
+    "블로그": ["블로", "블", "블ㄹ"],
+    "상위노출": ["상놀", "상위", "상노"],
+    "키워드": ["키워", "키웓", "ㅋㅇㄷ"],
+    "조회수": ["조회", "조수"],
+    "방문자": ["방문", "방자"],
+    "최적화": ["최적", "최ㅈㅎ"],
+    "검색": ["검색", "ㄱㅅ"],
+    "수익": ["수익", "수이"],
+    "체험단": ["체단", "체험"],
+    "협찬": ["협찬", "협"],
+    "애드포스트": ["애포", "애드포"],
+    "인플루언서": ["인플", "인플루"],
+    "리뷰": ["리뷰", "ㄹㅂ"],
+    "포스팅": ["포스팅", "포팅", "글"],
+}
+
+# 글 주제별 템플릿
+TOPIC_TEMPLATES = {
+    "tip": [
+        "{reaction} 블로그 {months}개월차인데 드디어 상놀 성공함\n\n{tip1}\n{tip2}\n{tip3}\n\n이거 {reaction} 진짜 효과 봄 ㄹㅇ",
+        "야 {slang} 이거 꿀팁인데 {reaction}\n\n{tip1} 하면 바로 {result}\n\n나만 알고 싶은데 공유함 {reaction}",
+        "{months}개월 삽질하다가 깨달은거\n\n{tip1}\n{tip2}\n\n이거 안하면 {slang} 시간낭비임 {reaction}",
+        "상놀 비법 알려줄까? {reaction}\n\n{tip1}\n\n근데 {slang} 귀찮아서 맨날 안함 ㅋㅋㅋ",
+        "오늘 터진거 공유 {reaction}\n\n{keyword} 키워드로 {rank}위 찍음\n\n비결: {tip1}\n\n{feeling}",
+    ],
+    "question": [
+        "아 {slang} 블로그 왜이러냐 {reaction}\n\n{problem}\n\n이거 나만 그런거? 도와줘 {reaction}",
+        "질문있는데요 {reaction}\n\n{problem}\n\n아시는분 알려주세요 제발 {slang}",
+        "ㅠㅠ 누가 좀 도와줘\n\n블로그 {months}개월찬데 {problem}\n\n진짜 답답해 {slang}",
+        "이거 정상임?\n\n{problem}\n\n뭐가 문젠지 모르겠음 {reaction}",
+        "선배님들 질문요 ㅠㅠ\n\n{problem}\n\n구글링해도 안나옴 {slang}",
+    ],
+    "free": [
+        "오늘 블로그 현황 {reaction}\n\n글 {posts}개 / 방문자 {visitors}명\n\n{feeling}",
+        "{reaction} 그냥 잡담인데\n\n{chat}\n\n블로그하는 사람 여기 있음? {reaction}",
+        "아 {slang} 오늘 글 {posts}개 썼다\n\n{feeling}\n\n다들 화이팅 {reaction}",
+        "ㅎㅇ 심심해서 왔음 {reaction}\n\n{chat}\n\n블로그 하기 싫다 {slang}",
+        "일기장 대신 씀 {reaction}\n\n{chat}\n\n읽어줘서 고마움 ㅋㅋ",
+    ],
+    "success": [
+        "드디어 {result} {reaction}{reaction}{reaction}\n\n{months}개월 걸림\n\n{tip1} 했더니 됨\n\n{slang} 감격 {reaction}",
+        "와 {reaction} 터졌다\n\n{keyword} {rank}위 달성!!\n\n{feeling}\n\n포기 안하길 잘했다 {reaction}",
+        "성공 인증 {reaction}\n\n드디어 {result}\n\n비결은 {tip1}\n\n{slang} 눈물남",
+        "ㅋㅋㅋ 방금 확인했는데 {result}\n\n{feeling}\n\n이맛에 블로그 함 {reaction}",
+        "야 {slang} 드디어 해냈다 {reaction}\n\n{result}\n\n{months}개월 삽질 끝 ㅠㅠ",
+    ],
+    "promo": [
+        "서이추 환영 {reaction}\n\n{months}개월차 블로거입니다\n\n맞팔해요~ {reaction}",
+        "이웃 구해요!\n\n{niche} 관심있는 분 환영\n\n소통해요 {reaction}",
+        "제 블로그 한번 봐주세요 ㅠㅠ\n\n{niche} 주제로 글 쓰고 있어요\n\n피드백 부탁드려요 {reaction}",
+        "맞팔 구함 {reaction}\n\n활동 열심히 하는 편이에요\n\n소통 원해요~",
+        "이웃 신청 받아요!\n\n{niche} 블로그 운영중\n\n같이 성장해요 {reaction}",
+    ],
+    "rant": [
+        "아 {slang} 진짜 빡치네\n\n{complaint}\n\n블로그 접을까 {reaction}",
+        "열받아서 씀 {slang}\n\n{complaint}\n\n이해하는 사람? {reaction}",
+        "오늘 {slang} 최악이었음\n\n{complaint}\n\n위로해줘 ㅠㅠ",
+        "ㅋㅋㅋ 웃겨서 씀\n\n{complaint}\n\n{slang} 어이없네 진짜",
+        "{slang} 왜이러냐고\n\n{complaint}\n\n나만 이런거 아니지? {reaction}",
+    ],
+}
+
+# 문제 상황
+PROBLEMS = [
+    "갑자기 방문자 반토막남", "저품질 걸린것 같음", "상위노출 안됨",
+    "글이 검색에 안잡힘", "C-Rank가 안오름", "이웃이 안늘어",
+    "댓글이 하나도 없음", "조회수가 0임", "글쓰기가 너무 어려움",
+    "키워드 선정을 못하겠음", "사진 편집 ㅈㄴ 귀찮음", "매일 쓰기 힘듬",
+    "뭘 써야할지 모르겠음", "경쟁 너무 치열함", "수익이 0원임",
+]
+
+# 팁
+TIPS = [
+    "매일 1포스팅 필수", "키워드 3개 이상 넣기", "2000자 이상 쓰기",
+    "이미지 10장 이상", "이웃 소통 열심히", "댓글 답글 필수",
+    "시리즈로 연재하기", "롱테일 키워드 공략", "경쟁 낮은거 찾기",
+    "아침에 발행하기", "제목에 키워드 넣기", "본문에 키워드 자연스럽게",
+    "카테고리 정리하기", "태그 잘 달기", "썸네일 신경쓰기",
+]
+
+# 결과
+RESULTS = [
+    "상놀 성공", "방문자 2배 증가", "이웃 100명 돌파", "첫 협찬 받음",
+    "애드포스트 승인", "월수익 10만원", "일방문 1000명", "C-Rank 상승",
+    "인플루언서 달성", "체험단 당첨", "첫 원고료", "브랜드 협업",
+]
+
+# 감정
+FEELINGS = [
+    "기분 좋다 ㅎㅎ", "뿌듯하네", "힘든데 해볼만함", "아직 갈길이 멀다",
+    "오늘도 화이팅", "포기하고 싶다", "의욕 없음", "동기부여 필요",
+    "보람차다", "재밌다 ㅋㅋ", "지친다", "힘들다 ㅠㅠ",
+]
+
+# 잡담
+CHATS = [
+    "오늘 날씨 좋네", "점심 뭐먹지", "졸리다", "일하기 싫다",
+    "블로그나 할까", "유튜브 보다가 옴", "심심해", "할거 없다",
+    "커피 마시는 중", "퇴근하고 싶다", "주말이 기다려짐", "피곤하다",
+]
+
+# 불만
+COMPLAINTS = [
+    "네이버 알고리즘 ㅈ같음", "저품질 기준이 뭐냐", "왜 상놀이 안되냐",
+    "이웃이 다 잠수탐", "댓글 아무도 안달아줌", "조회수 왜이리 낮냐",
+    "경쟁자가 너무 많음", "글쓰기 너무 힘듬", "시간이 부족함",
+    "돈이 안됨", "수익화가 어려움", "체험단 계속 떨어짐",
+]
+
+# 니치/분야
+NICHES = [
+    "맛집", "여행", "육아", "재테크", "다이어트", "뷰티", "패션",
+    "인테리어", "자기계발", "IT/테크", "게임", "영화/드라마", "독서",
+    "요리", "운동", "반려동물", "취미생활", "일상",
+]
+
+# 키워드
+KEYWORDS = [
+    "서울 맛집", "강남 카페", "홍대 데이트", "제주도 여행", "다이어트 식단",
+    "주식 투자", "부동산", "육아 일기", "신생아 용품", "노트북 추천",
+    "아이폰 케이스", "갤럭시 비교", "넷플릭스 추천", "운동 루틴", "홈트레이닝",
+]
+
+
+def generate_realistic_post():
+    """실제 한국 인터넷 커뮤니티 스타일의 글 생성"""
+    categories = ["tip", "question", "free", "success", "promo", "rant"]
+    weights = [0.25, 0.2, 0.25, 0.1, 0.1, 0.1]
+    category = random.choices(categories, weights=weights)[0]
+
+    # 카테고리 매핑 (DB용)
+    db_category = {
+        "tip": "tip",
+        "question": "question",
+        "success": "success",
+        "promo": "free",
+        "rant": "free",
+        "free": "free",
+    }.get(category, "free")
+
+    template = random.choice(TOPIC_TEMPLATES[category])
+
+    # 템플릿 변수 채우기
+    content = template.format(
+        reaction=random.choice(REACTIONS),
+        slang=random.choice(SLANG) if random.random() < 0.4 else random.choice(REACTIONS),
+        months=random.randint(1, 36),
+        tip1=random.choice(TIPS),
+        tip2=random.choice(TIPS),
+        tip3=random.choice(TIPS),
+        result=random.choice(RESULTS),
+        problem=random.choice(PROBLEMS),
+        feeling=random.choice(FEELINGS),
+        chat=random.choice(CHATS),
+        complaint=random.choice(COMPLAINTS),
+        niche=random.choice(NICHES),
+        keyword=random.choice(KEYWORDS),
+        rank=random.randint(1, 10),
+        posts=random.randint(10, 500),
+        visitors=random.randint(50, 5000),
+    )
+
+    # 제목 생성
+    title_templates = {
+        "tip": [
+            "상놀 꿀팁 공유 {r}", "이거 모르면 손해 {r}", "{m}개월차 노하우",
+            "드디어 깨달음 {r}", "팁 공유합니다", "효과 봤던 방법",
+        ],
+        "question": [
+            "이거 왜이럼? {r}", "도와주세요 ㅠㅠ", "질문있어요",
+            "아시는분? {r}", "이거 정상임?", "뭐가 문젠지 모르겠음",
+        ],
+        "free": [
+            "오늘 일상 {r}", "그냥 잡담 {r}", "심심해서 씀",
+            "하이 {r}", "일기장", "블로그 현황",
+        ],
+        "success": [
+            "성공했다 {r}{r}", "드디어!!! {r}", "인증합니다",
+            "해냈다 {r}", "터졌다 {r}", "감격 ㅠㅠ",
+        ],
+        "promo": [
+            "서이추해요~", "맞팔 구합니다", "이웃 구해요",
+            "소통해요 {r}", "이웃신청 받아요", "같이 성장해요",
+        ],
+        "rant": [
+            "열받아서 씀", "빡치네 진짜", "왜이러냐고",
+            "이해 안됨", "어이없다 {r}", "진짜 ㅋㅋㅋ",
+        ],
+    }
+
+    title_template = random.choice(title_templates[category])
+    title = title_template.format(
+        r=random.choice(REACTIONS),
+        m=random.randint(1, 24),
+    )
+
+    # 랜덤하게 오타/줄임말 적용
+    if random.random() < 0.3:
+        for word, abbrs in ABBREVIATIONS.items():
+            if word in content and random.random() < 0.5:
+                content = content.replace(word, random.choice(abbrs), 1)
+
+    return {
+        "title": title[:100],
+        "content": content,
+        "category": db_category,
+    }
+
+
+def generate_realistic_comment():
+    """실제 한국 인터넷 스타일의 댓글 생성"""
+    templates = [
+        "{r} 저도 해봐야겠어요", "오 대박 {r}", "이거 진짜 꿀팁 {r}",
+        "감사합니다 {r}", "저도 비슷한 경험 ㅋㅋ", "인정 {r}",
+        "굳굳", "좋은 정보 {r}", "저장 {r}", "화이팅 {r}",
+        "응원해요~", "좋은 글 감사해요", "저도 궁금했는데 {r}",
+        "공감 {r}", "저도요 ㅠㅠ", "힘내세요!", "대박 {r}",
+        "{r}", "{r}{r}", "ㅇㅈ", "ㄹㅇ", "굳", "ㄱㅅ", "ㅊㅊ",
+        "오오", "와", "헐", "실화?", "대박ㅋㅋ",
+        "{s} 진짜?", "이거 {s} 대박인데", "{r} 나도 해봐야지",
+        "저 이거 해봤는데 {r}", "효과 있던데요 {r}", "추천 {r}",
+    ]
+
+    template = random.choice(templates)
+    comment = template.format(
+        r=random.choice(REACTIONS),
+        s=random.choice(SLANG) if random.random() < 0.2 else random.choice(REACTIONS),
+    )
+
+    return comment
+
+
+class AutoGenRequest(BaseModel):
+    enabled: bool = True
+    posts_per_hour: int = 10
+    include_comments: bool = True
+
+
+async def auto_generate_content_task(posts_per_hour: int, include_comments: bool):
+    """백그라운드 자동 글 생성 태스크"""
+    global _auto_gen_running
+
+    # Supabase 연결
+    import os
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    supabase_key = os.environ.get("SUPABASE_KEY", "")
+
+    if not supabase_url or not supabase_key:
+        logger.error("Supabase credentials not configured")
+        _auto_gen_running = False
+        return
+
+    try:
+        from supabase import create_client
+        supabase = create_client(supabase_url, supabase_key)
+    except Exception as e:
+        logger.error(f"Failed to connect to Supabase: {e}")
+        _auto_gen_running = False
+        return
+
+    # 시간당 글 수 -> 분당 간격 계산
+    interval_seconds = 3600 / posts_per_hour
+
+    logger.info(f"Auto generation started: {posts_per_hour} posts/hour, interval: {interval_seconds:.1f}s")
+
+    while _auto_gen_running:
+        try:
+            # 글 생성
+            post_data = generate_realistic_post()
+            user_id = 1000 + random.randint(0, 9999)
+
+            # 랜덤 시간 (최근 몇 분 내)
+            minutes_ago = random.randint(0, 10)
+            created_at = (datetime.now() - timedelta(minutes=minutes_ago)).isoformat()
+
+            response = supabase.table("posts").insert({
+                "user_id": user_id,
+                "title": post_data["title"],
+                "content": post_data["content"],
+                "category": post_data["category"],
+                "tags": [],
+                "views": random.randint(5, 200),
+                "likes": random.randint(0, 20),
+                "comments_count": 0,
+                "created_at": created_at,
+            }).execute()
+
+            if response.data:
+                post_id = response.data[0]["id"]
+                logger.info(f"Auto generated post {post_id}: {post_data['title'][:30]}...")
+
+                # 댓글 생성
+                if include_comments:
+                    num_comments = random.choices([0, 1, 2, 3, 4, 5], weights=[0.3, 0.25, 0.2, 0.15, 0.07, 0.03])[0]
+
+                    for _ in range(num_comments):
+                        comment_user = 1000 + random.randint(0, 9999)
+                        try:
+                            supabase.table("post_comments").insert({
+                                "post_id": post_id,
+                                "user_id": comment_user,
+                                "content": generate_realistic_comment(),
+                            }).execute()
+                        except:
+                            pass
+
+                    if num_comments > 0:
+                        supabase.table("posts").update({
+                            "comments_count": num_comments
+                        }).eq("id", post_id).execute()
+
+            # 랜덤 지연 추가 (자연스러운 간격)
+            jitter = random.uniform(0.5, 1.5)
+            await asyncio.sleep(interval_seconds * jitter)
+
+        except Exception as e:
+            logger.error(f"Auto generation error: {e}")
+            await asyncio.sleep(60)  # 에러 시 1분 대기
+
+
+@router.post("/community/auto-generate")
+async def toggle_auto_generation(
+    request: AutoGenRequest,
+    admin: dict = Depends(require_admin)
+):
+    """커뮤니티 자동 글 생성 토글"""
+    global _auto_gen_task, _auto_gen_running
+
+    if request.enabled:
+        if _auto_gen_running:
+            return {"message": "이미 실행 중입니다", "status": "running"}
+
+        _auto_gen_running = True
+        _auto_gen_task = asyncio.create_task(
+            auto_generate_content_task(request.posts_per_hour, request.include_comments)
+        )
+
+        logger.info(f"Admin {admin['email']} started auto generation: {request.posts_per_hour} posts/hour")
+
+        return {
+            "success": True,
+            "status": "started",
+            "message": f"자동 생성 시작: 시간당 {request.posts_per_hour}개 글",
+            "posts_per_hour": request.posts_per_hour,
+        }
+    else:
+        _auto_gen_running = False
+        if _auto_gen_task:
+            _auto_gen_task.cancel()
+            _auto_gen_task = None
+
+        logger.info(f"Admin {admin['email']} stopped auto generation")
+
+        return {
+            "success": True,
+            "status": "stopped",
+            "message": "자동 생성 중지됨",
+        }
+
+
+@router.get("/community/auto-generate/status")
+async def get_auto_generation_status(admin: dict = Depends(require_admin)):
+    """자동 생성 상태 확인"""
+    return {
+        "running": _auto_gen_running,
+        "status": "running" if _auto_gen_running else "stopped",
+    }
+
+
+@router.post("/community/generate-batch")
+async def generate_batch_posts(
+    count: int = 100,
+    admin: dict = Depends(require_admin)
+):
+    """일괄 게시글 생성 (최대 500개)"""
+    if count > 500:
+        raise HTTPException(status_code=400, detail="최대 500개까지 생성 가능")
+
+    import os
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    supabase_key = os.environ.get("SUPABASE_KEY", "")
+
+    if not supabase_url or not supabase_key:
+        raise HTTPException(status_code=500, detail="Supabase not configured")
+
+    try:
+        from supabase import create_client
+        supabase = create_client(supabase_url, supabase_key)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Supabase connection failed: {e}")
+
+    created = 0
+    comments_created = 0
+
+    for i in range(count):
+        try:
+            post_data = generate_realistic_post()
+            user_id = 1000 + random.randint(0, 9999)
+
+            # 랜덤 시간 (최근 7일 내)
+            days_ago = random.randint(0, 7)
+            hours_ago = random.randint(0, 23)
+            created_at = (datetime.now() - timedelta(days=days_ago, hours=hours_ago)).isoformat()
+
+            response = supabase.table("posts").insert({
+                "user_id": user_id,
+                "title": post_data["title"],
+                "content": post_data["content"],
+                "category": post_data["category"],
+                "tags": [],
+                "views": random.randint(10, 500),
+                "likes": random.randint(0, 30),
+                "comments_count": 0,
+                "created_at": created_at,
+            }).execute()
+
+            if response.data:
+                created += 1
+                post_id = response.data[0]["id"]
+
+                # 댓글 추가
+                num_comments = random.randint(0, 5)
+                for _ in range(num_comments):
+                    try:
+                        supabase.table("post_comments").insert({
+                            "post_id": post_id,
+                            "user_id": 1000 + random.randint(0, 9999),
+                            "content": generate_realistic_comment(),
+                        }).execute()
+                        comments_created += 1
+                    except:
+                        pass
+
+                if num_comments > 0:
+                    supabase.table("posts").update({
+                        "comments_count": num_comments
+                    }).eq("id", post_id).execute()
+        except Exception as e:
+            logger.error(f"Batch generation error: {e}")
+
+        # API 부하 방지
+        if (i + 1) % 50 == 0:
+            await asyncio.sleep(1)
+
+    logger.info(f"Admin {admin['email']} generated {created} posts, {comments_created} comments")
+
+    return {
+        "success": True,
+        "posts_created": created,
+        "comments_created": comments_created,
+        "message": f"{created}개 글, {comments_created}개 댓글 생성 완료",
+    }
+
+
 # ============ Dynamic User Routes (must be at the end to avoid route conflicts) ============
 
 @router.get("/users/{user_id}")

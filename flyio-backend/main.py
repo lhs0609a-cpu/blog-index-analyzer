@@ -1,7 +1,8 @@
 """
 FastAPI 메인 애플리케이션
-Version: 2.2.0 - Unique title generation for community posts
+Version: 2.3.0 - Community auto-generation
 """
+import os
 from fastapi import FastAPI, APIRouter, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -78,33 +79,32 @@ async def lifespan(app: FastAPI):
         admin_email = os.getenv("ADMIN_EMAIL")
         admin_password = os.getenv("ADMIN_PASSWORD")
 
-        # 환경변수가 설정되지 않으면 관리자 자동 생성 건너뛰기
-        if not admin_email or not admin_password:
-            logger.warning("⚠️ ADMIN_EMAIL or ADMIN_PASSWORD not set. Skipping auto admin creation.")
-            return
-
-        existing_user = user_db.get_user_by_email(admin_email)
-        if existing_user:
-            # 기존 사용자를 관리자로 업그레이드
-            user_db.set_admin(existing_user["id"], True)
-            user_db.update_user(
-                existing_user["id"],
-                hashed_password=pwd_context.hash(admin_password),
-                plan="business",
-                is_premium_granted=1
-            )
-            logger.info(f"✅ Admin user {admin_email} updated")
+        # 환경변수가 설정되어 있으면 관리자 생성
+        if admin_email and admin_password:
+            existing_user = user_db.get_user_by_email(admin_email)
+            if existing_user:
+                # 기존 사용자를 관리자로 업그레이드
+                user_db.set_admin(existing_user["id"], True)
+                user_db.update_user(
+                    existing_user["id"],
+                    hashed_password=pwd_context.hash(admin_password),
+                    plan="business",
+                    is_premium_granted=1
+                )
+                logger.info(f"✅ Admin user {admin_email} updated")
+            else:
+                # 새 관리자 계정 생성
+                hashed_password = pwd_context.hash(admin_password)
+                user_id = user_db.create_user(
+                    email=admin_email,
+                    hashed_password=hashed_password,
+                    name="관리자"
+                )
+                user_db.set_admin(user_id, True)
+                user_db.update_user(user_id, plan="business", is_premium_granted=1)
+                logger.info(f"✅ Admin user {admin_email} created")
         else:
-            # 새 관리자 계정 생성
-            hashed_password = pwd_context.hash(admin_password)
-            user_id = user_db.create_user(
-                email=admin_email,
-                hashed_password=hashed_password,
-                name="관리자"
-            )
-            user_db.set_admin(user_id, True)
-            user_db.update_user(user_id, plan="business", is_premium_granted=1)
-            logger.info(f"✅ Admin user {admin_email} created")
+            logger.warning("⚠️ ADMIN_EMAIL or ADMIN_PASSWORD not set. Skipping auto admin creation.")
     except Exception as e:
         logger.warning(f"⚠️ Admin user setup failed: {e}")
 
@@ -277,6 +277,24 @@ async def lifespan(app: FastAPI):
             logger.info("✅ Sentry initialized")
         except Exception as e:
             logger.warning(f"⚠️ Sentry initialization failed (optional): {e}")
+
+    # 커뮤니티 자동 글 생성 시작 (시간당 12개 = 5분마다 1개)
+    try:
+        import asyncio
+        from routers.admin import _auto_gen_running, auto_generate_content_task
+        import routers.admin as admin_module
+
+        supabase_url = os.getenv("SUPABASE_URL", "")
+        supabase_key = os.getenv("SUPABASE_KEY", "")
+
+        if supabase_url and supabase_key:
+            admin_module._auto_gen_running = True
+            asyncio.create_task(auto_generate_content_task(posts_per_hour=12, include_comments=True))
+            logger.info("✅ Community auto-generation started (12 posts/hour)")
+        else:
+            logger.warning("⚠️ Community auto-generation skipped (Supabase not configured)")
+    except Exception as e:
+        logger.warning(f"⚠️ Community auto-generation failed: {e}")
 
     yield
 
