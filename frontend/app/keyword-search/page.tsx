@@ -782,26 +782,42 @@ function KeywordSearchContent() {
       const postsGap = avgPosts - myPosts
       const neighborsGap = avgNeighbors - myNeighbors
 
-      // 10위권 진입 가능성 계산 (C-Rank 기반)
-      const cRankDiff = (myCRank / avgCRank) * 100
-      let probability = Math.min(Math.max(cRankDiff - 20, 0), 100)
+      // 상위 블로그 최고/최저 점수
+      const maxScore = Math.max(...top10Blogs.map(b => b.index?.total_score || 0))
+      const minScore = Math.min(...top10Blogs.map(b => b.index?.total_score || 0))
 
-      // 예상 순위 계산 (C-Rank 기반)
-      const betterBlogs = top10Blogs.filter(b => {
-        const bBreakdown = b.index?.score_breakdown
-        const bCRank = bBreakdown?.c_rank ?? (bBreakdown as any)?.trust ?? 0
-        return bCRank > myCRank
-      }).length
-      const rankEstimate = betterBlogs + 1
+      // 10위권 진입 가능성 계산 (개선된 공식)
+      // 1. 기본 확률: 내 점수가 최저 점수보다 높으면 50%, 아니면 30%
+      let baseProbability = myScore >= minScore ? 50 : 30
 
-      // 추천사항 생성 (C-Rank 중심)
+      // 2. 점수 차이 보정 (-30 ~ +30)
+      const scoreBonus = Math.max(-30, Math.min(30, (myScore - avgScore) * 2))
+
+      // 3. C-Rank 보정 (-15 ~ +15)
+      const cRankBonus = Math.max(-15, Math.min(15, (myCRank - avgCRank) * 1.5))
+
+      // 4. 상위 블로그 강도 페널티 (최고 점수가 높으면 어려움)
+      const strengthPenalty = maxScore >= 70 ? -15 : maxScore >= 60 ? -10 : maxScore >= 50 ? -5 : 0
+
+      // 최종 확률 계산 (최대 85%, 최소 5%)
+      let probability = baseProbability + scoreBonus + cRankBonus + strengthPenalty
+      probability = Math.min(85, Math.max(5, Math.round(probability)))
+
+      // 예상 순위 계산 (점수 기반)
+      const betterBlogs = top10Blogs.filter(b => (b.index?.total_score || 0) > myScore).length
+      const rankEstimate = Math.max(1, betterBlogs + 1)
+
+      // 추천사항 생성
       const recommendations: string[] = []
-      if (cRankGap > 5) recommendations.push(`C-Rank를 ${cRankGap.toFixed(1)}점 개선하세요 (주제 집중, 꾸준한 포스팅, 소통 활동)`)
+      if (scoreGap > 10) recommendations.push(`블로그 점수를 ${scoreGap.toFixed(1)}점 개선하세요`)
+      if (cRankGap > 5) recommendations.push(`C-Rank를 ${cRankGap.toFixed(1)}점 개선하세요`)
       if (postsGap > 20) recommendations.push(`포스트를 ${Math.ceil(postsGap)}개 더 작성하세요`)
       if (neighborsGap > 10) recommendations.push(`이웃을 ${Math.ceil(neighborsGap)}명 더 늘리세요`)
 
-      if (recommendations.length === 0) {
+      if (recommendations.length === 0 && probability >= 60) {
         recommendations.push('현재 10위권 진입 가능한 수준입니다!')
+      } else if (recommendations.length === 0) {
+        recommendations.push('상위 블로그와의 격차를 줄이면 진입 가능성이 높아집니다')
       }
 
       const analysis: MyBlogAnalysis = {
@@ -902,26 +918,42 @@ function KeywordSearchContent() {
       const postsGap = avgPosts - myPosts
       const neighborsGap = avgNeighbors - myNeighbors
 
-      // 10위권 진입 가능성 계산 (C-Rank 기반)
-      const cRankDiff = (myCRank / avgCRank) * 100
-      let probability = Math.min(Math.max(cRankDiff - 20, 0), 100)
+      // 상위 블로그 최고/최저 점수
+      const maxScore = Math.max(...top10Blogs.map(b => b.index?.total_score || 0))
+      const minScore = Math.min(...top10Blogs.map(b => b.index?.total_score || 0))
 
-      // 예상 순위 계산 (C-Rank 기반)
-      const betterBlogs = top10Blogs.filter(b => {
-        const bBreakdown = b.index?.score_breakdown
-        const bCRank = bBreakdown?.c_rank ?? (bBreakdown as any)?.trust ?? 0
-        return bCRank > myCRank
-      }).length
-      const rankEstimate = betterBlogs + 1
+      // 10위권 진입 가능성 계산 (개선된 공식)
+      // 1. 기본 확률: 내 점수가 최저 점수보다 높으면 50%, 아니면 30%
+      let baseProbability = myScore >= minScore ? 50 : 30
 
-      // 추천사항 생성 (C-Rank 중심)
+      // 2. 점수 차이 보정 (-30 ~ +30)
+      const scoreBonus = Math.max(-30, Math.min(30, (myScore - avgScore) * 2))
+
+      // 3. C-Rank 보정 (-15 ~ +15)
+      const cRankBonus = Math.max(-15, Math.min(15, (myCRank - avgCRank) * 1.5))
+
+      // 4. 상위 블로그 강도 페널티 (최고 점수가 높으면 어려움)
+      const strengthPenalty = maxScore >= 70 ? -15 : maxScore >= 60 ? -10 : maxScore >= 50 ? -5 : 0
+
+      // 최종 확률 계산 (최대 85%, 최소 5%)
+      let probability = baseProbability + scoreBonus + cRankBonus + strengthPenalty
+      probability = Math.min(85, Math.max(5, Math.round(probability)))
+
+      // 예상 순위 계산 (점수 기반)
+      const betterBlogs = top10Blogs.filter(b => (b.index?.total_score || 0) > myScore).length
+      const rankEstimate = Math.max(1, betterBlogs + 1)
+
+      // 추천사항 생성
       const recommendations: string[] = []
-      if (cRankGap > 5) recommendations.push(`C-Rank를 ${cRankGap.toFixed(1)}점 개선하세요 (주제 집중, 꾸준한 포스팅, 소통 활동)`)
+      if (scoreGap > 10) recommendations.push(`블로그 점수를 ${scoreGap.toFixed(1)}점 개선하세요`)
+      if (cRankGap > 5) recommendations.push(`C-Rank를 ${cRankGap.toFixed(1)}점 개선하세요`)
       if (postsGap > 20) recommendations.push(`포스트를 ${Math.ceil(postsGap)}개 더 작성하세요`)
       if (neighborsGap > 10) recommendations.push(`이웃을 ${Math.ceil(neighborsGap)}명 더 늘리세요`)
 
-      if (recommendations.length === 0) {
+      if (recommendations.length === 0 && probability >= 60) {
         recommendations.push('현재 10위권 진입 가능한 수준입니다!')
+      } else if (recommendations.length === 0) {
+        recommendations.push('상위 블로그와의 격차를 줄이면 진입 가능성이 높아집니다')
       }
 
       const analysis: MyBlogAnalysis = {
