@@ -427,7 +427,7 @@ class SocialProofDB:
             conn.close()
 
     def get_stats(self) -> Dict[str, Any]:
-        """통계 조회"""
+        """통계 조회 - 시간대별 자연스러운 인원 수"""
         today = datetime.now().strftime('%Y-%m-%d')
         conn = self._get_connection()
         try:
@@ -444,23 +444,42 @@ class SocialProofDB:
                 cursor.execute("""
                     INSERT INTO stats (date, total_users, daily_analyses, peak_online)
                     VALUES (?, ?, ?, ?)
-                """, (today, 52341, 0, 1247))
+                """, (today, 52341, 0, 500))
                 conn.commit()
                 stats = {
                     'date': today,
                     'total_users': 52341,
                     'daily_analyses': 0,
-                    'peak_online': 1247
+                    'peak_online': 500
                 }
 
-            # 현재 온라인 수 (피크의 60-100%)
-            current_online = int(stats['peak_online'] * random.uniform(0.6, 1.0))
+            # 시간대별 활동 인원 계산 (한국 시간 기준)
+            current_hour = datetime.now().hour
+
+            # 시간대별 기본 인원 (한국 일반적인 웹 트래픽 패턴)
+            # 새벽(0-6시): 매우 적음, 아침(7-9시): 증가, 낮(10-18시): 최고, 저녁(19-23시): 높음
+            hourly_multipliers = {
+                0: 0.08, 1: 0.05, 2: 0.04, 3: 0.03, 4: 0.03, 5: 0.04,  # 새벽
+                6: 0.08, 7: 0.15, 8: 0.25, 9: 0.40,  # 아침
+                10: 0.55, 11: 0.65, 12: 0.60, 13: 0.70, 14: 0.75, 15: 0.80, 16: 0.85, 17: 0.80, 18: 0.75,  # 낮
+                19: 0.70, 20: 0.75, 21: 0.80, 22: 0.65, 23: 0.40  # 저녁/밤
+            }
+
+            base_multiplier = hourly_multipliers.get(current_hour, 0.5)
+
+            # 랜덤 변동 추가 (±15%)
+            jitter = random.uniform(0.85, 1.15)
+
+            # 기본 최대 인원 (실제 서비스 규모에 맞게 조정)
+            max_users = 150  # 최대 활동 인원
+
+            current_online = max(3, int(max_users * base_multiplier * jitter))
 
             return {
                 'current_online': current_online,
                 'daily_analyses': stats['daily_analyses'],
                 'total_users': stats['total_users'],
-                'peak_online': stats['peak_online']
+                'peak_online': max(current_online, stats.get('peak_online', 100))
             }
         finally:
             conn.close()

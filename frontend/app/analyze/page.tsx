@@ -1484,7 +1484,7 @@ export default function AnalyzePage() {
 
                   <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
                     {[
-                      { label: '총점', value: `${(result.index.total_score * 10).toFixed(1)}/1000`, icon: '🎯' },
+                      { label: '총점', value: `${result.index.total_score.toFixed(1)}/100`, icon: '🎯' },
                       { label: '포스트', value: result.stats.total_posts, icon: '📝' },
                       { label: '방문자', value: result.stats.total_visitors.toLocaleString(), icon: '👥' },
                       { label: '이웃', value: result.stats.neighbor_count, icon: '❤️' },
