@@ -1067,8 +1067,9 @@ function PostsSection({ userId, isAuthenticated }: { userId?: number; isAuthenti
               </motion.div>
             ))}
           </div>
+        )}
 
-          {/* 페이지네이션 */}
+        {/* 페이지네이션 */}
           {posts.length > 0 && (
             <div className="p-4 border-t border-gray-100">
               <div className="flex items-center justify-center gap-2">
