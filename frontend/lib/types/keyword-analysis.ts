@@ -64,6 +64,11 @@ export interface CompetitionAnalysis {
   recommended_blog_score: number
   my_blog_score?: number
   my_blog_gap?: number
+  // 의료/지역 키워드 특수성 (2025 업데이트)
+  is_medical_keyword?: boolean
+  is_local_medical?: boolean
+  official_blog_ratio?: number
+  difficulty_reason?: string
 }
 
 // 세부 키워드

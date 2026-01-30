@@ -108,6 +108,12 @@ class CompetitionAnalysis(BaseModel):
     my_blog_score: Optional[float] = None
     my_blog_gap: Optional[float] = None  # 상위 평균과의 차이
 
+    # 의료/지역 키워드 특수성 (2025 업데이트)
+    is_medical_keyword: bool = Field(default=False, description="의료 관련 키워드 여부")
+    is_local_medical: bool = Field(default=False, description="지역+의료 복합 키워드 여부")
+    official_blog_ratio: float = Field(default=0.0, ge=0.0, le=1.0, description="상위 10위 중 병원 공식 블로그 비율")
+    difficulty_reason: Optional[str] = Field(default=None, description="난이도 판정 사유")
+
 
 class SubKeyword(BaseModel):
     """세부 키워드 (확장용)"""

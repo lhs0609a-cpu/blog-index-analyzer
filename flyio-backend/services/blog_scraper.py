@@ -881,85 +881,145 @@ async def scrape_blog_tab_results(keyword: str, limit: int = 20) -> list:
         except:
             pass
 
-        # Extract blog post links using JavaScript
+        # Extract blog post links using JavaScript - 실제 검색 결과 순서대로 추출
         blog_links = await page.evaluate('''() => {
             const results = [];
             const seen = new Set();
 
-            // Method 1: Direct regex extraction from page HTML (페이지 전체에서 URL 추출)
-            const htmlContent = document.body.innerHTML;
-            // 단순 패턴으로 더 많은 URL 찾기
-            const urlPattern = /blog\\.naver\\.com\\/(\\w+)\\/(\\d+)/g;
-            let match;
+            // ===== 핵심: 검색 결과 컨테이너에서 순서대로 추출 =====
+            // 네이버 블로그탭의 검색 결과 아이템 선택자들 (우선순위 순)
+            const resultSelectors = [
+                // 2024-2025 네이버 블로그탭 DOM 구조
+                '#main_pack .api_subject_bx',           // 메인 검색 결과 아이템
+                '#main_pack .sp_blog .bx',              // 블로그 검색 결과
+                '#main_pack .total_wrap .total_area',   // 통합 검색 결과
+                '.blog_list li',                        // 구버전 리스트
+                '#content .search_list li',             // 또 다른 구버전
+            ];
 
-            while ((match = urlPattern.exec(htmlContent)) !== null) {
-                const blogId = match[1];
-                const postId = match[2];
-                const postUrl = `https://blog.naver.com/${blogId}/${postId}`;
+            let resultItems = [];
 
-                if (seen.has(postUrl)) continue;
-                seen.add(postUrl);
-
-                results.push({
-                    blog_id: blogId,
-                    post_id: postId,
-                    post_url: postUrl,
-                    post_title: `포스팅 #${postId}`,
-                    tab_type: 'BLOG'
-                });
+            // 첫 번째로 매칭되는 선택자 사용
+            for (const selector of resultSelectors) {
+                const items = document.querySelectorAll(selector);
+                if (items.length > 0) {
+                    resultItems = Array.from(items);
+                    console.log(`[Scraper] Found ${items.length} items with selector: ${selector}`);
+                    break;
+                }
             }
 
-            // Method 2: DOM traversal for better titles
-            const contentArea = document.querySelector('#main_pack') || document.body;
-            const links = contentArea.querySelectorAll('a[href*="blog.naver.com"]');
+            // 각 검색 결과 아이템에서 순서대로 블로그 URL 추출
+            for (let i = 0; i < resultItems.length; i++) {
+                const item = resultItems[i];
 
-            for (const link of links) {
-                const href = link.href;
-                const urlMatch = href.match(/blog\\.naver\\.com\\/([^\\/]+)\\/([0-9]+)/);
-                if (!urlMatch) continue;
+                // 아이템 내의 블로그 링크 찾기
+                const links = item.querySelectorAll('a[href*="blog.naver.com"]');
 
-                const blogId = urlMatch[1];
-                const postId = urlMatch[2];
-                const postUrl = `https://blog.naver.com/${blogId}/${postId}`;
+                for (const link of links) {
+                    const href = link.href || link.getAttribute('href') || '';
+                    const urlMatch = href.match(/blog\\.naver\\.com\\/([\\w-]+)\\/([0-9]+)/);
+                    if (!urlMatch) continue;
 
-                if (seen.has(postUrl)) {
-                    // Update title if better one found
-                    const existing = results.find(r => r.post_url === postUrl);
-                    if (existing && existing.post_title.startsWith('포스팅 #')) {
-                        let title = '';
-                        const parent = link.closest('.api_subject_bx, .sp_blog, .total_area, li');
-                        if (parent) {
-                            const titleEl = parent.querySelector('.api_txt_lines.total_tit, .title_link, .title, strong');
-                            if (titleEl) title = titleEl.textContent?.trim() || '';
-                        }
-                        if (!title) title = link.textContent?.trim() || '';
-                        if (title && title.length > 5 && !title.startsWith('포스팅 #')) {
-                            existing.post_title = title;
+                    const blogId = urlMatch[1];
+                    const postId = urlMatch[2];
+                    const postUrl = `https://blog.naver.com/${blogId}/${postId}`;
+
+                    // 중복 체크 (같은 아이템 내 여러 링크 중 첫 번째만)
+                    if (seen.has(postUrl)) continue;
+                    seen.add(postUrl);
+
+                    // 제목 추출 (여러 선택자 시도)
+                    let title = '';
+                    const titleSelectors = [
+                        '.api_txt_lines.total_tit',
+                        '.title_link',
+                        '.title',
+                        'strong.tit',
+                        '.tit',
+                        'a.title_area',
+                    ];
+
+                    for (const titleSel of titleSelectors) {
+                        const titleEl = item.querySelector(titleSel);
+                        if (titleEl) {
+                            title = titleEl.textContent?.trim() || '';
+                            if (title && title.length > 3) break;
                         }
                     }
-                    continue;
-                }
-                seen.add(postUrl);
 
-                // Find title
-                let title = '';
-                const parent = link.closest('.api_subject_bx, .sp_blog, .total_area, li');
-                if (parent) {
-                    const titleEl = parent.querySelector('.api_txt_lines.total_tit, .title_link, .title, strong');
-                    if (titleEl) title = titleEl.textContent?.trim() || '';
-                }
-                if (!title) title = link.textContent?.trim() || '';
-                if (!title || title.length < 5) title = `포스팅 #${postId}`;
+                    if (!title || title.length < 3) {
+                        title = link.textContent?.trim() || `포스팅 #${postId}`;
+                    }
 
-                results.push({
-                    blog_id: blogId,
-                    post_id: postId,
-                    post_url: postUrl,
-                    post_title: title,
-                    tab_type: 'BLOG'
-                });
+                    // 블로그 이름 추출
+                    let blogName = blogId;
+                    const blogNameSelectors = ['.sub_txt.sub_name', '.name', '.blog_name', '.writer'];
+                    for (const nameSel of blogNameSelectors) {
+                        const nameEl = item.querySelector(nameSel);
+                        if (nameEl) {
+                            blogName = nameEl.textContent?.trim() || blogId;
+                            break;
+                        }
+                    }
+
+                    // 날짜 추출
+                    let postDate = null;
+                    const dateSelectors = ['.sub_txt.sub_time', '.date', '.time'];
+                    for (const dateSel of dateSelectors) {
+                        const dateEl = item.querySelector(dateSel);
+                        if (dateEl) {
+                            postDate = dateEl.textContent?.trim() || null;
+                            break;
+                        }
+                    }
+
+                    results.push({
+                        blog_id: blogId,
+                        post_id: postId,
+                        post_url: postUrl,
+                        post_title: title,
+                        blog_name: blogName,
+                        post_date: postDate,
+                        tab_type: 'BLOG',
+                        source_rank: results.length + 1  // 원본 순위 보존!
+                    });
+
+                    break;  // 한 아이템에서 하나만 추출
+                }
             }
 
+            // Fallback: 결과가 없으면 페이지 전체에서 추출 (순서 덜 정확)
+            if (results.length === 0) {
+                console.log('[Scraper] Fallback: extracting from entire page');
+                const allLinks = document.querySelectorAll('#main_pack a[href*="blog.naver.com"]');
+
+                for (const link of allLinks) {
+                    const href = link.href || '';
+                    const urlMatch = href.match(/blog\\.naver\\.com\\/([\\w-]+)\\/([0-9]+)/);
+                    if (!urlMatch) continue;
+
+                    const blogId = urlMatch[1];
+                    const postId = urlMatch[2];
+                    const postUrl = `https://blog.naver.com/${blogId}/${postId}`;
+
+                    if (seen.has(postUrl)) continue;
+                    seen.add(postUrl);
+
+                    results.push({
+                        blog_id: blogId,
+                        post_id: postId,
+                        post_url: postUrl,
+                        post_title: link.textContent?.trim() || `포스팅 #${postId}`,
+                        blog_name: blogId,
+                        post_date: null,
+                        tab_type: 'BLOG',
+                        source_rank: results.length + 1
+                    });
+                }
+            }
+
+            console.log(`[Scraper] Total extracted: ${results.length} blog posts`);
             return results;
         }''')
 

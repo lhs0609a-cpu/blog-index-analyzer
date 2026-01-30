@@ -29,6 +29,31 @@ logger = logging.getLogger(__name__)
 class KeywordClassifier:
     """키워드 유형 분류기 (규칙 기반 + 학습)"""
 
+    # 의료/병원 관련 키워드 (경쟁 특수성 반영)
+    MEDICAL_KEYWORDS = [
+        # 피부과 관련
+        '여드름', '흉터', '모공', '기미', '주근깨', '잡티', '피부', '레이저', '필링',
+        '보톡스', '필러', '리프팅', '탈모', '두피', '아토피', '건선', '습진',
+        # 성형외과 관련
+        '코성형', '눈성형', '쌍꺼풀', '지방흡입', '윤곽', '안면윤곽', '양악', '턱',
+        # 치과 관련
+        '임플란트', '치아교정', '교정', '라미네이트', '치아미백', '잇몸', '사랑니',
+        # 한의원 관련
+        '한의원', '한방', '침', '추나', '한약', '다이어트한의원', '비만한의원',
+        # 정형외과/통증의학과
+        '허리', '디스크', '척추', '관절', '무릎', '어깨', '목', '통증',
+        # 안과
+        '라식', '라섹', '스마일라식', '백내장', '녹내장', '안경', '시력교정',
+        # 기타 전문과
+        '비염', '축농증', '이비인후과', '내시경', '건강검진', '산부인과', '비뇨기과',
+    ]
+
+    # 병원 공식 블로그 패턴
+    OFFICIAL_BLOG_PATTERNS = [
+        r'.*병원$', r'.*의원$', r'.*클리닉$', r'.*센터$', r'.*한의원$',
+        r'.*치과$', r'.*피부과$', r'.*성형외과$', r'.*안과$', r'.*이비인후과$',
+    ]
+
     # 키워드 유형별 패턴
     TYPE_PATTERNS = {
         KeywordType.INFO: {
@@ -54,10 +79,27 @@ class KeywordClassifier:
             'patterns': [r'.*얼마.*', r'.*비용.*', r'.*가격.*']
         },
         KeywordType.LOCAL: {
+            # 주요 지역 (구 단위)
             'prefixes': ['강남', '서초', '송파', '강동', '강서', '마포', '영등포', '용산',
                         '성북', '노원', '분당', '판교', '일산', '수원', '안양', '부천',
-                        '인천', '의정부', '대전', '대구', '부산', '광주', '울산'],
-            'patterns': [r'^(강남|서초|분당|판교|일산).*병원.*',
+                        '인천', '의정부', '대전', '대구', '부산', '광주', '울산',
+                        # 주요 상권/역세권 추가
+                        '홍대', '신촌', '이태원', '압구정', '청담', '잠실', '건대', '왕십리',
+                        '신림', '사당', '교대', '역삼', '선릉', '삼성', '잠실새내',
+                        '목동', '여의도', '합정', '상수', '연남동', '망원', '성수',
+                        '해운대', '서면', '동래', '남포동', '광안리',
+                        '동성로', '수성구', '달서구',
+                        '유성', '둔산', '대덕',
+                        '상무지구', '첨단', '수완',
+                        # 경기도 주요 지역
+                        '위례', '동탄', '광교', '영통', '정자', '미금', '수지', '죽전',
+                        '평촌', '범계', '산본', '금정', '평내호평', '별내',
+                        '김포', '파주', '고양', '화정', '행신'],
+            'patterns': [r'^(강남|서초|분당|판교|일산|홍대|신촌|압구정|청담|잠실|건대).*병원.*',
+                        r'^(강남|서초|분당|판교|일산|홍대|신촌|압구정|청담|잠실|건대).*의원.*',
+                        r'^(강남|서초|분당|판교|일산|홍대|신촌|압구정|청담|잠실|건대).*한의원.*',
+                        r'^(강남|서초|분당|판교|일산|홍대|신촌|압구정|청담|잠실|건대).*클리닉.*',
+                        r'^(강남|서초|분당|판교|일산|홍대|신촌|압구정|청담|잠실|건대).*피부과.*',
                         r'.*역\s*(병원|의원|한의원).*',
                         r'.*동\s*(병원|의원).*',
                         r'.*구\s*(병원|의원).*']
@@ -194,6 +236,39 @@ class KeywordClassifier:
             # 학습 저장
             save_keyword_type(kw, kw_type.value, confidence)
         return results
+
+    def is_medical_keyword(self, keyword: str) -> Tuple[bool, List[str]]:
+        """
+        의료/병원 관련 키워드인지 확인
+        Returns: (의료 키워드 여부, 매칭된 의료 키워드 목록)
+        """
+        keyword_lower = keyword.lower()
+        matched = []
+        for medical_kw in self.MEDICAL_KEYWORDS:
+            if medical_kw in keyword_lower:
+                matched.append(medical_kw)
+        return (len(matched) > 0, matched)
+
+    def is_local_medical_keyword(self, keyword: str) -> bool:
+        """지역 + 의료 복합 키워드인지 확인 (경쟁 매우 어려움)"""
+        kw_type, _ = self.classify(keyword)
+        is_local = kw_type in [KeywordType.LOCAL, KeywordType.BROAD]
+        is_medical, _ = self.is_medical_keyword(keyword)
+        return is_local and is_medical
+
+    @staticmethod
+    def is_official_blog(blog_name: str) -> bool:
+        """병원/의원 공식 블로그인지 확인"""
+        if not blog_name:
+            return False
+        blog_name = blog_name.strip()
+        official_suffixes = ['병원', '의원', '클리닉', '센터', '한의원',
+                           '치과', '피부과', '성형외과', '안과', '이비인후과',
+                           '정형외과', '내과', '외과', '산부인과', '비뇨기과']
+        for suffix in official_suffixes:
+            if blog_name.endswith(suffix):
+                return True
+        return False
 
 
 class KeywordAnalysisService:
@@ -395,7 +470,7 @@ class KeywordAnalysisService:
         keyword: str,
         my_blog_id: Optional[str] = None
     ) -> CompetitionAnalysis:
-        """경쟁도 분석"""
+        """경쟁도 분석 (의료/지역 키워드 특수성 반영)"""
         # 상위 블로그 분석 (기존 search-keyword-with-tabs 활용)
         from routers.blogs import search_keyword_with_tabs
 
@@ -408,6 +483,7 @@ class KeywordAnalysisService:
             top10_dias = []
             top10_posts = []
             top10_visitors = []
+            official_blog_count = 0  # 병원 공식 블로그 수
 
             for blog in search_result.results[:10]:
                 if blog.index:
@@ -418,6 +494,11 @@ class KeywordAnalysisService:
                 if blog.stats:
                     top10_posts.append(blog.stats.total_posts)
                     top10_visitors.append(blog.stats.total_visitors)
+
+                # 병원 공식 블로그 체크
+                blog_name = getattr(blog, 'blog_name', '') or getattr(blog, 'blogger_name', '') or ''
+                if self.classifier.is_official_blog(blog_name):
+                    official_blog_count += 1
 
             # 통계 계산
             top10_stats = Top10Stats(
@@ -433,8 +514,15 @@ class KeywordAnalysisService:
             # 탭별 비율 조회
             tab_ratio = await self.get_tab_ratio(keyword)
 
-            # 경쟁도 레벨 결정
+            # 의료/지역 키워드 특수성 체크
+            is_local_medical = self.classifier.is_local_medical_keyword(keyword)
+            is_medical, medical_matches = self.classifier.is_medical_keyword(keyword)
+            official_blog_ratio = official_blog_count / 10 if len(search_result.results) >= 10 else official_blog_count / max(len(search_result.results), 1)
+
+            # 경쟁도 레벨 결정 (의료/지역 키워드는 상향 조정)
             avg_score = top10_stats.avg_total_score
+
+            # 기본 경쟁도 판단
             if avg_score >= 75:
                 competition_level = CompetitionLevel.HIGH
             elif avg_score >= 55:
@@ -442,18 +530,50 @@ class KeywordAnalysisService:
             else:
                 competition_level = CompetitionLevel.LOW
 
-            # 진입 난이도 결정
-            if avg_score < 45:
-                entry_difficulty = EntryDifficulty.EASY
-            elif avg_score < 60:
-                entry_difficulty = EntryDifficulty.ACHIEVABLE
-            elif avg_score < 75:
+            # 지역+의료 키워드이거나 병원 공식 블로그가 많으면 경쟁도 상향
+            if is_local_medical or official_blog_ratio >= 0.5:
+                competition_level = CompetitionLevel.HIGH
+
+            # 진입 난이도 결정 (의료/지역 키워드 특수성 반영)
+            if is_local_medical:
+                # 지역+의료 키워드는 무조건 어려움 이상
+                if official_blog_ratio >= 0.7:
+                    entry_difficulty = EntryDifficulty.VERY_HARD
+                elif official_blog_ratio >= 0.5:
+                    entry_difficulty = EntryDifficulty.VERY_HARD
+                else:
+                    entry_difficulty = EntryDifficulty.HARD
+            elif is_medical and official_blog_ratio >= 0.5:
+                # 의료 키워드 + 공식 블로그 많음
                 entry_difficulty = EntryDifficulty.HARD
             else:
-                entry_difficulty = EntryDifficulty.VERY_HARD
+                # 일반 키워드
+                if avg_score < 45:
+                    entry_difficulty = EntryDifficulty.EASY
+                elif avg_score < 60:
+                    entry_difficulty = EntryDifficulty.ACHIEVABLE
+                elif avg_score < 75:
+                    entry_difficulty = EntryDifficulty.HARD
+                else:
+                    entry_difficulty = EntryDifficulty.VERY_HARD
 
             # 권장 블로그 점수 (상위 진입을 위해)
-            recommended_score = top10_stats.min_score * 0.9 if top10_stats.min_score else 50
+            # 지역+의료 키워드는 더 높은 점수 필요
+            if is_local_medical:
+                recommended_score = top10_stats.avg_total_score * 1.1  # 평균보다 10% 이상
+            else:
+                recommended_score = top10_stats.min_score * 0.9 if top10_stats.min_score else 50
+
+            # 난이도 사유 생성
+            difficulty_reason = None
+            if is_local_medical and official_blog_ratio >= 0.5:
+                difficulty_reason = f"지역+의료 키워드이며, 상위 10위 중 {official_blog_ratio:.0%}가 병원 공식 블로그입니다."
+            elif is_local_medical:
+                difficulty_reason = "지역+의료 복합 키워드로, 병원 공식 블로그가 상위를 차지하기 쉽습니다."
+            elif official_blog_ratio >= 0.5:
+                difficulty_reason = f"상위 10위 중 {official_blog_ratio:.0%}가 병원/의원 공식 블로그입니다."
+            elif avg_score >= 75:
+                difficulty_reason = f"상위 블로그들의 평균 점수가 {avg_score:.0f}점으로 매우 높습니다."
 
             analysis = CompetitionAnalysis(
                 keyword=keyword,
@@ -462,8 +582,18 @@ class KeywordAnalysisService:
                 top10_stats=top10_stats,
                 tab_ratio=tab_ratio,
                 entry_difficulty=entry_difficulty,
-                recommended_blog_score=recommended_score
+                recommended_blog_score=recommended_score,
+                is_medical_keyword=is_medical,
+                is_local_medical=is_local_medical,
+                official_blog_ratio=official_blog_ratio,
+                difficulty_reason=difficulty_reason
             )
+
+            # 추가 메타데이터 (로깅용)
+            logger.info(f"Competition analysis for '{keyword}': "
+                       f"is_local_medical={is_local_medical}, "
+                       f"official_blog_ratio={official_blog_ratio:.1%}, "
+                       f"entry_difficulty={entry_difficulty.value}")
 
             # 이력 저장
             save_competition_history(keyword, analysis.model_dump())
@@ -570,35 +700,52 @@ class KeywordAnalysisService:
         competition: CompetitionAnalysis,
         type_dist: Dict[str, int]
     ) -> List[str]:
-        """추천 메시지 생성"""
+        """추천 메시지 생성 (의료/지역 키워드 경고 강화)"""
         recommendations = []
+        keyword = competition.keyword
+
+        # 의료/지역 키워드 특수 경고
+        is_local_medical = self.classifier.is_local_medical_keyword(keyword)
+        is_medical, medical_matches = self.classifier.is_medical_keyword(keyword)
+
+        if is_local_medical:
+            recommendations.append("⚠️ 지역+의료 키워드입니다. 병원/의원 공식 블로그가 상위를 차지하는 경우가 많아 일반 블로거의 상위 노출이 매우 어렵습니다.")
+            recommendations.append(f"💡 대안: 후기/경험 중심의 롱테일 키워드(예: '{keyword} 후기', '{keyword} 가격')를 노려보세요.")
+        elif is_medical:
+            recommendations.append("⚠️ 의료 관련 키워드입니다. 네이버는 전문성(E-E-A-T)을 중시하므로 공식 의료기관 블로그가 유리합니다.")
 
         # 경쟁도 기반 추천
         if competition.entry_difficulty == EntryDifficulty.EASY:
-            recommendations.append("경쟁이 낮은 키워드입니다. 초보 블로거도 상위 노출이 가능합니다.")
+            recommendations.append("✅ 경쟁이 낮은 키워드입니다. 초보 블로거도 상위 노출이 가능합니다.")
         elif competition.entry_difficulty == EntryDifficulty.ACHIEVABLE:
-            recommendations.append(f"도전 가능한 키워드입니다. 블로그 점수 {competition.recommended_blog_score:.0f}점 이상이면 상위 진입 가능성이 있습니다.")
+            recommendations.append(f"✅ 도전 가능한 키워드입니다. 블로그 점수 {competition.recommended_blog_score:.0f}점 이상이면 상위 진입 가능성이 있습니다.")
         elif competition.entry_difficulty == EntryDifficulty.HARD:
-            recommendations.append(f"경쟁이 높은 키워드입니다. C-Rank 점수 {competition.top10_stats.avg_c_rank:.0f}점 이상 필요합니다.")
+            recommendations.append(f"⚠️ 경쟁이 높은 키워드입니다. C-Rank 점수 {competition.top10_stats.avg_c_rank:.0f}점 이상이 필요합니다.")
+            if not is_local_medical:
+                recommendations.append("💡 콘텐츠 품질(이미지 15개+, 본문 3000자+, 소제목 10개+)에 집중하세요.")
         else:
-            recommendations.append("매우 경쟁이 높은 키워드입니다. 상위 블로거들의 평균 점수가 매우 높습니다.")
+            recommendations.append("🚫 매우 경쟁이 높은 키워드입니다. 상위 블로거들의 평균 점수가 매우 높습니다.")
+            if is_local_medical:
+                recommendations.append("💡 이 키워드는 공식 병원 블로그 위주로 노출됩니다. 다른 키워드를 추천드립니다.")
+            else:
+                recommendations.append("💡 롱테일 키워드나 틈새 키워드를 찾아보세요.")
 
         # 유형별 추천
         total = sum(type_dist.values())
         if total > 0:
             info_ratio = type_dist.get("정보형", 0) / total
             if info_ratio > 0.4:
-                recommendations.append("정보형 키워드가 많습니다. 상세한 정보 제공 콘텐츠가 효과적입니다.")
+                recommendations.append("📝 정보형 키워드가 많습니다. 상세한 정보 제공 콘텐츠가 효과적입니다.")
 
-            hospital_ratio = type_dist.get("병원탐색형", 0) / total
-            if hospital_ratio > 0.2:
-                recommendations.append("병원 탐색 키워드가 포함되어 있습니다. 지역 기반 SEO를 고려하세요.")
+            local_ratio = (type_dist.get("지역형", 0) + type_dist.get("광역형", 0)) / total
+            if local_ratio > 0.3:
+                recommendations.append("📍 지역 키워드가 많습니다. 지역명+핵심키워드 조합으로 최적화하세요.")
 
         # 탭 비율 추천
         if competition.tab_ratio.blog > 0.4:
-            recommendations.append("블로그 콘텐츠가 많이 노출되는 키워드입니다. 블로그 SEO에 집중하세요.")
+            recommendations.append("📊 블로그 콘텐츠가 많이 노출되는 키워드입니다. 블로그 SEO에 집중하세요.")
         elif competition.tab_ratio.cafe > 0.3:
-            recommendations.append("카페 콘텐츠가 많습니다. 네이버 카페 활동도 고려해보세요.")
+            recommendations.append("📊 카페 콘텐츠가 많습니다. 네이버 카페 활동도 고려해보세요.")
 
         return recommendations
 

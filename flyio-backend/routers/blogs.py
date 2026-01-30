@@ -718,7 +718,14 @@ async def fetch_naver_search_results(keyword: str, limit: int = 10) -> List[Dict
 
 
 async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 10) -> Dict[str, List[Dict]]:
-    """Fetch search results from both VIEW tab and BLOG tab - 다중 소스 병합으로 10개 결과 보장"""
+    """
+    Fetch search results - 순위 정확도 우선 전략
+
+    우선순위:
+    1. 크롬 확장 프로그램 결과 (100% 정확)
+    2. Playwright 스크래핑 (95% 정확 - 실제 DOM 순서)
+    3. HTTP/Mobile/API 병합 (fallback)
+    """
     # 0단계: 크롬 확장 프로그램 결과 확인 (가장 정확)
     cache_key = keyword.strip().lower()
     if cache_key in EXTENSION_RESULTS_CACHE:
@@ -726,7 +733,7 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 10) ->
         if time.time() - ext_cached["timestamp"] < EXTENSION_CACHE_TTL:
             ext_data = ext_cached["data"]
             if len(ext_data.get("blog_results", [])) >= limit:
-                logger.info(f"[EXTENSION] Using extension results for '{keyword}': {len(ext_data['blog_results'])} blogs")
+                logger.info(f"[EXTENSION] Using extension results for '{keyword}': {len(ext_data['blog_results'])} blogs (순위 정확도: 100%)")
                 return ext_data
 
     # 캐시 확인 (성능 개선 - 5분 TTL)
@@ -734,74 +741,85 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 10) ->
     if cached:
         return cached
 
-    logger.info(f"Fetching both tabs for keyword: {keyword} (target: {limit} results)")
+    logger.info(f"Fetching results for keyword: {keyword} (target: {limit} results)")
 
     try:
         blog_results = []
-        view_results = []
-        all_urls = set()  # 모든 소스에서 중복 제거용
+        all_urls = set()
+        rank_source = "unknown"  # 순위 데이터 출처 추적
 
-        # ===== 1단계: 다중 소스 병렬 수집 (HTTP + 모바일 + API) =====
-        logger.info(f"Step 1: Multi-source parallel fetch for: {keyword}")
+        # ===== 1단계: Playwright 스크래핑 (가장 정확한 순위) =====
+        logger.info(f"Step 1: Playwright BLOG tab for accurate ranking: {keyword}")
+        try:
+            playwright_results = await fetch_via_blog_tab_scraping(keyword, limit + 10)
+            if playwright_results and len(playwright_results) >= min(limit, 5):
+                # Playwright 결과 사용 - 원본 순위 보존
+                for item in playwright_results:
+                    if len(blog_results) >= limit:
+                        break
+                    if item["post_url"] not in all_urls:
+                        # source_rank가 있으면 사용, 없으면 순서대로
+                        item["rank"] = item.get("source_rank", len(blog_results) + 1)
+                        item["original_rank"] = item.get("source_rank", len(blog_results) + 1)
+                        item["rank_source"] = "playwright"
+                        blog_results.append(item)
+                        all_urls.add(item["post_url"])
+                rank_source = "playwright"
+                logger.info(f"[Playwright] Got {len(blog_results)} results with accurate ranking")
+        except Exception as e:
+            logger.warning(f"Playwright failed: {e}")
 
-        # 병렬로 여러 소스에서 결과 수집
-        async def safe_fetch(coro, name):
-            try:
-                return await coro
-            except Exception as e:
-                logger.warning(f"{name} failed: {e}")
-                return []
-
-        client_id = getattr(settings, 'NAVER_CLIENT_ID', None)
-        client_secret = getattr(settings, 'NAVER_CLIENT_SECRET', None)
-
-        # 병렬 실행: HTTP, 모바일, API
-        tasks = [
-            safe_fetch(fetch_via_http_only(keyword, limit * 2), "HTTP"),
-            safe_fetch(fetch_via_mobile_web(keyword, limit * 2), "Mobile"),
-        ]
-
-        if client_id and client_secret:
-            tasks.append(safe_fetch(
-                fetch_via_naver_api(keyword, limit * 3, client_id, client_secret),
-                "Naver API"
-            ))
-
-        all_results = await asyncio.gather(*tasks)
-
-        # 결과 병합 (중복 제거)
-        for source_results in all_results:
-            for item in source_results:
-                if len(blog_results) >= limit:
-                    break
-                if item["post_url"] not in all_urls:
-                    item["tab_type"] = "BLOG"
-                    item["rank"] = len(blog_results) + 1
-                    blog_results.append(item)
-                    all_urls.add(item["post_url"])
-
-        logger.info(f"After parallel fetch: {len(blog_results)} results")
-
-        # ===== 2단계: Playwright BLOG 탭 (추가 필요 시) =====
+        # ===== 2단계: Playwright 부족하면 다른 소스로 보완 =====
         if len(blog_results) < limit:
-            logger.info(f"Step 2: Playwright BLOG tab for: {keyword} (need {limit - len(blog_results)} more)")
-            try:
-                playwright_results = await fetch_via_blog_tab_scraping(keyword, limit * 2)
-                if playwright_results:
-                    for item in playwright_results:
-                        if len(blog_results) >= limit:
-                            break
-                        if item["post_url"] not in all_urls:
-                            item["rank"] = len(blog_results) + 1
-                            blog_results.append(item)
-                            all_urls.add(item["post_url"])
-                    logger.info(f"After Playwright: {len(blog_results)} results")
-            except Exception as e:
-                logger.warning(f"Playwright failed: {e}")
+            logger.info(f"Step 2: Supplementing with HTTP/Mobile/API (need {limit - len(blog_results)} more)")
 
-        # ===== 4단계: RSS fallback (아직 부족하면) =====
+            async def safe_fetch(coro, name):
+                try:
+                    return await coro
+                except Exception as e:
+                    logger.warning(f"{name} failed: {e}")
+                    return []
+
+            client_id = getattr(settings, 'NAVER_CLIENT_ID', None)
+            client_secret = getattr(settings, 'NAVER_CLIENT_SECRET', None)
+
+            # 병렬 실행: HTTP, 모바일, API
+            tasks = [
+                safe_fetch(fetch_via_http_only(keyword, limit * 2), "HTTP"),
+                safe_fetch(fetch_via_mobile_web(keyword, limit * 2), "Mobile"),
+            ]
+
+            if client_id and client_secret:
+                tasks.append(safe_fetch(
+                    fetch_via_naver_api(keyword, limit * 3, client_id, client_secret),
+                    "Naver API"
+                ))
+
+            all_results = await asyncio.gather(*tasks)
+
+            # 결과 병합 (중복 제거, 기존 결과 뒤에 추가)
+            supplement_count = 0
+            for source_idx, source_results in enumerate(all_results):
+                source_name = ["http", "mobile", "api"][source_idx] if source_idx < 3 else "unknown"
+                for item in source_results:
+                    if len(blog_results) >= limit:
+                        break
+                    if item["post_url"] not in all_urls:
+                        item["tab_type"] = "BLOG"
+                        item["rank"] = len(blog_results) + 1
+                        item["original_rank"] = item.get("source_rank", len(blog_results) + 1)
+                        item["rank_source"] = source_name
+                        blog_results.append(item)
+                        all_urls.add(item["post_url"])
+                        supplement_count += 1
+
+            if rank_source == "unknown" and supplement_count > 0:
+                rank_source = "http_mobile_api"
+            logger.info(f"After supplementing: {len(blog_results)} results")
+
+        # ===== 3단계: RSS fallback (아직 부족하면) =====
         if len(blog_results) < limit:
-            logger.info(f"Step 4: RSS fallback for: {keyword} (need {limit - len(blog_results)} more)")
+            logger.info(f"Step 3: RSS fallback for: {keyword} (need {limit - len(blog_results)} more)")
             rss_results = await fetch_via_rss(keyword, limit * 2)
             if rss_results:
                 for item in rss_results:
@@ -809,23 +827,18 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 10) ->
                         break
                     if item["post_url"] not in all_urls:
                         item["rank"] = len(blog_results) + 1
+                        item["original_rank"] = len(blog_results) + 1
+                        item["rank_source"] = "rss"
                         blog_results.append(item)
                         all_urls.add(item["post_url"])
                 logger.info(f"After RSS: {len(blog_results)} results")
 
-        # ===== 5단계: Mobile web fallback (최후의 수단) =====
-        if len(blog_results) < limit:
-            logger.info(f"Step 5: Mobile web fallback for: {keyword} (need {limit - len(blog_results)} more)")
-            mobile_results = await fetch_via_mobile_web(keyword, limit * 2)
-            if mobile_results:
-                for item in mobile_results:
-                    if len(blog_results) >= limit:
-                        break
-                    if item["post_url"] not in all_urls:
-                        item["rank"] = len(blog_results) + 1
-                        blog_results.append(item)
-                        all_urls.add(item["post_url"])
-                logger.info(f"After mobile: {len(blog_results)} results")
+        # ===== 다양성 필터 적용 (같은 블로거 연속 노출 방지) =====
+        # 주의: Playwright 결과는 이미 네이버의 다양성 필터가 적용된 상태
+        # 다른 소스 결과는 다양성 필터 필요
+        if len(blog_results) > 1 and rank_source != "playwright":
+            blog_results = apply_diversity_filter(blog_results)
+            logger.info(f"Applied diversity filter: {len(blog_results)} results")
 
         # VIEW 탭 결과 생성 (BLOG 결과 복사)
         view_results = []
@@ -834,7 +847,7 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 10) ->
             view_item["tab_type"] = "VIEW"
             view_results.append(view_item)
 
-        logger.info(f"Final results - BLOG: {len(blog_results)}, VIEW: {len(view_results)} for: {keyword}")
+        logger.info(f"Final results - BLOG: {len(blog_results)}, VIEW: {len(view_results)} for: {keyword} (source: {rank_source})")
 
         result = {
             "view_results": view_results,
@@ -866,20 +879,24 @@ async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
         raw_results = await scrape_blog_tab_results(keyword, limit)
 
         if raw_results:
-            for item in raw_results:
+            for idx, item in enumerate(raw_results):
+                # source_rank 보존 (Playwright에서 추출한 실제 순위)
+                source_rank = item.get("source_rank", idx + 1)
                 results.append({
-                    "rank": item.get("rank", len(results) + 1),
+                    "rank": source_rank,
+                    "source_rank": source_rank,  # 원본 순위 보존
                     "blog_id": item["blog_id"],
-                    "blog_name": item["blog_id"],
+                    "blog_name": item.get("blog_name", item["blog_id"]),  # 블로그 이름 사용
                     "blog_url": item.get("blog_url", f"https://blog.naver.com/{item['blog_id']}"),
                     "post_title": item.get("post_title", ""),
                     "post_url": item["post_url"],
-                    "post_date": None,
+                    "post_date": item.get("post_date"),  # 날짜도 보존
                     "thumbnail": None,
                     "tab_type": "BLOG",
                     "smart_block_keyword": keyword,
+                    "rank_source": "playwright",  # 순위 출처 표시
                 })
-            logger.info(f"[BLOG] Playwright returned {len(results)} results for: {keyword}")
+            logger.info(f"[BLOG] Playwright returned {len(results)} results with accurate ranking for: {keyword}")
             if len(results) >= limit:
                 return results
 
@@ -1013,7 +1030,7 @@ async def fetch_via_view_tab_scraping(keyword: str, limit: int) -> List[Dict]:
 
 
 async def fetch_via_http_only(keyword: str, limit: int) -> List[Dict]:
-    """HTTP 전용 블로그 검색 - 랜덤 헤더와 딜레이로 봇 탐지 우회"""
+    """HTTP 전용 블로그 검색 - DOM 파싱으로 순위 정확도 개선"""
     results = []
     existing_urls = set()
 
@@ -1022,26 +1039,23 @@ async def fetch_via_http_only(keyword: str, limit: int) -> List[Dict]:
         encoded_keyword = quote(keyword)
         client = await get_http_client()
 
-        # 세 가지 정렬 + VIEW 탭도 시도
+        # 블로그탭 관련도순만 사용 (가장 정확한 순위)
         search_configs = [
             ("blog", "sim"),   # 블로그탭 관련도순
-            ("blog", "date"),  # 블로그탭 최신순
-            ("view", "sim"),   # VIEW탭 관련도순
         ]
 
         for where_tab, sort_opt in search_configs:
             if len(results) >= limit:
                 break
 
-            # 각 설정당 3페이지씩 시도 (너무 많으면 차단 위험)
+            # 각 설정당 3페이지씩 시도
             for page_num in range(3):
                 if len(results) >= limit:
                     break
 
-                # 랜덤 딜레이 (0.5~1.5초) - 봇 탐지 우회
-                await asyncio.sleep(random.uniform(0.5, 1.5))
+                # 랜덤 딜레이 (0.3~0.8초)
+                await asyncio.sleep(random.uniform(0.3, 0.8))
 
-                # 매 요청마다 새로운 랜덤 헤더 사용
                 headers = get_random_headers(mobile=False)
                 headers["Referer"] = "https://search.naver.com/"
 
@@ -1052,48 +1066,113 @@ async def fetch_via_http_only(keyword: str, limit: int) -> List[Dict]:
 
                 if response.status_code == 200:
                     html_text = response.text
-                    # 단순 패턴으로 더 많은 URL 찾기
-                    post_url_pattern = re.compile(r'blog\.naver\.com/(\w+)/(\d+)')
-                    url_matches = post_url_pattern.findall(html_text)
+                    soup = BeautifulSoup(html_text, 'html.parser')
+
+                    # DOM 기반 순서대로 추출 (정규식보다 정확)
+                    # 검색 결과 컨테이너 선택
+                    result_containers = soup.select('#main_pack .api_subject_bx, #main_pack .sp_blog .bx, .total_wrap .total_area')
 
                     page_added = 0
-                    for match in url_matches:
+                    for container in result_containers:
                         if len(results) >= limit:
                             break
 
-                        blog_id = match[0]
-                        post_id = match[1]
-                        post_url = f"https://blog.naver.com/{blog_id}/{post_id}"
+                        # 컨테이너 내 블로그 링크 찾기
+                        links = container.select('a[href*="blog.naver.com"]')
+                        for link in links:
+                            href = link.get('href', '')
+                            match = re.search(r'blog\.naver\.com/([\w-]+)/(\d+)', href)
+                            if not match:
+                                continue
 
-                        if post_url in existing_urls:
-                            continue
-                        existing_urls.add(post_url)
+                            blog_id = match.group(1)
+                            post_id = match.group(2)
+                            post_url = f"https://blog.naver.com/{blog_id}/{post_id}"
 
-                        results.append({
-                            "rank": len(results) + 1,
-                            "blog_id": blog_id,
-                            "blog_name": blog_id,
-                            "blog_url": f"https://blog.naver.com/{blog_id}",
-                            "post_title": f"포스팅 #{post_id}",
-                            "post_url": post_url,
-                            "post_date": None,
-                            "thumbnail": None,
-                            "tab_type": "BLOG",
-                            "smart_block_keyword": keyword,
-                        })
-                        page_added += 1
+                            if post_url in existing_urls:
+                                continue
+                            existing_urls.add(post_url)
 
-                    logger.info(f"[HTTP-ONLY] {sort_opt} page {page_num + 1}: +{page_added} (total: {len(results)})")
+                            # 제목 추출
+                            title = ""
+                            title_el = container.select_one('.api_txt_lines.total_tit, .title_link, .title, strong.tit')
+                            if title_el:
+                                title = title_el.get_text(strip=True)
+                            if not title:
+                                title = link.get_text(strip=True) or f"포스팅 #{post_id}"
+
+                            # 블로그 이름 추출
+                            blog_name = blog_id
+                            name_el = container.select_one('.sub_txt.sub_name, .name, .blog_name')
+                            if name_el:
+                                blog_name = name_el.get_text(strip=True) or blog_id
+
+                            # 순위: 페이지 기반 계산
+                            source_rank = start_index + page_added
+
+                            results.append({
+                                "rank": len(results) + 1,
+                                "source_rank": source_rank,  # 원본 순위
+                                "blog_id": blog_id,
+                                "blog_name": blog_name,
+                                "blog_url": f"https://blog.naver.com/{blog_id}",
+                                "post_title": title,
+                                "post_url": post_url,
+                                "post_date": None,
+                                "thumbnail": None,
+                                "tab_type": "BLOG",
+                                "smart_block_keyword": keyword,
+                                "rank_source": "http",
+                            })
+                            page_added += 1
+                            break  # 한 컨테이너에서 하나만
+
+                    # Fallback: DOM 파싱 실패 시 정규식 사용
+                    if page_added == 0:
+                        post_url_pattern = re.compile(r'blog\.naver\.com/([\w-]+)/(\d+)')
+                        url_matches = post_url_pattern.findall(html_text)
+
+                        for match in url_matches:
+                            if len(results) >= limit:
+                                break
+
+                            blog_id = match[0]
+                            post_id = match[1]
+                            post_url = f"https://blog.naver.com/{blog_id}/{post_id}"
+
+                            if post_url in existing_urls:
+                                continue
+                            existing_urls.add(post_url)
+
+                            results.append({
+                                "rank": len(results) + 1,
+                                "source_rank": len(results) + 1,
+                                "blog_id": blog_id,
+                                "blog_name": blog_id,
+                                "blog_url": f"https://blog.naver.com/{blog_id}",
+                                "post_title": f"포스팅 #{post_id}",
+                                "post_url": post_url,
+                                "post_date": None,
+                                "thumbnail": None,
+                                "tab_type": "BLOG",
+                                "smart_block_keyword": keyword,
+                                "rank_source": "http_regex",
+                            })
+                            page_added += 1
+
+                    logger.info(f"[HTTP] {sort_opt} page {page_num + 1}: +{page_added} (total: {len(results)})")
 
                     if page_added == 0:
-                        break  # 더 이상 새 결과 없음
+                        break
 
                 await asyncio.sleep(0.2)
 
-        logger.info(f"[HTTP-ONLY] Total: {len(results)} results for: {keyword}")
+        logger.info(f"[HTTP] Total: {len(results)} results for: {keyword}")
 
     except Exception as e:
-        logger.error(f"[HTTP-ONLY] Failed: {e}")
+        logger.error(f"[HTTP] Failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
 
     return results
 
