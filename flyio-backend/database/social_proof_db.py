@@ -470,8 +470,8 @@ class SocialProofDB:
             # 랜덤 변동 추가 (±15%)
             jitter = random.uniform(0.85, 1.15)
 
-            # 기본 최대 인원 (실제 서비스 규모에 맞게 조정)
-            max_users = 150  # 최대 활동 인원
+            # 기본 최대 인원 (중간 규모 서비스)
+            max_users = 650  # 최대 활동 인원
 
             current_online = max(3, int(max_users * base_multiplier * jitter))
 
