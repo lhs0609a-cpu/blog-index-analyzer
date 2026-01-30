@@ -1221,26 +1221,11 @@ class AutoGenRequest(BaseModel):
 
 
 async def auto_generate_content_task(posts_per_hour: int, include_comments: bool):
-    """백그라운드 자동 글 생성 태스크"""
+    """백그라운드 자동 글 생성 태스크 (SQLite 사용)"""
     global _auto_gen_running
 
-    # Supabase 연결
-    import os
-    supabase_url = os.environ.get("SUPABASE_URL", "")
-    supabase_key = os.environ.get("SUPABASE_KEY", "")
-
-    if not supabase_url or not supabase_key:
-        logger.error("Supabase credentials not configured")
-        _auto_gen_running = False
-        return
-
-    try:
-        from supabase import create_client
-        supabase = create_client(supabase_url, supabase_key)
-    except Exception as e:
-        logger.error(f"Failed to connect to Supabase: {e}")
-        _auto_gen_running = False
-        return
+    # SQLite community_db 사용
+    from database.community_db import create_post, create_post_comment
 
     # 시간당 글 수 -> 분당 간격 계산
     interval_seconds = 3600 / posts_per_hour
@@ -1253,24 +1238,16 @@ async def auto_generate_content_task(posts_per_hour: int, include_comments: bool
             post_data = generate_realistic_post()
             user_id = 1000 + random.randint(0, 9999)
 
-            # 랜덤 시간 (최근 몇 분 내)
-            minutes_ago = random.randint(0, 10)
-            created_at = (datetime.now() - timedelta(minutes=minutes_ago)).isoformat()
+            # SQLite에 저장
+            post_id = create_post(
+                user_id=user_id,
+                title=post_data["title"],
+                content=post_data["content"],
+                category=post_data["category"],
+                tags=[]
+            )
 
-            response = supabase.table("posts").insert({
-                "user_id": user_id,
-                "title": post_data["title"],
-                "content": post_data["content"],
-                "category": post_data["category"],
-                "tags": [],
-                "views": random.randint(5, 200),
-                "likes": random.randint(0, 20),
-                "comments_count": 0,
-                "created_at": created_at,
-            }).execute()
-
-            if response.data:
-                post_id = response.data[0]["id"]
+            if post_id:
                 logger.info(f"Auto generated post {post_id}: {post_data['title'][:30]}...")
 
                 # 댓글 생성
@@ -1280,18 +1257,13 @@ async def auto_generate_content_task(posts_per_hour: int, include_comments: bool
                     for _ in range(num_comments):
                         comment_user = 1000 + random.randint(0, 9999)
                         try:
-                            supabase.table("post_comments").insert({
-                                "post_id": post_id,
-                                "user_id": comment_user,
-                                "content": generate_realistic_comment(),
-                            }).execute()
-                        except:
-                            pass
-
-                    if num_comments > 0:
-                        supabase.table("posts").update({
-                            "comments_count": num_comments
-                        }).eq("id", post_id).execute()
+                            create_post_comment(
+                                post_id=post_id,
+                                user_id=comment_user,
+                                content=generate_realistic_comment()
+                            )
+                        except Exception as ce:
+                            logger.debug(f"Comment creation error: {ce}")
 
             # 랜덤 지연 추가 (자연스러운 간격)
             jitter = random.uniform(0.5, 1.5)

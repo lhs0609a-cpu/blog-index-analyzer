@@ -281,18 +281,12 @@ async def lifespan(app: FastAPI):
     # 커뮤니티 자동 글 생성 시작 (시간당 12개 = 5분마다 1개)
     try:
         import asyncio
-        from routers.admin import _auto_gen_running, auto_generate_content_task
+        from routers.admin import auto_generate_content_task
         import routers.admin as admin_module
 
-        supabase_url = os.getenv("SUPABASE_URL", "")
-        supabase_key = os.getenv("SUPABASE_KEY", "")
-
-        if supabase_url and supabase_key:
-            admin_module._auto_gen_running = True
-            asyncio.create_task(auto_generate_content_task(posts_per_hour=12, include_comments=True))
-            logger.info("✅ Community auto-generation started (12 posts/hour)")
-        else:
-            logger.warning("⚠️ Community auto-generation skipped (Supabase not configured)")
+        admin_module._auto_gen_running = True
+        asyncio.create_task(auto_generate_content_task(posts_per_hour=12, include_comments=True))
+        logger.info("✅ Community auto-generation started (12 posts/hour)")
     except Exception as e:
         logger.warning(f"⚠️ Community auto-generation failed: {e}")
 
