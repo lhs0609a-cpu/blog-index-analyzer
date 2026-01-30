@@ -1,7 +1,8 @@
 """
 FastAPI 메인 애플리케이션
-Version: 2.2.0 - Unique title generation for community posts
+Version: 2.2.1 - Supabase community content generation
 """
+import os
 from fastapi import FastAPI, APIRouter, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -79,32 +80,31 @@ async def lifespan(app: FastAPI):
         admin_password = os.getenv("ADMIN_PASSWORD")
 
         # 환경변수가 설정되지 않으면 관리자 자동 생성 건너뛰기
-        if not admin_email or not admin_password:
-            logger.warning("⚠️ ADMIN_EMAIL or ADMIN_PASSWORD not set. Skipping auto admin creation.")
-            return
-
-        existing_user = user_db.get_user_by_email(admin_email)
-        if existing_user:
-            # 기존 사용자를 관리자로 업그레이드
-            user_db.set_admin(existing_user["id"], True)
-            user_db.update_user(
-                existing_user["id"],
-                hashed_password=pwd_context.hash(admin_password),
-                plan="business",
-                is_premium_granted=1
-            )
-            logger.info(f"✅ Admin user {admin_email} updated")
+        if admin_email and admin_password:
+            existing_user = user_db.get_user_by_email(admin_email)
+            if existing_user:
+                # 기존 사용자를 관리자로 업그레이드
+                user_db.set_admin(existing_user["id"], True)
+                user_db.update_user(
+                    existing_user["id"],
+                    hashed_password=pwd_context.hash(admin_password),
+                    plan="business",
+                    is_premium_granted=1
+                )
+                logger.info(f"✅ Admin user {admin_email} updated")
+            else:
+                # 새 관리자 계정 생성
+                hashed_password = pwd_context.hash(admin_password)
+                user_id = user_db.create_user(
+                    email=admin_email,
+                    hashed_password=hashed_password,
+                    name="관리자"
+                )
+                user_db.set_admin(user_id, True)
+                user_db.update_user(user_id, plan="business", is_premium_granted=1)
+                logger.info(f"✅ Admin user {admin_email} created")
         else:
-            # 새 관리자 계정 생성
-            hashed_password = pwd_context.hash(admin_password)
-            user_id = user_db.create_user(
-                email=admin_email,
-                hashed_password=hashed_password,
-                name="관리자"
-            )
-            user_db.set_admin(user_id, True)
-            user_db.update_user(user_id, plan="business", is_premium_granted=1)
-            logger.info(f"✅ Admin user {admin_email} created")
+            logger.warning("⚠️ ADMIN_EMAIL or ADMIN_PASSWORD not set. Skipping auto admin creation.")
     except Exception as e:
         logger.warning(f"⚠️ Admin user setup failed: {e}")
 

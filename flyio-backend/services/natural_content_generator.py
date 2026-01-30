@@ -738,16 +738,152 @@ def generate_natural_post(user: VirtualUser = None, category: str = None) -> Dic
     }
 
 
+# ============ Supabase 콘텐츠 생성 함수 ============
+
+def _generate_content_supabase(supabase, posts_count, comments_per_post) -> Dict:
+    """Supabase에 자연스러운 콘텐츠 생성"""
+    import json
+    from datetime import datetime, timedelta
+
+    num_posts = random.randint(*posts_count)
+    now = datetime.now()
+
+    created_posts = []
+    created_comments = []
+
+    for i in range(num_posts):
+        # 랜덤 시간 (오늘 중)
+        hour = random.choices(
+            range(24),
+            weights=[1,1,1,1,1,2,3,4,5,6,7,7,6,6,7,7,7,6,7,8,9,8,6,3]
+        )[0]
+        minute = random.randint(0, 59)
+        post_time = now.replace(hour=hour, minute=minute, second=random.randint(0, 59))
+
+        if post_time > now:
+            post_time = now - timedelta(minutes=random.randint(1, 60))
+
+        # 게시글 생성
+        user = generate_virtual_user()
+        post = generate_natural_post(user)
+
+        try:
+            # Supabase에 삽입
+            response = supabase.table("posts").insert({
+                "user_id": post["user_id"],
+                "user_name": post["user_name"],
+                "title": post["title"],
+                "content": post["content"],
+                "category": post["category"],
+                "tags": post.get("tags", []),
+                "views": random.randint(10, 500),
+                "likes": random.randint(0, 30),
+                "created_at": post_time.isoformat()
+            }).execute()
+
+            if not response.data:
+                continue
+
+            post_id = response.data[0]["id"]
+            post["id"] = post_id
+            post["created_at"] = post_time
+            created_posts.append(post)
+
+            # 댓글 생성
+            num_comments = random.randint(*comments_per_post)
+            comment_count = 0
+
+            for j in range(num_comments):
+                commenter = generate_virtual_user()
+                comment_text = generate_contextual_comment(post, commenter)
+
+                # 댓글 시간 (게시글 이후)
+                comment_time = post_time + timedelta(
+                    minutes=random.randint(5, 60 * 24)
+                )
+                if comment_time > now:
+                    comment_time = now - timedelta(minutes=random.randint(1, 30))
+
+                try:
+                    comment_response = supabase.table("post_comments").insert({
+                        "post_id": post_id,
+                        "user_id": commenter.id,
+                        "user_name": commenter.name,
+                        "content": comment_text,
+                        "created_at": comment_time.isoformat()
+                    }).execute()
+
+                    if comment_response.data:
+                        comment_id = comment_response.data[0]["id"]
+                        comment_count += 1
+                        created_comments.append({
+                            "id": comment_id,
+                            "post_id": post_id,
+                            "content": comment_text,
+                        })
+
+                        # 대댓글 (30% 확률)
+                        if random.random() < 0.3:
+                            reply = generate_reply(comment_text, user, user)
+                            if reply:
+                                reply_time = comment_time + timedelta(minutes=random.randint(5, 120))
+                                if reply_time > now:
+                                    reply_time = now - timedelta(minutes=random.randint(1, 10))
+
+                                reply_response = supabase.table("post_comments").insert({
+                                    "post_id": post_id,
+                                    "user_id": user.id,
+                                    "user_name": user.name,
+                                    "content": reply,
+                                    "parent_id": comment_id,
+                                    "created_at": reply_time.isoformat()
+                                }).execute()
+
+                                if reply_response.data:
+                                    comment_count += 1
+                                    created_comments.append({
+                                        "id": reply_response.data[0]["id"],
+                                        "post_id": post_id,
+                                        "parent_id": comment_id,
+                                        "content": reply,
+                                    })
+                except Exception as e:
+                    logger.warning(f"Comment insert error: {e}")
+
+            # 댓글 수 업데이트
+            if comment_count > 0:
+                supabase.table("posts").update({"comments_count": comment_count}).eq("id", post_id).execute()
+
+        except Exception as e:
+            logger.warning(f"Post insert error: {e}")
+
+    logger.info(f"[Supabase] Generated {len(created_posts)} posts and {len(created_comments)} comments")
+
+    return {
+        "posts_created": len(created_posts),
+        "comments_created": len(created_comments),
+        "timestamp": now.isoformat(),
+        "storage": "supabase"
+    }
+
+
 # ============ 메인 생성 함수 ============
 
 def generate_daily_natural_content(
     posts_count: Tuple[int, int] = (15, 30),
     comments_per_post: Tuple[int, int] = (3, 12),
 ) -> Dict:
-    """하루치 자연스러운 콘텐츠 생성"""
-    from database.community_db import get_db_connection
+    """하루치 자연스러운 콘텐츠 생성 (Supabase 우선)"""
+    from database.community_db import get_db_connection, get_supabase
     import json
 
+    supabase = get_supabase()
+
+    # Supabase 사용 가능하면 Supabase로 저장
+    if supabase:
+        return _generate_content_supabase(supabase, posts_count, comments_per_post)
+
+    # SQLite 폴백
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -878,9 +1014,16 @@ def add_comments_to_existing_posts(
     max_posts: int = 20,
     comments_per_post: Tuple[int, int] = (1, 5),
 ) -> Dict:
-    """기존 게시글에 새 댓글 추가"""
-    from database.community_db import get_db_connection
+    """기존 게시글에 새 댓글 추가 (Supabase 우선)"""
+    from database.community_db import get_db_connection, get_supabase
 
+    supabase = get_supabase()
+
+    # Supabase 사용 가능하면 Supabase로 처리
+    if supabase:
+        return _add_comments_supabase(supabase, max_posts, comments_per_post)
+
+    # SQLite 폴백
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -943,3 +1086,78 @@ def add_comments_to_existing_posts(
         "posts_updated": len(posts),
         "comments_added": total_comments,
     }
+
+
+def _add_comments_supabase(supabase, max_posts: int, comments_per_post: Tuple[int, int]) -> Dict:
+    """Supabase에서 기존 게시글에 댓글 추가"""
+    from datetime import datetime, timedelta
+
+    now = datetime.now()
+    total_comments = 0
+
+    try:
+        # 최근 게시글 조회 (댓글 적은 것 우선)
+        response = supabase.table("posts").select("id, user_id, user_name, title, content, category").eq("is_deleted", False).order("comments_count").order("created_at", desc=True).limit(max_posts).execute()
+
+        if not response.data:
+            return {"posts_updated": 0, "comments_added": 0, "storage": "supabase"}
+
+        posts = response.data
+
+        for post in posts:
+            post_dict = {
+                "id": post["id"],
+                "user_id": post["user_id"],
+                "title": post["title"],
+                "content": post["content"],
+                "category": post["category"],
+            }
+
+            num_comments = random.randint(*comments_per_post)
+            added_comments = 0
+
+            for _ in range(num_comments):
+                commenter = generate_virtual_user()
+                comment_text = generate_contextual_comment(post_dict, commenter)
+
+                comment_time = now - timedelta(minutes=random.randint(1, 60 * 6))
+
+                try:
+                    supabase.table("post_comments").insert({
+                        "post_id": post["id"],
+                        "user_id": commenter.id,
+                        "user_name": commenter.name,
+                        "content": comment_text,
+                        "created_at": comment_time.isoformat()
+                    }).execute()
+
+                    total_comments += 1
+                    added_comments += 1
+                except Exception as e:
+                    logger.warning(f"Comment insert error: {e}")
+
+            # 댓글 수 업데이트
+            if added_comments > 0:
+                try:
+                    # 현재 댓글 수 조회
+                    count_response = supabase.table("post_comments").select("id", count="exact").eq("post_id", post["id"]).eq("is_deleted", False).execute()
+                    new_count = count_response.count or 0
+                    supabase.table("posts").update({"comments_count": new_count}).eq("id", post["id"]).execute()
+                except Exception as e:
+                    logger.warning(f"Update comments_count error: {e}")
+
+        logger.info(f"[Supabase] Added {total_comments} comments to {len(posts)} posts")
+
+        return {
+            "posts_updated": len(posts),
+            "comments_added": total_comments,
+            "storage": "supabase"
+        }
+
+    except Exception as e:
+        logger.error(f"[Supabase] add_comments error: {e}")
+        return {
+            "posts_updated": 0,
+            "comments_added": 0,
+            "error": str(e)
+        }
