@@ -27,6 +27,7 @@ import TermTooltip from '@/components/TermTooltip'
 function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywordSearch: () => void }) {
   const level = result.index.level
   const totalScore = result.index.total_score
+  const percentile = result.index.percentile || 50  // 실제 백분위 값 사용
   const cRank = result.index.score_breakdown?.c_rank || 50
   const dia = result.index.score_breakdown?.dia || 50
 
@@ -34,22 +35,35 @@ function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywo
   const gradeInfo = getLevelGrade(level)
   const nextGradeInfo = getLevelsToNextGrade(level)
 
-  // 레벨별 해석 데이터
+  // 실제 백분위를 사람이 읽기 쉬운 형식으로 변환
+  const getPercentileText = (p: number) => {
+    if (p >= 99) return '상위 1%'
+    if (p >= 95) return `상위 ${(100 - p).toFixed(0)}%`
+    if (p >= 50) return `상위 ${(100 - p).toFixed(0)}%`
+    return `하위 ${(100 - p).toFixed(0)}%`
+  }
+
+  // 레벨별 해석 데이터 (백분위는 실제 값 사용)
   const levelInterpretation = {
-    1: { tier: '입문', percentile: '하위 20%', viewChance: '5%', competitiveKeywords: '월 검색량 100 미만' },
-    2: { tier: '입문', percentile: '하위 30%', viewChance: '10%', competitiveKeywords: '월 검색량 300 미만' },
-    3: { tier: '성장기', percentile: '하위 40%', viewChance: '15%', competitiveKeywords: '월 검색량 500 미만' },
-    4: { tier: '성장기', percentile: '중위권', viewChance: '25%', competitiveKeywords: '월 검색량 1,000 미만' },
-    5: { tier: '중급', percentile: '상위 45%', viewChance: '35%', competitiveKeywords: '월 검색량 2,000 미만' },
-    6: { tier: '중급', percentile: '상위 35%', viewChance: '45%', competitiveKeywords: '월 검색량 3,000 미만' },
-    7: { tier: '상급', percentile: '상위 25%', viewChance: '55%', competitiveKeywords: '월 검색량 5,000 미만' },
-    8: { tier: '상급', percentile: '상위 15%', viewChance: '65%', competitiveKeywords: '월 검색량 10,000 미만' },
-    9: { tier: '전문가', percentile: '상위 8%', viewChance: '75%', competitiveKeywords: '월 검색량 20,000 미만' },
-    10: { tier: '마스터', percentile: '상위 3%', viewChance: '85%', competitiveKeywords: '월 검색량 50,000 미만' },
-    11: { tier: '레전드', percentile: '상위 1%', viewChance: '95%', competitiveKeywords: '대부분 키워드 경쟁 가능' },
+    1: { tier: '시작', viewChance: '3%', competitiveKeywords: '월 검색량 100 미만' },
+    2: { tier: '스타터', viewChance: '5%', competitiveKeywords: '월 검색량 200 미만' },
+    3: { tier: '뉴비', viewChance: '8%', competitiveKeywords: '월 검색량 300 미만' },
+    4: { tier: '초보', viewChance: '12%', competitiveKeywords: '월 검색량 500 미만' },
+    5: { tier: '입문', viewChance: '18%', competitiveKeywords: '월 검색량 800 미만' },
+    6: { tier: '성장기', viewChance: '25%', competitiveKeywords: '월 검색량 1,500 미만' },
+    7: { tier: '아이언', viewChance: '35%', competitiveKeywords: '월 검색량 3,000 미만' },
+    8: { tier: '브론즈', viewChance: '45%', competitiveKeywords: '월 검색량 5,000 미만' },
+    9: { tier: '실버', viewChance: '55%', competitiveKeywords: '월 검색량 10,000 미만' },
+    10: { tier: '골드', viewChance: '65%', competitiveKeywords: '월 검색량 20,000 미만' },
+    11: { tier: '플래티넘', viewChance: '75%', competitiveKeywords: '월 검색량 50,000 미만' },
+    12: { tier: '다이아몬드', viewChance: '85%', competitiveKeywords: '월 검색량 100,000 미만' },
+    13: { tier: '챌린저', viewChance: '90%', competitiveKeywords: '고경쟁 키워드 가능' },
+    14: { tier: '그랜드마스터', viewChance: '95%', competitiveKeywords: '대부분 키워드 경쟁 가능' },
+    15: { tier: '마스터', viewChance: '98%', competitiveKeywords: '모든 키워드 상위 노출' },
   }
 
   const interpretation = levelInterpretation[level as keyof typeof levelInterpretation] || levelInterpretation[1]
+  const percentileText = getPercentileText(percentile)
 
   // 1레벨 올랐을 때 예상 효과
   const nextLevelEffect = {
@@ -75,7 +89,7 @@ function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywo
         <div className="bg-white rounded-2xl p-5 border border-emerald-100">
           <div className="text-sm text-gray-500 mb-1">전체 블로거 중</div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-3xl font-bold text-emerald-600">{interpretation.percentile}</span>
+            <span className="text-3xl font-bold text-emerald-600">{percentileText}</span>
             <span className={`px-2 py-1 rounded-lg text-sm font-bold ${getGradeBadgeStyle(gradeInfo.grade)}`}>
               {gradeInfo.grade}
             </span>

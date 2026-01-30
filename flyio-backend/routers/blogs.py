@@ -21,6 +21,7 @@ from database.learning_db import add_learning_sample, get_current_weights, save_
 from services.category_weights import detect_keyword_category, get_category_weights, merge_weights_with_category, get_category_optimization_tips
 from database.keyword_analysis_db import get_cached_related_keywords, cache_related_keywords
 from services.learning_engine import train_model, calculate_blog_score
+from database.blog_percentile_db import get_blog_percentile_db
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -2614,49 +2615,56 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
 
         index["total_score"] = min(round(total_score, 1), 100)
 
-        # Calculate level (1-15) - 고득점 블로그 세분화
-        if total_score >= 70:
-            index["level"] = 15
-        elif total_score >= 66:
-            index["level"] = 14
-        elif total_score >= 62:
-            index["level"] = 13
-        elif total_score >= 58:
-            index["level"] = 12
-        elif total_score >= 54:
-            index["level"] = 11
-        elif total_score >= 50:
-            index["level"] = 10
-        elif total_score >= 45:
-            index["level"] = 9
-        elif total_score >= 40:
-            index["level"] = 8
-        elif total_score >= 35:
-            index["level"] = 7
-        elif total_score >= 30:
-            index["level"] = 6
-        elif total_score >= 25:
-            index["level"] = 5
-        elif total_score >= 20:
-            index["level"] = 4
-        elif total_score >= 15:
-            index["level"] = 3
-        elif total_score >= 10:
-            index["level"] = 2
-        else:
-            index["level"] = 1
+        # ===== 실제 백분위 시스템 =====
+        # 분석된 모든 블로그 중에서 현재 블로그의 위치를 계산
+        try:
+            percentile_db = get_blog_percentile_db()
 
-        # Set grade based on level
-        grade_map = {
-            15: "마스터", 14: "그랜드마스터", 13: "챌린저",
-            12: "최적화1", 11: "최적화2", 10: "최적화3",
-            9: "준최적화1", 8: "준최적화2", 7: "준최적화3",
-            6: "성장기1", 5: "성장기2", 4: "성장기3",
-            3: "입문1", 2: "입문2", 1: "초보"
-        }
-        index["grade"] = grade_map.get(index["level"], "")
-        index["level_category"] = "마스터" if index["level"] >= 13 else "최적화" if index["level"] >= 10 else "준최적화" if index["level"] >= 7 else "성장기" if index["level"] >= 4 else "입문"
-        index["percentile"] = min(index["total_score"], 99)
+            # 점수 저장 (실제 분석된 블로그로 기록)
+            percentile_db.add_blog_score(blog_id, index["total_score"])
+
+            # 실제 백분위 계산 (0-100, 높을수록 상위)
+            percentile = percentile_db.get_percentile(index["total_score"])
+            index["percentile"] = percentile
+
+            # 백분위 기반 레벨 계산
+            level, grade = percentile_db.get_level_from_percentile(percentile)
+            index["level"] = level
+            index["grade"] = grade
+
+            # 레벨 카테고리 설정
+            if level >= 13:
+                index["level_category"] = "레전드"
+            elif level >= 10:
+                index["level_category"] = "엘리트"
+            elif level >= 7:
+                index["level_category"] = "우수"
+            elif level >= 4:
+                index["level_category"] = "성장"
+            else:
+                index["level_category"] = "입문"
+
+            logger.info(f"Blog {blog_id}: score={index['total_score']}, percentile={percentile:.1f}%, level={level} ({grade})")
+
+        except Exception as percentile_error:
+            logger.warning(f"Percentile calculation failed, using fallback: {percentile_error}")
+            # 폴백: 고정 기준 레벨 (백분위 DB 실패 시)
+            if total_score >= 70:
+                index["level"], index["grade"] = 15, "마스터"
+            elif total_score >= 60:
+                index["level"], index["grade"] = 12, "다이아몬드"
+            elif total_score >= 50:
+                index["level"], index["grade"] = 10, "골드"
+            elif total_score >= 40:
+                index["level"], index["grade"] = 8, "브론즈"
+            elif total_score >= 30:
+                index["level"], index["grade"] = 6, "성장기"
+            elif total_score >= 20:
+                index["level"], index["grade"] = 4, "초보"
+            else:
+                index["level"], index["grade"] = 2, "스타터"
+            index["percentile"] = min(index["total_score"], 99)
+            index["level_category"] = "마스터" if index["level"] >= 13 else "엘리트" if index["level"] >= 10 else "우수" if index["level"] >= 7 else "성장" if index["level"] >= 4 else "입문"
 
         # Store detailed breakdown with category info
         index["score_breakdown"] = {
@@ -2679,8 +2687,6 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
             },
             "keyword_category": keyword_category if keyword else "default"
         }
-
-        logger.info(f"Blog {blog_id}: score={index['total_score']}, level={index['level']}, c_rank={c_rank_score:.1f}, dia={dia_score:.1f}, sources={analysis_data['data_sources']}")
 
     except Exception as e:
         logger.warning(f"Error analyzing blog {blog_id}: {e}")
