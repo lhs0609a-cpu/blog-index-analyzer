@@ -29,6 +29,7 @@ class Mood(Enum):
     HELPFUL = "helpful"       # 도움주고 싶음
     BRAGGING = "bragging"     # 자랑, 뿌듯
     COMPLAINING = "complaining"  # 불만, 투덜
+    SARCASTIC = "sarcastic"   # 비꼬는, 냉소적
 
 
 class Personality(Enum):
