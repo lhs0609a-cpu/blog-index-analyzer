@@ -9,6 +9,38 @@ import { useAuthStore } from '@/lib/stores/auth'
 import { registerBilling, type PlanType } from '@/lib/api/subscription'
 import toast from 'react-hot-toast'
 
+// 토스페이먼츠 타입 정의
+interface TossPaymentsInstance {
+  requestBillingAuth: (method: string, options: {
+    customerKey: string
+    successUrl: string
+    failUrl: string
+  }) => Promise<void>
+}
+
+interface TossPaymentsSDK {
+  (clientKey: string): TossPaymentsInstance
+}
+
+declare global {
+  interface Window {
+    TossPayments?: TossPaymentsSDK
+  }
+}
+
+// UUID 생성 함수 (crypto.randomUUID 폴백)
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID()
+  }
+  // 폴백: 브라우저 호환성을 위한 수동 생성
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0
+    const v = c === 'x' ? r : (r & 0x3 | 0x8)
+    return v.toString(16)
+  })
+}
+
 // 토스페이먼츠 클라이언트 키 (라이브) - 자동결제(빌링)용 / MID: bill_nsmard045
 const TOSS_CLIENT_KEY = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY || 'live_ck_6BYq7GWPVv4LKjjM6ojG8NE5vbo1'
 
@@ -98,8 +130,8 @@ function PaymentContent() {
       // 토스페이먼츠 SDK 로드
       const tossPayments = await loadTossPayments(TOSS_CLIENT_KEY)
 
-      // 고객 고유 키 생성 (사용자 ID 기반)
-      const customerKey = `customer_${user.id}_${Date.now()}`
+      // 고객 고유 키 생성 (UUID 사용으로 중복 방지)
+      const customerKey = `customer_${user.id}_${generateUUID()}`
 
       // 빌링키 발급 요청 (정기결제용)
       await tossPayments.requestBillingAuth('카드', {
@@ -222,7 +254,20 @@ function PaymentContent() {
               <CreditCard className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-3xl font-bold">정기결제 등록</h1>
-            <p className="text-gray-500 mt-2 text-sm">카드를 등록하면 자동으로 결제됩니다</p>
+            <p className="text-gray-500 mt-2 text-sm">한 클릭으로 언제든 해지 가능</p>
+          </div>
+
+          {/* 신뢰도 강화 배너 */}
+          <div className="bg-green-50 border border-green-200 rounded-2xl p-4 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                <Shield className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-green-800 text-sm">마이페이지에서 클릭 한 번으로 해지</p>
+                <p className="text-green-600 text-xs">전화나 상담 없이 즉시 처리 · 위약금 없음</p>
+              </div>
+            </div>
           </div>
 
           {/* 정기결제 안내 */}
@@ -281,27 +326,39 @@ function PaymentContent() {
             </div>
           </div>
 
-          {/* 환불 정책 요약 */}
+          {/* 환불 정책 요약 - 구체적 예시 포함 */}
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6">
-            <h3 className="font-semibold text-gray-800 text-sm mb-2 flex items-center gap-2">
+            <h3 className="font-semibold text-gray-800 text-sm mb-3 flex items-center gap-2">
               <Shield className="w-4 h-4 text-green-600" />
               환불 정책 안내
             </h3>
-            <ul className="text-xs text-gray-600 space-y-1">
-              <li className="flex items-start gap-2">
-                <CheckCircle className="w-3 h-3 text-green-500 mt-0.5 flex-shrink-0" />
-                <span>결제 후 <strong>7일 이내</strong> 서비스 미사용 시 전액 환불</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle className="w-3 h-3 text-green-500 mt-0.5 flex-shrink-0" />
-                <span>7일 이후 또는 서비스 사용 시 <strong>일할 계산</strong>하여 환불</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle className="w-3 h-3 text-green-500 mt-0.5 flex-shrink-0" />
-                <span>정기결제 해지는 마이페이지에서 <strong>언제든 가능</strong></span>
-              </li>
-            </ul>
-            <Link href="/refund-policy" className="text-[#0064FF] text-xs hover:underline mt-2 inline-block" target="_blank">
+            <div className="space-y-3 text-xs">
+              <div className="flex items-start gap-2">
+                <CheckCircle className="w-4 h-4 text-green-500 mt-0 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-gray-800">7일 이내 전액 환불</p>
+                  <p className="text-gray-500">결제 후 7일 이내, 서비스 미사용 시 100% 환불</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <CheckCircle className="w-4 h-4 text-green-500 mt-0 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-gray-800">7일 이후 일할 계산 환불</p>
+                  <p className="text-gray-500">
+                    예) Pro 월간 19,900원, 15일 사용 후 해지 시<br/>
+                    → 남은 15일분 9,950원 환불
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <CheckCircle className="w-4 h-4 text-green-500 mt-0 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-gray-800">한 클릭 해지</p>
+                  <p className="text-gray-500">마이페이지에서 클릭 한 번으로 즉시 해지 · 위약금 0원</p>
+                </div>
+              </div>
+            </div>
+            <Link href="/refund-policy" className="text-[#0064FF] text-xs hover:underline mt-3 inline-block font-medium" target="_blank">
               환불 정책 전문 보기 →
             </Link>
           </div>
@@ -388,17 +445,15 @@ export default function PaymentPage() {
   )
 }
 
-// 토스페이먼츠 SDK 로드 함수
-function loadTossPayments(clientKey: string): Promise<any> {
+// 토스페이먼츠 SDK 로드 함수 (타입 안전)
+function loadTossPayments(clientKey: string): Promise<TossPaymentsInstance> {
   return new Promise((resolve, reject) => {
     if (typeof window === 'undefined') {
       reject(new Error('Window is not defined'))
       return
     }
 
-    // @ts-ignore
     if (window.TossPayments) {
-      // @ts-ignore
       resolve(window.TossPayments(clientKey))
       return
     }
@@ -406,8 +461,11 @@ function loadTossPayments(clientKey: string): Promise<any> {
     const script = document.createElement('script')
     script.src = 'https://js.tosspayments.com/v1/payment'
     script.onload = () => {
-      // @ts-ignore
-      resolve(window.TossPayments(clientKey))
+      if (window.TossPayments) {
+        resolve(window.TossPayments(clientKey))
+      } else {
+        reject(new Error('TossPayments SDK loaded but not initialized'))
+      }
     }
     script.onerror = () => {
       reject(new Error('Failed to load TossPayments SDK'))

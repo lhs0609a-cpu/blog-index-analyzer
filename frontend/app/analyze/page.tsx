@@ -532,8 +532,9 @@ function ConcreteRecommendations({ result, isFreeUser }: { result: any; isFreeUs
                     +{recommendations.length - 3}개 맞춤 가이드 더보기
                   </p>
                   <button className="px-4 py-2 bg-[#0064FF] text-white text-sm font-medium rounded-lg hover:shadow-lg transition-all">
-                    Pro 7일 무료 체험
+                    7일 무료 체험 시작
                   </button>
+                  <p className="text-xs text-gray-500 mt-2">클릭 한 번으로 해지</p>
                 </div>
               </Link>
             </div>
@@ -1029,9 +1030,10 @@ function DetailedMetricsSection({ result, isFreeUser }: { result: any; isFreeUse
                 <div className="space-y-3">
                   <Link href="/pricing" className="block">
                     <button className="w-full py-3 bg-[#0064FF] text-white font-bold rounded-xl hover:shadow-lg shadow-lg shadow-[#0064FF]/25 transition-all">
-                      Pro 7일 무료 체험
+                      7일 무료 체험 시작
                     </button>
                   </Link>
+                  <p className="text-xs text-gray-500 text-center">클릭 한 번으로 언제든 해지 · 위약금 0원</p>
                   <button
                     onClick={() => setShowUpgradeModal(false)}
                     className="w-full py-3 text-gray-500 hover:text-gray-700 font-medium transition-colors"

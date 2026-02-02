@@ -306,6 +306,19 @@ export default function SubscriptionPage() {
               </div>
             </div>
           )}
+
+          {/* 해지 안심 배너 */}
+          {subscription?.plan_type !== 'free' && subscription?.status === 'active' && (
+            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-xl">
+              <div className="flex items-center gap-3">
+                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                <div className="text-sm">
+                  <span className="font-semibold text-green-800">언제든 한 클릭으로 해지 가능</span>
+                  <span className="text-green-700 ml-2">위의 &apos;구독 취소&apos; 버튼으로 즉시 해지 · 위약금 0원</span>
+                </div>
+              </div>
+            </div>
+          )}
         </motion.div>
 
         {/* Usage Stats */}

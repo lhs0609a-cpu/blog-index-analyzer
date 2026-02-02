@@ -730,6 +730,265 @@ export default function Home() {
         </div>
       </section>
 
+      {/* P1: Killer Feature - 1위 가능 키워드 */}
+      <section className="py-20 relative bg-gradient-to-b from-yellow-50 to-white">
+        <div className="container mx-auto px-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            className="max-w-5xl mx-auto"
+          >
+            <div className="text-center mb-12">
+              <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-100 border border-yellow-200 text-sm font-bold text-yellow-700 mb-4">
+                <Crown className="w-4 h-4" />
+                Pro 전용 킬러 기능
+              </span>
+              <h2 className="text-4xl md:text-5xl font-black mb-4">
+                <span className="text-yellow-600">1위 가능 키워드</span>를 매일 받아보세요
+              </h2>
+              <p className="text-gray-600 text-lg max-w-2xl mx-auto">
+                내 블로그 레벨로 지금 당장 1위가 가능한 키워드를 AI가 찾아드립니다
+              </p>
+            </div>
+
+            {/* 데모 카드 */}
+            <div className="grid md:grid-cols-3 gap-6 mb-10">
+              {[
+                { keyword: '홈트레이닝 루틴', volume: 8400, probability: 94, reason: '현재 1위 Lv.3 → 내 레벨 Lv.5' },
+                { keyword: '자취 요리 레시피', volume: 12300, probability: 87, reason: '경쟁 블로그 3개월 미활동' },
+                { keyword: '노트북 추천 2024', volume: 18500, probability: 78, reason: '상위권 평균보다 높은 D.I.A.' }
+              ].map((item, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.1 }}
+                  className="p-6 bg-white rounded-2xl border-2 border-yellow-200 shadow-xl shadow-yellow-100/50"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white ${
+                      index === 0 ? 'bg-gradient-to-r from-yellow-400 to-amber-500' :
+                      index === 1 ? 'bg-gradient-to-r from-gray-300 to-gray-400' :
+                      'bg-gradient-to-r from-orange-300 to-orange-400'
+                    }`}>
+                      {index + 1}
+                    </div>
+                    <div className={`text-2xl font-bold ${
+                      item.probability >= 90 ? 'text-green-600' : item.probability >= 80 ? 'text-blue-600' : 'text-yellow-600'
+                    }`}>
+                      {item.probability}%
+                    </div>
+                  </div>
+                  <div className="font-bold text-lg text-gray-900 mb-2">{item.keyword}</div>
+                  <div className="text-sm text-gray-500 mb-3">월 {item.volume.toLocaleString()}회 검색</div>
+                  <div className="text-xs text-green-600 bg-green-50 rounded-lg p-2">
+                    ✓ {item.reason}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* 성과 지표 */}
+            <div className="bg-gradient-to-r from-yellow-400 to-amber-500 rounded-2xl p-6 text-white text-center mb-8">
+              <div className="flex flex-wrap items-center justify-center gap-8">
+                <div>
+                  <div className="text-3xl font-bold">82%</div>
+                  <div className="text-sm opacity-90">Pro 사용자가 30일 내 상위 노출</div>
+                </div>
+                <div className="hidden md:block w-px h-12 bg-white/30" />
+                <div>
+                  <div className="text-3xl font-bold">5개/일</div>
+                  <div className="text-sm opacity-90">매일 새로운 1위 가능 키워드</div>
+                </div>
+                <div className="hidden md:block w-px h-12 bg-white/30" />
+                <div>
+                  <div className="text-3xl font-bold">골든타임</div>
+                  <div className="text-sm opacity-90">최적 발행 시간까지 안내</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-center">
+              <Link
+                href="/pricing"
+                className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-yellow-400 to-amber-500 text-white font-bold text-lg rounded-2xl hover:shadow-xl transition-all"
+              >
+                <Crown className="w-5 h-5" />
+                Pro 7일 무료로 체험하기
+                <ArrowRight className="w-5 h-5" />
+              </Link>
+              <p className="text-sm text-gray-500 mt-3">7일 내 해지 시 0원 · 클릭 한 번으로 해지</p>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* P1: 사용자 후기 (Testimonials) */}
+      <section className="py-20 relative bg-gray-50">
+        <div className="container mx-auto px-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            className="text-center mb-12"
+          >
+            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 border border-blue-100 text-sm font-medium text-[#0064FF] mb-4">
+              <Heart className="w-4 h-4" />
+              REVIEWS
+            </span>
+            <h2 className="text-4xl md:text-5xl font-black mb-4 text-gray-900">
+              블로거들의 생생한 후기
+            </h2>
+          </motion.div>
+
+          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+            {[
+              {
+                name: '맛집탐방러',
+                level: 'Lv.7 → Lv.9',
+                period: '3개월 사용',
+                content: '"1위 가능 키워드 기능이 진짜 신세계예요. 추천받은 키워드로 글 쓰니까 바로 상위 노출되더라고요!"',
+                highlight: '일 방문자 300 → 2,400'
+              },
+              {
+                name: '육아맘 블로거',
+                level: 'Lv.4 → Lv.6',
+                period: '2개월 사용',
+                content: '"초보라서 어떤 키워드로 글을 써야 할지 몰랐는데, 블랭크가 딱 맞는 키워드를 알려줘서 자신감이 생겼어요."',
+                highlight: 'VIEW탭 첫 노출 성공'
+              },
+              {
+                name: 'IT리뷰어',
+                level: 'Lv.8 → Lv.10',
+                period: '6개월 사용',
+                content: '"경쟁도 분석이 정확해서 시간 낭비 없이 승산 있는 키워드만 공략할 수 있어요. 효율이 확 올랐습니다."',
+                highlight: '월 수익 3배 증가'
+              }
+            ].map((review, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: index * 0.1 }}
+                className="p-6 bg-white rounded-2xl border border-gray-200 shadow-lg"
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] flex items-center justify-center text-white font-bold">
+                    {review.name.charAt(0)}
+                  </div>
+                  <div>
+                    <div className="font-bold text-gray-900">{review.name}</div>
+                    <div className="text-xs text-gray-500">{review.level} · {review.period}</div>
+                  </div>
+                </div>
+                <p className="text-gray-600 text-sm mb-4 leading-relaxed">{review.content}</p>
+                <div className="px-3 py-2 bg-green-50 text-green-700 rounded-lg text-sm font-medium">
+                  {review.highlight}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* P1: 무료 vs Pro 비교 */}
+      <section className="py-20 relative">
+        <div className="container mx-auto px-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            className="max-w-4xl mx-auto"
+          >
+            <div className="text-center mb-12">
+              <h2 className="text-4xl md:text-5xl font-black mb-4 text-gray-900">
+                무료 vs <span className="text-[#0064FF]">Pro</span>
+              </h2>
+              <p className="text-gray-600">무료로 시작하고, 필요할 때 업그레이드하세요</p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* 무료 */}
+              <div className="p-6 bg-gray-50 rounded-2xl border border-gray-200">
+                <div className="text-center mb-6">
+                  <div className="text-2xl font-bold text-gray-900 mb-1">무료</div>
+                  <div className="text-4xl font-black text-gray-900">0원</div>
+                </div>
+                <ul className="space-y-3">
+                  {[
+                    '블로그 분석 2회/일',
+                    '키워드 검색 8회/일',
+                    'AI 도구 5회/일',
+                    '기본 분석 리포트'
+                  ].map((item, i) => (
+                    <li key={i} className="flex items-center gap-2 text-gray-600">
+                      <Check className="w-4 h-4 text-gray-400" />
+                      {item}
+                    </li>
+                  ))}
+                  {[
+                    '1위 가능 키워드 추천',
+                    '순위 추적 & 알림',
+                    '경쟁사 비교 분석',
+                    '엑셀 내보내기'
+                  ].map((item, i) => (
+                    <li key={i} className="flex items-center gap-2 text-gray-400">
+                      <X className="w-4 h-4" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/analyze"
+                  className="block w-full mt-6 py-3 text-center bg-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-300 transition-colors"
+                >
+                  무료로 시작
+                </Link>
+              </div>
+
+              {/* Pro */}
+              <div className="p-6 bg-gradient-to-br from-[#0064FF] to-[#3182F6] rounded-2xl text-white relative overflow-hidden">
+                <div className="absolute top-4 right-4 px-3 py-1 bg-white/20 rounded-full text-xs font-bold">
+                  추천
+                </div>
+                <div className="text-center mb-6">
+                  <div className="text-2xl font-bold mb-1">Pro</div>
+                  <div className="text-4xl font-black">19,900원<span className="text-lg font-normal">/월</span></div>
+                  <div className="text-sm opacity-80 mt-1">7일 무료 체험</div>
+                </div>
+                <ul className="space-y-3">
+                  {[
+                    '블로그 분석 무제한',
+                    '키워드 검색 200회/일',
+                    'AI 도구 무제한',
+                    '상세 분석 리포트',
+                    '1위 가능 키워드 5개/일',
+                    '순위 추적 & 알림',
+                    '경쟁사 10개 비교',
+                    '엑셀 내보내기'
+                  ].map((item, i) => (
+                    <li key={i} className="flex items-center gap-2">
+                      <Check className="w-4 h-4" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/pricing"
+                  className="block w-full mt-6 py-3 text-center bg-white text-[#0064FF] font-bold rounded-xl hover:bg-blue-50 transition-colors"
+                >
+                  7일 무료 체험 시작
+                </Link>
+                <p className="text-xs text-center mt-2 opacity-80">클릭 한 번으로 언제든 해지</p>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
       {/* Why Choose Us */}
       <section className="py-20 relative">
         <div className="container mx-auto px-4">
@@ -817,7 +1076,7 @@ export default function Home() {
                 className="group inline-flex items-center gap-3 px-10 py-5 bg-white text-[#0064FF] rounded-2xl font-bold text-lg hover:scale-105 transition-all shadow-2xl"
               >
                 <Crown className="w-6 h-6" />
-                Pro 7일 무료 체험
+                7일 무료 체험 시작
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Link>
               <Link
@@ -825,9 +1084,10 @@ export default function Home() {
                 className="group inline-flex items-center gap-3 px-10 py-5 bg-white/10 backdrop-blur-md border border-white/30 rounded-2xl font-bold text-lg hover:bg-white hover:text-[#0064FF] transition-all"
               >
                 <Sparkles className="w-5 h-5" />
-                무료로 시작하기
+                무료로 먼저 분석해보기
               </Link>
             </div>
+            <p className="text-sm text-white/70 mt-4">7일 내 해지 시 0원 · 클릭 한 번으로 해지</p>
           </motion.div>
         </div>
       </section>
@@ -874,13 +1134,16 @@ export default function Home() {
               ))}
             </div>
 
-            <Link
-              href="/pricing"
-              className="group inline-flex items-center gap-3 px-8 py-4 bg-[#0064FF] text-white rounded-2xl font-bold text-lg hover:shadow-lg hover:shadow-[#0064FF]/20 transition-all"
-            >
-              Pro 7일 무료 체험 시작
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </Link>
+            <div className="flex flex-col items-center">
+              <Link
+                href="/pricing"
+                className="group inline-flex items-center gap-3 px-8 py-4 bg-[#0064FF] text-white rounded-2xl font-bold text-lg hover:shadow-lg hover:shadow-[#0064FF]/20 transition-all"
+              >
+                7일 무료 체험 시작
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </Link>
+              <p className="text-xs text-gray-400 mt-3">클릭 한 번으로 언제든 해지 가능</p>
+            </div>
           </motion.div>
         </div>
       </section>
@@ -916,13 +1179,13 @@ export default function Home() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="px-2 py-0.5 text-[9px] font-bold bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white rounded-full">LIMITED</span>
+                      <span className="px-2 py-0.5 text-[9px] font-bold bg-green-500 text-white rounded-full">7일 무료</span>
                     </div>
-                    <div className="text-sm font-bold text-gray-900 truncate">Pro 플랜 7일 무료 체험</div>
-                    <div className="text-xs text-gray-500">모든 프리미엄 기능 무제한 이용</div>
+                    <div className="text-sm font-bold text-gray-900 truncate">1위 가능 키워드 매일 5개 추천</div>
+                    <div className="text-xs text-gray-500">클릭 한 번으로 해지 · 위약금 0원</div>
                   </div>
                   <div className="hidden sm:flex items-center gap-1 px-4 py-2 rounded-xl bg-[#0064FF] text-white text-xs font-bold flex-shrink-0">
-                    <span>시작</span>
+                    <span>체험</span>
                     <ChevronRight className="w-3 h-3" />
                   </div>
                 </div>

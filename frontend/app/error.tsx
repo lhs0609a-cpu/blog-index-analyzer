@@ -79,12 +79,12 @@ export default function Error({
         <p className="mt-8 text-sm text-white/40">
           문제가 계속되면{' '}
           <a
-            href="mailto:support@blank.com"
+            href="mailto:lhs0609c@naver.com"
             className="text-purple-400 hover:underline"
           >
-            고객센터
+            lhs0609c@naver.com
           </a>
-          로 문의해주세요.
+          으로 문의해주세요.
         </p>
       </div>
     </div>

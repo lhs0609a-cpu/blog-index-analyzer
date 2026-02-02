@@ -50,8 +50,8 @@ export default function NotFound() {
           <p className="text-sm text-white/40 mb-4">인기 페이지</p>
           <div className="flex flex-wrap gap-2 justify-center">
             {[
+              { href: '/analyze', label: '블로그 분석' },
               { href: '/keyword-search', label: '키워드 분석' },
-              { href: '/dashboard/learning', label: 'AI 학습' },
               { href: '/tools', label: '블로그 도구' },
               { href: '/pricing', label: '요금제' },
             ].map((link) => (
@@ -64,6 +64,19 @@ export default function NotFound() {
               </Link>
             ))}
           </div>
+        </div>
+
+        {/* P3: Pro 안내 */}
+        <div className="mt-8 p-4 bg-gradient-to-r from-purple-600/20 to-indigo-600/20 border border-purple-500/30 rounded-xl">
+          <p className="text-sm text-white/70 mb-2">
+            Pro 플랜으로 1위 가능 키워드를 매일 받아보세요
+          </p>
+          <Link
+            href="/pricing"
+            className="text-purple-400 hover:text-purple-300 text-sm font-medium"
+          >
+            7일 무료 체험 시작 →
+          </Link>
         </div>
       </div>
     </div>

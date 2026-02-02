@@ -1,11 +1,38 @@
 'use client'
 
 import Link from 'next/link'
-import { Building2, ArrowRight, Mic, Sparkles } from 'lucide-react'
+import { Building2, ArrowRight, Mic, Sparkles, Shield, Crown, Check } from 'lucide-react'
 
 export default function Footer() {
   return (
     <footer className="bg-gray-900 text-gray-300">
+      {/* P3: Pro CTA 배너 */}
+      <div className="bg-gradient-to-r from-[#0064FF] to-[#3182F6] py-4">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3 text-white">
+              <Crown className="w-5 h-5" />
+              <span className="font-medium">Pro 플랜으로 1위 가능 키워드를 매일 5개 받아보세요</span>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="hidden md:flex items-center gap-2 text-white/80 text-sm">
+                <Check className="w-4 h-4" />
+                <span>7일 무료 체험</span>
+                <span className="mx-2">·</span>
+                <Check className="w-4 h-4" />
+                <span>클릭 한 번 해지</span>
+              </div>
+              <Link
+                href="/pricing"
+                className="px-5 py-2 bg-white text-[#0064FF] font-bold rounded-lg hover:bg-blue-50 transition-colors text-sm"
+              >
+                무료 체험 시작
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Main Footer */}
       <div className="max-w-7xl mx-auto px-4 py-12">
         <div className="grid md:grid-cols-5 gap-8">
@@ -106,6 +133,18 @@ export default function Footer() {
                 </a>
               </li>
             </ul>
+            {/* P3: 응답 시간 안내 */}
+            <div className="mt-4 p-3 bg-gray-800 rounded-lg">
+              <div className="text-xs text-gray-400">
+                <div className="flex items-center gap-2 mb-1">
+                  <Shield className="w-3 h-3 text-green-400" />
+                  <span className="text-green-400 font-medium">평일 24시간 내 응답</span>
+                </div>
+                <div className="text-gray-500">
+                  구독 해지는 마이페이지에서<br/>클릭 한 번으로 즉시 가능
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -132,7 +171,7 @@ export default function Footer() {
       <div className="border-t border-gray-800">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex flex-col md:flex-row justify-between items-center gap-2 text-xs text-gray-500">
-            <p>© 2024{' '}
+            <p>© 2025{' '}
               <a href="https://www.brandplaton.com/" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:text-violet-300 transition-colors font-medium">
                 플라톤마케팅
               </a>

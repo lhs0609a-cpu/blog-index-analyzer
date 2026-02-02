@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Check, X, Sparkles, Zap, Crown, Building2, ArrowLeft, Loader2, AlertCircle, Shield } from 'lucide-react'
+import { Check, X, Sparkles, Zap, Crown, Building2, ArrowLeft, Loader2, AlertCircle, Shield, Trophy, TrendingUp, Clock, Target } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/stores/auth'
@@ -206,6 +206,102 @@ export default function PricingPage() {
           </div>
         </motion.div>
 
+        {/* Killer Feature: 1위 가능 키워드 미리보기 */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="mb-12 rounded-3xl overflow-hidden bg-gradient-to-br from-yellow-50 via-amber-50 to-orange-50 border-2 border-yellow-300 shadow-xl shadow-yellow-200/50"
+        >
+          <div className="p-6 md:p-8">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-r from-yellow-400 to-amber-500 flex items-center justify-center shadow-lg shadow-yellow-500/30">
+                  <Trophy className="w-7 h-7 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                    1위 가능 키워드 추천
+                    <span className="px-2 py-1 text-xs bg-red-500 text-white rounded-full animate-pulse">
+                      Pro 전용
+                    </span>
+                  </h2>
+                  <p className="text-gray-600">내 블로그 레벨로 지금 당장 1위 가능한 키워드를 찾아드립니다</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-full text-sm font-medium">
+                <TrendingUp className="w-4 h-4" />
+                Pro 사용자 82%가 30일 내 상위 노출
+              </div>
+            </div>
+
+            {/* 데모 키워드 카드 */}
+            <div className="grid md:grid-cols-3 gap-4 mb-6">
+              {[
+                { keyword: '홈트레이닝 루틴', volume: 8400, probability: 94, level: 'Lv.3', myLevel: 'Lv.5', goldenTime: '오후 8-10시' },
+                { keyword: '자취 요리 레시피', volume: 12300, probability: 87, level: 'Lv.4', myLevel: 'Lv.5', goldenTime: '저녁 6-8시' },
+                { keyword: '노트북 추천 2024', volume: 18500, probability: 78, level: 'Lv.5', myLevel: 'Lv.5', goldenTime: '오전 10-12시' }
+              ].map((item, index) => (
+                <div
+                  key={index}
+                  className="p-4 bg-white rounded-2xl border border-yellow-200 shadow-sm hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${
+                      index === 0
+                        ? 'bg-gradient-to-r from-yellow-400 to-amber-500 text-white'
+                        : index === 1
+                        ? 'bg-gradient-to-r from-gray-300 to-gray-400 text-white'
+                        : 'bg-gradient-to-r from-orange-300 to-orange-400 text-white'
+                    }`}>
+                      {index + 1}
+                    </div>
+                    <div className={`text-xl font-bold ${
+                      item.probability >= 90 ? 'text-green-600' : item.probability >= 80 ? 'text-blue-600' : 'text-yellow-600'
+                    }`}>
+                      {item.probability}%
+                    </div>
+                  </div>
+                  <div className="font-semibold text-gray-900 mb-1">{item.keyword}</div>
+                  <div className="flex items-center gap-2 text-xs text-gray-500 mb-3">
+                    <span>월 {item.volume.toLocaleString()}회</span>
+                    <span className="flex items-center gap-1 text-amber-600">
+                      <Clock className="w-3 h-3" />
+                      {item.goldenTime}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-500">현재 1위: {item.level}</span>
+                    <span className="text-blue-600 font-medium">내 레벨: {item.myLevel}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* CTA */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <div className="text-center sm:text-left">
+                <p className="text-sm text-gray-600">
+                  <strong className="text-gray-900">Pro 플랜</strong>으로 매일 5개의 1위 가능 키워드를 받아보세요
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  블로그 분석 후 맞춤형 키워드 추천 - 골든타임까지 알려드립니다
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  const proCard = document.querySelector('[data-plan="pro"]')
+                  proCard?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                }}
+                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-yellow-400 to-amber-500 text-white font-semibold rounded-xl hover:shadow-lg transition-all whitespace-nowrap"
+              >
+                <Target className="w-4 h-4" />
+                Pro 플랜 시작하기
+              </button>
+            </div>
+          </div>
+        </motion.div>
+
         {/* Plans Grid */}
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
           {plans.map((plan, index) => {
@@ -219,6 +315,7 @@ export default function PricingPage() {
             return (
               <motion.div
                 key={plan.type}
+                data-plan={plan.type}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
@@ -364,150 +461,127 @@ export default function PricingPage() {
           })}
         </div>
 
-        {/* P0-3: 실제 사용자 케이스 스터디 */}
+        {/* Pro 플랜 핵심 기능 */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.45 }}
           className="rounded-3xl p-8 bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200/50 shadow-xl mb-12"
         >
-          <h2 className="text-2xl font-bold text-center mb-2">💰 실제 성공 사례</h2>
-          <p className="text-center text-gray-600 mb-8">Pro 플랜 사용자들의 실제 성장 기록입니다</p>
+          <h2 className="text-2xl font-bold text-center mb-2">🎯 Pro 플랜으로 할 수 있는 것</h2>
+          <p className="text-center text-gray-600 mb-8">데이터 기반 블로그 성장 전략을 세워보세요</p>
 
-          {/* 케이스 스터디 카드 */}
+          {/* 핵심 기능 카드 */}
           <div className="grid md:grid-cols-3 gap-6 mb-8">
-            {/* 케이스 1: 육아 블로거 */}
+            {/* 기능 1: 키워드 경쟁도 분석 */}
             <div className="bg-white rounded-2xl p-6 border border-emerald-100 shadow-sm">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-full bg-pink-100 flex items-center justify-center text-2xl">👶</div>
+                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-2xl">🔍</div>
                 <div>
-                  <div className="font-bold text-gray-900">육아맘 J님</div>
-                  <div className="text-xs text-gray-500">육아 블로그 · 3개월 사용</div>
+                  <div className="font-bold text-gray-900">경쟁도 분석</div>
+                  <div className="text-xs text-gray-500">일 200회 검색</div>
                 </div>
               </div>
               <div className="space-y-3 mb-4">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">일 방문자</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-400 line-through text-sm">120명</span>
-                    <span className="text-green-600 font-bold">→ 890명</span>
-                  </div>
+                  <span className="text-sm text-gray-600">분석 지표</span>
+                  <span className="text-[#0064FF] font-bold">42개</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">VIEW탭 상위 노출</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-400 line-through text-sm">0회</span>
-                    <span className="text-green-600 font-bold">→ 12회/월</span>
-                  </div>
+                  <span className="text-sm text-gray-600">검색 결과</span>
+                  <span className="text-[#0064FF] font-bold">50개</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">블로그 레벨</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-400 line-through text-sm">Lv.3</span>
-                    <span className="text-green-600 font-bold">→ Lv.7</span>
-                  </div>
+                  <span className="text-sm text-gray-600">히스토리 저장</span>
+                  <span className="text-[#0064FF] font-bold">90일</span>
                 </div>
               </div>
-              <div className="bg-emerald-50 rounded-xl p-3 text-sm text-emerald-700">
-                "경쟁 가능한 키워드를 알려줘서<br/>처음으로 VIEW탭 1위를 찍었어요!"
+              <div className="bg-blue-50 rounded-xl p-3 text-sm text-[#0064FF]">
+                내 레벨로 경쟁 가능한 키워드를<br/>데이터로 확인하세요
               </div>
             </div>
 
-            {/* 케이스 2: 맛집 블로거 */}
+            {/* 기능 2: 순위 추적 */}
             <div className="bg-white rounded-2xl p-6 border border-emerald-100 shadow-sm">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center text-2xl">🍽️</div>
+                <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center text-2xl">📊</div>
                 <div>
-                  <div className="font-bold text-gray-900">맛집헌터 K님</div>
-                  <div className="text-xs text-gray-500">맛집 블로그 · 6개월 사용</div>
+                  <div className="font-bold text-gray-900">순위 추적</div>
+                  <div className="text-xs text-gray-500">실시간 모니터링</div>
                 </div>
               </div>
               <div className="space-y-3 mb-4">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">일 방문자</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-400 line-through text-sm">450명</span>
-                    <span className="text-green-600 font-bold">→ 2,340명</span>
-                  </div>
+                  <span className="text-sm text-gray-600">블로그탭 순위</span>
+                  <span className="text-orange-600 font-bold">실시간</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">체험단 선정</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-400 line-through text-sm">1회/월</span>
-                    <span className="text-green-600 font-bold">→ 8회/월</span>
-                  </div>
+                  <span className="text-sm text-gray-600">VIEW탭 순위</span>
+                  <span className="text-orange-600 font-bold">실시간</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">월 부수입</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-400 line-through text-sm">5만원</span>
-                    <span className="text-green-600 font-bold">→ 45만원</span>
-                  </div>
+                  <span className="text-sm text-gray-600">순위 알림</span>
+                  <Check className="w-5 h-5 text-green-500" />
                 </div>
               </div>
-              <div className="bg-emerald-50 rounded-xl p-3 text-sm text-emerald-700">
-                "블루오션 키워드 덕분에 체험단<br/>선정률이 확 올랐어요!"
+              <div className="bg-orange-50 rounded-xl p-3 text-sm text-orange-700">
+                내 포스트의 검색 순위 변화를<br/>실시간으로 추적하세요
               </div>
             </div>
 
-            {/* 케이스 3: IT 블로거 */}
+            {/* 기능 3: 경쟁사 비교 */}
             <div className="bg-white rounded-2xl p-6 border border-emerald-100 shadow-sm">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-2xl">💻</div>
+                <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center text-2xl">⚔️</div>
                 <div>
-                  <div className="font-bold text-gray-900">테크리뷰어 P님</div>
-                  <div className="text-xs text-gray-500">IT 블로그 · 4개월 사용</div>
+                  <div className="font-bold text-gray-900">경쟁사 비교</div>
+                  <div className="text-xs text-gray-500">최대 10개 블로그</div>
                 </div>
               </div>
               <div className="space-y-3 mb-4">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">일 방문자</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-400 line-through text-sm">280명</span>
-                    <span className="text-green-600 font-bold">→ 1,560명</span>
-                  </div>
+                  <span className="text-sm text-gray-600">비교 가능</span>
+                  <span className="text-purple-600 font-bold">10개</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">애드포스트 수익</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-400 line-through text-sm">3만원</span>
-                    <span className="text-green-600 font-bold">→ 18만원/월</span>
-                  </div>
+                  <span className="text-sm text-gray-600">엑셀 내보내기</span>
+                  <Check className="w-5 h-5 text-green-500" />
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">인플루언서 선정</span>
-                  <div className="text-green-600 font-bold">✓ 달성</div>
+                  <span className="text-sm text-gray-600">팀 멤버</span>
+                  <span className="text-purple-600 font-bold">3명</span>
                 </div>
               </div>
-              <div className="bg-emerald-50 rounded-xl p-3 text-sm text-emerald-700">
-                "42개 지표 분석으로 부족한 점을<br/>정확히 알고 개선했어요!"
+              <div className="bg-purple-50 rounded-xl p-3 text-sm text-purple-700">
+                상위 블로거들과 내 블로그를<br/>직접 비교 분석하세요
               </div>
             </div>
           </div>
 
-          {/* ROI 계산기 */}
+          {/* 기능 요약 */}
           <div className="bg-white rounded-2xl p-6 border border-emerald-200">
-            <h3 className="font-bold text-center mb-4">💡 Pro 플랜 ROI 계산</h3>
+            <h3 className="font-bold text-center mb-4">💡 Pro 플랜 핵심 가치</h3>
             <div className="grid md:grid-cols-4 gap-4 text-center">
               <div className="p-4 bg-gray-50 rounded-xl">
-                <div className="text-2xl font-bold text-gray-900">19,900원</div>
-                <div className="text-xs text-gray-500">월 구독료</div>
+                <div className="text-2xl font-bold text-gray-900">42개</div>
+                <div className="text-xs text-gray-500">분석 지표</div>
               </div>
               <div className="p-4 bg-blue-50 rounded-xl">
-                <div className="text-2xl font-bold text-blue-600">+500명</div>
-                <div className="text-xs text-gray-500">평균 일 방문자 증가</div>
+                <div className="text-2xl font-bold text-blue-600">200회/일</div>
+                <div className="text-xs text-gray-500">키워드 검색</div>
               </div>
               <div className="p-4 bg-green-50 rounded-xl">
-                <div className="text-2xl font-bold text-green-600">+15만원</div>
-                <div className="text-xs text-gray-500">예상 월 추가 수익</div>
+                <div className="text-2xl font-bold text-green-600">실시간</div>
+                <div className="text-xs text-gray-500">순위 알림</div>
               </div>
               <div className="p-4 bg-purple-50 rounded-xl">
-                <div className="text-2xl font-bold text-purple-600">7.5배</div>
-                <div className="text-xs text-gray-500">투자 대비 수익률</div>
+                <div className="text-2xl font-bold text-purple-600">90일</div>
+                <div className="text-xs text-gray-500">히스토리 저장</div>
               </div>
             </div>
             <p className="text-xs text-gray-500 text-center mt-4">
-              * 애드포스트 + 체험단 평균 기준 추정치입니다. 실제 수익은 개인차가 있습니다.
+              * 블로그 성장은 콘텐츠 품질, 포스팅 빈도, 키워드 전략 등 다양한 요소에 따라 달라집니다.<br/>
+              블랭크는 데이터 기반 인사이트를 제공하며, 특정 수익이나 방문자 수를 보장하지 않습니다.
             </p>
           </div>
         </motion.div>
@@ -678,10 +752,10 @@ export default function PricingPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
               </div>
-              <h3 className="font-bold mb-2">자동 갱신</h3>
+              <h3 className="font-bold mb-2">한 클릭 해지</h3>
               <p className="text-sm text-gray-600">
-                정기결제는 만료일에 자동 갱신됩니다.<br/>
-                갱신 1일 전까지 해지 가능합니다.
+                마이페이지에서 클릭 한 번으로 해지<br/>
+                <span className="text-green-600 font-medium">전화 상담 없이 즉시 처리</span>
               </p>
             </div>
             <div className="text-center p-4">
@@ -692,7 +766,9 @@ export default function PricingPage() {
               </div>
               <h3 className="font-bold mb-2">환불 정책</h3>
               <p className="text-sm text-gray-600">
-                7일 이내 전액 환불 가능<br/>
+                7일 이내 전액 환불<br/>
+                이후 남은 기간 일할 계산 환불<br/>
+                <span className="text-xs text-gray-500">(예: 15일 사용 시 50% 환불)</span><br/>
                 <Link href="/refund-policy" className="text-[#0064FF] hover:underline transition-colors">
                   자세한 환불정책 보기 →
                 </Link>
@@ -718,14 +794,18 @@ export default function PricingPage() {
               <h3 className="font-bold mb-2">정기결제는 어떻게 작동하나요?</h3>
               <p className="text-gray-600 text-sm">
                 월간 결제 시 매월 같은 날짜에, 연간 결제 시 1년 후 같은 날짜에
-                등록된 결제수단으로 자동 결제됩니다. 해지는 언제든 가능합니다.
+                등록된 결제수단으로 자동 결제됩니다.<br/>
+                <strong className="text-green-600">마이페이지에서 클릭 한 번으로 즉시 해지</strong> 가능합니다.
               </p>
             </div>
             <div className="rounded-2xl p-6 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-lg shadow-blue-100/50">
               <h3 className="font-bold mb-2">환불 정책은 어떻게 되나요?</h3>
               <p className="text-gray-600 text-sm">
-                결제 후 7일 이내 전액 환불이 가능합니다.
-                7일 이후에는 남은 기간에 대해 일할 계산하여 환불해드립니다.{' '}
+                <strong>7일 이내:</strong> 서비스 미사용 시 전액 환불<br/>
+                <strong>7일 이후:</strong> 남은 기간 일할 계산 환불<br/>
+                <span className="text-xs text-gray-500">
+                  (예: Pro 월간 19,900원, 15일 사용 후 해지 → 9,950원 환불)
+                </span><br/>
                 <Link href="/refund-policy" className="text-[#0064FF] hover:underline transition-colors">
                   자세히 보기
                 </Link>
@@ -793,23 +873,24 @@ export default function PricingPage() {
                 </p>
               </div>
 
-              {/* 체험 안내 */}
-              <div className="bg-blue-50 rounded-2xl p-4 mb-6">
+              {/* 체험 안내 - 신뢰도 강화 */}
+              <div className="bg-green-50 rounded-2xl p-4 mb-6 border border-green-200">
                 <div className="flex items-start gap-3 mb-3">
-                  <Shield className="w-5 h-5 text-[#0064FF] flex-shrink-0 mt-0.5" />
+                  <Shield className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
                   <div className="text-sm">
-                    <p className="font-semibold text-gray-900 mb-1">안심하고 체험하세요</p>
-                    <p className="text-gray-600">7일 이내 언제든 해지 가능</p>
+                    <p className="font-semibold text-green-800 mb-1">한 클릭으로 언제든 해지</p>
+                    <p className="text-green-700">
+                      마이페이지에서 <strong>클릭 한 번</strong>으로 바로 해지됩니다.<br/>
+                      전화나 상담 없이 즉시 처리!
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <Check className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
                   <div className="text-sm">
-                    <p className="font-semibold text-gray-900 mb-1">자동 결제 안내</p>
-                    <p className="text-gray-600">
-                      체험 종료 후 <strong className="text-[#0064FF]">
-                        월 {PLAN_INFO[selectedTrialPlan].price.toLocaleString()}원
-                      </strong>이 자동 결제됩니다
+                    <p className="font-semibold text-green-800 mb-1">7일 무료, 결제는 그 이후</p>
+                    <p className="text-green-700">
+                      체험 기간 내 해지하면 <strong>0원</strong> · 체험 종료 후 월 {PLAN_INFO[selectedTrialPlan].price.toLocaleString()}원
                     </p>
                   </div>
                 </div>

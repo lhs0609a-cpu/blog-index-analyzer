@@ -284,10 +284,10 @@ export default function GlobalNav() {
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors flex items-center gap-1"
+                      className="px-3 py-2 text-sm font-semibold text-[#0064FF] hover:text-[#0050CC] transition-colors flex items-center gap-1"
                     >
-                      <CreditCard className="w-4 h-4" />
-                      요금제
+                      <Sparkles className="w-4 h-4" />
+                      7일 무료 체험
                     </motion.button>
                   </Link>
                   <Link href="/login">

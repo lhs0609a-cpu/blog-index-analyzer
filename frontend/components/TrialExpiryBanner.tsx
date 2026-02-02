@@ -96,7 +96,7 @@ export default function TrialExpiryBanner({ dismissible = true, compact = false 
               href="/pricing"
               className="underline hover:no-underline font-bold ml-2"
             >
-              지금 구독하고 20% 할인받기
+              Pro로 계속하기 (클릭 한 번 해지)
             </Link>
           </div>
           {dismissible && (
@@ -181,15 +181,18 @@ export default function TrialExpiryBanner({ dismissible = true, compact = false 
           </div>
 
           {/* CTA 버튼 */}
-          <Link href="/pricing">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold rounded-xl shadow-lg shadow-amber-500/25 hover:shadow-xl hover:shadow-amber-500/30 transition-all whitespace-nowrap"
-            >
-              구독 플랜 보기
-            </motion.button>
-          </Link>
+          <div className="text-center">
+            <Link href="/pricing">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold rounded-xl shadow-lg shadow-amber-500/25 hover:shadow-xl hover:shadow-amber-500/30 transition-all whitespace-nowrap"
+              >
+                Pro로 계속하기
+              </motion.button>
+            </Link>
+            <p className="text-xs text-amber-600 mt-2">클릭 한 번으로 해지 가능</p>
+          </div>
         </div>
 
         {/* 카운트다운 바 */}

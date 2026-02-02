@@ -215,7 +215,7 @@ export default function UpgradeModal({ isOpen, onClose, feature, currentUsage, m
                   className="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-xl hover:shadow-lg shadow-lg shadow-blue-500/25 transition-all flex items-center justify-center gap-2"
                 >
                   <Crown className="w-5 h-5" />
-                  7일 무료로 Pro 체험하기
+                  7일 무료 체험 시작
                 </motion.button>
               </Link>
 
@@ -227,9 +227,14 @@ export default function UpgradeModal({ isOpen, onClose, feature, currentUsage, m
               </button>
             </div>
 
-            {/* 하단 안내 */}
-            <div className="mt-4 text-center text-xs text-gray-400">
-              7일 이내 언제든 해지 가능 · 자동 결제 전 알림
+            {/* 하단 안내 - 신뢰도 강화 */}
+            <div className="mt-4 p-3 bg-green-50 rounded-xl text-center">
+              <div className="text-sm text-green-700 font-medium">
+                ✓ 클릭 한 번으로 언제든 해지
+              </div>
+              <div className="text-xs text-green-600 mt-1">
+                전화 상담 없이 마이페이지에서 즉시 해지 · 위약금 0원
+              </div>
             </div>
           </motion.div>
         </motion.div>
