@@ -56,27 +56,27 @@ export default function Footer() {
             <h3 className="text-white font-semibold mb-4">서비스</h3>
             <ul className="space-y-2 text-sm">
               <li>
-                <Link href="/analyze" className="hover:text-violet-400 transition-colors">
+                <Link href="/analyze" className="block py-1 hover:text-violet-400 transition-colors cursor-pointer">
                   블로그 분석
                 </Link>
               </li>
               <li>
-                <Link href="/keyword-search" className="hover:text-violet-400 transition-colors">
+                <Link href="/keyword-search" className="block py-1 hover:text-violet-400 transition-colors cursor-pointer">
                   키워드 검색
                 </Link>
               </li>
               <li>
-                <Link href="/dashboard" className="hover:text-violet-400 transition-colors">
+                <Link href="/dashboard" className="block py-1 hover:text-violet-400 transition-colors cursor-pointer">
                   대시보드
                 </Link>
               </li>
               <li>
-                <Link href="/tools" className="hover:text-violet-400 transition-colors">
+                <Link href="/tools" className="block py-1 hover:text-violet-400 transition-colors cursor-pointer">
                   프리미엄 도구
                 </Link>
               </li>
               <li>
-                <Link href="/pricing" className="hover:text-violet-400 transition-colors">
+                <Link href="/pricing" className="block py-1 hover:text-violet-400 transition-colors cursor-pointer">
                   요금제
                 </Link>
               </li>
@@ -88,19 +88,19 @@ export default function Footer() {
             <h3 className="text-white font-semibold mb-4">플라톤마케팅</h3>
             <ul className="space-y-2 text-sm">
               <li>
-                <a href="https://www.brandplaton.com/" target="_blank" rel="noopener noreferrer" className="hover:text-violet-400 transition-colors flex items-center gap-2">
+                <a href="https://www.brandplaton.com/" target="_blank" rel="noopener noreferrer" className="py-1 hover:text-violet-400 transition-colors flex items-center gap-2 cursor-pointer">
                   <Building2 className="w-4 h-4" />
                   병원마케팅 전문
                 </a>
               </li>
               <li>
-                <a href="https://www.brandplaton.com/" target="_blank" rel="noopener noreferrer" className="hover:text-violet-400 transition-colors flex items-center gap-2">
+                <a href="https://www.brandplaton.com/" target="_blank" rel="noopener noreferrer" className="py-1 hover:text-violet-400 transition-colors flex items-center gap-2 cursor-pointer">
                   <ArrowRight className="w-4 h-4" />
                   무료 상담 신청
                 </a>
               </li>
               <li>
-                <a href="https://doctor-voice-pro-ghwi.vercel.app/" target="_blank" rel="noopener noreferrer" className="hover:text-cyan-400 transition-colors flex items-center gap-2">
+                <a href="https://doctor-voice-pro-ghwi.vercel.app/" target="_blank" rel="noopener noreferrer" className="py-1 hover:text-cyan-400 transition-colors flex items-center gap-2 cursor-pointer">
                   <Mic className="w-4 h-4" />
                   AI 자동 글쓰기
                 </a>
@@ -113,22 +113,22 @@ export default function Footer() {
             <h3 className="text-white font-semibold mb-4">고객지원</h3>
             <ul className="space-y-2 text-sm">
               <li>
-                <Link href="/terms" className="hover:text-violet-400 transition-colors">
+                <Link href="/terms" className="block py-1 hover:text-violet-400 transition-colors cursor-pointer">
                   이용약관
                 </Link>
               </li>
               <li>
-                <Link href="/privacy" className="hover:text-violet-400 transition-colors">
+                <Link href="/privacy" className="block py-1 hover:text-violet-400 transition-colors cursor-pointer">
                   개인정보처리방침
                 </Link>
               </li>
               <li>
-                <Link href="/refund-policy" className="hover:text-violet-400 transition-colors">
+                <Link href="/refund-policy" className="block py-1 hover:text-violet-400 transition-colors cursor-pointer">
                   환불정책
                 </Link>
               </li>
               <li>
-                <a href="mailto:lhs0609c@naver.com" className="hover:text-violet-400 transition-colors">
+                <a href="mailto:lhs0609c@naver.com" className="block py-1 hover:text-violet-400 transition-colors cursor-pointer">
                   문의하기
                 </a>
               </li>
@@ -178,9 +178,9 @@ export default function Footer() {
               . All rights reserved.
             </p>
             <div className="flex gap-4">
-              <Link href="/terms" className="hover:text-gray-300">이용약관</Link>
-              <Link href="/privacy" className="hover:text-gray-300">개인정보처리방침</Link>
-              <a href="mailto:lhs0609c@naver.com" className="hover:text-gray-300">lhs0609c@naver.com</a>
+              <Link href="/terms" className="hover:text-gray-300 cursor-pointer">이용약관</Link>
+              <Link href="/privacy" className="hover:text-gray-300 cursor-pointer">개인정보처리방침</Link>
+              <a href="mailto:lhs0609c@naver.com" className="hover:text-gray-300 cursor-pointer">lhs0609c@naver.com</a>
             </div>
           </div>
         </div>

@@ -94,45 +94,70 @@ class BlogPercentileDB:
             conn.close()
 
     def _seed_initial_data(self):
-        """초기 데이터 시드 - 현실적인 네이버 블로그 점수 분포"""
+        """초기 데이터 시드 - 현실적인 네이버 블로그 점수 분포
+
+        실제 블로그 분석 결과 기준:
+        - 일반/신규 블로그: 25-45점
+        - 활성 블로그: 45-55점
+        - 준최적화 블로그: 55-65점 (Lv.4-6)
+        - 최적화 블로그: 65-75점 (Lv.7-9)
+        - 인플루언서급: 75-85점 (Lv.10-12)
+        - 파워블로거: 85점 이상 (Lv.13+)
+        """
         conn = self._get_connection()
         try:
             cursor = conn.cursor()
 
-            # 이미 시드 데이터가 있는지 확인
-            cursor.execute("SELECT COUNT(*) as cnt FROM blog_scores WHERE is_seed = 1")
-            row = cursor.fetchone()
-            if row and row['cnt'] > 1000:
-                return  # 이미 충분한 시드 데이터가 있음
+            # 시드 데이터 버전 확인 (v2로 업그레이드 필요 시 리셋)
+            # 버전: 1.0 = 초기, 2.0 = 현실적 분포 (상향 조정)
+            SEED_VERSION = 2.0
 
-            logger.info("Seeding initial blog score distribution...")
+            cursor.execute("""
+                SELECT stat_value FROM percentile_stats WHERE stat_key = 'seed_version'
+            """)
+            version_row = cursor.fetchone()
+            current_version = version_row['stat_value'] if version_row else None
 
-            # 네이버 블로그 점수 분포 시뮬레이션
-            # 실제 네이버 블로그 분포를 반영 (대부분 낮은 점수, 소수만 높은 점수)
+            if current_version and current_version >= SEED_VERSION:
+                # 이미 최신 버전 시드 데이터가 있음
+                cursor.execute("SELECT COUNT(*) as cnt FROM blog_scores WHERE is_seed = 1")
+                row = cursor.fetchone()
+                if row and row['cnt'] > 1000:
+                    return
+
+            # 버전이 낮거나 없으면 기존 시드 삭제 후 재생성
+            if current_version and current_version < SEED_VERSION:
+                logger.info(f"Upgrading seed data from v{current_version} to v{SEED_VERSION}")
+                cursor.execute("DELETE FROM blog_scores WHERE is_seed = 1")
+                cursor.execute("DELETE FROM score_distribution")
+                conn.commit()
+
+            logger.info(f"Seeding initial blog score distribution ({SEED_VERSION})...")
+
+            # 네이버 블로그 점수 분포 시뮬레이션 (상향 조정)
+            # 실제 분석에서 45-55점이 일반적으로 나오므로 이를 중앙값으로 설정
             #
             # 점수 분포 (100,000개 블로그 기준):
-            # - 0-10점: 5% (신규/방치 블로그)
-            # - 10-20점: 15% (초보 블로그)
-            # - 20-30점: 25% (입문 블로그)
-            # - 30-40점: 25% (성장 블로그)
-            # - 40-50점: 15% (활성 블로그)
-            # - 50-60점: 8% (우수 블로그)
-            # - 60-70점: 4% (상위 블로그)
-            # - 70-80점: 2% (엘리트 블로그)
-            # - 80-90점: 0.8% (최상위 블로그)
-            # - 90-100점: 0.2% (레전드 블로그)
+            # - 10-25점: 3% (방치/신규 블로그)
+            # - 25-35점: 10% (초보 블로그)
+            # - 35-45점: 20% (입문 블로그)
+            # - 45-55점: 30% (일반 활성 블로그) ← 중앙값
+            # - 55-65점: 20% (준최적화 블로그)
+            # - 65-75점: 10% (최적화 블로그)
+            # - 75-85점: 5% (인플루언서급)
+            # - 85-95점: 1.5% (파워블로거)
+            # - 95-100점: 0.5% (최상위)
 
             distribution = [
-                (0, 10, 5000),      # 5%
-                (10, 20, 15000),    # 15%
-                (20, 30, 25000),    # 25%
-                (30, 40, 25000),    # 25%
-                (40, 50, 15000),    # 15%
-                (50, 60, 8000),     # 8%
-                (60, 70, 4000),     # 4%
-                (70, 80, 2000),     # 2%
-                (80, 90, 800),      # 0.8%
-                (90, 100, 200),     # 0.2%
+                (10, 25, 3000),     # 3% - 방치/신규
+                (25, 35, 10000),    # 10% - 초보
+                (35, 45, 20000),    # 20% - 입문
+                (45, 55, 30000),    # 30% - 일반 활성 (중앙)
+                (55, 65, 20000),    # 20% - 준최적화
+                (65, 75, 10000),    # 10% - 최적화
+                (75, 85, 5000),     # 5% - 인플루언서급
+                (85, 95, 1500),     # 1.5% - 파워블로거
+                (95, 100, 500),     # 0.5% - 최상위
             ]
 
             seed_data = []
@@ -157,8 +182,14 @@ class BlogPercentileDB:
             # 점수 분포 캐시 업데이트
             self._update_distribution_cache(cursor)
 
+            # 시드 버전 저장
+            cursor.execute("""
+                INSERT OR REPLACE INTO percentile_stats (stat_key, stat_value, updated_at)
+                VALUES ('seed_version', ?, CURRENT_TIMESTAMP)
+            """, (SEED_VERSION,))
+
             conn.commit()
-            logger.info(f"Seeded {len(seed_data)} blog scores")
+            logger.info(f"Seeded {len(seed_data)} blog scores ({SEED_VERSION})")
         except Exception as e:
             logger.error(f"Error seeding data: {e}")
             conn.rollback()
@@ -298,51 +329,57 @@ class BlogPercentileDB:
             conn.close()
 
     def get_level_from_percentile(self, percentile: float) -> Tuple[int, str]:
-        """백분위 기반 레벨 계산
+        """백분위 기반 레벨 계산 (v2 - 현실적 기준)
 
-        상위 0.1% = Level 15 (마스터)
+        네이버 블로그 지수 기준 (실제 분포 반영):
+        - 준최적화 블로그 (55-65점) = Lv.4-6
+        - 최적화 블로그 (65-75점) = Lv.7-9
+        - 인플루언서급 (75-85점) = Lv.10-12
+        - 파워블로거 (85점+) = Lv.13-15
+
+        상위 0.1% = Level 15 (마스터) - 최상위 파워블로거
         상위 0.5% = Level 14 (그랜드마스터)
-        상위 1% = Level 13 (챌린저)
-        상위 3% = Level 12 (다이아몬드)
+        상위 1.5% = Level 13 (챌린저)
+        상위 3% = Level 12 (다이아몬드) - 인플루언서
         상위 5% = Level 11 (플래티넘)
-        상위 10% = Level 10 (골드)
-        상위 20% = Level 9 (실버)
-        상위 30% = Level 8 (브론즈)
-        상위 40% = Level 7 (아이언)
-        상위 50% = Level 6 (성장기)
-        상위 60% = Level 5 (입문)
-        상위 70% = Level 4 (초보)
+        상위 8% = Level 10 (골드)
+        상위 12% = Level 9 (실버) - 최적화 블로그
+        상위 17% = Level 8 (브론즈)
+        상위 25% = Level 7 (아이언)
+        상위 37% = Level 6 (성장기) - 준최적화 블로그
+        상위 50% = Level 5 (입문)
+        상위 63% = Level 4 (초보) - 일반 활성 블로그
         상위 80% = Level 3 (뉴비)
-        상위 90% = Level 2 (스타터)
-        하위 10% = Level 1 (시작)
+        상위 95% = Level 2 (스타터)
+        하위 5% = Level 1 (시작)
         """
         if percentile >= 99.9:
             return 15, "마스터"
         elif percentile >= 99.5:
             return 14, "그랜드마스터"
-        elif percentile >= 99.0:
+        elif percentile >= 98.5:
             return 13, "챌린저"
         elif percentile >= 97.0:
             return 12, "다이아몬드"
         elif percentile >= 95.0:
             return 11, "플래티넘"
-        elif percentile >= 90.0:
+        elif percentile >= 92.0:
             return 10, "골드"
-        elif percentile >= 80.0:
+        elif percentile >= 88.0:
             return 9, "실버"
-        elif percentile >= 70.0:
+        elif percentile >= 83.0:
             return 8, "브론즈"
-        elif percentile >= 60.0:
+        elif percentile >= 75.0:
             return 7, "아이언"
-        elif percentile >= 50.0:
+        elif percentile >= 63.0:
             return 6, "성장기"
-        elif percentile >= 40.0:
+        elif percentile >= 50.0:
             return 5, "입문"
-        elif percentile >= 30.0:
+        elif percentile >= 37.0:
             return 4, "초보"
         elif percentile >= 20.0:
             return 3, "뉴비"
-        elif percentile >= 10.0:
+        elif percentile >= 5.0:
             return 2, "스타터"
         else:
             return 1, "시작"
@@ -403,6 +440,34 @@ class BlogPercentileDB:
             self._update_distribution_cache(cursor)
             conn.commit()
             logger.info("Distribution cache refreshed")
+        finally:
+            conn.close()
+
+    def reset_seed_data(self):
+        """시드 데이터 리셋 - 새로운 분포로 재생성"""
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+
+            # 기존 시드 데이터 삭제
+            cursor.execute("DELETE FROM blog_scores WHERE is_seed = 1")
+            deleted_count = cursor.rowcount
+
+            # 분포 캐시 초기화
+            cursor.execute("DELETE FROM score_distribution")
+
+            conn.commit()
+            logger.info(f"Deleted {deleted_count} seed records")
+
+            # 새로운 시드 데이터 생성
+            self._seed_initial_data()
+
+            logger.info("Seed data reset completed with new distribution")
+            return {"deleted": deleted_count, "status": "success"}
+        except Exception as e:
+            logger.error(f"Error resetting seed data: {e}")
+            conn.rollback()
+            return {"error": str(e), "status": "failed"}
         finally:
             conn.close()
 

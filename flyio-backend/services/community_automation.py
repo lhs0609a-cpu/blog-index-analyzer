@@ -190,37 +190,91 @@ POST_TEMPLATES = {
 # ============ 현실적인 댓글 ============
 COMMENT_TEMPLATES = [
     # 공감
-    "저도 완전 공감이에요 ㅠㅠ", "ㅋㅋ 진짜 맞아요", "저만 그런줄 알았는데",
-    "와 제 얘기인줄", "공감 100%", "저도요 ㅠ", "ㄹㅇ 인정",
+    "저도 완전 공감이에요", "진짜 맞아요", "저만 그런줄 알았는데",
+    "와 제 얘기인줄", "공감 100%", "저도요", "ㄹㅇ 인정",
+    "이거 완전 공감", "나도 그래요", "진짜 그렇죠",
 
     # 질문
     "혹시 얼마나 걸리셨어요?", "더 자세히 알려주실 수 있나요?",
     "어떤 방법으로 하셨어요?", "초보도 할 수 있을까요?",
+    "구체적으로 어떻게 하셨어요?", "비용은 얼마나 들었어요?",
+    "시간이 많이 걸리나요?", "어려운 부분은 없었어요?",
 
     # 응원
     "축하드려요!!", "우와 대박 부럽다", "화이팅이에요!",
-    "저도 열심히 해야겠어요", "멋있어요 ㅎㅎ", "응원합니다!",
+    "저도 열심히 해야겠어요", "멋있어요", "응원합니다!",
+    "대단하시네요", "진짜 멋져요", "본받고 싶어요",
 
     # 감사
-    "좋은 정보 감사해요!", "도움 됐어요 ㅎㅎ", "꿀팁이네요",
-    "저장해둘게요!", "참고할게요!",
+    "좋은 정보 감사해요!", "도움 됐어요", "꿀팁이네요",
+    "저장해둘게요!", "참고할게요!", "유익한 글이에요",
+    "덕분에 알았어요", "정보 감사합니다", "배워갑니다",
 
     # 조언
     "저는 이렇게 했는데 효과 있었어요", "포기하지 마세요!",
-    "꾸준히 하시면 돼요", "다들 그래요 ㅎㅎ",
+    "꾸준히 하시면 돼요", "다들 그래요", "시간이 해결해줄거예요",
+    "저도 처음엔 그랬어요", "점점 나아질거예요",
 
     # 캐주얼
-    "오오 그렇군요", "ㅎㅎ", "ㅋㅋㅋ", "그쵸", "오", "헐",
-    "신기하네요", "재밌네요 ㅎㅎ", "좋아요!", "글 잘 읽었어요",
+    "오오 그렇군요", "신기하네요", "재밌네요", "좋아요!", "글 잘 읽었어요",
+    "잘 봤어요", "좋은 글이네요", "공유 감사해요",
 
     # 의견
     "저는 좀 다른 경험인데", "글쎄요.. 사람마다 다른것 같아요",
-    "저는 그 방법 안 맞았어요",
+    "저는 그 방법 안 맞았어요", "케바케인듯요",
+
+    # 호기심
+    "오 이거 몰랐어요", "처음 알았네요", "이런 방법이 있었군요",
+    "나중에 참고할게요!", "북마크 해둘게요", "저도 해봐야겠어요",
+
+    # 짧은 반응
+    "오 좋네요", "괜찮아 보여요", "흥미롭네요", "그렇구나",
+    "아하 그렇군요", "이해됐어요", "알겠어요",
+
+    # 격려
+    "힘내세요!", "잘 하고 계신거예요", "충분히 잘하고 있어요",
+    "걱정 마세요", "괜찮아요", "할 수 있어요",
+
+    # 동의
+    "저도 그렇게 생각해요", "맞는 말씀이에요", "동감이에요",
+    "저도 같은 생각이에요", "인정합니다",
+]
+
+# 댓글 변형을 위한 접미사/이모지
+COMMENT_SUFFIXES = [
+    "", "", "", "",  # 빈 문자열 (변형 없음) 확률 높임
+    " ㅎㅎ", " ㅋㅋ", " ㅠㅠ", "!", "~", " :)",
+    " 👍", " 😊", " 🙏", " ✨", " 💪",
+]
+
+COMMENT_PREFIXES = [
+    "", "", "", "", "",  # 빈 문자열 (변형 없음) 확률 높임
+    "오 ", "와 ", "헐 ", "ㅎㅎ ",
 ]
 
 
 def get_random_blogger_name() -> str:
     return random.choice(BLOGGER_NAMES)
+
+
+def _generate_unique_comment(existing_comments: Set[str]) -> str:
+    """기존 댓글과 중복되지 않는 댓글 생성"""
+    max_attempts = 50
+
+    for _ in range(max_attempts):
+        base_comment = random.choice(COMMENT_TEMPLATES)
+        prefix = random.choice(COMMENT_PREFIXES)
+        suffix = random.choice(COMMENT_SUFFIXES)
+
+        comment = f"{prefix}{base_comment}{suffix}".strip()
+
+        if comment not in existing_comments:
+            return comment
+
+    # 모든 시도 실패 시 고유 ID 추가
+    base_comment = random.choice(COMMENT_TEMPLATES)
+    unique_id = random.randint(1, 9999)
+    return f"{base_comment} #{unique_id}"
 
 
 def _check_title_exists_in_db(title: str) -> bool:
@@ -401,7 +455,7 @@ def generate_seed_posts(count: int = 30) -> List[int]:
 
 
 def generate_seed_comments(post_ids: List[int] = None, comments_per_post: tuple = (2, 8)) -> int:
-    """시드 댓글 생성"""
+    """시드 댓글 생성 - 중복 방지"""
     from database.community_db import get_db_connection
 
     conn = get_db_connection()
@@ -416,10 +470,16 @@ def generate_seed_comments(post_ids: List[int] = None, comments_per_post: tuple 
     for post_id in post_ids:
         num_comments = random.randint(comments_per_post[0], comments_per_post[1])
 
+        # 이 게시글에 달린 댓글들 추적 (중복 방지)
+        existing_comments: Set[str] = set()
+
         for _ in range(num_comments):
             fake_user_id = random.randint(10000, 99999)
             author_name = get_random_blogger_name()
-            comment = get_random_comment()
+
+            # 중복되지 않는 댓글 생성
+            comment = _generate_unique_comment(existing_comments)
+            existing_comments.add(comment)
 
             hours_ago = random.randint(0, 72)
             created_at = (datetime.now() - timedelta(hours=hours_ago)).isoformat()
@@ -492,9 +552,15 @@ def generate_daily_content() -> Dict:
 
     conn.commit()
 
-    # 기존 게시글에 댓글
+    # 기존 게시글에 댓글 - 중복 방지
     cursor.execute("SELECT id FROM posts WHERE is_deleted = FALSE ORDER BY created_at DESC LIMIT 30")
     recent_posts = [row['id'] for row in cursor.fetchall()]
+
+    # 게시글별 기존 댓글 로드 (중복 방지)
+    post_existing_comments: Dict[int, Set[str]] = {}
+    for post_id in recent_posts:
+        cursor.execute("SELECT content FROM post_comments WHERE post_id = ?", (post_id,))
+        post_existing_comments[post_id] = {row['content'] for row in cursor.fetchall()}
 
     num_comments = random.randint(10, 20)
     for _ in range(num_comments):
@@ -504,7 +570,11 @@ def generate_daily_content() -> Dict:
 
         fake_user_id = random.randint(10000, 99999)
         author_name = get_random_blogger_name()
-        comment = get_random_comment()
+
+        # 해당 게시글의 기존 댓글과 중복되지 않는 댓글 생성
+        existing = post_existing_comments.get(post_id, set())
+        comment = _generate_unique_comment(existing)
+        existing.add(comment)
 
         cursor.execute("""
             INSERT INTO post_comments (post_id, user_id, user_name, content)

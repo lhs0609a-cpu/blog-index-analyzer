@@ -1425,3 +1425,49 @@ async def get_user_by_id(
     # Remove password hash
     user.pop('hashed_password', None)
     return user
+
+
+# ============ Blog Percentile Management ============
+
+@router.post("/percentile/reset-seed")
+async def reset_percentile_seed_data(admin: dict = Depends(require_admin)):
+    """백분위 시드 데이터 리셋 (admin only)
+
+    새로운 점수 분포로 시드 데이터를 재생성합니다.
+    실제 분석된 블로그 데이터는 유지됩니다.
+    """
+    from database.blog_percentile_db import get_blog_percentile_db
+
+    try:
+        db = get_blog_percentile_db()
+        result = db.reset_seed_data()
+        return {
+            "message": "Seed data reset completed",
+            "details": result
+        }
+    except Exception as e:
+        logger.error(f"Failed to reset seed data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/percentile/stats")
+async def get_percentile_stats(admin: dict = Depends(require_admin)):
+    """백분위 통계 조회 (admin only)"""
+    from database.blog_percentile_db import get_blog_percentile_db
+
+    try:
+        db = get_blog_percentile_db()
+        stats = db.get_stats()
+
+        # 주요 백분위 점수 조회
+        percentile_scores = {}
+        for p in [50, 75, 90, 95, 99]:
+            percentile_scores[f"p{p}"] = db.get_score_for_percentile(p)
+
+        return {
+            "stats": stats,
+            "percentile_scores": percentile_scores
+        }
+    except Exception as e:
+        logger.error(f"Failed to get percentile stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
-import { TrendingUp, TrendingDown, Heart, MessageCircle, Eye, Sparkles, Plus, Search, Brain, ArrowLeft, Target, RefreshCw, Trash2, Zap, BarChart3, Wallet, Globe } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { TrendingUp, TrendingDown, Heart, MessageCircle, Eye, Sparkles, Plus, Search, Brain, Target, RefreshCw, Trash2, Zap, BarChart3, Wallet, Globe, HelpCircle, MoreHorizontal, ChevronDown } from 'lucide-react'
 import Link from 'next/link'
 import { getUserBlogs, deleteBlogFromList } from '@/lib/api/blog'
 import { refreshBlogAnalysis } from '@/lib/api/userBlogs'
@@ -11,6 +11,172 @@ import { useAuthStore } from '@/lib/stores/auth'
 import type { BlogListItem } from '@/lib/types/api'
 import toast from 'react-hot-toast'
 import EmptyState from '@/components/EmptyState'
+import TermTooltip from '@/components/TermTooltip'
+import WinnerKeywordsWidget from '@/components/WinnerKeywordsWidget'
+
+// 레벨별 퍼센타일 매핑 (대략적인 추정치)
+const LEVEL_PERCENTILE: Record<number, string> = {
+  0: '하위',
+  1: '하위 50%',
+  2: '하위 40%',
+  3: '상위 40%',
+  4: '상위 35%',
+  5: '상위 30%',
+  6: '상위 25%',
+  7: '상위 20%',
+  8: '상위 15%',
+  9: '상위 10%',
+  10: '상위 5%',
+  11: '상위 1%'
+}
+
+// 레벨별 설명 (짧은 버전)
+const LEVEL_DESCRIPTION: Record<number, string> = {
+  0: '시작 단계',
+  1: '입문자',
+  2: '초보',
+  3: '성장 중',
+  4: '활동적',
+  5: '안정적',
+  6: '우수',
+  7: '상급',
+  8: '전문가',
+  9: '인플루언서급',
+  10: '최상위',
+  11: '레전드'
+}
+
+// 접을 수 있는 섹션 컴포넌트
+interface CollapsibleSectionProps {
+  title: string
+  subtitle: string
+  icon: React.ReactNode
+  iconBgColor: string
+  children: React.ReactNode
+  actionButton?: React.ReactNode
+  defaultOpen?: boolean
+}
+
+function CollapsibleSection({ title, subtitle, icon, iconBgColor, children, actionButton, defaultOpen = false }: CollapsibleSectionProps) {
+  const [isOpen, setIsOpen] = useState(defaultOpen)
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-2xl mb-4 bg-white border border-gray-200 shadow-sm overflow-hidden"
+    >
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className={`w-10 h-10 rounded-full ${iconBgColor} flex items-center justify-center`}>
+            {icon}
+          </div>
+          <div className="text-left">
+            <h3 className="font-bold text-gray-900">{title}</h3>
+            <p className="text-xs text-gray-500">{subtitle}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          {actionButton && !isOpen && (
+            <div onClick={(e) => e.stopPropagation()}>
+              {actionButton}
+            </div>
+          )}
+          <motion.div
+            animate={{ rotate: isOpen ? 180 : 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </motion.div>
+        </div>
+      </button>
+
+      <motion.div
+        initial={false}
+        animate={{ height: isOpen ? 'auto' : 0, opacity: isOpen ? 1 : 0 }}
+        transition={{ duration: 0.3 }}
+        className="overflow-hidden"
+      >
+        <div className="p-4 pt-0 border-t border-gray-100">
+          {children}
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// 드롭다운 메뉴 컴포넌트
+interface DropdownMenuProps {
+  user: { is_admin?: boolean } | null
+}
+
+function DropdownMenu({ user }: DropdownMenuProps) {
+  const [isOpen, setIsOpen] = useState(false)
+
+  const menuItems = [
+    { href: '/keyword-search', icon: Search, label: '키워드 검색', color: 'text-[#0064FF]' },
+    { href: '/dashboard/rank-tracker', icon: Target, label: '순위 추적', color: 'text-[#0064FF]' },
+    { href: '/tools', icon: Sparkles, label: 'AI 도구', color: 'text-purple-600' },
+    ...(user?.is_admin ? [
+      { href: '/dashboard/learning', icon: Brain, label: 'AI 학습 엔진', color: 'text-green-600' },
+      { href: '/dashboard/batch-learning', icon: Zap, label: '대량 학습', color: 'text-orange-600' },
+    ] : []),
+  ]
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-1 px-4 py-2.5 rounded-full bg-white border border-gray-200 text-gray-700 font-medium hover:bg-gray-50 transition-all text-sm"
+      >
+        <MoreHorizontal className="w-4 h-4" />
+        <span className="hidden sm:inline">더보기</span>
+        <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            {/* 배경 클릭 시 닫기 */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-40"
+              onClick={() => setIsOpen(false)}
+            />
+
+            {/* 드롭다운 메뉴 */}
+            <motion.div
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              transition={{ duration: 0.15 }}
+              className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-50"
+            >
+              {menuItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors"
+                >
+                  <item.icon className={`w-4 h-4 ${item.color}`} />
+                  <span className="text-sm text-gray-700">{item.label}</span>
+                </Link>
+              ))}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
 
 export default function Dashboard() {
   const router = useRouter()
@@ -87,338 +253,33 @@ export default function Dashboard() {
     <div className="min-h-screen bg-[#fafafa] pt-24">
       <div className="container mx-auto px-4 py-8">
 
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        {/* Header - 개선된 버전 */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-4xl font-bold mb-2">
+            <h1 className="text-3xl md:text-4xl font-bold mb-1">
               <span className="gradient-text">대시보드</span>
             </h1>
-            <p className="text-gray-600">블랭크에서 내 블로그를 한눈에 확인하세요</p>
+            <p className="text-sm md:text-base text-gray-600">블랭크에서 내 블로그를 한눈에 확인하세요</p>
           </div>
 
-          <div className="flex gap-3 flex-wrap">
-            <Link
-              href="/dashboard/rank-tracker"
-              className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white font-semibold hover:shadow-lg transition-all duration-300"
-            >
-              <Target className="w-5 h-5" />
-              순위 추적
-            </Link>
-            {user?.is_admin && (
-              <Link
-                href="/dashboard/batch-learning"
-                className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white font-semibold hover:shadow-lg transition-all duration-300"
-              >
-                <Sparkles className="w-5 h-5" />
-                대량 학습
-              </Link>
-            )}
-            {user?.is_admin && (
-              <Link
-                href="/dashboard/learning"
-                className="flex items-center gap-2 px-6 py-3 rounded-full bg-white border-2 border-green-500 text-green-600 font-semibold hover:shadow-lg transition-all duration-300"
-              >
-                <Brain className="w-5 h-5" />
-                AI 학습 엔진
-              </Link>
-            )}
-            <Link
-              href="/keyword-search"
-              className="flex items-center gap-2 px-6 py-3 rounded-full bg-white border-2 border-[#0064FF] text-[#0064FF] font-semibold hover:shadow-lg transition-all duration-300"
-            >
-              <Search className="w-5 h-5" />
-              키워드 검색
-            </Link>
+          {/* 액션 버튼 - 모바일 최적화 */}
+          <div className="flex items-center gap-2">
+            {/* 주요 액션: 블로그 추가 */}
             <Link
               href="/analyze"
-              className="flex items-center gap-2 px-6 py-3 rounded-full bg-[#0064FF] text-white font-semibold hover:shadow-lg shadow-lg shadow-[#0064FF]/15 transition-all duration-300"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#0064FF] text-white font-semibold hover:shadow-lg shadow-lg shadow-[#0064FF]/15 transition-all text-sm"
             >
-              <Plus className="w-5 h-5" />
-              블로그 추가
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">블로그 추가</span>
+              <span className="sm:hidden">추가</span>
             </Link>
+
+            {/* 드롭다운 메뉴 */}
+            <DropdownMenu user={user} />
           </div>
         </div>
 
-        {/* 키워드 지수분석 섹션 */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-3xl p-8 mb-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] flex items-center justify-center shadow-lg shadow-[#0064FF]/15">
-                <TrendingUp className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold gradient-text">키워드 지수분석</h2>
-                <p className="text-sm text-gray-600">경쟁 키워드의 상위 블로그들을 분석하세요</p>
-              </div>
-            </div>
-            <Link
-              href="/keyword-search"
-              className="flex items-center gap-2 px-6 py-3 rounded-full bg-[#0064FF] text-white font-semibold hover:shadow-lg shadow-lg shadow-[#0064FF]/15 transition-all duration-300"
-            >
-              <Search className="w-5 h-5" />
-              분석 시작
-            </Link>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-4">
-            <div className="bg-white rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                  <Eye className="w-4 h-4 text-[#0064FF]" />
-                </div>
-                <span className="font-semibold text-gray-700">상위 노출 분석</span>
-              </div>
-              <p className="text-sm text-gray-500">
-                키워드 검색 시 상위에 노출되는 블로그들의 지수를 파악합니다
-              </p>
-            </div>
-
-            <div className="bg-white rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center">
-                  <TrendingUp className="w-4 h-4 text-[#3182F6]" />
-                </div>
-                <span className="font-semibold text-gray-700">경쟁 인사이트</span>
-              </div>
-              <p className="text-sm text-gray-500">
-                평균 점수, 포스트 수, 이웃 수 등 상위 블로그의 공통 패턴을 확인합니다
-              </p>
-            </div>
-
-            <div className="bg-white rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
-                  <Sparkles className="w-4 h-4 text-orange-600" />
-                </div>
-                <span className="font-semibold text-gray-700">노출 로직 파악</span>
-              </div>
-              <p className="text-sm text-gray-500">
-                어떤 블로그들이 상위에 노출되는지 분석하여 전략을 수립합니다
-              </p>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* 순위 추적 섹션 */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="rounded-3xl p-8 mb-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] flex items-center justify-center">
-                <Target className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-[#0064FF]">순위 추적</h2>
-                <p className="text-sm text-gray-600">내 블로그 포스팅의 검색 순위를 실시간 추적하세요</p>
-              </div>
-            </div>
-            <Link
-              href="/dashboard/rank-tracker"
-              className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white font-semibold hover:shadow-lg transition-all duration-300"
-            >
-              <Target className="w-5 h-5" />
-              순위 추적 시작
-            </Link>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-4">
-            <div className="bg-white rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                  <Search className="w-4 h-4 text-[#0064FF]" />
-                </div>
-                <span className="font-semibold text-gray-700">키워드 자동 추출</span>
-              </div>
-              <p className="text-sm text-gray-500">
-                포스트 제목에서 핵심 키워드를 자동으로 추출합니다
-              </p>
-            </div>
-
-            <div className="bg-white rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center">
-                  <TrendingUp className="w-4 h-4 text-[#3182F6]" />
-                </div>
-                <span className="font-semibold text-gray-700">블로그탭 & VIEW탭</span>
-              </div>
-              <p className="text-sm text-gray-500">
-                블로그탭과 VIEW탭에서의 순위를 모두 확인합니다
-              </p>
-            </div>
-
-            <div className="bg-white rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
-                  <Eye className="w-4 h-4 text-orange-600" />
-                </div>
-                <span className="font-semibold text-gray-700">히스토리 분석</span>
-              </div>
-              <p className="text-sm text-gray-500">
-                순위 변동 추이를 그래프로 확인하고 분석합니다
-              </p>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* 학습 대시보드 섹션 */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="rounded-3xl p-8 mb-8 bg-gradient-to-br from-green-50 to-white border border-green-100/50 shadow-xl shadow-green-100/50"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 flex items-center justify-center">
-                <Brain className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-green-700">학습 대시보드</h2>
-                <p className="text-sm text-gray-600">순위 학습 현황을 실시간으로 모니터링하세요</p>
-              </div>
-            </div>
-            <Link
-              href="/dashboard/learning"
-              className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold hover:shadow-lg transition-all duration-300"
-            >
-              <Brain className="w-5 h-5" />
-              학습 엔진 보기
-            </Link>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-4">
-            <div className="bg-white rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
-                  <TrendingUp className="w-4 h-4 text-green-600" />
-                </div>
-                <span className="font-semibold text-gray-700">실시간 학습</span>
-              </div>
-              <p className="text-sm text-gray-500">
-                검색할 때마다 자동으로 순위 데이터를 학습합니다
-              </p>
-            </div>
-
-            <div className="bg-white rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
-                  <Eye className="w-4 h-4 text-emerald-600" />
-                </div>
-                <span className="font-semibold text-gray-700">가중치 모니터링</span>
-              </div>
-              <p className="text-sm text-gray-500">
-                C-Rank, D.I.A. 가중치가 어떻게 변하는지 확인합니다
-              </p>
-            </div>
-
-            <div className="bg-white rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-teal-100 flex items-center justify-center">
-                  <Sparkles className="w-4 h-4 text-teal-600" />
-                </div>
-                <span className="font-semibold text-gray-700">예측 정확도</span>
-              </div>
-              <p className="text-sm text-gray-500">
-                학습이 진행될수록 순위 예측 정확도가 향상됩니다
-              </p>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* 통합광고 최적화 섹션 - BETA */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="rounded-3xl p-8 mb-8 bg-gradient-to-br from-orange-50 to-white border border-orange-100/50 shadow-xl shadow-orange-100/50 relative overflow-hidden"
-        >
-          {/* BETA 배너 */}
-          <div className="absolute top-4 right-4">
-            <span className="px-3 py-1 bg-orange-500 text-white text-xs font-bold rounded-full">
-              BETA - 개발 중
-            </span>
-          </div>
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-orange-400 to-orange-500 flex items-center justify-center shadow-lg">
-                <Zap className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-2xl font-bold bg-gradient-to-r from-orange-500 to-orange-600 bg-clip-text text-transparent">통합 광고 최적화</h2>
-                </div>
-                <p className="text-sm text-gray-600">모든 광고 플랫폼을 AI가 자동으로 최적화합니다 (준비 중)</p>
-              </div>
-            </div>
-            <Link
-              href="/ad-optimizer/unified"
-              className="flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-orange-400 to-orange-500 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-300"
-            >
-              <Zap className="w-5 h-5" />
-              미리보기
-            </Link>
-          </div>
-
-          <div className="grid md:grid-cols-4 gap-4">
-            <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-white/50 hover:shadow-md transition-all">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center">
-                  <Globe className="w-4 h-4 text-white" />
-                </div>
-                <span className="font-semibold text-gray-700">멀티 플랫폼</span>
-              </div>
-              <p className="text-sm text-gray-500">
-                네이버, 구글, 메타, 카카오 등 모든 광고를 한 곳에서
-              </p>
-            </div>
-
-            <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-white/50 hover:shadow-md transition-all">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#3182F6] to-[#0064FF] flex items-center justify-center">
-                  <Brain className="w-4 h-4 text-white" />
-                </div>
-                <span className="font-semibold text-gray-700">AI 자동 최적화</span>
-              </div>
-              <p className="text-sm text-gray-500">
-                입찰가, 예산, 타겟팅을 AI가 실시간 조정
-              </p>
-            </div>
-
-            <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-white/50 hover:shadow-md transition-all">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center">
-                  <Wallet className="w-4 h-4 text-white" />
-                </div>
-                <span className="font-semibold text-gray-700">예산 최적화</span>
-              </div>
-              <p className="text-sm text-gray-500">
-                성과 기반 자동 예산 배분으로 ROAS 극대화
-              </p>
-            </div>
-
-            <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-white/50 hover:shadow-md transition-all">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#0064FF] to-[#3182F6] flex items-center justify-center">
-                  <BarChart3 className="w-4 h-4 text-white" />
-                </div>
-                <span className="font-semibold text-gray-700">통합 리포트</span>
-              </div>
-              <p className="text-sm text-gray-500">
-                모든 플랫폼 성과를 한눈에 비교 분석
-              </p>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Search */}
+        {/* 블로그 검색 - 최상단으로 이동 */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -436,6 +297,21 @@ export default function Dashboard() {
             />
           </div>
         </motion.div>
+
+        {/* 1위 보장 키워드 위젯 - 킬러 기능 */}
+        {!isLoading && displayBlogs.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="mb-8"
+          >
+            <WinnerKeywordsWidget
+              blogId={displayBlogs[0]?.blog_id}
+              className="shadow-xl shadow-yellow-100/50"
+            />
+          </motion.div>
+        )}
 
         {/* Blog Grid */}
         {isLoading ? (
@@ -579,12 +455,26 @@ export default function Dashboard() {
                 </motion.div>
               </div>
 
-              {/* Level Badge */}
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-100 to-sky-100 mb-4">
-                <span className="text-2xl font-bold gradient-text">
-                  Level {blog.level}
-                </span>
-                <span className="text-sm text-gray-600">{blog.grade}</span>
+              {/* Level Badge - 개선된 버전 */}
+              <div className="mb-4">
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-100 to-sky-100">
+                  <TermTooltip term="level">
+                    <span className="text-2xl font-bold gradient-text">
+                      Lv.{blog.level}
+                    </span>
+                  </TermTooltip>
+                  <span className="text-sm text-gray-600">/11</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-white text-gray-700 font-medium">
+                    {blog.grade}
+                  </span>
+                </div>
+                <div className="mt-1 text-xs text-gray-500 flex items-center gap-1">
+                  <span className="font-medium text-[#0064FF]">
+                    {LEVEL_PERCENTILE[blog.level] || '측정 중'}
+                  </span>
+                  <span>·</span>
+                  <span>{LEVEL_DESCRIPTION[blog.level] || ''}</span>
+                </div>
               </div>
 
               {/* Score */}
@@ -690,7 +580,7 @@ export default function Dashboard() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="mt-12 grid md:grid-cols-4 gap-6"
+          className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4"
         >
           {(() => {
             const totalBlogs = displayBlogs.length
@@ -707,30 +597,10 @@ export default function Dashboard() {
             ).length
 
             return [
-              {
-                label: '총 블로그',
-                value: totalBlogs,
-                icon: '📚',
-                color: 'blue'
-              },
-              {
-                label: '평균 레벨',
-                value: avgLevel,
-                icon: '⭐',
-                color: 'sky'
-              },
-              {
-                label: '총 방문자',
-                value: formattedVisitors,
-                icon: '👥',
-                color: 'orange'
-              },
-              {
-                label: '이번 주 분석',
-                value: recentAnalyses,
-                icon: '📊',
-                color: 'yellow'
-              },
+              { label: '총 블로그', value: totalBlogs, icon: '📚' },
+              { label: '평균 레벨', value: avgLevel, icon: '⭐' },
+              { label: '총 방문자', value: formattedVisitors, icon: '👥' },
+              { label: '이번 주 분석', value: recentAnalyses, icon: '📊' },
             ]
           })().map((stat, index) => (
             <motion.div
@@ -738,15 +608,205 @@ export default function Dashboard() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.5 + index * 0.1 }}
-              className="rounded-2xl p-6 text-center bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50 hover:shadow-2xl transition-all duration-300"
+              className="rounded-xl p-4 text-center bg-white border border-gray-200 shadow-sm"
             >
-              <div className="text-4xl mb-3">{stat.icon}</div>
-              <div className="text-3xl font-bold gradient-text">{stat.value}</div>
-              <div className="text-sm text-gray-600 mt-1">{stat.label}</div>
+              <div className="text-2xl mb-1">{stat.icon}</div>
+              <div className="text-xl font-bold text-gray-900">{stat.value}</div>
+              <div className="text-xs text-gray-500">{stat.label}</div>
             </motion.div>
           ))}
         </motion.div>
         )}
+
+        {/* 더 많은 기능 - 접을 수 있는 섹션들 */}
+        <div className="mt-8">
+          <h2 className="text-lg font-bold text-gray-700 mb-4">더 많은 기능</h2>
+
+          {/* 키워드 지수분석 */}
+          <CollapsibleSection
+            title="키워드 지수분석"
+            subtitle="경쟁 키워드의 상위 블로그들을 분석"
+            icon={<TrendingUp className="w-5 h-5 text-white" />}
+            iconBgColor="bg-gradient-to-r from-[#0064FF] to-[#3182F6]"
+            actionButton={
+              <Link href="/keyword-search" className="px-4 py-1.5 rounded-full bg-[#0064FF] text-white text-sm font-medium hover:bg-[#0050CC] transition-colors">
+                시작
+              </Link>
+            }
+          >
+            <div className="grid md:grid-cols-3 gap-3">
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Eye className="w-4 h-4 text-[#0064FF]" />
+                  <span className="font-medium text-sm">상위 노출 분석</span>
+                </div>
+                <p className="text-xs text-gray-500">상위 블로그들의 지수를 파악</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <TrendingUp className="w-4 h-4 text-[#3182F6]" />
+                  <span className="font-medium text-sm">경쟁 인사이트</span>
+                </div>
+                <p className="text-xs text-gray-500">상위 블로그의 공통 패턴 확인</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Sparkles className="w-4 h-4 text-orange-600" />
+                  <span className="font-medium text-sm">노출 로직 파악</span>
+                </div>
+                <p className="text-xs text-gray-500">전략 수립을 위한 분석</p>
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          {/* 순위 추적 */}
+          <CollapsibleSection
+            title="순위 추적"
+            subtitle="내 블로그 포스팅의 검색 순위 실시간 추적"
+            icon={<Target className="w-5 h-5 text-white" />}
+            iconBgColor="bg-gradient-to-r from-[#0064FF] to-[#3182F6]"
+            actionButton={
+              <Link href="/dashboard/rank-tracker" className="px-4 py-1.5 rounded-full bg-[#0064FF] text-white text-sm font-medium hover:bg-[#0050CC] transition-colors">
+                시작
+              </Link>
+            }
+          >
+            <div className="grid md:grid-cols-3 gap-3">
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Search className="w-4 h-4 text-[#0064FF]" />
+                  <span className="font-medium text-sm">키워드 자동 추출</span>
+                </div>
+                <p className="text-xs text-gray-500">포스트 제목에서 핵심 키워드 추출</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <TrendingUp className="w-4 h-4 text-[#3182F6]" />
+                  <span className="font-medium text-sm">블로그탭 & VIEW탭</span>
+                </div>
+                <p className="text-xs text-gray-500">두 탭 모두 순위 확인</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Eye className="w-4 h-4 text-orange-600" />
+                  <span className="font-medium text-sm">히스토리 분석</span>
+                </div>
+                <p className="text-xs text-gray-500">순위 변동 추이 그래프</p>
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          {/* AI 학습 엔진 - 관리자 전용 */}
+          {user?.is_admin && (
+            <CollapsibleSection
+              title="AI 학습 엔진"
+              subtitle="순위 학습 현황 실시간 모니터링"
+              icon={<Brain className="w-5 h-5 text-white" />}
+              iconBgColor="bg-gradient-to-r from-green-500 to-emerald-500"
+              actionButton={
+                <Link href="/dashboard/learning" className="px-4 py-1.5 rounded-full bg-green-500 text-white text-sm font-medium hover:bg-green-600 transition-colors">
+                  보기
+                </Link>
+              }
+            >
+              <div className="grid md:grid-cols-3 gap-3">
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <TrendingUp className="w-4 h-4 text-green-600" />
+                    <span className="font-medium text-sm">실시간 학습</span>
+                  </div>
+                  <p className="text-xs text-gray-500">검색 시 자동 순위 데이터 학습</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Eye className="w-4 h-4 text-emerald-600" />
+                    <span className="font-medium text-sm">가중치 모니터링</span>
+                  </div>
+                  <p className="text-xs text-gray-500">C-Rank, D.I.A. 가중치 변화 확인</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Sparkles className="w-4 h-4 text-teal-600" />
+                    <span className="font-medium text-sm">예측 정확도</span>
+                  </div>
+                  <p className="text-xs text-gray-500">학습에 따른 정확도 향상</p>
+                </div>
+              </div>
+            </CollapsibleSection>
+          )}
+
+          {/* 통합 광고 최적화 - BETA */}
+          <CollapsibleSection
+            title="통합 광고 최적화"
+            subtitle="모든 광고 플랫폼 AI 자동 최적화 (BETA)"
+            icon={<Zap className="w-5 h-5 text-white" />}
+            iconBgColor="bg-gradient-to-r from-orange-400 to-orange-500"
+            actionButton={
+              <Link href="/ad-optimizer/unified" className="px-4 py-1.5 rounded-full bg-orange-500 text-white text-sm font-medium hover:bg-orange-600 transition-colors">
+                미리보기
+              </Link>
+            }
+          >
+            <div className="grid md:grid-cols-4 gap-3">
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Globe className="w-4 h-4 text-green-600" />
+                  <span className="font-medium text-sm">멀티 플랫폼</span>
+                </div>
+                <p className="text-xs text-gray-500">네이버, 구글, 메타, 카카오</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Brain className="w-4 h-4 text-[#0064FF]" />
+                  <span className="font-medium text-sm">AI 자동 최적화</span>
+                </div>
+                <p className="text-xs text-gray-500">입찰가, 예산 실시간 조정</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Wallet className="w-4 h-4 text-orange-600" />
+                  <span className="font-medium text-sm">예산 최적화</span>
+                </div>
+                <p className="text-xs text-gray-500">성과 기반 자동 배분</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <BarChart3 className="w-4 h-4 text-[#0064FF]" />
+                  <span className="font-medium text-sm">통합 리포트</span>
+                </div>
+                <p className="text-xs text-gray-500">모든 플랫폼 성과 비교</p>
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          {/* 플라톤마케팅 프로모션 */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-2xl p-5 bg-gradient-to-r from-slate-900 to-slate-800 border border-slate-700 relative overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 w-24 h-24 bg-violet-500/10 rounded-full blur-2xl" />
+            <div className="relative flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center flex-shrink-0">
+                  <Sparkles className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h4 className="text-white font-bold text-sm">플라톤마케팅</h4>
+                  <p className="text-slate-400 text-xs">병원마케팅 전문</p>
+                </div>
+              </div>
+              <a
+                href="https://www.brandplaton.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 bg-gradient-to-r from-violet-500 to-pink-500 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap"
+              >
+                상담 신청
+              </a>
+            </div>
+          </motion.div>
+        </div>
       </div>
     </div>
   )

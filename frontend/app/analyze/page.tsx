@@ -1816,11 +1816,43 @@ export default function AnalyzePage() {
                   </div>
                 </div>
 
+                {/* 플라톤마케팅 CTA */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 1.3 }}
+                  className="mt-8 p-6 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 border border-slate-700 relative overflow-hidden"
+                >
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-violet-500/10 rounded-full blur-3xl" />
+                  <div className="relative flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center flex-shrink-0">
+                        <Sparkles className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="text-white font-bold text-lg mb-1">전문가의 도움이 필요하신가요?</h4>
+                        <p className="text-slate-400 text-sm">
+                          병원/의료 블로그라면 플라톤마케팅의 전문 컨설팅을 받아보세요
+                        </p>
+                      </div>
+                    </div>
+                    <a
+                      href="https://www.brandplaton.com/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-6 py-3 bg-gradient-to-r from-violet-500 to-pink-500 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity whitespace-nowrap flex items-center gap-2"
+                    >
+                      무료 상담 신청
+                      <ChevronRight className="w-4 h-4" />
+                    </a>
+                  </div>
+                </motion.div>
+
                 {/* CTA */}
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 1 }}
+                  transition={{ delay: 1.4 }}
                   className="text-center py-8"
                 >
                   <button
