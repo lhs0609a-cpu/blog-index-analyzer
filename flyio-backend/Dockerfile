@@ -56,12 +56,12 @@ RUN chmod +x /app/entrypoint.sh
 RUN mkdir -p /app/data
 
 # 포트 노출
-EXPOSE 8001
+EXPOSE 8000
 
 # 환경변수 설정
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-ENV PORT=8001
+ENV PORT=8000
 
 # 애플리케이션 실행 with entrypoint
 CMD ["/app/entrypoint.sh"]
