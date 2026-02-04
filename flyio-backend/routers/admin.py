@@ -1221,16 +1221,17 @@ class AutoGenRequest(BaseModel):
 
 
 async def auto_generate_content_task(posts_per_hour: int, include_comments: bool):
-    """백그라운드 자동 글 생성 태스크 (SQLite 사용)"""
+    """백그라운드 자동 글 생성 태스크 (Supabase 우선, SQLite fallback)"""
     global _auto_gen_running
 
-    # SQLite community_db 사용
-    from database.community_db import create_post, create_post_comment
+    # community_db 사용 (Supabase 또는 SQLite)
+    from database.community_db import create_post, create_post_comment, USE_SUPABASE
 
     # 시간당 글 수 -> 분당 간격 계산
     interval_seconds = 3600 / posts_per_hour
+    storage_type = "Supabase" if USE_SUPABASE else "SQLite"
 
-    logger.info(f"Auto generation started: {posts_per_hour} posts/hour, interval: {interval_seconds:.1f}s")
+    logger.info(f"Auto generation started: {posts_per_hour} posts/hour, interval: {interval_seconds:.1f}s, storage: {storage_type}")
 
     while _auto_gen_running:
         try:
@@ -1328,20 +1329,20 @@ async def generate_batch_posts(
     count: int = 100,
     admin: dict = Depends(require_admin)
 ):
-    """일괄 게시글 생성 (최대 500개) - SQLite 사용"""
+    """일괄 게시글 생성 (최대 500개) - Supabase 우선, SQLite fallback"""
     if count > 500:
         raise HTTPException(status_code=400, detail="최대 500개까지 생성 가능")
 
-    from database.community_db import get_db_connection
+    from database.community_db import USE_SUPABASE, supabase, get_db_connection
     import json
 
     created = 0
     comments_created = 0
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    # Supabase 사용
+    if USE_SUPABASE and supabase:
+        logger.info(f"Generating {count} posts using Supabase...")
 
-    try:
         for i in range(count):
             try:
                 post_data = generate_realistic_post()
@@ -1352,59 +1353,110 @@ async def generate_batch_posts(
                 hours_ago = random.randint(0, 23)
                 created_at = (datetime.now() - timedelta(days=days_ago, hours=hours_ago)).isoformat()
 
-                # SQLite에 직접 삽입
-                cursor.execute("""
-                    INSERT INTO posts (user_id, user_name, title, content, category, tags, views, likes, comments_count, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    user_id,
-                    f"블로거{user_id % 10000:04d}",
-                    post_data["title"],
-                    post_data["content"],
-                    post_data["category"],
-                    json.dumps([]),
-                    random.randint(10, 500),
-                    random.randint(0, 30),
-                    0,
-                    created_at,
-                ))
+                response = supabase.table("posts").insert({
+                    "user_id": user_id,
+                    "user_name": f"블로거{user_id % 10000:04d}",
+                    "title": post_data["title"],
+                    "content": post_data["content"],
+                    "category": post_data["category"],
+                    "tags": [],
+                    "views": random.randint(10, 500),
+                    "likes": random.randint(0, 30),
+                    "comments_count": 0,
+                    "created_at": created_at,
+                }).execute()
 
-                post_id = cursor.lastrowid
-                created += 1
+                if response.data:
+                    created += 1
+                    post_id = response.data[0]["id"]
 
-                # 댓글 추가
-                num_comments = random.randint(0, 5)
-                for _ in range(num_comments):
-                    try:
-                        comment_user_id = 1000 + random.randint(0, 9999)
-                        cursor.execute("""
-                            INSERT INTO post_comments (post_id, user_id, user_name, content, created_at)
-                            VALUES (?, ?, ?, ?, ?)
-                        """, (
-                            post_id,
-                            comment_user_id,
-                            f"블로거{comment_user_id % 10000:04d}",
-                            generate_realistic_comment(),
-                            created_at,
-                        ))
-                        comments_created += 1
-                    except Exception as ce:
-                        logger.error(f"Comment creation error: {ce}")
+                    # 댓글 추가
+                    num_comments = random.randint(0, 5)
+                    for _ in range(num_comments):
+                        try:
+                            comment_user_id = 1000 + random.randint(0, 9999)
+                            supabase.table("post_comments").insert({
+                                "post_id": post_id,
+                                "user_id": comment_user_id,
+                                "user_name": f"블로거{comment_user_id % 10000:04d}",
+                                "content": generate_realistic_comment(),
+                                "created_at": created_at,
+                            }).execute()
+                            comments_created += 1
+                        except Exception as ce:
+                            logger.debug(f"Comment error: {ce}")
 
-                if num_comments > 0:
-                    cursor.execute("UPDATE posts SET comments_count = ? WHERE id = ?", (num_comments, post_id))
+                    if num_comments > 0:
+                        supabase.table("posts").update({"comments_count": num_comments}).eq("id", post_id).execute()
 
             except Exception as e:
-                logger.error(f"Batch generation error: {e}")
+                logger.error(f"Supabase batch error: {e}")
 
             # 진행상황 로깅
             if (i + 1) % 50 == 0:
-                conn.commit()
-                logger.info(f"Generated {i + 1}/{count} posts...")
+                logger.info(f"Generated {i + 1}/{count} posts (Supabase)...")
+                await asyncio.sleep(1)  # Rate limiting
 
-        conn.commit()
-    finally:
-        conn.close()
+    else:
+        # SQLite fallback
+        logger.info(f"Generating {count} posts using SQLite (fallback)...")
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        try:
+            for i in range(count):
+                try:
+                    post_data = generate_realistic_post()
+                    user_id = 1000 + random.randint(0, 9999)
+
+                    days_ago = random.randint(0, 7)
+                    hours_ago = random.randint(0, 23)
+                    created_at = (datetime.now() - timedelta(days=days_ago, hours=hours_ago)).isoformat()
+
+                    cursor.execute("""
+                        INSERT INTO posts (user_id, user_name, title, content, category, tags, views, likes, comments_count, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        user_id,
+                        f"블로거{user_id % 10000:04d}",
+                        post_data["title"],
+                        post_data["content"],
+                        post_data["category"],
+                        json.dumps([]),
+                        random.randint(10, 500),
+                        random.randint(0, 30),
+                        0,
+                        created_at,
+                    ))
+
+                    post_id = cursor.lastrowid
+                    created += 1
+
+                    num_comments = random.randint(0, 5)
+                    for _ in range(num_comments):
+                        try:
+                            comment_user_id = 1000 + random.randint(0, 9999)
+                            cursor.execute("""
+                                INSERT INTO post_comments (post_id, user_id, user_name, content, created_at)
+                                VALUES (?, ?, ?, ?, ?)
+                            """, (post_id, comment_user_id, f"블로거{comment_user_id % 10000:04d}", generate_realistic_comment(), created_at))
+                            comments_created += 1
+                        except Exception as ce:
+                            logger.error(f"Comment error: {ce}")
+
+                    if num_comments > 0:
+                        cursor.execute("UPDATE posts SET comments_count = ? WHERE id = ?", (num_comments, post_id))
+
+                except Exception as e:
+                    logger.error(f"SQLite batch error: {e}")
+
+                if (i + 1) % 50 == 0:
+                    conn.commit()
+                    logger.info(f"Generated {i + 1}/{count} posts (SQLite)...")
+
+            conn.commit()
+        finally:
+            conn.close()
 
     logger.info(f"Admin {admin['email']} generated {created} posts, {comments_created} comments")
 
@@ -1412,7 +1464,8 @@ async def generate_batch_posts(
         "success": True,
         "posts_created": created,
         "comments_created": comments_created,
-        "message": f"{created}개 글, {comments_created}개 댓글 생성 완료",
+        "storage": "supabase" if USE_SUPABASE else "sqlite",
+        "message": f"{created}개 글, {comments_created}개 댓글 생성 완료 ({'Supabase' if USE_SUPABASE else 'SQLite'})",
     }
 
 

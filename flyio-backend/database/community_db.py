@@ -6,9 +6,13 @@
 - 인사이트 게시판
 - 키워드 트렌드
 - 상위노출 성공 알림
+
+게시판 데이터는 Supabase에 영구 저장 (데이터 유실 방지)
+기타 데이터는 SQLite 사용 (캐시/임시 데이터)
 """
 import sqlite3
 import json
+import os
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from pathlib import Path
@@ -16,9 +20,23 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# 데이터 경로
+# ============ Supabase 설정 (게시판용) ============
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
+USE_SUPABASE = bool(SUPABASE_URL and SUPABASE_KEY)
+
+supabase = None
+if USE_SUPABASE:
+    try:
+        from supabase import create_client
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        logger.info("✅ Community DB: Supabase connected for posts")
+    except Exception as e:
+        logger.warning(f"⚠️ Supabase connection failed: {e}, falling back to SQLite")
+        USE_SUPABASE = False
+
+# ============ SQLite 설정 (포인트/활동 피드용) ============
 import sys
-import os
 if sys.platform == "win32":
     DATA_DIR = Path(os.environ.get("DATA_DIR", Path(os.path.dirname(__file__)).parent / "data"))
 else:
@@ -28,7 +46,7 @@ DB_PATH = DATA_DIR / "community.db"
 
 
 def get_db_connection():
-    """DB 연결"""
+    """SQLite DB 연결 (포인트/활동 피드용)"""
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
     return conn
@@ -942,14 +960,18 @@ def get_platform_stats() -> Dict:
     }
 
 
-# ============ 게시판 ============
+# ============ 게시판 (Supabase 사용 - 영구 저장) ============
 
 def init_post_tables():
-    """게시판 테이블 초기화"""
+    """게시판 테이블 초기화 - Supabase 사용 시 스킵"""
+    if USE_SUPABASE:
+        logger.info("✅ Posts tables managed by Supabase")
+        return
+
+    # Supabase 미사용 시 SQLite fallback
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # 게시글 테이블
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS posts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -969,7 +991,6 @@ def init_post_tables():
         )
     """)
 
-    # 게시글 좋아요 테이블
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS post_likes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -980,7 +1001,6 @@ def init_post_tables():
         )
     """)
 
-    # 게시글 댓글 테이블
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS post_comments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -995,13 +1015,13 @@ def init_post_tables():
         )
     """)
 
-    # 인덱스
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_posts_category ON posts(category)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_posts_created ON posts(created_at DESC)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_post_comments_post ON post_comments(post_id)")
 
     conn.commit()
     conn.close()
+    logger.info("✅ Posts tables initialized (SQLite fallback)")
 
 
 def create_post(
@@ -1011,26 +1031,36 @@ def create_post(
     category: str = "free",
     tags: list = None
 ) -> int:
-    """게시글 작성"""
+    """게시글 작성 - Supabase 또는 SQLite"""
+    if USE_SUPABASE and supabase:
+        try:
+            response = supabase.table("posts").insert({
+                "user_id": user_id,
+                "user_name": f"블로거{user_id % 10000:04d}",
+                "title": title,
+                "content": content,
+                "category": category,
+                "tags": tags or [],
+                "views": 0,
+                "likes": 0,
+                "comments_count": 0,
+            }).execute()
+            return response.data[0]["id"] if response.data else None
+        except Exception as e:
+            logger.error(f"Supabase create_post error: {e}")
+            return None
+
+    # SQLite fallback
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    # 사용자 이름 조회 (마스킹)
-    cursor.execute("SELECT level_name FROM user_points WHERE user_id = ?", (user_id,))
-    user_point = cursor.fetchone()
-    user_level = user_point['level_name'] if user_point else "Bronze"
-
     tags_json = json.dumps(tags) if tags else None
-
     cursor.execute("""
         INSERT INTO posts (user_id, user_name, title, content, category, tags)
         VALUES (?, ?, ?, ?, ?, ?)
-    """, (user_id, user_level, title, content, category, tags_json))
-
+    """, (user_id, f"블로거{user_id % 10000:04d}", title, content, category, tags_json))
     post_id = cursor.lastrowid
     conn.commit()
     conn.close()
-
     return post_id
 
 
@@ -1041,10 +1071,40 @@ def get_posts(
     offset: int = 0,
     search: str = None
 ) -> list:
-    """게시글 목록 조회"""
+    """게시글 목록 조회 - Supabase 또는 SQLite"""
+    if USE_SUPABASE and supabase:
+        try:
+            query = supabase.table("posts").select("*").eq("is_deleted", False)
+
+            if category:
+                query = query.eq("category", category)
+
+            if search:
+                query = query.or_(f"title.ilike.%{search}%,content.ilike.%{search}%")
+
+            # 정렬
+            if sort_by == "popular":
+                query = query.order("likes", desc=True).order("created_at", desc=True)
+            elif sort_by == "comments":
+                query = query.order("comments_count", desc=True).order("created_at", desc=True)
+            else:
+                query = query.order("is_pinned", desc=True).order("created_at", desc=True)
+
+            response = query.range(offset, offset + limit - 1).execute()
+
+            result = []
+            for row in response.data:
+                row['author'] = f"블로거{row['user_id'] % 10000:04d}"
+                row['tags'] = row.get('tags') or []
+                result.append(row)
+            return result
+        except Exception as e:
+            logger.error(f"Supabase get_posts error: {e}")
+            return []
+
+    # SQLite fallback
     conn = get_db_connection()
     cursor = conn.cursor()
-
     query = "SELECT * FROM posts WHERE is_deleted = FALSE"
     params = []
 
@@ -1056,12 +1116,11 @@ def get_posts(
         query += " AND (title LIKE ? OR content LIKE ?)"
         params.extend([f"%{search}%", f"%{search}%"])
 
-    # 정렬
     if sort_by == "popular":
         query += " ORDER BY likes DESC, created_at DESC"
     elif sort_by == "comments":
         query += " ORDER BY comments_count DESC, created_at DESC"
-    else:  # recent
+    else:
         query += " ORDER BY is_pinned DESC, created_at DESC"
 
     query += " LIMIT ? OFFSET ?"
@@ -1075,18 +1134,43 @@ def get_posts(
     for row in rows:
         data = dict(row)
         data['tags'] = json.loads(data['tags']) if data.get('tags') else []
-        # 마스킹된 사용자 ID 생성
         data['author'] = f"블로거{data['user_id'] % 10000:04d}"
         result.append(data)
-
     return result
 
 
 def get_post(post_id: int, user_id: int = None) -> dict:
-    """게시글 상세 조회"""
+    """게시글 상세 조회 - Supabase 또는 SQLite"""
+    if USE_SUPABASE and supabase:
+        try:
+            response = supabase.table("posts").select("*").eq("id", post_id).eq("is_deleted", False).execute()
+            if not response.data:
+                return None
+
+            data = response.data[0]
+
+            # 조회수 증가
+            supabase.table("posts").update({"views": data.get("views", 0) + 1}).eq("id", post_id).execute()
+
+            data['tags'] = data.get('tags') or []
+            data['author'] = f"블로거{data['user_id'] % 10000:04d}"
+            data['is_mine'] = user_id == data['user_id'] if user_id else False
+
+            # 좋아요 여부
+            if user_id:
+                like_response = supabase.table("post_likes").select("id").eq("post_id", post_id).eq("user_id", user_id).execute()
+                data['is_liked'] = len(like_response.data) > 0
+            else:
+                data['is_liked'] = False
+
+            return data
+        except Exception as e:
+            logger.error(f"Supabase get_post error: {e}")
+            return None
+
+    # SQLite fallback
     conn = get_db_connection()
     cursor = conn.cursor()
-
     cursor.execute("SELECT * FROM posts WHERE id = ? AND is_deleted = FALSE", (post_id,))
     row = cursor.fetchone()
 
@@ -1094,7 +1178,6 @@ def get_post(post_id: int, user_id: int = None) -> dict:
         conn.close()
         return None
 
-    # 조회수 증가
     cursor.execute("UPDATE posts SET views = views + 1 WHERE id = ?", (post_id,))
     conn.commit()
 
@@ -1103,7 +1186,6 @@ def get_post(post_id: int, user_id: int = None) -> dict:
     data['author'] = f"블로거{data['user_id'] % 10000:04d}"
     data['is_mine'] = user_id == data['user_id'] if user_id else False
 
-    # 좋아요 여부
     if user_id:
         cursor.execute("SELECT 1 FROM post_likes WHERE post_id = ? AND user_id = ?", (post_id, user_id))
         data['is_liked'] = cursor.fetchone() is not None
@@ -1115,14 +1197,23 @@ def get_post(post_id: int, user_id: int = None) -> dict:
 
 
 def update_post(post_id: int, update_data: dict) -> bool:
-    """게시글 수정"""
+    """게시글 수정 - Supabase 또는 SQLite"""
+    update_data['updated_at'] = datetime.now().isoformat()
+
+    if USE_SUPABASE and supabase:
+        try:
+            response = supabase.table("posts").update(update_data).eq("id", post_id).execute()
+            return len(response.data) > 0
+        except Exception as e:
+            logger.error(f"Supabase update_post error: {e}")
+            return False
+
+    # SQLite fallback
     conn = get_db_connection()
     cursor = conn.cursor()
 
     if 'tags' in update_data and isinstance(update_data['tags'], list):
         update_data['tags'] = json.dumps(update_data['tags'])
-
-    update_data['updated_at'] = datetime.now().isoformat()
 
     set_clause = ", ".join([f"{k} = ?" for k in update_data.keys()])
     values = list(update_data.values()) + [post_id]
@@ -1130,80 +1221,137 @@ def update_post(post_id: int, update_data: dict) -> bool:
     cursor.execute(f"UPDATE posts SET {set_clause} WHERE id = ?", values)
     conn.commit()
     conn.close()
-
     return True
 
 
 def delete_post(post_id: int) -> bool:
-    """게시글 삭제 (소프트 삭제)"""
+    """게시글 삭제 (소프트 삭제) - Supabase 또는 SQLite"""
+    if USE_SUPABASE and supabase:
+        try:
+            response = supabase.table("posts").update({"is_deleted": True}).eq("id", post_id).execute()
+            return len(response.data) > 0
+        except Exception as e:
+            logger.error(f"Supabase delete_post error: {e}")
+            return False
+
+    # SQLite fallback
     conn = get_db_connection()
     cursor = conn.cursor()
-
     cursor.execute("UPDATE posts SET is_deleted = TRUE WHERE id = ?", (post_id,))
     conn.commit()
     conn.close()
-
     return True
 
 
 def like_post(post_id: int, user_id: int) -> dict:
-    """게시글 좋아요 토글"""
+    """게시글 좋아요 토글 - Supabase 또는 SQLite"""
+    if USE_SUPABASE and supabase:
+        try:
+            # 이미 좋아요 했는지 확인
+            existing = supabase.table("post_likes").select("id").eq("post_id", post_id).eq("user_id", user_id).execute()
+
+            if existing.data:
+                # 좋아요 취소
+                supabase.table("post_likes").delete().eq("post_id", post_id).eq("user_id", user_id).execute()
+                # likes 감소
+                post = supabase.table("posts").select("likes").eq("id", post_id).execute()
+                if post.data:
+                    new_likes = max(0, post.data[0].get("likes", 0) - 1)
+                    supabase.table("posts").update({"likes": new_likes}).eq("id", post_id).execute()
+                return {"success": True, "liked": False, "message": "좋아요 취소"}
+            else:
+                # 좋아요
+                supabase.table("post_likes").insert({"post_id": post_id, "user_id": user_id}).execute()
+                # likes 증가
+                post = supabase.table("posts").select("likes").eq("id", post_id).execute()
+                if post.data:
+                    new_likes = post.data[0].get("likes", 0) + 1
+                    supabase.table("posts").update({"likes": new_likes}).eq("id", post_id).execute()
+                return {"success": True, "liked": True, "message": "좋아요 완료"}
+        except Exception as e:
+            logger.error(f"Supabase like_post error: {e}")
+            return {"success": False, "message": str(e)}
+
+    # SQLite fallback
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    # 이미 좋아요 했는지 확인
     cursor.execute("SELECT 1 FROM post_likes WHERE post_id = ? AND user_id = ?", (post_id, user_id))
     existing = cursor.fetchone()
 
     if existing:
-        # 좋아요 취소
         cursor.execute("DELETE FROM post_likes WHERE post_id = ? AND user_id = ?", (post_id, user_id))
         cursor.execute("UPDATE posts SET likes = likes - 1 WHERE id = ?", (post_id,))
         result = {"success": True, "liked": False, "message": "좋아요 취소"}
     else:
-        # 좋아요
         cursor.execute("INSERT INTO post_likes (post_id, user_id) VALUES (?, ?)", (post_id, user_id))
         cursor.execute("UPDATE posts SET likes = likes + 1 WHERE id = ?", (post_id,))
         result = {"success": True, "liked": True, "message": "좋아요 완료"}
 
     conn.commit()
     conn.close()
-
     return result
 
 
 def create_post_comment(post_id: int, user_id: int, content: str, parent_id: int = None) -> int:
-    """게시글 댓글 작성"""
+    """게시글 댓글 작성 - Supabase 또는 SQLite"""
+    if USE_SUPABASE and supabase:
+        try:
+            response = supabase.table("post_comments").insert({
+                "post_id": post_id,
+                "user_id": user_id,
+                "user_name": f"블로거{user_id % 10000:04d}",
+                "content": content,
+                "parent_id": parent_id,
+            }).execute()
+
+            if response.data:
+                # 댓글 수 증가
+                post = supabase.table("posts").select("comments_count").eq("id", post_id).execute()
+                if post.data:
+                    new_count = post.data[0].get("comments_count", 0) + 1
+                    supabase.table("posts").update({"comments_count": new_count}).eq("id", post_id).execute()
+                return response.data[0]["id"]
+            return None
+        except Exception as e:
+            logger.error(f"Supabase create_post_comment error: {e}")
+            return None
+
+    # SQLite fallback
     conn = get_db_connection()
     cursor = conn.cursor()
-
     cursor.execute("""
         INSERT INTO post_comments (post_id, user_id, content, parent_id)
         VALUES (?, ?, ?, ?)
     """, (post_id, user_id, content, parent_id))
-
     comment_id = cursor.lastrowid
-
-    # 댓글 수 증가
     cursor.execute("UPDATE posts SET comments_count = comments_count + 1 WHERE id = ?", (post_id,))
-
     conn.commit()
     conn.close()
-
     return comment_id
 
 
 def get_post_comments(post_id: int) -> list:
-    """게시글 댓글 조회"""
+    """게시글 댓글 조회 - Supabase 또는 SQLite"""
+    if USE_SUPABASE and supabase:
+        try:
+            response = supabase.table("post_comments").select("*").eq("post_id", post_id).eq("is_deleted", False).order("created_at").execute()
+            result = []
+            for row in response.data:
+                row['author'] = f"블로거{row['user_id'] % 10000:04d}"
+                result.append(row)
+            return result
+        except Exception as e:
+            logger.error(f"Supabase get_post_comments error: {e}")
+            return []
+
+    # SQLite fallback
     conn = get_db_connection()
     cursor = conn.cursor()
-
     cursor.execute("""
         SELECT * FROM post_comments
         WHERE post_id = ? AND is_deleted = FALSE
         ORDER BY created_at ASC
     """, (post_id,))
-
     rows = cursor.fetchall()
     conn.close()
 
@@ -1212,7 +1360,6 @@ def get_post_comments(post_id: int) -> list:
         data = dict(row)
         data['author'] = f"블로거{data['user_id'] % 10000:04d}"
         result.append(data)
-
     return result
 
 
