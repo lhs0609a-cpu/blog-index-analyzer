@@ -126,3 +126,47 @@ def initialize_db():
             logger.warning(f"Error executing init query: {e}")
 
     logger.info("SQLite database initialized")
+
+
+async def get_blog_by_id(blog_id: str) -> Optional[Dict]:
+    """
+    블로그 ID로 블로그 정보 조회
+    user_blogs.db의 user_saved_blogs 테이블에서 조회
+    """
+    # user_blogs.db 경로
+    if sys.platform == "win32":
+        user_blogs_db_path = os.path.join(os.path.dirname(__file__), "..", "data", "user_blogs.db")
+    else:
+        user_blogs_db_path = "/data/user_blogs.db"
+
+    try:
+        conn = sqlite3.connect(user_blogs_db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT
+                blog_id,
+                blog_name as name,
+                level,
+                grade,
+                total_score,
+                total_posts,
+                total_visitors,
+                neighbor_count,
+                last_analyzed_at
+            FROM user_saved_blogs
+            WHERE blog_id = ?
+            ORDER BY updated_at DESC
+            LIMIT 1
+        """, (blog_id,))
+
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return dict(row)
+        return None
+    except Exception as e:
+        logger.warning(f"Error getting blog by id: {e}")
+        return None
