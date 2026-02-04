@@ -540,6 +540,47 @@ def check_usage_limit(user_id: int, usage_type: str) -> Dict:
     }
 
 
+async def check_feature_access(user_id: int, feature: str) -> Dict:
+    """
+    특정 기능에 대한 접근 권한 확인
+
+    Args:
+        user_id: 사용자 ID
+        feature: 기능명 (winner_keywords, blue_ocean, etc.)
+
+    Returns:
+        dict with 'allowed' (bool) and 'plan' (str)
+    """
+    # 기능별 최소 플랜 요구사항
+    feature_requirements = {
+        "winner_keywords": ["pro", "business"],  # Pro 이상
+        "blue_ocean": ["basic", "pro", "business"],  # Basic 이상
+        "profitable_keywords": ["pro", "business"],  # Pro 이상
+        "marketplace": ["pro", "business"],  # Pro 이상
+        "ad_optimization": ["business"],  # Business만
+        "bulk_analysis": ["pro", "business"],  # Pro 이상
+    }
+
+    subscription = get_user_subscription(user_id)
+    if not subscription:
+        subscription = create_subscription(user_id, "free")
+
+    user_plan = subscription.get('plan_type', 'free')
+
+    # 해당 기능의 요구 플랜 목록
+    required_plans = feature_requirements.get(feature, ["free", "basic", "pro", "business"])
+
+    # 사용자 플랜이 요구 플랜에 포함되는지 확인
+    allowed = user_plan in required_plans
+
+    return {
+        "allowed": allowed,
+        "plan": user_plan,
+        "feature": feature,
+        "required_plans": required_plans
+    }
+
+
 # ============ 결제 내역 함수 ============
 
 def create_payment(
