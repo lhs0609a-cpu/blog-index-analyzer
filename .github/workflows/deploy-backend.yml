@@ -83,7 +83,7 @@ jobs:
             docker build --no-cache --pull -t blog-api .
             docker run -d \
               --name blog-analyzer-api \
-              -p 8000:8001 \
+              -p 8000:8000 \
               --env-file .env \
               --restart unless-stopped \
               --memory=2g \
