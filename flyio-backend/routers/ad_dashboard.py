@@ -357,9 +357,38 @@ async def update_settings(
 
 @router.post("/settings/{platform_id}/toggle-auto")
 async def toggle_auto_optimization(platform_id: str, user_id: int = Query(...)):
-    """자동 최적화 토글"""
+    """자동 최적화 토글 - 활성화 시 연결 테스트 수행"""
     settings = get_optimization_settings(user_id, platform_id)
     new_status = not settings.get("is_auto_enabled", False)
+
+    # 활성화하려는 경우, 먼저 연결 테스트 수행
+    if new_status:
+        account = get_ad_account(user_id, platform_id)
+        if not account:
+            raise HTTPException(
+                status_code=404,
+                detail="광고 계정이 연동되어 있지 않습니다. 먼저 계정을 연동해주세요."
+            )
+
+        try:
+            service = get_platform_service(platform_id, account["credentials"])
+            is_valid = await service.validate_credentials()
+            if not is_valid:
+                raise HTTPException(
+                    status_code=400,
+                    detail="API 자격증명이 유효하지 않습니다. 계정 설정을 확인해주세요."
+                )
+            # 실제 연결 테스트
+            await service.connect()
+            await service.disconnect()
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Auto-optimization connection test failed: {e}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"광고 플랫폼 연결 테스트 실패: {str(e)}"
+            )
 
     settings["is_auto_enabled"] = new_status
     save_optimization_settings(user_id, platform_id, settings)
@@ -367,7 +396,7 @@ async def toggle_auto_optimization(platform_id: str, user_id: int = Query(...)):
     return {
         "success": True,
         "is_auto_enabled": new_status,
-        "message": "자동 최적화가 활성화되었습니다." if new_status else "자동 최적화가 비활성화되었습니다."
+        "message": "자동 최적화가 활성화되었습니다. 15분마다 자동으로 입찰가가 조정됩니다." if new_status else "자동 최적화가 비활성화되었습니다."
     }
 
 

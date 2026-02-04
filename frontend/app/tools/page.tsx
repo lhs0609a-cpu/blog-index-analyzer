@@ -1184,27 +1184,157 @@ export default function ToolsPage() {
         titles: data.titles.map((t: any) => ({
           title: t.title,
           ctr: t.ctr_score / 10,
-          emotion: t.style,
-          type: '생성형'
+          emotion: t.emotion || t.style || '정보',
+          type: t.style || '생성형'
         })).sort((a: any, b: any) => b.ctr - a.ctr)
       })
 
       toast.success('AI 제목 생성 완료!')
     } catch (error) {
-      // Fallback to template-based generation
-      const titleTemplates = [
-        { template: `${titleKeyword} 완벽 정리! 이것만 알면 끝`, emotion: '정보형', type: '리스트' },
-        { template: `${titleKeyword}, 아직도 모르세요? 꼭 알아야 할 꿀팁`, emotion: '호기심', type: '질문형' },
-        { template: `${titleKeyword} 후기 | 직접 써보고 솔직하게 말합니다`, emotion: '신뢰', type: '후기형' },
-        { template: `2024 ${titleKeyword} 추천 TOP 10 (+ 비교 분석)`, emotion: '정보형', type: '리스트' },
-        { template: `${titleKeyword} 초보자도 쉽게! 단계별 가이드`, emotion: '친근함', type: '가이드' },
-      ]
+      // Fallback to keyword-type-based template generation
+      const keyword = titleKeyword
+      const currentYear = new Date().getFullYear()
+
+      // 한국어 조사 처리 (이/가)
+      const getJosa = (word: string, withBatchim: string, withoutBatchim: string) => {
+        if (!word) return withBatchim
+        const lastChar = word.charCodeAt(word.length - 1)
+        // 한글 유니코드 범위 체크 (가-힣)
+        if (lastChar >= 0xAC00 && lastChar <= 0xD7A3) {
+          const code = lastChar - 0xAC00
+          return code % 28 === 0 ? withoutBatchim : withBatchim
+        }
+        return withBatchim
+      }
+
+      // 키워드 유형 분석 (우선순위 순서)
+      const analyzeKeywordType = (kw: string) => {
+        // 순서가 중요: 더 구체적인 유형이 먼저 와야 함
+        const typeOrder = ['medical', 'parenting', 'beauty', 'travel', 'local', 'it_tech', 'howto', 'product']
+        const types: Record<string, string[]> = {
+          medical: ['병원', '의원', '클리닉', '피부과', '성형', '치과', '안과', '정형외과', '한의원', '시술', '치료'],
+          parenting: ['육아', '아기', '아이', '출산', '임신', '태교', '유아'],
+          beauty: ['화장품', '스킨케어', '메이크업', '헤어', '네일', '뷰티'],
+          travel: ['여행', '관광', '숙소', '호텔', '펜션', '투어'],
+          local: ['맛집', '카페', '식당', '음식점', '레스토랑', '베이커리'],
+          it_tech: ['앱', '어플', '프로그램', '코딩', '개발'],
+          howto: ['방법', '하는법', '만들기', '레시피', '노하우', '비법'],
+          product: ['비교', '가격', '리뷰', '구매', '쇼핑', '최저가'],
+        }
+
+        for (const type of typeOrder) {
+          if (types[type]?.some(k => kw.includes(k))) return type
+        }
+        return 'general'
+      }
+
+      const keywordType = analyzeKeywordType(keyword)
+
+      // 키워드 유형별 템플릿
+      const templatesByType: Record<string, Array<{ template: string; emotion: string; type: string }>> = {
+        medical: [
+          { template: `${keyword} 실제 방문 후기 (비용/시술/결과)`, emotion: '신뢰', type: '후기형' },
+          { template: `${keyword} 가격표 공개! 시술별 비용 총정리`, emotion: '실용', type: '정보형' },
+          { template: `${keyword} 선택 전 꼭 확인해야 할 3가지`, emotion: '주의', type: '체크리스트' },
+          { template: `${keyword} 어디가 좋을까? 실제 환자 추천`, emotion: '신뢰', type: '추천형' },
+          { template: `직장인이 ${keyword} 다녀온 솔직 후기`, emotion: '공감', type: '후기형' },
+          { template: `${keyword} 예약 전 알아두면 좋은 꿀팁`, emotion: '실용', type: '팁형' },
+          { template: `${keyword} 시술 종류별 장단점 비교`, emotion: '정보', type: '비교형' },
+          { template: `첫 ${keyword} 방문기 | 긴장했는데 괜찮았어요`, emotion: '공감', type: '후기형' },
+        ],
+        local: [
+          { template: `${keyword} 웨이팅 없이 가는 법`, emotion: '실용', type: '팁형' },
+          { template: `${keyword} 메뉴 추천 | 이거 시키세요`, emotion: '확신', type: '추천형' },
+          { template: `${keyword} 솔직 후기 (+ 주차/웨이팅 정보)`, emotion: '신뢰', type: '후기형' },
+          { template: `재방문 의사 100%! ${keyword} 리뷰`, emotion: '만족', type: '후기형' },
+          { template: `${keyword} 인생맛집 인정? 직접 먹어봄`, emotion: '솔직', type: '후기형' },
+          { template: `${keyword} 시그니처 메뉴 3종 비교`, emotion: '정보', type: '비교형' },
+          { template: `혼밥하기 좋은 ${keyword} 후기`, emotion: '공감', type: '후기형' },
+          { template: `인스타 감성 ${keyword} | 사진 스팟은 여기`, emotion: '감성', type: '정보형' },
+        ],
+        product: [
+          { template: `${keyword} 한 달 사용 후기 (장단점 정리)`, emotion: '객관', type: '후기형' },
+          { template: `${currentYear} ${keyword} 인기 순위 TOP 5`, emotion: '정보', type: '리스트' },
+          { template: `${keyword} 가성비 vs 프리미엄 뭘 살까?`, emotion: '고민', type: '비교형' },
+          { template: `실패 없는 ${keyword} 고르는 법`, emotion: '확신', type: '가이드' },
+          { template: `${keyword} 최저가 구매처 총정리`, emotion: '실용', type: '정보형' },
+          { template: `${keyword} 사기 전에 꼭 보세요`, emotion: '주의', type: '경고형' },
+          { template: `1년째 쓰는 ${keyword} 찐 리뷰`, emotion: '신뢰', type: '후기형' },
+          { template: `${keyword} 이건 사지 마세요 (실패담)`, emotion: '솔직', type: '경고형' },
+        ],
+        howto: [
+          { template: `${keyword} 왕초보도 따라하는 쉬운 방법`, emotion: '친근', type: '가이드' },
+          { template: `${keyword} 프로처럼 하는 5단계`, emotion: '전문', type: '리스트' },
+          { template: `실패 없는 ${keyword} 비법 공개`, emotion: '확신', type: '팁형' },
+          { template: `${keyword} 자주 하는 실수 TOP 3`, emotion: '주의', type: '경고형' },
+          { template: `10분 만에 끝내는 ${keyword}`, emotion: '실용', type: '효율형' },
+          { template: `${keyword} 전문가가 알려주는 핵심 포인트`, emotion: '신뢰', type: '전문형' },
+          { template: `${keyword} 처음이라면 이것부터`, emotion: '친근', type: '가이드' },
+          { template: `${keyword} 꿀팁 모음 (저장 필수)`, emotion: '유용', type: '팁형' },
+        ],
+        beauty: [
+          { template: `${keyword} 한 달 사용 솔직 리뷰`, emotion: '솔직', type: '후기형' },
+          { template: `피부과 의사가 추천한 ${keyword}`, emotion: '신뢰', type: '전문형' },
+          { template: `${keyword} 가성비 vs 명품 비교`, emotion: '객관', type: '비교형' },
+          { template: `건성/지성별 ${keyword} 추천`, emotion: '실용', type: '맞춤형' },
+          { template: `${keyword} 올바른 사용법 (순서 중요!)`, emotion: '정보', type: '가이드' },
+          { template: `${keyword} 이렇게 쓰면 효과 2배`, emotion: '확신', type: '팁형' },
+          { template: `${keyword} 성분 분석 | 이건 피하세요`, emotion: '전문', type: '분석형' },
+          { template: `공병 각! ${keyword} 재구매 후기`, emotion: '확신', type: '후기형' },
+        ],
+        travel: [
+          { template: `${keyword} 2박 3일 코스 총정리`, emotion: '실용', type: '가이드' },
+          { template: `${keyword} 현지인 추천 숨은 명소`, emotion: '특별', type: '추천형' },
+          { template: `${keyword} 예산별 숙소 추천`, emotion: '실용', type: '추천형' },
+          { template: `${keyword} 가기 전 꼭 알아야 할 것들`, emotion: '필수', type: '정보형' },
+          { template: `비수기 ${keyword} 여행 꿀팁`, emotion: '실용', type: '팁형' },
+          { template: `${keyword} 맛집/카페 리스트 공유`, emotion: '공유', type: '리스트' },
+          { template: `혼자 떠난 ${keyword} 여행기`, emotion: '감성', type: '후기형' },
+          { template: `${keyword} 이것만은 꼭 해보세요`, emotion: '강조', type: '추천형' },
+        ],
+        parenting: [
+          { template: `${keyword} 선배맘이 알려주는 꿀팁`, emotion: '공감', type: '팁형' },
+          { template: `${keyword} 이렇게 하니까 달라졌어요`, emotion: '경험', type: '후기형' },
+          { template: `첫째 때 몰랐던 ${keyword} 비법`, emotion: '깨달음', type: '비법형' },
+          { template: `${keyword} 월령별 체크리스트`, emotion: '실용', type: '가이드' },
+          { template: `소아과 의사가 말하는 ${keyword}`, emotion: '신뢰', type: '전문형' },
+          { template: `${keyword} 육아템 솔직 리뷰`, emotion: '솔직', type: '후기형' },
+          { template: `워킹맘의 ${keyword} 루틴 공유`, emotion: '공감', type: '일상형' },
+          { template: `${keyword} 실수담 & 해결법`, emotion: '공감', type: '경험형' },
+        ],
+        it_tech: [
+          { template: `${keyword} 초보자 입문 가이드`, emotion: '친근', type: '가이드' },
+          { template: `${keyword} 실무에서 바로 쓰는 팁`, emotion: '실용', type: '팁형' },
+          { template: `개발자가 추천하는 ${keyword}`, emotion: '전문', type: '추천형' },
+          { template: `${keyword} 무료로 시작하는 방법`, emotion: '실용', type: '가이드' },
+          { template: `${keyword} 에러 해결법 모음`, emotion: '유용', type: '해결형' },
+          { template: `6개월 사용한 ${keyword} 후기`, emotion: '경험', type: '후기형' },
+          { template: `${keyword} 숨겨진 기능 10가지`, emotion: '발견', type: '리스트' },
+          { template: `비전공자도 이해하는 ${keyword}`, emotion: '친근', type: '설명형' },
+        ],
+        general: [
+          { template: `${keyword} 완벽 정리 | 이것만 알면 끝`, emotion: '확신', type: '정보형' },
+          { template: `${keyword} 직접 해본 솔직 후기`, emotion: '솔직', type: '후기형' },
+          { template: `${currentYear} ${keyword} 총정리`, emotion: '최신', type: '정보형' },
+          { template: `${keyword} 처음이라면 여기서 시작`, emotion: '친근', type: '가이드' },
+          { template: `${keyword} 자주 묻는 질문 Q&A`, emotion: '유용', type: 'Q&A형' },
+          { template: `${keyword} 비교 분석 | 뭐가 좋을까?`, emotion: '고민', type: '비교형' },
+          { template: `한눈에 보는 ${keyword} 가이드`, emotion: '간편', type: '가이드' },
+          { template: `${keyword} 꿀팁 5가지 (저장 필수)`, emotion: '유용', type: '리스트' },
+        ],
+      }
+
+      // 해당 유형의 템플릿 가져오기 (없으면 general)
+      const templates = templatesByType[keywordType] || templatesByType.general
+
+      // 랜덤하게 섞기
+      const shuffled = [...templates].sort(() => Math.random() - 0.5).slice(0, 8)
 
       setTitleResult({
         keyword: titleKeyword,
-        titles: titleTemplates.map(t => ({
+        titles: shuffled.map((t, i) => ({
           title: t.template,
-          ctr: Math.floor(Math.random() * 5) + 5 + Math.random(),
+          ctr: 9.5 - i * 0.5 + Math.random() * 0.5,
           emotion: t.emotion,
           type: t.type
         })).sort((a, b) => b.ctr - a.ctr)

@@ -98,7 +98,25 @@ class AdAutoOptimizer:
         return self._is_running
 
     async def _run_optimization_cycle(self):
-        """최적화 사이클 실행"""
+        """최적화 사이클 실행 (전체 타임아웃: 10분)"""
+        CYCLE_TIMEOUT = 600  # 전체 사이클 타임아웃: 10분
+        ACCOUNT_TIMEOUT = 120  # 개별 계정 타임아웃: 2분
+
+        try:
+            await asyncio.wait_for(
+                self._run_optimization_cycle_impl(ACCOUNT_TIMEOUT),
+                timeout=CYCLE_TIMEOUT
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"⚠️ Optimization cycle timed out after {CYCLE_TIMEOUT}s")
+            self._last_run_results = {
+                "timestamp": datetime.now().isoformat(),
+                "status": "timeout",
+                "error": f"Cycle timed out after {CYCLE_TIMEOUT}s",
+            }
+
+    async def _run_optimization_cycle_impl(self, account_timeout: int):
+        """최적화 사이클 실행 (실제 구현)"""
         async with self._optimization_lock:
             logger.info("🔄 Starting ad optimization cycle...")
             start_time = datetime.now()
@@ -117,9 +135,20 @@ class AdAutoOptimizer:
 
             for account in accounts:
                 try:
-                    result = await self._optimize_account(account)
+                    # 개별 계정에 타임아웃 적용
+                    result = await asyncio.wait_for(
+                        self._optimize_account(account),
+                        timeout=account_timeout
+                    )
                     results[f"{account['user_id']}_{account['platform_id']}"] = result
                     total_changes += result.get("total_changes", 0)
+
+                except asyncio.TimeoutError:
+                    logger.error(f"⚠️ Optimization timed out for {account['platform_id']} after {account_timeout}s")
+                    results[f"{account['user_id']}_{account['platform_id']}"] = {
+                        "success": False,
+                        "error": f"Timed out after {account_timeout}s"
+                    }
 
                 except Exception as e:
                     logger.error(f"Optimization failed for {account['platform_id']}: {str(e)}")
@@ -211,7 +240,7 @@ class AdAutoOptimizer:
             try:
                 applied = await self._apply_change(service, change, settings)
                 if applied:
-                    # 변경 이력 저장
+                    # 변경 이력 저장 (시간대별 가중치 포함)
                     save_bid_change(
                         user_id=user_id,
                         platform_id=platform_id,
@@ -222,6 +251,8 @@ class AdAutoOptimizer:
                         new_bid=change.get("new_bid", 0),
                         reason=change.get("reason", ""),
                         applied=True,
+                        hourly_modifier=change.get("hourly_modifier", 1.0),
+                        strategy=strategy.value if strategy else None,
                     )
                     applied_changes.append(change)
 

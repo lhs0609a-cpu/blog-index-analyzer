@@ -118,11 +118,23 @@ def init_ad_optimization_tables():
             old_bid REAL NOT NULL,
             new_bid REAL NOT NULL,
             change_reason TEXT,
+            hourly_modifier REAL DEFAULT 1.0,
+            strategy TEXT,
             applied BOOLEAN DEFAULT 0,
             applied_at TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
+    # 기존 테이블에 hourly_modifier, strategy 컬럼이 없으면 추가 (마이그레이션)
+    try:
+        cursor.execute("ALTER TABLE bid_change_history ADD COLUMN hourly_modifier REAL DEFAULT 1.0")
+    except:
+        pass  # 이미 존재하면 무시
+    try:
+        cursor.execute("ALTER TABLE bid_change_history ADD COLUMN strategy TEXT")
+    except:
+        pass  # 이미 존재하면 무시
 
     # 5. 성과 스냅샷 테이블 (일별)
     cursor.execute("""
@@ -1091,20 +1103,22 @@ def save_bid_change(
     old_bid: float,
     new_bid: float,
     reason: str,
-    applied: bool = False
+    applied: bool = False,
+    hourly_modifier: float = 1.0,
+    strategy: str = None
 ) -> int:
-    """입찰가 변경 이력 저장"""
+    """입찰가 변경 이력 저장 (시간대별 가중치 포함)"""
     conn = get_ad_db()
     cursor = conn.cursor()
 
     cursor.execute("""
         INSERT INTO bid_change_history
         (user_id, platform_id, entity_type, entity_id, entity_name,
-         old_bid, new_bid, change_reason, applied, applied_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         old_bid, new_bid, change_reason, hourly_modifier, strategy, applied, applied_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         user_id, platform_id, entity_type, entity_id, entity_name,
-        old_bid, new_bid, reason, applied,
+        old_bid, new_bid, reason, hourly_modifier, strategy, applied,
         datetime.now().isoformat() if applied else None
     ))
 

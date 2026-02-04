@@ -450,6 +450,9 @@ from routers import social_proof
 from routers import ab_test
 from routers import recommendation
 from routers import notification
+from routers import winner_keywords
+from routers import profitable_keywords
+from routers import marketplace
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
@@ -491,6 +494,9 @@ app.include_router(social_proof.router, tags=["소셜프루프"])
 app.include_router(ab_test.router, tags=["A/B테스트"])
 app.include_router(recommendation.router, tags=["추천시스템"])
 app.include_router(notification.router, tags=["알림시스템"])
+app.include_router(winner_keywords.router, prefix="/api/winner-keywords", tags=["1위보장키워드"])
+app.include_router(profitable_keywords.router, prefix="/api", tags=["수익성키워드"])
+app.include_router(marketplace.router, prefix="/api", tags=["마켓플레이스"])
 
 
 if __name__ == "__main__":

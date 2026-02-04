@@ -236,25 +236,272 @@ async def get_keyword_stats(keywords: List[str]) -> List[Dict]:
 # API Endpoints
 # ============================================
 
+def get_korean_josa(word: str, josa_with_batchim: str, josa_without_batchim: str) -> str:
+    """한국어 조사 선택 (받침 유무에 따라)"""
+    if not word:
+        return josa_with_batchim
+    last_char = word[-1]
+    # 한글 유니코드 범위 체크
+    if '가' <= last_char <= '힣':
+        # 받침 유무 확인: (유니코드 - 0xAC00) % 28 == 0이면 받침 없음
+        code = ord(last_char) - 0xAC00
+        if code % 28 == 0:
+            return josa_without_batchim
+    return josa_with_batchim
+
+
+def analyze_keyword_type(keyword: str) -> dict:
+    """키워드 유형 분석 - 의료/지역/상품/맛집 등 분류"""
+    keyword_lower = keyword.lower()
+
+    # 키워드 유형 분류 (우선순위 순서로 정렬)
+    # 더 구체적인 유형이 먼저 와야 함
+    keyword_types = {
+        "medical": ["병원", "의원", "클리닉", "피부과", "성형", "치과", "안과", "정형외과", "한의원", "약국", "시술", "치료", "수술", "진료"],
+        "parenting": ["육아", "아기", "아이", "출산", "임신", "태교", "유아"],  # parenting을 howto보다 먼저
+        "beauty": ["화장품", "스킨케어", "메이크업", "헤어", "네일", "뷰티", "피부관리"],
+        "travel": ["여행", "관광", "숙소", "호텔", "펜션", "에어비앤비", "투어"],
+        "local": ["맛집", "카페", "식당", "음식점", "레스토랑", "베이커리", "술집", "바", "펍"],
+        "it_tech": ["앱", "어플", "프로그램", "소프트웨어", "코딩", "개발", "AI", "IT"],
+        "howto": ["방법", "하는법", "만들기", "레시피", "노하우", "비법"],  # "꿀팁" 제거 (너무 일반적)
+        "product": ["비교", "가격", "리뷰", "구매", "쇼핑", "최저가", "할인"],  # "추천", "후기" 제거 (너무 일반적)
+        "location": ["서울", "강남", "홍대", "이태원", "부산", "대구", "인천", "광주", "대전", "제주", "판교", "분당"],
+    }
+
+    detected_types = []
+    detected_location = None
+
+    for type_name, keywords_list in keyword_types.items():
+        for kw in keywords_list:
+            if kw in keyword:
+                if type_name == "location":
+                    detected_location = kw
+                elif type_name not in detected_types:  # 중복 방지
+                    detected_types.append(type_name)
+
+    # 검색 의도 분석
+    intent = "informational"  # 기본
+    if any(t in detected_types for t in ["medical", "local"]):
+        intent = "local"  # 지역 기반
+    elif any(t in detected_types for t in ["product"]):
+        intent = "transactional"  # 구매 의도
+    elif any(t in detected_types for t in ["howto"]):
+        intent = "how-to"  # 방법 탐색
+
+    return {
+        "types": detected_types,
+        "location": detected_location,
+        "intent": intent,
+        "primary_type": detected_types[0] if detected_types else "general"
+    }
+
+
+def generate_diverse_templates(keyword: str, keyword_analysis: dict, title_patterns: dict, count: int = 10) -> list:
+    """키워드 유형별 다양한 제목 템플릿 생성"""
+    primary_type = keyword_analysis.get("primary_type", "general")
+    location = keyword_analysis.get("location")
+    intent = keyword_analysis.get("intent")
+    current_year = datetime.now().year
+
+    templates_pool = []
+
+    # 의료/병원 키워드
+    if primary_type == "medical":
+        templates_pool.extend([
+            {"title": f"{keyword} 실제 방문 후기 (비용/시술/결과)", "type": "후기형", "emotion": "신뢰"},
+            {"title": f"{keyword} 가격표 공개! 시술별 비용 총정리", "type": "정보형", "emotion": "실용"},
+            {"title": f"{keyword} 선택 전 꼭 확인해야 할 3가지", "type": "체크리스트", "emotion": "주의"},
+            {"title": f"{keyword} 어디가 좋을까? 실제 환자 추천", "type": "추천형", "emotion": "신뢰"},
+            {"title": f"직장인이 {keyword} 다녀온 솔직 후기", "type": "후기형", "emotion": "공감"},
+            {"title": f"{keyword} 예약 전 알아두면 좋은 꿀팁", "type": "팁형", "emotion": "실용"},
+            {"title": f"{keyword} 시술 종류별 장단점 비교", "type": "비교형", "emotion": "정보"},
+            {"title": f"첫 {keyword} 방문기 | 긴장했는데 괜찮았어요", "type": "후기형", "emotion": "공감"},
+            {"title": f"{keyword} 가기 전 궁금했던 것들 Q&A", "type": "Q&A형", "emotion": "친근"},
+            {"title": f"{keyword} 재방문 리뷰 | 달라진 점은?", "type": "후기형", "emotion": "신뢰"},
+        ])
+
+    # 맛집/카페/식당 키워드
+    elif primary_type == "local":
+        location_prefix = f"{location} " if location else ""
+        templates_pool.extend([
+            {"title": f"{location_prefix}{keyword} 웨이팅 없이 가는 법", "type": "팁형", "emotion": "실용"},
+            {"title": f"{keyword} 메뉴 추천 | 이거 시키세요", "type": "추천형", "emotion": "확신"},
+            {"title": f"{keyword} 솔직 후기 (+ 주차/웨이팅 정보)", "type": "후기형", "emotion": "신뢰"},
+            {"title": f"재방문 의사 100%! {keyword} 리뷰", "type": "후기형", "emotion": "만족"},
+            {"title": f"{keyword} 인생맛집 인정? 직접 먹어봄", "type": "후기형", "emotion": "솔직"},
+            {"title": f"{keyword} 시그니처 메뉴 3종 비교", "type": "비교형", "emotion": "정보"},
+            {"title": f"혼밥하기 좋은 {keyword} 후기", "type": "후기형", "emotion": "공감"},
+            {"title": f"{keyword} 방문 전 꼭 알아야 할 것들", "type": "정보형", "emotion": "실용"},
+            {"title": f"인스타 감성 {keyword} | 사진 스팟은 여기", "type": "정보형", "emotion": "감성"},
+            {"title": f"{keyword} 단골 손님이 추천하는 메뉴", "type": "추천형", "emotion": "신뢰"},
+        ])
+
+    # 제품/상품 키워드
+    elif primary_type == "product":
+        templates_pool.extend([
+            {"title": f"{keyword} 한 달 사용 후기 (장단점 정리)", "type": "후기형", "emotion": "객관"},
+            {"title": f"{current_year} {keyword} 인기 순위 TOP 5", "type": "리스트", "emotion": "정보"},
+            {"title": f"{keyword} 가성비 vs 프리미엄 뭘 살까?", "type": "비교형", "emotion": "고민"},
+            {"title": f"실패 없는 {keyword} 고르는 법", "type": "가이드", "emotion": "확신"},
+            {"title": f"{keyword} 최저가 구매처 총정리", "type": "정보형", "emotion": "실용"},
+            {"title": f"{keyword} 사기 전에 꼭 보세요", "type": "경고형", "emotion": "주의"},
+            {"title": f"1년째 쓰는 {keyword} 찐 리뷰", "type": "후기형", "emotion": "신뢰"},
+            {"title": f"{keyword} 초보자 구매 가이드", "type": "가이드", "emotion": "친근"},
+            {"title": f"직접 써본 {keyword} 솔직 비교", "type": "비교형", "emotion": "솔직"},
+            {"title": f"{keyword} 이건 사지 마세요 (실패담)", "type": "경고형", "emotion": "솔직"},
+        ])
+
+    # How-to 키워드
+    elif primary_type == "howto":
+        templates_pool.extend([
+            {"title": f"{keyword} 왕초보도 따라하는 쉬운 방법", "type": "가이드", "emotion": "친근"},
+            {"title": f"{keyword} 프로처럼 하는 5단계", "type": "리스트", "emotion": "전문"},
+            {"title": f"실패 없는 {keyword} 비법 공개", "type": "팁형", "emotion": "확신"},
+            {"title": f"{keyword} 자주 하는 실수 TOP 3", "type": "경고형", "emotion": "주의"},
+            {"title": f"10분 만에 끝내는 {keyword}", "type": "효율형", "emotion": "실용"},
+            {"title": f"{keyword} 전문가가 알려주는 핵심 포인트", "type": "전문형", "emotion": "신뢰"},
+            {"title": f"매일 하는 {keyword} 루틴 공유", "type": "일상형", "emotion": "공감"},
+            {"title": f"{keyword} 처음이라면 이것부터", "type": "가이드", "emotion": "친근"},
+            {"title": f"유튜브 안 보고 {keyword} 성공하기", "type": "도전형", "emotion": "자신감"},
+            {"title": f"{keyword} 꿀팁 모음 (저장 필수)", "type": "팁형", "emotion": "유용"},
+        ])
+
+    # 뷰티/화장품 키워드
+    elif primary_type == "beauty":
+        templates_pool.extend([
+            {"title": f"{keyword} 한 달 사용 솔직 리뷰", "type": "후기형", "emotion": "솔직"},
+            {"title": f"피부과 의사가 추천한 {keyword}", "type": "전문형", "emotion": "신뢰"},
+            {"title": f"{keyword} 가성비 vs 명품 비교", "type": "비교형", "emotion": "객관"},
+            {"title": f"건성/지성별 {keyword} 추천", "type": "맞춤형", "emotion": "실용"},
+            {"title": f"{keyword} 올바른 사용법 (순서 중요!)", "type": "가이드", "emotion": "정보"},
+            {"title": f"30대 직장인의 {keyword} 루틴", "type": "일상형", "emotion": "공감"},
+            {"title": f"{keyword} 이렇게 쓰면 효과 2배", "type": "팁형", "emotion": "확신"},
+            {"title": f"인플루언서들이 숨기는 {keyword} 진실", "type": "폭로형", "emotion": "호기심"},
+            {"title": f"{keyword} 성분 분석 | 이건 피하세요", "type": "분석형", "emotion": "전문"},
+            {"title": f"공병 각! {keyword} 재구매 후기", "type": "후기형", "emotion": "확신"},
+        ])
+
+    # 여행 키워드
+    elif primary_type == "travel":
+        templates_pool.extend([
+            {"title": f"{keyword} 2박 3일 코스 총정리", "type": "가이드", "emotion": "실용"},
+            {"title": f"{keyword} 현지인 추천 숨은 명소", "type": "추천형", "emotion": "특별"},
+            {"title": f"{keyword} 예산별 숙소 추천", "type": "추천형", "emotion": "실용"},
+            {"title": f"{keyword} 가기 전 꼭 알아야 할 것들", "type": "정보형", "emotion": "필수"},
+            {"title": f"비수기 {keyword} 여행 꿀팁", "type": "팁형", "emotion": "실용"},
+            {"title": f"{keyword} 맛집/카페 리스트 공유", "type": "리스트", "emotion": "공유"},
+            {"title": f"혼자 떠난 {keyword} 여행기", "type": "후기형", "emotion": "감성"},
+            {"title": f"{keyword} 실패 없는 일정표", "type": "가이드", "emotion": "확신"},
+            {"title": f"{keyword} 이것만은 꼭 해보세요", "type": "추천형", "emotion": "강조"},
+            {"title": f"인스타 감성 {keyword} 포토스팟", "type": "정보형", "emotion": "감성"},
+        ])
+
+    # 육아 키워드
+    elif primary_type == "parenting":
+        templates_pool.extend([
+            {"title": f"{keyword} 선배맘이 알려주는 꿀팁", "type": "팁형", "emotion": "공감"},
+            {"title": f"{keyword} 이렇게 하니까 달라졌어요", "type": "후기형", "emotion": "경험"},
+            {"title": f"첫째 때 몰랐던 {keyword} 비법", "type": "비법형", "emotion": "깨달음"},
+            {"title": f"{keyword} 월령별 체크리스트", "type": "가이드", "emotion": "실용"},
+            {"title": f"소아과 의사가 말하는 {keyword}", "type": "전문형", "emotion": "신뢰"},
+            {"title": f"{keyword} 육아템 솔직 리뷰", "type": "후기형", "emotion": "솔직"},
+            {"title": f"워킹맘의 {keyword} 루틴 공유", "type": "일상형", "emotion": "공감"},
+            {"title": f"{keyword} 실수담 & 해결법", "type": "경험형", "emotion": "공감"},
+            {"title": f"둘째 낳고 바뀐 {keyword} 방식", "type": "비교형", "emotion": "변화"},
+            {"title": f"{keyword} 이건 하지 마세요 (실패담)", "type": "경고형", "emotion": "솔직"},
+        ])
+
+    # IT/테크 키워드
+    elif primary_type == "it_tech":
+        templates_pool.extend([
+            {"title": f"{keyword} 초보자 입문 가이드", "type": "가이드", "emotion": "친근"},
+            {"title": f"{keyword} 실무에서 바로 쓰는 팁", "type": "팁형", "emotion": "실용"},
+            {"title": f"{keyword} vs 경쟁 서비스 비교", "type": "비교형", "emotion": "객관"},
+            {"title": f"개발자가 추천하는 {keyword}", "type": "추천형", "emotion": "전문"},
+            {"title": f"{keyword} 무료로 시작하는 방법", "type": "가이드", "emotion": "실용"},
+            {"title": f"{keyword} 에러 해결법 모음", "type": "해결형", "emotion": "유용"},
+            {"title": f"6개월 사용한 {keyword} 후기", "type": "후기형", "emotion": "경험"},
+            {"title": f"{keyword} 숨겨진 기능 10가지", "type": "리스트", "emotion": "발견"},
+            {"title": f"{keyword} 이것만 알면 충분해요", "type": "핵심형", "emotion": "효율"},
+            {"title": f"비전공자도 이해하는 {keyword}", "type": "설명형", "emotion": "친근"},
+        ])
+
+    # 일반 키워드 (기본)
+    else:
+        templates_pool.extend([
+            {"title": f"{keyword} 완벽 정리 | 이것만 알면 끝", "type": "정보형", "emotion": "확신"},
+            {"title": f"{keyword} 직접 해본 솔직 후기", "type": "후기형", "emotion": "솔직"},
+            {"title": f"{current_year} {keyword} 총정리", "type": "정보형", "emotion": "최신"},
+            {"title": f"{keyword} 처음이라면 여기서 시작", "type": "가이드", "emotion": "친근"},
+            {"title": f"{keyword} 자주 묻는 질문 Q&A", "type": "Q&A형", "emotion": "유용"},
+            {"title": f"{keyword} 비교 분석 | 뭐가 좋을까?", "type": "비교형", "emotion": "고민"},
+            {"title": f"한눈에 보는 {keyword} 가이드", "type": "가이드", "emotion": "간편"},
+            {"title": f"{keyword} 꿀팁 5가지 (저장 필수)", "type": "리스트", "emotion": "유용"},
+            {"title": f"알고 나면 쉬운 {keyword}", "type": "설명형", "emotion": "깨달음"},
+            {"title": f"{keyword} A to Z 완벽 가이드", "type": "가이드", "emotion": "전문"},
+        ])
+
+    # 상위 제목 패턴 반영하여 추가 템플릿 생성
+    if title_patterns.get("has_number", 0) >= 3:
+        templates_pool.extend([
+            {"title": f"{keyword} 꼭 알아야 할 5가지", "type": "리스트", "emotion": "정보"},
+            {"title": f"{keyword} TOP 5 비교 분석", "type": "리스트", "emotion": "추천"},
+            {"title": f"{keyword} 베스트 7 총정리", "type": "리스트", "emotion": "정보"},
+        ])
+
+    if title_patterns.get("has_question", 0) >= 2:
+        # 조사 처리: "이/가"
+        josa_iga = get_korean_josa(keyword, "이", "가")
+        templates_pool.extend([
+            {"title": f"{keyword}, 어떻게 해야 할까요?", "type": "질문형", "emotion": "고민"},
+            {"title": f"{keyword} 이게 맞나요? 확인해보세요", "type": "질문형", "emotion": "의문"},
+            {"title": f"왜 {keyword}{josa_iga} 중요할까?", "type": "질문형", "emotion": "호기심"},
+        ])
+
+    if title_patterns.get("has_brackets", 0) >= 2:
+        templates_pool.extend([
+            {"title": f"{keyword} [실제 경험담]", "type": "후기형", "emotion": "신뢰"},
+            {"title": f"{keyword} (+ 보너스 팁 공개)", "type": "팁형", "emotion": "보너스"},
+        ])
+
+    # 랜덤하게 섞어서 다양성 확보
+    random.shuffle(templates_pool)
+
+    # 중복 제거 후 반환
+    seen_titles = set()
+    unique_templates = []
+    for t in templates_pool:
+        if t["title"] not in seen_titles:
+            seen_titles.add(t["title"])
+            unique_templates.append(t)
+            if len(unique_templates) >= count:
+                break
+
+    return unique_templates
+
+
 @router.post("/title/generate")
 async def generate_ai_title(
     request: TitleGenerateRequest,
     current_user: dict = Depends(get_current_user)
 ):
     """
-    AI 제목 생성 - 실제 상위 블로그 제목 분석 + OpenAI API 사용
-    상위 노출된 실제 제목을 분석하여 최적화된 제목 생성
+    AI 제목 생성 - 키워드 유형 분석 + 실제 상위 블로그 제목 분석 + OpenAI API 사용
+    키워드별 맞춤 제목을 생성하여 차별화된 결과 제공
     """
     from routers.blogs import fetch_naver_search_results, get_related_keywords_from_searchad
 
     keyword = request.keyword
 
     try:
-        # 1. 실제 상위 블로그 제목들 가져오기
+        # 1. 키워드 유형 분석
+        keyword_analysis = analyze_keyword_type(keyword)
+
+        # 2. 실제 상위 블로그 제목들 가져오기
         top_blogs = await fetch_naver_search_results(keyword, limit=10)
         top_titles = [blog.get("title", "").replace("<b>", "").replace("</b>", "") for blog in top_blogs[:10]]
 
-        # 2. 월간 검색량 조회
+        # 3. 월간 검색량 조회
         monthly_search = 0
         try:
             search_result = await get_related_keywords_from_searchad(keyword)
@@ -268,7 +515,7 @@ async def generate_ai_title(
         except:
             pass
 
-        # 3. 제목 패턴 분석
+        # 4. 제목 패턴 분석
         title_patterns = {
             "has_number": sum(1 for t in top_titles if any(c.isdigit() for c in t)),
             "has_emoji": sum(1 for t in top_titles if any(ord(c) > 127 for c in t)),
@@ -285,9 +532,25 @@ async def generate_ai_title(
         }
         style_desc = style_prompts.get(request.style, style_prompts["engaging"])
 
-        # 4. AI 프롬프트 생성 (실제 상위 제목 참고)
+        # 키워드 유형 설명
+        type_descriptions = {
+            "medical": "의료/병원 관련 - 신뢰성과 전문성 강조, 비용/후기/시술 정보 중심",
+            "local": "맛집/카페 관련 - 실제 방문 경험, 메뉴/분위기/가성비 중심",
+            "product": "제품/상품 관련 - 사용 후기, 가격 비교, 장단점 분석 중심",
+            "howto": "방법/노하우 관련 - 단계별 설명, 팁, 실수 방지 중심",
+            "beauty": "뷰티/화장품 관련 - 피부 타입별 추천, 성분 분석, 사용법 중심",
+            "travel": "여행 관련 - 코스 추천, 숨은 명소, 예산 정보 중심",
+            "parenting": "육아 관련 - 경험 공유, 월령별 정보, 육아템 리뷰 중심",
+            "it_tech": "IT/테크 관련 - 사용법, 비교 분석, 에러 해결 중심",
+            "general": "일반 정보 - 종합 가이드, Q&A, 비교 분석 중심"
+        }
+        type_desc = type_descriptions.get(keyword_analysis["primary_type"], type_descriptions["general"])
+
+        # 5. AI 프롬프트 생성 (키워드 유형 + 실제 상위 제목 참고)
         prompt = f"""당신은 네이버 블로그 제목 전문가입니다.
 키워드: "{keyword}"
+키워드 유형: {keyword_analysis["primary_type"]} ({type_desc})
+검색 의도: {keyword_analysis["intent"]}
 월간 검색량: {monthly_search:,}회
 
 현재 상위 노출된 실제 제목들:
@@ -295,26 +558,30 @@ async def generate_ai_title(
 
 상위 제목 패턴 분석:
 - 숫자 포함: {title_patterns['has_number']}개 ({title_patterns['has_number']*10}%)
-- 이모지 포함: {title_patterns['has_emoji']}개
 - 질문형: {title_patterns['has_question']}개
 - 괄호 사용: {title_patterns['has_brackets']}개
 - 평균 길이: {title_patterns['avg_length']:.0f}자
 
-위 분석을 참고하여 다음 조건으로 블로그 제목 {request.count}개를 생성해주세요:
+다음 조건으로 **서로 다른 스타일의** 블로그 제목 {request.count}개를 생성해주세요:
 1. 스타일: {style_desc}
-2. 상위 제목들의 성공 패턴 반영
+2. 키워드 특성 반영: {type_desc}
 3. 길이: {int(title_patterns['avg_length'])-5}~{int(title_patterns['avg_length'])+5}자
-4. 기존 제목들과 차별화되면서도 검색 의도 충족
+4. **중요**: 각 제목은 서로 다른 관점/형식이어야 함 (후기형, 정보형, 비교형, 리스트형, Q&A형 등 다양하게)
+5. 기존 상위 제목들과 차별화되면서도 검색 의도 충족
+
+각 제목에 대해 다음 정보도 포함:
+- type: 제목 유형 (후기형, 정보형, 비교형, 리스트형, 가이드형, Q&A형 등)
+- emotion: 전달하는 감정 (신뢰, 호기심, 공감, 확신, 실용 등)
 
 JSON 형식으로 응답해주세요:
 [
-  {{"title": "제목1", "ctr_score": 85, "tips": ["실제 데이터 기반 팁1", "팁2"], "reference": "참고한 상위 제목 패턴"}}
+  {{"title": "제목1", "ctr_score": 85, "type": "후기형", "emotion": "신뢰", "tips": ["실제 데이터 기반 팁1"], "reference": "참고 패턴"}}
 ]
 """
 
-        # 5. OpenAI API 호출
+        # 6. OpenAI API 호출
         if settings.OPENAI_API_KEY:
-            ai_response = await call_openai_api(prompt, max_tokens=1000)
+            ai_response = await call_openai_api(prompt, max_tokens=1500)
 
             try:
                 json_match = re.search(r'\[.*\]', ai_response, re.DOTALL)
@@ -323,6 +590,7 @@ JSON 형식으로 응답해주세요:
                     return {
                         "success": True,
                         "keyword": keyword,
+                        "keyword_analysis": keyword_analysis,
                         "style": request.style,
                         "monthly_search": monthly_search,
                         "top_titles_analyzed": len(top_titles),
@@ -331,7 +599,8 @@ JSON 형식으로 응답해주세요:
                             {
                                 "title": t.get("title", ""),
                                 "ctr_score": t.get("ctr_score", 75),
-                                "style": request.style,
+                                "style": t.get("type", request.style),
+                                "emotion": t.get("emotion", "정보"),
                                 "tips": t.get("tips", []),
                                 "reference": t.get("reference", "")
                             }
@@ -341,53 +610,40 @@ JSON 형식으로 응답해주세요:
             except json.JSONDecodeError:
                 pass
 
-        # Fallback: 실제 상위 제목 기반 템플릿 생성
-        templates = []
-
-        # 실제 상위 제목에서 패턴 추출하여 변형
-        for top_title in top_titles[:3]:
-            if request.style == "curious":
-                templates.append(f"{keyword}? 이렇게 하면 됩니다")
-                templates.append(f"왜 {keyword}을 이렇게 하는 걸까요?")
-            elif request.style == "informative":
-                templates.append(f"2024 {keyword} 완벽 정리")
-                templates.append(f"{keyword} 핵심만 정리했습니다")
-            elif request.style == "engaging":
-                templates.append(f"{keyword} 직접 해본 솔직 후기")
-                templates.append(f"나만 알고 싶은 {keyword} 꿀팁")
-            else:  # clickbait
-                templates.append(f"역대급 {keyword} 꿀팁 공개!")
-                templates.append(f"{keyword} 이것 모르면 손해!")
-
-        # 숫자가 효과적이면 숫자 포함 제목 추가
-        if title_patterns["has_number"] >= 3:
-            templates.append(f"{keyword} 꼭 알아야 할 5가지")
-            templates.append(f"{keyword} TOP 3 추천")
-
-        # 질문형이 효과적이면 질문형 추가
-        if title_patterns["has_question"] >= 2:
-            templates.append(f"{keyword}, 어떻게 해야 할까요?")
+        # 7. Fallback: 키워드 유형별 다양한 템플릿 생성
+        template_results = generate_diverse_templates(keyword, keyword_analysis, title_patterns, request.count)
 
         titles = []
-        for i, title in enumerate(templates[:request.count]):
+        base_ctr = 70
+        for i, t in enumerate(template_results):
+            # CTR 점수를 다양하게 (순서 영향 + 랜덤 요소)
+            ctr_variance = random.uniform(-3, 3)
+            ctr_score = base_ctr + (len(template_results) - i) * 2 + ctr_variance
+
             tips = []
             if title_patterns["has_number"] >= 3:
-                tips.append(f"상위 {title_patterns['has_number']}개 제목이 숫자 포함 - 숫자 사용 권장")
+                tips.append(f"상위 {title_patterns['has_number']}개 제목이 숫자 포함")
             if title_patterns["has_question"] >= 2:
                 tips.append(f"질문형 제목 {title_patterns['has_question']}개 상위 노출 중")
-            tips.append(f"평균 제목 길이 {title_patterns['avg_length']:.0f}자 권장")
+            tips.append(f"권장 길이: {int(title_patterns['avg_length'])}자 내외")
+            tips.append(f"키워드 유형: {keyword_analysis['primary_type']}")
 
             titles.append({
-                "title": title,
-                "ctr_score": 75 + i * 3,
-                "style": request.style,
+                "title": t["title"],
+                "ctr_score": round(ctr_score, 1),
+                "style": t["type"],
+                "emotion": t["emotion"],
                 "tips": tips,
-                "reference": f"상위 {len(top_titles)}개 제목 패턴 분석"
+                "reference": f"상위 {len(top_titles)}개 제목 패턴 + 키워드 유형 분석"
             })
+
+        # CTR 점수로 정렬
+        titles.sort(key=lambda x: x["ctr_score"], reverse=True)
 
         return {
             "success": True,
             "keyword": keyword,
+            "keyword_analysis": keyword_analysis,
             "style": request.style,
             "monthly_search": monthly_search,
             "top_titles_analyzed": len(top_titles),
