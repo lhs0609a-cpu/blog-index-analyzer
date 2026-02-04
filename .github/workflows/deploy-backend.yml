@@ -157,3 +157,11 @@ jobs:
             # 커뮤니티 API 테스트
             echo "=== Community API test ==="
             curl -s http://localhost:8000/api/community/automation/test-v3 || echo "test-v3 failed"
+
+            # Docker 컨테이너 로그 확인 (디버깅용)
+            echo "=== Docker container logs ==="
+            docker logs blog-analyzer-api --tail 50 || echo "Failed to get logs"
+
+            # 컨테이너 상태 확인
+            echo "=== Container status ==="
+            docker ps -a | grep blog-analyzer-api || echo "Container not found"
