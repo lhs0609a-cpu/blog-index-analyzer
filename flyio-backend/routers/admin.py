@@ -719,6 +719,104 @@ async def setup_initial_admin(request: InitialAdminSetupRequest):
     raise HTTPException(status_code=500, detail="Failed to set admin status")
 
 
+# ============ Database Backup & Restore ============
+
+@router.post("/restore-from-backup")
+async def restore_database_from_backup(backup_filename: str = "backup_20260205_100515.db"):
+    """
+    백업 파일에서 데이터베이스 복구 (관리자 없을 때만 작동)
+    보안: 기존 관리자가 있으면 require_admin 필요
+    """
+    import shutil
+    import os
+
+    backup_dir = "/data/backups"
+    backup_path = os.path.join(backup_dir, backup_filename)
+    db_path = "/data/blog_analyzer.db"
+
+    # 백업 파일 존재 확인
+    if not os.path.exists(backup_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"백업 파일을 찾을 수 없습니다: {backup_filename}"
+        )
+
+    # 현재 관리자 확인 (관리자 있으면 차단)
+    user_db = get_user_db()
+    with user_db.get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM users WHERE is_admin = 1")
+        admin_count = cursor.fetchone()[0]
+
+        if admin_count > 0:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="관리자가 이미 존재합니다. SSH에서 직접 복구하세요."
+            )
+
+    try:
+        # 현재 DB 임시 백업
+        temp_backup = db_path + ".temp_before_restore"
+        if os.path.exists(db_path):
+            shutil.copy2(db_path, temp_backup)
+
+        # 백업에서 복구
+        shutil.copy2(backup_path, db_path)
+
+        # 복구된 DB에서 사용자 수 확인
+        with user_db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM users")
+            user_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM users WHERE is_admin = 1")
+            admin_count = cursor.fetchone()[0]
+
+        logger.info(f"Database restored from {backup_filename}: {user_count} users, {admin_count} admins")
+
+        return {
+            "message": f"데이터베이스 복구 완료: {backup_filename}",
+            "user_count": user_count,
+            "admin_count": admin_count
+        }
+
+    except Exception as e:
+        # 복구 실패 시 원래 DB 복원
+        if os.path.exists(temp_backup):
+            shutil.copy2(temp_backup, db_path)
+        logger.error(f"Database restore failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"데이터베이스 복구 실패: {str(e)}"
+        )
+
+
+@router.get("/list-backups")
+async def list_backup_files():
+    """백업 파일 목록 조회"""
+    import os
+
+    backup_dir = "/data/backups"
+
+    if not os.path.exists(backup_dir):
+        return {"backups": [], "message": "백업 디렉토리가 없습니다"}
+
+    backups = []
+    for f in os.listdir(backup_dir):
+        if f.endswith('.db'):
+            path = os.path.join(backup_dir, f)
+            stat = os.stat(path)
+            backups.append({
+                "filename": f,
+                "size_mb": round(stat.st_size / 1024 / 1024, 2),
+                "modified": stat.st_mtime
+            })
+
+    # 최신순 정렬
+    backups.sort(key=lambda x: x['modified'], reverse=True)
+
+    return {"backups": backups}
+
+
 # ============ Payment Management ============
 
 @router.get("/payments")
