@@ -731,38 +731,43 @@ async def restore_database_from_backup(backup_filename: str = "backup_20260205_1
     import os
     import subprocess
 
-    # 여러 가능한 백업 경로 시도
+    # 여러 가능한 백업 경로 시도 (Docker 내부 및 호스트 경로)
     possible_paths = [
         f"/data/backups/{backup_filename}",
+        f"/app/data/backups/{backup_filename}",
         f"/home/ubuntu/blog-index-analyzer/flyio-backend/data/backups/{backup_filename}",
         f"/root/blog-index-analyzer/flyio-backend/data/backups/{backup_filename}",
+        # 호스트 마운트 경로들
+        f"/host_data/backups/{backup_filename}",
+        f"/mnt/data/backups/{backup_filename}",
     ]
 
     backup_path = None
     for path in possible_paths:
         if os.path.exists(path):
             backup_path = path
+            logger.info(f"Found backup at: {path}")
             break
 
     db_path = "/data/blog_analyzer.db"
 
     # 백업 파일 존재 확인
     if not backup_path:
-        # 호스트에서 직접 복사 시도 (docker exec 사용)
-        try:
-            result = subprocess.run(
-                ["ls", "-la", "/data/backups/"],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            available_files = result.stdout
-        except:
-            available_files = "확인 불가"
+        # 각 디렉토리 내용 확인
+        available_info = []
+        check_dirs = ["/data/backups", "/app/data/backups", "/host_data/backups"]
+        for check_dir in check_dirs:
+            try:
+                if os.path.exists(check_dir):
+                    files = os.listdir(check_dir)
+                    db_files = [f for f in files if f.endswith('.db')]
+                    available_info.append(f"{check_dir}: {db_files}")
+            except Exception as e:
+                available_info.append(f"{check_dir}: error - {e}")
 
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"백업 파일을 찾을 수 없습니다: {backup_filename}. 사용 가능한 파일: {available_files}"
+            detail=f"백업 파일을 찾을 수 없습니다: {backup_filename}. 확인된 경로: {'; '.join(available_info)}. docker cp로 백업 파일을 컨테이너에 복사하세요: docker cp /data/backups/{backup_filename} blog-analyzer-api:/data/backups/"
         )
 
     # 현재 관리자 확인 (관리자 있으면 차단)
@@ -816,29 +821,49 @@ async def restore_database_from_backup(backup_filename: str = "backup_20260205_1
 
 @router.get("/list-backups")
 async def list_backup_files():
-    """백업 파일 목록 조회"""
+    """백업 파일 목록 조회 (여러 경로 확인)"""
     import os
 
-    backup_dir = "/data/backups"
+    # 여러 백업 디렉토리 확인
+    backup_dirs = [
+        "/data/backups",
+        "/app/data/backups",
+        "/host_data/backups",
+    ]
 
-    if not os.path.exists(backup_dir):
-        return {"backups": [], "message": "백업 디렉토리가 없습니다"}
+    all_backups = []
+    dir_status = {}
 
-    backups = []
-    for f in os.listdir(backup_dir):
-        if f.endswith('.db'):
-            path = os.path.join(backup_dir, f)
-            stat = os.stat(path)
-            backups.append({
-                "filename": f,
-                "size_mb": round(stat.st_size / 1024 / 1024, 2),
-                "modified": stat.st_mtime
-            })
+    for backup_dir in backup_dirs:
+        if not os.path.exists(backup_dir):
+            dir_status[backup_dir] = "not_exists"
+            continue
+
+        dir_status[backup_dir] = "exists"
+        for f in os.listdir(backup_dir):
+            if f.endswith('.db'):
+                path = os.path.join(backup_dir, f)
+                stat = os.stat(path)
+                all_backups.append({
+                    "filename": f,
+                    "path": path,
+                    "dir": backup_dir,
+                    "size_mb": round(stat.st_size / 1024 / 1024, 2),
+                    "modified": stat.st_mtime
+                })
 
     # 최신순 정렬
-    backups.sort(key=lambda x: x['modified'], reverse=True)
+    all_backups.sort(key=lambda x: x['modified'], reverse=True)
 
-    return {"backups": backups}
+    # 볼륨 마운트 상태 확인
+    volume_mounted = os.path.ismount("/data")
+
+    return {
+        "backups": all_backups,
+        "directories": dir_status,
+        "volume_mounted": volume_mounted,
+        "help": "볼륨이 마운트되지 않았다면: docker cp /data/backups/<filename> blog-analyzer-api:/data/backups/"
+    }
 
 
 # ============ Payment Management ============
