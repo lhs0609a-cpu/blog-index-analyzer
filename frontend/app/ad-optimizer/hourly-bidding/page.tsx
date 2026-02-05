@@ -115,7 +115,7 @@ export default function HourlyBiddingPage() {
   const loadSchedule = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("auth_token");
       const res = await fetch(`${API_BASE_URL}/api/ads/hourly-bidding/schedule/${selectedPlatform}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -153,7 +153,7 @@ export default function HourlyBiddingPage() {
 
   const loadPresets = async () => {
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("auth_token");
       const res = await fetch(`${API_BASE_URL}/api/ads/hourly-bidding/presets`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -169,7 +169,7 @@ export default function HourlyBiddingPage() {
 
   const loadPreview = async () => {
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("auth_token");
       const res = await fetch(
         `${API_BASE_URL}/api/ads/hourly-bidding/preview/${selectedPlatform}/week?base_bid=${baseBid}`,
         {
@@ -197,7 +197,7 @@ export default function HourlyBiddingPage() {
 
     setSaving(true);
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("auth_token");
       const res = await fetch(`${API_BASE_URL}/api/ads/hourly-bidding/schedule`, {
         method: "POST",
         headers: {
@@ -227,7 +227,7 @@ export default function HourlyBiddingPage() {
 
   const applyPreset = async (presetName: string) => {
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("auth_token");
       const res = await fetch(`${API_BASE_URL}/api/ads/hourly-bidding/presets/apply`, {
         method: "POST",
         headers: {
@@ -254,7 +254,7 @@ export default function HourlyBiddingPage() {
 
   const autoOptimize = async () => {
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("auth_token");
       const res = await fetch(`${API_BASE_URL}/api/ads/hourly-bidding/auto-optimize`, {
         method: "POST",
         headers: {

@@ -1159,7 +1159,7 @@ export default function ToolsPage() {
 
     setTitleLoading(true)
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('auth_token')
       const response = await fetch(`${API_BASE}/api/tools/title/generate`, {
         method: 'POST',
         headers: {
@@ -1354,7 +1354,7 @@ export default function ToolsPage() {
 
     setBlueOceanLoading(true)
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('auth_token')
       const response = await fetch(`${API_BASE}/api/tools/keyword/discover`, {
         method: 'POST',
         headers: {
@@ -1508,7 +1508,7 @@ export default function ToolsPage() {
 
     setInsightLoading(true)
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('auth_token')
       const response = await fetch(`${API_BASE}/api/tools/insight/analyze?blog_id=${encodeURIComponent(insightBlogId)}&keyword=${encodeURIComponent(insightKeyword)}`, {
         method: 'POST',
         headers: {
@@ -1553,7 +1553,7 @@ export default function ToolsPage() {
 
     setPredictionLoading(true)
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('auth_token')
       // 내 블로그 ID도 함께 전송
       const blogIdParam = predictionBlogId.trim() ? `&blog_id=${encodeURIComponent(predictionBlogId.trim())}` : ''
       const response = await fetch(`${API_BASE}/api/tools/prediction/rank?keyword=${encodeURIComponent(predictionKeyword)}${blogIdParam}`, {
@@ -1606,7 +1606,7 @@ export default function ToolsPage() {
 
     setHashtagLoading(true)
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('auth_token')
       const response = await fetch(`${API_BASE}/api/tools/hashtag/generate`, {
         method: 'POST',
         headers: {
@@ -1774,7 +1774,7 @@ export default function ToolsPage() {
 
     setLowQualityLoading(true)
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('auth_token')
       const response = await fetch(`${API_BASE}/api/tools/lowquality/check`, {
         method: 'POST',
         headers: {
@@ -2259,7 +2259,7 @@ export default function ToolsPage() {
   const loadRevenueData = async () => {
     setRevenueLoading(true)
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('auth_token')
       const response = await fetch(`${API_BASE}/api/revenue/revenue/dashboard`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -2298,7 +2298,7 @@ export default function ToolsPage() {
   const saveRevenueData = async () => {
     setRevenueLoading(true)
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('auth_token')
       const response = await fetch(`${API_BASE}/api/revenue/revenue/monthly`, {
         method: 'POST',
         headers: {
@@ -2325,7 +2325,7 @@ export default function ToolsPage() {
   // 특정 월 데이터 로드
   const loadMonthData = async (year: number, month: number) => {
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('auth_token')
       const response = await fetch(`${API_BASE}/api/revenue/revenue/monthly/${year}/${month}`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -2905,7 +2905,7 @@ export default function ToolsPage() {
   const handleKin = async () => {
     setKinLoading(true)
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('auth_token')
       const response = await fetch(`${API_BASE}/api/tools/kin/questions?category=추천&limit=10`, {
         headers: {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})

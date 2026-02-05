@@ -63,7 +63,7 @@ export function useFeatureAccess(): UseFeatureAccessReturn {
 
     setIsLoading(true)
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('auth_token')
       const response = await fetch(`${API_BASE}/api/system/features`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       })
