@@ -53,9 +53,9 @@ export interface PlanLimits {
 
 export const PLAN_LIMITS: Record<Exclude<Plan, 'guest'>, PlanLimits> = {
   free: {
-    keywordSearchDaily: 8,
-    blogAnalysisDaily: 2,
-    searchResultsCount: 10,
+    keywordSearchDaily: 3,  // P0: 8→3 유료 전환 유도
+    blogAnalysisDaily: 1,   // P0: 2→1 유료 전환 유도
+    searchResultsCount: 5,  // P0: 10→5 결과 제한
     historyDays: 0,
     competitorCompare: 0,
     rankAlert: false,

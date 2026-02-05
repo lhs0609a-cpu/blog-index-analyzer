@@ -3367,45 +3367,85 @@ export default function ToolsPage() {
                     </div>
 
                     <div className="space-y-3">
-                      {titleResult.titles.map((item, i) => (
-                        <motion.div
-                          key={i}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: i * 0.05 }}
-                          className="group flex items-center justify-between p-4 bg-white rounded-xl hover:shadow-md transition-all cursor-pointer"
-                          onClick={() => {
-                            navigator.clipboard.writeText(item.title)
-                            toast.success('제목이 복사되었습니다!')
-                          }}
-                        >
-                          <div className="flex items-center gap-4 flex-1">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${
-                              i === 0 ? 'bg-gradient-to-r from-yellow-400 to-orange-500' :
-                              i === 1 ? 'bg-gradient-to-r from-gray-400 to-gray-500' :
-                              i === 2 ? 'bg-gradient-to-r from-amber-600 to-amber-700' :
-                              'bg-gray-300'
-                            }`}>
-                              {i + 1}
-                            </div>
-                            <div className="flex-1">
-                              <div className="font-medium text-gray-800 group-hover:text-[#0064FF] transition-colors">
-                                {item.title}
+                      {titleResult.titles.map((item, i) => {
+                        // P0: 무료 사용자는 2개만 보여주고 나머지 블러 처리
+                        const isLocked = (plan === 'free' || plan === 'guest') && i >= 2
+
+                        return (
+                          <motion.div
+                            key={i}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: i * 0.05 }}
+                            className={`group relative flex items-center justify-between p-4 bg-white rounded-xl transition-all ${
+                              isLocked ? 'overflow-hidden' : 'hover:shadow-md cursor-pointer'
+                            }`}
+                            onClick={() => {
+                              if (isLocked) {
+                                toast('프로 플랜에서 모든 제목을 확인하세요', { icon: '🔒' })
+                                return
+                              }
+                              navigator.clipboard.writeText(item.title)
+                              toast.success('제목이 복사되었습니다!')
+                            }}
+                          >
+                            {/* P0: 블러 오버레이 */}
+                            {isLocked && (
+                              <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center z-10">
+                                <div className="text-center">
+                                  <Lock className="w-5 h-5 text-gray-400 mx-auto mb-1" />
+                                  <Link href="/pricing" className="text-sm text-[#0064FF] font-medium hover:underline">
+                                    Pro 플랜에서 확인
+                                  </Link>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-3 mt-1">
-                                <span className="text-xs px-2 py-0.5 bg-blue-100 text-[#0064FF] rounded">{item.type}</span>
-                                <span className="text-xs px-2 py-0.5 bg-sky-100 text-sky-700 rounded">{item.emotion}</span>
+                            )}
+                            <div className="flex items-center gap-4 flex-1">
+                              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${
+                                i === 0 ? 'bg-gradient-to-r from-yellow-400 to-orange-500' :
+                                i === 1 ? 'bg-gradient-to-r from-gray-400 to-gray-500' :
+                                i === 2 ? 'bg-gradient-to-r from-amber-600 to-amber-700' :
+                                'bg-gray-300'
+                              }`}>
+                                {i + 1}
+                              </div>
+                              <div className="flex-1">
+                                <div className="font-medium text-gray-800 group-hover:text-[#0064FF] transition-colors">
+                                  {item.title}
+                                </div>
+                                <div className="flex items-center gap-3 mt-1">
+                                  <span className="text-xs px-2 py-0.5 bg-blue-100 text-[#0064FF] rounded">{item.type}</span>
+                                  <span className="text-xs px-2 py-0.5 bg-sky-100 text-sky-700 rounded">{item.emotion}</span>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-lg font-bold text-green-600">{item.ctr.toFixed(1)}%</div>
-                            <div className="text-xs text-gray-500">예상 CTR</div>
-                          </div>
-                          <Copy className="w-5 h-5 text-gray-400 ml-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </motion.div>
-                      ))}
+                            <div className="text-right">
+                              <div className="text-lg font-bold text-green-600">{item.ctr.toFixed(1)}%</div>
+                              <div className="text-xs text-gray-500">예상 CTR</div>
+                            </div>
+                            <Copy className="w-5 h-5 text-gray-400 ml-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </motion.div>
+                        )
+                      })}
                     </div>
+
+                    {/* P0: 무료 사용자 업그레이드 유도 */}
+                    {(plan === 'free' || plan === 'guest') && titleResult.titles.length > 2 && (
+                      <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-bold text-gray-800">🎯 {titleResult.titles.length - 2}개의 추가 제목이 있습니다</div>
+                            <div className="text-sm text-gray-600">Pro 플랜으로 모든 AI 추천 제목을 확인하세요</div>
+                          </div>
+                          <Link
+                            href="/pricing"
+                            className="px-4 py-2 bg-[#0064FF] text-white rounded-lg font-medium hover:bg-blue-600 transition-colors"
+                          >
+                            7일 무료 체험
+                          </Link>
+                        </div>
+                      </div>
+                    )}
                   </motion.div>
                 )}
               </div>
@@ -3485,46 +3525,83 @@ export default function ToolsPage() {
                     </div>
 
                     <div className="grid md:grid-cols-2 gap-3">
-                      {blueOceanResult.keywords.map((item, i) => (
-                        <motion.div
-                          key={i}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: i * 0.05 }}
-                          className={`p-4 rounded-xl border-2 ${
-                            i < 3 ? 'bg-gradient-to-r from-cyan-50 to-blue-50 border-cyan-200' : 'bg-white border-gray-100'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              {i < 3 && <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />}
-                              <span className="font-semibold text-gray-800">{item.keyword}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              {item.trend === 'up' && <TrendingUp className="w-4 h-4 text-green-500" />}
-                              {item.trend === 'down' && <TrendingDown className="w-4 h-4 text-red-500" />}
-                              {item.trend === 'stable' && <span className="text-gray-400">-</span>}
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-3 gap-2 text-center text-sm">
-                            <div className="bg-white/50 rounded-lg p-2">
-                              <div className="font-bold text-blue-600">{item.searchVolume.toLocaleString()}</div>
-                              <div className="text-xs text-gray-500">검색량</div>
-                            </div>
-                            <div className="bg-white/50 rounded-lg p-2">
-                              <div className={`font-bold ${item.competition < 40 ? 'text-green-600' : item.competition < 70 ? 'text-yellow-600' : 'text-red-600'}`}>
-                                {item.competition}%
+                      {blueOceanResult.keywords.map((item, i) => {
+                        // P0: 무료 사용자는 4개만 보여주고 나머지 블러 처리
+                        const isLocked = (plan === 'free' || plan === 'guest') && i >= 4
+
+                        return (
+                          <motion.div
+                            key={i}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: i * 0.05 }}
+                            className={`relative p-4 rounded-xl border-2 ${
+                              i < 3 ? 'bg-gradient-to-r from-cyan-50 to-blue-50 border-cyan-200' : 'bg-white border-gray-100'
+                            }`}
+                          >
+                            <div className={isLocked ? 'blur-sm select-none' : ''}>
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  {i < 3 && <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />}
+                                  <span className="font-semibold text-gray-800">{item.keyword}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  {item.trend === 'up' && <TrendingUp className="w-4 h-4 text-green-500" />}
+                                  {item.trend === 'down' && <TrendingDown className="w-4 h-4 text-red-500" />}
+                                  {item.trend === 'stable' && <span className="text-gray-400">-</span>}
+                                </div>
                               </div>
-                              <div className="text-xs text-gray-500">경쟁도</div>
+                              <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                                <div className="bg-white/50 rounded-lg p-2">
+                                  <div className="font-bold text-blue-600">{item.searchVolume.toLocaleString()}</div>
+                                  <div className="text-xs text-gray-500">검색량</div>
+                                </div>
+                                <div className="bg-white/50 rounded-lg p-2">
+                                  <div className={`font-bold ${item.competition < 40 ? 'text-green-600' : item.competition < 70 ? 'text-yellow-600' : 'text-red-600'}`}>
+                                    {item.competition}%
+                                  </div>
+                                  <div className="text-xs text-gray-500">경쟁도</div>
+                                </div>
+                                <div className="bg-white/50 rounded-lg p-2">
+                                  <div className="font-bold text-[#0064FF]">{item.opportunity}</div>
+                                  <div className="text-xs text-gray-500">기회지수</div>
+                                </div>
+                              </div>
                             </div>
-                            <div className="bg-white/50 rounded-lg p-2">
-                              <div className="font-bold text-[#0064FF]">{item.opportunity}</div>
-                              <div className="text-xs text-gray-500">기회지수</div>
+                            {isLocked && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-white/60 rounded-xl">
+                                <Lock className="w-5 h-5 text-gray-400" />
+                              </div>
+                            )}
+                          </motion.div>
+                        )
+                      })}
+                    </div>
+
+                    {/* P0: 블루오션 잠금 안내 */}
+                    {(plan === 'free' || plan === 'guest') && blueOceanResult.keywords.length > 4 && (
+                      <div className="mt-4 p-4 bg-gradient-to-r from-cyan-50 to-blue-50 rounded-xl border border-cyan-200">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Lock className="w-5 h-5 text-cyan-600" />
+                            <div>
+                              <div className="font-semibold text-cyan-800">
+                                {blueOceanResult.keywords.length - 4}개 키워드가 더 있습니다
+                              </div>
+                              <div className="text-sm text-cyan-600">
+                                베이직 플랜으로 업그레이드하면 모든 블루오션 키워드를 확인할 수 있습니다
+                              </div>
                             </div>
                           </div>
-                        </motion.div>
-                      ))}
-                    </div>
+                          <a
+                            href="/pricing"
+                            className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg font-medium hover:shadow-lg transition-all"
+                          >
+                            업그레이드
+                          </a>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="mt-6 p-4 bg-cyan-50 rounded-xl border border-cyan-200">
                       <div className="flex items-start gap-3">
@@ -3642,32 +3719,71 @@ export default function ToolsPage() {
                     {/* 체크리스트 */}
                     <div className="space-y-3">
                       <h3 className="font-bold text-lg">SEO 체크리스트</h3>
-                      {writingResult.checks.map((check, i) => (
-                        <div
-                          key={i}
-                          className={`flex items-start gap-3 p-4 rounded-xl ${
-                            check.status === 'pass' ? 'bg-green-50 border border-green-200' :
-                            check.status === 'warning' ? 'bg-yellow-50 border border-yellow-200' :
-                            'bg-red-50 border border-red-200'
-                          }`}
-                        >
-                          <div className="mt-0.5">
-                            {check.status === 'pass' && <CheckCircle className="w-5 h-5 text-green-500" />}
-                            {check.status === 'warning' && <AlertCircle className="w-5 h-5 text-yellow-500" />}
-                            {check.status === 'fail' && <XCircle className="w-5 h-5 text-red-500" />}
-                          </div>
-                          <div className="flex-1">
-                            <div className="font-medium text-gray-800">{check.item}</div>
-                            <div className="text-sm text-gray-600">{check.message}</div>
-                            {check.suggestion && (
-                              <div className="text-sm text-blue-600 mt-1 flex items-center gap-1">
-                                <Lightbulb className="w-4 h-4" />
-                                {check.suggestion}
+                      {writingResult.checks.map((check, i) => {
+                        // P0: 무료 사용자는 3개만 보여주고 나머지 블러 처리
+                        const isLocked = (plan === 'free' || plan === 'guest') && i >= 3
+
+                        return (
+                          <div
+                            key={i}
+                            className={`relative flex items-start gap-3 p-4 rounded-xl ${
+                              check.status === 'pass' ? 'bg-green-50 border border-green-200' :
+                              check.status === 'warning' ? 'bg-yellow-50 border border-yellow-200' :
+                              'bg-red-50 border border-red-200'
+                            }`}
+                          >
+                            <div className={isLocked ? 'blur-sm select-none' : ''}>
+                              <div className="flex items-start gap-3">
+                                <div className="mt-0.5">
+                                  {check.status === 'pass' && <CheckCircle className="w-5 h-5 text-green-500" />}
+                                  {check.status === 'warning' && <AlertCircle className="w-5 h-5 text-yellow-500" />}
+                                  {check.status === 'fail' && <XCircle className="w-5 h-5 text-red-500" />}
+                                </div>
+                                <div className="flex-1">
+                                  <div className="font-medium text-gray-800">{check.item}</div>
+                                  <div className="text-sm text-gray-600">{check.message}</div>
+                                  {check.suggestion && (
+                                    <div className="text-sm text-blue-600 mt-1 flex items-center gap-1">
+                                      <Lightbulb className="w-4 h-4" />
+                                      {check.suggestion}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            {isLocked && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-white/60 rounded-xl">
+                                <Lock className="w-5 h-5 text-gray-400" />
                               </div>
                             )}
                           </div>
+                        )
+                      })}
+
+                      {/* P0: 글쓰기 가이드 잠금 안내 */}
+                      {(plan === 'free' || plan === 'guest') && writingResult.checks.length > 3 && (
+                        <div className="mt-4 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-200">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <Lock className="w-5 h-5 text-emerald-600" />
+                              <div>
+                                <div className="font-semibold text-emerald-800">
+                                  {writingResult.checks.length - 3}개 SEO 체크 항목이 더 있습니다
+                                </div>
+                                <div className="text-sm text-emerald-600">
+                                  베이직 플랜으로 업그레이드하면 모든 개선 포인트를 확인할 수 있습니다
+                                </div>
+                              </div>
+                            </div>
+                            <a
+                              href="/pricing"
+                              className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg font-medium hover:shadow-lg transition-all"
+                            >
+                              업그레이드
+                            </a>
+                          </div>
                         </div>
-                      ))}
+                      )}
                     </div>
                   </motion.div>
                 )}
@@ -3732,29 +3848,64 @@ export default function ToolsPage() {
                     </div>
 
                     <div className="grid md:grid-cols-2 gap-3">
-                      {hashtagResult.hashtags.map((hashtag, i) => (
-                        <motion.div
-                          key={i}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: i * 0.05 }}
-                          className="flex items-center justify-between p-4 bg-white rounded-xl hover:shadow-md transition-all cursor-pointer"
-                          onClick={() => {
-                            navigator.clipboard.writeText(hashtag.tag)
-                            toast.success(`${hashtag.tag} 복사됨!`)
-                          }}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="text-2xl font-bold text-green-500">#{i + 1}</span>
-                            <div>
-                              <div className="font-semibold text-gray-800">{hashtag.tag}</div>
-                              <div className="text-sm text-gray-500">사용량: {hashtag.frequency.toLocaleString()}회</div>
+                      {hashtagResult.hashtags.map((hashtag, i) => {
+                        // P0: 무료 사용자는 4개만 보여주고 나머지 블러 처리
+                        const isLocked = (plan === 'free' || plan === 'guest') && i >= 4
+
+                        return (
+                          <motion.div
+                            key={i}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: i * 0.05 }}
+                            className={`relative flex items-center justify-between p-4 bg-white rounded-xl transition-all ${
+                              isLocked ? 'overflow-hidden' : 'hover:shadow-md cursor-pointer'
+                            }`}
+                            onClick={() => {
+                              if (isLocked) {
+                                toast('프로 플랜에서 모든 해시태그를 확인하세요', { icon: '🔒' })
+                                return
+                              }
+                              navigator.clipboard.writeText(hashtag.tag)
+                              toast.success(`${hashtag.tag} 복사됨!`)
+                            }}
+                          >
+                            {/* P0: 블러 오버레이 */}
+                            {isLocked && (
+                              <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center z-10">
+                                <Lock className="w-4 h-4 text-gray-400" />
+                              </div>
+                            )}
+                            <div className="flex items-center gap-3">
+                              <span className="text-2xl font-bold text-green-500">#{i + 1}</span>
+                              <div>
+                                <div className="font-semibold text-gray-800">{hashtag.tag}</div>
+                                <div className="text-sm text-gray-500">사용량: {hashtag.frequency.toLocaleString()}회</div>
+                              </div>
                             </div>
-                          </div>
-                          <div className="text-sm font-medium text-green-600">관련도 {hashtag.relevance}%</div>
-                        </motion.div>
-                      ))}
+                            <div className="text-sm font-medium text-green-600">관련도 {hashtag.relevance}%</div>
+                          </motion.div>
+                        )
+                      })}
                     </div>
+
+                    {/* P0: 무료 사용자 업그레이드 유도 */}
+                    {(plan === 'free' || plan === 'guest') && hashtagResult.hashtags.length > 4 && (
+                      <div className="mt-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-bold text-gray-800">🏷️ {hashtagResult.hashtags.length - 4}개의 추가 해시태그</div>
+                            <div className="text-sm text-gray-600">Pro 플랜으로 상위 노출에 최적화된 모든 해시태그를 확인하세요</div>
+                          </div>
+                          <Link
+                            href="/pricing"
+                            className="px-4 py-2 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors"
+                          >
+                            업그레이드
+                          </Link>
+                        </div>
+                      </div>
+                    )}
                   </motion.div>
                 )}
               </div>

@@ -1070,7 +1070,8 @@ export default function Home() {
               무료로 블로그 지수를 확인하고, 성장 전략을 받아보세요
             </p>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            {/* P1: CTA 최적화 - Primary 강조, Secondary 약화 */}
+            <div className="flex flex-col items-center justify-center gap-4">
               <Link
                 href="/pricing"
                 className="group inline-flex items-center gap-3 px-10 py-5 bg-white text-[#0064FF] rounded-2xl font-bold text-lg hover:scale-105 transition-all shadow-2xl"
@@ -1079,15 +1080,29 @@ export default function Home() {
                 7일 무료 체험 시작
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Link>
+
+              {/* 신뢰 신호 강화 */}
+              <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-white/80">
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-4 h-4 text-green-400" />
+                  <span>7일 내 해지 시 0원</span>
+                </div>
+                <span className="text-white/40">|</span>
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-4 h-4 text-green-400" />
+                  <span>클릭 한 번으로 해지</span>
+                </div>
+              </div>
+
+              {/* Secondary CTA - 약화 */}
               <Link
                 href="/analyze"
-                className="group inline-flex items-center gap-3 px-10 py-5 bg-white/10 backdrop-blur-md border border-white/30 rounded-2xl font-bold text-lg hover:bg-white hover:text-[#0064FF] transition-all"
+                className="text-white/70 hover:text-white transition-colors text-sm font-medium flex items-center gap-1 mt-2"
               >
-                <Sparkles className="w-5 h-5" />
-                무료로 먼저 분석해보기
+                또는 무료로 먼저 분석해보기
+                <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
-            <p className="text-sm text-white/70 mt-4">7일 내 해지 시 0원 · 클릭 한 번으로 해지</p>
           </motion.div>
         </div>
       </section>
