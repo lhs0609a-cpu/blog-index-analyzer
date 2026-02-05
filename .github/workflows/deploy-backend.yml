@@ -81,9 +81,13 @@ jobs:
 
             # Docker 이미지 빌드
             docker build --no-cache --pull -t blog-api .
+            # /data 디렉토리 생성 (없으면)
+            sudo mkdir -p /data/backups
+
             docker run -d \
               --name blog-analyzer-api \
               -p 8000:8000 \
+              -v /data:/data \
               --env-file .env \
               --restart unless-stopped \
               --memory=2g \
