@@ -22,8 +22,61 @@ from database.subscription_db import (
     PLAN_LIMITS,
     PlanType
 )
+from database.user_db import get_user_db
 
 logger = logging.getLogger(__name__)
+
+
+def verify_subscription_ownership(user_id: int, subscription: dict) -> dict:
+    """
+    구독이 실제 사용자에게 속하는지 확인하고, 고아 구독이면 무료로 리셋
+
+    문제 상황: users 테이블과 subscriptions 테이블이 별도 DB 파일을 사용하므로,
+    삭제된 사용자의 구독이 남아있다가 새 사용자에게 할당될 수 있음
+    """
+    if not subscription:
+        return None
+
+    # 사용자가 실제로 존재하는지 확인
+    user_db = get_user_db()
+    user = user_db.get_user_by_id(user_id)
+
+    if not user:
+        # 사용자가 존재하지 않으면 고아 구독 - 무시
+        logger.warning(f"Orphaned subscription found for non-existent user_id={user_id}")
+        return None
+
+    # 구독의 생성 시간과 사용자의 생성 시간 비교
+    # 구독이 사용자보다 먼저 생성되었다면 고아 구독일 가능성 높음
+    sub_created = subscription.get("created_at") or subscription.get("started_at")
+    user_created = user.get("created_at")
+
+    if sub_created and user_created:
+        try:
+            from datetime import datetime
+            # 문자열을 datetime으로 변환
+            if isinstance(sub_created, str):
+                sub_dt = datetime.fromisoformat(sub_created.replace('Z', '+00:00').replace('+00:00', ''))
+            else:
+                sub_dt = sub_created
+
+            if isinstance(user_created, str):
+                user_dt = datetime.fromisoformat(user_created.replace('Z', '+00:00').replace('+00:00', ''))
+            else:
+                user_dt = user_created
+
+            # 구독이 사용자 생성보다 1일 이상 먼저 생성되었고, free가 아니면 고아 구독
+            if (user_dt - sub_dt).days > 1 and subscription.get("plan_type") != "free":
+                logger.warning(
+                    f"Suspicious subscription for user_id={user_id}: "
+                    f"subscription created at {sub_created}, user created at {user_created}"
+                )
+                # 무료로 리셋
+                return None
+        except Exception as e:
+            logger.debug(f"Date comparison failed: {e}")
+
+    return subscription
 router = APIRouter()
 
 
@@ -118,8 +171,11 @@ async def get_my_subscription(user_id: int = Query(..., description="사용자 I
     """내 구독 정보 조회"""
     subscription = get_user_subscription(user_id)
 
+    # 고아 구독 검증 (삭제된 사용자의 구독이 새 사용자에게 할당되는 문제 방지)
+    subscription = verify_subscription_ownership(user_id, subscription)
+
     if not subscription:
-        # 구독이 없으면 무료 플랜으로 자동 생성
+        # 구독이 없거나 고아 구독이면 무료 플랜으로 새로 생성
         subscription = create_subscription(user_id, "free")
 
     return {
@@ -181,6 +237,10 @@ async def cancel_plan(user_id: int = Query(..., description="사용자 ID")):
 async def get_usage(user_id: int = Query(..., description="사용자 ID")):
     """오늘 사용량 조회"""
     subscription = get_user_subscription(user_id)
+
+    # 고아 구독 검증
+    subscription = verify_subscription_ownership(user_id, subscription)
+
     if not subscription:
         subscription = create_subscription(user_id, "free")
 

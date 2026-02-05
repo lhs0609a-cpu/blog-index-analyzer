@@ -133,6 +133,57 @@ PLAN_LIMITS = {
 }
 
 
+def _verify_subscription_ownership(user_id: int, subscription: Dict) -> Optional[Dict]:
+    """
+    구독이 실제 사용자에게 속하는지 확인 (고아 구독 검증)
+
+    문제: users 테이블(blog_analyzer.db)과 subscriptions 테이블(subscription.db)이
+    별도 DB 파일을 사용하므로, 삭제된 사용자의 구독이 새 사용자에게 할당될 수 있음
+    """
+    if not subscription:
+        return None
+
+    try:
+        # 순환 참조 방지를 위한 지연 임포트
+        from database.user_db import get_user_db
+        user_db = get_user_db()
+        user = user_db.get_user_by_id(user_id)
+
+        if not user:
+            logger.warning(f"Orphaned subscription: user_id={user_id} does not exist")
+            return None
+
+        # 구독 생성 시간과 사용자 생성 시간 비교
+        sub_created = subscription.get("created_at") or subscription.get("started_at")
+        user_created = user.get("created_at")
+
+        if sub_created and user_created:
+            # 문자열을 datetime으로 변환
+            if isinstance(sub_created, str):
+                sub_dt = datetime.fromisoformat(sub_created.replace('Z', '+00:00').replace('+00:00', ''))
+            else:
+                sub_dt = sub_created
+
+            if isinstance(user_created, str):
+                user_dt = datetime.fromisoformat(user_created.replace('Z', '+00:00').replace('+00:00', ''))
+            else:
+                user_dt = user_created
+
+            # 구독이 사용자보다 1일 이상 먼저 생성되었고 free가 아니면 고아 구독
+            if (user_dt - sub_dt).days > 1 and subscription.get("plan_type") != "free":
+                logger.warning(
+                    f"Orphaned subscription detected: user_id={user_id}, "
+                    f"sub_created={sub_created}, user_created={user_created}"
+                )
+                return None
+
+    except Exception as e:
+        logger.debug(f"Subscription ownership verification failed: {e}")
+        # 검증 실패 시 기존 구독 반환 (안전한 폴백)
+
+    return subscription
+
+
 def get_connection():
     """데이터베이스 연결 (PostgreSQL 우선, SQLite fallback)"""
     if USE_POSTGRES:
@@ -502,8 +553,13 @@ def increment_usage(user_id: int, usage_type: str) -> Dict:
 def check_usage_limit(user_id: int, usage_type: str) -> Dict:
     """사용량 제한 확인"""
     subscription = get_user_subscription(user_id)
+
+    # 고아 구독 검증 (users와 subscriptions가 별도 DB인 경우 발생 가능)
+    if subscription:
+        subscription = _verify_subscription_ownership(user_id, subscription)
+
     if not subscription:
-        # 구독이 없으면 무료 플랜으로 생성
+        # 구독이 없거나 고아 구독이면 무료 플랜으로 생성
         subscription = create_subscription(user_id, "free")
 
     usage = get_today_usage(user_id)
@@ -562,6 +618,11 @@ async def check_feature_access(user_id: int, feature: str) -> Dict:
     }
 
     subscription = get_user_subscription(user_id)
+
+    # 고아 구독 검증
+    if subscription:
+        subscription = _verify_subscription_ownership(user_id, subscription)
+
     if not subscription:
         subscription = create_subscription(user_id, "free")
 
