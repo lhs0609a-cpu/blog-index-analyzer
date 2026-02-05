@@ -291,3 +291,46 @@ async def verify_token(current_user: dict = Depends(get_current_user)):
         "valid": True,
         "user": user_to_response(current_user)
     }
+
+
+@router.post("/make-first-admin")
+async def make_first_admin(email: str):
+    """
+    첫 번째 관리자 설정 (관리자가 없을 때만 작동)
+    보안: 기존 관리자가 있으면 실패
+    """
+    user_db = get_user_db()
+
+    # 기존 관리자 확인
+    with user_db.get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM users WHERE is_admin = 1")
+        admin_count = cursor.fetchone()[0]
+
+        if admin_count > 0:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="관리자가 이미 존재합니다. 이 엔드포인트는 사용할 수 없습니다."
+            )
+
+    # 사용자 찾기
+    user = user_db.get_user_by_email(email)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"사용자를 찾을 수 없습니다: {email}"
+        )
+
+    # 관리자로 설정
+    success = user_db.set_admin(user['id'], True)
+    if success:
+        logger.info(f"First admin setup: {email} is now admin")
+        return {
+            "message": f"{email} 계정이 관리자로 설정되었습니다",
+            "user_id": user['id']
+        }
+
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="관리자 설정에 실패했습니다"
+    )
