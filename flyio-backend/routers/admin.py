@@ -729,16 +729,40 @@ async def restore_database_from_backup(backup_filename: str = "backup_20260205_1
     """
     import shutil
     import os
+    import subprocess
 
-    backup_dir = "/data/backups"
-    backup_path = os.path.join(backup_dir, backup_filename)
+    # 여러 가능한 백업 경로 시도
+    possible_paths = [
+        f"/data/backups/{backup_filename}",
+        f"/home/ubuntu/blog-index-analyzer/flyio-backend/data/backups/{backup_filename}",
+        f"/root/blog-index-analyzer/flyio-backend/data/backups/{backup_filename}",
+    ]
+
+    backup_path = None
+    for path in possible_paths:
+        if os.path.exists(path):
+            backup_path = path
+            break
+
     db_path = "/data/blog_analyzer.db"
 
     # 백업 파일 존재 확인
-    if not os.path.exists(backup_path):
+    if not backup_path:
+        # 호스트에서 직접 복사 시도 (docker exec 사용)
+        try:
+            result = subprocess.run(
+                ["ls", "-la", "/data/backups/"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            available_files = result.stdout
+        except:
+            available_files = "확인 불가"
+
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"백업 파일을 찾을 수 없습니다: {backup_filename}"
+            detail=f"백업 파일을 찾을 수 없습니다: {backup_filename}. 사용 가능한 파일: {available_files}"
         )
 
     # 현재 관리자 확인 (관리자 있으면 차단)
