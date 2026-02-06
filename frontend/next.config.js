@@ -28,10 +28,6 @@ const nextConfig = {
     ignoreBuildErrors: false,
   },
 
-  // Turbopack 설정 - Google Drive 한글 경로 호환성을 위해 절대 경로 사용
-  turbopack: {
-    root: __dirname,
-  },
 }
 
 module.exports = nextConfig
