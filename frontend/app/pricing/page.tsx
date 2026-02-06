@@ -231,7 +231,7 @@ export default function PricingPage() {
               </div>
               <div className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-full text-sm font-medium">
                 <TrendingUp className="w-4 h-4" />
-                Pro 사용자 82%가 30일 내 상위 노출
+                데이터 기반 키워드 추천
               </div>
             </div>
 
@@ -240,7 +240,7 @@ export default function PricingPage() {
               {[
                 { keyword: '홈트레이닝 루틴', volume: 8400, probability: 94, level: 'Lv.3', myLevel: 'Lv.5', goldenTime: '오후 8-10시' },
                 { keyword: '자취 요리 레시피', volume: 12300, probability: 87, level: 'Lv.4', myLevel: 'Lv.5', goldenTime: '저녁 6-8시' },
-                { keyword: '노트북 추천 2024', volume: 18500, probability: 78, level: 'Lv.5', myLevel: 'Lv.5', goldenTime: '오전 10-12시' }
+                { keyword: '노트북 추천 2026', volume: 18500, probability: 78, level: 'Lv.5', myLevel: 'Lv.5', goldenTime: '오전 10-12시' }
               ].map((item, index) => (
                 <div
                   key={index}
@@ -309,21 +309,21 @@ export default function PricingPage() {
           transition={{ delay: 0.3 }}
           className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl mb-12"
         >
-          <h2 className="text-2xl font-bold text-center mb-8">Pro 사용자의 실제 성과</h2>
+          <h2 className="text-2xl font-bold text-center mb-8">Pro 플랜 주요 기능</h2>
 
-          {/* 통계 */}
+          {/* 기능 수치 */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             <div className="text-center p-4 rounded-2xl bg-white border border-blue-100">
-              <div className="text-3xl md:text-4xl font-black text-[#0064FF] mb-1">82%</div>
-              <p className="text-xs md:text-sm text-gray-600">30일 내<br/>상위 노출 성공</p>
+              <div className="text-3xl md:text-4xl font-black text-[#0064FF] mb-1">42개</div>
+              <p className="text-xs md:text-sm text-gray-600">블로그<br/>분석 지표</p>
             </div>
             <div className="text-center p-4 rounded-2xl bg-white border border-green-100">
               <div className="text-3xl md:text-4xl font-black text-green-600 mb-1">5개</div>
               <p className="text-xs md:text-sm text-gray-600">매일 새로운<br/>1위 가능 키워드</p>
             </div>
             <div className="text-center p-4 rounded-2xl bg-white border border-purple-100">
-              <div className="text-3xl md:text-4xl font-black text-purple-600 mb-1">3배</div>
-              <p className="text-xs md:text-sm text-gray-600">평균 방문자 수<br/>증가</p>
+              <div className="text-3xl md:text-4xl font-black text-purple-600 mb-1">200회</div>
+              <p className="text-xs md:text-sm text-gray-600">일일<br/>키워드 검색</p>
             </div>
             <div className="text-center p-4 rounded-2xl bg-white border border-amber-100">
               <div className="text-3xl md:text-4xl font-black text-amber-600 mb-1">90일</div>
@@ -331,26 +331,27 @@ export default function PricingPage() {
             </div>
           </div>
 
-          {/* 사용자 후기 */}
+          {/* 활용 시나리오 */}
+          <p className="text-xs text-gray-500 text-center mb-4">* 서비스 활용 시나리오 예시이며, 실제 사용자 후기가 아닙니다</p>
           <div className="grid md:grid-cols-3 gap-4">
             {[
               {
-                name: '맛집탐방러',
-                level: 'Lv.7 → Lv.9',
-                content: '1위 가능 키워드가 정말 정확해요. 추천받은 키워드로 글을 쓰니 바로 상위 노출되었어요!',
-                highlight: '월 방문자 300 → 2,400명'
+                name: '맛집 블로거',
+                level: '활용 예시',
+                content: '1위 가능 키워드 추천 기능으로 경쟁이 적은 키워드를 찾아 집중할 수 있어요.',
+                highlight: '키워드 전략 최적화'
               },
               {
-                name: '육아맘 블로거',
-                level: 'Lv.4 → Lv.6',
-                content: '초보라서 불안했는데 블랭크가 딱 맞는 키워드를 찾아줘서 자신감이 생겼습니다.',
-                highlight: 'VIEW탭 첫 노출 성공'
+                name: '육아 블로거',
+                level: '활용 예시',
+                content: '블로그 레벨에 맞는 키워드를 추천받아 효율적으로 콘텐츠를 기획할 수 있어요.',
+                highlight: '맞춤 키워드 추천'
               },
               {
-                name: 'IT리뷰어',
-                level: 'Lv.8 → Lv.10',
-                content: '경쟁도 분석이 정확해서 시간 낭비 없이 승산 있는 키워드만 공략할 수 있어요.',
-                highlight: '월 수익 3배 증가'
+                name: 'IT 블로거',
+                level: '활용 예시',
+                content: '경쟁도 분석으로 승산 있는 키워드를 선별하여 시간을 절약할 수 있어요.',
+                highlight: '경쟁도 데이터 분석'
               }
             ].map((review, index) => (
               <div key={index} className="p-4 bg-white rounded-2xl border border-gray-200">
@@ -364,7 +365,7 @@ export default function PricingPage() {
                   </div>
                 </div>
                 <p className="text-sm text-gray-600 mb-3 leading-relaxed">"{review.content}"</p>
-                <div className="px-3 py-2 bg-green-50 text-green-700 rounded-lg text-xs font-medium text-center">
+                <div className="px-3 py-2 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium text-center">
                   {review.highlight}
                 </div>
               </div>

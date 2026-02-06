@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { getApiUrl, setApiUrl, autoDiscoverBackend, checkHealth, subscribeToApiUrl, isProduction } from '@/lib/api/apiConfig';
+import { getApiUrl, setApiUrl, autoDiscoverBackend, checkHealth, subscribeToApiUrl, isProduction, notifyServerDown } from '@/lib/api/apiConfig';
 
 export default function BackendStatus() {
   const pathname = usePathname();
@@ -30,6 +30,8 @@ export default function BackendStatus() {
       if (foundUrl) {
         setCurrentApiUrl(foundUrl);
         setIsConnected(true);
+        // 전역 서버 상태: 연결됨
+        notifyServerDown(false);
         // 관리자 페이지에서만 toast 표시
         if (pathname?.startsWith('/admin')) {
           toast.success('백엔드 연결됨: ' + foundUrl);
@@ -37,6 +39,10 @@ export default function BackendStatus() {
       } else {
         setCurrentApiUrl(getApiUrl());
         setIsConnected(false);
+        // 프로덕션에서 연결 실패 시 전역 서버 다운 알림
+        if (isProduction()) {
+          notifyServerDown(true);
+        }
       }
       setIsAutoDiscovering(false);
       setLastChecked(new Date());
@@ -62,6 +68,11 @@ export default function BackendStatus() {
       const ok = await checkHealth(currentApiUrl, timeout);
       setIsConnected(ok);
       setLastChecked(new Date());
+
+      // 전역 서버 상태 업데이트 (프로덕션에서 중요)
+      if (isProduction()) {
+        notifyServerDown(!ok);
+      }
 
       // 로컬 개발 환경에서만 자동으로 다른 포트 시도
       if (!ok && !isReconnecting && !isProduction()) {

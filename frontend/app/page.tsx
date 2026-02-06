@@ -5,7 +5,7 @@ import { Sparkles, TrendingUp, Zap, Award, BarChart3, Search, BookOpen, ArrowRig
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import TrialExpiryBanner from '@/components/TrialExpiryBanner'
-import SocialProofSystem, { LiveStatsBanner, LiveToastNotifications, LiveCounter, LiveActivityWidget } from '@/components/SocialProofSystem'
+// Social proof disabled (P0: fake data removal)
 import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, useRef } from 'react'
@@ -147,11 +147,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#fafafa] text-gray-900 overflow-hidden">
-      {/* P2-4: 소셜 프루프 - 실시간 통계 배너 */}
-      <LiveStatsBanner className="fixed top-[72px] left-0 right-0 z-40" />
-
-      {/* P2-4: 소셜 프루프 - 실시간 토스트 알림 */}
-      <LiveToastNotifications />
+      {/* Social proof disabled - P0 blocker: fake data */}
 
       {/* Cursor glow effect - Toss style (subtle) */}
       <div
@@ -253,15 +249,7 @@ export default function Home() {
                 <span className="text-gray-900 font-semibold">11단계 레벨</span>로 성장 전략 수립
               </motion.p>
 
-              {/* P2-4: 실시간 카운터 */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.25 }}
-                className="mb-10"
-              >
-                <LiveCounter />
-              </motion.div>
+              {/* Live counter disabled - P0 blocker: fake data */}
 
               {/* 검색 모드 전환 탭 + 입력 영역 */}
               <motion.div
@@ -757,7 +745,7 @@ export default function Home() {
               {[
                 { keyword: '홈트레이닝 루틴', volume: 8400, probability: 94, reason: '현재 1위 Lv.3 → 내 레벨 Lv.5' },
                 { keyword: '자취 요리 레시피', volume: 12300, probability: 87, reason: '경쟁 블로그 3개월 미활동' },
-                { keyword: '노트북 추천 2024', volume: 18500, probability: 78, reason: '상위권 평균보다 높은 D.I.A.' }
+                { keyword: '노트북 추천 2026', volume: 18500, probability: 78, reason: '상위권 평균보다 높은 D.I.A.' }
               ].map((item, index) => (
                 <motion.div
                   key={index}
@@ -790,14 +778,9 @@ export default function Home() {
               ))}
             </div>
 
-            {/* 성과 지표 */}
+            {/* 서비스 특징 */}
             <div className="bg-gradient-to-r from-yellow-400 to-amber-500 rounded-2xl p-6 text-white text-center mb-8">
               <div className="flex flex-wrap items-center justify-center gap-8">
-                <div>
-                  <div className="text-3xl font-bold">82%</div>
-                  <div className="text-sm opacity-90">Pro 사용자가 30일 내 상위 노출</div>
-                </div>
-                <div className="hidden md:block w-px h-12 bg-white/30" />
                 <div>
                   <div className="text-3xl font-bold">5개/일</div>
                   <div className="text-sm opacity-90">매일 새로운 1위 가능 키워드</div>
@@ -807,7 +790,13 @@ export default function Home() {
                   <div className="text-3xl font-bold">골든타임</div>
                   <div className="text-sm opacity-90">최적 발행 시간까지 안내</div>
                 </div>
+                <div className="hidden md:block w-px h-12 bg-white/30" />
+                <div>
+                  <div className="text-3xl font-bold">42개</div>
+                  <div className="text-sm opacity-90">분석 지표로 블로그 진단</div>
+                </div>
               </div>
+              <p className="text-xs opacity-70 mt-3">* 결과는 개인 블로그 상태 및 운영 방식에 따라 다를 수 있습니다</p>
             </div>
 
             <div className="text-center">
@@ -839,8 +828,9 @@ export default function Home() {
               REVIEWS
             </span>
             <h2 className="text-4xl md:text-5xl font-black mb-4 text-gray-900">
-              블로거들의 생생한 후기
+              이런 경험을 할 수 있어요
             </h2>
+            <p className="text-sm text-gray-500">* 서비스 활용 시나리오 예시이며, 실제 사용자 후기가 아닙니다</p>
           </motion.div>
 
           <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">

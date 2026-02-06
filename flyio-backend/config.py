@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Blog Index Analyzer"
     APP_ENV: str = "development"
     DEBUG: bool = True
-    API_VERSION: str = "v2.2.0"  # Level system 1-15 deployed
+    API_VERSION: str = "v2.3.1"  # Rate limiting + security hardening
 
     # Server
     HOST: str = "0.0.0.0"
@@ -94,8 +94,8 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # CORS - 모든 Vercel 도메인 허용
-    CORS_ORIGINS: str = "*"
+    # CORS - main.py에서 ALLOWED_ORIGINS 화이트리스트로 오버라이드됨
+    CORS_ORIGINS: str = "https://www.blrank.co.kr,https://blrank.co.kr,https://blog-index-analyzer.vercel.app"
 
     @property
     def cors_origins_list(self) -> List[str]:
@@ -174,7 +174,7 @@ class Settings(BaseSettings):
     # Threads API (Meta)
     THREADS_APP_ID: str = ""
     THREADS_APP_SECRET: str = ""
-    THREADS_REDIRECT_URI: str = "https://blog-index-analyzer.vercel.app/threads/callback"
+    THREADS_REDIRECT_URI: str = "https://www.blrank.co.kr/threads/callback"
 
     class Config:
         env_file = ".env"

@@ -7,7 +7,7 @@ import {
   Sparkles, Award, Target, Heart, BookOpen, Search,
   ThumbsUp, PartyPopper, Rocket, Trophy, Gift, Activity
 } from 'lucide-react'
-import { getApiUrl } from '@/lib/api/apiConfig'
+import { getApiUrl, safeFetch } from '@/lib/api/apiConfig'
 import { useABTest, EXPERIMENTS, AB_EVENTS } from '@/lib/hooks/useABTest'
 
 // ============ 아이콘 매핑 ============
@@ -48,10 +48,10 @@ interface Stats {
   peak_online: number
 }
 
-// ============ API 호출 함수 ============
+// ============ API 호출 함수 (safeFetch로 에러 감지) ============
 async function fetchActivities(limit: number = 20): Promise<Activity[]> {
   try {
-    const response = await fetch(`${getApiUrl()}/api/social-proof/activities?limit=${limit}`)
+    const response = await safeFetch(`${getApiUrl()}/api/social-proof/activities?limit=${limit}`)
     const data = await response.json()
     return data.success ? data.activities : []
   } catch (error) {
@@ -62,7 +62,7 @@ async function fetchActivities(limit: number = 20): Promise<Activity[]> {
 
 async function fetchStats(): Promise<Stats | null> {
   try {
-    const response = await fetch(`${getApiUrl()}/api/social-proof/stats`)
+    const response = await safeFetch(`${getApiUrl()}/api/social-proof/stats`)
     const data = await response.json()
     return data.success ? data.stats : null
   } catch (error) {
@@ -71,19 +71,27 @@ async function fetchStats(): Promise<Stats | null> {
   }
 }
 
-// ============ SSE 스트림 연결 ============
+// ============ SSE 스트림 연결 (에러 시 서버 다운 감지) ============
 function useActivityStream(onActivity: (activity: Activity) => void) {
   const eventSourceRef = useRef<EventSource | null>(null)
+  const errorCountRef = useRef(0)
 
   useEffect(() => {
     const connectSSE = () => {
       try {
         const eventSource = new EventSource(`${getApiUrl()}/api/social-proof/stream`)
 
+        eventSource.onopen = () => {
+          // 연결 성공 시 에러 카운트 초기화
+          errorCountRef.current = 0
+        }
+
         eventSource.onmessage = (event) => {
           try {
             const activity = JSON.parse(event.data)
             onActivity(activity)
+            // 데이터 수신 성공 시 에러 카운트 초기화
+            errorCountRef.current = 0
           } catch (e) {
             console.error('Failed to parse activity:', e)
           }
@@ -91,14 +99,23 @@ function useActivityStream(onActivity: (activity: Activity) => void) {
 
         eventSource.onerror = () => {
           eventSource.close()
-          // 5초 후 재연결
-          setTimeout(connectSSE, 5000)
+          errorCountRef.current++
+
+          // 3번 이상 연속 실패 시 서버 다운으로 처리하지 않음 (모달 과다 표시 방지)
+          // 대신 조용히 재연결 시도
+          console.warn(`SSE connection error (attempt ${errorCountRef.current})`)
+
+          // 에러 횟수에 따라 재연결 간격 증가 (백오프)
+          const delay = Math.min(5000 * errorCountRef.current, 30000)
+          setTimeout(connectSSE, delay)
         }
 
         eventSourceRef.current = eventSource
       } catch (error) {
         console.error('Failed to connect SSE:', error)
-        setTimeout(connectSSE, 5000)
+        errorCountRef.current++
+        const delay = Math.min(5000 * errorCountRef.current, 30000)
+        setTimeout(connectSSE, delay)
       }
     }
 
@@ -187,10 +204,10 @@ interface LiveCounterProps {
 
 export function LiveCounter({ className = '', useAPI = true }: LiveCounterProps) {
   const [stats, setStats] = useState<Stats>({
-    current_online: 1247,
-    daily_analyses: 4892,
-    total_users: 52341,
-    peak_online: 1247
+    current_online: 0,
+    daily_analyses: 0,
+    total_users: 0,
+    peak_online: 0
   })
 
   useEffect(() => {
@@ -207,14 +224,6 @@ export function LiveCounter({ className = '', useAPI = true }: LiveCounterProps)
         fetchStats().then(data => {
           if (data) setStats(data)
         })
-      } else {
-        // 로컬 시뮬레이션
-        setStats(prev => ({
-          ...prev,
-          current_online: Math.max(800, prev.current_online + Math.floor(Math.random() * 30) - 12),
-          daily_analyses: prev.daily_analyses + Math.floor(Math.random() * 5) + 1,
-          total_users: prev.total_users + (Math.random() > 0.7 ? 1 : 0)
-        }))
       }
     }, 5000)
 
@@ -325,7 +334,7 @@ export function LiveToastNotifications({ useAPI = true }: LiveToastProps) {
 // ============ 상단 배너 (실시간 통계) ============
 export function LiveStatsBanner({ className = '', useAPI = true }: { className?: string; useAPI?: boolean }) {
   const [stats, setStats] = useState({
-    online: 1247,
+    online: 0,
     recentUser: '',
     recentAction: ''
   })
@@ -435,7 +444,7 @@ function getActionText(type: string): string {
 // ============ 사이드바 위젯 ============
 export function LiveActivityWidget({ className = '', useAPI = true }: { className?: string; useAPI?: boolean }) {
   const [activities, setActivities] = useState<Activity[]>([])
-  const [stats, setStats] = useState({ online: 1247, today: 4892 })
+  const [stats, setStats] = useState({ online: 0, today: 0 })
 
   useEffect(() => {
     // 초기 로드

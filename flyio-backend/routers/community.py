@@ -76,15 +76,15 @@ class InsightCreateRequest(BaseModel):
 
 class PostCreateRequest(BaseModel):
     user_id: int
-    title: str = Field(..., min_length=2, max_length=100)
-    content: str = Field(..., min_length=10, max_length=5000)
+    title: str = Field(..., min_length=5, max_length=100)
+    content: str = Field(..., min_length=30, max_length=5000)
     category: str = "free"  # free, tip, question, success
     tags: Optional[List[str]] = None
 
 
 class PostUpdateRequest(BaseModel):
-    title: Optional[str] = Field(None, min_length=2, max_length=100)
-    content: Optional[str] = Field(None, min_length=10, max_length=5000)
+    title: Optional[str] = Field(None, min_length=5, max_length=100)
+    content: Optional[str] = Field(None, min_length=30, max_length=5000)
     category: Optional[str] = None
     tags: Optional[List[str]] = None
 

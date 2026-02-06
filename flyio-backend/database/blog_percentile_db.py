@@ -94,23 +94,30 @@ class BlogPercentileDB:
             conn.close()
 
     def _seed_initial_data(self):
-        """초기 데이터 시드 - 현실적인 네이버 블로그 점수 분포
+        """초기 데이터 시드 - 실제 네이버 블로그 레벨 분포 반영 (v3)
 
-        실제 블로그 분석 결과 기준:
-        - 일반/신규 블로그: 25-45점
-        - 활성 블로그: 45-55점
-        - 준최적화 블로그: 55-65점 (Lv.4-6)
-        - 최적화 블로그: 65-75점 (Lv.7-9)
-        - 인플루언서급: 75-85점 (Lv.10-12)
-        - 파워블로거: 85점 이상 (Lv.13+)
+        실제 네이버 블로그 레벨 분포 (크롤링 데이터 기반 추정):
+        - 네이버 Lv.1 (신규/방치): 약 10-12%
+        - 네이버 Lv.2 (초보): 약 28-32%
+        - 네이버 Lv.3 (활성): 약 40-45%
+        - 네이버 Lv.4 (우수): 약 15-18%
+
+        블랭크 레벨 매핑:
+        - 네이버 Lv.1 → 블랭크 Lv.1-2 (점수 15-35)
+        - 네이버 Lv.2 → 블랭크 Lv.3-4 (점수 35-50)
+        - 네이버 Lv.3 → 블랭크 Lv.5-7 (점수 50-70)
+        - 네이버 Lv.4 → 블랭크 Lv.8-15 (점수 70-100)
+
+        키워드 검색 상위 노출 블로그 기준:
+        - 상위 노출되는 블로그는 대부분 Lv.3-4
+        - 따라서 분석 결과에서도 Lv.3-4가 많이 나와야 함
         """
         conn = self._get_connection()
         try:
             cursor = conn.cursor()
 
-            # 시드 데이터 버전 확인 (v2로 업그레이드 필요 시 리셋)
-            # 버전: 1.0 = 초기, 2.0 = 현실적 분포 (상향 조정)
-            SEED_VERSION = 2.0
+            # 시드 데이터 버전 (v3 = 실제 네이버 레벨 분포 반영)
+            SEED_VERSION = 3.0
 
             cursor.execute("""
                 SELECT stat_value FROM percentile_stats WHERE stat_key = 'seed_version'
@@ -132,32 +139,39 @@ class BlogPercentileDB:
                 cursor.execute("DELETE FROM score_distribution")
                 conn.commit()
 
-            logger.info(f"Seeding initial blog score distribution ({SEED_VERSION})...")
+            logger.info(f"Seeding blog score distribution v{SEED_VERSION} (실제 네이버 레벨 분포 반영)...")
 
-            # 네이버 블로그 점수 분포 시뮬레이션 (상향 조정)
-            # 실제 분석에서 45-55점이 일반적으로 나오므로 이를 중앙값으로 설정
+            # ========================================================
+            # 실제 네이버 블로그 레벨 분포 기반 점수 분포
+            # ========================================================
             #
-            # 점수 분포 (100,000개 블로그 기준):
-            # - 10-25점: 3% (방치/신규 블로그)
-            # - 25-35점: 10% (초보 블로그)
-            # - 35-45점: 20% (입문 블로그)
-            # - 45-55점: 30% (일반 활성 블로그) ← 중앙값
-            # - 55-65점: 20% (준최적화 블로그)
-            # - 65-75점: 10% (최적화 블로그)
-            # - 75-85점: 5% (인플루언서급)
-            # - 85-95점: 1.5% (파워블로거)
-            # - 95-100점: 0.5% (최상위)
+            # 네이버 Lv.1 (10%): 점수 15-35 → 블랭크 Lv.1-2
+            # 네이버 Lv.2 (30%): 점수 35-50 → 블랭크 Lv.3-4
+            # 네이버 Lv.3 (43%): 점수 50-70 → 블랭크 Lv.5-7 (가장 많음)
+            # 네이버 Lv.4 (17%): 점수 70-100 → 블랭크 Lv.8-15
+            #
+            # 키워드 검색 상위 노출 블로그는 대부분 Lv.3-4이므로
+            # 분석 결과에서 블랭크 Lv.3-7이 많이 나와야 함
 
             distribution = [
-                (10, 25, 3000),     # 3% - 방치/신규
-                (25, 35, 10000),    # 10% - 초보
-                (35, 45, 20000),    # 20% - 입문
-                (45, 55, 30000),    # 30% - 일반 활성 (중앙)
-                (55, 65, 20000),    # 20% - 준최적화
-                (65, 75, 10000),    # 10% - 최적화
-                (75, 85, 5000),     # 5% - 인플루언서급
-                (85, 95, 1500),     # 1.5% - 파워블로거
-                (95, 100, 500),     # 0.5% - 최상위
+                # 네이버 Lv.1 영역 (10%) - 블랭크 Lv.1-2
+                (15, 25, 5000),     # 5% - 방치/신규 블로그
+                (25, 35, 5000),     # 5% - 저활동 블로그
+
+                # 네이버 Lv.2 영역 (30%) - 블랭크 Lv.3-4
+                (35, 42, 15000),    # 15% - 초보 블로그
+                (42, 50, 15000),    # 15% - 입문 블로그
+
+                # 네이버 Lv.3 영역 (43%) - 블랭크 Lv.5-7 (가장 많음)
+                (50, 57, 15000),    # 15% - 일반 활성 블로그
+                (57, 63, 14000),    # 14% - 활성 블로그
+                (63, 70, 14000),    # 14% - 준최적화 블로그
+
+                # 네이버 Lv.4 영역 (17%) - 블랭크 Lv.8-15
+                (70, 78, 8000),     # 8% - 최적화 블로그
+                (78, 85, 5000),     # 5% - 인플루언서급
+                (85, 92, 2500),     # 2.5% - 파워블로거
+                (92, 100, 1500),    # 1.5% - 최상위
             ]
 
             seed_data = []
@@ -170,7 +184,7 @@ class BlogPercentileDB:
                     score = max(min_score, min(max_score - 0.1, score))
 
                     # 가상 블로그 ID
-                    fake_blog_id = f"seed_blog_{min_score}_{i}"
+                    fake_blog_id = f"seed_v3_{min_score}_{i}"
                     seed_data.append((fake_blog_id, round(score, 1), 1))
 
             # 배치 삽입
@@ -189,7 +203,7 @@ class BlogPercentileDB:
             """, (SEED_VERSION,))
 
             conn.commit()
-            logger.info(f"Seeded {len(seed_data)} blog scores ({SEED_VERSION})")
+            logger.info(f"Seeded {len(seed_data)} blog scores (v{SEED_VERSION})")
         except Exception as e:
             logger.error(f"Error seeding data: {e}")
             conn.rollback()
@@ -329,60 +343,65 @@ class BlogPercentileDB:
             conn.close()
 
     def get_level_from_percentile(self, percentile: float) -> Tuple[int, str]:
-        """백분위 기반 레벨 계산 (v2 - 현실적 기준)
+        """백분위 기반 레벨 계산 (v3 - 실제 네이버 레벨 분포 반영)
 
-        네이버 블로그 지수 기준 (실제 분포 반영):
-        - 준최적화 블로그 (55-65점) = Lv.4-6
-        - 최적화 블로그 (65-75점) = Lv.7-9
-        - 인플루언서급 (75-85점) = Lv.10-12
-        - 파워블로거 (85점+) = Lv.13-15
+        실제 네이버 블로그 레벨 분포:
+        - 네이버 Lv.1 (10%): 블랭크 Lv.1-2
+        - 네이버 Lv.2 (30%): 블랭크 Lv.3-4
+        - 네이버 Lv.3 (43%): 블랭크 Lv.5-7 (가장 많음)
+        - 네이버 Lv.4 (17%): 블랭크 Lv.8-15
 
-        상위 0.1% = Level 15 (마스터) - 최상위 파워블로거
-        상위 0.5% = Level 14 (그랜드마스터)
-        상위 1.5% = Level 13 (챌린저)
-        상위 3% = Level 12 (다이아몬드) - 인플루언서
-        상위 5% = Level 11 (플래티넘)
-        상위 8% = Level 10 (골드)
-        상위 12% = Level 9 (실버) - 최적화 블로그
-        상위 17% = Level 8 (브론즈)
-        상위 25% = Level 7 (아이언)
-        상위 37% = Level 6 (성장기) - 준최적화 블로그
-        상위 50% = Level 5 (입문)
-        상위 63% = Level 4 (초보) - 일반 활성 블로그
-        상위 80% = Level 3 (뉴비)
-        상위 95% = Level 2 (스타터)
-        하위 5% = Level 1 (시작)
+        키워드 검색 상위 노출 블로그 기준:
+        - 상위 노출 블로그는 대부분 네이버 Lv.3-4
+        - 따라서 블랭크 Lv.3-7이 가장 많이 분포
+
+        백분위 → 레벨 매핑 (v3):
+        상위 0.5% = Level 15 (마스터) - 최상위
+        상위 1.5% = Level 14 (그랜드마스터)
+        상위 3% = Level 13 (챌린저)
+        상위 5% = Level 12 (다이아몬드)
+        상위 8% = Level 11 (플래티넘)
+        상위 12% = Level 10 (골드)
+        상위 17% = Level 9 (실버) ← 네이버 Lv.4 시작
+        상위 25% = Level 8 (브론즈)
+        상위 35% = Level 7 (아이언)
+        상위 50% = Level 6 (성장기) ← 네이버 Lv.3 중심
+        상위 60% = Level 5 (입문)
+        상위 75% = Level 4 (초보) ← 네이버 Lv.2-3 경계
+        상위 90% = Level 3 (뉴비) ← 네이버 Lv.2
+        상위 97% = Level 2 (스타터) ← 네이버 Lv.1-2 경계
+        하위 3% = Level 1 (시작) ← 네이버 Lv.1
         """
-        if percentile >= 99.9:
+        if percentile >= 99.5:
             return 15, "마스터"
-        elif percentile >= 99.5:
-            return 14, "그랜드마스터"
         elif percentile >= 98.5:
-            return 13, "챌린저"
+            return 14, "그랜드마스터"
         elif percentile >= 97.0:
-            return 12, "다이아몬드"
+            return 13, "챌린저"
         elif percentile >= 95.0:
-            return 11, "플래티넘"
+            return 12, "다이아몬드"
         elif percentile >= 92.0:
-            return 10, "골드"
+            return 11, "플래티넘"
         elif percentile >= 88.0:
-            return 9, "실버"
+            return 10, "골드"
         elif percentile >= 83.0:
-            return 8, "브론즈"
+            return 9, "실버"        # 네이버 Lv.4 영역 시작
         elif percentile >= 75.0:
+            return 8, "브론즈"
+        elif percentile >= 65.0:
             return 7, "아이언"
-        elif percentile >= 63.0:
-            return 6, "성장기"
         elif percentile >= 50.0:
+            return 6, "성장기"      # 네이버 Lv.3 중심
+        elif percentile >= 40.0:
             return 5, "입문"
-        elif percentile >= 37.0:
-            return 4, "초보"
-        elif percentile >= 20.0:
-            return 3, "뉴비"
-        elif percentile >= 5.0:
-            return 2, "스타터"
+        elif percentile >= 25.0:
+            return 4, "초보"        # 네이버 Lv.2-3 경계
+        elif percentile >= 10.0:
+            return 3, "뉴비"        # 네이버 Lv.2 영역
+        elif percentile >= 3.0:
+            return 2, "스타터"      # 네이버 Lv.1-2 경계
         else:
-            return 1, "시작"
+            return 1, "시작"        # 네이버 Lv.1 영역
 
     def get_stats(self) -> Dict:
         """전체 통계 조회"""

@@ -33,7 +33,7 @@ export default async function Image() {
             width: 400,
             height: 400,
             borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(168, 85, 247, 0.3) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, rgba(0, 100, 255, 0.3) 0%, transparent 70%)',
           }}
         />
         <div
@@ -67,9 +67,9 @@ export default async function Image() {
               width: 120,
               height: 120,
               borderRadius: 30,
-              background: 'linear-gradient(135deg, #a855f7 0%, #6366f1 100%)',
+              background: 'linear-gradient(135deg, #0064FF 0%, #3182F6 100%)',
               marginBottom: 40,
-              boxShadow: '0 20px 60px rgba(168, 85, 247, 0.4)',
+              boxShadow: '0 20px 60px rgba(0, 100, 255, 0.4)',
             }}
           >
             <span style={{ fontSize: 60, color: 'white' }}>B</span>
@@ -80,7 +80,7 @@ export default async function Image() {
             style={{
               fontSize: 72,
               fontWeight: 800,
-              background: 'linear-gradient(90deg, #ffffff 0%, #a855f7 50%, #6366f1 100%)',
+              background: 'linear-gradient(90deg, #ffffff 0%, #0064FF 50%, #3182F6 100%)',
               backgroundClip: 'text',
               color: 'transparent',
               margin: 0,
@@ -142,7 +142,7 @@ export default async function Image() {
             fontSize: 20,
           }}
         >
-          blog-index-analyzer.vercel.app
+          www.blrank.co.kr
         </div>
       </div>
     ),
