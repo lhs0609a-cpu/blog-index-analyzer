@@ -526,13 +526,16 @@ function ConcreteRecommendations({ result, isFreeUser }: { result: any; isFreeUs
             </div>
             <div className="absolute inset-0 flex items-center justify-center">
               <Link href="/pricing">
-                <div className="bg-white/95 rounded-xl px-6 py-4 shadow-lg text-center cursor-pointer hover:shadow-xl transition-all">
-                  <Lock className="w-6 h-6 text-[#0064FF] mx-auto mb-2" />
-                  <p className="text-sm text-gray-700 mb-3">
-                    +{recommendations.length - 3}개 맞춤 가이드 더보기
+                <div className="bg-white/95 rounded-xl px-6 py-4 shadow-lg text-center cursor-pointer hover:shadow-xl transition-all border-2 border-amber-300">
+                  <div className="text-2xl mb-2">🔥</div>
+                  <p className="text-sm font-bold text-amber-900 mb-1">
+                    상위노출 핵심 가이드 {recommendations.length - 3}개가 숨겨져 있습니다
                   </p>
-                  <button className="px-4 py-2 bg-[#0064FF] text-white text-sm font-medium rounded-lg hover:shadow-lg transition-all">
-                    7일 무료 체험 시작
+                  <p className="text-xs text-amber-700 mb-3">
+                    이 가이드만 따라하면 평균 순위 5단계 이상 상승
+                  </p>
+                  <button className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-red-500 text-white text-sm font-bold rounded-lg hover:shadow-lg hover:shadow-amber-500/30 transition-all">
+                    7일 무료로 확인하기
                   </button>
                   <p className="text-xs text-gray-500 mt-2">클릭 한 번으로 해지</p>
                 </div>
@@ -541,11 +544,11 @@ function ConcreteRecommendations({ result, isFreeUser }: { result: any; isFreeUs
           </div>
         )}
 
-        {/* 추가 가이드 있음 안내 */}
+        {/* 추가 가이드 있음 안내 - 티저 마케팅 */}
         {isFreeUser && recommendations.length > 4 && (
           <div className="text-center py-4">
-            <p className="text-sm text-gray-500">
-              Pro 플랜에서 <strong>+{recommendations.length - 3}개</strong> 추가 가이드를 확인하세요
+            <p className="text-sm text-amber-800 font-medium">
+              지금 숨겨진 <strong>+{recommendations.length - 3}개</strong> 핵심 가이드를 확인하면 상위노출이 빨라집니다
             </p>
           </div>
         )}

@@ -7,12 +7,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sparkles,
   Zap,
-  Users,
   Target,
-  BarChart3,
-  MessageCircle,
-  PenTool,
-  ChevronRight,
+  Users,
   Menu,
   X,
   LogOut,
@@ -20,7 +16,6 @@ import {
   Shield,
   Home,
   LayoutDashboard,
-  Megaphone
 } from 'lucide-react'
 import { useAuthStore } from '@/lib/stores/auth'
 import UsageIndicator from './UsageIndicator'
@@ -40,9 +35,9 @@ const navItems = [
     label: 'AI 도구',
     href: '/tools',
     icon: Sparkles,
-    badge: '9개',
+    badge: 'SEO 원고 외 7건',
     badgeColor: 'bg-gray-100 text-gray-600',
-    description: '프리미엄 AI 도구 모음'
+    description: '상위노출 최적화 AI 도구 모음'
   },
   {
     label: '커뮤니티',
@@ -56,17 +51,9 @@ const navItems = [
     label: '광고 최적화',
     href: '/ad-optimizer',
     icon: Target,
-    badge: 'BETA',
-    badgeColor: 'bg-orange-500 text-white',
-    description: '네이버 광고 분석 및 최적화 (개발 중)'
-  },
-  {
-    label: '통합 광고',
-    href: '/ad-dashboard',
-    icon: Megaphone,
-    badge: 'BETA',
-    badgeColor: 'bg-orange-500 text-white',
-    description: '멀티 플랫폼 광고 관리 (개발 중)'
+    badge: 'PREMIUM',
+    badgeColor: 'bg-gradient-to-r from-amber-500 to-red-500 text-white',
+    description: 'AI가 찾아주는 가성비 광고 타겟팅'
   },
   {
     label: '대시보드',
@@ -76,29 +63,7 @@ const navItems = [
   }
 ]
 
-// SNS 자동화 메뉴
-const snsItems = [
-  {
-    label: 'Threads',
-    href: '/threads',
-    icon: MessageCircle,
-    badge: 'BETA',
-    badgeColor: 'bg-orange-500 text-white',
-    bgColor: 'bg-gradient-to-br from-gray-800 to-gray-900'
-  },
-  {
-    label: 'X (Twitter)',
-    href: '/x',
-    icon: () => (
-      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-      </svg>
-    ),
-    badge: 'BETA',
-    badgeColor: 'bg-orange-500 text-white',
-    bgColor: 'bg-black'
-  }
-]
+// SNS 자동화 메뉴 - 추후 유저 풀 확보 후 재활성화
 
 export default function GlobalNav() {
   const pathname = usePathname()
@@ -178,51 +143,7 @@ export default function GlobalNav() {
                   )
                 })}
 
-                {/* SNS Dropdown */}
-                <div className="relative group">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
-                      pathname?.startsWith('/threads') || pathname?.startsWith('/x')
-                        ? 'bg-[#0064FF] text-white shadow-md shadow-[#0064FF]/20'
-                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                    }`}
-                  >
-                    <PenTool className="w-4 h-4" />
-                    <span>SNS 자동화</span>
-                    <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-orange-500 text-white">BETA</span>
-                    <ChevronRight className="w-3 h-3 transition-transform group-hover:rotate-90" />
-                  </motion.button>
-
-                  {/* Dropdown Menu */}
-                  <div className="absolute top-full left-0 mt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
-                    <div className="bg-white rounded-xl shadow-xl border border-gray-100 p-2 min-w-[180px]">
-                      {snsItems.map((item) => {
-                        const Icon = item.icon
-                        return (
-                          <Link key={item.href} href={item.href}>
-                            <div className={`flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors`}>
-                              <div className={`w-8 h-8 rounded-lg ${item.bgColor} flex items-center justify-center text-white`}>
-                                {typeof Icon === 'function' ? <Icon /> : <Icon className="w-4 h-4" />}
-                              </div>
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium text-gray-900 text-sm">{item.label}</span>
-                                  {item.badge && (
-                                    <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded ${item.badgeColor}`}>
-                                      {item.badge}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </Link>
-                        )
-                      })}
-                    </div>
-                  </div>
-                </div>
+                {/* SNS 자동화 메뉴 제거 - 추후 유저 풀 확보 후 재활성화 */}
               </nav>
 
               {/* Right Section */}
@@ -416,33 +337,7 @@ export default function GlobalNav() {
                 })}
               </div>
 
-              {/* SNS Section */}
-              <div className="p-4 border-t space-y-2">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">SNS 자동화</p>
-                {snsItems.map((item) => {
-                  const Icon = item.icon
-                  const active = isActive(item.href)
-                  return (
-                    <Link key={item.href} href={item.href} onClick={() => setMobileMenuOpen(false)}>
-                      <div className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-colors ${
-                        active ? 'bg-[#0064FF] text-white' : 'hover:bg-gray-100'
-                      }`}>
-                        <div className={`w-8 h-8 rounded-lg ${item.bgColor} flex items-center justify-center text-white`}>
-                          {typeof Icon === 'function' ? <Icon /> : <Icon className="w-4 h-4" />}
-                        </div>
-                        <span className="font-medium flex-1">{item.label}</span>
-                        {item.badge && (
-                          <span className={`px-2 py-0.5 text-xs font-bold rounded ${
-                            active ? 'bg-white/20 text-white' : item.badgeColor
-                          }`}>
-                            {item.badge}
-                          </span>
-                        )}
-                      </div>
-                    </Link>
-                  )
-                })}
-              </div>
+              {/* SNS 자동화 섹션 제거 - 추후 유저 풀 확보 후 재활성화 */}
 
               {/* Bottom Section */}
               <div className="p-4 border-t space-y-2">
