@@ -514,7 +514,7 @@ input[type="radio"]:checked {
   scroll-snap-align: start;
 }
 
-/* Smooth transitions */
-* {
+/* Smooth transitions - 인터랙티브 요소에만 적용 (전체 적용 시 성능 저하) */
+button, a, input, textarea, select, [role="button"] {
   @apply transition-colors duration-150;
 }

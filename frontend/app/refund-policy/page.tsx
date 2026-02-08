@@ -46,7 +46,7 @@ export default function RefundPolicyPage() {
 
         {/* Last Updated */}
         <p className="text-sm text-gray-500 mb-6">
-          최종 수정일: 2024년 12월 22일 | 시행일: 2024년 1월 31일
+          최종 수정일: 2026년 2월 6일 | 시행일: 2026년 2월 6일
         </p>
 
         {/* Main Content */}

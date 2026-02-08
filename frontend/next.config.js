@@ -23,25 +23,11 @@ const nextConfig = {
     formats: ['image/avif', 'image/webp'],
   },
 
-  // TypeScript 설정 - 빌드 시 무시 (임시)
+  // TypeScript 설정 - 빌드 시 타입 체크 활성화
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
 
-  // ESLint 설정 - 빌드 시 무시 (임시)
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-
-  // Turbopack 설정
-  turbopack: {
-    root: process.cwd(),
-  },
 }
 
 module.exports = nextConfig
-// Trigger deployment 1766927030
-// Trigger deployment 1766944277
-// Deploy test 1766944507
-// Webhook test 1766944924
-// Deploy hook test 1766966792

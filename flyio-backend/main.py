@@ -1,13 +1,16 @@
 """
 FastAPI 메인 애플리케이션
-Version: 2.3.0 - Community auto-generation
+Version: 2.3.1 - Rate limiting + security hardening
 """
 import os
+import time
+from collections import defaultdict
 from fastapi import FastAPI, APIRouter, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
 from contextlib import asynccontextmanager
 import logging
 
@@ -331,11 +334,25 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS 설정 - 모든 도메인 허용
+# CORS 설정 - 프로덕션 도메인만 허용
+ALLOWED_ORIGINS = [
+    "https://blog-index-analyzer.vercel.app",
+    "https://www.blrank.co.kr",
+    "https://blrank.co.kr",
+]
+
+# 개발 환경에서는 localhost 추가
+if settings.DEBUG or settings.APP_ENV == "development":
+    ALLOWED_ORIGINS.extend([
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3000",
+    ])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 모든 도메인 허용
-    allow_credentials=False,  # credentials와 "*"는 함께 사용 불가
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
     expose_headers=["*"],
@@ -343,10 +360,102 @@ app.add_middleware(
 )
 
 
-# CORS 헤더 헬퍼 함수
+# Rate Limiting Middleware
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """IP 기반 rate limiting (in-memory, 분/시간 단위)"""
+
+    def __init__(self, app, requests_per_minute: int = 60, requests_per_hour: int = 1000):
+        super().__init__(app)
+        self.rpm = requests_per_minute
+        self.rph = requests_per_hour
+        self._minute_hits: dict[str, list[float]] = defaultdict(list)
+        self._hour_hits: dict[str, list[float]] = defaultdict(list)
+        self._last_cleanup = time.time()
+
+    def _cleanup(self, now: float):
+        """5분마다 오래된 기록 정리"""
+        if now - self._last_cleanup < 300:
+            return
+        self._last_cleanup = now
+        cutoff_minute = now - 60
+        cutoff_hour = now - 3600
+        for ip in list(self._minute_hits.keys()):
+            self._minute_hits[ip] = [t for t in self._minute_hits[ip] if t > cutoff_minute]
+            if not self._minute_hits[ip]:
+                del self._minute_hits[ip]
+        for ip in list(self._hour_hits.keys()):
+            self._hour_hits[ip] = [t for t in self._hour_hits[ip] if t > cutoff_hour]
+            if not self._hour_hits[ip]:
+                del self._hour_hits[ip]
+
+    async def dispatch(self, request: Request, call_next):
+        # 헬스 체크는 rate limit 면제
+        if request.url.path in ("/", "/health", "/deployment-test-v6"):
+            return await call_next(request)
+
+        client_ip = request.client.host if request.client else "unknown"
+        now = time.time()
+
+        self._cleanup(now)
+
+        # 분당 제한 체크
+        cutoff_minute = now - 60
+        self._minute_hits[client_ip] = [t for t in self._minute_hits[client_ip] if t > cutoff_minute]
+        if len(self._minute_hits[client_ip]) >= self.rpm:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."},
+                headers={"Retry-After": "60", **get_cors_headers()}
+            )
+
+        # 시간당 제한 체크
+        cutoff_hour = now - 3600
+        self._hour_hits[client_ip] = [t for t in self._hour_hits[client_ip] if t > cutoff_hour]
+        if len(self._hour_hits[client_ip]) >= self.rph:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "시간당 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요."},
+                headers={"Retry-After": "300", **get_cors_headers()}
+            )
+
+        # 기록 추가
+        self._minute_hits[client_ip].append(now)
+        self._hour_hits[client_ip].append(now)
+
+        response = await call_next(request)
+        return response
+
+
+app.add_middleware(
+    RateLimitMiddleware,
+    requests_per_minute=settings.RATE_LIMIT_PER_MINUTE,
+    requests_per_hour=settings.RATE_LIMIT_PER_HOUR,
+)
+
+
+# Security Headers Middleware
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """보안 응답 헤더 추가"""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        if not settings.DEBUG:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+
+# CORS 헤더 헬퍼 함수 (에러 응답용 - 미들웨어가 처리하지 못하는 경우)
 def get_cors_headers():
     return {
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else "*",
         "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
         "Access-Control-Allow-Headers": "*",
     }

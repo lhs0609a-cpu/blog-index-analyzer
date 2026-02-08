@@ -24,10 +24,10 @@ DATABASE_PATH = os.environ.get("DATABASE_PATH", _default_path)
 class UsageDB:
     """Usage tracking database client"""
 
-    # Daily limits by plan
+    # Daily limits by plan (P0: 무료 플랜 제한 강화로 유료 전환 유도)
     DAILY_LIMITS = {
-        'guest': 5,           # 비회원: 하루 5회
-        'free': 10,           # 무료회원: 하루 10회
+        'guest': 3,           # 비회원: 하루 3회 (P0: 5→3)
+        'free': 5,            # 무료회원: 하루 5회 (P0: 10→5)
         'basic': 50,          # 기본 구독: 하루 50회
         'pro': 200,           # 프로 구독: 하루 200회
         'business': -1,       # 비즈니스 (-1 = 무제한)

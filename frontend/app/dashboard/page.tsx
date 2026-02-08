@@ -13,6 +13,7 @@ import toast from 'react-hot-toast'
 import EmptyState from '@/components/EmptyState'
 import TermTooltip from '@/components/TermTooltip'
 import WinnerKeywordsWidget from '@/components/WinnerKeywordsWidget'
+import OnboardingModal from '@/components/OnboardingModal'
 
 // 레벨별 퍼센타일 매핑 (대략적인 추정치)
 const LEVEL_PERCENTILE: Record<number, string> = {
@@ -185,6 +186,18 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [refreshingBlogId, setRefreshingBlogId] = useState<string | null>(null)
+  const [showOnboarding, setShowOnboarding] = useState(false)
+
+  // 첫 방문 사용자 온보딩 모달 표시
+  useEffect(() => {
+    if (user?.id) {
+      const visited = localStorage.getItem('hasVisitedDashboard')
+      if (!visited) {
+        setShowOnboarding(true)
+        localStorage.setItem('hasVisitedDashboard', 'true')
+      }
+    }
+  }, [user?.id])
 
   const loadBlogs = useCallback(async () => {
     setIsLoading(true)
@@ -250,7 +263,11 @@ export default function Dashboard() {
   const displayBlogs = filteredBlogs
 
   return (
-    <div className="min-h-screen bg-[#fafafa] pt-24">
+    <>
+      {/* P1: 첫 방문 사용자 온보딩 모달 */}
+      <OnboardingModal isOpen={showOnboarding} onClose={() => setShowOnboarding(false)} />
+
+      <div className="min-h-screen bg-[#fafafa] pt-24">
       <div className="container mx-auto px-4 py-8">
 
         {/* Header - 개선된 버전 */}
@@ -809,5 +826,6 @@ export default function Dashboard() {
         </div>
       </div>
     </div>
+    </>
   )
 }

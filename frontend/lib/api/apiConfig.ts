@@ -15,6 +15,55 @@ let currentApiUrl: string | null = null;
 type ApiUrlListener = (url: string) => void;
 const listeners: Set<ApiUrlListener> = new Set();
 
+// ============ 전역 서버 상태 관리 ============
+let globalServerDown = false;
+type ServerStatusListener = (down: boolean) => void;
+const serverStatusListeners: Set<ServerStatusListener> = new Set();
+
+export function notifyServerDown(down: boolean) {
+  if (globalServerDown === down) return; // 상태 변경 없으면 무시
+  globalServerDown = down;
+  serverStatusListeners.forEach(listener => listener(down));
+}
+
+export function isServerDown(): boolean {
+  return globalServerDown;
+}
+
+export function subscribeToServerStatus(listener: ServerStatusListener): () => void {
+  serverStatusListeners.add(listener);
+  return () => serverStatusListeners.delete(listener);
+}
+
+// ============ 에러 감지 포함 fetch 래퍼 ============
+export async function safeFetch(
+  url: string,
+  options?: RequestInit
+): Promise<Response> {
+  try {
+    const response = await fetch(url, options);
+
+    // 502, 503, 504 에러는 서버 다운으로 처리
+    if (response.status === 502 || response.status === 503 || response.status === 504) {
+      notifyServerDown(true);
+      throw new Error(`Server error: ${response.status}`);
+    }
+
+    // 성공하면 서버 다운 상태 해제
+    if (response.ok && globalServerDown) {
+      notifyServerDown(false);
+    }
+
+    return response;
+  } catch (error) {
+    // 네트워크 에러 (서버 연결 불가)
+    if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+      notifyServerDown(true);
+    }
+    throw error;
+  }
+}
+
 // 프로덕션 환경 확인
 export function isProduction(): boolean {
   if (typeof window === 'undefined') {

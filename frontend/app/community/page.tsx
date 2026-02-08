@@ -6,7 +6,7 @@ import {
   Activity, Trophy, TrendingUp, MessageSquare, Zap, Users,
   Crown, Medal, Star, ThumbsUp, Send, Clock, ArrowUp, ArrowDown,
   Flame, Target, ChevronRight, RefreshCw, Search, Award,
-  PenSquare, Eye, MessageCircle, X, Hash, Plus
+  PenSquare, Eye, MessageCircle, X, Hash, Plus, HelpCircle
 } from 'lucide-react'
 import { useAuthStore } from '@/lib/stores/auth'
 import {
@@ -38,6 +38,64 @@ const LEVEL_ICONS: Record<string, string> = {
   'Platinum': '💎',
   'Diamond': '👑',
   'Master': '🏆'
+}
+
+// 카테고리별 스타일 & 아이콘
+const CATEGORY_STYLES: Record<string, { bg: string; text: string; icon: React.ReactNode; label: string; border: string }> = {
+  free: { bg: 'bg-gray-100', text: 'text-gray-700', icon: <MessageSquare className="w-3 h-3" />, label: '자유', border: 'border-gray-200' },
+  tip: { bg: 'bg-emerald-100', text: 'text-emerald-700', icon: <Star className="w-3 h-3" />, label: '블로그 팁', border: 'border-emerald-200' },
+  question: { bg: 'bg-amber-100', text: 'text-amber-700', icon: <HelpCircle className="w-3 h-3" />, label: '질문', border: 'border-amber-200' },
+  success: { bg: 'bg-blue-100', text: 'text-blue-700', icon: <Trophy className="w-3 h-3" />, label: '성공 후기', border: 'border-blue-200' },
+}
+
+// 스켈레톤 로딩 컴포넌트
+function PostSkeleton() {
+  return (
+    <div className="p-5 animate-pulse">
+      <div className="flex items-center gap-2 mb-3">
+        <div className="w-16 h-5 bg-gray-200 rounded-full" />
+        <div className="w-20 h-4 bg-gray-100 rounded" />
+      </div>
+      <div className="w-3/4 h-5 bg-gray-200 rounded mb-2" />
+      <div className="w-full h-4 bg-gray-100 rounded mb-1" />
+      <div className="w-5/6 h-4 bg-gray-100 rounded mb-1" />
+      <div className="w-2/3 h-4 bg-gray-100 rounded mb-3" />
+      <div className="flex gap-2 mb-3">
+        <div className="w-16 h-5 bg-gray-100 rounded" />
+        <div className="w-14 h-5 bg-gray-100 rounded" />
+      </div>
+      <div className="flex gap-4">
+        <div className="w-14 h-4 bg-gray-100 rounded" />
+        <div className="w-12 h-4 bg-gray-100 rounded" />
+        <div className="w-12 h-4 bg-gray-100 rounded" />
+      </div>
+    </div>
+  )
+}
+
+// HOT 인기글 카드 컴포넌트
+function HotPostCard({ post, onClick, formatTime }: { post: Post; onClick: () => void; formatTime: (d: string) => string }) {
+  const style = CATEGORY_STYLES[post.category] || CATEGORY_STYLES.free
+  return (
+    <div
+      onClick={onClick}
+      className={`flex-shrink-0 w-[280px] p-4 rounded-xl border-2 ${style.border} bg-white hover:shadow-md cursor-pointer transition-all`}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <span className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded-full ${style.bg} ${style.text}`}>
+          {style.icon}
+          {style.label}
+        </span>
+        <span className="text-xs text-gray-400">{formatTime(post.created_at)}</span>
+      </div>
+      <h4 className="font-semibold text-gray-900 line-clamp-2 text-sm leading-snug mb-2">{post.title}</h4>
+      <p className="text-xs text-gray-500 line-clamp-2 mb-3">{post.content}</p>
+      <div className="flex items-center gap-3 text-xs text-gray-400">
+        <span className="flex items-center gap-1"><ThumbsUp className="w-3 h-3" /> {post.likes}</span>
+        <span className="flex items-center gap-1"><MessageCircle className="w-3 h-3" /> {post.comments_count}</span>
+      </div>
+    </div>
+  )
 }
 
 export default function CommunityPage() {
@@ -836,15 +894,33 @@ function PointsGuideCard() {
 // 게시판 섹션
 function PostsSection({ userId, isAuthenticated }: { userId?: number; isAuthenticated: boolean }) {
   const [posts, setPosts] = useState<Post[]>([])
+  const [hotPosts, setHotPosts] = useState<Post[]>([])
   const [category, setCategory] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<'recent' | 'popular' | 'comments'>('recent')
   const [isLoading, setIsLoading] = useState(true)
+  const [isHotLoading, setIsHotLoading] = useState(true)
   const [showWriteModal, setShowWriteModal] = useState(false)
   const [selectedPost, setSelectedPost] = useState<Post | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [hasMore, setHasMore] = useState(true)
   const POSTS_PER_PAGE = 20
+
+  // HOT 인기글 로드
+  useEffect(() => {
+    const loadHotPosts = async () => {
+      setIsHotLoading(true)
+      try {
+        const data = await getPosts({ sort_by: 'popular', limit: 5 })
+        setHotPosts(data.posts.filter(p => p.likes >= 3 || p.comments_count >= 2))
+      } catch {
+        // 인기글 로드 실패 무시
+      } finally {
+        setIsHotLoading(false)
+      }
+    }
+    loadHotPosts()
+  }, [])
 
   useEffect(() => {
     setCurrentPage(1)
@@ -960,17 +1036,18 @@ function PostsSection({ userId, isAuthenticated }: { userId?: number; isAuthenti
           >
             전체
           </button>
-          {Object.entries(POST_CATEGORIES).map(([key, label]) => (
+          {Object.entries(CATEGORY_STYLES).map(([key, style]) => (
             <button
               key={key}
               onClick={() => setCategory(key)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 category === key
-                  ? 'bg-blue-100 text-[#0064FF]'
+                  ? `${style.bg} ${style.text}`
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              {label}
+              {style.icon}
+              {style.label}
             </button>
           ))}
 
@@ -996,76 +1073,115 @@ function PostsSection({ userId, isAuthenticated }: { userId?: number; isAuthenti
         </div>
       </div>
 
+      {/* HOT 인기글 섹션 */}
+      {!isHotLoading && hotPosts.length > 0 && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+          <h3 className="font-bold text-gray-900 flex items-center gap-2 mb-3">
+            <Flame className="w-5 h-5 text-orange-500" />
+            HOT 인기글
+          </h3>
+          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            {hotPosts.map((post) => (
+              <HotPostCard
+                key={post.id}
+                post={post}
+                onClick={() => setSelectedPost(post)}
+                formatTime={formatTime}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 게시글 목록 */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         {isLoading ? (
-          <div className="p-8 text-center text-gray-500">로딩 중...</div>
+          <div className="divide-y divide-gray-100">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <PostSkeleton key={i} />
+            ))}
+          </div>
         ) : posts.length === 0 ? (
-          <div className="p-8 text-center">
-            <PenSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500">아직 게시글이 없습니다</p>
+          <div className="p-12 text-center">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <PenSquare className="w-8 h-8 text-gray-300" />
+            </div>
+            <p className="text-gray-900 font-medium text-lg mb-1">아직 게시글이 없어요</p>
+            <p className="text-gray-500 text-sm mb-4">블로그 운영 경험을 나누고 함께 성장해보세요</p>
             {isAuthenticated && (
               <button
                 onClick={() => setShowWriteModal(true)}
-                className="mt-3 text-[#0064FF] hover:text-[#0052CC] font-medium"
+                className="px-6 py-2.5 bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white rounded-xl font-medium hover:shadow-lg hover:shadow-blue-200 transition-all"
               >
-                첫 번째 글을 작성해보세요!
+                첫 번째 글 작성하기
               </button>
             )}
           </div>
         ) : (
-          <div className="divide-y divide-gray-50">
-            {posts.map((post, index) => (
-              <motion.div
-                key={post.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.03 }}
-                onClick={() => setSelectedPost(post)}
-                className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`px-2 py-0.5 text-xs rounded-full ${
-                        post.category === 'tip' ? 'bg-green-100 text-green-700' :
-                        post.category === 'question' ? 'bg-yellow-100 text-yellow-700' :
-                        post.category === 'success' ? 'bg-blue-100 text-blue-700' :
-                        'bg-gray-100 text-gray-600'
-                      }`}>
-                        {POST_CATEGORIES[post.category] || '자유'}
+          <div className="divide-y divide-gray-100">
+            {posts.map((post, index) => {
+              const catStyle = CATEGORY_STYLES[post.category] || CATEGORY_STYLES.free
+              const isHot = post.likes >= 10 || post.comments_count >= 5
+              return (
+                <motion.div
+                  key={post.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.03 }}
+                  onClick={() => setSelectedPost(post)}
+                  className="p-5 hover:bg-gray-50 cursor-pointer transition-colors"
+                >
+                  {/* 상단: 카테고리 + 작성자 + 시간 */}
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded-full ${catStyle.bg} ${catStyle.text}`}>
+                        {catStyle.icon}
+                        {catStyle.label}
                       </span>
                       <span className="text-xs text-gray-400">{post.masked_name}</span>
                     </div>
-                    <h3 className="font-medium text-gray-900 line-clamp-1">{post.title}</h3>
-                    <p className="text-sm text-gray-500 line-clamp-2 mt-1">{post.content}</p>
-                    {post.tags && post.tags.length > 0 && (
-                      <div className="flex gap-1 mt-2">
-                        {post.tags.slice(0, 3).map((tag, i) => (
-                          <span key={i} className="text-xs text-[#0064FF] bg-blue-50 px-2 py-0.5 rounded">
-                            #{tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                    <span className="text-xs text-gray-400">{formatTime(post.created_at)}</span>
                   </div>
-                  <div className="flex flex-col items-end gap-1 text-xs text-gray-400">
-                    <span>{formatTime(post.created_at)}</span>
-                    <div className="flex items-center gap-3">
+
+                  {/* 제목 (최대 2줄) */}
+                  <h3 className="font-semibold text-gray-900 line-clamp-2 leading-snug mb-1.5">{post.title}</h3>
+
+                  {/* 내용 미리보기 (최대 3줄) */}
+                  <p className="text-sm text-gray-500 line-clamp-3 leading-relaxed mb-2">{post.content}</p>
+
+                  {/* 태그 */}
+                  {post.tags && post.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      {post.tags.slice(0, 3).map((tag, i) => (
+                        <span key={i} className="text-xs text-[#0064FF] bg-blue-50 px-2 py-0.5 rounded-full">
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* 하단: 참여 통계 + 인기 배지 */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4 text-xs text-gray-400">
                       <span className="flex items-center gap-1">
-                        <Eye className="w-3 h-3" /> {post.views}
+                        <Eye className="w-3.5 h-3.5" /> {post.views}
                       </span>
                       <span className="flex items-center gap-1">
-                        <ThumbsUp className="w-3 h-3" /> {post.likes}
+                        <ThumbsUp className="w-3.5 h-3.5" /> {post.likes}
                       </span>
                       <span className="flex items-center gap-1">
-                        <MessageCircle className="w-3 h-3" /> {post.comments_count}
+                        <MessageCircle className="w-3.5 h-3.5" /> {post.comments_count}
                       </span>
                     </div>
+                    {isHot && (
+                      <span className="flex items-center gap-1 px-2 py-0.5 bg-orange-50 text-orange-600 text-xs rounded-full font-medium">
+                        <Flame className="w-3 h-3" /> 인기
+                      </span>
+                    )}
                   </div>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              )
+            })}
           </div>
         )}
 
@@ -1174,12 +1290,12 @@ function WritePostModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (title.trim().length < 2) {
-      setError('제목을 2자 이상 입력해주세요')
+    if (title.trim().length < 5) {
+      setError('제목을 5자 이상 입력해주세요')
       return
     }
-    if (content.trim().length < 10) {
-      setError('내용을 10자 이상 입력해주세요')
+    if (content.trim().length < 30) {
+      setError('내용을 30자 이상 입력해주세요')
       return
     }
 
@@ -1240,10 +1356,11 @@ function WritePostModal({
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="제목을 입력하세요"
+              placeholder="무엇에 대해 이야기하고 싶으신가요? (예: 블로그 3개월차 성장 후기)"
               className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0064FF]"
               maxLength={100}
             />
+            <p className="text-xs text-gray-400 mt-1 text-right">{title.length}/100</p>
           </div>
 
           {/* 내용 */}
@@ -1252,7 +1369,7 @@ function WritePostModal({
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="내용을 입력하세요 (최소 10자)"
+              placeholder="블로그 운영 경험, 팁, 질문 등을 자유롭게 작성해주세요. 구체적인 수치나 경험을 공유하면 더 많은 공감을 받을 수 있어요! (최소 30자)"
               className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0064FF] min-h-[200px] resize-none"
               maxLength={5000}
             />
@@ -1302,7 +1419,7 @@ function WritePostModal({
           </button>
           <button
             onClick={handleSubmit}
-            disabled={isSubmitting || title.length < 2 || content.length < 10}
+            disabled={isSubmitting || title.length < 5 || content.length < 30}
             className="flex-1 py-3 bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg transition-all"
           >
             {isSubmitting ? '게시 중...' : '게시하기'}
@@ -1407,14 +1524,15 @@ function PostDetailModal({
         {/* 헤더 */}
         <div className="flex items-center justify-between p-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
-            <span className={`px-2 py-0.5 text-xs rounded-full ${
-              fullPost.category === 'tip' ? 'bg-green-100 text-green-700' :
-              fullPost.category === 'question' ? 'bg-yellow-100 text-yellow-700' :
-              fullPost.category === 'success' ? 'bg-blue-100 text-blue-700' :
-              'bg-gray-100 text-gray-600'
-            }`}>
-              {POST_CATEGORIES[fullPost.category] || '자유'}
-            </span>
+            {(() => {
+              const detailCatStyle = CATEGORY_STYLES[fullPost.category] || CATEGORY_STYLES.free
+              return (
+                <span className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded-full ${detailCatStyle.bg} ${detailCatStyle.text}`}>
+                  {detailCatStyle.icon}
+                  {detailCatStyle.label}
+                </span>
+              )
+            })()}
           </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
             <X className="w-5 h-5 text-gray-500" />

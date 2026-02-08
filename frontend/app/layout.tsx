@@ -10,7 +10,7 @@ import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
 
-const BASE_URL = 'https://blog-index-analyzer.vercel.app'
+const BASE_URL = 'https://www.blrank.co.kr'
 
 export const metadata: Metadata = {
   // 기본 메타데이터
@@ -92,10 +92,10 @@ export const metadata: Metadata = {
   },
   category: 'technology',
 
-  // 사이트 인증
-  verification: {
-    google: 'google-site-verification-code', // Google Search Console 인증 코드
-  },
+  // 사이트 인증 (Google Search Console 등록 후 실제 코드로 교체 필요)
+  // verification: {
+  //   google: 'YOUR_ACTUAL_GOOGLE_VERIFICATION_CODE',
+  // },
 
   // 네이버 서치어드바이저 인증
   other: {

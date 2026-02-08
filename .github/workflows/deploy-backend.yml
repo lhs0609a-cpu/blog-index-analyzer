@@ -81,9 +81,13 @@ jobs:
 
             # Docker 이미지 빌드
             docker build --no-cache --pull -t blog-api .
+            # /data 디렉토리 생성 (없으면)
+            sudo mkdir -p /data/backups
+
             docker run -d \
               --name blog-analyzer-api \
               -p 8000:8000 \
+              -v /data:/data \
               --env-file .env \
               --restart unless-stopped \
               --memory=2g \
@@ -165,3 +169,12 @@ jobs:
             # 컨테이너 상태 확인
             echo "=== Container status ==="
             docker ps -a | grep blog-analyzer-api || echo "Container not found"
+
+            # 볼륨 마운트 확인
+            echo "=== Volume mount check ==="
+            docker exec blog-analyzer-api ls -la /data/backups/ || echo "Backup dir check failed"
+            ls -la /data/backups/ || echo "Host backup dir check failed"
+
+            # 호스트와 컨테이너의 /data 동기화 확인
+            echo "=== Data sync check ==="
+            docker exec blog-analyzer-api cat /proc/mounts | grep /data || echo "Volume not mounted"

@@ -41,8 +41,8 @@ function generateUUID(): string {
   })
 }
 
-// 토스페이먼츠 클라이언트 키 (라이브) - 자동결제(빌링)용 / MID: bill_nsmard045
-const TOSS_CLIENT_KEY = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY || 'live_ck_6BYq7GWPVv4LKjjM6ojG8NE5vbo1'
+// 토스페이먼츠 클라이언트 키 - 환경변수에서만 로드 (하드코딩 금지)
+const TOSS_CLIENT_KEY = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY || ''
 
 function PaymentContent() {
   const searchParams = useSearchParams()
