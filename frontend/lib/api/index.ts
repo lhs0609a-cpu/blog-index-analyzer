@@ -10,3 +10,6 @@ export * from './system'
 
 // Re-export client for custom requests
 export { default as apiClient } from './client'
+
+// Re-export getApiUrl as getApiBaseUrl for convenience
+export { getApiUrl as getApiBaseUrl } from './apiConfig'

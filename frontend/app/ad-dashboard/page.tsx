@@ -479,7 +479,7 @@ export default function AdDashboardPage() {
             <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
               <Bell className="w-5 h-5 text-yellow-400" />
               알림
-              {summary?.unread_notifications > 0 && (
+              {(summary?.unread_notifications ?? 0) > 0 && (
                 <span className="px-2 py-0.5 bg-red-500 text-xs rounded-full">
                   {summary.unread_notifications}
                 </span>
