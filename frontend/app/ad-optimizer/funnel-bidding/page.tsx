@@ -85,6 +85,7 @@ interface StageMetrics {
   total_revenue: number
   avg_cpm: number
   avg_cpc: number
+  avg_ctr: number
   avg_cpa: number
   avg_roas: number
 }
