@@ -34,7 +34,8 @@
     "@radix-ui/react-tabs": "^1.0.4",
     "react-confetti": "^6.1.0",
     "canvas-confetti": "^1.9.2",
-    "html2canvas": "^1.4.1"
+    "html2canvas": "^1.4.1",
+    "reactflow": "^11.10.1"
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.6.4",

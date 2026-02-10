@@ -293,6 +293,26 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Community auto-generation failed: {e}")
 
+    # 퍼널 디자이너 DB 초기화
+    try:
+        from database.funnel_designer_db import init_funnel_designer_tables
+        init_funnel_designer_tables()
+        logger.info("✅ Funnel Designer DB initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ Funnel Designer DB init failed: {e}")
+
+    # 평판 모니터링 DB 초기화 + 백그라운드 스케줄러
+    try:
+        from database.reputation_db import init_reputation_tables
+        init_reputation_tables()
+        logger.info("✅ Reputation DB initialized")
+
+        from routers.reputation import reputation_monitor_loop
+        asyncio.create_task(reputation_monitor_loop())
+        logger.info("✅ Reputation monitor started (every 5 min)")
+    except Exception as e:
+        logger.warning(f"⚠️ Reputation monitor failed to start: {e}")
+
     yield
 
     # Shutdown - 빠른 종료 (타임아웃 방지)
@@ -562,6 +582,8 @@ from routers import notification
 from routers import winner_keywords
 from routers import profitable_keywords
 from routers import marketplace
+from routers import reputation
+from routers import funnel_designer
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
@@ -606,6 +628,8 @@ app.include_router(notification.router, tags=["알림시스템"])
 app.include_router(winner_keywords.router, prefix="/api/winner-keywords", tags=["1위보장키워드"])
 app.include_router(profitable_keywords.router, prefix="/api", tags=["수익성키워드"])
 app.include_router(marketplace.router, prefix="/api", tags=["마켓플레이스"])
+app.include_router(reputation.router, tags=["평판모니터링"])
+app.include_router(funnel_designer.router, tags=["퍼널디자이너"])
 
 
 if __name__ == "__main__":
