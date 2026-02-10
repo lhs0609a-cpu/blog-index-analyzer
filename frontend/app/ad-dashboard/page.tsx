@@ -481,7 +481,7 @@ export default function AdDashboardPage() {
               알림
               {(summary?.unread_notifications ?? 0) > 0 && (
                 <span className="px-2 py-0.5 bg-red-500 text-xs rounded-full">
-                  {summary.unread_notifications}
+                  {summary?.unread_notifications}
                 </span>
               )}
             </h2>
