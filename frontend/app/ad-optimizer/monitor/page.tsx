@@ -26,6 +26,7 @@ interface OptimizationAction {
   reason: string
   created_at: string
   description?: string
+  time_ago?: string
 }
 
 interface Strategy {
