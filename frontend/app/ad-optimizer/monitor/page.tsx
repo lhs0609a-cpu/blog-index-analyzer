@@ -17,9 +17,12 @@ interface OptimizationAction {
   id: number
   platform: string
   action_type: string
+  action?: string
+  target?: string
   target_name: string
   old_value: string
   new_value: string
+  change?: string
   reason: string
   created_at: string
   description?: string
