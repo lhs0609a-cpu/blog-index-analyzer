@@ -1268,8 +1268,8 @@ export default function AdminPage() {
                       <tbody className="divide-y divide-gray-200">
                         {expiringUsers.map((user) => (
                           <tr key={user.id} className={`hover:bg-gray-50 ${
-                            user.remaining_days !== undefined && user.remaining_days <= 1 ? 'bg-red-50' :
-                            user.remaining_days !== undefined && user.remaining_days <= 3 ? 'bg-orange-50' : ''
+                            user.remaining_days != null && user.remaining_days <= 1 ? 'bg-red-50' :
+                            user.remaining_days != null && user.remaining_days <= 3 ? 'bg-orange-50' : ''
                           }`}>
                             <td className="px-4 py-3 text-sm text-gray-900">{user.id}</td>
                             <td className="px-4 py-3 text-sm text-gray-900">
@@ -1284,11 +1284,11 @@ export default function AdminPage() {
                             </td>
                             <td className="px-4 py-3">
                               <span className={`text-sm font-bold ${
-                                user.remaining_days !== undefined && user.remaining_days <= 1 ? 'text-red-600' :
-                                user.remaining_days !== undefined && user.remaining_days <= 3 ? 'text-orange-600' :
+                                user.remaining_days != null && user.remaining_days <= 1 ? 'text-red-600' :
+                                user.remaining_days != null && user.remaining_days <= 3 ? 'text-orange-600' :
                                 'text-yellow-600'
                               }`}>
-                                {user.remaining_days !== undefined ? `${user.remaining_days}일` : '-'}
+                                {user.remaining_days != null ? `${user.remaining_days}일` : '-'}
                               </span>
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-600">
