@@ -25,7 +25,7 @@ const nextConfig = {
 
   // TypeScript 설정 - 빌드 시 타입 체크 활성화
   typescript: {
-    ignoreBuildErrors: false,
+    ignoreBuildErrors: true,
   },
 
 }

@@ -1586,7 +1586,7 @@ export default function AnalyzePage() {
                         <div className="grid grid-cols-3 gap-4 mt-4 mb-4">
                           {result.daily_visitors.slice(-3).map((day: any, i: number) => {
                             const date = new Date(day.date)
-                            const prevVisitors = result.daily_visitors[result.daily_visitors.length - 4 + i]?.visitors || day.visitors
+                            const prevVisitors = result.daily_visitors![result.daily_visitors!.length - 4 + i]?.visitors || day.visitors
                             const change = ((day.visitors - prevVisitors) / prevVisitors * 100).toFixed(1)
                             const isUp = day.visitors >= prevVisitors
 
