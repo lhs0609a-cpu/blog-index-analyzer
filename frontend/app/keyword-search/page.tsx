@@ -2324,7 +2324,7 @@ function KeywordSearchContent() {
             {/* Estimated Time */}
             <div className="text-center">
               <p className="text-xs text-gray-400">
-                예상 소요 시간: 약 1분
+                예상 소요 시간: 약 10초
               </p>
             </div>
 

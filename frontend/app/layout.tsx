@@ -99,7 +99,7 @@ export const metadata: Metadata = {
 
   // 네이버 서치어드바이저 인증
   other: {
-    'naver-site-verification': '225b96b53906bb64665ae546c9d11adb32dd128f',
+    'naver-site-verification': 'a2d07f71e11662403bea4bf15caa6b6582f57693',
   },
 }
 

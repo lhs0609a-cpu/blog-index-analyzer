@@ -720,12 +720,12 @@ async def fetch_naver_search_results(keyword: str, limit: int = 10) -> List[Dict
 
 async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 10) -> Dict[str, List[Dict]]:
     """
-    Fetch search results - 순위 정확도 우선 전략
+    Fetch search results - HTTP 기반 고속 전략
 
     우선순위:
     1. 크롬 확장 프로그램 결과 (100% 정확)
-    2. Playwright 스크래핑 (95% 정확 - 실제 DOM 순서)
-    3. HTTP/Mobile/API 병합 (fallback)
+    2. HTTP/Mobile/API 병렬 수집 (빠르고 안정적)
+    3. RSS fallback
     """
     # 0단계: 크롬 확장 프로그램 결과 확인 (가장 정확)
     cache_key = keyword.strip().lower()
@@ -749,78 +749,54 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 10) ->
         all_urls = set()
         rank_source = "unknown"  # 순위 데이터 출처 추적
 
-        # ===== 1단계: Playwright 스크래핑 (가장 정확한 순위) =====
-        logger.info(f"Step 1: Playwright BLOG tab for accurate ranking: {keyword}")
-        try:
-            playwright_results = await fetch_via_blog_tab_scraping(keyword, limit + 10)
-            if playwright_results and len(playwright_results) >= min(limit, 5):
-                # Playwright 결과 사용 - 원본 순위 보존
-                for item in playwright_results:
-                    if len(blog_results) >= limit:
-                        break
-                    if item["post_url"] not in all_urls:
-                        # source_rank가 있으면 사용, 없으면 순서대로
-                        item["rank"] = item.get("source_rank", len(blog_results) + 1)
-                        item["original_rank"] = item.get("source_rank", len(blog_results) + 1)
-                        item["rank_source"] = "playwright"
-                        blog_results.append(item)
-                        all_urls.add(item["post_url"])
-                rank_source = "playwright"
-                logger.info(f"[Playwright] Got {len(blog_results)} results with accurate ranking")
-        except Exception as e:
-            logger.warning(f"Playwright failed: {e}")
+        # ===== 1단계: HTTP 병렬 수집 (HTTP + Mobile + API) =====
+        logger.info(f"Step 1: HTTP/Mobile/API parallel fetch for: {keyword}")
 
-        # ===== 2단계: Playwright 부족하면 다른 소스로 보완 =====
+        async def safe_fetch(coro, name):
+            try:
+                return await coro
+            except Exception as e:
+                logger.warning(f"{name} failed: {e}")
+                return []
+
+        client_id = getattr(settings, 'NAVER_CLIENT_ID', None)
+        client_secret = getattr(settings, 'NAVER_CLIENT_SECRET', None)
+
+        # 병렬 실행: HTTP, 모바일, API
+        tasks = [
+            safe_fetch(fetch_via_http_only(keyword, limit * 2), "HTTP"),
+            safe_fetch(fetch_via_mobile_web(keyword, limit * 2), "Mobile"),
+        ]
+
+        if client_id and client_secret:
+            tasks.append(safe_fetch(
+                fetch_via_naver_api(keyword, limit * 3, client_id, client_secret),
+                "Naver API"
+            ))
+
+        all_results = await asyncio.gather(*tasks)
+
+        # 결과 병합 (중복 제거)
+        for source_idx, source_results in enumerate(all_results):
+            source_name = ["http", "mobile", "api"][source_idx] if source_idx < 3 else "unknown"
+            for item in source_results:
+                if len(blog_results) >= limit:
+                    break
+                if item["post_url"] not in all_urls:
+                    item["tab_type"] = "BLOG"
+                    item["rank"] = len(blog_results) + 1
+                    item["original_rank"] = item.get("source_rank", len(blog_results) + 1)
+                    item["rank_source"] = source_name
+                    blog_results.append(item)
+                    all_urls.add(item["post_url"])
+
+        if rank_source == "unknown" and len(blog_results) > 0:
+            rank_source = "http_mobile_api"
+        logger.info(f"HTTP parallel fetch: {len(blog_results)} results")
+
+        # ===== 2단계: RSS fallback (아직 부족하면) =====
         if len(blog_results) < limit:
-            logger.info(f"Step 2: Supplementing with HTTP/Mobile/API (need {limit - len(blog_results)} more)")
-
-            async def safe_fetch(coro, name):
-                try:
-                    return await coro
-                except Exception as e:
-                    logger.warning(f"{name} failed: {e}")
-                    return []
-
-            client_id = getattr(settings, 'NAVER_CLIENT_ID', None)
-            client_secret = getattr(settings, 'NAVER_CLIENT_SECRET', None)
-
-            # 병렬 실행: HTTP, 모바일, API
-            tasks = [
-                safe_fetch(fetch_via_http_only(keyword, limit * 2), "HTTP"),
-                safe_fetch(fetch_via_mobile_web(keyword, limit * 2), "Mobile"),
-            ]
-
-            if client_id and client_secret:
-                tasks.append(safe_fetch(
-                    fetch_via_naver_api(keyword, limit * 3, client_id, client_secret),
-                    "Naver API"
-                ))
-
-            all_results = await asyncio.gather(*tasks)
-
-            # 결과 병합 (중복 제거, 기존 결과 뒤에 추가)
-            supplement_count = 0
-            for source_idx, source_results in enumerate(all_results):
-                source_name = ["http", "mobile", "api"][source_idx] if source_idx < 3 else "unknown"
-                for item in source_results:
-                    if len(blog_results) >= limit:
-                        break
-                    if item["post_url"] not in all_urls:
-                        item["tab_type"] = "BLOG"
-                        item["rank"] = len(blog_results) + 1
-                        item["original_rank"] = item.get("source_rank", len(blog_results) + 1)
-                        item["rank_source"] = source_name
-                        blog_results.append(item)
-                        all_urls.add(item["post_url"])
-                        supplement_count += 1
-
-            if rank_source == "unknown" and supplement_count > 0:
-                rank_source = "http_mobile_api"
-            logger.info(f"After supplementing: {len(blog_results)} results")
-
-        # ===== 3단계: RSS fallback (아직 부족하면) =====
-        if len(blog_results) < limit:
-            logger.info(f"Step 3: RSS fallback for: {keyword} (need {limit - len(blog_results)} more)")
+            logger.info(f"Step 2: RSS fallback for: {keyword} (need {limit - len(blog_results)} more)")
             rss_results = await fetch_via_rss(keyword, limit * 2)
             if rss_results:
                 for item in rss_results:
@@ -835,9 +811,7 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 10) ->
                 logger.info(f"After RSS: {len(blog_results)} results")
 
         # ===== 다양성 필터 적용 (같은 블로거 연속 노출 방지) =====
-        # 주의: Playwright 결과는 이미 네이버의 다양성 필터가 적용된 상태
-        # 다른 소스 결과는 다양성 필터 필요
-        if len(blog_results) > 1 and rank_source != "playwright":
+        if len(blog_results) > 1:
             blog_results = apply_diversity_filter(blog_results)
             logger.info(f"Applied diversity filter: {len(blog_results)} results")
 
@@ -2133,9 +2107,158 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
     return post_analysis
 
 
+async def scrape_blog_stats_fast(blog_id: str) -> Dict:
+    """
+    HTTP 병렬 요청으로 블로그 통계를 빠르게 수집 (데스크톱 + 모바일 동시 요청)
+    - Playwright 없이 httpx만 사용하여 병목 제거
+    - 데스크톱 페이지의 <script> JSON 데이터 + 모바일 페이지 regex 추출
+    """
+    stats = {
+        "total_posts": None,
+        "neighbor_count": None,
+        "total_visitors": None,
+        "success": False,
+        "source": "scrape_fast"
+    }
+
+    try:
+        client = await get_http_client()
+
+        desktop_headers = {
+            "User-Agent": random.choice(USER_AGENTS),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "ko-KR,ko;q=0.9",
+            "Referer": "https://blog.naver.com/",
+        }
+        mobile_headers = {
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "ko-KR,ko;q=0.9",
+            "Referer": "https://m.blog.naver.com/",
+        }
+
+        # 데스크톱 + 모바일 동시 요청
+        desktop_url = f"https://blog.naver.com/{blog_id}"
+        mobile_url = f"https://m.blog.naver.com/{blog_id}"
+
+        async def fetch_page(url, headers):
+            try:
+                resp = await client.get(url, headers=headers, timeout=5.0)
+                return resp
+            except Exception:
+                return None
+
+        desktop_resp, mobile_resp = await asyncio.gather(
+            fetch_page(desktop_url, desktop_headers),
+            fetch_page(mobile_url, mobile_headers),
+        )
+
+        # 비공개/존재하지 않는 블로그 감지
+        for resp in [desktop_resp, mobile_resp]:
+            if resp is None:
+                continue
+            html = resp.text
+            if resp.status_code == 404 or "존재하지 않는 블로그" in html:
+                return {**stats, "error_code": "NOT_FOUND", "error_message": "존재하지 않는 블로그입니다."}
+            if "비공개 블로그" in html or "이 블로그는 공개설정이" in html:
+                return {**stats, "error_code": "PRIVATE_BLOG", "error_message": "비공개 블로그입니다."}
+
+        # 데스크톱 페이지에서 JSON 데이터 추출 (script 태그 내 정확한 데이터)
+        if desktop_resp and desktop_resp.status_code == 200:
+            html = desktop_resp.text
+            # 데스크톱 페이지의 script 내 JSON 패턴
+            json_post_patterns = [
+                r'"countPost"\s*:\s*(\d+)',
+                r'"postCnt"\s*:\s*(\d+)',
+            ]
+            json_buddy_patterns = [
+                r'"countBuddy"\s*:\s*(\d+)',
+                r'"buddyCnt"\s*:\s*(\d+)',
+            ]
+            json_visitor_patterns = [
+                r'"visitorcnt"\s*:\s*"?(\d+)"?',
+                r'"countVisitor"\s*:\s*(\d+)',
+            ]
+
+            for pattern in json_post_patterns:
+                match = re.search(pattern, html)
+                if match:
+                    stats["total_posts"] = int(match.group(1))
+                    break
+
+            for pattern in json_buddy_patterns:
+                match = re.search(pattern, html)
+                if match:
+                    stats["neighbor_count"] = int(match.group(1))
+                    break
+
+            for pattern in json_visitor_patterns:
+                match = re.search(pattern, html, re.IGNORECASE)
+                if match:
+                    stats["total_visitors"] = int(match.group(1))
+                    break
+
+        # 모바일 페이지에서 보완 (데스크톱에서 못 찾은 항목만)
+        if mobile_resp and mobile_resp.status_code == 200:
+            html = mobile_resp.text
+
+            if stats["total_posts"] is None:
+                post_patterns = [
+                    r'게시글\s*(\d[\d,]*)',
+                    r'포스트\s*(\d[\d,]*)',
+                    r'전체글\s*\((\d[\d,]*)\)',
+                    r'"postCnt":\s*(\d+)',
+                    r'글\s*(\d[\d,]*)\s*개',
+                ]
+                for pattern in post_patterns:
+                    match = re.search(pattern, html)
+                    if match:
+                        stats["total_posts"] = int(match.group(1).replace(',', ''))
+                        break
+
+            if stats["neighbor_count"] is None:
+                neighbor_patterns = [
+                    r'이웃\s*(\d[\d,]*)',
+                    r'"buddyCnt":\s*(\d+)',
+                    r'서로이웃\s*(\d[\d,]*)',
+                ]
+                for pattern in neighbor_patterns:
+                    match = re.search(pattern, html)
+                    if match:
+                        stats["neighbor_count"] = int(match.group(1).replace(',', ''))
+                        break
+
+            if stats["total_visitors"] is None:
+                visitor_patterns = [
+                    r'방문자\s*(\d[\d,]*)',
+                    r'"visitorcnt":\s*"?(\d+)"?',
+                    r'전체방문\s*(\d[\d,]*)',
+                    r'총\s*방문\s*(\d[\d,]*)',
+                ]
+                for pattern in visitor_patterns:
+                    match = re.search(pattern, html, re.IGNORECASE)
+                    if match:
+                        stats["total_visitors"] = int(match.group(1).replace(',', ''))
+                        break
+
+        # 성공 여부 판단 (최소 1개 이상 추출)
+        if stats["total_posts"] or stats["neighbor_count"] or stats["total_visitors"]:
+            stats["success"] = True
+            logger.info(f"Blog scrape_fast success: {blog_id} - posts={stats['total_posts']}, neighbors={stats['neighbor_count']}, visitors={stats['total_visitors']}")
+        else:
+            logger.warning(f"Blog scrape_fast: no stats found for {blog_id}")
+
+    except httpx.TimeoutException:
+        logger.warning(f"Blog scrape_fast timeout: {blog_id}")
+    except Exception as e:
+        logger.warning(f"Blog scrape_fast error for {blog_id}: {e}")
+
+    return stats
+
+
 async def scrape_blog_stats(blog_id: str) -> Dict:
     """
-    실제 블로그 페이지를 스크래핑하여 정확한 통계 수집
+    실제 블로그 페이지를 스크래핑하여 정확한 통계 수집 (레거시 - scrape_blog_stats_fast 사용 권장)
     - 총 글 수, 이웃 수, 방문자 수를 실제 페이지에서 추출
     """
     stats = {
@@ -2258,8 +2381,8 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
     }
 
     try:
-        # ===== 1단계: 실제 블로그 페이지 스크래핑 시도 =====
-        scraped_stats = await scrape_blog_stats(blog_id)
+        # ===== 1단계: HTTP 병렬 스크래핑으로 블로그 통계 수집 =====
+        scraped_stats = await scrape_blog_stats_fast(blog_id)
 
         # 에러 코드 확인 - 비공개/존재하지 않는 블로그 등
         if scraped_stats.get("error_code"):
