@@ -41,6 +41,8 @@ from database.community_db import (
     get_today_success_count,
     # 통계
     get_platform_stats,
+    # 중복 체크
+    is_title_duplicate,
 )
 
 logger = logging.getLogger(__name__)
@@ -473,6 +475,10 @@ async def get_post_api(post_id: int, user_id: Optional[int] = None):
 @router.post("/posts")
 async def create_post_api(request: PostCreateRequest):
     """게시글 작성"""
+    # 1시간 이내 동일 제목 중복 방어
+    if is_title_duplicate(request.title, hours=1):
+        raise HTTPException(status_code=409, detail="동일한 제목의 글이 이미 있습니다.")
+
     post_id = create_post(
         user_id=request.user_id,
         title=request.title,

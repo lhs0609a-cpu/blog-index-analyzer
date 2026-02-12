@@ -1016,6 +1016,59 @@ def fill_template(template: str, user: VirtualUser) -> str:
     return result
 
 
+# ============ 제목 변형 시스템 (고정 제목 중복 방지) ============
+
+TITLE_SUFFIXES_EMOTION = [
+    "ㅠㅠ", "ㅜㅜ", "ㅋㅋ", "ㅋㅋㅋ", "ㅎㅎ", "ㅎ", "..", "...", ";;;",
+    "ㄷㄷ", "ㅠ", "ㅜ", "ㅋ", "!!", "!", "~", "ㅎㅎㅎ",
+]
+
+TITLE_SUFFIXES_PERIOD = [
+    "(1개월차)", "(2개월차)", "(3개월차)", "(4개월차)", "(5개월차)",
+    "(6개월차)", "(8개월차)", "(10개월차)", "(1년차)", "(초보)",
+    "(입문)", "(중급)", "(n개월차)",
+]
+
+TITLE_SUFFIXES_REACTION = [
+    "진짜", "아", "후", "하", "흠", "으으", "아아",
+    "ㄹㅇ", "솔직히", "대충", "그냥",
+]
+
+TITLE_SUFFIXES_TAG = [
+    "(블로그)", "(일상)", "(고민)", "(잡담)", "(경험담)",
+    "(후기)", "(현실)", "(TMI)", "(공감)", "(토크)",
+]
+
+ALL_TITLE_SUFFIXES = (
+    TITLE_SUFFIXES_EMOTION
+    + TITLE_SUFFIXES_PERIOD
+    + TITLE_SUFFIXES_REACTION
+    + TITLE_SUFFIXES_TAG
+)
+
+
+def _add_title_variation(title: str) -> str:
+    """고정 제목(placeholder 없는 제목)에 자연스러운 변형 접미사 추가.
+
+    변형 패턴:
+    - 감정 표현: "슬럼프 온듯" → "슬럼프 온듯 ㅠㅠ"
+    - 기간 표현: "블로그 하기 싫다" → "블로그 하기 싫다 (3개월차)"
+    - 감탄 표현: "번아웃 왔어요" → "번아웃 왔어요 진짜"
+    """
+    suffix = random.choice(ALL_TITLE_SUFFIXES)
+    # 이미 비슷한 접미사가 있으면 다른 카테고리에서 선택
+    if suffix.strip("()") in title:
+        pool = random.choice([
+            TITLE_SUFFIXES_EMOTION,
+            TITLE_SUFFIXES_PERIOD,
+            TITLE_SUFFIXES_REACTION,
+            TITLE_SUFFIXES_TAG,
+        ])
+        suffix = random.choice(pool)
+    # 공백 + 접미사
+    return f"{title} {suffix}"
+
+
 # ============ 맥락 인식 댓글 생성 ============
 
 def generate_contextual_comment(post: Dict, commenter: VirtualUser) -> str:
@@ -1162,6 +1215,10 @@ def generate_natural_post(user: VirtualUser = None, category: str = None) -> Dic
     title = fill_template(template["title"], user)
     content = fill_template(template["content"], user)
 
+    # 고정 제목(placeholder가 없었던 제목)에 변형 적용
+    if "{" not in template["title"]:
+        title = _add_title_variation(title)
+
     # 자연스러운 변환 적용
     transformer = NaturalTextTransformer()
 
@@ -1199,8 +1256,8 @@ def generate_daily_natural_content(
     posts_count: Tuple[int, int] = (15, 30),
     comments_per_post: Tuple[int, int] = (3, 12),
 ) -> Dict:
-    """하루치 자연스러운 콘텐츠 생성"""
-    from database.community_db import get_db_connection
+    """하루치 자연스러운 콘텐츠 생성 (중복 방지 포함)"""
+    from database.community_db import get_db_connection, is_title_duplicate
     import json
 
     conn = get_db_connection()
@@ -1214,6 +1271,10 @@ def generate_daily_natural_content(
 
     created_posts = []
     created_comments = []
+    skipped_duplicates = 0
+
+    # ★ 배치 내 중복 방지용 세트
+    used_titles_in_batch: set = set()
 
     for i in range(num_posts):
         # 랜덤 시간 (오늘 중)
@@ -1227,9 +1288,29 @@ def generate_daily_natural_content(
         if post_time > now:
             post_time = now - timedelta(minutes=random.randint(1, 60))
 
-        # 게시글 생성
+        # 게시글 생성 (최대 3회 재시도)
         user = generate_virtual_user()
-        post = generate_natural_post(user)
+        post = None
+        for _attempt in range(3):
+            candidate = generate_natural_post(user)
+            title = candidate["title"]
+
+            # (1) 배치 내 중복 체크
+            if title in used_titles_in_batch:
+                continue
+
+            # (2) DB 중복 체크 (72시간)
+            if is_title_duplicate(title, hours=72):
+                continue
+
+            post = candidate
+            break
+
+        if post is None:
+            skipped_duplicates += 1
+            continue
+
+        used_titles_in_batch.add(post["title"])
 
         # DB 삽입
         cursor.execute("""
@@ -1318,11 +1399,15 @@ def generate_daily_natural_content(
     conn.commit()
     conn.close()
 
-    logger.info(f"Generated {len(created_posts)} posts and {len(created_comments)} comments")
+    logger.info(
+        f"Generated {len(created_posts)} posts and {len(created_comments)} comments "
+        f"(skipped {skipped_duplicates} duplicates)"
+    )
 
     return {
         "posts_created": len(created_posts),
         "comments_created": len(created_comments),
+        "duplicates_skipped": skipped_duplicates,
         "timestamp": now.isoformat(),
     }
 

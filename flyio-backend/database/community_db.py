@@ -960,6 +960,55 @@ def get_platform_stats() -> Dict:
     }
 
 
+# ============ 게시판 중복 체크 ============
+
+def is_title_duplicate(title: str, hours: int = 72) -> bool:
+    """최근 N시간 이내 동일 제목 존재 여부 (Supabase + SQLite 모두 체크)
+
+    Args:
+        title: 검사할 제목
+        hours: 검색 범위 (기본 72시간=3일)
+
+    Returns:
+        True면 중복 존재
+    """
+    cutoff = (datetime.now() - timedelta(hours=hours)).isoformat()
+
+    # 1) Supabase 체크
+    if USE_SUPABASE and supabase:
+        try:
+            response = (
+                supabase.table("posts")
+                .select("id")
+                .eq("title", title)
+                .eq("is_deleted", False)
+                .gte("created_at", cutoff)
+                .limit(1)
+                .execute()
+            )
+            if response.data:
+                return True
+        except Exception as e:
+            logger.warning(f"Supabase duplicate check failed: {e}")
+
+    # 2) SQLite fallback 체크
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT 1 FROM posts WHERE title = ? AND created_at > ? AND is_deleted = FALSE LIMIT 1",
+            (title, cutoff),
+        )
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return True
+    except Exception as e:
+        logger.warning(f"SQLite duplicate check failed: {e}")
+
+    return False
+
+
 # ============ 게시판 (Supabase 사용 - 영구 저장) ============
 
 def init_post_tables():
