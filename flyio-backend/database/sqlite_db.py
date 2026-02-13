@@ -88,6 +88,14 @@ def get_sqlite_client() -> SQLiteClient:
     return _client
 
 
+def get_connection():
+    """Get a raw sqlite3 connection (for platform_store etc.)"""
+    client = get_sqlite_client()
+    conn = sqlite3.connect(client.db_path)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
 def initialize_db():
     """Initialize database tables"""
     client = get_sqlite_client()

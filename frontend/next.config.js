@@ -5,7 +5,7 @@ const nextConfig = {
   // 환경 변수
   env: {
     API_BASE_URL: process.env.API_BASE_URL || 'http://localhost:8000',
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr',
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'https://bqts.fly.dev',
   },
 
   // 이미지 최적화 (remotePatterns 사용)

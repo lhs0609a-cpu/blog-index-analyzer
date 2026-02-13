@@ -1,0 +1,22 @@
+app = "bqts"
+primary_region = "nrt"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[mounts]
+  source = "bqts_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
