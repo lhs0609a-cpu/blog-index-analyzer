@@ -5,12 +5,13 @@ Budget Pacing API Router - 예산 페이싱 최적화 API
 예산 소진 속도를 모니터링합니다.
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 import logging
 
+from routers.auth_deps import get_user_id_with_fallback
 from services.budget_pacing_service import (
     budget_pacing_optimizer,
     PacingStrategy,
@@ -83,7 +84,7 @@ class StrategyChangeRequest(BaseModel):
 # ============ API Endpoints ============
 
 @router.get("/summary")
-async def get_pacing_summary(user_id: int = Query(1)):
+async def get_pacing_summary(user_id: int = Depends(get_user_id_with_fallback)):
     """예산 페이싱 전체 요약"""
     try:
         # DB에서 캠페인 목록 가져오기
@@ -133,7 +134,7 @@ async def get_pacing_summary(user_id: int = Query(1)):
 
 @router.get("/campaigns")
 async def get_campaigns(
-    user_id: int = Query(1),
+    user_id: int = Depends(get_user_id_with_fallback),
     platform: str = Query(None)
 ):
     """캠페인 예산 목록 조회"""
@@ -195,7 +196,7 @@ async def get_campaigns(
 @router.post("/campaigns")
 async def add_campaign(
     request: CampaignBudgetRequest,
-    user_id: int = Query(1)
+    user_id: int = Depends(get_user_id_with_fallback)
 ):
     """캠페인 예산 추가/수정"""
     try:
@@ -222,7 +223,7 @@ async def add_campaign(
 @router.post("/campaigns/update-spend")
 async def update_spend(
     request: SpendUpdateRequest,
-    user_id: int = Query(1)
+    user_id: int = Depends(get_user_id_with_fallback)
 ):
     """캠페인 지출 업데이트"""
     try:
@@ -244,7 +245,7 @@ async def update_spend(
 
 @router.get("/analysis")
 async def get_analysis(
-    user_id: int = Query(1),
+    user_id: int = Depends(get_user_id_with_fallback),
     campaign_id: str = Query(None)
 ):
     """페이싱 분석 결과 조회"""
@@ -304,7 +305,7 @@ async def get_analysis(
 @router.post("/analyze")
 async def run_analysis(
     request: AnalyzeRequest,
-    user_id: int = Query(1)
+    user_id: int = Depends(get_user_id_with_fallback)
 ):
     """페이싱 분석 실행"""
     try:
@@ -430,7 +431,7 @@ async def run_analysis(
 
 @router.get("/alerts")
 async def get_alerts(
-    user_id: int = Query(1),
+    user_id: int = Depends(get_user_id_with_fallback),
     include_resolved: bool = Query(False)
 ):
     """페이싱 알림 조회"""
@@ -445,7 +446,7 @@ async def get_alerts(
 @router.post("/alerts/{alert_id}/resolve")
 async def resolve_alert(
     alert_id: int,
-    user_id: int = Query(1)
+    user_id: int = Depends(get_user_id_with_fallback)
 ):
     """알림 해결 처리"""
     try:
@@ -461,7 +462,7 @@ async def resolve_alert(
 
 @router.get("/recommendations")
 async def get_recommendations(
-    user_id: int = Query(1),
+    user_id: int = Depends(get_user_id_with_fallback),
     include_applied: bool = Query(False)
 ):
     """페이싱 권장사항 조회"""
@@ -476,7 +477,7 @@ async def get_recommendations(
 @router.post("/recommendations/{recommendation_id}/apply")
 async def apply_recommendation(
     recommendation_id: int,
-    user_id: int = Query(1)
+    user_id: int = Depends(get_user_id_with_fallback)
 ):
     """권장사항 적용"""
     try:
@@ -492,7 +493,7 @@ async def apply_recommendation(
 
 @router.get("/hourly-distribution")
 async def get_hourly_distribution(
-    user_id: int = Query(1),
+    user_id: int = Depends(get_user_id_with_fallback),
     campaign_id: str = Query(None),
     strategy: str = Query("standard")
 ):
@@ -536,7 +537,7 @@ async def get_hourly_distribution(
 @router.post("/strategy/change")
 async def change_strategy(
     request: StrategyChangeRequest,
-    user_id: int = Query(1)
+    user_id: int = Depends(get_user_id_with_fallback)
 ):
     """페이싱 전략 변경"""
     try:
@@ -579,7 +580,7 @@ async def change_strategy(
 
 @router.get("/monthly-projection")
 async def get_monthly_projection(
-    user_id: int = Query(1),
+    user_id: int = Depends(get_user_id_with_fallback),
     campaign_id: str = Query(None)
 ):
     """월간 예산 예측 조회"""

@@ -6,7 +6,7 @@ import {
   TrendingUp, Settings, Play, Pause, RefreshCw, Search,
   Plus, Trash2, RotateCcw, Download, Filter, Clock,
   Target, DollarSign, MousePointer, Eye, ShoppingCart,
-  AlertTriangle, CheckCircle, XCircle, ChevronDown, ChevronUp,
+  AlertTriangle, CheckCircle, XCircle,
   Zap, BarChart3, PieChart, Activity, ArrowUpRight, ArrowDownRight,
   Loader2, Save, Bell, History, Sparkles, Link2, Wallet, Flame,
   Star, Check, X
@@ -14,11 +14,12 @@ import {
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth'
+import { adGet, adPost } from '@/lib/api/adFetch'
 import { useFeature } from '@/lib/features/useFeatureAccess'
 import Tutorial, { adOptimizerTutorialSteps } from '@/components/Tutorial'
 import ValueProposition from '@/components/ad-optimizer/ValueProposition'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
+import AccountSetupWizard from '@/components/ad-optimizer/AccountSetupWizard'
 
 // 타입 정의
 interface DashboardStats {
@@ -130,10 +131,9 @@ export default function AdOptimizerPage() {
   const { allowed: hasAccess, isLocked, upgradeHint } = useFeature('adOptimizer')
   const [activeTab, setActiveTab] = useState<'connect' | 'dashboard' | 'efficiency' | 'trending' | 'keywords' | 'discover' | 'excluded' | 'settings' | 'logs'>('connect')
   const [isLoading, setIsLoading] = useState(false)
-  const [showApiTutorial, setShowApiTutorial] = useState(false)
-  const userId = user?.id || 1 // 인증된 사용자 ID 사용, 기본값 1
+  const userId = user?.id
 
-  // 계정 연동 상태 (Hook은 조건부 return 전에 모두 선언해야 함)
+  // 계정 연동 상태
   const [adAccount, setAdAccount] = useState<AdAccount | null>(null)
   const [connectForm, setConnectForm] = useState({
     customer_id: '',
@@ -141,7 +141,6 @@ export default function AdOptimizerPage() {
     secret_key: '',
     name: ''
   })
-  const [isConnecting, setIsConnecting] = useState(false)
 
   // 효율 추적 상태
   const [efficiency, setEfficiency] = useState<EfficiencySummary | null>(null)
@@ -191,6 +190,25 @@ export default function AdOptimizerPage() {
 
   // 로그 상태
   const [logs, setLogs] = useState<any[]>([])
+
+  // 미인증 시 로그인 리다이렉트
+  useEffect(() => {
+    if (!isAuthenticated && !user) {
+      window.location.href = '/login'
+    }
+  }, [isAuthenticated, user])
+
+  // 모든 Hook 선언 후 조건부 return
+  if (!userId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-600">로그인 확인 중...</p>
+        </div>
+      </div>
+    )
+  }
 
   // 프로 플랜 미만 사용자 접근 제한 - 프리미엄 유도 팝업
   if (isLocked) {
@@ -412,19 +430,17 @@ export default function AdOptimizerPage() {
   // 대시보드 데이터 로드
   const loadDashboard = useCallback(async () => {
     try {
-      const [dashRes, changesRes] = await Promise.all([
-        fetch(`${API_BASE}/api/naver-ad/dashboard?user_id=${userId}`),
-        fetch(`${API_BASE}/api/naver-ad/bids/history?user_id=${userId}&limit=20`)
+      const [dashData, changesData] = await Promise.all([
+        adGet('/api/naver-ad/dashboard', { userId }),
+        adGet('/api/naver-ad/bids/history?limit=20', { userId })
       ])
 
-      if (dashRes.ok) {
-        const dashData = await dashRes.json()
+      if (dashData?.data) {
         setDashboardStats(dashData.data)
         setIsAutoRunning(dashData.data.is_auto_optimization)
       }
 
-      if (changesRes.ok) {
-        const changesData = await changesRes.json()
+      if (changesData) {
         setRecentChanges(changesData.history || [])
       }
     } catch (error) {
@@ -435,9 +451,8 @@ export default function AdOptimizerPage() {
   // 설정 로드
   const loadSettings = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/naver-ad/settings?user_id=${userId}`)
-      if (res.ok) {
-        const data = await res.json()
+      const data = await adGet('/api/naver-ad/settings', { userId })
+      if (data?.data) {
         setSettings(data.data)
         setBlacklistInput(data.data.blacklist_keywords?.join(', ') || '')
         setCoreTermsInput(data.data.core_terms?.join(', ') || '')
@@ -451,9 +466,8 @@ export default function AdOptimizerPage() {
   // 제외 키워드 로드
   const loadExcludedKeywords = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/naver-ad/keywords/excluded?user_id=${userId}`)
-      if (res.ok) {
-        const data = await res.json()
+      const data = await adGet('/api/naver-ad/keywords/excluded', { userId })
+      if (data) {
         setExcludedKeywords(data.keywords || [])
       }
     } catch (error) {
@@ -464,9 +478,8 @@ export default function AdOptimizerPage() {
   // 로그 로드
   const loadLogs = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/naver-ad/logs?user_id=${userId}&limit=50`)
-      if (res.ok) {
-        const data = await res.json()
+      const data = await adGet('/api/naver-ad/logs?limit=50', { userId })
+      if (data) {
         setLogs(data.logs || [])
       }
     } catch (error) {
@@ -477,12 +490,9 @@ export default function AdOptimizerPage() {
   // 계정 연동 상태 로드
   const loadAccountStatus = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/naver-ad/account/status?user_id=${userId}`)
-      if (res.ok) {
-        const data = await res.json()
-        if (data.data) {
-          setAdAccount(data.data)
-        }
+      const data = await adGet('/api/naver-ad/account/status', { userId })
+      if (data?.data) {
+        setAdAccount(data.data)
       }
     } catch (error) {
       console.error('Account status load error:', error)
@@ -492,9 +502,8 @@ export default function AdOptimizerPage() {
   // 효율 요약 로드
   const loadEfficiency = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/naver-ad/efficiency/summary?user_id=${userId}&days=7`)
-      if (res.ok) {
-        const data = await res.json()
+      const data = await adGet('/api/naver-ad/efficiency/summary?days=7', { userId })
+      if (data?.data) {
         setEfficiency(data.data)
       }
     } catch (error) {
@@ -505,9 +514,8 @@ export default function AdOptimizerPage() {
   // 효율 히스토리 로드 (차트용)
   const loadEfficiencyHistory = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/naver-ad/efficiency/history?user_id=${userId}&days=30`)
-      if (res.ok) {
-        const data = await res.json()
+      const data = await adGet('/api/naver-ad/efficiency/history?days=30', { userId })
+      if (data) {
         setEfficiencyHistory(data.data || [])
       }
     } catch (error) {
@@ -518,9 +526,8 @@ export default function AdOptimizerPage() {
   // 트렌드 키워드 로드
   const loadTrendingKeywords = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/naver-ad/trending/keywords?user_id=${userId}&limit=20`)
-      if (res.ok) {
-        const data = await res.json()
+      const data = await adGet('/api/naver-ad/trending/keywords?limit=20', { userId })
+      if (data) {
         setTrendingKeywords(data.data || [])
       }
     } catch (error) {
@@ -528,61 +535,18 @@ export default function AdOptimizerPage() {
     }
   }, [userId])
 
-  // 계정 연동
-  const connectAccount = async () => {
-    if (!connectForm.customer_id || !connectForm.api_key || !connectForm.secret_key) {
-      toast.error('모든 필수 항목을 입력해주세요')
-      return
-    }
-
-    setIsConnecting(true)
-    try {
-      const res = await fetch(`${API_BASE}/api/naver-ad/account/connect?user_id=${userId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(connectForm)
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-        toast.success('계정이 연동되었습니다!')
-        setAdAccount({
-          customer_id: connectForm.customer_id,
-          name: connectForm.name,
-          is_connected: true
-        })
-        setActiveTab('dashboard')
-        loadDashboard()
-      } else {
-        const error = await res.json()
-        toast.error(error.detail || '계정 연동 실패')
-      }
-    } catch (error) {
-      toast.error('서버 오류')
-    } finally {
-      setIsConnecting(false)
-    }
-  }
-
   // 계정 연동 해제
   const disconnectAccount = async () => {
     if (!confirm('정말로 계정 연동을 해제하시겠습니까?')) return
 
     try {
-      const res = await fetch(`${API_BASE}/api/naver-ad/account/disconnect?user_id=${userId}`, {
-        method: 'POST'
-      })
-
-      if (res.ok) {
-        toast.success('계정 연동이 해제되었습니다')
-        setAdAccount(null)
-        setConnectForm({ customer_id: '', api_key: '', secret_key: '', name: '' })
-        setActiveTab('connect')
-      } else {
-        toast.error('연동 해제 실패')
-      }
+      await adPost('/api/naver-ad/account/disconnect', undefined, { userId })
+      toast.success('계정 연동이 해제되었습니다')
+      setAdAccount(null)
+      setConnectForm({ customer_id: '', api_key: '', secret_key: '', name: '' })
+      setActiveTab('connect')
     } catch (error) {
-      toast.error('서버 오류')
+      // adFetch handles error toasts automatically
     }
   }
 
@@ -590,18 +554,11 @@ export default function AdOptimizerPage() {
   const refreshTrendingKeywords = async () => {
     setIsRefreshingTrending(true)
     try {
-      const res = await fetch(`${API_BASE}/api/naver-ad/trending/refresh?user_id=${userId}`, {
-        method: 'POST'
-      })
-
-      if (res.ok) {
-        toast.success('트렌드 키워드가 업데이트되었습니다')
-        loadTrendingKeywords()
-      } else {
-        toast.error('업데이트 실패')
-      }
+      await adPost('/api/naver-ad/trending/refresh', undefined, { userId })
+      toast.success('트렌드 키워드가 업데이트되었습니다')
+      loadTrendingKeywords()
     } catch (error) {
-      toast.error('서버 오류')
+      // adFetch handles error toasts automatically
     } finally {
       setIsRefreshingTrending(false)
     }
@@ -610,20 +567,11 @@ export default function AdOptimizerPage() {
   // 트렌드 키워드를 캠페인에 추가
   const addTrendingToCampaign = async (keyword: string) => {
     try {
-      const res = await fetch(`${API_BASE}/api/naver-ad/trending/add-to-campaign?user_id=${userId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keyword })
-      })
-
-      if (res.ok) {
-        toast.success(`"${keyword}" 키워드가 캠페인에 추가되었습니다`)
-        loadTrendingKeywords()
-      } else {
-        toast.error('추가 실패')
-      }
+      await adPost('/api/naver-ad/trending/add-to-campaign', { keyword }, { userId })
+      toast.success(`"${keyword}" 키워드가 캠페인에 추가되었습니다`)
+      loadTrendingKeywords()
     } catch (error) {
-      toast.error('서버 오류')
+      // adFetch handles error toasts automatically
     }
   }
 
@@ -658,19 +606,12 @@ export default function AdOptimizerPage() {
     setIsLoading(true)
     try {
       const endpoint = isAutoRunning ? 'stop' : 'start'
-      const res = await fetch(`${API_BASE}/api/naver-ad/optimization/${endpoint}?user_id=${userId}`, {
-        method: 'POST'
-      })
-
-      if (res.ok) {
-        setIsAutoRunning(!isAutoRunning)
-        toast.success(isAutoRunning ? '자동 최적화가 중지되었습니다' : '자동 최적화가 시작되었습니다')
-        loadDashboard()
-      } else {
-        toast.error('작업 실패')
-      }
+      await adPost(`/api/naver-ad/optimization/${endpoint}`, undefined, { userId })
+      setIsAutoRunning(!isAutoRunning)
+      toast.success(isAutoRunning ? '자동 최적화가 중지되었습니다' : '자동 최적화가 시작되었습니다')
+      loadDashboard()
     } catch (error) {
-      toast.error('서버 오류')
+      // adFetch handles error toasts automatically
     } finally {
       setIsLoading(false)
     }
@@ -680,19 +621,11 @@ export default function AdOptimizerPage() {
   const runOptimizationOnce = async () => {
     setIsLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/api/naver-ad/optimization/run-once?user_id=${userId}`, {
-        method: 'POST'
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-        toast.success(`${data.changes?.length || 0}개 키워드 최적화 완료`)
-        loadDashboard()
-      } else {
-        toast.error('최적화 실패')
-      }
+      const data = await adPost('/api/naver-ad/optimization/run-once', undefined, { userId })
+      toast.success(`${data.changes?.length || 0}개 키워드 최적화 완료`)
+      loadDashboard()
     } catch (error) {
-      toast.error('서버 오류')
+      // adFetch handles error toasts automatically
     } finally {
       setIsLoading(false)
     }
@@ -707,27 +640,17 @@ export default function AdOptimizerPage() {
 
     setIsDiscovering(true)
     try {
-      const res = await fetch(`${API_BASE}/api/naver-ad/keywords/discover?user_id=${userId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          seed_keywords: seedKeywords.split(',').map(k => k.trim()),
-          max_keywords: 50,
-          min_search_volume: 100,
-          max_competition: 0.85,
-          auto_add: false
-        })
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-        setDiscoveredKeywords(data.keywords || [])
-        toast.success(`${data.discovered}개 키워드 발굴 완료`)
-      } else {
-        toast.error('키워드 발굴 실패')
-      }
+      const data = await adPost('/api/naver-ad/keywords/discover', {
+        seed_keywords: seedKeywords.split(',').map(k => k.trim()),
+        max_keywords: 50,
+        min_search_volume: 100,
+        max_competition: 0.85,
+        auto_add: false
+      }, { userId })
+      setDiscoveredKeywords(data.keywords || [])
+      toast.success(`${data.discovered}개 키워드 발굴 완료`)
     } catch (error) {
-      toast.error('서버 오류')
+      // adFetch handles error toasts automatically
     } finally {
       setIsDiscovering(false)
     }
@@ -744,20 +667,11 @@ export default function AdOptimizerPage() {
         conversion_keywords: conversionKeywordsInput.split(',').map(k => k.trim()).filter(k => k)
       }
 
-      const res = await fetch(`${API_BASE}/api/naver-ad/settings?user_id=${userId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedSettings)
-      })
-
-      if (res.ok) {
-        toast.success('설정이 저장되었습니다')
-        loadSettings()
-      } else {
-        toast.error('저장 실패')
-      }
+      await adPost('/api/naver-ad/settings', updatedSettings, { userId })
+      toast.success('설정이 저장되었습니다')
+      loadSettings()
     } catch (error) {
-      toast.error('서버 오류')
+      // adFetch handles error toasts automatically
     } finally {
       setIsLoading(false)
     }
@@ -772,27 +686,17 @@ export default function AdOptimizerPage() {
 
     setIsDiscoveringConversion(true)
     try {
-      const res = await fetch(`${API_BASE}/api/naver-ad/keywords/discover-conversion?user_id=${userId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          seed_keywords: seedKeywords.split(',').map(k => k.trim()),
-          max_keywords: 50,
-          min_search_volume: 50,
-          max_competition: 0.85,
-          auto_add: false
-        })
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-        setDiscoveredKeywords(data.keywords || [])
-        toast.success(`전환 키워드 ${data.discovered}개 발굴 완료!`)
-      } else {
-        toast.error('전환 키워드 발굴 실패')
-      }
+      const data = await adPost('/api/naver-ad/keywords/discover-conversion', {
+        seed_keywords: seedKeywords.split(',').map(k => k.trim()),
+        max_keywords: 50,
+        min_search_volume: 50,
+        max_competition: 0.85,
+        auto_add: false
+      }, { userId })
+      setDiscoveredKeywords(data.keywords || [])
+      toast.success(`전환 키워드 ${data.discovered}개 발굴 완료!`)
     } catch (error) {
-      toast.error('서버 오류')
+      // adFetch handles error toasts automatically
     } finally {
       setIsDiscoveringConversion(false)
     }
@@ -802,20 +706,12 @@ export default function AdOptimizerPage() {
   const evaluateKeywords = async () => {
     setIsLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/api/naver-ad/keywords/evaluate?user_id=${userId}`, {
-        method: 'POST'
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-        toast.success(`${data.excluded?.length || 0}개 키워드 제외됨`)
-        loadExcludedKeywords()
-        loadDashboard()
-      } else {
-        toast.error('평가 실패')
-      }
+      const data = await adPost('/api/naver-ad/keywords/evaluate', undefined, { userId })
+      toast.success(`${data.excluded?.length || 0}개 키워드 제외됨`)
+      loadExcludedKeywords()
+      loadDashboard()
     } catch (error) {
-      toast.error('서버 오류')
+      // adFetch handles error toasts automatically
     } finally {
       setIsLoading(false)
     }
@@ -824,18 +720,11 @@ export default function AdOptimizerPage() {
   // 제외 키워드 복원
   const restoreKeyword = async (keywordId: string) => {
     try {
-      const res = await fetch(`${API_BASE}/api/naver-ad/keywords/restore/${keywordId}?user_id=${userId}`, {
-        method: 'POST'
-      })
-
-      if (res.ok) {
-        toast.success('키워드가 복원되었습니다')
-        loadExcludedKeywords()
-      } else {
-        toast.error('복원 실패')
-      }
+      await adPost(`/api/naver-ad/keywords/restore/${keywordId}`, undefined, { userId })
+      toast.success('키워드가 복원되었습니다')
+      loadExcludedKeywords()
     } catch (error) {
-      toast.error('서버 오류')
+      // adFetch handles error toasts automatically
     }
   }
 
@@ -999,234 +888,19 @@ export default function AdOptimizerPage() {
                 </div>
               </motion.div>
             ) : (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-2xl p-8 shadow-sm"
-              >
-                <div className="text-center mb-8">
-                  <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Link2 className="w-10 h-10 text-blue-600" />
-                  </div>
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">네이버 검색광고 계정 연동</h2>
-                  <p className="text-gray-600">
-                    API 자격 증명을 입력하여 광고 계정을 연동하세요.<br />
-                    연동 후 실시간 자동 최적화가 가능합니다.
-                  </p>
-                </div>
-
-                <div className="max-w-lg mx-auto space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      고객 ID (Customer ID) *
-                    </label>
-                    <input
-                      type="text"
-                      value={connectForm.customer_id}
-                      onChange={(e) => setConnectForm({ ...connectForm, customer_id: e.target.value })}
-                      placeholder="네이버 광고 고객 ID"
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      API 키 (API Key) *
-                    </label>
-                    <input
-                      type="password"
-                      value={connectForm.api_key}
-                      onChange={(e) => setConnectForm({ ...connectForm, api_key: e.target.value })}
-                      placeholder="API 액세스 라이선스 키"
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      비밀 키 (Secret Key) *
-                    </label>
-                    <input
-                      type="password"
-                      value={connectForm.secret_key}
-                      onChange={(e) => setConnectForm({ ...connectForm, secret_key: e.target.value })}
-                      placeholder="API 비밀 키"
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      계정 이름 (선택사항)
-                    </label>
-                    <input
-                      type="text"
-                      value={connectForm.name}
-                      onChange={(e) => setConnectForm({ ...connectForm, name: e.target.value })}
-                      placeholder="식별을 위한 계정 이름"
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  <button
-                    onClick={connectAccount}
-                    disabled={isConnecting}
-                    className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-medium transition-colors disabled:opacity-50 mt-6"
-                  >
-                    {isConnecting ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <Link2 className="w-5 h-5" />
-                    )}
-                    계정 연동하기
-                  </button>
-                </div>
-
-                <div className="mt-8 p-4 bg-gray-50 rounded-xl">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-medium text-gray-900">API 키 발급 방법</h4>
-                    <button
-                      onClick={() => setShowApiTutorial(!showApiTutorial)}
-                      className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
-                    >
-                      {showApiTutorial ? '간략히 보기' : '자세히 보기'}
-                      {showApiTutorial ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    </button>
-                  </div>
-
-                  {!showApiTutorial ? (
-                    <ol className="text-sm text-gray-600 space-y-1 list-decimal list-inside">
-                      <li>네이버 검색광고 센터 로그인</li>
-                      <li>도구 → API 관리 메뉴 클릭</li>
-                      <li>API 라이선스 키 발급 신청</li>
-                      <li>발급된 키 정보 입력</li>
-                    </ol>
-                  ) : (
-                    <div className="space-y-6">
-                      {/* Step 1 */}
-                      <div className="bg-white rounded-xl p-4 border border-gray-200">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold text-sm">1</div>
-                          <h5 className="font-semibold text-gray-900">네이버 검색광고 센터 접속</h5>
-                        </div>
-                        <div className="ml-11 space-y-2">
-                          <p className="text-sm text-gray-600">
-                            아래 링크를 클릭하여 네이버 검색광고 센터에 로그인하세요.
-                          </p>
-                          <a
-                            href="https://searchad.naver.com"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors"
-                          >
-                            네이버 검색광고 센터 바로가기
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                          </a>
-                          <p className="text-xs text-gray-500">
-                            * 광고 계정이 없다면 먼저 광고주 가입이 필요합니다.
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Step 2 */}
-                      <div className="bg-white rounded-xl p-4 border border-gray-200">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold text-sm">2</div>
-                          <h5 className="font-semibold text-gray-900">API 관리 메뉴 찾기</h5>
-                        </div>
-                        <div className="ml-11 space-y-3">
-                          <p className="text-sm text-gray-600">로그인 후 아래 경로로 이동하세요:</p>
-                          <div className="flex items-center gap-2 text-sm">
-                            <span className="px-3 py-1 bg-gray-100 rounded-lg font-medium">도구</span>
-                            <span className="text-gray-400">→</span>
-                            <span className="px-3 py-1 bg-gray-100 rounded-lg font-medium">API 사용 관리</span>
-                          </div>
-                          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                            <p className="text-sm text-amber-800">
-                              <strong>💡 팁:</strong> 상단 메뉴바에서 &quot;도구&quot; 메뉴를 클릭하면 드롭다운 메뉴가 나타납니다.
-                              그 중 &quot;API 사용 관리&quot;를 선택하세요.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Step 3 */}
-                      <div className="bg-white rounded-xl p-4 border border-gray-200">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold text-sm">3</div>
-                          <h5 className="font-semibold text-gray-900">API 라이선스 발급</h5>
-                        </div>
-                        <div className="ml-11 space-y-3">
-                          <p className="text-sm text-gray-600">
-                            API 관리 화면에서 &quot;API 라이선스 발급&quot; 버튼을 클릭합니다.
-                          </p>
-                          <div className="grid grid-cols-2 gap-3 text-sm">
-                            <div className="bg-gray-50 rounded-lg p-3">
-                              <p className="font-medium text-gray-700 mb-1">고객 ID (Customer ID)</p>
-                              <p className="text-gray-500 text-xs">광고 계정 고유 번호 (7자리)</p>
-                            </div>
-                            <div className="bg-gray-50 rounded-lg p-3">
-                              <p className="font-medium text-gray-700 mb-1">액세스 라이선스</p>
-                              <p className="text-gray-500 text-xs">API 키 (API Key)</p>
-                            </div>
-                            <div className="bg-gray-50 rounded-lg p-3 col-span-2">
-                              <p className="font-medium text-gray-700 mb-1">비밀 키 (Secret Key)</p>
-                              <p className="text-gray-500 text-xs">발급 시 1회만 표시됩니다. 반드시 복사해서 안전한 곳에 저장하세요!</p>
-                            </div>
-                          </div>
-                          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                            <p className="text-sm text-red-800">
-                              <strong>⚠️ 주의:</strong> 비밀 키는 발급 시 <strong>단 1회만</strong> 표시됩니다.
-                              창을 닫으면 다시 확인할 수 없으니, 꼭 복사해두세요!
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Step 4 */}
-                      <div className="bg-white rounded-xl p-4 border border-gray-200">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center font-bold text-sm">4</div>
-                          <h5 className="font-semibold text-gray-900">키 정보 입력</h5>
-                        </div>
-                        <div className="ml-11 space-y-2">
-                          <p className="text-sm text-gray-600">
-                            발급받은 정보를 위의 입력란에 입력하고 &quot;계정 연동하기&quot; 버튼을 클릭하세요.
-                          </p>
-                          <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 rounded-lg p-3">
-                            <CheckCircle className="w-5 h-5" />
-                            <span>연동이 완료되면 자동 최적화를 시작할 수 있습니다!</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* FAQ */}
-                      <div className="bg-blue-50 rounded-xl p-4">
-                        <h5 className="font-semibold text-blue-900 mb-3 flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4" />
-                          자주 묻는 질문
-                        </h5>
-                        <div className="space-y-3 text-sm">
-                          <div>
-                            <p className="font-medium text-blue-800">Q. API 관리 메뉴가 보이지 않아요</p>
-                            <p className="text-blue-700">A. 광고주 마스터 권한이 필요합니다. 계정 관리자에게 권한을 요청하세요.</p>
-                          </div>
-                          <div>
-                            <p className="font-medium text-blue-800">Q. 비밀 키를 잃어버렸어요</p>
-                            <p className="text-blue-700">A. 기존 라이선스를 삭제하고 새로 발급받으셔야 합니다.</p>
-                          </div>
-                          <div>
-                            <p className="font-medium text-blue-800">Q. 연동 시 오류가 발생해요</p>
-                            <p className="text-blue-700">A. API 키가 정확한지 확인하고, 공백 없이 입력했는지 확인해주세요.</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
+              <AccountSetupWizard
+                userId={userId}
+                onComplete={(account) => {
+                  setAdAccount({
+                    customer_id: account.customer_id,
+                    name: account.name,
+                    is_connected: true
+                  })
+                  setActiveTab('dashboard')
+                  loadDashboard()
+                }}
+                onStartAutoOptimization={toggleAutoOptimization}
+              />
             )}
 
             {/* 연동 이점 */}

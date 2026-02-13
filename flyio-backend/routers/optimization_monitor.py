@@ -4,12 +4,13 @@
 - 최적화 로직 설명
 - 성과 변화 추적
 """
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 import logging
 
+from routers.auth_deps import get_user_id_with_fallback
 from database.optimization_db import (
     get_optimization_sessions, get_optimization_actions, get_action_summary,
     get_performance_history, get_performance_comparison,
@@ -144,7 +145,7 @@ async def get_strategy_detail(strategy_id: str):
 
 @router.get("/sessions")
 async def get_sessions(
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     platform: str = Query(None),
     limit: int = Query(20, ge=1, le=100)
 ):
@@ -158,7 +159,7 @@ async def get_sessions(
 
 @router.get("/actions")
 async def get_actions(
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     platform: str = Query(None),
     action_type: str = Query(None),
     limit: int = Query(50, ge=1, le=500),
@@ -180,7 +181,7 @@ async def get_actions(
 
 @router.get("/actions/summary")
 async def get_actions_summary(
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     days: int = Query(7, ge=1, le=90)
 ):
     """최적화 액션 요약"""
@@ -190,7 +191,7 @@ async def get_actions_summary(
 
 @router.get("/actions/live")
 async def get_live_actions(
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     platform: str = Query(None)
 ):
     """실시간 최적화 피드 (최근 1시간)"""
@@ -221,7 +222,7 @@ async def get_live_actions(
 
 @router.get("/performance/history")
 async def get_performance(
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     platform: str = Query(...),
     days: int = Query(7, ge=1, le=90)
 ):
@@ -236,7 +237,7 @@ async def get_performance(
 
 @router.get("/performance/comparison")
 async def compare_performance(
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     platform: str = Query(...)
 ):
     """성과 비교 (최근 7일 vs 이전 7일)"""
@@ -249,7 +250,7 @@ async def compare_performance(
 
 @router.get("/insights")
 async def get_user_insights(
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     platform: str = Query(None),
     unread_only: bool = Query(False),
     limit: int = Query(20, ge=1, le=100)
@@ -264,7 +265,7 @@ async def get_user_insights(
 
 @router.post("/insights/read")
 async def mark_read(
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     insight_ids: List[int] = None
 ):
     """인사이트 읽음 처리"""
@@ -274,7 +275,7 @@ async def mark_read(
 
 @router.get("/dashboard")
 async def get_optimization_dashboard(
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     platform: str = Query(None)
 ):
     """최적화 대시보드 통합 데이터"""
@@ -321,7 +322,7 @@ async def get_optimization_dashboard(
 
 
 @router.get("/explain/{action_id}")
-async def explain_action(action_id: int, user_id: int = Query(...)):
+async def explain_action(action_id: int, user_id: int = Depends(get_user_id_with_fallback)):
     """특정 최적화 액션 상세 설명"""
     actions = get_optimization_actions(user_id, limit=1000)
     action = next((a for a in actions if a['id'] == action_id), None)

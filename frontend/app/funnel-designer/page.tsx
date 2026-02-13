@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
   GitBranch, Calculator, Palette, Activity, Stethoscope, Users,
-  RefreshCw, Save, FolderOpen, Trash2, Plus
+  RefreshCw, Save, FolderOpen, Trash2, Plus, Play
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/lib/stores/auth'
@@ -13,10 +13,11 @@ import FunnelCanvas from '@/components/funnel-designer/FunnelCanvas'
 import FunnelHealthScore from '@/components/funnel-designer/FunnelHealthScore'
 import AiFunnelDoctor from '@/components/funnel-designer/AiFunnelDoctor'
 import PersonaWalkThrough from '@/components/funnel-designer/PersonaWalkThrough'
+import FunnelSimulation from '@/components/funnel-designer/FunnelSimulation'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
 
-type TabId = 'calculator' | 'canvas' | 'health' | 'doctor' | 'persona'
+type TabId = 'calculator' | 'canvas' | 'health' | 'doctor' | 'persona' | 'simulation'
 
 const TABS = [
   { id: 'calculator' as TabId, label: '역산 시뮬레이터', icon: Calculator },
@@ -24,6 +25,7 @@ const TABS = [
   { id: 'health' as TabId, label: '헬스 스코어', icon: Activity },
   { id: 'doctor' as TabId, label: 'AI 닥터', icon: Stethoscope },
   { id: 'persona' as TabId, label: '페르소나', icon: Users },
+  { id: 'simulation' as TabId, label: '시뮬레이션', icon: Play },
 ]
 
 interface SavedFunnel {
@@ -293,6 +295,11 @@ export default function FunnelDesignerPage() {
         {activeTab === 'persona' && (
           <PersonaWalkThrough
             funnelId={currentFunnelId}
+            funnelData={funnelData}
+          />
+        )}
+        {activeTab === 'simulation' && (
+          <FunnelSimulation
             funnelData={funnelData}
           />
         )}

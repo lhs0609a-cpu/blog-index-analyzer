@@ -1,8 +1,9 @@
 """
 네이버 광고 자동 최적화 API 라우터
 """
-from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends
 from pydantic import BaseModel, Field
+from routers.auth_deps import get_user_id_with_fallback
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 import logging
@@ -102,7 +103,7 @@ class BulkKeywordAddRequest(BaseModel):
 # ============ 대시보드 ============
 
 @router.get("/dashboard")
-async def get_dashboard(user_id: int = Query(..., description="사용자 ID")):
+async def get_dashboard(user_id: int = Depends(get_user_id_with_fallback)):
     """대시보드 통계 조회"""
     try:
         stats = get_dashboard_stats(user_id)
@@ -116,7 +117,7 @@ async def get_dashboard(user_id: int = Query(..., description="사용자 ID")):
 
 
 @router.get("/dashboard/realtime")
-async def get_realtime_status(user_id: int = Query(..., description="사용자 ID")):
+async def get_realtime_status(user_id: int = Depends(get_user_id_with_fallback)):
     """실시간 최적화 상태"""
     try:
         optimizer = get_optimizer()
@@ -140,7 +141,7 @@ async def get_realtime_status(user_id: int = Query(..., description="사용자 I
 # ============ 최적화 설정 ============
 
 @router.get("/settings")
-async def get_settings(user_id: int = Query(..., description="사용자 ID")):
+async def get_settings(user_id: int = Depends(get_user_id_with_fallback)):
     """최적화 설정 조회"""
     settings = get_optimization_settings(user_id)
 
@@ -157,7 +158,7 @@ async def get_settings(user_id: int = Query(..., description="사용자 ID")):
 @router.post("/settings")
 async def update_settings(
     request: OptimizationSettingsRequest,
-    user_id: int = Query(..., description="사용자 ID")
+    user_id: int = Depends(get_user_id_with_fallback)
 ):
     """최적화 설정 저장"""
     try:
@@ -215,7 +216,7 @@ async def update_settings(
 @router.post("/optimization/start")
 async def start_optimization(
     background_tasks: BackgroundTasks,
-    user_id: int = Query(..., description="사용자 ID"),
+    user_id: int = Depends(get_user_id_with_fallback),
     ad_group_ids: Optional[List[str]] = Query(None, description="광고그룹 ID 목록")
 ):
     """자동 최적화 시작"""
@@ -247,7 +248,7 @@ async def start_optimization(
 
 
 @router.post("/optimization/stop")
-async def stop_optimization(user_id: int = Query(..., description="사용자 ID")):
+async def stop_optimization(user_id: int = Depends(get_user_id_with_fallback)):
     """자동 최적화 중지"""
     try:
         optimizer = get_optimizer()
@@ -267,7 +268,7 @@ async def stop_optimization(user_id: int = Query(..., description="사용자 ID"
 
 @router.post("/optimization/run-once")
 async def run_optimization_once(
-    user_id: int = Query(..., description="사용자 ID"),
+    user_id: int = Depends(get_user_id_with_fallback),
     ad_group_ids: Optional[List[str]] = Query(None, description="광고그룹 ID 목록")
 ):
     """입찰 최적화 1회 실행"""
@@ -328,7 +329,7 @@ async def run_optimization_once(
 @router.post("/keywords/discover")
 async def discover_keywords(
     request: KeywordDiscoveryRequest,
-    user_id: int = Query(..., description="사용자 ID")
+    user_id: int = Depends(get_user_id_with_fallback)
 ):
     """연관 키워드 발굴"""
     try:
@@ -414,7 +415,7 @@ async def discover_keywords(
 @router.post("/keywords/discover-conversion")
 async def discover_conversion_keywords(
     request: KeywordDiscoveryRequest,
-    user_id: int = Query(..., description="사용자 ID")
+    user_id: int = Depends(get_user_id_with_fallback)
 ):
     """전환 키워드만 집중 발굴 (구매의도 높은 키워드)"""
     try:
@@ -496,7 +497,7 @@ async def discover_conversion_keywords(
 
 @router.get("/keywords/discovered")
 async def get_discovered(
-    user_id: int = Query(..., description="사용자 ID"),
+    user_id: int = Depends(get_user_id_with_fallback),
     status: Optional[str] = Query(None, description="상태 필터"),
     limit: int = Query(100, description="조회 개수")
 ):
@@ -512,7 +513,7 @@ async def get_discovered(
 @router.post("/keywords/bulk-add")
 async def bulk_add_keywords(
     request: BulkKeywordAddRequest,
-    user_id: int = Query(..., description="사용자 ID")
+    user_id: int = Depends(get_user_id_with_fallback)
 ):
     """키워드 대량 추가"""
     try:
@@ -552,7 +553,7 @@ async def bulk_add_keywords(
 
 @router.get("/bids/history")
 async def get_bids_history(
-    user_id: int = Query(..., description="사용자 ID"),
+    user_id: int = Depends(get_user_id_with_fallback),
     keyword_id: Optional[str] = Query(None, description="키워드 ID"),
     limit: int = Query(100, description="조회 개수")
 ):
@@ -567,7 +568,7 @@ async def get_bids_history(
 
 @router.get("/bids/summary")
 async def get_bids_summary(
-    user_id: int = Query(..., description="사용자 ID"),
+    user_id: int = Depends(get_user_id_with_fallback),
     days: int = Query(7, description="조회 기간 (일)")
 ):
     """입찰 변경 요약"""
@@ -581,7 +582,7 @@ async def get_bids_summary(
 @router.post("/bids/update")
 async def update_bid_manual(
     request: ManualBidUpdateRequest,
-    user_id: int = Query(..., description="사용자 ID")
+    user_id: int = Depends(get_user_id_with_fallback)
 ):
     """수동 입찰가 변경"""
     try:
@@ -620,7 +621,7 @@ async def update_bid_manual(
 
 @router.post("/keywords/evaluate")
 async def evaluate_keywords(
-    user_id: int = Query(..., description="사용자 ID"),
+    user_id: int = Depends(get_user_id_with_fallback),
     ad_group_ids: Optional[List[str]] = Query(None, description="광고그룹 ID 목록")
 ):
     """비효율 키워드 평가 및 제외"""
@@ -668,7 +669,7 @@ async def evaluate_keywords(
 
 @router.get("/keywords/excluded")
 async def get_excluded_list(
-    user_id: int = Query(..., description="사용자 ID"),
+    user_id: int = Depends(get_user_id_with_fallback),
     include_restored: bool = Query(False, description="복원된 키워드 포함")
 ):
     """제외된 키워드 목록"""
@@ -683,7 +684,7 @@ async def get_excluded_list(
 @router.post("/keywords/restore/{keyword_id}")
 async def restore_keyword(
     keyword_id: str,
-    user_id: int = Query(..., description="사용자 ID")
+    user_id: int = Depends(get_user_id_with_fallback)
 ):
     """제외된 키워드 복원"""
     try:
@@ -713,7 +714,7 @@ async def restore_keyword(
 
 @router.get("/performance")
 async def get_performance(
-    user_id: int = Query(..., description="사용자 ID"),
+    user_id: int = Depends(get_user_id_with_fallback),
     start_date: Optional[str] = Query(None, description="시작일 (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="종료일 (YYYY-MM-DD)"),
     keyword_id: Optional[str] = Query(None, description="키워드 ID")
@@ -734,7 +735,7 @@ async def get_performance(
 
 @router.get("/performance/summary")
 async def get_perf_summary(
-    user_id: int = Query(..., description="사용자 ID"),
+    user_id: int = Depends(get_user_id_with_fallback),
     days: int = Query(7, description="조회 기간 (일)")
 ):
     """성과 요약 조회"""
@@ -749,7 +750,7 @@ async def get_perf_summary(
 
 @router.get("/reports/daily")
 async def get_daily_report(
-    user_id: int = Query(..., description="사용자 ID"),
+    user_id: int = Depends(get_user_id_with_fallback),
     days: int = Query(30, description="조회 기간 (일)")
 ):
     """일일 리포트 조회"""
@@ -763,7 +764,7 @@ async def get_daily_report(
 
 @router.get("/logs")
 async def get_logs(
-    user_id: int = Query(..., description="사용자 ID"),
+    user_id: int = Depends(get_user_id_with_fallback),
     log_type: Optional[str] = Query(None, description="로그 유형"),
     limit: int = Query(100, description="조회 개수")
 ):
@@ -779,7 +780,7 @@ async def get_logs(
 # ============ 캠페인/광고그룹 조회 ============
 
 @router.get("/campaigns")
-async def get_campaigns(user_id: int = Query(..., description="사용자 ID")):
+async def get_campaigns(user_id: int = Depends(get_user_id_with_fallback)):
     """캠페인 목록 조회"""
     try:
         optimizer = get_optimizer()
@@ -796,7 +797,7 @@ async def get_campaigns(user_id: int = Query(..., description="사용자 ID")):
 
 @router.get("/adgroups")
 async def get_ad_groups(
-    user_id: int = Query(..., description="사용자 ID"),
+    user_id: int = Depends(get_user_id_with_fallback),
     campaign_id: Optional[str] = Query(None, description="캠페인 ID")
 ):
     """광고그룹 목록 조회"""
@@ -815,7 +816,7 @@ async def get_ad_groups(
 
 @router.get("/keywords")
 async def get_keywords(
-    user_id: int = Query(..., description="사용자 ID"),
+    user_id: int = Depends(get_user_id_with_fallback),
     ad_group_id: Optional[str] = Query(None, description="광고그룹 ID")
 ):
     """키워드 목록 조회"""
@@ -844,7 +845,7 @@ class AdAccountRequest(BaseModel):
 @router.post("/account/connect")
 async def connect_ad_account(
     request: AdAccountRequest,
-    user_id: int = Query(..., description="사용자 ID")
+    user_id: int = Depends(get_user_id_with_fallback)
 ):
     """광고 계정 연동"""
     try:
@@ -895,7 +896,7 @@ async def connect_ad_account(
 
 
 @router.get("/account/status")
-async def get_account_status(user_id: int = Query(..., description="사용자 ID")):
+async def get_account_status(user_id: int = Depends(get_user_id_with_fallback)):
     """광고 계정 연동 상태 조회"""
     try:
         account = get_ad_account(user_id)
@@ -924,7 +925,7 @@ async def get_account_status(user_id: int = Query(..., description="사용자 ID
 
 @router.delete("/account/disconnect")
 async def disconnect_ad_account(
-    user_id: int = Query(..., description="사용자 ID"),
+    user_id: int = Depends(get_user_id_with_fallback),
     customer_id: str = Query(..., description="고객 ID")
 ):
     """광고 계정 연동 해제"""
@@ -945,7 +946,7 @@ async def disconnect_ad_account(
 
 @router.get("/efficiency/summary")
 async def get_efficiency(
-    user_id: int = Query(..., description="사용자 ID"),
+    user_id: int = Depends(get_user_id_with_fallback),
     days: int = Query(default=7, description="조회 기간 (일)")
 ):
     """효율 개선 요약"""
@@ -963,7 +964,7 @@ async def get_efficiency(
 
 @router.get("/efficiency/history")
 async def get_efficiency_chart(
-    user_id: int = Query(..., description="사용자 ID"),
+    user_id: int = Depends(get_user_id_with_fallback),
     days: int = Query(default=30, description="조회 기간 (일)")
 ):
     """일별 효율 추적 이력 (차트용)"""
@@ -983,7 +984,7 @@ async def get_efficiency_chart(
 
 @router.get("/trending/keywords")
 async def get_trending_keyword_recommendations(
-    user_id: int = Query(..., description="사용자 ID"),
+    user_id: int = Depends(get_user_id_with_fallback),
     limit: int = Query(default=20, description="최대 개수")
 ):
     """트렌드 키워드 추천 조회"""
@@ -1001,7 +1002,7 @@ async def get_trending_keyword_recommendations(
 
 @router.post("/trending/refresh")
 async def refresh_trending_keywords(
-    user_id: int = Query(..., description="사용자 ID"),
+    user_id: int = Depends(get_user_id_with_fallback),
     seed_keywords: List[str] = Query(default=[], description="시드 키워드")
 ):
     """트렌드 키워드 새로고침 - 네이버 광고 API에서 최신 키워드 가져오기"""
@@ -1066,7 +1067,7 @@ async def refresh_trending_keywords(
 
 @router.post("/trending/add-to-campaign")
 async def add_trending_to_campaign(
-    user_id: int = Query(..., description="사용자 ID"),
+    user_id: int = Depends(get_user_id_with_fallback),
     keyword: str = Query(..., description="키워드"),
     ad_group_id: str = Query(..., description="광고그룹 ID"),
     bid: int = Query(default=100, description="입찰가")
@@ -1100,7 +1101,7 @@ async def add_trending_to_campaign(
 # ============ 종합 대시보드 ============
 
 @router.get("/dashboard/comprehensive")
-async def get_comprehensive_dashboard(user_id: int = Query(..., description="사용자 ID")):
+async def get_comprehensive_dashboard(user_id: int = Depends(get_user_id_with_fallback)):
     """종합 대시보드 - 계정 상태, 효율, 트렌드 모두 포함"""
     try:
         # 계정 상태

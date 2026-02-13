@@ -100,9 +100,9 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     id: 3,
     title: '2단계: 네이버 광고 연동하기',
     subtitle: 'API 키 발급받고 연결하기',
-    description: '네이버 검색광고 API 키를 발급받아 연동해주세요. 처음이라면 아래 가이드를 따라해주세요!',
+    description: '네이버 검색광고 API 키를 발급받아 연동해주세요. "계정 연동" 탭에서 미션 형식의 가이드를 따라하면 쉽게 완료할 수 있어요!',
     tips: [
-      '네이버 검색광고 관리 시스템에서 발급받아요',
+      '"계정 연동" 탭의 미션 가이드를 따라하면 쉬워요!',
       'API 키, 시크릿 키, 고객 ID 3개가 필요해요',
       '발급받은 키는 안전하게 보관하세요'
     ],
@@ -135,8 +135,9 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     category: 'connect',
     icon: <Link2 className="w-6 h-6" />,
     action: {
-      type: 'button',
-      label: '네이버 광고 연동하기'
+      type: 'link',
+      label: '계정 연동 미션 시작하기',
+      href: '#connect-wizard'
     }
   },
   {

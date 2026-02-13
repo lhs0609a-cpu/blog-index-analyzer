@@ -148,16 +148,20 @@ export default function ReputationDashboard() {
   const searchPlaces = async () => {
     if (!searchQuery.trim()) return
     setSearching(true)
+    setSearchResults([])
     try {
       const res = await fetch(
         `${getApiUrl()}/api/reputation/search-place?query=${encodeURIComponent(searchQuery)}&platform=${searchPlatform}`
       )
       const data = await res.json()
-      if (data.success) {
+      if (data.success && data.places?.length > 0) {
         setSearchResults(data.places)
+      } else {
+        setSearchResults([])
+        toast.error(`'${searchQuery}' 검색 결과가 없습니다. 다른 플랫폼이나 검색어를 시도해보세요.`)
       }
     } catch {
-      toast.error('검색 실패')
+      toast.error('검색 서버 연결 실패. 잠시 후 다시 시도해주세요.')
     } finally {
       setSearching(false)
     }
@@ -697,8 +701,17 @@ export default function ReputationDashboard() {
                   </button>
                 </div>
               ))}
+              {searching && (
+                <div className="text-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-[#0064FF] mx-auto mb-2" />
+                  <p className="text-sm text-gray-400">검색 중...</p>
+                </div>
+              )}
               {searchResults.length === 0 && searchQuery && !searching && (
-                <p className="text-center text-sm text-gray-400 py-8">검색 결과가 없습니다</p>
+                <div className="text-center py-8">
+                  <p className="text-sm text-gray-400 mb-1">검색 결과가 없습니다</p>
+                  <p className="text-xs text-gray-300">다른 플랫폼 탭이나 검색어를 시도해보세요</p>
+                </div>
               )}
             </div>
 

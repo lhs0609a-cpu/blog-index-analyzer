@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -32,8 +32,8 @@ import {
   PLATFORM_STYLES,
 } from "@/components/ad-optimizer/PlatformSupportBanner";
 import { ValuePropositionCompact } from "@/components/ad-optimizer/ValueProposition";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.blrank.co.kr";
+import { useAuthStore } from "@/lib/stores/auth";
+import { adGet, adPost } from "@/lib/api/adFetch";
 
 // 시간대별 기본 아이콘
 const getTimeIcon = (hour: number) => {
@@ -97,6 +97,17 @@ interface PresetData {
 
 export default function HourlyBiddingPage() {
   const router = useRouter();
+  const { isAuthenticated, user } = useAuthStore();
+  const userId = user?.id;
+
+  useEffect(() => {
+    if (!isAuthenticated && !user) {
+      window.location.href = "/login";
+    }
+  }, [isAuthenticated, user]);
+
+  const debounceRef = useRef<NodeJS.Timeout>();
+
   const [selectedPlatform, setSelectedPlatform] = useState("naver_searchad");
   const [schedule, setSchedule] = useState<ScheduleData | null>(null);
   const [presets, setPresets] = useState<PresetData>({});
@@ -115,37 +126,31 @@ export default function HourlyBiddingPage() {
   const loadSchedule = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem("auth_token");
-      const res = await fetch(`${API_BASE_URL}/api/ads/hourly-bidding/schedule/${selectedPlatform}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setSchedule(data.data);
-      } else {
-        // 스케줄이 없으면 기본값 설정
-        setSchedule({
-          hourly_modifiers: Object.fromEntries([...Array(24)].map((_, i) => [i, 1.0])),
-          daily_modifiers: Object.fromEntries([...Array(7)].map((_, i) => [i, 1.0])),
-          special_slots: [],
-          auto_optimize: true,
-          insights: {
-            high_performance_hours: [],
-            low_performance_hours: [],
-            high_performance_days: [],
-            low_performance_days: [],
-            potential_savings: {
-              low_efficiency_hours: 0,
-              estimated_cost_reduction_percent: 0,
-              recommendation: "데이터 수집 중",
-            },
-          },
-        });
-      }
+      const data = await adGet<{ data: ScheduleData }>(
+        `/api/ads/hourly-bidding/schedule/${selectedPlatform}`,
+        { showToast: false }
+      );
+      setSchedule(data.data);
     } catch (error) {
+      // 스케줄이 없으면 기본값 설정
       console.error("Failed to load schedule:", error);
-      toast.error("스케줄 로드 실패");
+      setSchedule({
+        hourly_modifiers: Object.fromEntries([...Array(24)].map((_, i) => [i, 1.0])),
+        daily_modifiers: Object.fromEntries([...Array(7)].map((_, i) => [i, 1.0])),
+        special_slots: [],
+        auto_optimize: true,
+        insights: {
+          high_performance_hours: [],
+          low_performance_hours: [],
+          high_performance_days: [],
+          low_performance_days: [],
+          potential_savings: {
+            low_efficiency_hours: 0,
+            estimated_cost_reduction_percent: 0,
+            recommendation: "데이터 수집 중",
+          },
+        },
+      });
     } finally {
       setLoading(false);
     }
@@ -153,15 +158,11 @@ export default function HourlyBiddingPage() {
 
   const loadPresets = async () => {
     try {
-      const token = localStorage.getItem("auth_token");
-      const res = await fetch(`${API_BASE_URL}/api/ads/hourly-bidding/presets`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setPresets(data.data);
-      }
+      const data = await adGet<{ data: PresetData }>(
+        `/api/ads/hourly-bidding/presets`,
+        { showToast: false }
+      );
+      setPresets(data.data);
     } catch (error) {
       console.error("Failed to load presets:", error);
     }
@@ -169,18 +170,11 @@ export default function HourlyBiddingPage() {
 
   const loadPreview = async () => {
     try {
-      const token = localStorage.getItem("auth_token");
-      const res = await fetch(
-        `${API_BASE_URL}/api/ads/hourly-bidding/preview/${selectedPlatform}/week?base_bid=${baseBid}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+      const data = await adGet<{ data: any }>(
+        `/api/ads/hourly-bidding/preview/${selectedPlatform}/week?base_bid=${baseBid}`,
+        { showToast: false }
       );
-
-      if (res.ok) {
-        const data = await res.json();
-        setPreviewData(data.data);
-      }
+      setPreviewData(data.data);
     } catch (error) {
       console.error("Failed to load preview:", error);
     }
@@ -188,8 +182,14 @@ export default function HourlyBiddingPage() {
 
   useEffect(() => {
     if (activeTab === "heatmap" && schedule) {
-      loadPreview();
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        loadPreview();
+      }, 500);
     }
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, [activeTab, schedule, baseBid]);
 
   const saveSchedule = async () => {
@@ -197,29 +197,16 @@ export default function HourlyBiddingPage() {
 
     setSaving(true);
     try {
-      const token = localStorage.getItem("auth_token");
-      const res = await fetch(`${API_BASE_URL}/api/ads/hourly-bidding/schedule`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          platform_id: selectedPlatform,
-          hourly_modifiers: schedule.hourly_modifiers,
-          daily_modifiers: schedule.daily_modifiers,
-          auto_optimize: schedule.auto_optimize,
-        }),
+      await adPost(`/api/ads/hourly-bidding/schedule`, {
+        platform_id: selectedPlatform,
+        hourly_modifiers: schedule.hourly_modifiers,
+        daily_modifiers: schedule.daily_modifiers,
+        auto_optimize: schedule.auto_optimize,
       });
-
-      if (res.ok) {
-        toast.success("스케줄이 저장되었습니다!");
-        loadSchedule();
-      } else {
-        toast.error("저장 실패");
-      }
+      toast.success("스케줄이 저장되었습니다!");
+      loadSchedule();
     } catch (error) {
-      toast.error("저장 중 오류 발생");
+      // adFetch already shows toast on error
     } finally {
       setSaving(false);
     }
@@ -227,55 +214,30 @@ export default function HourlyBiddingPage() {
 
   const applyPreset = async (presetName: string) => {
     try {
-      const token = localStorage.getItem("auth_token");
-      const res = await fetch(`${API_BASE_URL}/api/ads/hourly-bidding/presets/apply`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
+      const data = await adPost<{ data: { name: string } }>(
+        `/api/ads/hourly-bidding/presets/apply`,
+        {
           platform_id: selectedPlatform,
           preset_name: presetName,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        toast.success(`'${data.data.name}' 프리셋이 적용되었습니다!`);
-        loadSchedule();
-      } else {
-        toast.error("프리셋 적용 실패");
-      }
+        }
+      );
+      toast.success(`'${data.data.name}' 프리셋이 적용되었습니다!`);
+      loadSchedule();
     } catch (error) {
-      toast.error("프리셋 적용 중 오류 발생");
+      // adFetch already shows toast on error
     }
   };
 
   const autoOptimize = async () => {
     try {
-      const token = localStorage.getItem("auth_token");
-      const res = await fetch(`${API_BASE_URL}/api/ads/hourly-bidding/auto-optimize`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          platform_id: selectedPlatform,
-          optimization_target: "conversions",
-        }),
+      await adPost(`/api/ads/hourly-bidding/auto-optimize`, {
+        platform_id: selectedPlatform,
+        optimization_target: "conversions",
       });
-
-      if (res.ok) {
-        toast.success("자동 최적화가 완료되었습니다!");
-        loadSchedule();
-      } else {
-        const data = await res.json();
-        toast.error(data.detail || "자동 최적화 실패");
-      }
+      toast.success("자동 최적화가 완료되었습니다!");
+      loadSchedule();
     } catch (error) {
-      toast.error("자동 최적화 중 오류 발생");
+      // adFetch already shows toast with server-provided detail on error
     }
   };
 
@@ -300,6 +262,17 @@ export default function HourlyBiddingPage() {
       },
     });
   };
+
+  if (!userId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-600">로그인 확인 중...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

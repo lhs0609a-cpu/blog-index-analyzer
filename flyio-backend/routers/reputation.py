@@ -324,13 +324,22 @@ async def search_place(
     platform: str = Query("naver", description="검색 플랫폼: naver, google, kakao"),
 ):
     """플랫폼별 가게 검색 (등록 시 사용)"""
-    if platform == "google":
-        results = await crawler.search_google_place(query)
-    elif platform == "kakao":
-        results = await crawler.search_kakao_place(query)
-    else:
-        results = await crawler.search_naver_place(query)
-    return {"success": True, "places": results, "platform": platform}
+    logger.info(f"Place search request: query='{query}', platform='{platform}'")
+    try:
+        if platform == "google":
+            results = await crawler.search_google_place(query)
+        elif platform == "kakao":
+            results = await crawler.search_kakao_place(query)
+        else:
+            results = await crawler.search_naver_place(query)
+
+        if not results:
+            logger.warning(f"No results found for query='{query}', platform='{platform}'")
+
+        return {"success": True, "places": results, "platform": platform}
+    except Exception as e:
+        logger.error(f"Place search error: {e}", exc_info=True)
+        return {"success": False, "places": [], "platform": platform, "error": str(e)}
 
 
 @router.get("/search-all-platforms")

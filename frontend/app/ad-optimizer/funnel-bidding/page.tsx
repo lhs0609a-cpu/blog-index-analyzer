@@ -11,6 +11,7 @@ import {
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
+import { adGet, adPost } from '@/lib/api/adFetch'
 import {
   PlatformSupportBanner,
   FEATURE_PLATFORMS,
@@ -19,8 +20,6 @@ import {
   PlatformBadge,
 } from "@/components/ad-optimizer/PlatformSupportBanner"
 import { ValuePropositionCompact } from "@/components/ad-optimizer/ValueProposition"
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
 
 // 퍼널 단계별 스타일
 const STAGE_STYLES: Record<string, { bg: string; text: string; border: string; icon: any; gradient: string }> = {
@@ -119,8 +118,8 @@ interface AllocationStrategy {
 }
 
 export default function FunnelBiddingPage() {
-  const { user } = useAuthStore()
-  const userId = user?.id || 1
+  const { user, isAuthenticated } = useAuthStore()
+  const userId = user?.id
 
   const [activeTab, setActiveTab] = useState<'overview' | 'campaigns' | 'allocation' | 'guide'>('overview')
   const [loading, setLoading] = useState(true)
@@ -138,6 +137,13 @@ export default function FunnelBiddingPage() {
   const [selectedStage, setSelectedStage] = useState<string | null>(null)
   const [selectedStrategy, setSelectedStrategy] = useState('balanced')
   const [expandedCampaign, setExpandedCampaign] = useState<string | null>(null)
+
+  // 인증 가드
+  useEffect(() => {
+    if (!isAuthenticated && !user) {
+      window.location.href = '/login'
+    }
+  }, [isAuthenticated, user])
 
   // 데이터 로드
   useEffect(() => {
@@ -165,11 +171,8 @@ export default function FunnelBiddingPage() {
 
   const loadSummary = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/ads/funnel-bidding/summary?user_id=${userId}`)
-      if (res.ok) {
-        const data = await res.json()
-        setSummary(data.summary)
-      }
+      const data = await adGet<{ summary: any }>('/api/ads/funnel-bidding/summary', { userId })
+      setSummary(data.summary)
     } catch (error) {
       console.error('Failed to load summary:', error)
     }
@@ -177,11 +180,8 @@ export default function FunnelBiddingPage() {
 
   const loadCampaigns = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/ads/funnel-bidding/campaigns?user_id=${userId}`)
-      if (res.ok) {
-        const data = await res.json()
-        setCampaigns(data.campaigns || [])
-      }
+      const data = await adGet<{ campaigns: Campaign[] }>('/api/ads/funnel-bidding/campaigns', { userId })
+      setCampaigns(data.campaigns || [])
     } catch (error) {
       console.error('Failed to load campaigns:', error)
     }
@@ -189,11 +189,8 @@ export default function FunnelBiddingPage() {
 
   const loadStageMetrics = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/ads/funnel-bidding/stage-metrics?user_id=${userId}`)
-      if (res.ok) {
-        const data = await res.json()
-        setStageMetrics(data.stage_metrics || {})
-      }
+      const data = await adGet<{ stage_metrics: Record<string, StageMetrics> }>('/api/ads/funnel-bidding/stage-metrics', { userId })
+      setStageMetrics(data.stage_metrics || {})
     } catch (error) {
       console.error('Failed to load stage metrics:', error)
     }
@@ -201,11 +198,8 @@ export default function FunnelBiddingPage() {
 
   const loadFunnelFlow = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/ads/funnel-bidding/funnel-flow?user_id=${userId}`)
-      if (res.ok) {
-        const data = await res.json()
-        setFunnelFlow(data.funnel_flow)
-      }
+      const data = await adGet<{ funnel_flow: FunnelFlow }>('/api/ads/funnel-bidding/funnel-flow', { userId })
+      setFunnelFlow(data.funnel_flow)
     } catch (error) {
       console.error('Failed to load funnel flow:', error)
     }
@@ -213,11 +207,8 @@ export default function FunnelBiddingPage() {
 
   const loadRecommendations = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/ads/funnel-bidding/recommendations?user_id=${userId}`)
-      if (res.ok) {
-        const data = await res.json()
-        setRecommendations(data.recommendations || [])
-      }
+      const data = await adGet<{ recommendations: Recommendation[] }>('/api/ads/funnel-bidding/recommendations', { userId })
+      setRecommendations(data.recommendations || [])
     } catch (error) {
       console.error('Failed to load recommendations:', error)
     }
@@ -225,11 +216,8 @@ export default function FunnelBiddingPage() {
 
   const loadAllocation = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/ads/funnel-bidding/budget-allocation?user_id=${userId}&strategy=${selectedStrategy}`)
-      if (res.ok) {
-        const data = await res.json()
-        setAllocation(data.allocation)
-      }
+      const data = await adGet<{ allocation: any }>(`/api/ads/funnel-bidding/budget-allocation?strategy=${selectedStrategy}`, { userId })
+      setAllocation(data.allocation)
     } catch (error) {
       console.error('Failed to load allocation:', error)
     }
@@ -237,11 +225,8 @@ export default function FunnelBiddingPage() {
 
   const loadAllocationStrategies = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/ads/funnel-bidding/allocation-strategies`)
-      if (res.ok) {
-        const data = await res.json()
-        setAllocationStrategies(data.strategies || [])
-      }
+      const data = await adGet<{ strategies: AllocationStrategy[] }>('/api/ads/funnel-bidding/allocation-strategies')
+      setAllocationStrategies(data.strategies || [])
     } catch (error) {
       console.error('Failed to load strategies:', error)
     }
@@ -250,17 +235,9 @@ export default function FunnelBiddingPage() {
   const runAnalysis = async () => {
     setAnalyzing(true)
     try {
-      const res = await fetch(`${API_BASE}/api/ads/funnel-bidding/analyze?user_id=${userId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-        toast.success(`${data.analyzed_count}개 캠페인 분석 완료`)
-        await loadAllData()
-      }
+      const data = await adPost<{ analyzed_count: number }>('/api/ads/funnel-bidding/analyze', {}, { userId, showToast: false })
+      toast.success(`${data.analyzed_count}개 캠페인 분석 완료`)
+      await loadAllData()
     } catch (error) {
       toast.error('분석 실패')
     } finally {
@@ -269,16 +246,10 @@ export default function FunnelBiddingPage() {
   }
 
   const applyAllocation = async () => {
+    if (!confirm('예산 배분을 적용하시겠습니까? 실제 광고 예산이 변경됩니다.')) return
     try {
-      const res = await fetch(`${API_BASE}/api/ads/funnel-bidding/budget-allocation/apply?user_id=${userId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ strategy: selectedStrategy })
-      })
-
-      if (res.ok) {
-        toast.success('예산 배분이 적용되었습니다')
-      }
+      await adPost('/api/ads/funnel-bidding/budget-allocation/apply', { strategy: selectedStrategy }, { userId, showToast: false })
+      toast.success('예산 배분이 적용되었습니다')
     } catch (error) {
       toast.error('적용 실패')
     }
@@ -286,16 +257,23 @@ export default function FunnelBiddingPage() {
 
   const applyRecommendation = async (recId: number) => {
     try {
-      const res = await fetch(`${API_BASE}/api/ads/funnel-bidding/recommendations/${recId}/apply?user_id=${userId}`, {
-        method: 'POST'
-      })
-      if (res.ok) {
-        toast.success('권장사항이 적용되었습니다')
-        loadRecommendations()
-      }
+      await adPost(`/api/ads/funnel-bidding/recommendations/${recId}/apply`, undefined, { userId, showToast: false })
+      toast.success('권장사항이 적용되었습니다')
+      loadRecommendations()
     } catch (error) {
       toast.error('적용 실패')
     }
+  }
+
+  if (!userId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-600">로그인 확인 중...</p>
+        </div>
+      </div>
+    )
   }
 
   if (loading) {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuthStore } from "@/lib/stores/auth";
-import { getApiBaseUrl } from "@/lib/api";
+import { adGet, adPost } from "@/lib/api/adFetch";
 import Link from "next/link";
 import { toast } from "react-hot-toast";
 import {
@@ -98,13 +98,8 @@ export default function BudgetReallocationPage() {
 
     try {
       setLoading(true);
-      const res = await fetch(`${getApiBaseUrl()}/api/ads/budget/health`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setHealthData(data.data);
-      }
+      const data = await adGet<{ data: HealthAnalysis }>("/api/ads/budget/health");
+      setHealthData(data.data);
     } catch (err) {
       console.error("Failed to fetch health data:", err);
     } finally {
@@ -116,13 +111,8 @@ export default function BudgetReallocationPage() {
     if (!token) return;
 
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/ads/budget/recommendation`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setRecommendation(data.data);
-      }
+      const data = await adGet<{ data: QuickRecommendation }>("/api/ads/budget/recommendation");
+      setRecommendation(data.data);
     } catch (err) {
       console.error("Failed to fetch recommendation:", err);
     }
@@ -132,13 +122,8 @@ export default function BudgetReallocationPage() {
     if (!token) return;
 
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/ads/budget/strategies`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setStrategies(data.data || []);
-      }
+      const data = await adGet<{ data: Strategy[] }>("/api/ads/budget/strategies");
+      setStrategies(data.data || []);
     } catch (err) {
       console.error("Failed to fetch strategies:", err);
     }
@@ -148,13 +133,8 @@ export default function BudgetReallocationPage() {
     if (!token) return;
 
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/ads/budget/history`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setHistory(data.data || []);
-      }
+      const data = await adGet<{ data: any[] }>("/api/ads/budget/history");
+      setHistory(data.data || []);
     } catch (err) {
       console.error("Failed to fetch history:", err);
     }
@@ -188,27 +168,17 @@ export default function BudgetReallocationPage() {
         revenue: (p.revenue_share / 100) * (healthData.overall?.total_revenue || 0),
       }));
 
-      const res = await fetch(`${getApiBaseUrl()}/api/ads/budget/plan/generate`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          performances,
-          total_budget: healthData.overall?.total_budget || 1000000,
-          strategy: selectedStrategy,
-          max_change_ratio: 0.3,
-        }),
+      const data = await adPost<{ data: { reallocations: Reallocation[]; plan_id?: string } }>("/api/ads/budget/plan/generate", {
+        performances,
+        total_budget: healthData.overall?.total_budget || 1000000,
+        strategy: selectedStrategy,
+        max_change_ratio: 0.3,
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        setPlan({
-          reallocations: data.data.reallocations,
-          plan_id: data.data.plan_id,
-        });
-      }
+      setPlan({
+        reallocations: data.data.reallocations,
+        plan_id: data.data.plan_id,
+      });
     } catch (err) {
       console.error("Failed to generate plan:", err);
     } finally {
@@ -221,25 +191,14 @@ export default function BudgetReallocationPage() {
     if (!confirm("이 예산 재분배 계획을 적용하시겠습니까?")) return;
 
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/ads/budget/plan/apply`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          plan_id: plan.plan_id,
-          notes: "UI에서 적용",
-        }),
-      });
+      await adPost("/api/ads/budget/plan/apply", {
+        plan_id: plan.plan_id,
+        notes: "UI에서 적용",
+      }, { showToast: false });
 
-      if (res.ok) {
-        toast.success("예산 재분배 계획이 적용되었습니다.");
-        setPlan(null);
-        fetchHistory();
-      } else {
-        toast.error("예산 재분배 계획 적용에 실패했습니다.");
-      }
+      toast.success("예산 재분배 계획이 적용되었습니다.");
+      setPlan(null);
+      fetchHistory();
     } catch (err) {
       console.error("Failed to apply plan:", err);
       toast.error("오류가 발생했습니다.");

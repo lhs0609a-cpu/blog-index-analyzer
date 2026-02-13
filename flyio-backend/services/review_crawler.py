@@ -4,6 +4,7 @@
 """
 import httpx
 import json
+import os
 import re
 import logging
 import random
@@ -95,7 +96,7 @@ class ReviewCrawler:
                     "variables": {
                         "input": {
                             "businessId": place_id,
-                            "businessType": "restaurant",
+                            "businessType": "place",
                             "item": "0",
                             "bookingBusinessId": None,
                             "page": page,
@@ -126,7 +127,7 @@ class ReviewCrawler:
                 headers = {
                     **self._get_headers(),
                     "Content-Type": "application/json",
-                    "Referer": f"https://m.place.naver.com/restaurant/{place_id}/review/visitor",
+                    "Referer": f"https://m.place.naver.com/place/{place_id}/review/visitor",
                 }
 
                 try:
@@ -169,7 +170,7 @@ class ReviewCrawler:
         reviews = []
 
         async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
-            url = f"https://m.place.naver.com/restaurant/{place_id}/review/visitor"
+            url = f"https://m.place.naver.com/place/{place_id}/review/visitor"
             headers = self._get_headers()
 
             try:
@@ -483,37 +484,42 @@ class ReviewCrawler:
         """구글 플레이스 검색"""
         results = []
         async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
-            # Google Maps 검색 (텍스트 검색)
             url = f"https://www.google.com/maps/search/{urllib.parse.quote(query)}?hl=ko"
             headers = {
-                "User-Agent": random.choice(USER_AGENTS),
-                "Accept": "text/html",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                 "Accept-Language": "ko-KR,ko;q=0.9",
             }
 
             try:
                 resp = await client.get(url, headers=headers)
+                logger.info(f"Google search response status: {resp.status_code} for query: {query}")
                 if resp.status_code != 200:
                     return results
 
                 html = resp.text
 
-                # Place ID 추출 패턴
-                place_matches = re.findall(
-                    r'ChIJ[A-Za-z0-9_-]+',
-                    html
-                )
-                # 가게명/주소 추출
+                # Place ID 추출 (ChIJ 패턴)
+                place_matches = re.findall(r'ChIJ[A-Za-z0-9_\-]+', html)
+
+                # 가게 정보 추출 - 여러 패턴 시도
                 name_matches = re.findall(
-                    r'\"([^\"]{2,50})\",\"([^\"]{5,100})\",\d+\.\d+,\d+\.\d+',
+                    r'"([^"]{2,50})","([^"]{5,100})",\d+\.\d+,\d+\.\d+',
                     html
                 )
+
+                # 대체 패턴: aria-label 기반
+                if not name_matches:
+                    name_matches = re.findall(
+                        r'aria-label="([^"]{2,80})"[^>]*data-tooltip="([^"]*)"',
+                        html
+                    )
 
                 seen_ids = set()
                 for i, pid in enumerate(place_matches[:10]):
                     if pid not in seen_ids:
                         seen_ids.add(pid)
-                        name = name_matches[i][0] if i < len(name_matches) else f"장소 {i+1}"
+                        name = name_matches[i][0] if i < len(name_matches) else query
                         addr = name_matches[i][1] if i < len(name_matches) else ""
                         results.append({
                             "place_id": pid,
@@ -529,6 +535,7 @@ class ReviewCrawler:
             except Exception as e:
                 logger.warning(f"Google place search error: {e}")
 
+        logger.info(f"Google search results for '{query}': {len(results)} places found")
         return results
 
     # ===== 카카오맵 =====
@@ -698,7 +705,7 @@ class ReviewCrawler:
         async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
             url = f"https://dapi.kakao.com/v2/local/search/keyword.json?query={urllib.parse.quote(query)}&size=10"
             headers = {
-                "Authorization": "KakaoAK 95be04e741ea3d78e51ea57e23dbb05c",  # Public web key
+                "Authorization": f"KakaoAK {os.environ.get('KAKAO_REST_API_KEY', '95be04e741ea3d78e51ea57e23dbb05c')}",
                 "Accept": "application/json",
             }
 
@@ -758,15 +765,22 @@ class ReviewCrawler:
     async def search_naver_place(self, query: str) -> List[Dict]:
         """네이버 플레이스 검색 (가게 등록 시 사용)"""
         results = []
+        encoded_query = urllib.parse.quote(query)
+
         async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
-            url = f"https://map.naver.com/p/api/search/allSearch?query={query}&type=all"
+            # 1차: 네이버 지도 API
+            url = f"https://map.naver.com/p/api/search/allSearch?query={encoded_query}&type=all"
             headers = {
-                **self._get_headers(),
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8",
                 "Referer": "https://map.naver.com/",
+                "Origin": "https://map.naver.com",
             }
 
             try:
                 resp = await client.get(url, headers=headers)
+                logger.info(f"Naver search response status: {resp.status_code} for query: {query}")
                 if resp.status_code == 200:
                     data = resp.json()
                     places = data.get("result", {}).get("place", {}).get("list", [])
@@ -780,10 +794,100 @@ class ReviewCrawler:
                             "phone": p.get("phone", ""),
                             "rating": p.get("rating", ""),
                             "review_count": p.get("reviewCount", 0),
+                            "platform": "naver",
                         })
             except Exception as e:
-                logger.warning(f"Naver place search error: {e}")
+                logger.warning(f"Naver map API search error: {e}")
 
+            # 2차 폴백: 네이버 스마트플레이스 검색
+            if not results:
+                try:
+                    url2 = f"https://pcmap-api.place.naver.com/place/graphql"
+                    graphql_body = [
+                        {
+                            "operationName": "getPlacesList",
+                            "query": "query getPlacesList($input: PlacesInput) { places(input: $input) { items { id name category address { text } roadAddress { text } phone reviewCount } } }",
+                            "variables": {
+                                "input": {
+                                    "query": query,
+                                    "x": "126.9783882",
+                                    "y": "37.5666103",
+                                    "display": 10,
+                                    "deviceType": "pcmap",
+                                }
+                            }
+                        }
+                    ]
+                    headers2 = {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "Content-Type": "application/json",
+                        "Referer": "https://pcmap.place.naver.com/",
+                        "Origin": "https://pcmap.place.naver.com",
+                    }
+                    resp2 = await client.post(url2, json=graphql_body, headers=headers2)
+                    logger.info(f"Naver GraphQL search status: {resp2.status_code}")
+                    if resp2.status_code == 200:
+                        gql_data = resp2.json()
+                        items = []
+                        if isinstance(gql_data, list) and gql_data:
+                            items = gql_data[0].get("data", {}).get("places", {}).get("items", [])
+                        elif isinstance(gql_data, dict):
+                            items = gql_data.get("data", {}).get("places", {}).get("items", [])
+                        for p in items[:10]:
+                            addr = p.get("address", {})
+                            road = p.get("roadAddress", {})
+                            results.append({
+                                "place_id": p.get("id", ""),
+                                "name": p.get("name", ""),
+                                "category": p.get("category", ""),
+                                "address": addr.get("text", "") if isinstance(addr, dict) else str(addr),
+                                "road_address": road.get("text", "") if isinstance(road, dict) else str(road),
+                                "phone": p.get("phone", ""),
+                                "rating": "",
+                                "review_count": p.get("reviewCount", 0),
+                                "platform": "naver",
+                            })
+                except Exception as e:
+                    logger.warning(f"Naver GraphQL search fallback error: {e}")
+
+            # 3차 폴백: 네이버 통합검색에서 플레이스 정보 추출
+            if not results:
+                try:
+                    url3 = f"https://m.search.naver.com/search.naver?where=m_local&query={encoded_query}&sm=mob_sug.pre"
+                    headers3 = {
+                        "User-Agent": random.choice(USER_AGENTS),
+                        "Accept": "text/html",
+                        "Accept-Language": "ko-KR,ko;q=0.9",
+                    }
+                    resp3 = await client.get(url3, headers=headers3)
+                    logger.info(f"Naver mobile local search status: {resp3.status_code}")
+                    if resp3.status_code == 200:
+                        html = resp3.text
+                        # __NEXT_DATA__ 또는 place ID 패턴 추출
+                        place_ids = re.findall(r'/place/(\d+)', html)
+                        place_names = re.findall(r'class="[^"]*tit[^"]*"[^>]*>([^<]+)<', html)
+                        place_addrs = re.findall(r'class="[^"]*addr[^"]*"[^>]*>([^<]+)<', html)
+                        place_cats = re.findall(r'class="[^"]*cate[^"]*"[^>]*>([^<]+)<', html)
+
+                        seen = set()
+                        for i, pid in enumerate(place_ids[:10]):
+                            if pid not in seen:
+                                seen.add(pid)
+                                results.append({
+                                    "place_id": pid,
+                                    "name": place_names[i] if i < len(place_names) else query,
+                                    "category": place_cats[i] if i < len(place_cats) else "",
+                                    "address": place_addrs[i] if i < len(place_addrs) else "",
+                                    "road_address": "",
+                                    "phone": "",
+                                    "rating": "",
+                                    "review_count": 0,
+                                    "platform": "naver",
+                                })
+                except Exception as e:
+                    logger.warning(f"Naver mobile local search fallback error: {e}")
+
+        logger.info(f"Naver search results for '{query}': {len(results)} places found")
         return results
 
     # ===== 감성 분석 =====

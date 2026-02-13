@@ -24,8 +24,8 @@ import {
 } from '../platforms'
 import AdOptimizerTutorial, { TutorialStartButton } from '@/components/ad-optimizer/AdOptimizerTutorial'
 import { FeatureHelpCard, QuickStartGuide } from '@/components/ad-optimizer/FeatureHelpCard'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
+import { adGet, adPost } from '@/lib/api/adFetch'
+import { DemoBanner } from '@/components/ad-optimizer/DemoBadge'
 
 // 대시보드 탭 타입
 type DashboardTab = 'overview' | 'platforms' | 'budget' | 'insights'
@@ -82,6 +82,7 @@ interface ConnectedPlatform {
 export default function UnifiedAdOptimizerPage() {
   const { isAuthenticated, user } = useAuthStore()
   const { allowed: hasAccess, isLocked } = useFeature('adOptimizer')
+  const userId = user?.id
 
   // 인트로 화면 상태
   const [showIntro, setShowIntro] = useState(true)
@@ -89,12 +90,6 @@ export default function UnifiedAdOptimizerPage() {
   // 튜토리얼 상태
   const [showTutorial, setShowTutorial] = useState(false)
   const [tutorialCompleted, setTutorialCompleted] = useState(false)
-
-  // 튜토리얼 완료 여부 확인
-  useEffect(() => {
-    const completed = localStorage.getItem('ad_optimizer_tutorial_completed') === 'true'
-    setTutorialCompleted(completed)
-  }, [])
 
   // 대시보드 탭 상태
   const [activeTab, setActiveTab] = useState<DashboardTab>('overview')
@@ -130,56 +125,59 @@ export default function UnifiedAdOptimizerPage() {
   const [connectForm, setConnectForm] = useState<Record<string, string>>({})
   const [isConnecting, setIsConnecting] = useState(false)
 
+  useEffect(() => {
+    if (!isAuthenticated && !user) {
+      window.location.href = '/login'
+    }
+  }, [isAuthenticated, user])
+
+  // 튜토리얼 완료 여부 확인
+  useEffect(() => {
+    const completed = localStorage.getItem('ad_optimizer_tutorial_completed') === 'true'
+    setTutorialCompleted(completed)
+  }, [])
+
   // 연동 상태 로드
   const loadConnectedPlatforms = useCallback(async () => {
     setIsLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/api/ads/platforms/status?user_id=${user?.id || 1}`)
-      if (res.ok) {
-        const data = await res.json()
-        setConnectedPlatforms(data.platforms || {})
-      }
+      const data = await adGet('/api/ads/platforms/status', { userId })
+      setConnectedPlatforms(data.platforms || {})
     } catch (error) {
       // 연동된 플랫폼이 없으면 빈 객체
       setConnectedPlatforms({})
     } finally {
       setIsLoading(false)
     }
-  }, [user?.id])
+  }, [userId])
 
   // 대시보드 요약 로드
   const loadDashboardSummary = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/ads/dashboard/summary?user_id=${user?.id || 1}`)
-      if (res.ok) {
-        const data = await res.json()
-        setDashboardSummary(data.summary)
-      }
+      const data = await adGet('/api/ads/dashboard/summary', { userId })
+      setDashboardSummary(data.summary)
     } catch (error) {
       console.error('Failed to load dashboard summary:', error)
     }
-  }, [user?.id])
+  }, [userId])
 
   // AI 인사이트 로드 (이상 징후 감지)
   const loadAIInsights = useCallback(async () => {
     setInsightsLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/api/ads/cross-platform/anomalies?user_id=${user?.id || 1}`)
-      if (res.ok) {
-        const data = await res.json()
-        // anomalies를 AIInsight 형식으로 변환
-        const insights: AIInsight[] = (data.anomalies || []).map((a: any, idx: number) => ({
-          id: String(idx + 1),
-          type: a.severity === 'high' ? 'warning' : a.severity === 'medium' ? 'opportunity' : 'tip',
-          title: a.title || a.metric,
-          description: a.description || `${a.platform}에서 ${a.metric} 이상 감지`,
-          impact: a.impact || `변동: ${a.change_percent?.toFixed(1)}%`,
-          action: a.recommendation,
-          platform: a.platform,
-          timestamp: a.detected_at || new Date().toISOString()
-        }))
-        setAiInsights(insights)
-      }
+      const data = await adGet('/api/ads/cross-platform/anomalies', { userId })
+      // anomalies를 AIInsight 형식으로 변환
+      const insights: AIInsight[] = (data.anomalies || []).map((a: any, idx: number) => ({
+        id: String(idx + 1),
+        type: a.severity === 'high' ? 'warning' : a.severity === 'medium' ? 'opportunity' : 'tip',
+        title: a.title || a.metric,
+        description: a.description || `${a.platform}에서 ${a.metric} 이상 감지`,
+        impact: a.impact || `변동: ${a.change_percent?.toFixed(1)}%`,
+        action: a.recommendation,
+        platform: a.platform,
+        timestamp: a.detected_at || new Date().toISOString()
+      }))
+      setAiInsights(insights)
     } catch (error) {
       console.error('Failed to load AI insights:', error)
       // 연동된 플랫폼이 없으면 빈 배열
@@ -187,7 +185,7 @@ export default function UnifiedAdOptimizerPage() {
     } finally {
       setInsightsLoading(false)
     }
-  }, [user?.id])
+  }, [userId])
 
   // 예산 배분 로드
   const loadBudgetAllocations = useCallback(async () => {
@@ -226,19 +224,16 @@ export default function UnifiedAdOptimizerPage() {
       const allocations: BudgetAllocation[] = await Promise.all(
         connectedIds.map(async (platformId) => {
           try {
-            const res = await fetch(`${API_BASE}/api/ads/platforms/${platformId}/performance?user_id=${user?.id || 1}&days=7`)
-            if (res.ok) {
-              const data = await res.json()
-              const perf = data.performance || {}
-              return {
-                platformId,
-                name: platformNames[platformId] || platformId,
-                icon: platformIcons[platformId] || '📊',
-                currentBudget: perf.cost || 0,
-                suggestedBudget: perf.roas > 300 ? perf.cost * 1.3 : perf.cost * 0.8,
-                performance: perf.roas || 0,
-                trend: perf.roas > 350 ? 'up' : perf.roas < 250 ? 'down' : 'stable' as 'up' | 'down' | 'stable'
-              }
+            const data = await adGet(`/api/ads/platforms/${platformId}/performance?days=7`, { userId })
+            const perf = data.performance || {}
+            return {
+              platformId,
+              name: platformNames[platformId] || platformId,
+              icon: platformIcons[platformId] || '📊',
+              currentBudget: perf.cost || 0,
+              suggestedBudget: perf.roas > 300 ? perf.cost * 1.3 : perf.cost * 0.8,
+              performance: perf.roas || 0,
+              trend: perf.roas > 350 ? 'up' : perf.roas < 250 ? 'down' : 'stable' as 'up' | 'down' | 'stable'
             }
           } catch (e) {
             console.error(`Failed to load performance for ${platformId}:`, e)
@@ -262,40 +257,37 @@ export default function UnifiedAdOptimizerPage() {
     } finally {
       setBudgetLoading(false)
     }
-  }, [user?.id, connectedPlatforms])
+  }, [userId, connectedPlatforms])
 
   // 최적화 로그 로드 (크로스 플랫폼 리포트에서)
   const loadOptimizationLogs = useCallback(async () => {
     setLogsLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/api/ads/cross-platform/report?user_id=${user?.id || 1}&days=7`)
-      if (res.ok) {
-        const data = await res.json()
-        const report = data.report || {}
+      const data = await adGet('/api/ads/cross-platform/report?days=7', { userId })
+      const report = data.report || {}
 
-        // 추천사항을 로그 형식으로 변환
-        const logs: OptimizationLog[] = (report.recommendations || []).map((rec: any, idx: number) => ({
-          id: String(idx + 1),
-          platform: rec.platform || '전체',
-          icon: rec.platform === 'naver_searchad' ? '🟢' :
-                rec.platform === 'google_ads' ? '🔵' :
-                rec.platform === 'meta_ads' ? '🔷' :
-                rec.platform === 'kakao_moment' ? '💛' : '📊',
-          action: rec.action || rec.type || '최적화',
-          result: rec.description || rec.message,
-          savedAmount: rec.expected_savings,
-          timestamp: rec.created_at || '방금 전'
-        }))
+      // 추천사항을 로그 형식으로 변환
+      const logs: OptimizationLog[] = (report.recommendations || []).map((rec: any, idx: number) => ({
+        id: String(idx + 1),
+        platform: rec.platform || '전체',
+        icon: rec.platform === 'naver_searchad' ? '🟢' :
+              rec.platform === 'google_ads' ? '🔵' :
+              rec.platform === 'meta_ads' ? '🔷' :
+              rec.platform === 'kakao_moment' ? '💛' : '📊',
+        action: rec.action || rec.type || '최적화',
+        result: rec.description || rec.message,
+        savedAmount: rec.expected_savings,
+        timestamp: rec.created_at || '방금 전'
+      }))
 
-        setOptimizationLogs(logs)
-      }
+      setOptimizationLogs(logs)
     } catch (error) {
       console.error('Failed to load optimization logs:', error)
       setOptimizationLogs([])
     } finally {
       setLogsLoading(false)
     }
-  }, [user?.id])
+  }, [userId])
 
   useEffect(() => {
     if (hasAccess) {
@@ -312,6 +304,17 @@ export default function UnifiedAdOptimizerPage() {
       loadBudgetAllocations()
     }
   }, [connectedPlatforms, loadBudgetAllocations])
+
+  if (!userId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-600">로그인 확인 중...</p>
+        </div>
+      </div>
+    )
+  }
 
   // 플랫폼 필터링
   const filteredPlatforms = AD_PLATFORMS.filter(platform => {
@@ -341,22 +344,12 @@ export default function UnifiedAdOptimizerPage() {
 
     setIsConnecting(true)
     try {
-      const res = await fetch(`${API_BASE}/api/ads/platforms/${selectedPlatform.id}/connect?user_id=${user?.id || 1}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(connectForm)
-      })
-
-      if (res.ok) {
-        toast.success(`${selectedPlatform.nameKo} 연동 완료!`)
-        setConnectModalOpen(false)
-        loadConnectedPlatforms()
-      } else {
-        const error = await res.json()
-        toast.error(error.detail || '연동 실패')
-      }
+      await adPost(`/api/ads/platforms/${selectedPlatform.id}/connect`, connectForm, { userId })
+      toast.success(`${selectedPlatform.nameKo} 연동 완료!`)
+      setConnectModalOpen(false)
+      loadConnectedPlatforms()
     } catch (error) {
-      toast.error('서버 오류가 발생했습니다')
+      // adPost handles error toasts automatically
     } finally {
       setIsConnecting(false)
     }
@@ -367,18 +360,11 @@ export default function UnifiedAdOptimizerPage() {
     if (!confirm('정말로 연동을 해제하시겠습니까?')) return
 
     try {
-      const res = await fetch(`${API_BASE}/api/ads/platforms/${platformId}/disconnect?user_id=${user?.id || 1}`, {
-        method: 'POST'
-      })
-
-      if (res.ok) {
-        toast.success('연동이 해제되었습니다')
-        loadConnectedPlatforms()
-      } else {
-        toast.error('연동 해제 실패')
-      }
+      await adPost(`/api/ads/platforms/${platformId}/disconnect`, undefined, { userId })
+      toast.success('연동이 해제되었습니다')
+      loadConnectedPlatforms()
     } catch (error) {
-      toast.error('서버 오류')
+      // adPost handles error toasts automatically
     }
   }
 
@@ -386,16 +372,11 @@ export default function UnifiedAdOptimizerPage() {
   const toggleOptimization = async (platformId: string, isActive: boolean) => {
     try {
       const endpoint = isActive ? 'stop' : 'start'
-      const res = await fetch(`${API_BASE}/api/ads/platforms/${platformId}/optimization/${endpoint}?user_id=${user?.id || 1}`, {
-        method: 'POST'
-      })
-
-      if (res.ok) {
-        toast.success(isActive ? '최적화가 중지되었습니다' : '최적화가 시작되었습니다')
-        loadConnectedPlatforms()
-      }
+      await adPost(`/api/ads/platforms/${platformId}/optimization/${endpoint}`, undefined, { userId })
+      toast.success(isActive ? '최적화가 중지되었습니다' : '최적화가 시작되었습니다')
+      loadConnectedPlatforms()
     } catch (error) {
-      toast.error('서버 오류')
+      // adPost handles error toasts automatically
     }
   }
 
@@ -1022,7 +1003,18 @@ export default function UnifiedAdOptimizerPage() {
                       </div>
                       <span className="text-sm font-medium text-gray-900">예산 재배분</span>
                     </button>
-                    <button className="w-full p-3 text-left bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors flex items-center gap-3">
+                    <button
+                      onClick={async () => {
+                        try {
+                          await adPost('/api/ads/cross-platform/optimize-all', undefined, { userId })
+                          toast.success('수동 최적화가 실행되었습니다')
+                          loadDashboardSummary()
+                        } catch {
+                          // adPost handles error toasts automatically
+                        }
+                      }}
+                      className="w-full p-3 text-left bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors flex items-center gap-3"
+                    >
                       <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
                         <RefreshCw className="w-4 h-4 text-purple-600" />
                       </div>
@@ -1032,6 +1024,7 @@ export default function UnifiedAdOptimizerPage() {
                 </div>
 
                 {/* 오늘의 하이라이트 */}
+                <DemoBanner />
                 <div className="bg-gradient-to-br from-green-50 to-emerald-100 rounded-2xl p-5 border border-green-200">
                   <div className="flex items-center gap-2 mb-3">
                     <Award className="w-5 h-5 text-green-600" />

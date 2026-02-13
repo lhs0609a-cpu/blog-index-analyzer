@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuthStore } from "@/lib/stores/auth";
-import { getApiBaseUrl } from "@/lib/api";
+import { adGet, adPost } from "@/lib/api/adFetch";
 import Link from "next/link";
 import {
   PlatformSupportBanner,
@@ -80,13 +80,8 @@ export default function AnomalyDetectionPage() {
     if (!token) return;
 
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/ads/anomaly/summary`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSummary(data.data);
-      }
+      const data = await adGet<{ data: AnomalySummary }>("/api/ads/anomaly/summary");
+      setSummary(data.data);
     } catch (err) {
       console.error("Failed to fetch summary:", err);
     }
@@ -102,16 +97,8 @@ export default function AnomalyDetectionPage() {
       if (severityFilter) params.append("severity", severityFilter);
       if (showResolved) params.append("include_resolved", "true");
 
-      const res = await fetch(
-        `${getApiBaseUrl()}/api/ads/anomaly/alerts?${params}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setAlerts(data.data || []);
-      }
+      const data = await adGet<{ data: AnomalyAlert[] }>(`/api/ads/anomaly/alerts?${params}`);
+      setAlerts(data.data || []);
     } catch (err) {
       console.error("Failed to fetch alerts:", err);
     } finally {
@@ -123,13 +110,8 @@ export default function AnomalyDetectionPage() {
     if (!token) return;
 
     try {
-      const res = await fetch(`${getApiBaseUrl()}/api/ads/anomaly/types`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setAnomalyTypes(data.data || []);
-      }
+      const data = await adGet<{ data: AnomalyType[] }>("/api/ads/anomaly/types");
+      setAnomalyTypes(data.data || []);
     } catch (err) {
       console.error("Failed to fetch anomaly types:", err);
     }
@@ -139,16 +121,8 @@ export default function AnomalyDetectionPage() {
     if (!token) return;
 
     try {
-      const res = await fetch(
-        `${getApiBaseUrl()}/api/ads/anomaly/thresholds/${selectedPlatform}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setThresholds(data.data || {});
-      }
+      const data = await adGet<{ data: Record<string, Threshold> }>(`/api/ads/anomaly/thresholds/${selectedPlatform}`);
+      setThresholds(data.data || {});
     } catch (err) {
       console.error("Failed to fetch thresholds:", err);
     }
@@ -170,21 +144,9 @@ export default function AnomalyDetectionPage() {
     if (!token) return;
 
     try {
-      const res = await fetch(
-        `${getApiBaseUrl()}/api/ads/anomaly/alerts/acknowledge`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ alert_id: alertId }),
-        }
-      );
-      if (res.ok) {
-        fetchAlerts();
-        fetchSummary();
-      }
+      await adPost("/api/ads/anomaly/alerts/acknowledge", { alert_id: alertId });
+      fetchAlerts();
+      fetchSummary();
     } catch (err) {
       console.error("Failed to acknowledge alert:", err);
     }
@@ -194,21 +156,9 @@ export default function AnomalyDetectionPage() {
     if (!token) return;
 
     try {
-      const res = await fetch(
-        `${getApiBaseUrl()}/api/ads/anomaly/alerts/resolve`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ alert_id: alertId, notes: "UI에서 해결 처리" }),
-        }
-      );
-      if (res.ok) {
-        fetchAlerts();
-        fetchSummary();
-      }
+      await adPost("/api/ads/anomaly/alerts/resolve", { alert_id: alertId, notes: "UI에서 해결 처리" });
+      fetchAlerts();
+      fetchSummary();
     } catch (err) {
       console.error("Failed to resolve alert:", err);
     }
@@ -219,17 +169,9 @@ export default function AnomalyDetectionPage() {
     if (!confirm("모든 알림을 해결 처리하시겠습니까?")) return;
 
     try {
-      const res = await fetch(
-        `${getApiBaseUrl()}/api/ads/anomaly/alerts/resolve-all?platform_id=${selectedPlatform}`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (res.ok) {
-        fetchAlerts();
-        fetchSummary();
-      }
+      await adPost(`/api/ads/anomaly/alerts/resolve-all?platform_id=${selectedPlatform}`);
+      fetchAlerts();
+      fetchSummary();
     } catch (err) {
       console.error("Failed to resolve all alerts:", err);
     }

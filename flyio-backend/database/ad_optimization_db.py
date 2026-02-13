@@ -1995,6 +1995,35 @@ def resolve_anomaly_alert(alert_id: str, user_id: int, notes: Optional[str] = No
     return affected > 0
 
 
+def batch_resolve_anomaly_alerts(
+    user_id: int,
+    platform_id: Optional[str] = None,
+    notes: str = "일괄 해결 처리"
+) -> int:
+    """모든 미해결 알림을 단일 SQL로 일괄 해결 (성능 최적화)"""
+    conn = get_ad_db()
+    cursor = conn.cursor()
+
+    if platform_id:
+        cursor.execute("""
+            UPDATE anomaly_alerts
+            SET resolved_at = CURRENT_TIMESTAMP, notes = ?
+            WHERE user_id = ? AND platform_id = ? AND resolved_at IS NULL
+        """, (notes, user_id, platform_id))
+    else:
+        cursor.execute("""
+            UPDATE anomaly_alerts
+            SET resolved_at = CURRENT_TIMESTAMP, notes = ?
+            WHERE user_id = ? AND resolved_at IS NULL
+        """, (notes, user_id))
+
+    affected = cursor.rowcount
+    conn.commit()
+    conn.close()
+
+    return affected
+
+
 def get_anomaly_summary(user_id: int) -> Dict[str, Any]:
     """이상 징후 요약"""
     conn = get_ad_db()

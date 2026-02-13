@@ -23,6 +23,7 @@ from database.ad_optimization_db import (
     get_anomaly_alert_history,
     acknowledge_anomaly_alert,
     resolve_anomaly_alert,
+    batch_resolve_anomaly_alerts,
     get_anomaly_summary,
     save_anomaly_threshold,
     get_anomaly_thresholds,
@@ -270,17 +271,14 @@ async def resolve_all_alerts(
     platform_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """모든 알림 일괄 해결"""
+    """모든 알림 일괄 해결 (단일 SQL 배치 처리)"""
     user_id = current_user.get("id")
 
-    alerts = get_active_anomaly_alerts(user_id, platform_id, limit=500)
+    count = batch_resolve_anomaly_alerts(user_id, platform_id, "일괄 해결 처리")
 
-    count = 0
-    for alert in alerts:
-        alert_id = alert.get("alert_id")
-        if alert_id:
-            resolve_anomaly_alert(alert_id, user_id, "일괄 해결 처리")
-            count += 1
+    # 메모리 캐시도 클리어
+    detector = get_anomaly_detector()
+    detector.clear_resolved_alerts(user_id)
 
     return {
         "success": True,

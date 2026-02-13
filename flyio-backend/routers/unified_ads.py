@@ -14,6 +14,7 @@ from services.ad_platforms import (
     get_platform_service, get_all_platforms,
     unified_optimizer, OptimizationStrategy, AllocationStrategy
 )
+from routers.auth_deps import get_user_id_with_fallback
 
 router = APIRouter(prefix="/api/ads", tags=["Unified Ads"])
 logger = logging.getLogger(__name__)
@@ -64,11 +65,46 @@ SUPPORTED_PLATFORMS = {
 }
 
 
-# 임시 저장소 (실제로는 DB 사용)
+# DB 기반 플랫폼 저장소 (인메모리 캐시 겸용)
+from database.platform_store import (
+    get_user_platforms as _db_get_user_platforms,
+    save_platform_connection as _db_save_platform_connection,
+    delete_platform_connection as _db_delete_platform_connection,
+    update_platform_stats as _db_update_platform_stats,
+    save_platform_credentials as _db_save_platform_credentials,
+    get_platform_credentials as _db_get_platform_credentials,
+    delete_platform_credentials as _db_delete_platform_credentials,
+    get_optimization_status as _db_get_optimization_status,
+    set_optimization_status as _db_set_optimization_status,
+    get_platform_opt_settings as _db_get_platform_opt_settings,
+    save_platform_opt_settings as _db_save_platform_opt_settings,
+)
+
+# 인메모리 캐시 (DB 읽기 성능 보완, 서버 재시작 시 DB에서 복구)
 connected_platforms_db: Dict[int, Dict[str, Any]] = {}
 platform_credentials_db: Dict[int, Dict[str, Dict[str, str]]] = {}
 optimization_status_db: Dict[int, Dict[str, bool]] = {}
 optimization_settings_db: Dict[int, Dict[str, Dict[str, Any]]] = {}
+
+
+def _sync_platform_to_db(user_id: int, platform_id: str, account_name: str = None):
+    """인메모리 → DB 동기화"""
+    _db_save_platform_connection(user_id, platform_id, account_name)
+
+def _sync_credentials_to_db(user_id: int, platform_id: str, credentials: Dict[str, str]):
+    """자격증명 암호화 후 DB 저장"""
+    _db_save_platform_credentials(user_id, platform_id, credentials)
+
+def _load_user_from_db(user_id: int):
+    """DB에서 사용자 데이터를 인메모리 캐시로 로드"""
+    if user_id not in connected_platforms_db:
+        db_platforms = _db_get_user_platforms(user_id)
+        if db_platforms:
+            connected_platforms_db[user_id] = db_platforms
+    if user_id not in optimization_status_db:
+        db_status = _db_get_optimization_status(user_id)
+        if db_status:
+            optimization_status_db[user_id] = db_status
 
 
 # ============ 모델 정의 ============
@@ -140,8 +176,9 @@ async def list_implemented_platforms():
 
 
 @router.get("/platforms/status")
-async def get_platforms_status(user_id: int = Query(...)):
+async def get_platforms_status(user_id: int = Depends(get_user_id_with_fallback)):
     """사용자의 모든 플랫폼 연동 상태 조회"""
+    _load_user_from_db(user_id)  # DB에서 캐시 복구
     user_platforms = connected_platforms_db.get(user_id, {})
     user_optimization = optimization_status_db.get(user_id, {})
 
@@ -163,7 +200,7 @@ async def get_platforms_status(user_id: int = Query(...)):
 
 
 @router.get("/platforms/{platform_id}/status")
-async def get_platform_status(platform_id: str, user_id: int = Query(...)):
+async def get_platform_status(platform_id: str, user_id: int = Depends(get_user_id_with_fallback)):
     """특정 플랫폼 연동 상태 조회"""
     if platform_id not in SUPPORTED_PLATFORMS:
         raise HTTPException(status_code=404, detail="지원하지 않는 플랫폼입니다")
@@ -190,7 +227,7 @@ async def get_platform_status(platform_id: str, user_id: int = Query(...)):
 async def connect_platform(
     platform_id: str,
     request: PlatformConnectRequest,
-    user_id: int = Query(...)
+    user_id: int = Depends(get_user_id_with_fallback)
 ):
     """광고 플랫폼 연동"""
     if platform_id not in SUPPORTED_PLATFORMS:
@@ -220,7 +257,8 @@ async def connect_platform(
     else:
         account_name = request.account_name or f"{SUPPORTED_PLATFORMS[platform_id]['name']} 계정"
 
-    # 자격 증명 저장 (실제로는 암호화하여 저장)
+    # 자격 증명 저장 (암호화하여 DB + 인메모리 캐시)
+    _sync_credentials_to_db(user_id, platform_id, request.credentials)
     if user_id not in platform_credentials_db:
         platform_credentials_db[user_id] = {}
     platform_credentials_db[user_id][platform_id] = request.credentials
@@ -242,6 +280,9 @@ async def connect_platform(
         }
     }
 
+    # DB에도 동기화
+    _sync_platform_to_db(user_id, platform_id, account_name)
+
     return {
         "success": True,
         "message": f"{SUPPORTED_PLATFORMS[platform_id]['name']} 연동이 완료되었습니다",
@@ -251,7 +292,7 @@ async def connect_platform(
 
 
 @router.post("/platforms/{platform_id}/disconnect")
-async def disconnect_platform(platform_id: str, user_id: int = Query(...)):
+async def disconnect_platform(platform_id: str, user_id: int = Depends(get_user_id_with_fallback)):
     """광고 플랫폼 연동 해제"""
     if platform_id not in SUPPORTED_PLATFORMS:
         raise HTTPException(status_code=404, detail="지원하지 않는 플랫폼입니다")
@@ -263,15 +304,18 @@ async def disconnect_platform(platform_id: str, user_id: int = Query(...)):
         except:
             pass
 
-    # 자격 증명 삭제
+    # 자격 증명 삭제 (DB + 캐시)
+    _db_delete_platform_credentials(user_id, platform_id)
     if user_id in platform_credentials_db and platform_id in platform_credentials_db[user_id]:
         del platform_credentials_db[user_id][platform_id]
 
-    # 연동 상태 삭제
+    # 연동 상태 삭제 (DB + 캐시)
+    _db_delete_platform_connection(user_id, platform_id)
     if user_id in connected_platforms_db and platform_id in connected_platforms_db[user_id]:
         del connected_platforms_db[user_id][platform_id]
 
-    # 최적화 상태 삭제
+    # 최적화 상태 삭제 (DB + 캐시)
+    _db_set_optimization_status(user_id, platform_id, False)
     if user_id in optimization_status_db and platform_id in optimization_status_db[user_id]:
         del optimization_status_db[user_id][platform_id]
 
@@ -282,7 +326,7 @@ async def disconnect_platform(platform_id: str, user_id: int = Query(...)):
 
 
 @router.post("/platforms/{platform_id}/optimization/start")
-async def start_optimization(platform_id: str, user_id: int = Query(...)):
+async def start_optimization(platform_id: str, user_id: int = Depends(get_user_id_with_fallback)):
     """플랫폼 자동 최적화 시작"""
     if platform_id not in SUPPORTED_PLATFORMS:
         raise HTTPException(status_code=404, detail="지원하지 않는 플랫폼입니다")
@@ -305,7 +349,7 @@ async def start_optimization(platform_id: str, user_id: int = Query(...)):
 
 
 @router.post("/platforms/{platform_id}/optimization/stop")
-async def stop_optimization(platform_id: str, user_id: int = Query(...)):
+async def stop_optimization(platform_id: str, user_id: int = Depends(get_user_id_with_fallback)):
     """플랫폼 자동 최적화 중지"""
     if platform_id not in SUPPORTED_PLATFORMS:
         raise HTTPException(status_code=404, detail="지원하지 않는 플랫폼입니다")
@@ -322,7 +366,7 @@ async def stop_optimization(platform_id: str, user_id: int = Query(...)):
 
 
 @router.get("/platforms/{platform_id}/settings")
-async def get_platform_settings(platform_id: str, user_id: int = Query(...)):
+async def get_platform_settings(platform_id: str, user_id: int = Depends(get_user_id_with_fallback)):
     """플랫폼 최적화 설정 조회"""
     if platform_id not in SUPPORTED_PLATFORMS:
         raise HTTPException(status_code=404, detail="지원하지 않는 플랫폼입니다")
@@ -348,7 +392,7 @@ async def get_platform_settings(platform_id: str, user_id: int = Query(...)):
 async def update_platform_settings(
     platform_id: str,
     settings: OptimizationSettings,
-    user_id: int = Query(...)
+    user_id: int = Depends(get_user_id_with_fallback)
 ):
     """플랫폼 최적화 설정 업데이트"""
     if platform_id not in SUPPORTED_PLATFORMS:
@@ -369,7 +413,7 @@ async def update_platform_settings(
 @router.get("/platforms/{platform_id}/performance")
 async def get_platform_performance(
     platform_id: str,
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     days: int = Query(default=7, ge=1, le=90)
 ):
     """플랫폼 성과 데이터 조회"""
@@ -434,10 +478,12 @@ async def get_platform_performance(
             except Exception as e:
                 logger.error(f"Performance fetch failed: {platform_id} - {str(e)}")
 
-    # 더미 성과 데이터 (API 미구현 또는 에러)
+    # 더미 성과 데이터 (API 미구현 또는 에러) - is_demo_data 플래그 포함
     return {
         "platform_id": platform_id,
         "period_days": days,
+        "is_demo_data": True,
+        "demo_reason": "이 플랫폼의 API가 아직 연동되지 않았거나, 데이터를 불러올 수 없습니다.",
         "performance": {
             "impressions": 125000,
             "clicks": 3750,
@@ -455,7 +501,7 @@ async def get_platform_performance(
 
 
 @router.post("/platforms/{platform_id}/sync")
-async def sync_platform_data(platform_id: str, user_id: int = Query(...)):
+async def sync_platform_data(platform_id: str, user_id: int = Depends(get_user_id_with_fallback)):
     """플랫폼 데이터 동기화"""
     if platform_id not in SUPPORTED_PLATFORMS:
         raise HTTPException(status_code=404, detail="지원하지 않는 플랫폼입니다")
@@ -503,7 +549,7 @@ async def sync_platform_data(platform_id: str, user_id: int = Query(...)):
 
 
 @router.get("/dashboard/summary")
-async def get_dashboard_summary(user_id: int = Query(...)):
+async def get_dashboard_summary(user_id: int = Depends(get_user_id_with_fallback)):
     """통합 대시보드 요약"""
     user_platforms = connected_platforms_db.get(user_id, {})
     user_optimization = optimization_status_db.get(user_id, {})
@@ -544,7 +590,7 @@ async def get_dashboard_summary(user_id: int = Query(...)):
 
 @router.get("/cross-platform/report")
 async def get_cross_platform_report(
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     days: int = Query(default=30, ge=1, le=90)
 ):
     """크로스 플랫폼 종합 리포트"""
@@ -575,7 +621,7 @@ async def get_cross_platform_report(
 
 
 @router.get("/cross-platform/compare")
-async def compare_platforms(user_id: int = Query(...)):
+async def compare_platforms(user_id: int = Depends(get_user_id_with_fallback)):
     """플랫폼간 성과 비교"""
     try:
         comparison = await unified_optimizer.compare_platform_performance()
@@ -589,7 +635,7 @@ async def compare_platforms(user_id: int = Query(...)):
 
 
 @router.get("/cross-platform/anomalies")
-async def detect_anomalies(user_id: int = Query(...)):
+async def detect_anomalies(user_id: int = Depends(get_user_id_with_fallback)):
     """이상 징후 감지"""
     try:
         anomalies = await unified_optimizer.detect_anomalies()
@@ -605,7 +651,7 @@ async def detect_anomalies(user_id: int = Query(...)):
 
 @router.post("/cross-platform/optimize-all")
 async def optimize_all_platforms(
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     strategy: str = Query(default="balanced")
 ):
     """모든 플랫폼 일괄 최적화"""
@@ -636,7 +682,7 @@ async def optimize_all_platforms(
 @router.post("/cross-platform/budget-allocation")
 async def optimize_budget_allocation(
     request: BudgetAllocationRequest,
-    user_id: int = Query(...)
+    user_id: int = Depends(get_user_id_with_fallback)
 ):
     """크로스 플랫폼 예산 배분 최적화"""
     try:
@@ -671,7 +717,7 @@ async def optimize_budget_allocation(
 @router.get("/platforms/{platform_id}/keywords")
 async def get_platform_keywords(
     platform_id: str,
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     limit: int = Query(default=50, ge=1, le=500)
 ):
     """플랫폼 키워드 목록 조회 (검색 광고용)"""
@@ -724,7 +770,7 @@ async def get_platform_keywords(
 @router.get("/platforms/{platform_id}/campaigns")
 async def get_platform_campaigns(
     platform_id: str,
-    user_id: int = Query(...)
+    user_id: int = Depends(get_user_id_with_fallback)
 ):
     """플랫폼 캠페인 목록 조회"""
     # API가 구현된 플랫폼인 경우 실제 데이터 조회
@@ -773,7 +819,7 @@ async def get_platform_campaigns(
 @router.post("/platforms/{platform_id}/optimize-once")
 async def run_optimization_once(
     platform_id: str,
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     strategy: str = Query(default="balanced")
 ):
     """1회 최적화 실행"""

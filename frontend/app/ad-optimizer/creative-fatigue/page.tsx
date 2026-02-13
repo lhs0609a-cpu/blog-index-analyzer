@@ -10,6 +10,7 @@ import {
   PLATFORM_STYLES,
 } from "@/components/ad-optimizer/PlatformSupportBanner";
 import { ValuePropositionCompact } from "@/components/ad-optimizer/ValueProposition";
+import { adGet, adPost } from "@/lib/api/adFetch";
 
 interface FatigueSummary {
   total_creatives: number;
@@ -49,8 +50,6 @@ interface Recommendation {
   budget_impact: string;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.blrank.co.kr";
-
 const FATIGUE_LEVEL_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   fresh: { label: "신선함", color: "text-green-600", bg: "bg-green-100" },
   good: { label: "양호", color: "text-lime-600", bg: "bg-lime-100" },
@@ -66,7 +65,15 @@ const URGENCY_CONFIG: Record<string, { label: string; color: string }> = {
 };
 
 export default function CreativeFatiguePage() {
-  const { user, token } = useAuthStore();
+  const { isAuthenticated, user, token } = useAuthStore();
+  const userId = user?.id;
+
+  useEffect(() => {
+    if (!isAuthenticated && !user) {
+      window.location.href = "/login";
+    }
+  }, [isAuthenticated, user]);
+
   const [activeTab, setActiveTab] = useState<"summary" | "analysis" | "recommendations">("summary");
   const [adAccountId, setAdAccountId] = useState("meta_default");
   const [summary, setSummary] = useState<FatigueSummary | null>(null);
@@ -87,13 +94,7 @@ export default function CreativeFatiguePage() {
   const fetchSummary = async () => {
     try {
       setLoading(true);
-      const res = await fetch(
-        `${API_URL}/api/ads/creative-fatigue/summary?ad_account_id=${adAccountId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      const data = await res.json();
+      const data = await adGet<{ status: string; summary: FatigueSummary }>(`/api/ads/creative-fatigue/summary?ad_account_id=${adAccountId}`);
       if (data.status === "success") {
         setSummary(data.summary);
       }
@@ -106,13 +107,7 @@ export default function CreativeFatiguePage() {
 
   const fetchAnalyses = async () => {
     try {
-      const res = await fetch(
-        `${API_URL}/api/ads/creative-fatigue/analysis?ad_account_id=${adAccountId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      const data = await res.json();
+      const data = await adGet<{ status: string; analyses: FatigueAnalysis[] }>(`/api/ads/creative-fatigue/analysis?ad_account_id=${adAccountId}`);
       if (data.status === "success") {
         setAnalyses(data.analyses || []);
       }
@@ -123,13 +118,7 @@ export default function CreativeFatiguePage() {
 
   const fetchRecommendations = async () => {
     try {
-      const res = await fetch(
-        `${API_URL}/api/ads/creative-fatigue/recommendations?ad_account_id=${adAccountId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      const data = await res.json();
+      const data = await adGet<{ status: string; recommendations: Recommendation[] }>(`/api/ads/creative-fatigue/recommendations?ad_account_id=${adAccountId}`);
       if (data.status === "success") {
         setRecommendations(data.recommendations || []);
       }
@@ -142,15 +131,7 @@ export default function CreativeFatiguePage() {
     try {
       setAnalyzing(true);
       setError("");
-      const res = await fetch(`${API_URL}/api/ads/creative-fatigue/analyze`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ ad_account_id: adAccountId }),
-      });
-      const data = await res.json();
+      const data = await adPost<{ status: string; message?: string }>("/api/ads/creative-fatigue/analyze", { ad_account_id: adAccountId }, { showToast: false });
       if (data.status === "success") {
         await fetchSummary();
         await fetchAnalyses();
@@ -169,17 +150,8 @@ export default function CreativeFatiguePage() {
 
   const applyRecommendation = async (recommendationId: number) => {
     try {
-      const res = await fetch(`${API_URL}/api/ads/creative-fatigue/recommendations/apply`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ recommendation_id: recommendationId }),
-      });
-      if (res.ok) {
-        await fetchRecommendations();
-      }
+      await adPost("/api/ads/creative-fatigue/recommendations/apply", { recommendation_id: recommendationId });
+      await fetchRecommendations();
     } catch (err) {
       console.error("Failed to apply recommendation:", err);
     }
@@ -214,6 +186,17 @@ export default function CreativeFatiguePage() {
       </div>
     );
   };
+
+  if (!userId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-600">로그인 확인 중...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">

@@ -4,11 +4,13 @@ Funnel-Based Bidding API Router - 퍼널 기반 입찰 최적화 API
 마케팅 퍼널 단계(TOFU/MOFU/BOFU)에 따른 입찰 전략 최적화
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 import logging
+
+from routers.auth_deps import get_user_id_with_fallback
 
 from services.funnel_bidding_service import (
     funnel_bidding_optimizer,
@@ -64,7 +66,7 @@ class AnalyzeRequest(BaseModel):
 # ============ API Endpoints ============
 
 @router.get("/summary")
-async def get_funnel_summary(user_id: int = Query(1)):
+async def get_funnel_summary(user_id: int = Depends(get_user_id_with_fallback)):
     """퍼널 전체 요약"""
     try:
         # DB에서 캠페인 로드
@@ -110,7 +112,7 @@ async def get_funnel_summary(user_id: int = Query(1)):
 
 @router.get("/campaigns")
 async def get_campaigns(
-    user_id: int = Query(1),
+    user_id: int = Depends(get_user_id_with_fallback),
     stage: str = Query(None),
     platform: str = Query(None)
 ):
@@ -160,7 +162,7 @@ async def get_campaigns(
 @router.post("/campaigns")
 async def add_campaign(
     request: FunnelCampaignRequest,
-    user_id: int = Query(1)
+    user_id: int = Depends(get_user_id_with_fallback)
 ):
     """퍼널 캠페인 추가/수정"""
     try:
@@ -197,7 +199,7 @@ async def add_campaign(
 
 @router.get("/stage-metrics")
 async def get_stage_metrics(
-    user_id: int = Query(1),
+    user_id: int = Depends(get_user_id_with_fallback),
     stage: str = Query(None)
 ):
     """퍼널 단계별 성과 조회"""
@@ -261,7 +263,7 @@ async def get_stage_metrics(
 
 
 @router.get("/funnel-flow")
-async def get_funnel_flow(user_id: int = Query(1)):
+async def get_funnel_flow(user_id: int = Depends(get_user_id_with_fallback)):
     """퍼널 흐름 분석"""
     try:
         db_campaigns = get_funnel_campaigns(user_id)
@@ -313,7 +315,7 @@ async def get_funnel_flow(user_id: int = Query(1)):
 @router.post("/analyze")
 async def run_analysis(
     request: AnalyzeRequest,
-    user_id: int = Query(1)
+    user_id: int = Depends(get_user_id_with_fallback)
 ):
     """퍼널 분석 실행"""
     try:
@@ -432,7 +434,7 @@ async def run_analysis(
 
 @router.get("/recommendations")
 async def get_recommendations(
-    user_id: int = Query(1),
+    user_id: int = Depends(get_user_id_with_fallback),
     include_applied: bool = Query(False)
 ):
     """퍼널 입찰 권장사항 조회"""
@@ -447,7 +449,7 @@ async def get_recommendations(
 @router.post("/recommendations/{recommendation_id}/apply")
 async def apply_recommendation(
     recommendation_id: int,
-    user_id: int = Query(1)
+    user_id: int = Depends(get_user_id_with_fallback)
 ):
     """권장사항 적용"""
     try:
@@ -463,7 +465,7 @@ async def apply_recommendation(
 
 @router.get("/budget-allocation")
 async def get_budget_allocation(
-    user_id: int = Query(1),
+    user_id: int = Depends(get_user_id_with_fallback),
     strategy: str = Query("balanced")
 ):
     """퍼널별 예산 배분 조회"""
@@ -526,7 +528,7 @@ async def get_budget_allocation(
 @router.post("/budget-allocation/apply")
 async def apply_budget_allocation(
     request: BudgetAllocationRequest,
-    user_id: int = Query(1)
+    user_id: int = Depends(get_user_id_with_fallback)
 ):
     """예산 배분 적용"""
     try:

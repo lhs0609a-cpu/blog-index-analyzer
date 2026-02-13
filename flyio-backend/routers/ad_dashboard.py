@@ -5,7 +5,7 @@
 - 알림 관리
 - 최적화 이력
 """
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 from typing import Optional, Dict, List, Any
 from datetime import datetime, timedelta
@@ -27,6 +27,10 @@ from database.ad_optimization_db import (
 )
 from services.ad_auto_optimizer import ad_auto_optimizer
 from services.ad_platforms import PLATFORM_SERVICES, get_platform_service, PLATFORM_INFO
+import logging
+from routers.auth_deps import get_user_id_with_fallback
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/ad-dashboard", tags=["광고 대시보드"])
 
@@ -177,7 +181,7 @@ class OptimizationSettingsRequest(BaseModel):
 # ============ 대시보드 메인 ============
 
 @router.get("/summary")
-async def get_dashboard_summary(user_id: int = Query(...)):
+async def get_dashboard_summary(user_id: int = Depends(get_user_id_with_fallback)):
     """대시보드 요약 - 전체 성과 및 ROI"""
     accounts = get_user_ad_accounts(user_id)
     roi = get_roi_summary(user_id, days=30)
@@ -231,7 +235,7 @@ async def get_dashboard_summary(user_id: int = Query(...)):
 # ============ 계정 관리 ============
 
 @router.post("/accounts/connect")
-async def connect_account(request: AccountConnectRequest, user_id: int = Query(...)):
+async def connect_account(request: AccountConnectRequest, user_id: int = Depends(get_user_id_with_fallback)):
     """광고 계정 연동"""
     if request.platform_id not in PLATFORM_SERVICES:
         raise HTTPException(status_code=400, detail=f"지원하지 않는 플랫폼: {request.platform_id}")
@@ -289,7 +293,7 @@ async def connect_account(request: AccountConnectRequest, user_id: int = Query(.
 
 
 @router.get("/accounts")
-async def list_accounts(user_id: int = Query(...)):
+async def list_accounts(user_id: int = Depends(get_user_id_with_fallback)):
     """연동된 계정 목록"""
     accounts = get_user_ad_accounts(user_id)
 
@@ -306,7 +310,7 @@ async def list_accounts(user_id: int = Query(...)):
 
 
 @router.delete("/accounts/{platform_id}")
-async def disconnect_account(platform_id: str, user_id: int = Query(...)):
+async def disconnect_account(platform_id: str, user_id: int = Depends(get_user_id_with_fallback)):
     """계정 연동 해제"""
     success = delete_ad_account(user_id, platform_id)
 
@@ -326,7 +330,7 @@ async def disconnect_account(platform_id: str, user_id: int = Query(...)):
 # ============ 최적화 설정 ============
 
 @router.get("/settings/{platform_id}")
-async def get_settings(platform_id: str, user_id: int = Query(...)):
+async def get_settings(platform_id: str, user_id: int = Depends(get_user_id_with_fallback)):
     """플랫폼 최적화 설정 조회"""
     settings = get_optimization_settings(user_id, platform_id)
     return {"platform_id": platform_id, "settings": settings}
@@ -336,7 +340,7 @@ async def get_settings(platform_id: str, user_id: int = Query(...)):
 async def update_settings(
     platform_id: str,
     request: OptimizationSettingsRequest,
-    user_id: int = Query(...)
+    user_id: int = Depends(get_user_id_with_fallback)
 ):
     """플랫폼 최적화 설정 업데이트"""
     save_optimization_settings(user_id, platform_id, request.dict())
@@ -356,7 +360,7 @@ async def update_settings(
 
 
 @router.post("/settings/{platform_id}/toggle-auto")
-async def toggle_auto_optimization(platform_id: str, user_id: int = Query(...)):
+async def toggle_auto_optimization(platform_id: str, user_id: int = Depends(get_user_id_with_fallback)):
     """자동 최적화 토글 - 활성화 시 연결 테스트 수행"""
     settings = get_optimization_settings(user_id, platform_id)
     new_status = not settings.get("is_auto_enabled", False)
@@ -406,7 +410,7 @@ async def toggle_auto_optimization(platform_id: str, user_id: int = Query(...)):
 
 @router.get("/performance/all")
 async def get_all_performance(
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     days: int = Query(default=7, ge=1, le=30)
 ):
     """전체 플랫폼 성과"""
@@ -428,7 +432,7 @@ async def get_all_performance(
 
 @router.get("/roi")
 async def get_roi_data(
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     days: int = Query(default=30, ge=7, le=90)
 ):
     """ROI 데이터 조회"""
@@ -448,7 +452,7 @@ async def get_roi_data(
 
 @router.get("/history/optimizations")
 async def get_optimization_logs(
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     platform_id: Optional[str] = None,
     days: int = Query(default=7, ge=1, le=30),
     limit: int = Query(default=50, ge=1, le=200)
@@ -460,7 +464,7 @@ async def get_optimization_logs(
 
 @router.get("/history/bid-changes")
 async def get_bid_changes(
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     platform_id: Optional[str] = None,
     days: int = Query(default=7, ge=1, le=30)
 ):
@@ -487,7 +491,7 @@ async def get_bid_changes(
 
 @router.get("/notifications")
 async def get_user_notifications(
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     unread_only: bool = Query(default=False),
     limit: int = Query(default=50, ge=1, le=100)
 ):
@@ -512,7 +516,7 @@ async def get_optimizer_status():
 
 
 @router.post("/optimizer/run-now")
-async def run_optimization_now(user_id: int = Query(...), platform_id: Optional[str] = None):
+async def run_optimization_now(user_id: int = Depends(get_user_id_with_fallback), platform_id: Optional[str] = None):
     """즉시 최적화 실행"""
     # 수동 실행은 별도 로직
     from database.ad_optimization_db import get_auto_optimization_accounts
@@ -547,7 +551,7 @@ async def run_optimization_now(user_id: int = Query(...), platform_id: Optional[
 # ============ 실시간 데이터 ============
 
 @router.get("/realtime/{platform_id}")
-async def get_realtime_data(platform_id: str, user_id: int = Query(...)):
+async def get_realtime_data(platform_id: str, user_id: int = Depends(get_user_id_with_fallback)):
     """실시간 데이터 조회"""
     account = get_ad_account(user_id, platform_id)
 
@@ -598,7 +602,7 @@ async def get_realtime_data(platform_id: str, user_id: int = Query(...)):
 
 @router.get("/performance/keywords")
 async def get_keywords_performance(
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     platform_id: Optional[str] = None
 ):
     """키워드별 최적화 전/후 성과 비교"""
@@ -611,7 +615,7 @@ async def get_keywords_performance(
 
 @router.get("/performance/trends")
 async def get_performance_trends(
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     days: int = Query(default=14, ge=1, le=30)
 ):
     """일별 성과 추이"""
@@ -625,7 +629,7 @@ async def get_performance_trends(
 # ============ 실시간 스트리밍 (SSE) ============
 
 @router.get("/stream/optimizations")
-async def stream_optimizations(user_id: int = Query(...)):
+async def stream_optimizations(user_id: int = Depends(get_user_id_with_fallback)):
     """실시간 최적화 로그 스트리밍 (Server-Sent Events)"""
     from fastapi.responses import StreamingResponse
     import asyncio
@@ -633,16 +637,40 @@ async def stream_optimizations(user_id: int = Query(...)):
 
     async def event_generator():
         last_id = 0
+        error_count = 0
+        max_errors = 5
+
+        # 초기 heartbeat으로 연결 확인
+        yield "event: connected\ndata: {}\n\n"
+
         while True:
-            # 새로운 최적화 이력 조회
-            new_logs = get_optimization_history(user_id, None, days=1, limit=10)
+            try:
+                new_logs = get_optimization_history(user_id, None, days=1, limit=10)
+                error_count = 0  # 성공 시 에러 카운트 리셋
 
-            for log in new_logs:
-                if log.get("id", 0) > last_id:
-                    last_id = log.get("id", 0)
-                    yield f"data: {json.dumps(log, ensure_ascii=False)}\n\n"
+                for log in new_logs:
+                    if log.get("id", 0) > last_id:
+                        last_id = log.get("id", 0)
+                        yield f"data: {json.dumps(log, ensure_ascii=False)}\n\n"
 
-            await asyncio.sleep(5)  # 5초마다 폴링
+                # heartbeat (클라이언트 연결 유지)
+                yield ": heartbeat\n\n"
+
+            except asyncio.CancelledError:
+                # 클라이언트 연결 종료
+                logger.info(f"SSE client disconnected: user_id={user_id}")
+                break
+            except Exception as e:
+                error_count += 1
+                logger.error(f"SSE polling error (user_id={user_id}, attempt {error_count}): {e}")
+
+                if error_count >= max_errors:
+                    yield f"event: error\ndata: {{\"message\": \"서버 오류가 반복되어 스트리밍을 종료합니다.\"}}\n\n"
+                    break
+
+                yield f"event: error\ndata: {{\"message\": \"일시적 오류, 재시도 중...\"}}\n\n"
+
+            await asyncio.sleep(5)
 
     return StreamingResponse(
         event_generator(),
@@ -650,6 +678,7 @@ async def stream_optimizations(user_id: int = Query(...)):
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
         }
     )
 
@@ -658,7 +687,7 @@ async def stream_optimizations(user_id: int = Query(...)):
 
 @router.get("/performance/summary")
 async def get_performance_summary(
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     days: int = Query(default=7, ge=1, le=30)
 ):
     """종합 성과 요약 - 최적화 효과 정량화"""
@@ -773,7 +802,7 @@ async def get_performance_summary(
 @router.get("/performance/{platform_id}")
 async def get_platform_performance(
     platform_id: str,
-    user_id: int = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
     days: int = Query(default=30, ge=1, le=90)
 ):
     """플랫폼 성과 히스토리"""

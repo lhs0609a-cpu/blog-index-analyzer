@@ -11,14 +11,13 @@ import {
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
+import { adGet, adPost } from '@/lib/api/adFetch'
 import {
   PlatformSupportBanner,
   FEATURE_PLATFORMS,
   FEATURE_DESCRIPTIONS,
 } from "@/components/ad-optimizer/PlatformSupportBanner"
 import { ValuePropositionCompact } from "@/components/ad-optimizer/ValueProposition"
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
 
 // 페이싱 상태별 스타일
 const STATUS_STYLES: Record<string, { bg: string; text: string; icon: any }> = {
@@ -92,8 +91,8 @@ interface Strategy {
 }
 
 export default function BudgetPacingPage() {
-  const { user } = useAuthStore()
-  const userId = user?.id || 1
+  const { user, isAuthenticated } = useAuthStore()
+  const userId = user?.id
 
   const [activeTab, setActiveTab] = useState<'overview' | 'campaigns' | 'alerts' | 'strategies'>('overview')
   const [loading, setLoading] = useState(true)
@@ -110,9 +109,18 @@ export default function BudgetPacingPage() {
   const [expandedCampaign, setExpandedCampaign] = useState<string | null>(null)
   const [selectedStrategy, setSelectedStrategy] = useState('standard')
 
-  // 데이터 로드
+  // 인증 가드
+  useEffect(() => {
+    if (!isAuthenticated && !user) {
+      window.location.href = '/login'
+    }
+  }, [isAuthenticated, user])
+
+  // 데이터 로드 + 30초 자동 갱신
   useEffect(() => {
     loadAllData()
+    const interval = setInterval(() => { loadAllData() }, 30000) // 30초마다 자동 갱신
+    return () => clearInterval(interval)
   }, [userId])
 
   const loadAllData = async () => {
@@ -135,11 +143,8 @@ export default function BudgetPacingPage() {
 
   const loadSummary = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/ads/budget-pacing/summary?user_id=${userId}`)
-      if (res.ok) {
-        const data = await res.json()
-        setSummary(data)
-      }
+      const data = await adGet('/api/ads/budget-pacing/summary', { userId, showToast: false })
+      setSummary(data)
     } catch (error) {
       console.error('Failed to load summary:', error)
     }
@@ -147,11 +152,8 @@ export default function BudgetPacingPage() {
 
   const loadCampaigns = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/ads/budget-pacing/campaigns?user_id=${userId}`)
-      if (res.ok) {
-        const data = await res.json()
-        setCampaigns(data.campaigns || [])
-      }
+      const data = await adGet('/api/ads/budget-pacing/campaigns', { userId, showToast: false })
+      setCampaigns(data.campaigns || [])
     } catch (error) {
       console.error('Failed to load campaigns:', error)
     }
@@ -159,11 +161,8 @@ export default function BudgetPacingPage() {
 
   const loadAlerts = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/ads/budget-pacing/alerts?user_id=${userId}`)
-      if (res.ok) {
-        const data = await res.json()
-        setAlerts(data.alerts || [])
-      }
+      const data = await adGet('/api/ads/budget-pacing/alerts', { userId, showToast: false })
+      setAlerts(data.alerts || [])
     } catch (error) {
       console.error('Failed to load alerts:', error)
     }
@@ -171,11 +170,8 @@ export default function BudgetPacingPage() {
 
   const loadRecommendations = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/ads/budget-pacing/recommendations?user_id=${userId}`)
-      if (res.ok) {
-        const data = await res.json()
-        setRecommendations(data.recommendations || [])
-      }
+      const data = await adGet('/api/ads/budget-pacing/recommendations', { userId, showToast: false })
+      setRecommendations(data.recommendations || [])
     } catch (error) {
       console.error('Failed to load recommendations:', error)
     }
@@ -183,11 +179,8 @@ export default function BudgetPacingPage() {
 
   const loadStrategies = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/ads/budget-pacing/strategies`)
-      if (res.ok) {
-        const data = await res.json()
-        setStrategies(data.strategies || [])
-      }
+      const data = await adGet('/api/ads/budget-pacing/strategies', { showToast: false })
+      setStrategies(data.strategies || [])
     } catch (error) {
       console.error('Failed to load strategies:', error)
     }
@@ -195,11 +188,8 @@ export default function BudgetPacingPage() {
 
   const loadHourlyDistribution = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/ads/budget-pacing/hourly-distribution?user_id=${userId}&strategy=${selectedStrategy}`)
-      if (res.ok) {
-        const data = await res.json()
-        setHourlyDistribution(data.distribution || [])
-      }
+      const data = await adGet(`/api/ads/budget-pacing/hourly-distribution?strategy=${selectedStrategy}`, { userId, showToast: false })
+      setHourlyDistribution(data.distribution || [])
     } catch (error) {
       console.error('Failed to load hourly distribution:', error)
     }
@@ -208,19 +198,11 @@ export default function BudgetPacingPage() {
   const runAnalysis = async () => {
     setAnalyzing(true)
     try {
-      const res = await fetch(`${API_BASE}/api/ads/budget-pacing/analyze?user_id=${userId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-        toast.success(`${data.analyzed_count}개 캠페인 분석 완료`)
-        await loadAllData()
-      }
+      const data = await adPost('/api/ads/budget-pacing/analyze', {}, { userId })
+      toast.success(`${data.analyzed_count}개 캠페인 분석 완료`)
+      await loadAllData()
     } catch (error) {
-      toast.error('분석 실패')
+      // adFetch already shows a toast on error
     } finally {
       setAnalyzing(false)
     }
@@ -228,51 +210,48 @@ export default function BudgetPacingPage() {
 
   const resolveAlert = async (alertId: number) => {
     try {
-      const res = await fetch(`${API_BASE}/api/ads/budget-pacing/alerts/${alertId}/resolve?user_id=${userId}`, {
-        method: 'POST'
-      })
-      if (res.ok) {
-        toast.success('알림이 해결 처리되었습니다')
-        loadAlerts()
-      }
+      await adPost(`/api/ads/budget-pacing/alerts/${alertId}/resolve`, undefined, { userId })
+      toast.success('알림이 해결 처리되었습니다')
+      loadAlerts()
     } catch (error) {
-      toast.error('처리 실패')
+      // adFetch already shows a toast on error
     }
   }
 
   const applyRecommendation = async (recId: number) => {
     try {
-      const res = await fetch(`${API_BASE}/api/ads/budget-pacing/recommendations/${recId}/apply?user_id=${userId}`, {
-        method: 'POST'
-      })
-      if (res.ok) {
-        toast.success('권장사항이 적용되었습니다')
-        loadRecommendations()
-      }
+      await adPost(`/api/ads/budget-pacing/recommendations/${recId}/apply`, undefined, { userId })
+      toast.success('권장사항이 적용되었습니다')
+      loadRecommendations()
     } catch (error) {
-      toast.error('적용 실패')
+      // adFetch already shows a toast on error
     }
   }
 
   const changeStrategy = async (campaignId: string, newStrategy: string) => {
     try {
-      const res = await fetch(`${API_BASE}/api/ads/budget-pacing/strategy/change?user_id=${userId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ campaign_id: campaignId, new_strategy: newStrategy })
-      })
-      if (res.ok) {
-        toast.success('전략이 변경되었습니다')
-        loadCampaigns()
-      }
+      await adPost('/api/ads/budget-pacing/strategy/change', { campaign_id: campaignId, new_strategy: newStrategy }, { userId })
+      toast.success('전략이 변경되었습니다')
+      loadCampaigns()
     } catch (error) {
-      toast.error('변경 실패')
+      // adFetch already shows a toast on error
     }
   }
 
   // 현재 시간 기준 진행률 계산
   const currentHour = new Date().getHours()
   const expectedProgress = ((currentHour + 1) / 24) * 100
+
+  if (!userId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-600">로그인 확인 중...</p>
+        </div>
+      </div>
+    )
+  }
 
   if (loading) {
     return (

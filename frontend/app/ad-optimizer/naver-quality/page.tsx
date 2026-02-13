@@ -9,6 +9,7 @@ import {
   FEATURE_DESCRIPTIONS,
 } from "@/components/ad-optimizer/PlatformSupportBanner";
 import { ValuePropositionCompact } from "@/components/ad-optimizer/ValueProposition";
+import { adGet, adPost } from "@/lib/api/adFetch";
 
 interface QualitySummary {
   total_keywords: number;
@@ -52,8 +53,6 @@ interface Recommendation {
   difficulty: string;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.blrank.co.kr";
-
 const QUALITY_LEVEL_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   excellent: { label: "우수", color: "text-green-600", bg: "bg-green-100" },
   good: { label: "양호", color: "text-lime-600", bg: "bg-lime-100" },
@@ -77,7 +76,15 @@ const FACTOR_LABELS: Record<string, string> = {
 };
 
 export default function NaverQualityPage() {
-  const { user, token } = useAuthStore();
+  const { isAuthenticated, user, token } = useAuthStore();
+  const userId = user?.id;
+
+  useEffect(() => {
+    if (!isAuthenticated && !user) {
+      window.location.href = "/login";
+    }
+  }, [isAuthenticated, user]);
+
   const [activeTab, setActiveTab] = useState<"summary" | "analysis" | "recommendations">("summary");
   const [summary, setSummary] = useState<QualitySummary | null>(null);
   const [analyses, setAnalyses] = useState<QualityAnalysis[]>([]);
@@ -98,10 +105,7 @@ export default function NaverQualityPage() {
   const fetchSummary = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/api/ads/naver-quality/summary`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
+      const data = await adGet<{ status: string; summary: QualitySummary }>("/api/ads/naver-quality/summary");
       if (data.status === "success") {
         setSummary(data.summary);
       }
@@ -114,10 +118,7 @@ export default function NaverQualityPage() {
 
   const fetchAnalyses = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/ads/naver-quality/analysis`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
+      const data = await adGet<{ status: string; analyses: QualityAnalysis[] }>("/api/ads/naver-quality/analysis");
       if (data.status === "success") {
         setAnalyses(data.analyses || []);
       }
@@ -128,10 +129,7 @@ export default function NaverQualityPage() {
 
   const fetchRecommendations = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/ads/naver-quality/recommendations`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
+      const data = await adGet<{ status: string; recommendations: Recommendation[] }>("/api/ads/naver-quality/recommendations");
       if (data.status === "success") {
         setRecommendations(data.recommendations || []);
       }
@@ -144,15 +142,7 @@ export default function NaverQualityPage() {
     try {
       setAnalyzing(true);
       setError("");
-      const res = await fetch(`${API_URL}/api/ads/naver-quality/analyze`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({}),
-      });
-      const data = await res.json();
+      const data = await adPost<{ status: string; message?: string }>("/api/ads/naver-quality/analyze", {}, { showToast: false });
       if (data.status === "success") {
         await fetchSummary();
         await fetchAnalyses();
@@ -171,17 +161,8 @@ export default function NaverQualityPage() {
 
   const applyRecommendation = async (recommendationId: number) => {
     try {
-      const res = await fetch(`${API_URL}/api/ads/naver-quality/recommendations/apply`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ recommendation_id: recommendationId }),
-      });
-      if (res.ok) {
-        await fetchRecommendations();
-      }
+      await adPost("/api/ads/naver-quality/recommendations/apply", { recommendation_id: recommendationId });
+      await fetchRecommendations();
     } catch (err) {
       console.error("Failed to apply recommendation:", err);
     }
@@ -223,6 +204,17 @@ export default function NaverQualityPage() {
       maximumFractionDigits: 0,
     }).format(value);
   };
+
+  if (!userId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-600">로그인 확인 중...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">

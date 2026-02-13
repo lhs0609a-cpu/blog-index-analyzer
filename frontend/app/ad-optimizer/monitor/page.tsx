@@ -10,8 +10,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
+import { adGet } from '@/lib/api/adFetch'
 
 interface OptimizationAction {
   id: number
@@ -62,7 +61,15 @@ interface PerformanceChange {
 }
 
 export default function OptimizationMonitorPage() {
-  const { user } = useAuthStore()
+  const { isAuthenticated, user } = useAuthStore()
+  const userId = user?.id
+
+  useEffect(() => {
+    if (!isAuthenticated && !user) {
+      window.location.href = '/login'
+    }
+  }, [isAuthenticated, user])
+
   const [activeTab, setActiveTab] = useState<'live' | 'strategies' | 'history' | 'performance'>('live')
   const [liveActions, setLiveActions] = useState<OptimizationAction[]>([])
   const [strategies, setStrategies] = useState<Record<string, Strategy>>({})
@@ -70,6 +77,7 @@ export default function OptimizationMonitorPage() {
   const [performanceChanges, setPerformanceChanges] = useState<Record<string, PerformanceChange>>({})
   const [actionSummary, setActionSummary] = useState<any>(null)
   const [selectedStrategy, setSelectedStrategy] = useState<string | null>(null)
+  const [connectedPlatformIds, setConnectedPlatformIds] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isAutoRefresh, setIsAutoRefresh] = useState(true)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
@@ -77,47 +85,59 @@ export default function OptimizationMonitorPage() {
   // 실시간 피드 로드
   const loadLiveFeed = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/optimization/actions/live?user_id=${user?.id || 1}`)
-      if (res.ok) {
-        const data = await res.json()
-        setLiveActions(data.feed || [])
-      }
+      const data = await adGet('/api/optimization/actions/live', { userId, showToast: false })
+      setLiveActions(data.feed || [])
     } catch (error) {
       console.error('Failed to load live feed:', error)
     }
-  }, [user?.id])
+  }, [userId])
 
   // 전략 정보 로드
   const loadStrategies = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/optimization/strategies`)
-      if (res.ok) {
-        const data = await res.json()
-        setStrategies(data.strategies || {})
-        setExclusionRules(data.exclusion_rules || {})
-      }
+      const data = await adGet('/api/optimization/strategies', { showToast: false })
+      setStrategies(data.strategies || {})
+      setExclusionRules(data.exclusion_rules || {})
     } catch (error) {
       console.error('Failed to load strategies:', error)
     }
   }, [])
 
-  // 성과 변화 로드
-  const loadPerformanceChanges = useCallback(async () => {
+  // 연동된 플랫폼 목록 로드
+  const loadConnectedPlatforms = useCallback(async () => {
     try {
-      const platforms = ['naver_searchad', 'google_ads', 'meta_ads']
+      const data = await adGet('/api/ads/platforms/status', { userId, showToast: false })
+      const platforms = data.platforms || {}
+      const ids = Object.entries(platforms)
+        .filter(([_, p]: [string, any]) => p.is_connected)
+        .map(([id]) => id)
+      setConnectedPlatformIds(ids)
+      return ids
+    } catch (error) {
+      console.error('Failed to load connected platforms:', error)
+    }
+    return []
+  }, [userId])
+
+  // 성과 변화 로드
+  const loadPerformanceChanges = useCallback(async (platformIds?: string[]) => {
+    try {
+      const platforms = platformIds && platformIds.length > 0
+        ? platformIds
+        : connectedPlatformIds
+      if (platforms.length === 0) return
+
       const changes: Record<string, PerformanceChange> = {}
 
       await Promise.all(
         platforms.map(async (platform) => {
           try {
-            const res = await fetch(
-              `${API_BASE}/api/optimization/performance/comparison?user_id=${user?.id || 1}&platform=${platform}`
+            const data = await adGet(
+              `/api/optimization/performance/comparison?platform=${platform}`,
+              { userId, showToast: false }
             )
-            if (res.ok) {
-              const data = await res.json()
-              if (data.current_period?.cost) {
-                changes[platform] = data
-              }
+            if (data.current_period?.cost) {
+              changes[platform] = data
             }
           } catch {
             // Skip failed platforms
@@ -129,33 +149,31 @@ export default function OptimizationMonitorPage() {
     } catch (error) {
       console.error('Failed to load performance changes:', error)
     }
-  }, [user?.id])
+  }, [userId, connectedPlatformIds])
 
   // 액션 요약 로드
   const loadActionSummary = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/optimization/actions/summary?user_id=${user?.id || 1}&days=7`)
-      if (res.ok) {
-        const data = await res.json()
-        setActionSummary(data)
-      }
+      const data = await adGet('/api/optimization/actions/summary?days=7', { userId, showToast: false })
+      setActionSummary(data)
     } catch (error) {
       console.error('Failed to load action summary:', error)
     }
-  }, [user?.id])
+  }, [userId])
 
   // 전체 데이터 로드
   const loadAllData = useCallback(async () => {
     setIsLoading(true)
+    const platformIds = await loadConnectedPlatforms()
     await Promise.all([
       loadLiveFeed(),
       loadStrategies(),
-      loadPerformanceChanges(),
+      loadPerformanceChanges(platformIds),
       loadActionSummary()
     ])
     setLastRefresh(new Date())
     setIsLoading(false)
-  }, [loadLiveFeed, loadStrategies, loadPerformanceChanges, loadActionSummary])
+  }, [loadLiveFeed, loadStrategies, loadConnectedPlatforms, loadPerformanceChanges, loadActionSummary])
 
   useEffect(() => {
     loadAllData()
@@ -198,6 +216,17 @@ export default function OptimizationMonitorPage() {
     naver_searchad: '🟢',
     google_ads: '🔵',
     meta_ads: '🔷'
+  }
+
+  if (!userId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-600">로그인 확인 중...</p>
+        </div>
+      </div>
+    )
   }
 
   return (

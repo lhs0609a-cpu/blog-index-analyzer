@@ -465,6 +465,16 @@ class AnomalyDetector:
                     return True
         return False
 
+    def clear_resolved_alerts(self, user_id: int):
+        """메모리에서 해당 사용자의 모든 활성 알림을 해결 처리"""
+        now = datetime.now()
+        for key, alerts in self._active_alerts.items():
+            if str(user_id) not in key:
+                continue
+            for alert in alerts:
+                if alert.resolved_at is None:
+                    alert.resolved_at = now
+
     def set_custom_threshold(
         self,
         user_id: int,
