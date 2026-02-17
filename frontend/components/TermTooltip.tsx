@@ -52,9 +52,9 @@ export const TERM_DEFINITIONS: Record<string, { title: string; description: stri
     detail: 'PC와 모바일 검색량을 합산한 수치입니다. 검색량이 높을수록 트래픽 잠재력이 크지만 경쟁도 치열합니다.'
   },
   'entry-chance': {
-    title: '진입 확률',
-    description: '해당 키워드에서 상위 10위 안에 진입할 확률입니다.',
-    detail: '현재 블로그 점수와 상위 10개 블로그의 평균 점수를 비교하여 산출합니다.'
+    title: '경쟁력 지수',
+    description: '해당 키워드에서 상위 10위 안에 진입할 경쟁력을 나타냅니다.',
+    detail: '현재 블로그 점수와 상위 10개 블로그의 평균 점수를 비교하여 산출합니다. 100점 만점 기준입니다.'
   },
   'influencer': {
     title: '인플루언서',

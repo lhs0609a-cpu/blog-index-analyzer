@@ -101,35 +101,61 @@ interface KeywordSearchResponse {
   timestamp: string
 }
 
+interface DimensionComparison {
+  dimension: string
+  label: string
+  score: number
+  detail: string
+  my_value: any
+  competitor_avg: any
+  weight: number
+}
+
+interface Recommendation {
+  type: string
+  message: string
+  priority: string
+  current?: number
+  target?: number
+}
+
+interface KeywordCompetitiveness {
+  difficulty: string
+  difficulty_score: number
+  level_floor: number
+  high_level_count: number
+  avg_level?: number
+  detail: string
+}
+
 interface MyBlogAnalysis {
   blog_id: string
   blog_name: string
-  index: {
-    level: number
-    grade: string
-    total_score: number
-    score_breakdown: {
-      c_rank: number
-      dia: number
-    }
-  }
+  naver_level: number | null
+  related_post_count: number
+  already_ranking: number | null
   stats: {
-    total_posts: number
-    total_visitors: number
-    neighbor_count: number
+    total_posts: number | null
   }
-  competitiveness: {
-    can_enter_top10: boolean
-    probability: number
-    rank_estimate: number
-    gaps: {
-      score_gap: number
-      c_rank_gap: number
-      dia_gap: number
-      posts_gap: number
-      neighbors_gap: number
-    }
-    recommendations: string[]
+  keyword_competitiveness: KeywordCompetitiveness
+  competitive_position: {
+    probability_low: number
+    probability_mid: number
+    probability_high: number
+    rank_best: number
+    rank_worst: number
+    rank_explanation: string
+    weighted_score: number
+    grade: string
+    grade_label: string
+  }
+  dimension_comparisons: DimensionComparison[]
+  recommendations: Recommendation[]
+  data_quality: {
+    estimated_fields: string[]
+    warnings: string[]
+    limitations?: string[]
+    limitation_summary?: string
   }
 }
 
@@ -716,7 +742,7 @@ function KeywordSearchContent() {
     setBreakdownData(null)
   }
 
-  // 키워드별 내 블로그 분석
+  // 키워드별 내 블로그 경쟁력 분석 (백엔드 API 기반)
   const analyzeMyBlogForKeyword = async (keyword: string, keywordResults: KeywordSearchResponse) => {
     if (!myBlogId.trim()) {
       toast.error('블로그 ID를 입력하세요')
@@ -726,118 +752,50 @@ function KeywordSearchContent() {
     setMyBlogAnalyzing(prev => ({ ...prev, [keyword]: true }))
 
     try {
-      // 내 블로그 분석
-      const response = await fetch(`${getApiUrl()}/api/blogs/analyze`, {
+      // 검색 결과를 백엔드로 전달 (이미 가져온 데이터 재활용)
+      const searchResults = keywordResults.results.slice(0, 10).map(r => ({
+        title: r.title || '',
+        description: r.description || '',
+        blog_id: r.blog_id || '',
+        postdate: r.pub_date || '',
+        stats: r.stats || {},
+        index: r.index || {},
+      }))
+
+      const response = await fetch(`${getApiUrl()}/api/competitive-analysis/analyze`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           blog_id: myBlogId.trim(),
-          analysis_type: 'quick',
+          keyword,
+          search_results: searchResults,
         }),
       })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        const errorMessage = errorData.detail || errorData.message || `블로그 분석 실패 (${response.status})`
+        const errorMessage = errorData.detail || errorData.message || `경쟁력 분석 실패 (${response.status})`
         throw new Error(errorMessage)
       }
 
-      const analysisData = await response.json()
+      const data = await response.json()
 
-      if (!analysisData.result || !analysisData.result.index) {
-        throw new Error('블로그 분석 데이터가 올바르지 않습니다')
-      }
-      const myBlog = analysisData.result
-
-      // 10위권 블로그들의 평균 계산
-      const top10Blogs = keywordResults.results.slice(0, 10).filter(b => b.index)
-
-      const avgScore = top10Blogs.reduce((sum, b) => sum + (b.index?.total_score || 0), 0) / top10Blogs.length
-      const avgCRank = top10Blogs.reduce((sum, b) => {
-        const breakdown = b.index?.score_breakdown
-        if (!breakdown) return sum
-        return sum + (breakdown.c_rank || (breakdown as any).trust || 0)
-      }, 0) / top10Blogs.length
-      const avgDia = top10Blogs.reduce((sum, b) => {
-        const breakdown = b.index?.score_breakdown
-        if (!breakdown) return sum
-        return sum + (breakdown.dia || (breakdown as any).content || 0)
-      }, 0) / top10Blogs.length
-      const avgPosts = top10Blogs.reduce((sum, b) => sum + (b.stats?.total_posts || 0), 0) / top10Blogs.length
-      const avgNeighbors = top10Blogs.reduce((sum, b) => sum + (b.stats?.neighbor_count || 0), 0) / top10Blogs.length
-
-      const myScore = myBlog.index.total_score
-      const breakdown = myBlog.index.score_breakdown
-      const myCRank = breakdown.c_rank ?? (breakdown as any).trust ?? 0
-      const myDia = breakdown.dia ?? (breakdown as any).content ?? 0
-      const myPosts = myBlog.stats.total_posts
-      const myNeighbors = myBlog.stats.neighbor_count
-
-      // 격차 계산
-      const scoreGap = avgScore - myScore
-      const cRankGap = avgCRank - myCRank
-      const diaGap = avgDia - myDia
-      const postsGap = avgPosts - myPosts
-      const neighborsGap = avgNeighbors - myNeighbors
-
-      // 상위 블로그 최고/최저 점수
-      const maxScore = Math.max(...top10Blogs.map(b => b.index?.total_score || 0))
-      const minScore = Math.min(...top10Blogs.map(b => b.index?.total_score || 0))
-
-      // 10위권 진입 가능성 계산 (개선된 공식)
-      // 1. 기본 확률: 내 점수가 최저 점수보다 높으면 50%, 아니면 30%
-      let baseProbability = myScore >= minScore ? 50 : 30
-
-      // 2. 점수 차이 보정 (-30 ~ +30)
-      const scoreBonus = Math.max(-30, Math.min(30, (myScore - avgScore) * 2))
-
-      // 3. C-Rank 보정 (-15 ~ +15)
-      const cRankBonus = Math.max(-15, Math.min(15, (myCRank - avgCRank) * 1.5))
-
-      // 4. 상위 블로그 강도 페널티 (최고 점수가 높으면 어려움)
-      const strengthPenalty = maxScore >= 70 ? -15 : maxScore >= 60 ? -10 : maxScore >= 50 ? -5 : 0
-
-      // 최종 확률 계산 (최대 85%, 최소 5%)
-      let probability = baseProbability + scoreBonus + cRankBonus + strengthPenalty
-      probability = Math.min(85, Math.max(5, Math.round(probability)))
-
-      // 예상 순위 계산 (점수 기반)
-      const betterBlogs = top10Blogs.filter(b => (b.index?.total_score || 0) > myScore).length
-      const rankEstimate = Math.max(1, betterBlogs + 1)
-
-      // 추천사항 생성
-      const recommendations: string[] = []
-      if (scoreGap > 10) recommendations.push(`블로그 점수를 ${scoreGap.toFixed(1)}점 개선하세요`)
-      if (cRankGap > 5) recommendations.push(`C-Rank를 ${cRankGap.toFixed(1)}점 개선하세요`)
-      if (postsGap > 20) recommendations.push(`포스트를 ${Math.ceil(postsGap)}개 더 작성하세요`)
-      if (neighborsGap > 10) recommendations.push(`이웃을 ${Math.ceil(neighborsGap)}명 더 늘리세요`)
-
-      if (recommendations.length === 0 && probability >= 60) {
-        recommendations.push('현재 10위권 진입 가능한 수준입니다!')
-      } else if (recommendations.length === 0) {
-        recommendations.push('상위 블로그와의 격차를 줄이면 진입 가능성이 높아집니다')
+      if (!data.success) {
+        throw new Error(data.error_message || '경쟁력 분석에 실패했습니다')
       }
 
       const analysis: MyBlogAnalysis = {
-        blog_id: myBlog.blog.blog_id,
-        blog_name: myBlog.blog.blog_name,
-        index: myBlog.index,
-        stats: myBlog.stats,
-        competitiveness: {
-          can_enter_top10: probability >= 70,
-          probability: Math.round(probability),
-          rank_estimate: rankEstimate,
-          gaps: {
-            score_gap: scoreGap,
-            c_rank_gap: cRankGap,
-            dia_gap: diaGap,
-            posts_gap: postsGap,
-            neighbors_gap: neighborsGap,
-          },
-          recommendations,
-        },
+        blog_id: data.my_blog.blog_id,
+        blog_name: data.my_blog.blog_name,
+        naver_level: data.my_blog.naver_level,
+        stats: data.my_blog.stats || { total_posts: null },
+        related_post_count: data.my_blog.related_post_count,
+        already_ranking: data.my_blog.already_ranking,
+        keyword_competitiveness: data.keyword_competitiveness,
+        competitive_position: data.competitive_position,
+        dimension_comparisons: data.dimension_comparisons,
+        recommendations: data.recommendations,
+        data_quality: data.data_quality,
       }
 
       setMyBlogResults(prev => ({ ...prev, [keyword]: analysis }))
@@ -859,140 +817,85 @@ function KeywordSearchContent() {
       return
     }
 
-    setMyBlogAnalyzing(prev => ({ ...prev, [results.keyword]: true }))
+    const keyword = results.keyword
+    setMyBlogAnalyzing(prev => ({ ...prev, [keyword]: true }))
 
     try {
-      // 내 블로그 분석
-      const response = await fetch(`${getApiUrl()}/api/blogs/analyze`, {
+      const searchResults = results.results.slice(0, 10).map(r => ({
+        title: r.title || '',
+        description: r.description || '',
+        blog_id: r.blog_id || '',
+        postdate: r.pub_date || '',
+        stats: r.stats || {},
+        index: r.index || {},
+      }))
+
+      const response = await fetch(`${getApiUrl()}/api/competitive-analysis/analyze`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           blog_id: myBlogId.trim(),
-          analysis_type: 'quick',
+          keyword,
+          search_results: searchResults,
         }),
       })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        const errorMessage = errorData.detail || errorData.message || `블로그 분석 실패 (${response.status})`
+        const errorMessage = errorData.detail || errorData.message || `경쟁력 분석 실패 (${response.status})`
         throw new Error(errorMessage)
       }
 
-      const analysisData = await response.json()
+      const data = await response.json()
 
-      if (!analysisData.result || !analysisData.result.index) {
-        throw new Error('블로그 분석 데이터가 올바르지 않습니다')
-      }
-      const myBlog = analysisData.result
-
-      // 10위권 블로그들의 평균 계산
-      const top10Blogs = results.results.slice(0, 10).filter(b => b.index)
-
-      const avgScore = top10Blogs.reduce((sum, b) => sum + (b.index?.total_score || 0), 0) / top10Blogs.length
-      const avgCRank = top10Blogs.reduce((sum, b) => {
-        const breakdown = b.index?.score_breakdown
-        if (!breakdown) return sum
-        return sum + (breakdown.c_rank || (breakdown as any).trust || 0)
-      }, 0) / top10Blogs.length
-      const avgDia = top10Blogs.reduce((sum, b) => {
-        const breakdown = b.index?.score_breakdown
-        if (!breakdown) return sum
-        return sum + (breakdown.dia || (breakdown as any).content || 0)
-      }, 0) / top10Blogs.length
-      const avgPosts = top10Blogs.reduce((sum, b) => sum + (b.stats?.total_posts || 0), 0) / top10Blogs.length
-      const avgNeighbors = top10Blogs.reduce((sum, b) => sum + (b.stats?.neighbor_count || 0), 0) / top10Blogs.length
-
-      const myScore = myBlog.index.total_score
-      const breakdown = myBlog.index.score_breakdown
-      const myCRank = breakdown.c_rank ?? (breakdown as any).trust ?? 0
-      const myDia = breakdown.dia ?? (breakdown as any).content ?? 0
-      const myPosts = myBlog.stats.total_posts
-      const myNeighbors = myBlog.stats.neighbor_count
-
-      // 격차 계산
-      const scoreGap = avgScore - myScore
-      const cRankGap = avgCRank - myCRank
-      const diaGap = avgDia - myDia
-      const postsGap = avgPosts - myPosts
-      const neighborsGap = avgNeighbors - myNeighbors
-
-      // 상위 블로그 최고/최저 점수
-      const maxScore = Math.max(...top10Blogs.map(b => b.index?.total_score || 0))
-      const minScore = Math.min(...top10Blogs.map(b => b.index?.total_score || 0))
-
-      // 10위권 진입 가능성 계산 (개선된 공식)
-      // 1. 기본 확률: 내 점수가 최저 점수보다 높으면 50%, 아니면 30%
-      let baseProbability = myScore >= minScore ? 50 : 30
-
-      // 2. 점수 차이 보정 (-30 ~ +30)
-      const scoreBonus = Math.max(-30, Math.min(30, (myScore - avgScore) * 2))
-
-      // 3. C-Rank 보정 (-15 ~ +15)
-      const cRankBonus = Math.max(-15, Math.min(15, (myCRank - avgCRank) * 1.5))
-
-      // 4. 상위 블로그 강도 페널티 (최고 점수가 높으면 어려움)
-      const strengthPenalty = maxScore >= 70 ? -15 : maxScore >= 60 ? -10 : maxScore >= 50 ? -5 : 0
-
-      // 최종 확률 계산 (최대 85%, 최소 5%)
-      let probability = baseProbability + scoreBonus + cRankBonus + strengthPenalty
-      probability = Math.min(85, Math.max(5, Math.round(probability)))
-
-      // 예상 순위 계산 (점수 기반)
-      const betterBlogs = top10Blogs.filter(b => (b.index?.total_score || 0) > myScore).length
-      const rankEstimate = Math.max(1, betterBlogs + 1)
-
-      // 추천사항 생성
-      const recommendations: string[] = []
-      if (scoreGap > 10) recommendations.push(`블로그 점수를 ${scoreGap.toFixed(1)}점 개선하세요`)
-      if (cRankGap > 5) recommendations.push(`C-Rank를 ${cRankGap.toFixed(1)}점 개선하세요`)
-      if (postsGap > 20) recommendations.push(`포스트를 ${Math.ceil(postsGap)}개 더 작성하세요`)
-      if (neighborsGap > 10) recommendations.push(`이웃을 ${Math.ceil(neighborsGap)}명 더 늘리세요`)
-
-      if (recommendations.length === 0 && probability >= 60) {
-        recommendations.push('현재 10위권 진입 가능한 수준입니다!')
-      } else if (recommendations.length === 0) {
-        recommendations.push('상위 블로그와의 격차를 줄이면 진입 가능성이 높아집니다')
+      if (!data.success) {
+        throw new Error(data.error_message || '경쟁력 분석에 실패했습니다')
       }
 
       const analysis: MyBlogAnalysis = {
-        blog_id: myBlog.blog.blog_id,
-        blog_name: myBlog.blog.blog_name,
-        index: myBlog.index,
-        stats: myBlog.stats,
-        competitiveness: {
-          can_enter_top10: probability >= 70,
-          probability: Math.round(probability),
-          rank_estimate: rankEstimate,
-          gaps: {
-            score_gap: scoreGap,
-            c_rank_gap: cRankGap,
-            dia_gap: diaGap,
-            posts_gap: postsGap,
-            neighbors_gap: neighborsGap,
-          },
-          recommendations,
-        },
+        blog_id: data.my_blog.blog_id,
+        blog_name: data.my_blog.blog_name,
+        naver_level: data.my_blog.naver_level,
+        stats: data.my_blog.stats || { total_posts: null },
+        related_post_count: data.my_blog.related_post_count,
+        already_ranking: data.my_blog.already_ranking,
+        keyword_competitiveness: data.keyword_competitiveness,
+        competitive_position: data.competitive_position,
+        dimension_comparisons: data.dimension_comparisons,
+        recommendations: data.recommendations,
+        data_quality: data.data_quality,
       }
 
       setMyBlogResult(analysis)
-      setMyBlogResults(prev => ({ ...prev, [results.keyword]: analysis }))
+      setMyBlogResults(prev => ({ ...prev, [keyword]: analysis }))
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '분석 중 오류가 발생했습니다')
     } finally {
-      setMyBlogAnalyzing(prev => ({ ...prev, [results.keyword]: false }))
+      setMyBlogAnalyzing(prev => ({ ...prev, [keyword]: false }))
     }
   }
 
-  const getLevelColor = (level: number) => {
-    if (level <= 1) return 'bg-gray-400'
-    if (level <= 3) return 'bg-slate-500'      // 입문
-    if (level <= 6) return 'bg-blue-500'       // 성장기
-    if (level <= 9) return 'bg-indigo-500'     // 준최적화
-    if (level <= 12) return 'bg-[#0064FF]/50'    // 최적화
-    if (level <= 14) return 'bg-[#3182F6]/50'      // 챌린저/그랜드마스터
-    return 'bg-gradient-to-r from-amber-400 to-orange-500' // 마스터 (Lv.15)
+  const getLevelColor = (level: number | null) => {
+    if (!level || level <= 1) return 'bg-gray-400'
+    if (level === 2) return 'bg-blue-500'
+    if (level === 3) return 'bg-indigo-600'
+    return 'bg-gradient-to-r from-amber-500 to-orange-500' // Lv.4
+  }
+
+  const getGradeColor = (grade: string) => {
+    if (grade === 'A') return 'text-green-600'
+    if (grade === 'B') return 'text-blue-600'
+    if (grade === 'C') return 'text-orange-600'
+    if (grade === 'D') return 'text-red-500'
+    return 'text-gray-500' // F
+  }
+
+  const getGradeBg = (grade: string) => {
+    if (grade === 'A') return 'bg-green-100 text-green-700 border-green-300'
+    if (grade === 'B') return 'bg-blue-100 text-blue-700 border-blue-300'
+    if (grade === 'C') return 'bg-orange-100 text-orange-700 border-orange-300'
+    if (grade === 'D') return 'bg-red-100 text-red-700 border-red-300'
+    return 'bg-gray-100 text-gray-700 border-gray-300' // F
   }
 
   const getScoreColor = (score: number) => {
@@ -1001,6 +904,16 @@ function KeywordSearchContent() {
     if (score >= 70) return 'text-blue-600'
     if (score >= 60) return 'text-green-600'
     return 'text-gray-600'
+  }
+
+  const getDifficultyBadge = (difficulty: string) => {
+    switch (difficulty) {
+      case 'very_hard': return { label: '매우 높음', color: 'bg-red-100 text-red-700', dot: 'bg-red-500' }
+      case 'hard': return { label: '높음', color: 'bg-orange-100 text-orange-700', dot: 'bg-orange-500' }
+      case 'moderate': return { label: '보통', color: 'bg-yellow-100 text-yellow-700', dot: 'bg-yellow-500' }
+      case 'easy': return { label: '낮음', color: 'bg-green-100 text-green-700', dot: 'bg-green-500' }
+      default: return { label: '미확인', color: 'bg-gray-100 text-gray-600', dot: 'bg-gray-400' }
+    }
   }
 
   // 학습 데이터 수집 (백그라운드)
@@ -1482,14 +1395,14 @@ function KeywordSearchContent() {
                       <Star className="w-5 h-5 text-[#0064FF]" />
                     </div>
                     <div>
-                      <h4 className="font-bold text-gray-900">상위 노출 가능성 분석</h4>
+                      <h4 className="font-bold text-gray-900">상위 노출 경쟁력 분석</h4>
                       <p className="text-sm text-gray-600">
                         {(() => {
-                          const rankableCount = Object.values(myBlogResults).filter(r => r.competitiveness.probability >= 60).length
+                          const rankableCount = Object.values(myBlogResults).filter(r => r.competitive_position.probability_mid >= 50).length
                           const totalCount = Object.keys(myBlogResults).length
                           return (
                             <>
-                              <span className="font-semibold text-green-600">{rankableCount}개</span> 키워드에서 상위 노출 가능성 높음
+                              <span className="font-semibold text-green-600">{rankableCount}개</span> 키워드에서 경쟁력 높음
                               <span className="text-gray-400 mx-2">|</span>
                               전체 {totalCount}개 분석 완료
                             </>
@@ -1518,8 +1431,8 @@ function KeywordSearchContent() {
                   <div className="mt-4 pt-4 border-t border-blue-200">
                     <div className="flex flex-wrap gap-2">
                       {Object.entries(myBlogResults)
-                        .filter(([_, result]) => result.competitiveness.probability >= 60)
-                        .sort((a, b) => b[1].competitiveness.probability - a[1].competitiveness.probability)
+                        .filter(([_, result]) => result.competitive_position.probability_mid >= 50)
+                        .sort((a, b) => b[1].competitive_position.probability_mid - a[1].competitive_position.probability_mid)
                         .map(([keyword, result]) => (
                           <button
                             key={keyword}
@@ -1532,15 +1445,15 @@ function KeywordSearchContent() {
                           >
                             {keyword}
                             <span className={`ml-2 ${
-                              result.competitiveness.probability >= 80 ? 'text-green-500' : 'text-blue-500'
+                              result.competitive_position.probability_mid >= 55 ? 'text-green-500' : 'text-blue-500'
                             }`}>
-                              {result.competitiveness.probability}%
+                              {result.competitive_position.probability_mid}점
                             </span>
                           </button>
                         ))}
-                      {Object.values(myBlogResults).filter(r => r.competitiveness.probability >= 60).length === 0 && (
+                      {Object.values(myBlogResults).filter(r => r.competitive_position.probability_mid >= 50).length === 0 && (
                         <p className="text-sm text-gray-500">
-                          현재 분석된 키워드 중 상위 노출 가능성이 높은 키워드가 없습니다.
+                          현재 분석된 키워드 중 경쟁력이 높은 키워드가 없습니다.
                           블로그 지수를 높이거나 경쟁이 낮은 키워드를 찾아보세요.
                         </p>
                       )}
@@ -1556,7 +1469,7 @@ function KeywordSearchContent() {
                 .filter(status => {
                   // 필터가 활성화되어 있고 내 블로그 결과가 있으면 노출 가능한 것만 표시
                   if (showRankableOnly && myBlogResults[status.keyword]) {
-                    return myBlogResults[status.keyword].competitiveness.probability >= 60
+                    return myBlogResults[status.keyword].competitive_position.probability_mid >= 50
                   }
                   return true
                 })
@@ -1854,135 +1767,175 @@ function KeywordSearchContent() {
                             </button>
                           </div>
 
-                          {/* My Blog Analysis Result for this keyword */}
-                          {myBlogResults[status.keyword] && (
+                          {/* My Blog Competitive Analysis Result */}
+                          {myBlogResults[status.keyword] && (() => {
+                            const result = myBlogResults[status.keyword]
+                            const cp = result.competitive_position
+                            const probMid = cp.probability_mid
+                            const probColor = probMid >= 50 ? 'text-green-600' : probMid >= 35 ? 'text-blue-600' : probMid >= 20 ? 'text-orange-600' : 'text-red-600'
+                            const barColor = probMid >= 50 ? 'from-green-400 to-green-600' : probMid >= 35 ? 'from-blue-400 to-blue-600' : probMid >= 20 ? 'from-orange-400 to-orange-600' : 'from-red-400 to-red-600'
+                            const kc = result.keyword_competitiveness
+                            const diffBadge = getDifficultyBadge(kc?.difficulty || 'unknown')
+                            return (
                             <div className="bg-white rounded-xl shadow-lg border-2 border-blue-300 p-6 mt-4">
-                              <div className="flex items-start justify-between mb-6">
+                              {/* Header */}
+                              <div className="flex items-start justify-between mb-4">
                                 <div>
-                                  <h5 className="text-xl font-bold text-gray-800 mb-1">{myBlogResults[status.keyword].blog_name}</h5>
-                                  <p className="text-sm text-gray-500">@{myBlogResults[status.keyword].blog_id}</p>
+                                  <h5 className="text-xl font-bold text-gray-800 mb-1">{result.blog_name}</h5>
+                                  <p className="text-sm text-gray-500">@{result.blog_id}</p>
                                 </div>
                                 <div className="text-right">
-                                  <div className={`inline-flex px-3 py-1 rounded-full text-white text-sm font-bold ${getLevelColor(myBlogResults[status.keyword].index.level)}`}>
-                                    Lv.{myBlogResults[status.keyword].index.level}
+                                  <div className={`inline-flex px-3 py-1 rounded-full text-white text-sm font-bold ${getLevelColor(result.naver_level)}`}>
+                                    Lv.{result.naver_level || '?'}
                                   </div>
-                                  <p className="text-xs text-gray-500 mt-1">Lv.{myBlogResults[status.keyword].index.level}</p>
+                                  {result.already_ranking && (
+                                    <p className="text-xs text-green-600 mt-1 font-bold">현재 {result.already_ranking}위 노출 중</p>
+                                  )}
                                 </div>
                               </div>
+
+                              {/* 3개 요약 카드 */}
+                              <div className="grid grid-cols-3 gap-2 mb-4">
+                                <div className={`rounded-lg p-2 text-center border ${getGradeBg(cp.grade)}`}>
+                                  <p className="text-[10px] font-medium mb-0.5">등급</p>
+                                  <p className="text-xl font-bold">{cp.grade}</p>
+                                </div>
+                                <div className="bg-gray-50 rounded-lg p-2 text-center border border-gray-200">
+                                  <p className="text-[10px] font-medium text-gray-500 mb-0.5">레벨</p>
+                                  <p className="text-xl font-bold text-gray-800">Lv.{result.naver_level || '?'}</p>
+                                </div>
+                                <div className="bg-gray-50 rounded-lg p-2 text-center border border-gray-200">
+                                  <p className="text-[10px] font-medium text-gray-500 mb-0.5">관련 글</p>
+                                  <p className="text-xl font-bold text-gray-800">{result.related_post_count}개</p>
+                                </div>
+                              </div>
+
+                              {/* 주제 적합성 경고 */}
+                              {result.related_post_count === 0 && (
+                                <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded mb-4">
+                                  <p className="text-sm text-red-700 font-medium">이 키워드 관련 글이 없습니다. 관련 글을 먼저 작성해야 합니다.</p>
+                                </div>
+                              )}
+
+                              {/* 키워드 난이도 배지 */}
+                              {kc && kc.difficulty !== 'unknown' && (
+                                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium mb-4 ${diffBadge.color}`}>
+                                  <span className={`w-2 h-2 rounded-full ${diffBadge.dot}`} />
+                                  난이도: {diffBadge.label}
+                                  {kc.high_level_count > 0 && (
+                                    <span className="text-xs opacity-75">(상위 {kc.high_level_count}개 고레벨)</span>
+                                  )}
+                                </div>
+                              )}
 
                               {/* 10위권 진입 가능성 */}
                               <div className="bg-gradient-to-r from-[#0064FF]/10 to-[#3182F6]/10 rounded-xl p-6 mb-6">
                                 <div className="flex items-center justify-between mb-4">
-                                  <h6 className="text-lg font-bold text-gray-800">
-                                    10위권 진입 가능성
-                                  </h6>
-                                  <span className={`text-3xl font-bold ${
-                                    myBlogResults[status.keyword].competitiveness.probability >= 80 ? 'text-green-600' :
-                                    myBlogResults[status.keyword].competitiveness.probability >= 60 ? 'text-blue-600' :
-                                    myBlogResults[status.keyword].competitiveness.probability >= 40 ? 'text-orange-600' :
-                                    'text-red-600'
-                                  }`}>
-                                    {myBlogResults[status.keyword].competitiveness.probability}%
-                                  </span>
-                                </div>
-
-                                {/* Progress Bar */}
-                                <div className="relative h-8 bg-white rounded-full overflow-hidden mb-4">
-                                  <div
-                                    className={`absolute inset-y-0 left-0 flex items-center justify-end pr-3 text-white text-sm font-bold transition-all duration-1000 ${
-                                      myBlogResults[status.keyword].competitiveness.probability >= 80 ? 'bg-gradient-to-r from-green-400 to-green-600' :
-                                      myBlogResults[status.keyword].competitiveness.probability >= 60 ? 'bg-gradient-to-r from-blue-400 to-blue-600' :
-                                      myBlogResults[status.keyword].competitiveness.probability >= 40 ? 'bg-gradient-to-r from-orange-400 to-orange-600' :
-                                      'bg-gradient-to-r from-red-400 to-red-600'
-                                    }`}
-                                    style={{ width: `${myBlogResults[status.keyword].competitiveness.probability}%` }}
-                                  >
-                                    {myBlogResults[status.keyword].competitiveness.probability >= 20 && `${myBlogResults[status.keyword].competitiveness.probability}%`}
+                                  <h6 className="text-lg font-bold text-gray-800">10위권 진입 경쟁력</h6>
+                                  <div className="text-right">
+                                    <span className={`text-3xl font-bold ${probColor}`}>
+                                      {probMid}점 <span className="text-base font-normal text-gray-400">/ 100</span>
+                                    </span>
+                                    <p className="text-xs text-gray-500 mt-0.5">범위: {cp.probability_low}~{cp.probability_high}점</p>
                                   </div>
                                 </div>
+
+                                <div className="relative h-8 bg-white rounded-full overflow-hidden mb-4">
+                                  <div
+                                    className="absolute inset-y-0 bg-gray-200 rounded-full"
+                                    style={{ left: `${cp.probability_low}%`, width: `${Math.max(1, cp.probability_high - cp.probability_low)}%` }}
+                                  />
+                                  <div
+                                    className={`absolute inset-y-0 left-0 flex items-center justify-end pr-3 text-white text-sm font-bold transition-all duration-1000 bg-gradient-to-r ${barColor} rounded-full`}
+                                    style={{ width: `${Math.max(3, probMid)}%` }}
+                                  >
+                                    {probMid >= 10 && `${probMid}점`}
+                                  </div>
+                                </div>
+
+                                {/* confidence === 'low' 면책 문구 */}
+                                {cp.confidence === 'low' && (
+                                  <p className="text-xs text-amber-600 mt-2 mb-2">⚠ 경쟁자 데이터가 부족하여 정확도가 낮을 수 있습니다</p>
+                                )}
 
                                 <div className="flex items-center justify-between text-sm">
                                   <span className="text-gray-600">예상 순위</span>
                                   <span className="font-bold text-[#0064FF] text-lg">
-                                    {myBlogResults[status.keyword].competitiveness.rank_estimate > 10
-                                      ? '순위권 밖'
-                                      : `${myBlogResults[status.keyword].competitiveness.rank_estimate}위`}
+                                    {cp.rank_best === cp.rank_worst
+                                      ? (cp.rank_best > 10 ? '순위권 밖' : `${cp.rank_best}위`)
+                                      : (cp.rank_worst > 10 ? `${cp.rank_best}위 이상 (불확실)` : `${cp.rank_best}위 ~ ${cp.rank_worst}위`)}
                                   </span>
                                 </div>
+
+                                {cp.rank_explanation && (
+                                  <p className="text-xs text-gray-500 mt-1">{cp.rank_explanation}</p>
+                                )}
                               </div>
 
-                              {/* Score Comparison */}
-                              <div className="grid grid-cols-3 gap-4 mb-6">
-                                <div className="bg-gray-50 rounded-lg p-4 text-center">
-                                  <div className="text-xs text-gray-500 mb-1">총점</div>
-                                  <div className={`text-2xl font-bold ${getScoreColor(myBlogResults[status.keyword].index.total_score)}`}>
-                                    {myBlogResults[status.keyword].index.total_score.toFixed(1)}
-                                  </div>
-                                  {myBlogResults[status.keyword].competitiveness.gaps.score_gap > 0 && (
-                                    <div className="text-xs text-red-500 mt-1">
-                                      평균 대비 -{myBlogResults[status.keyword].competitiveness.gaps.score_gap.toFixed(1)}
+                              {/* 6차원 비교 카드 */}
+                              <div className="mb-6">
+                                <h6 className="text-sm font-bold text-gray-700 mb-3">차원별 경쟁력 비교</h6>
+                                <div className="grid grid-cols-2 gap-3">
+                                  {result.dimension_comparisons.map((dim) => (
+                                    <div key={dim.dimension} className="bg-gray-50 rounded-lg p-3">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <span className="text-xs font-medium text-gray-600">{dim.label}</span>
+                                        <span className={`text-sm font-bold ${
+                                          dim.score >= 65 ? 'text-green-600' : dim.score >= 40 ? 'text-orange-600' : 'text-red-600'
+                                        }`}>{dim.score}점</span>
+                                      </div>
+                                      <div className="relative h-2 bg-gray-200 rounded-full overflow-hidden mb-1">
+                                        <div
+                                          className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${
+                                            dim.score >= 65 ? 'bg-green-500' : dim.score >= 40 ? 'bg-orange-500' : 'bg-red-500'
+                                          }`}
+                                          style={{ width: `${dim.score}%` }}
+                                        />
+                                      </div>
+                                      <p className="text-xs text-gray-500 truncate">{dim.detail}</p>
                                     </div>
-                                  )}
-                                </div>
-                                <div className="bg-[#0064FF]/5 rounded-lg p-4 text-center">
-                                  <div className="text-xs text-[#0064FF] mb-1">C-Rank</div>
-                                  <div className="text-2xl font-bold text-[#0064FF]">
-                                    {(() => {
-                                      const breakdown = myBlogResults[status.keyword].index.score_breakdown
-                                      if (typeof breakdown?.c_rank === 'number') {
-                                        return breakdown.c_rank.toFixed(1)
-                                      }
-                                      if (typeof (breakdown as any)?.trust === 'number') {
-                                        return (breakdown as any).trust.toFixed(1)
-                                      }
-                                      return '-'
-                                    })()}
-                                  </div>
-                                  {myBlogResults[status.keyword].competitiveness.gaps.c_rank_gap > 0 && (
-                                    <div className="text-xs text-red-500 mt-1">
-                                      평균 대비 -{myBlogResults[status.keyword].competitiveness.gaps.c_rank_gap.toFixed(1)}
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="bg-[#3182F6]/5 rounded-lg p-4 text-center">
-                                  <div className="text-xs text-[#3182F6] mb-1">D.I.A.</div>
-                                  <div className="text-2xl font-bold text-[#3182F6]">
-                                    {(() => {
-                                      const breakdown = myBlogResults[status.keyword].index.score_breakdown
-                                      if (typeof breakdown?.dia === 'number') {
-                                        return breakdown.dia.toFixed(1)
-                                      }
-                                      if (typeof (breakdown as any)?.content === 'number') {
-                                        return (breakdown as any).content.toFixed(1)
-                                      }
-                                      return '-'
-                                    })()}
-                                  </div>
-                                  {myBlogResults[status.keyword].competitiveness.gaps.dia_gap > 0 && (
-                                    <div className="text-xs text-red-500 mt-1">
-                                      평균 대비 -{myBlogResults[status.keyword].competitiveness.gaps.dia_gap.toFixed(1)}
-                                    </div>
-                                  )}
+                                  ))}
                                 </div>
                               </div>
 
                               {/* Recommendations */}
-                              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
-                                <h6 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-                                  <span>💡</span>
-                                  10위권 진입을 위한 개선 방안
-                                </h6>
+                              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded mb-4">
+                                <h6 className="font-bold text-gray-800 mb-3">개선 방안</h6>
                                 <ul className="space-y-2">
-                                  {myBlogResults[status.keyword].competitiveness.recommendations.map((rec, idx) => (
+                                  {result.recommendations.map((rec, idx) => (
                                     <li key={idx} className="text-sm text-gray-700 flex items-start gap-2">
-                                      <span className="text-yellow-500 mt-0.5">•</span>
-                                      <span>{rec}</span>
+                                      <span className={`mt-0.5 ${
+                                        rec.type === 'critical' ? 'text-red-500' :
+                                        rec.type === 'opportunity' ? 'text-green-500' :
+                                        rec.type === 'success' ? 'text-blue-500' :
+                                        'text-yellow-500'
+                                      }`}>
+                                        {rec.type === 'critical' ? '!!' : rec.type === 'success' ? 'V' : '*'}
+                                      </span>
+                                      <span>{rec.message}</span>
+                                      {rec.current !== undefined && rec.target !== undefined && (
+                                        <span className="text-xs text-gray-400 whitespace-nowrap">({rec.current} → {rec.target})</span>
+                                      )}
                                     </li>
                                   ))}
                                 </ul>
                               </div>
+
+                              {/* Data Quality Warnings */}
+                              {result.data_quality.warnings.length > 0 && (
+                                <div className="bg-gray-50 border border-gray-200 rounded p-3">
+                                  <p className="text-xs text-gray-400 mb-1 font-medium">데이터 품질 안내</p>
+                                  {result.data_quality.warnings.map((w, i) => (
+                                    <p key={i} className="text-xs text-gray-400">{w}</p>
+                                  ))}
+                                </div>
+                              )}
+                              {result.data_quality?.limitation_summary && (
+                                <p className="text-xs text-gray-400 mt-2 italic">{result.data_quality.limitation_summary}</p>
+                              )}
                             </div>
-                          )}
+                            )
+                          })()}
                         </div>
 
                         {/* Blog Results Table */}
@@ -2383,146 +2336,182 @@ function KeywordSearchContent() {
           </div>
         )}
 
-        {/* My Blog Analysis Result */}
-        {myBlogResult && (
+        {/* My Blog Competitive Analysis Result (Single Keyword View) */}
+        {myBlogResult && (() => {
+          const cp = myBlogResult.competitive_position
+          const probMid = cp.probability_mid
+          const probColor = probMid >= 50 ? 'text-green-600' : probMid >= 35 ? 'text-blue-600' : probMid >= 20 ? 'text-orange-600' : 'text-red-600'
+          const barColor = probMid >= 50 ? 'from-green-400 to-green-600' : probMid >= 35 ? 'from-blue-400 to-blue-600' : probMid >= 20 ? 'from-orange-400 to-orange-600' : 'from-red-400 to-red-600'
+          const kc = myBlogResult.keyword_competitiveness
+          const diffBadge = getDifficultyBadge(kc?.difficulty || 'unknown')
+          return (
           <div className="bg-white rounded-xl shadow-lg border-2 border-blue-300 p-6 mb-6">
-            <div className="flex items-start justify-between mb-6">
+            {/* Header: Blog Name + Level */}
+            <div className="flex items-start justify-between mb-4">
               <div>
                 <h3 className="text-2xl font-bold text-gray-800 mb-1">{myBlogResult.blog_name}</h3>
                 <p className="text-sm text-gray-500">@{myBlogResult.blog_id}</p>
               </div>
               <div className="text-right">
-                <div className={`inline-flex px-3 py-1 rounded-full text-white text-sm font-bold ${getLevelColor(myBlogResult.index.level)}`}>
-                  Lv.{myBlogResult.index.level}
+                <div className={`inline-flex px-3 py-1 rounded-full text-white text-sm font-bold ${getLevelColor(myBlogResult.naver_level)}`}>
+                  Lv.{myBlogResult.naver_level || '?'}
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Lv.{myBlogResult.index.level}</p>
+                {myBlogResult.already_ranking && (
+                  <p className="text-xs text-green-600 mt-1 font-bold">현재 {myBlogResult.already_ranking}위 노출 중</p>
+                )}
               </div>
             </div>
 
-            {/* 10위권 진입 가능성 */}
+            {/* 3개 요약 카드: 경쟁력 등급, 네이버 레벨, 관련 글 수 */}
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className={`rounded-lg p-3 text-center border ${getGradeBg(cp.grade)}`}>
+                <p className="text-xs font-medium mb-1">경쟁력 등급</p>
+                <p className="text-2xl font-bold">{cp.grade}</p>
+                <p className="text-xs">{cp.grade_label}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-200">
+                <p className="text-xs font-medium text-gray-500 mb-1">네이버 레벨</p>
+                <p className="text-2xl font-bold text-gray-800">Lv.{myBlogResult.naver_level || '?'}</p>
+                <p className="text-xs text-gray-500">공식 레벨</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-200">
+                <p className="text-xs font-medium text-gray-500 mb-1">관련 글 수</p>
+                <p className="text-2xl font-bold text-gray-800">{myBlogResult.related_post_count}</p>
+                <p className="text-xs text-gray-500">개</p>
+              </div>
+            </div>
+
+            {/* 주제 적합성 경고 */}
+            {myBlogResult.related_post_count === 0 && (
+              <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded mb-4">
+                <p className="text-sm text-red-700 font-medium">이 키워드 관련 글이 없습니다. 관련 글을 먼저 작성해야 합니다.</p>
+              </div>
+            )}
+
+            {/* 키워드 난이도 배지 */}
+            {kc && kc.difficulty !== 'unknown' && (
+              <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium mb-4 ${diffBadge.color}`}>
+                <span className={`w-2 h-2 rounded-full ${diffBadge.dot}`} />
+                키워드 난이도: {diffBadge.label}
+                {kc.high_level_count > 0 && (
+                  <span className="text-xs opacity-75">
+                    (상위 {kc.high_level_count}개가 고레벨)
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* 10위권 진입 경쟁력 */}
             <div className="bg-gradient-to-r from-[#0064FF]/10 to-[#3182F6]/10 rounded-xl p-6 mb-6">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="text-lg font-bold text-gray-800">
-                  "{keyword}" 키워드 10위권 진입 가능성
+                  &quot;{keyword}&quot; 10위권 진입 경쟁력
                 </h4>
-                <span className={`text-3xl font-bold ${
-                  myBlogResult.competitiveness.probability >= 80 ? 'text-green-600' :
-                  myBlogResult.competitiveness.probability >= 60 ? 'text-blue-600' :
-                  myBlogResult.competitiveness.probability >= 40 ? 'text-orange-600' :
-                  'text-red-600'
-                }`}>
-                  {myBlogResult.competitiveness.probability}%
-                </span>
-              </div>
-
-              {/* Progress Bar */}
-              <div className="relative h-8 bg-white rounded-full overflow-hidden mb-4">
-                <div
-                  className={`absolute inset-y-0 left-0 flex items-center justify-end pr-3 text-white text-sm font-bold transition-all duration-1000 ${
-                    myBlogResult.competitiveness.probability >= 80 ? 'bg-gradient-to-r from-green-400 to-green-600' :
-                    myBlogResult.competitiveness.probability >= 60 ? 'bg-gradient-to-r from-blue-400 to-blue-600' :
-                    myBlogResult.competitiveness.probability >= 40 ? 'bg-gradient-to-r from-orange-400 to-orange-600' :
-                    'bg-gradient-to-r from-red-400 to-red-600'
-                  }`}
-                  style={{ width: `${myBlogResult.competitiveness.probability}%` }}
-                >
-                  {myBlogResult.competitiveness.probability >= 20 && `${myBlogResult.competitiveness.probability}%`}
+                <div className="text-right">
+                  <span className={`text-3xl font-bold ${probColor}`}>
+                    {probMid}점 <span className="text-base font-normal text-gray-400">/ 100</span>
+                  </span>
+                  <p className="text-xs text-gray-500 mt-0.5">범위: {cp.probability_low}~{cp.probability_high}점</p>
                 </div>
               </div>
+
+              {/* Probability Range Bar */}
+              <div className="relative h-8 bg-white rounded-full overflow-hidden mb-4">
+                <div
+                  className="absolute inset-y-0 bg-gray-200 rounded-full"
+                  style={{ left: `${cp.probability_low}%`, width: `${Math.max(1, cp.probability_high - cp.probability_low)}%` }}
+                />
+                <div
+                  className={`absolute inset-y-0 left-0 flex items-center justify-end pr-3 text-white text-sm font-bold transition-all duration-1000 bg-gradient-to-r ${barColor} rounded-full`}
+                  style={{ width: `${Math.max(3, probMid)}%` }}
+                >
+                  {probMid >= 10 && `${probMid}점`}
+                </div>
+              </div>
+
+              {/* confidence === 'low' 면책 문구 */}
+              {cp.confidence === 'low' && (
+                <p className="text-xs text-amber-600 mt-2 mb-2">⚠ 경쟁자 데이터가 부족하여 정확도가 낮을 수 있습니다</p>
+              )}
 
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">예상 순위</span>
                 <span className="font-bold text-[#0064FF] text-lg">
-                  {myBlogResult.competitiveness.rank_estimate > 10
-                    ? '순위권 밖'
-                    : `${myBlogResult.competitiveness.rank_estimate}위`}
+                  {cp.rank_best === cp.rank_worst
+                    ? (cp.rank_best > 10 ? '순위권 밖' : `${cp.rank_best}위`)
+                    : (cp.rank_worst > 10 ? `${cp.rank_best}위 이상 (불확실)` : `${cp.rank_best}위 ~ ${cp.rank_worst}위`)}
                 </span>
               </div>
+
+              {cp.rank_explanation && (
+                <p className="text-xs text-gray-500 mt-1">{cp.rank_explanation}</p>
+              )}
             </div>
 
-            {/* Score Comparison */}
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="bg-gray-50 rounded-lg p-4 text-center">
-                <div className="text-xs text-gray-500 mb-1">총점</div>
-                <div className={`text-2xl font-bold ${getScoreColor(myBlogResult.index.total_score)}`}>
-                  {myBlogResult.index.total_score.toFixed(1)}
-                </div>
-                {myBlogResult.competitiveness.gaps.score_gap > 0 && (
-                  <div className="text-xs text-red-500 mt-1">
-                    평균 대비 -{myBlogResult.competitiveness.gaps.score_gap.toFixed(1)}
+            {/* 6차원 비교 카드 */}
+            <div className="mb-6">
+              <h4 className="text-sm font-bold text-gray-700 mb-3">차원별 경쟁력 비교</h4>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {myBlogResult.dimension_comparisons.map((dim) => (
+                  <div key={dim.dimension} className="bg-gray-50 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-medium text-gray-600">{dim.label}</span>
+                      <span className={`text-sm font-bold ${
+                        dim.score >= 65 ? 'text-green-600' : dim.score >= 40 ? 'text-orange-600' : 'text-red-600'
+                      }`}>{dim.score}점</span>
+                    </div>
+                    <div className="relative h-2 bg-gray-200 rounded-full overflow-hidden mb-1">
+                      <div
+                        className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${
+                          dim.score >= 65 ? 'bg-green-500' : dim.score >= 40 ? 'bg-orange-500' : 'bg-red-500'
+                        }`}
+                        style={{ width: `${dim.score}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 truncate">{dim.detail}</p>
                   </div>
-                )}
-              </div>
-              <div className="bg-[#0064FF]/5 rounded-lg p-4 text-center">
-                <div className="text-xs text-[#0064FF] mb-1">C-Rank</div>
-                <div className="text-2xl font-bold text-[#0064FF]">
-                  {(() => {
-                    const breakdown = myBlogResult.index.score_breakdown
-                    if (typeof breakdown?.c_rank === 'number') {
-                      return breakdown.c_rank.toFixed(1)
-                    }
-                    if (typeof (breakdown as any)?.trust === 'number') {
-                      return (breakdown as any).trust.toFixed(1)
-                    }
-                    return '-'
-                  })()}
-                </div>
-                {myBlogResult.competitiveness.gaps.c_rank_gap > 0 && (
-                  <div className="text-xs text-red-500 mt-1">
-                    평균 대비 -{myBlogResult.competitiveness.gaps.c_rank_gap.toFixed(1)}
-                  </div>
-                )}
-              </div>
-              <div className="bg-[#3182F6]/5 rounded-lg p-4 text-center">
-                <div className="text-xs text-[#3182F6] mb-1">D.I.A.</div>
-                <div className="text-2xl font-bold text-[#3182F6]">
-                  {(() => {
-                    const breakdown = myBlogResult.index.score_breakdown
-                    if (typeof breakdown?.dia === 'number') {
-                      return breakdown.dia.toFixed(1)
-                    }
-                    if (typeof (breakdown as any)?.content === 'number') {
-                      return (breakdown as any).content.toFixed(1)
-                    }
-                    return '-'
-                  })()}
-                </div>
-                {myBlogResult.competitiveness.gaps.dia_gap > 0 && (
-                  <div className="text-xs text-red-500 mt-1">
-                    평균 대비 -{myBlogResult.competitiveness.gaps.dia_gap.toFixed(1)}
-                  </div>
-                )}
+                ))}
               </div>
             </div>
 
             {/* Recommendations */}
             <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded mb-4">
-              <h5 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-                <span>💡</span>
-                10위권 진입을 위한 개선 방안
-              </h5>
+              <h5 className="font-bold text-gray-800 mb-3">개선 방안</h5>
               <ul className="space-y-2">
-                {myBlogResult.competitiveness.recommendations.map((rec, idx) => (
+                {myBlogResult.recommendations.map((rec, idx) => (
                   <li key={idx} className="text-sm text-gray-700 flex items-start gap-2">
-                    <span className="text-yellow-500 mt-0.5">•</span>
-                    <span>{rec}</span>
+                    <span className={`mt-0.5 ${
+                      rec.type === 'critical' ? 'text-red-500' :
+                      rec.type === 'opportunity' ? 'text-green-500' :
+                      rec.type === 'success' ? 'text-blue-500' :
+                      'text-yellow-500'
+                    }`}>
+                      {rec.type === 'critical' ? '!!' : rec.type === 'success' ? 'V' : '*'}
+                    </span>
+                    <span>{rec.message}</span>
+                    {rec.current !== undefined && rec.target !== undefined && (
+                      <span className="text-xs text-gray-400 whitespace-nowrap">({rec.current} → {rec.target})</span>
+                    )}
                   </li>
                 ))}
               </ul>
             </div>
 
-            {/* 상세 분석 버튼 */}
-            <div className="text-center">
-              <button
-                onClick={() => openBreakdownModal(myBlogResult.blog_id)}
-                className="w-full py-3 px-6 bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white rounded-lg font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2"
-              >
-                <span>📊</span>
-                상세 점수 계산 과정 보기
-              </button>
-            </div>
+            {/* Data Quality Warnings */}
+            {myBlogResult.data_quality.warnings.length > 0 && (
+              <div className="bg-gray-50 border border-gray-200 rounded p-3 mb-4">
+                <p className="text-xs text-gray-400 mb-1 font-medium">데이터 품질 안내</p>
+                {myBlogResult.data_quality.warnings.map((w, i) => (
+                  <p key={i} className="text-xs text-gray-400">{w}</p>
+                ))}
+              </div>
+            )}
+            {myBlogResult.data_quality?.limitation_summary && (
+              <p className="text-xs text-gray-400 mb-4 italic">{myBlogResult.data_quality.limitation_summary}</p>
+            )}
           </div>
-        )}
+          )
+        })()}
 
         {/* Results */}
         {results && results.results.length > 0 && (
@@ -2565,7 +2554,11 @@ function KeywordSearchContent() {
                   blog_id: myBlogResult.blog_id,
                   blog_name: myBlogResult.blog_name,
                   rank: 0,
-                  index: myBlogResult.index,
+                  index: {
+                    level: myBlogResult.naver_level || 1,
+                    total_score: myBlogResult.competitive_position.weighted_score,
+                    score_breakdown: {},
+                  },
                   stats: myBlogResult.stats
                 } : null}
                 keyword={results.keyword}

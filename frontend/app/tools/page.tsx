@@ -917,8 +917,8 @@ export default function ToolsPage() {
     blueocean: {
       title: '숨은 키워드 발굴',
       description: '경쟁은 적고 검색량은 많은 꿀통 키워드를 AI가 찾아드립니다.',
-      steps: ['1. 메인 키워드를 입력하세요', '2. "키워드 발굴" 버튼을 클릭하세요', '3. 상위노출 확률이 높은 키워드를 확인하세요', '4. 요즘 뜨는 키워드를 우선 공략하세요'],
-      tips: ['상위노출 확률 = 검색량 ÷ 경쟁도', '상승 중(↑) 키워드가 가장 유망합니다', '롱테일 키워드로 틈새시장을 노려보세요']
+      steps: ['1. 메인 키워드를 입력하세요', '2. "키워드 발굴" 버튼을 클릭하세요', '3. 기회지수가 높은 키워드를 확인하세요', '4. 요즘 뜨는 키워드를 우선 공략하세요'],
+      tips: ['기회지수 = 검색량 ÷ 경쟁도', '상승 중(↑) 키워드가 가장 유망합니다', '롱테일 키워드로 틈새시장을 노려보세요']
     },
     writing: {
       title: '상위노출 최적화(SEO) 원고 가이드',
@@ -934,9 +934,9 @@ export default function ToolsPage() {
     },
     prediction: {
       title: '상위 노출 예측',
-      description: '특정 키워드로 상위 노출될 확률을 예측해드립니다.',
+      description: '특정 키워드로 상위 노출 경쟁력을 예측해드립니다.',
       steps: ['1. 목표 키워드를 입력하세요', '2. "예측하기" 버튼을 클릭하세요', '3. 난이도와 성공률을 확인하세요', '4. 제안된 팁을 참고해 글을 작성하세요'],
-      tips: ['성공률 70% 이상인 키워드를 공략하세요', '난이도가 낮을수록 상위 노출이 쉽습니다']
+      tips: ['경쟁력 지수 50 이상인 키워드를 공략하세요', '난이도가 낮을수록 상위 노출이 쉽습니다']
     },
     hashtag: {
       title: '해시태그 추천',
@@ -3608,7 +3608,7 @@ export default function ToolsPage() {
                                 </div>
                                 <div className="bg-white/50 rounded-lg p-2">
                                   <div className="font-bold text-[#0064FF]">{item.opportunity}</div>
-                                  <div className="text-xs text-gray-500">상위노출 확률</div>
+                                  <div className="text-xs text-gray-500">기회지수</div>
                                 </div>
                               </div>
                             </div>
@@ -3633,7 +3633,7 @@ export default function ToolsPage() {
                                 경쟁도 10% 미만 '꿀통 키워드' {Math.min(blueOceanResult.keywords.length - 4, 3)}개가 숨겨져 있습니다
                               </div>
                               <div className="text-sm text-amber-700">
-                                월 검색량 1만 회 이상, 상위노출 확률 높은 키워드를 지금 확인하세요
+                                월 검색량 1만 회 이상, 기회지수 높은 키워드를 지금 확인하세요
                               </div>
                             </div>
                           </div>

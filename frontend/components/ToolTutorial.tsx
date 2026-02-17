@@ -45,7 +45,7 @@ const toolTutorials: Record<string, ToolTutorialStep[]> = {
     {
       title: '블루오션 키워드 발굴',
       description: '경쟁은 낮고 검색량은 높은 "블루오션" 키워드를 AI가 찾아드립니다.',
-      tip: '블루오션 키워드로 글을 쓰면 상위노출 확률이 3배 이상 높아집니다!'
+      tip: '블루오션 키워드로 글을 쓰면 상위노출 경쟁력이 3배 이상 높아집니다!'
     },
     {
       title: '시드 키워드 입력',
@@ -67,7 +67,7 @@ const toolTutorials: Record<string, ToolTutorialStep[]> = {
     {
       title: '글쓰기 가이드',
       description: '작성한 글이 상위노출에 적합한지 AI가 분석하고 개선점을 알려드립니다.',
-      tip: '발행 전에 꼭 체크하면 상위노출 확률이 높아집니다!'
+      tip: '발행 전에 꼭 체크하면 상위노출 경쟁력이 높아집니다!'
     },
     {
       title: '글 내용 붙여넣기',
@@ -104,7 +104,7 @@ const toolTutorials: Record<string, ToolTutorialStep[]> = {
   prediction: [
     {
       title: '상위 노출 예측',
-      description: '특정 키워드로 상위 노출될 확률을 AI가 예측해드립니다.',
+      description: '특정 키워드로 상위 노출 경쟁력을 AI가 예측해드립니다.',
       tip: '내 블로그 지수와 키워드 난이도를 비교해 전략을 세울 수 있어요!'
     },
     {
@@ -113,7 +113,7 @@ const toolTutorials: Record<string, ToolTutorialStep[]> = {
     },
     {
       title: '예측 결과 확인',
-      description: '성공 확률, 예상 순위, 필요한 블로그 지수 등을 확인할 수 있습니다.',
+      description: '경쟁력 지수, 예상 순위, 필요한 블로그 지수 등을 확인할 수 있습니다.',
       tip: '성공률 60% 이상인 키워드부터 공략하는 것이 효율적입니다!'
     }
   ],

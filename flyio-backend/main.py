@@ -584,6 +584,7 @@ from routers import profitable_keywords
 from routers import marketplace
 from routers import reputation
 from routers import funnel_designer
+from routers import competitive_analysis
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
@@ -630,6 +631,7 @@ app.include_router(profitable_keywords.router, prefix="/api", tags=["수익성�
 app.include_router(marketplace.router, prefix="/api", tags=["마켓플레이스"])
 app.include_router(reputation.router, tags=["평판모니터링"])
 app.include_router(funnel_designer.router, tags=["퍼널디자이너"])
+app.include_router(competitive_analysis.router, tags=["경쟁력분석"])
 
 
 if __name__ == "__main__":

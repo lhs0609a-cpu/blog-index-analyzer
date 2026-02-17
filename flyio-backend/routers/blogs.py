@@ -2117,6 +2117,7 @@ async def scrape_blog_stats_fast(blog_id: str) -> Dict:
         "total_posts": None,
         "neighbor_count": None,
         "total_visitors": None,
+        "naver_level": None,
         "success": False,
         "source": "scrape_fast"
     }
@@ -2198,6 +2199,24 @@ async def scrape_blog_stats_fast(blog_id: str) -> Dict:
                     stats["total_visitors"] = int(match.group(1))
                     break
 
+            # 네이버 공식 레벨 추출 (Lv.1 ~ Lv.4)
+            naver_level_patterns = [
+                r'"bloggerLevel"\s*:\s*(\d+)',
+                r'"level"\s*:\s*(\d+)',
+                r'"blogLevel"\s*:\s*(\d+)',
+                r'"userLevel"\s*:\s*(\d+)',
+                r'Lv\.?\s*(\d+)',
+                r'레벨\s*(\d+)',
+            ]
+            for pattern in naver_level_patterns:
+                match = re.search(pattern, html, re.IGNORECASE)
+                if match:
+                    level_val = int(match.group(1))
+                    if 1 <= level_val <= 4:
+                        stats["naver_level"] = level_val
+                        break
+
+
         # 모바일 페이지에서 보완 (데스크톱에서 못 찾은 항목만)
         if mobile_resp and mobile_resp.status_code == 200:
             html = mobile_resp.text
@@ -2241,10 +2260,26 @@ async def scrape_blog_stats_fast(blog_id: str) -> Dict:
                         stats["total_visitors"] = int(match.group(1).replace(',', ''))
                         break
 
+            # 모바일에서도 네이버 레벨 추출 시도 (데스크톱에서 못 찾은 경우)
+            if stats["naver_level"] is None:
+                mobile_level_patterns = [
+                    r'"bloggerLevel"\s*:\s*(\d+)',
+                    r'"level"\s*:\s*(\d+)',
+                    r'"blogLevel"\s*:\s*(\d+)',
+                    r'Lv\.?\s*(\d+)',
+                ]
+                for pattern in mobile_level_patterns:
+                    match = re.search(pattern, html, re.IGNORECASE)
+                    if match:
+                        level_val = int(match.group(1))
+                        if 1 <= level_val <= 4:
+                            stats["naver_level"] = level_val
+                            break
+
         # 성공 여부 판단 (최소 1개 이상 추출)
         if stats["total_posts"] or stats["neighbor_count"] or stats["total_visitors"]:
             stats["success"] = True
-            logger.info(f"Blog scrape_fast success: {blog_id} - posts={stats['total_posts']}, neighbors={stats['neighbor_count']}, visitors={stats['total_visitors']}")
+            logger.info(f"Blog scrape_fast success: {blog_id} - posts={stats['total_posts']}, neighbors={stats['neighbor_count']}, visitors={stats['total_visitors']}, naver_level={stats['naver_level']}")
         else:
             logger.warning(f"Blog scrape_fast: no stats found for {blog_id}")
 
@@ -2367,6 +2402,8 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
         "score_breakdown": {"c_rank": 0, "dia": 0}
     }
 
+    naver_level = None  # 네이버 공식 레벨 (1~4)
+
     # Additional analysis data
     analysis_data = {
         "blog_name": None,  # 블로그 이름 (RSS에서 추출)
@@ -2401,6 +2438,9 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
                 "analysis": None,
                 "data_sources": ["error"]
             }
+
+        # 네이버 공식 레벨 추출
+        naver_level = scraped_stats.get("naver_level")
 
         if scraped_stats["success"]:
             analysis_data["data_sources"].append("scrape")
@@ -2816,8 +2856,27 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
         import traceback
         logger.debug(traceback.format_exc())
 
+    # estimated_fields 추적 - 어떤 필드가 추정값인지 명시
+    estimated_fields = []
+    if "estimated" in analysis_data["data_sources"]:
+        estimated_fields.extend(["total_posts", "neighbor_count", "total_visitors",
+                                 "category_count", "avg_post_length", "recent_activity"])
+    elif "scrape" not in analysis_data["data_sources"] and "rss" in analysis_data["data_sources"]:
+        # RSS만 사용한 경우 일부 추정
+        if not stats.get("neighbor_count"):
+            estimated_fields.append("neighbor_count")
+        if not stats.get("total_visitors"):
+            estimated_fields.append("total_visitors")
+
     # 캐시에 저장 (성능 개선)
-    result = {"stats": stats, "index": index, "blog_name": analysis_data.get("blog_name")}
+    result = {
+        "stats": stats,
+        "index": index,
+        "naver_level": naver_level,
+        "blog_name": analysis_data.get("blog_name"),
+        "data_sources": analysis_data["data_sources"],
+        "estimated_fields": estimated_fields,
+    }
     set_blog_analysis_cache(blog_id, result)
     return result
 

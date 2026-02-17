@@ -45,21 +45,21 @@ function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywo
 
   // 레벨별 해석 데이터 (백분위는 실제 값 사용)
   const levelInterpretation = {
-    1: { tier: '시작', viewChance: '3%', competitiveKeywords: '월 검색량 100 미만' },
-    2: { tier: '스타터', viewChance: '5%', competitiveKeywords: '월 검색량 200 미만' },
-    3: { tier: '뉴비', viewChance: '8%', competitiveKeywords: '월 검색량 300 미만' },
-    4: { tier: '초보', viewChance: '12%', competitiveKeywords: '월 검색량 500 미만' },
-    5: { tier: '입문', viewChance: '18%', competitiveKeywords: '월 검색량 800 미만' },
-    6: { tier: '성장기', viewChance: '25%', competitiveKeywords: '월 검색량 1,500 미만' },
-    7: { tier: '아이언', viewChance: '35%', competitiveKeywords: '월 검색량 3,000 미만' },
-    8: { tier: '브론즈', viewChance: '45%', competitiveKeywords: '월 검색량 5,000 미만' },
-    9: { tier: '실버', viewChance: '55%', competitiveKeywords: '월 검색량 10,000 미만' },
-    10: { tier: '골드', viewChance: '65%', competitiveKeywords: '월 검색량 20,000 미만' },
-    11: { tier: '플래티넘', viewChance: '75%', competitiveKeywords: '월 검색량 50,000 미만' },
-    12: { tier: '다이아몬드', viewChance: '85%', competitiveKeywords: '월 검색량 100,000 미만' },
-    13: { tier: '챌린저', viewChance: '90%', competitiveKeywords: '고경쟁 키워드 가능' },
-    14: { tier: '그랜드마스터', viewChance: '95%', competitiveKeywords: '대부분 키워드 경쟁 가능' },
-    15: { tier: '마스터', viewChance: '98%', competitiveKeywords: '모든 키워드 상위 노출' },
+    1: { tier: '시작', viewChance: '매우 낮음', competitiveKeywords: '월 검색량 100 미만' },
+    2: { tier: '스타터', viewChance: '매우 낮음', competitiveKeywords: '월 검색량 200 미만' },
+    3: { tier: '뉴비', viewChance: '매우 낮음', competitiveKeywords: '월 검색량 300 미만' },
+    4: { tier: '초보', viewChance: '낮음', competitiveKeywords: '월 검색량 500 미만' },
+    5: { tier: '입문', viewChance: '낮음', competitiveKeywords: '월 검색량 800 미만' },
+    6: { tier: '성장기', viewChance: '보통', competitiveKeywords: '월 검색량 1,500 미만' },
+    7: { tier: '아이언', viewChance: '보통', competitiveKeywords: '월 검색량 3,000 미만' },
+    8: { tier: '브론즈', viewChance: '높음', competitiveKeywords: '월 검색량 5,000 미만' },
+    9: { tier: '실버', viewChance: '높음', competitiveKeywords: '월 검색량 10,000 미만' },
+    10: { tier: '골드', viewChance: '높음', competitiveKeywords: '월 검색량 20,000 미만' },
+    11: { tier: '플래티넘', viewChance: '최상', competitiveKeywords: '월 검색량 50,000 미만' },
+    12: { tier: '다이아몬드', viewChance: '최상', competitiveKeywords: '월 검색량 100,000 미만' },
+    13: { tier: '챌린저', viewChance: '최상', competitiveKeywords: '고경쟁 키워드 가능' },
+    14: { tier: '그랜드마스터', viewChance: '최상', competitiveKeywords: '대부분 키워드 경쟁 가능' },
+    15: { tier: '마스터', viewChance: '최상', competitiveKeywords: '모든 키워드 상위 노출' },
   }
 
   const interpretation = levelInterpretation[level as keyof typeof levelInterpretation] || levelInterpretation[1]
@@ -106,7 +106,7 @@ function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywo
 
         {/* VIEW탭 노출 확률 */}
         <div className="bg-white rounded-2xl p-5 border border-emerald-100">
-          <div className="text-sm text-gray-500 mb-1">VIEW탭 상위 노출 확률</div>
+          <div className="text-sm text-gray-500 mb-1">VIEW탭 상위 노출 경쟁력</div>
           <div className="text-3xl font-bold text-blue-600 mb-1">{interpretation.viewChance}</div>
           <div className="text-sm text-gray-600">
             적합한 키워드 선택 시
@@ -137,7 +137,7 @@ function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywo
               <div className="text-gray-600">
                 {cRank >= 70 ? '네이버가 당신의 블로그를 신뢰합니다 ✓' :
                  cRank >= 50 ? '보통 수준입니다. 꾸준한 활동으로 올릴 수 있어요' :
-                 '신뢰도를 높이면 상위 노출 확률이 크게 올라갑니다'}
+                 '신뢰도를 높이면 상위 노출 경쟁력이 크게 올라갑니다'}
               </div>
             </div>
           </div>
@@ -169,7 +169,7 @@ function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywo
               </div>
               <div className="text-blue-100 text-sm">
                 일 방문자 <span className="text-yellow-300 font-bold">+{nextLevelEffect.visitors}명</span> |
-                VIEW탭 노출 확률 <span className="text-yellow-300 font-bold">{nextLevelEffect.viewChance}</span>
+                VIEW탭 노출 경쟁력 <span className="text-yellow-300 font-bold">{nextLevelEffect.viewChance}</span>
               </div>
             </div>
             <button
@@ -262,9 +262,9 @@ function RankableKeywordPreview({ result, isFreeUser }: { result: any; isFreeUse
                     kw.chance >= 40 ? 'text-amber-600' :
                     'text-red-500'
                   }`}>
-                    {kw.chance}%
+                    {kw.chance}점
                   </div>
-                  <div className="text-xs text-gray-500">상위 노출 확률</div>
+                  <div className="text-xs text-gray-500">경쟁력 지수</div>
                 </div>
               </div>
 
