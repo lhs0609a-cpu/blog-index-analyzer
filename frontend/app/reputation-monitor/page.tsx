@@ -96,10 +96,15 @@ export default function ReputationDashboard() {
   // 가게 등록 모달
   const [showAddModal, setShowAddModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchPlatform, setSearchPlatform] = useState<'naver' | 'google' | 'kakao'>('naver')
+  const [searchMode, setSearchMode] = useState<'search' | 'url'>('search')
   const [searchResults, setSearchResults] = useState<PlaceResult[]>([])
   const [searching, setSearching] = useState(false)
   const [registering, setRegistering] = useState(false)
+  // URL 직접 입력 모드
+  const [urlInput, setUrlInput] = useState('')
+  const [urlParsing, setUrlParsing] = useState(false)
+  const [urlResult, setUrlResult] = useState<{platform: string; place_id: string} | null>(null)
+  const [urlStoreName, setUrlStoreName] = useState('')
   const [collecting, setCollecting] = useState(false)
 
   const fetchStores = useCallback(async () => {
@@ -144,26 +149,89 @@ export default function ReputationDashboard() {
     }
   }, [selectedStore, fetchDashboard])
 
-  // 가게 검색 (플랫폼별)
+  // 가게 검색 (카카오 + 네이버 통합)
   const searchPlaces = async () => {
     if (!searchQuery.trim()) return
     setSearching(true)
     setSearchResults([])
     try {
       const res = await fetch(
-        `${getApiUrl()}/api/reputation/search-place?query=${encodeURIComponent(searchQuery)}&platform=${searchPlatform}`
+        `${getApiUrl()}/api/reputation/search-unified?query=${encodeURIComponent(searchQuery)}`
       )
       const data = await res.json()
       if (data.success && data.places?.length > 0) {
         setSearchResults(data.places)
       } else {
         setSearchResults([])
-        toast.error(`'${searchQuery}' 검색 결과가 없습니다. 다른 플랫폼이나 검색어를 시도해보세요.`)
+        toast.error(`'${searchQuery}' 검색 결과가 없습니다. URL 직접 입력을 시도해보세요.`)
       }
     } catch {
       toast.error('검색 서버 연결 실패. 잠시 후 다시 시도해주세요.')
     } finally {
       setSearching(false)
+    }
+  }
+
+  // URL 파싱
+  const parseUrl = async () => {
+    if (!urlInput.trim()) return
+    setUrlParsing(true)
+    setUrlResult(null)
+    try {
+      const res = await fetch(`${getApiUrl()}/api/reputation/parse-place-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: urlInput }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setUrlResult({ platform: data.platform, place_id: data.place_id })
+        toast.success(`${data.platform === 'naver' ? '네이버' : data.platform === 'kakao' ? '카카오' : '구글'} 장소 확인 완료`)
+      } else {
+        toast.error(data.error || 'URL을 인식할 수 없습니다')
+      }
+    } catch {
+      toast.error('URL 확인 실패. 잠시 후 다시 시도해주세요.')
+    } finally {
+      setUrlParsing(false)
+    }
+  }
+
+  // URL로 가게 등록
+  const registerFromUrl = async () => {
+    if (!urlResult || !urlStoreName.trim()) return
+    setRegistering(true)
+    try {
+      const body: Record<string, string> = {
+        store_name: urlStoreName,
+      }
+      if (urlResult.platform === 'google') {
+        body.google_place_id = urlResult.place_id
+      } else if (urlResult.platform === 'kakao') {
+        body.kakao_place_id = urlResult.place_id
+      } else {
+        body.naver_place_id = urlResult.place_id
+      }
+
+      const res = await fetch(`${getApiUrl()}/api/reputation/stores?user_id=demo_user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(`${urlStoreName} 등록 완료! 리뷰 수집을 시작합니다.`)
+        setShowAddModal(false)
+        setUrlInput('')
+        setUrlResult(null)
+        setUrlStoreName('')
+        await fetchStores()
+        setSelectedStore(data.store.id)
+      }
+    } catch {
+      toast.error('등록 실패')
+    } finally {
+      setRegistering(false)
     }
   }
 
@@ -178,7 +246,7 @@ export default function ReputationDashboard() {
       }
 
       // 플랫폼별 place_id 매핑
-      const platform = place.platform || searchPlatform
+      const platform = place.platform || 'naver'
       if (platform === 'google') {
         body.google_place_id = place.place_id
       } else if (platform === 'kakao') {
@@ -628,92 +696,164 @@ export default function ReputationDashboard() {
         </div>
       )}
 
-      {/* 가게 등록 모달 (멀티 플랫폼) */}
+      {/* 가게 등록 모달 (통합 검색 + URL 입력) */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowAddModal(false)}>
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6" onClick={e => e.stopPropagation()}>
             <h2 className="text-xl font-bold text-gray-900 mb-2">가게 등록</h2>
-            <p className="text-sm text-gray-500 mb-4">플랫폼을 선택하고 가게를 검색하세요</p>
+            <p className="text-sm text-gray-500 mb-4">가게명으로 검색하거나 URL을 입력하세요</p>
 
-            {/* 플랫폼 선택 탭 */}
+            {/* 모드 탭: 통합 검색 / URL 직접 입력 */}
             <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-4">
-              {([
-                { value: 'naver' as const, label: '네이버 플레이스' },
-                { value: 'google' as const, label: '구글 리뷰' },
-                { value: 'kakao' as const, label: '카카오맵' },
-              ]).map(tab => (
-                <button
-                  key={tab.value}
-                  onClick={() => { setSearchPlatform(tab.value); setSearchResults([]) }}
-                  className={`flex-1 py-2 text-xs font-medium rounded-md transition-colors ${
-                    searchPlatform === tab.value
-                      ? 'bg-white text-[#0064FF] shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex gap-2 mb-4">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && searchPlaces()}
-                placeholder="가게명 또는 주소 입력"
-                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0064FF]/30 focus:border-[#0064FF]"
-              />
               <button
-                onClick={searchPlaces}
-                disabled={searching}
-                className="px-4 py-2.5 bg-[#0064FF] text-white rounded-lg text-sm font-medium hover:bg-[#0052CC] disabled:opacity-50"
+                onClick={() => setSearchMode('search')}
+                className={`flex-1 py-2 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1.5 ${
+                  searchMode === 'search'
+                    ? 'bg-white text-[#0064FF] shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
               >
-                {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                <Search className="w-3.5 h-3.5" />
+                통합 검색
+              </button>
+              <button
+                onClick={() => setSearchMode('url')}
+                className={`flex-1 py-2 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1.5 ${
+                  searchMode === 'url'
+                    ? 'bg-white text-[#0064FF] shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <Globe className="w-3.5 h-3.5" />
+                URL 직접 입력
               </button>
             </div>
 
-            <div className="max-h-64 overflow-y-auto space-y-2">
-              {searchResults.map((place, idx) => (
-                <div
-                  key={`${place.place_id}-${idx}`}
-                  className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:border-[#0064FF] transition-colors"
-                >
-                  <div className="flex-1 min-w-0 mr-3">
-                    <div className="font-medium text-gray-800 text-sm">{place.name}</div>
-                    <div className="text-xs text-gray-500 truncate">{place.road_address || place.address}</div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs text-gray-400">{place.category}</span>
-                      {place.rating && (
-                        <span className="text-xs text-yellow-600 flex items-center gap-0.5">
-                          <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />{place.rating}
-                        </span>
-                      )}
-                    </div>
-                  </div>
+            {/* 검색 모드 */}
+            {searchMode === 'search' && (
+              <>
+                <div className="flex gap-2 mb-4">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && searchPlaces()}
+                    placeholder="가게명 또는 주소 입력"
+                    className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0064FF]/30 focus:border-[#0064FF]"
+                  />
                   <button
-                    onClick={() => registerStore(place)}
-                    disabled={registering}
-                    className="px-3 py-1.5 bg-[#0064FF] text-white rounded-md text-xs font-medium hover:bg-[#0052CC] disabled:opacity-50 flex-shrink-0"
+                    onClick={searchPlaces}
+                    disabled={searching}
+                    className="px-4 py-2.5 bg-[#0064FF] text-white rounded-lg text-sm font-medium hover:bg-[#0052CC] disabled:opacity-50"
                   >
-                    {registering ? '등록 중...' : '등록'}
+                    {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                   </button>
                 </div>
-              ))}
-              {searching && (
-                <div className="text-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-[#0064FF] mx-auto mb-2" />
-                  <p className="text-sm text-gray-400">검색 중...</p>
+
+                <div className="max-h-64 overflow-y-auto space-y-2">
+                  {searchResults.map((place, idx) => (
+                    <div
+                      key={`${place.place_id}-${idx}`}
+                      className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:border-[#0064FF] transition-colors"
+                    >
+                      <div className="flex-1 min-w-0 mr-3">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-gray-800 text-sm">{place.name}</span>
+                          {place.platform === 'kakao' && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-yellow-100 text-yellow-700 rounded">카카오</span>
+                          )}
+                          {place.platform === 'naver' && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-green-100 text-green-700 rounded">네이버</span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-500 truncate">{place.road_address || place.address}</div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-xs text-gray-400">{place.category}</span>
+                          {place.rating && (
+                            <span className="text-xs text-yellow-600 flex items-center gap-0.5">
+                              <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />{place.rating}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => registerStore(place)}
+                        disabled={registering}
+                        className="px-3 py-1.5 bg-[#0064FF] text-white rounded-md text-xs font-medium hover:bg-[#0052CC] disabled:opacity-50 flex-shrink-0"
+                      >
+                        {registering ? '등록 중...' : '등록'}
+                      </button>
+                    </div>
+                  ))}
+                  {searching && (
+                    <div className="text-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-[#0064FF] mx-auto mb-2" />
+                      <p className="text-sm text-gray-400">카카오 + 네이버 검색 중...</p>
+                    </div>
+                  )}
+                  {searchResults.length === 0 && searchQuery && !searching && (
+                    <div className="text-center py-8">
+                      <p className="text-sm text-gray-400 mb-1">검색 결과가 없습니다</p>
+                      <p className="text-xs text-gray-300">URL 직접 입력 탭을 이용해보세요</p>
+                    </div>
+                  )}
                 </div>
-              )}
-              {searchResults.length === 0 && searchQuery && !searching && (
-                <div className="text-center py-8">
-                  <p className="text-sm text-gray-400 mb-1">검색 결과가 없습니다</p>
-                  <p className="text-xs text-gray-300">다른 플랫폼 탭이나 검색어를 시도해보세요</p>
+              </>
+            )}
+
+            {/* URL 모드 */}
+            {searchMode === 'url' && (
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={urlInput}
+                    onChange={e => { setUrlInput(e.target.value); setUrlResult(null) }}
+                    onKeyDown={e => e.key === 'Enter' && parseUrl()}
+                    placeholder="https://map.naver.com/p/entry/place/..."
+                    className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0064FF]/30 focus:border-[#0064FF]"
+                  />
+                  <button
+                    onClick={parseUrl}
+                    disabled={urlParsing || !urlInput.trim()}
+                    className="px-4 py-2.5 bg-[#0064FF] text-white rounded-lg text-sm font-medium hover:bg-[#0052CC] disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {urlParsing ? <Loader2 className="w-4 h-4 animate-spin" /> : 'URL 확인'}
+                  </button>
                 </div>
-              )}
-            </div>
+                <p className="text-xs text-gray-400">
+                  네이버 지도, 카카오맵, 구글 지도 URL을 붙여넣으세요
+                </p>
+
+                {urlResult && (
+                  <div className="space-y-3">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                      <div className="flex items-center gap-2 text-sm text-green-700">
+                        <span className="font-medium">
+                          {urlResult.platform === 'naver' ? '네이버 플레이스' : urlResult.platform === 'kakao' ? '카카오맵' : '구글 지도'}
+                        </span>
+                        <span className="text-green-500">ID: {urlResult.place_id}</span>
+                      </div>
+                    </div>
+                    <input
+                      type="text"
+                      value={urlStoreName}
+                      onChange={e => setUrlStoreName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && urlStoreName.trim() && registerFromUrl()}
+                      placeholder="가게 이름 입력 (필수)"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0064FF]/30 focus:border-[#0064FF]"
+                    />
+                    <button
+                      onClick={registerFromUrl}
+                      disabled={registering || !urlStoreName.trim()}
+                      className="w-full py-2.5 bg-[#0064FF] text-white rounded-lg text-sm font-medium hover:bg-[#0052CC] disabled:opacity-50"
+                    >
+                      {registering ? '등록 중...' : '등록'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             <button
               onClick={() => setShowAddModal(false)}

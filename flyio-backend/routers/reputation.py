@@ -361,6 +361,69 @@ async def search_all_platforms(query: str = Query(..., description="가게명 �
     return {"success": True, "places": all_places}
 
 
+# ===== 통합 검색 (네이버 + 카카오 병렬) =====
+
+@router.get("/search-unified")
+async def search_unified(query: str = Query(..., description="가게명 검색")):
+    """네이버 + 카카오 통합 검색 (네이버 우선, 중복 제거)"""
+    logger.info(f"Unified search request: query='{query}'")
+    try:
+        naver_task = crawler.search_naver_place(query)
+        kakao_task = crawler.search_kakao_place(query)
+        results = await asyncio.gather(naver_task, kakao_task, return_exceptions=True)
+
+        naver_results = results[0] if not isinstance(results[0], Exception) else []
+        kakao_results = results[1] if not isinstance(results[1], Exception) else []
+
+        # 병합: 네이버 먼저(메인), 카카오 추가 (중복 제거)
+        merged = []
+        seen_keys = set()
+        for place in list(naver_results) + list(kakao_results):
+            # 중복 키: (이름, 도로주소 앞 20자)
+            dedup_key = (place.get("name", "").strip(), (place.get("road_address", "") or "")[:20])
+            if dedup_key not in seen_keys:
+                seen_keys.add(dedup_key)
+                merged.append(place)
+
+        source_counts = {
+            "naver": len(naver_results) if isinstance(naver_results, list) else 0,
+            "kakao": len(kakao_results) if isinstance(kakao_results, list) else 0,
+        }
+
+        return {"success": True, "places": merged, "source_counts": source_counts}
+    except Exception as e:
+        logger.error(f"Unified search error: {e}", exc_info=True)
+        return {"success": False, "places": [], "source_counts": {}, "error": str(e)}
+
+
+# ===== URL 파싱 =====
+
+class UrlParseRequest(BaseModel):
+    url: str
+
+
+@router.post("/parse-place-url")
+async def parse_place_url(req: UrlParseRequest):
+    """플레이스 URL에서 플랫폼/place_id 추출"""
+    logger.info(f"URL parse request: url='{req.url}'")
+    try:
+        result = await crawler.resolve_place_url(req.url)
+        if result and result.get("place_id"):
+            return {
+                "success": True,
+                "platform": result["platform"],
+                "place_id": result["place_id"],
+            }
+        else:
+            return {
+                "success": False,
+                "error": "URL에서 장소 정보를 추출할 수 없습니다. 네이버/카카오/구글 지도 URL을 입력해주세요.",
+            }
+    except Exception as e:
+        logger.error(f"URL parse error: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
 # ===== 답변 템플릿 =====
 
 @router.post("/templates")

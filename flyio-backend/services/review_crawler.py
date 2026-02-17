@@ -701,11 +701,17 @@ class ReviewCrawler:
 
     async def search_kakao_place(self, query: str) -> List[Dict]:
         """카카오맵 장소 검색"""
+        from config import settings as app_settings
+        kakao_key = os.environ.get('KAKAO_REST_API_KEY', '') or app_settings.KAKAO_REST_API_KEY
+        if not kakao_key:
+            logger.warning("KAKAO_REST_API_KEY not configured")
+            return []
+
         results = []
         async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
             url = f"https://dapi.kakao.com/v2/local/search/keyword.json?query={urllib.parse.quote(query)}&size=10"
             headers = {
-                "Authorization": f"KakaoAK {os.environ.get('KAKAO_REST_API_KEY', '95be04e741ea3d78e51ea57e23dbb05c')}",
+                "Authorization": f"KakaoAK {kakao_key}",
                 "Accept": "application/json",
             }
 
@@ -762,13 +768,72 @@ class ReviewCrawler:
 
     # ===== 네이버 플레이스 검색 =====
 
+    async def search_naver_open_api(self, query: str) -> List[Dict]:
+        """네이버 검색 Open API를 통한 장소 검색 (공식 API, 안정적)"""
+        from config import settings as app_settings
+        client_id = os.environ.get('NAVER_CLIENT_ID', '') or app_settings.NAVER_CLIENT_ID
+        client_secret = os.environ.get('NAVER_CLIENT_SECRET', '') or app_settings.NAVER_CLIENT_SECRET
+
+        if not client_id or not client_secret:
+            logger.warning("Naver Open API credentials not configured, skipping")
+            return []
+
+        results = []
+        url = f"https://openapi.naver.com/v1/search/local.json?query={urllib.parse.quote(query)}&display=10"
+        headers = {
+            "X-Naver-Client-Id": client_id,
+            "X-Naver-Client-Secret": client_secret,
+            "Accept": "application/json",
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.get(url, headers=headers)
+                logger.info(f"Naver Open API search status: {resp.status_code} for query: {query}")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    for item in data.get("items", []):
+                        name = re.sub(r'</?b>', '', item.get("title", ""))
+                        link = item.get("link", "")
+                        # link에서 place_id 추출
+                        place_match = re.search(r'/place/(\d+)', link)
+                        if place_match:
+                            place_id = place_match.group(1)
+                        else:
+                            # mapx, mapy 조합을 임시 ID로 사용
+                            place_id = f"naver_{item.get('mapx', '')}_{item.get('mapy', '')}"
+
+                        results.append({
+                            "place_id": place_id,
+                            "name": name,
+                            "category": item.get("category", ""),
+                            "address": item.get("address", ""),
+                            "road_address": item.get("roadAddress", ""),
+                            "phone": item.get("telephone", ""),
+                            "rating": "",
+                            "review_count": 0,
+                            "platform": "naver",
+                        })
+                else:
+                    logger.warning(f"Naver Open API error: status={resp.status_code}, body={resp.text[:200]}")
+        except Exception as e:
+            logger.warning(f"Naver Open API search error: {e}")
+
+        return results
+
     async def search_naver_place(self, query: str) -> List[Dict]:
         """네이버 플레이스 검색 (가게 등록 시 사용)"""
+        # 1순위: 네이버 검색 Open API (공식 API, 안정적)
+        results = await self.search_naver_open_api(query)
+        if results:
+            logger.info(f"Naver Open API returned {len(results)} results for '{query}'")
+            return results
+
         results = []
         encoded_query = urllib.parse.quote(query)
 
         async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
-            # 1차: 네이버 지도 API
+            # 2차: 네이버 지도 API (스크래핑 폴백)
             url = f"https://map.naver.com/p/api/search/allSearch?query={encoded_query}&type=all"
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -799,7 +864,7 @@ class ReviewCrawler:
             except Exception as e:
                 logger.warning(f"Naver map API search error: {e}")
 
-            # 2차 폴백: 네이버 스마트플레이스 검색
+            # 3차 폴백: 네이버 스마트플레이스 검색
             if not results:
                 try:
                     url2 = f"https://pcmap-api.place.naver.com/place/graphql"
@@ -850,7 +915,7 @@ class ReviewCrawler:
                 except Exception as e:
                     logger.warning(f"Naver GraphQL search fallback error: {e}")
 
-            # 3차 폴백: 네이버 통합검색에서 플레이스 정보 추출
+            # 4차 폴백: 네이버 통합검색에서 플레이스 정보 추출
             if not results:
                 try:
                     url3 = f"https://m.search.naver.com/search.naver?where=m_local&query={encoded_query}&sm=mob_sug.pre"
@@ -889,6 +954,83 @@ class ReviewCrawler:
 
         logger.info(f"Naver search results for '{query}': {len(results)} places found")
         return results
+
+    # ===== URL 파싱 =====
+
+    @staticmethod
+    def parse_place_url(url: str) -> Optional[Dict]:
+        """
+        플레이스 URL에서 플랫폼과 place_id를 추출
+
+        Returns:
+            {"platform": str, "place_id": str} or
+            {"platform": str, "needs_redirect": True} or
+            None
+        """
+        url = url.strip()
+
+        # 네이버 플레이스
+        naver_patterns = [
+            r'map\.naver\.com/.*?/place/(\d+)',
+            r'm\.place\.naver\.com/.*?place/(\d+)',
+            r'naver\.me/\w+',  # 단축 URL
+        ]
+        for pattern in naver_patterns:
+            m = re.search(pattern, url)
+            if m:
+                if 'naver.me' in url:
+                    return {"platform": "naver", "needs_redirect": True, "original_url": url}
+                return {"platform": "naver", "place_id": m.group(1)}
+
+        # 카카오맵
+        kakao_match = re.search(r'place\.map\.kakao\.com/(\d+)', url)
+        if kakao_match:
+            return {"platform": "kakao", "place_id": kakao_match.group(1)}
+
+        # 구글 맵
+        google_patterns = [
+            r'google\.\w+/maps/.*?(ChIJ[\w-]+)',
+            r'goo\.gl/\w+',  # 단축 URL
+        ]
+        for pattern in google_patterns:
+            m = re.search(pattern, url)
+            if m:
+                if 'goo.gl' in url:
+                    return {"platform": "google", "needs_redirect": True, "original_url": url}
+                return {"platform": "google", "place_id": m.group(1)}
+
+        return None
+
+    async def resolve_place_url(self, url: str) -> Optional[Dict]:
+        """
+        URL을 파싱하고, 단축 URL이면 리다이렉트를 따라가서 최종 URL에서 place_id 추출
+        """
+        parsed = self.parse_place_url(url)
+        if not parsed:
+            return None
+
+        if parsed.get("needs_redirect"):
+            try:
+                async with httpx.AsyncClient(timeout=httpx.Timeout(5.0), follow_redirects=False) as client:
+                    resp = await client.head(parsed["original_url"])
+                    if resp.status_code in (301, 302, 303, 307, 308):
+                        redirect_url = str(resp.headers.get("location", ""))
+                        if redirect_url:
+                            resolved = self.parse_place_url(redirect_url)
+                            if resolved and resolved.get("place_id"):
+                                return resolved
+                    # follow_redirects로 재시도
+                    async with httpx.AsyncClient(timeout=httpx.Timeout(5.0), follow_redirects=True) as client2:
+                        resp2 = await client2.head(parsed["original_url"])
+                        final_url = str(resp2.url)
+                        resolved = self.parse_place_url(final_url)
+                        if resolved and resolved.get("place_id"):
+                            return resolved
+            except Exception as e:
+                logger.warning(f"URL redirect resolution failed for {url}: {e}")
+            return None
+
+        return parsed
 
     # ===== 감성 분석 =====
 
