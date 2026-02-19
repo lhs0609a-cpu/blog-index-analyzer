@@ -22,7 +22,7 @@ from services.winner_keyword_service import (
 )
 from database.subscription_db import check_feature_access
 
-router = APIRouter(prefix="/winner-keywords", tags=["Winner Keywords"])
+router = APIRouter(tags=["Winner Keywords"])
 
 
 # ========== Response Models ==========

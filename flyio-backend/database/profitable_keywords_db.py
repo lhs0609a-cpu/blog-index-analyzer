@@ -140,6 +140,30 @@ def initialize_profitable_keywords_tables():
         except Exception as e:
             logger.warning(f"Error creating profitable keywords table: {e}")
 
+    # 기존 테이블에 누락된 컬럼 추가 (마이그레이션)
+    migration_columns = [
+        ("keyword_pool", "rank1_blog_level", "INTEGER DEFAULT 0"),
+        ("keyword_pool", "rank1_blog_score", "REAL DEFAULT 0"),
+        ("keyword_pool", "rank1_blog_id", "TEXT"),
+        ("keyword_pool", "rank1_last_post_date", "TIMESTAMP"),
+        ("keyword_pool", "rank1_inactive_hours", "INTEGER DEFAULT 0"),
+        ("keyword_pool", "top10_avg_level", "REAL DEFAULT 0"),
+        ("keyword_pool", "top10_min_level", "INTEGER DEFAULT 0"),
+        ("keyword_pool", "competition_score", "INTEGER DEFAULT 50"),
+        ("keyword_pool", "estimated_cpc", "INTEGER DEFAULT 15"),
+        ("keyword_pool", "sponsorship_potential", "REAL DEFAULT 0.3"),
+        ("keyword_pool", "sponsorship_value", "INTEGER DEFAULT 50000"),
+        ("keyword_pool", "estimated_monthly_revenue", "INTEGER DEFAULT 0"),
+        ("keyword_pool", "source", "TEXT DEFAULT 'crawled'"),
+        ("keyword_pool", "update_count", "INTEGER DEFAULT 0"),
+        ("keyword_pool", "is_active", "INTEGER DEFAULT 1"),
+    ]
+    for table, col, col_type in migration_columns:
+        try:
+            client.execute_query(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
+        except Exception:
+            pass  # 이미 존재하면 무시
+
     # 기본 카테고리 CPC 데이터 삽입
     _insert_default_category_cpc()
 
