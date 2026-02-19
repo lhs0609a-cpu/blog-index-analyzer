@@ -140,8 +140,11 @@ def initialize_profitable_keywords_tables():
         except Exception as e:
             logger.warning(f"Error creating profitable keywords table: {e}")
 
-    # 기존 테이블에 누락된 컬럼 추가 (마이그레이션)
+    # 기존 테이블에 누락된 컬럼 추가 (마이그레이션 — keyword_pool의 모든 컬럼)
     migration_columns = [
+        ("keyword_pool", "category", "TEXT"),
+        ("keyword_pool", "monthly_search_volume", "INTEGER DEFAULT 0"),
+        ("keyword_pool", "search_trend", "REAL DEFAULT 1.0"),
         ("keyword_pool", "rank1_blog_level", "INTEGER DEFAULT 0"),
         ("keyword_pool", "rank1_blog_score", "REAL DEFAULT 0"),
         ("keyword_pool", "rank1_blog_id", "TEXT"),
@@ -155,6 +158,7 @@ def initialize_profitable_keywords_tables():
         ("keyword_pool", "sponsorship_value", "INTEGER DEFAULT 50000"),
         ("keyword_pool", "estimated_monthly_revenue", "INTEGER DEFAULT 0"),
         ("keyword_pool", "source", "TEXT DEFAULT 'crawled'"),
+        ("keyword_pool", "last_updated", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
         ("keyword_pool", "update_count", "INTEGER DEFAULT 0"),
         ("keyword_pool", "is_active", "INTEGER DEFAULT 1"),
     ]
