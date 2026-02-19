@@ -1,11 +1,14 @@
 """
 퍼널 디자이너 — API 엔드포인트
 """
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
+from collections import defaultdict
 import logging
+import time
 
+from routers.auth_deps import get_user_id_with_fallback
 from data.funnel_templates import INDUSTRY_PRESETS, FUNNEL_TEMPLATES, PERSONAS
 from database.funnel_designer_db import (
     save_funnel, update_funnel, get_funnel, list_funnels, delete_funnel,
@@ -14,6 +17,21 @@ from database.funnel_designer_db import (
 from services.funnel_designer_service import FunnelDesignerService
 
 logger = logging.getLogger(__name__)
+
+# Simple in-memory rate limiter for OpenAI endpoints
+_ai_call_timestamps: Dict[int, list] = defaultdict(list)
+_AI_RATE_LIMIT = 10  # max calls per window
+_AI_RATE_WINDOW = 3600  # 1 hour window in seconds
+
+def _check_ai_rate_limit(user_id: int):
+    """Check if user has exceeded AI call rate limit"""
+    now = time.time()
+    timestamps = _ai_call_timestamps[user_id]
+    # Remove expired timestamps
+    _ai_call_timestamps[user_id] = [t for t in timestamps if now - t < _AI_RATE_WINDOW]
+    if len(_ai_call_timestamps[user_id]) >= _AI_RATE_LIMIT:
+        raise HTTPException(status_code=429, detail=f"AI 분석 요청이 너무 많습니다. 1시간에 {_AI_RATE_LIMIT}회까지 가능합니다.")
+    _ai_call_timestamps[user_id].append(now)
 
 router = APIRouter(prefix="/api/funnel-designer", tags=["퍼널디자이너"])
 
@@ -78,7 +96,7 @@ async def get_personas():
 # ========== 퍼널 CRUD ==========
 
 @router.post("/funnels")
-async def create_funnel(req: FunnelCreateRequest, user_id: int = Query(default=1)):
+async def create_funnel(req: FunnelCreateRequest, user_id: int = Depends(get_user_id_with_fallback)):
     """퍼널 생성"""
     funnel_id = save_funnel(
         user_id=user_id,
@@ -91,14 +109,14 @@ async def create_funnel(req: FunnelCreateRequest, user_id: int = Query(default=1
 
 
 @router.get("/funnels")
-async def get_funnels(user_id: int = Query(default=1)):
+async def get_funnels(user_id: int = Depends(get_user_id_with_fallback)):
     """사용자의 퍼널 목록"""
     funnels = list_funnels(user_id)
     return {"funnels": funnels}
 
 
 @router.get("/funnels/{funnel_id}")
-async def get_funnel_detail(funnel_id: int, user_id: int = Query(default=1)):
+async def get_funnel_detail(funnel_id: int, user_id: int = Depends(get_user_id_with_fallback)):
     """퍼널 상세"""
     funnel = get_funnel(funnel_id, user_id)
     if not funnel:
@@ -108,7 +126,7 @@ async def get_funnel_detail(funnel_id: int, user_id: int = Query(default=1)):
 
 @router.put("/funnels/{funnel_id}")
 async def update_funnel_endpoint(funnel_id: int, req: FunnelUpdateRequest,
-                                  user_id: int = Query(default=1)):
+                                  user_id: int = Depends(get_user_id_with_fallback)):
     """퍼널 수정"""
     updated = update_funnel(
         funnel_id=funnel_id,
@@ -124,7 +142,7 @@ async def update_funnel_endpoint(funnel_id: int, req: FunnelUpdateRequest,
 
 
 @router.delete("/funnels/{funnel_id}")
-async def delete_funnel_endpoint(funnel_id: int, user_id: int = Query(default=1)):
+async def delete_funnel_endpoint(funnel_id: int, user_id: int = Depends(get_user_id_with_fallback)):
     """퍼널 삭제 (soft)"""
     deleted = delete_funnel(funnel_id, user_id)
     if not deleted:
@@ -135,7 +153,7 @@ async def delete_funnel_endpoint(funnel_id: int, user_id: int = Query(default=1)
 # ========== 헬스 스코어 ==========
 
 @router.post("/funnels/{funnel_id}/health-score")
-async def calculate_health_score(funnel_id: int, user_id: int = Query(default=1)):
+async def calculate_health_score(funnel_id: int, user_id: int = Depends(get_user_id_with_fallback)):
     """퍼널 헬스 스코어 계산"""
     funnel = get_funnel(funnel_id, user_id)
     if not funnel:
@@ -144,7 +162,7 @@ async def calculate_health_score(funnel_id: int, user_id: int = Query(default=1)
     result = service.calculate_health_score(funnel["funnel_data"])
 
     # DB에 캐싱
-    update_funnel_health(funnel_id, result["total_score"], result)
+    update_funnel_health(funnel_id, user_id, result["total_score"], result)
 
     return {"success": True, "health_score": result}
 
@@ -152,8 +170,9 @@ async def calculate_health_score(funnel_id: int, user_id: int = Query(default=1)
 # ========== AI 진단 ==========
 
 @router.post("/funnels/{funnel_id}/ai-doctor")
-async def ai_doctor(funnel_id: int, user_id: int = Query(default=1)):
+async def ai_doctor(funnel_id: int, user_id: int = Depends(get_user_id_with_fallback)):
     """AI 퍼널 닥터 진단"""
+    _check_ai_rate_limit(user_id)
     funnel = get_funnel(funnel_id, user_id)
     if not funnel:
         raise HTTPException(status_code=404, detail="퍼널을 찾을 수 없습니다")
@@ -173,8 +192,9 @@ async def ai_doctor(funnel_id: int, user_id: int = Query(default=1)):
 
 @router.post("/funnels/{funnel_id}/persona-walkthrough")
 async def persona_walkthrough(funnel_id: int, req: PersonaWalkthroughRequest,
-                               user_id: int = Query(default=1)):
+                               user_id: int = Depends(get_user_id_with_fallback)):
     """페르소나 워크스루 시뮬레이션"""
+    _check_ai_rate_limit(user_id)
     funnel = get_funnel(funnel_id, user_id)
     if not funnel:
         raise HTTPException(status_code=404, detail="퍼널을 찾을 수 없습니다")
@@ -204,7 +224,11 @@ async def persona_walkthrough(funnel_id: int, req: PersonaWalkthroughRequest,
 
 
 @router.get("/funnels/{funnel_id}/diagnoses")
-async def get_diagnoses(funnel_id: int, diagnosis_type: Optional[str] = None):
+async def get_diagnoses(funnel_id: int, user_id: int = Depends(get_user_id_with_fallback), diagnosis_type: Optional[str] = None):
     """진단 이력 조회"""
+    # Verify funnel ownership first
+    funnel = get_funnel(funnel_id, user_id)
+    if not funnel:
+        raise HTTPException(status_code=404, detail="퍼널을 찾을 수 없습니다")
     diagnoses = get_ai_diagnoses(funnel_id, diagnosis_type)
     return {"diagnoses": diagnoses}

@@ -175,10 +175,10 @@ class FunnelDesignerService:
         # 5. 비용 효율 (15점)
         efficiency_score = 15
         total_traffic_in = sum(n.get("data", {}).get("traffic", 0) for n in traffic_nodes)
-        total_revenue_out = sum(n.get("data", {}).get("traffic", 0) for n in revenue_nodes)
+        total_output = sum(n.get("data", {}).get("traffic", 0) for n in revenue_nodes)
 
-        if total_traffic_in > 0 and total_revenue_out > 0:
-            overall_rate = (total_revenue_out / total_traffic_in) * 100
+        if total_traffic_in > 0 and total_output > 0:
+            overall_rate = (total_output / total_traffic_in) * 100
             if overall_rate < 0.5:
                 efficiency_score -= 10
                 recommendations.append({
@@ -294,7 +294,7 @@ class FunnelDesignerService:
 
         except Exception as e:
             logger.error(f"AI doctor diagnosis failed: {e}")
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "AI 진단 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."}
 
     # ========== 페르소나 워크스루 ==========
 
@@ -373,7 +373,7 @@ class FunnelDesignerService:
 
         except Exception as e:
             logger.error(f"Persona walkthrough failed: {e}")
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "AI 진단 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."}
 
     # ========== 내부 헬퍼 ==========
 

@@ -7,7 +7,7 @@ Funnel-Based Bidding API Router - 퍼널 기반 입찰 최적화 API
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
-from datetime import datetime, date
+from datetime import date
 import logging
 
 from routers.auth_deps import get_user_id_with_fallback

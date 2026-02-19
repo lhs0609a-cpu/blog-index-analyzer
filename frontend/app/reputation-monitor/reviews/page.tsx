@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { getApiUrl } from '@/lib/api/apiConfig'
 import {
   Star, Loader2, MessageSquare, Shield, Copy, Check,
-  ChevronDown, ChevronUp, Filter, Sparkles, AlertTriangle, X
+  ChevronDown, ChevronUp, Filter, Sparkles, AlertTriangle, X,
+  RefreshCw, CheckCircle
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -50,7 +51,7 @@ export default function ReviewsPage() {
   const [reviews, setReviews] = useState<Review[]>([])
   const [loading, setLoading] = useState(true)
   const [storeId, setStoreId] = useState<string | null>(null)
-  const [stores, setStores] = useState<Array<{ id: string; store_name: string }>>([])
+  const [stores, setStores] = useState<Array<{ id: string; store_name: string; last_crawled_at?: string }>>([])
   const [total, setTotal] = useState(0)
 
   // 필터
@@ -68,6 +69,15 @@ export default function ReviewsPage() {
   const [guideLoading, setGuideLoading] = useState(false)
   const [guidePlatform, setGuidePlatform] = useState('naver_place')
   const [guideType, setGuideType] = useState('general')
+
+  // 수집
+  const [collecting, setCollecting] = useState(false)
+  const [collectionResult, setCollectionResult] = useState<{
+    collected_count: number
+    by_platform: Record<string, number>
+  } | null>(null)
+  const [showCollectionSuccess, setShowCollectionSuccess] = useState(false)
+  const [newReviewIds, setNewReviewIds] = useState<Set<string>>(new Set())
 
   // 펼쳐진 리뷰
   const [expandedReview, setExpandedReview] = useState<string | null>(null)
@@ -114,6 +124,72 @@ export default function ReviewsPage() {
   useEffect(() => {
     fetchReviews()
   }, [fetchReviews])
+
+  // 수집 중 폴링
+  useEffect(() => {
+    if (!collecting || !storeId) return
+    const interval = setInterval(async () => {
+      try {
+        let url = `${getApiUrl()}/api/reputation/reviews?store_id=${storeId}&limit=100`
+        if (platformFilter) url += `&platform=${platformFilter}`
+        if (sentimentFilter) url += `&sentiment=${sentimentFilter}`
+        const res = await fetch(url)
+        const data = await res.json()
+        if (data.success) {
+          const oldIds = new Set(reviews.map(r => r.id))
+          const freshIds = new Set<string>()
+          data.reviews.forEach((r: Review) => {
+            if (!oldIds.has(r.id)) freshIds.add(r.id)
+          })
+          if (freshIds.size > 0) {
+            setNewReviewIds(freshIds)
+            setTimeout(() => setNewReviewIds(new Set()), 3000)
+          }
+          setReviews(data.reviews)
+          setTotal(data.total)
+        }
+      } catch { /* silent */ }
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [collecting, storeId, platformFilter, sentimentFilter, reviews])
+
+  // 수동 리뷰 수집
+  const collectReviews = async () => {
+    if (!storeId) return
+    setCollecting(true)
+    setCollectionResult(null)
+    setShowCollectionSuccess(false)
+    try {
+      const res = await fetch(`${getApiUrl()}/api/reputation/stores/${storeId}/collect`, { method: 'POST' })
+      const data = await res.json()
+      if (data.success) {
+        setCollectionResult({
+          collected_count: data.collected_count,
+          by_platform: data.by_platform || {},
+        })
+        setShowCollectionSuccess(true)
+        setTimeout(() => setShowCollectionSuccess(false), 8000)
+        fetchReviews()
+      } else {
+        toast.error(data.message || '수집 실패')
+      }
+    } catch {
+      toast.error('수집 실패')
+    } finally {
+      setCollecting(false)
+    }
+  }
+
+  const formatRelativeTime = (dateStr: string) => {
+    const diff = Date.now() - new Date(dateStr).getTime()
+    const mins = Math.floor(diff / 60000)
+    if (mins < 1) return '방금 전'
+    if (mins < 60) return `${mins}분 전`
+    const hours = Math.floor(mins / 60)
+    if (hours < 24) return `${hours}시간 전`
+    const days = Math.floor(hours / 24)
+    return `${days}일 전`
+  }
 
   // AI 답변 생성
   const generateResponse = async (reviewId: string) => {
@@ -205,6 +281,55 @@ export default function ReviewsPage() {
 
   return (
     <div className="space-y-4">
+      {/* 수집 상태 배너 */}
+      {collecting && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center gap-3">
+          <Loader2 className="w-5 h-5 text-blue-500 animate-spin flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-blue-800">리뷰를 수집하고 있습니다...</p>
+            <p className="text-xs text-blue-600">네이버 · 카카오 · 구글에서 최신 리뷰를 가져오는 중</p>
+          </div>
+          <div className="w-32 h-1.5 bg-blue-200 rounded-full overflow-hidden">
+            <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: '60%' }} />
+          </div>
+        </div>
+      )}
+
+      {!collecting && showCollectionSuccess && collectionResult && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+          <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+          <p className="text-sm font-medium text-green-800">
+            새 리뷰 {collectionResult.collected_count}건 수집 완료
+            {Object.keys(collectionResult.by_platform).length > 0 && (
+              <span className="text-green-600 font-normal ml-1">
+                ({Object.entries(collectionResult.by_platform).map(([p, c]) => `${platformLabel(p)} ${c}건`).join(', ')})
+              </span>
+            )}
+          </p>
+        </div>
+      )}
+
+      {/* 수집 버튼 영역 */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center justify-between">
+        <div className="text-sm text-gray-500">
+          {(() => {
+            const currentStore = stores.find(s => s.id === storeId)
+            return currentStore?.last_crawled_at
+              ? <>마지막 수집: {formatRelativeTime(currentStore.last_crawled_at)} · </>
+              : null
+          })()}
+          총 {total}건
+        </div>
+        <button
+          onClick={collectReviews}
+          disabled={collecting}
+          className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+        >
+          {collecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+          리뷰 새로 수집
+        </button>
+      </div>
+
       {/* 필터 바 */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
         <div className="flex flex-wrap items-center gap-3">
@@ -296,16 +421,25 @@ export default function ReviewsPage() {
       ) : reviews.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center text-gray-500">
           <MessageSquare className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-          <p className="font-medium">리뷰가 없습니다</p>
-          <p className="text-sm mt-1">가게를 등록하고 리뷰를 수집해보세요</p>
+          <p className="font-medium">아직 수집된 리뷰가 없습니다</p>
+          <p className="text-sm mt-1">&apos;리뷰 새로 수집&apos; 버튼을 눌러 네이버/카카오/구글에서 리뷰를 가져오세요</p>
+          <button
+            onClick={collectReviews}
+            disabled={collecting}
+            className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 bg-[#0064FF] text-white rounded-lg text-sm font-medium hover:bg-[#0052CC] transition-colors disabled:opacity-50"
+          >
+            {collecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            지금 수집하기
+          </button>
         </div>
       ) : (
         <div className="space-y-3">
           {reviews.map(review => (
             <div
               key={review.id}
-              className={`bg-white rounded-xl shadow-sm border transition-all ${
-                review.sentiment === 'negative' ? 'border-red-200' : 'border-gray-200'
+              className={`rounded-xl shadow-sm border transition-all ${
+                newReviewIds.has(review.id) ? 'bg-yellow-50 border-yellow-200' :
+                review.sentiment === 'negative' ? 'bg-white border-red-200' : 'bg-white border-gray-200'
               }`}
             >
               {/* 리뷰 헤더 */}

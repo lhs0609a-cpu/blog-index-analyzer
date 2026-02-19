@@ -1021,15 +1021,28 @@ def _generate_unique_comment(existing_comments: Set[str], category: str = None) 
 
 
 def _check_title_exists_in_db(title: str) -> bool:
-    """DB에서 제목 중복 확인"""
+    """DB에서 제목 중복 확인 (정확 매치 + 유사 매치)"""
     from database.community_db import get_db_connection
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT 1 FROM posts WHERE title = ? LIMIT 1", (title,))
-        exists = cursor.fetchone() is not None
+        # 정확 매치
+        cursor.execute("SELECT 1 FROM posts WHERE title = ? AND is_deleted = FALSE LIMIT 1", (title,))
+        if cursor.fetchone():
+            conn.close()
+            return True
+        # 유사 매치 (앞 15자 일치)
+        title_prefix = title.strip()[:15]
+        if len(title_prefix) >= 8:
+            cursor.execute(
+                "SELECT 1 FROM posts WHERE title LIKE ? AND is_deleted = FALSE LIMIT 1",
+                (f"{title_prefix}%",),
+            )
+            if cursor.fetchone():
+                conn.close()
+                return True
         conn.close()
-        return exists
+        return False
     except:
         return False
 

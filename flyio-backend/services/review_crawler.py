@@ -290,26 +290,84 @@ class ReviewCrawler:
 
     async def crawl_google_reviews(self, place_id: str, max_reviews: int = 50) -> List[Dict]:
         """
-        구글 리뷰 수집
-        Google Maps 모바일 페이지에서 리뷰 데이터 파싱
+        구글 리뷰 수집 (하이브리드)
+        1순위: Google Places API (New) — 안정적 5건
+        2순위: 모바일 HTML 스크래핑 — 추가 수집
+        3순위: 데스크톱 HTML 스크래핑 — 폴백
         """
+        all_reviews = []
+        seen_ids = set()
+
+        # 1순위: Google Places API (New) — 안정적 5건
+        try:
+            api_reviews = await self._crawl_google_places_api(place_id)
+            for r in api_reviews:
+                seen_ids.add(r["platform_review_id"])
+                all_reviews.append(r)
+        except Exception as e:
+            logger.warning(f"Google Places API failed for {place_id}: {e}")
+
+        # 2순위: 스크래핑으로 추가 수집 (중복 제거)
+        if len(all_reviews) < max_reviews:
+            try:
+                scraped = await self._crawl_google_mobile(place_id, max_reviews)
+                for r in scraped:
+                    if r["platform_review_id"] not in seen_ids:
+                        seen_ids.add(r["platform_review_id"])
+                        all_reviews.append(r)
+            except Exception as e:
+                logger.warning(f"Google mobile crawl failed for {place_id}: {e}")
+
+        # 3순위: 데스크톱 폴백
+        if len(all_reviews) < max_reviews:
+            try:
+                scraped2 = await self._crawl_google_html(place_id, max_reviews)
+                for r in scraped2:
+                    if r["platform_review_id"] not in seen_ids:
+                        seen_ids.add(r["platform_review_id"])
+                        all_reviews.append(r)
+            except Exception as e:
+                logger.warning(f"Google HTML crawl failed for {place_id}: {e}")
+
+        return all_reviews[:max_reviews]
+
+    async def _crawl_google_places_api(self, place_id: str) -> List[Dict]:
+        """Google Places API (New) — 공식 API로 리뷰 수집 (최대 5건)"""
+        from config import settings as app_settings
+        api_key = os.environ.get('GOOGLE_PLACES_API_KEY', '') or app_settings.GOOGLE_PLACES_API_KEY
+        if not api_key:
+            return []
+
         reviews = []
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            url = f"https://places.googleapis.com/v1/places/{place_id}"
+            headers = {
+                "X-Goog-Api-Key": api_key,
+                "X-Goog-FieldMask": "reviews",
+                "Accept-Language": "ko",
+            }
+            try:
+                resp = await client.get(url, headers=headers)
+                if resp.status_code != 200:
+                    logger.warning(f"Google Places API error: {resp.status_code}")
+                    return []
 
-        # 방법 1: Google Maps 모바일 페이지 파싱
-        try:
-            reviews = await self._crawl_google_mobile(place_id, max_reviews)
-            if reviews:
-                return reviews
-        except Exception as e:
-            logger.warning(f"Google mobile crawl failed for {place_id}: {e}")
+                data = resp.json()
+                for item in data.get("reviews", []):
+                    text_obj = item.get("originalText") or item.get("text") or {}
+                    content = text_obj.get("text", "")
+                    author = item.get("authorAttribution", {})
+                    review_name = item.get("name", "")
 
-        # 방법 2: Google Maps 데스크톱 페이지 폴백
-        try:
-            reviews = await self._crawl_google_html(place_id, max_reviews)
-            if reviews:
-                return reviews
-        except Exception as e:
-            logger.warning(f"Google HTML crawl failed for {place_id}: {e}")
+                    reviews.append({
+                        "platform_review_id": review_name or f"gapi_{hash(content[:30])}",
+                        "author_name": author.get("displayName", "익명"),
+                        "rating": item.get("rating", 0),
+                        "content": content,
+                        "review_date": item.get("publishTime", "")[:10],
+                    })
+            except Exception as e:
+                logger.warning(f"Google Places API failed for {place_id}: {e}")
 
         return reviews
 
@@ -482,6 +540,12 @@ class ReviewCrawler:
 
     async def search_google_place(self, query: str) -> List[Dict]:
         """구글 플레이스 검색"""
+        # 1순위: Google Places API Text Search (공식 API, 안정적)
+        api_results = await self._search_google_places_api(query)
+        if api_results:
+            return api_results
+
+        # 2순위: 기존 HTML 스크래핑 (폴백)
         results = []
         async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
             url = f"https://www.google.com/maps/search/{urllib.parse.quote(query)}?hl=ko"
@@ -536,6 +600,48 @@ class ReviewCrawler:
                 logger.warning(f"Google place search error: {e}")
 
         logger.info(f"Google search results for '{query}': {len(results)} places found")
+        return results
+
+    async def _search_google_places_api(self, query: str) -> List[Dict]:
+        """Google Places API (New) Text Search — 공식 API로 장소 검색"""
+        from config import settings as app_settings
+        api_key = os.environ.get('GOOGLE_PLACES_API_KEY', '') or app_settings.GOOGLE_PLACES_API_KEY
+        if not api_key:
+            return []
+
+        results = []
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            url = "https://places.googleapis.com/v1/places:searchText"
+            headers = {
+                "X-Goog-Api-Key": api_key,
+                "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.types",
+                "Content-Type": "application/json",
+            }
+            body = {
+                "textQuery": query,
+                "languageCode": "ko",
+                "regionCode": "KR",
+            }
+            try:
+                resp = await client.post(url, json=body, headers=headers)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    for place in data.get("places", [])[:10]:
+                        results.append({
+                            "place_id": place.get("id", ""),
+                            "name": place.get("displayName", {}).get("text", ""),
+                            "category": (place.get("types", []) or [""])[0],
+                            "address": place.get("formattedAddress", ""),
+                            "road_address": place.get("formattedAddress", ""),
+                            "rating": str(place.get("rating", "")),
+                            "review_count": place.get("userRatingCount", 0),
+                            "platform": "google",
+                        })
+                else:
+                    logger.warning(f"Google Places API search error: {resp.status_code}")
+            except Exception as e:
+                logger.warning(f"Google Places API search error: {e}")
+
         return results
 
     # ===== 카카오맵 =====

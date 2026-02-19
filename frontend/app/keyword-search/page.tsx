@@ -19,6 +19,7 @@ import Tutorial, { keywordAnalysisTutorialSteps } from '@/components/Tutorial'
 import UpgradeModal from '@/components/UpgradeModal'
 import TrialExpiryBanner from '@/components/TrialExpiryBanner'
 import CompetitorRadarChart from '@/components/CompetitorRadarChart'
+import FloatingBlogCompare from '@/components/FloatingBlogCompare'
 
 interface BlogIndexResult {
   rank: number
@@ -1734,210 +1735,6 @@ function KeywordSearchContent() {
                           </div>
                         )}
 
-                        {/* My Blog Comparison for this keyword */}
-                        <div className="mb-6 bg-gradient-to-r from-[#0064FF]/5 to-[#3182F6]/5 rounded-xl shadow-sm border-2 border-blue-200 p-6">
-                          <h4 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                            <span>🎯</span>
-                            &quot;{status.keyword}&quot; 키워드 경쟁력 분석
-                          </h4>
-                          <p className="text-sm text-gray-600 mb-4">
-                            내 블로그 ID를 입력하면 이 키워드로 10위권 진입 가능성을 분석해드립니다
-                          </p>
-
-                          <div className="flex gap-3 mb-4">
-                            <input
-                              type="text"
-                              value={myBlogId}
-                              onChange={(e) => setMyBlogId(e.target.value)}
-                              placeholder="내 블로그 ID 입력"
-                              maxLength={50}
-                              className="flex-1 px-4 py-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-[#0064FF] focus:border-transparent bg-white"
-                              disabled={myBlogAnalyzing[status.keyword]}
-                            />
-                            <button
-                              onClick={() => analyzeMyBlogForKeyword(status.keyword, status.result!)}
-                              disabled={myBlogAnalyzing[status.keyword] || !myBlogId.trim()}
-                              className={`px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap ${
-                                myBlogAnalyzing[status.keyword] || !myBlogId.trim()
-                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                  : 'bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white hover:shadow-lg'
-                              }`}
-                            >
-                              {myBlogAnalyzing[status.keyword] ? '분석 중...' : '경쟁력 분석'}
-                            </button>
-                          </div>
-
-                          {/* My Blog Competitive Analysis Result */}
-                          {myBlogResults[status.keyword] && (() => {
-                            const result = myBlogResults[status.keyword]
-                            const cp = result.competitive_position
-                            const probMid = cp.probability_mid
-                            const probColor = probMid >= 50 ? 'text-green-600' : probMid >= 35 ? 'text-blue-600' : probMid >= 20 ? 'text-orange-600' : 'text-red-600'
-                            const barColor = probMid >= 50 ? 'from-green-400 to-green-600' : probMid >= 35 ? 'from-blue-400 to-blue-600' : probMid >= 20 ? 'from-orange-400 to-orange-600' : 'from-red-400 to-red-600'
-                            const kc = result.keyword_competitiveness
-                            const diffBadge = getDifficultyBadge(kc?.difficulty || 'unknown')
-                            return (
-                            <div className="bg-white rounded-xl shadow-lg border-2 border-blue-300 p-6 mt-4">
-                              {/* Header */}
-                              <div className="flex items-start justify-between mb-4">
-                                <div>
-                                  <h5 className="text-xl font-bold text-gray-800 mb-1">{result.blog_name}</h5>
-                                  <p className="text-sm text-gray-500">@{result.blog_id}</p>
-                                </div>
-                                <div className="text-right">
-                                  <div className={`inline-flex px-3 py-1 rounded-full text-white text-sm font-bold ${getLevelColor(result.naver_level)}`}>
-                                    Lv.{result.naver_level || '?'}
-                                  </div>
-                                  {result.already_ranking && (
-                                    <p className="text-xs text-green-600 mt-1 font-bold">현재 {result.already_ranking}위 노출 중</p>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* 3개 요약 카드 */}
-                              <div className="grid grid-cols-3 gap-2 mb-4">
-                                <div className={`rounded-lg p-2 text-center border ${getGradeBg(cp.grade)}`}>
-                                  <p className="text-[10px] font-medium mb-0.5">등급</p>
-                                  <p className="text-xl font-bold">{cp.grade}</p>
-                                </div>
-                                <div className="bg-gray-50 rounded-lg p-2 text-center border border-gray-200">
-                                  <p className="text-[10px] font-medium text-gray-500 mb-0.5">레벨</p>
-                                  <p className="text-xl font-bold text-gray-800">Lv.{result.naver_level || '?'}</p>
-                                </div>
-                                <div className="bg-gray-50 rounded-lg p-2 text-center border border-gray-200">
-                                  <p className="text-[10px] font-medium text-gray-500 mb-0.5">관련 글</p>
-                                  <p className="text-xl font-bold text-gray-800">{result.related_post_count}개</p>
-                                </div>
-                              </div>
-
-                              {/* 주제 적합성 경고 */}
-                              {result.related_post_count === 0 && (
-                                <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded mb-4">
-                                  <p className="text-sm text-red-700 font-medium">이 키워드 관련 글이 없습니다. 관련 글을 먼저 작성해야 합니다.</p>
-                                </div>
-                              )}
-
-                              {/* 키워드 난이도 배지 */}
-                              {kc && kc.difficulty !== 'unknown' && (
-                                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium mb-4 ${diffBadge.color}`}>
-                                  <span className={`w-2 h-2 rounded-full ${diffBadge.dot}`} />
-                                  난이도: {diffBadge.label}
-                                  {kc.high_level_count > 0 && (
-                                    <span className="text-xs opacity-75">(상위 {kc.high_level_count}개 고레벨)</span>
-                                  )}
-                                </div>
-                              )}
-
-                              {/* 10위권 진입 가능성 */}
-                              <div className="bg-gradient-to-r from-[#0064FF]/10 to-[#3182F6]/10 rounded-xl p-6 mb-6">
-                                <div className="flex items-center justify-between mb-4">
-                                  <h6 className="text-lg font-bold text-gray-800">10위권 진입 경쟁력</h6>
-                                  <div className="text-right">
-                                    <span className={`text-3xl font-bold ${probColor}`}>
-                                      {probMid}점 <span className="text-base font-normal text-gray-400">/ 100</span>
-                                    </span>
-                                    <p className="text-xs text-gray-500 mt-0.5">범위: {cp.probability_low}~{cp.probability_high}점</p>
-                                  </div>
-                                </div>
-
-                                <div className="relative h-8 bg-white rounded-full overflow-hidden mb-4">
-                                  <div
-                                    className="absolute inset-y-0 bg-gray-200 rounded-full"
-                                    style={{ left: `${cp.probability_low}%`, width: `${Math.max(1, cp.probability_high - cp.probability_low)}%` }}
-                                  />
-                                  <div
-                                    className={`absolute inset-y-0 left-0 flex items-center justify-end pr-3 text-white text-sm font-bold transition-all duration-1000 bg-gradient-to-r ${barColor} rounded-full`}
-                                    style={{ width: `${Math.max(3, probMid)}%` }}
-                                  >
-                                    {probMid >= 10 && `${probMid}점`}
-                                  </div>
-                                </div>
-
-                                {/* confidence === 'low' 면책 문구 */}
-                                {cp.confidence === 'low' && (
-                                  <p className="text-xs text-amber-600 mt-2 mb-2">⚠ 경쟁자 데이터가 부족하여 정확도가 낮을 수 있습니다</p>
-                                )}
-
-                                <div className="flex items-center justify-between text-sm">
-                                  <span className="text-gray-600">예상 순위</span>
-                                  <span className="font-bold text-[#0064FF] text-lg">
-                                    {cp.rank_best === cp.rank_worst
-                                      ? (cp.rank_best > 10 ? '순위권 밖' : `${cp.rank_best}위`)
-                                      : (cp.rank_worst > 10 ? `${cp.rank_best}위 이상 (불확실)` : `${cp.rank_best}위 ~ ${cp.rank_worst}위`)}
-                                  </span>
-                                </div>
-
-                                {cp.rank_explanation && (
-                                  <p className="text-xs text-gray-500 mt-1">{cp.rank_explanation}</p>
-                                )}
-                              </div>
-
-                              {/* 6차원 비교 카드 */}
-                              <div className="mb-6">
-                                <h6 className="text-sm font-bold text-gray-700 mb-3">차원별 경쟁력 비교</h6>
-                                <div className="grid grid-cols-2 gap-3">
-                                  {result.dimension_comparisons.map((dim) => (
-                                    <div key={dim.dimension} className="bg-gray-50 rounded-lg p-3">
-                                      <div className="flex items-center justify-between mb-2">
-                                        <span className="text-xs font-medium text-gray-600">{dim.label}</span>
-                                        <span className={`text-sm font-bold ${
-                                          dim.score >= 65 ? 'text-green-600' : dim.score >= 40 ? 'text-orange-600' : 'text-red-600'
-                                        }`}>{dim.score}점</span>
-                                      </div>
-                                      <div className="relative h-2 bg-gray-200 rounded-full overflow-hidden mb-1">
-                                        <div
-                                          className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${
-                                            dim.score >= 65 ? 'bg-green-500' : dim.score >= 40 ? 'bg-orange-500' : 'bg-red-500'
-                                          }`}
-                                          style={{ width: `${dim.score}%` }}
-                                        />
-                                      </div>
-                                      <p className="text-xs text-gray-500 truncate">{dim.detail}</p>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-
-                              {/* Recommendations */}
-                              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded mb-4">
-                                <h6 className="font-bold text-gray-800 mb-3">개선 방안</h6>
-                                <ul className="space-y-2">
-                                  {result.recommendations.map((rec, idx) => (
-                                    <li key={idx} className="text-sm text-gray-700 flex items-start gap-2">
-                                      <span className={`mt-0.5 ${
-                                        rec.type === 'critical' ? 'text-red-500' :
-                                        rec.type === 'opportunity' ? 'text-green-500' :
-                                        rec.type === 'success' ? 'text-blue-500' :
-                                        'text-yellow-500'
-                                      }`}>
-                                        {rec.type === 'critical' ? '!!' : rec.type === 'success' ? 'V' : '*'}
-                                      </span>
-                                      <span>{rec.message}</span>
-                                      {rec.current !== undefined && rec.target !== undefined && (
-                                        <span className="text-xs text-gray-400 whitespace-nowrap">({rec.current} → {rec.target})</span>
-                                      )}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-
-                              {/* Data Quality Warnings */}
-                              {result.data_quality.warnings.length > 0 && (
-                                <div className="bg-gray-50 border border-gray-200 rounded p-3">
-                                  <p className="text-xs text-gray-400 mb-1 font-medium">데이터 품질 안내</p>
-                                  {result.data_quality.warnings.map((w, i) => (
-                                    <p key={i} className="text-xs text-gray-400">{w}</p>
-                                  ))}
-                                </div>
-                              )}
-                              {result.data_quality?.limitation_summary && (
-                                <p className="text-xs text-gray-400 mt-2 italic">{result.data_quality.limitation_summary}</p>
-                              )}
-                            </div>
-                            )
-                          })()}
-                        </div>
-
                         {/* Blog Results Table */}
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                           {/* 결과 개수 표시 */}
@@ -2299,219 +2096,6 @@ function KeywordSearchContent() {
             </div>
           </div>
         )}
-
-        {/* My Blog Comparison Section */}
-        {results && results.results.length > 0 && (
-          <div className="bg-gradient-to-r from-[#0064FF]/5 to-[#3182F6]/5 rounded-xl shadow-sm border-2 border-blue-200 p-6 mb-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <span>🎯</span>
-              내 블로그와 비교하기
-            </h2>
-            <p className="text-sm text-gray-600 mb-4">
-              내 블로그 ID를 입력하면 이 키워드로 10위권 진입 가능성을 분석해드립니다
-            </p>
-
-            <div className="flex gap-3">
-              <input
-                type="text"
-                value={myBlogId}
-                onChange={(e) => setMyBlogId(e.target.value)}
-                placeholder="내 블로그 ID 입력"
-                maxLength={50}
-                className="flex-1 px-4 py-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-[#0064FF] focus:border-transparent bg-white"
-                disabled={Object.values(myBlogAnalyzing).some(v => v)}
-              />
-              <button
-                onClick={analyzeMyBlog}
-                disabled={Object.values(myBlogAnalyzing).some(v => v) || !myBlogId.trim()}
-                className={`px-6 py-3 rounded-lg font-semibold transition-colors whitespace-nowrap ${
-                  Object.values(myBlogAnalyzing).some(v => v) || !myBlogId.trim()
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white hover:shadow-lg'
-                }`}
-              >
-                {Object.values(myBlogAnalyzing).some(v => v) ? '분석 중...' : '경쟁력 분석'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* My Blog Competitive Analysis Result (Single Keyword View) */}
-        {myBlogResult && (() => {
-          const cp = myBlogResult.competitive_position
-          const probMid = cp.probability_mid
-          const probColor = probMid >= 50 ? 'text-green-600' : probMid >= 35 ? 'text-blue-600' : probMid >= 20 ? 'text-orange-600' : 'text-red-600'
-          const barColor = probMid >= 50 ? 'from-green-400 to-green-600' : probMid >= 35 ? 'from-blue-400 to-blue-600' : probMid >= 20 ? 'from-orange-400 to-orange-600' : 'from-red-400 to-red-600'
-          const kc = myBlogResult.keyword_competitiveness
-          const diffBadge = getDifficultyBadge(kc?.difficulty || 'unknown')
-          return (
-          <div className="bg-white rounded-xl shadow-lg border-2 border-blue-300 p-6 mb-6">
-            {/* Header: Blog Name + Level */}
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h3 className="text-2xl font-bold text-gray-800 mb-1">{myBlogResult.blog_name}</h3>
-                <p className="text-sm text-gray-500">@{myBlogResult.blog_id}</p>
-              </div>
-              <div className="text-right">
-                <div className={`inline-flex px-3 py-1 rounded-full text-white text-sm font-bold ${getLevelColor(myBlogResult.naver_level)}`}>
-                  Lv.{myBlogResult.naver_level || '?'}
-                </div>
-                {myBlogResult.already_ranking && (
-                  <p className="text-xs text-green-600 mt-1 font-bold">현재 {myBlogResult.already_ranking}위 노출 중</p>
-                )}
-              </div>
-            </div>
-
-            {/* 3개 요약 카드: 경쟁력 등급, 네이버 레벨, 관련 글 수 */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              <div className={`rounded-lg p-3 text-center border ${getGradeBg(cp.grade)}`}>
-                <p className="text-xs font-medium mb-1">경쟁력 등급</p>
-                <p className="text-2xl font-bold">{cp.grade}</p>
-                <p className="text-xs">{cp.grade_label}</p>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-200">
-                <p className="text-xs font-medium text-gray-500 mb-1">네이버 레벨</p>
-                <p className="text-2xl font-bold text-gray-800">Lv.{myBlogResult.naver_level || '?'}</p>
-                <p className="text-xs text-gray-500">공식 레벨</p>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-200">
-                <p className="text-xs font-medium text-gray-500 mb-1">관련 글 수</p>
-                <p className="text-2xl font-bold text-gray-800">{myBlogResult.related_post_count}</p>
-                <p className="text-xs text-gray-500">개</p>
-              </div>
-            </div>
-
-            {/* 주제 적합성 경고 */}
-            {myBlogResult.related_post_count === 0 && (
-              <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded mb-4">
-                <p className="text-sm text-red-700 font-medium">이 키워드 관련 글이 없습니다. 관련 글을 먼저 작성해야 합니다.</p>
-              </div>
-            )}
-
-            {/* 키워드 난이도 배지 */}
-            {kc && kc.difficulty !== 'unknown' && (
-              <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium mb-4 ${diffBadge.color}`}>
-                <span className={`w-2 h-2 rounded-full ${diffBadge.dot}`} />
-                키워드 난이도: {diffBadge.label}
-                {kc.high_level_count > 0 && (
-                  <span className="text-xs opacity-75">
-                    (상위 {kc.high_level_count}개가 고레벨)
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* 10위권 진입 경쟁력 */}
-            <div className="bg-gradient-to-r from-[#0064FF]/10 to-[#3182F6]/10 rounded-xl p-6 mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-lg font-bold text-gray-800">
-                  &quot;{keyword}&quot; 10위권 진입 경쟁력
-                </h4>
-                <div className="text-right">
-                  <span className={`text-3xl font-bold ${probColor}`}>
-                    {probMid}점 <span className="text-base font-normal text-gray-400">/ 100</span>
-                  </span>
-                  <p className="text-xs text-gray-500 mt-0.5">범위: {cp.probability_low}~{cp.probability_high}점</p>
-                </div>
-              </div>
-
-              {/* Probability Range Bar */}
-              <div className="relative h-8 bg-white rounded-full overflow-hidden mb-4">
-                <div
-                  className="absolute inset-y-0 bg-gray-200 rounded-full"
-                  style={{ left: `${cp.probability_low}%`, width: `${Math.max(1, cp.probability_high - cp.probability_low)}%` }}
-                />
-                <div
-                  className={`absolute inset-y-0 left-0 flex items-center justify-end pr-3 text-white text-sm font-bold transition-all duration-1000 bg-gradient-to-r ${barColor} rounded-full`}
-                  style={{ width: `${Math.max(3, probMid)}%` }}
-                >
-                  {probMid >= 10 && `${probMid}점`}
-                </div>
-              </div>
-
-              {/* confidence === 'low' 면책 문구 */}
-              {cp.confidence === 'low' && (
-                <p className="text-xs text-amber-600 mt-2 mb-2">⚠ 경쟁자 데이터가 부족하여 정확도가 낮을 수 있습니다</p>
-              )}
-
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">예상 순위</span>
-                <span className="font-bold text-[#0064FF] text-lg">
-                  {cp.rank_best === cp.rank_worst
-                    ? (cp.rank_best > 10 ? '순위권 밖' : `${cp.rank_best}위`)
-                    : (cp.rank_worst > 10 ? `${cp.rank_best}위 이상 (불확실)` : `${cp.rank_best}위 ~ ${cp.rank_worst}위`)}
-                </span>
-              </div>
-
-              {cp.rank_explanation && (
-                <p className="text-xs text-gray-500 mt-1">{cp.rank_explanation}</p>
-              )}
-            </div>
-
-            {/* 6차원 비교 카드 */}
-            <div className="mb-6">
-              <h4 className="text-sm font-bold text-gray-700 mb-3">차원별 경쟁력 비교</h4>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {myBlogResult.dimension_comparisons.map((dim) => (
-                  <div key={dim.dimension} className="bg-gray-50 rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium text-gray-600">{dim.label}</span>
-                      <span className={`text-sm font-bold ${
-                        dim.score >= 65 ? 'text-green-600' : dim.score >= 40 ? 'text-orange-600' : 'text-red-600'
-                      }`}>{dim.score}점</span>
-                    </div>
-                    <div className="relative h-2 bg-gray-200 rounded-full overflow-hidden mb-1">
-                      <div
-                        className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${
-                          dim.score >= 65 ? 'bg-green-500' : dim.score >= 40 ? 'bg-orange-500' : 'bg-red-500'
-                        }`}
-                        style={{ width: `${dim.score}%` }}
-                      />
-                    </div>
-                    <p className="text-xs text-gray-500 truncate">{dim.detail}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Recommendations */}
-            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded mb-4">
-              <h5 className="font-bold text-gray-800 mb-3">개선 방안</h5>
-              <ul className="space-y-2">
-                {myBlogResult.recommendations.map((rec, idx) => (
-                  <li key={idx} className="text-sm text-gray-700 flex items-start gap-2">
-                    <span className={`mt-0.5 ${
-                      rec.type === 'critical' ? 'text-red-500' :
-                      rec.type === 'opportunity' ? 'text-green-500' :
-                      rec.type === 'success' ? 'text-blue-500' :
-                      'text-yellow-500'
-                    }`}>
-                      {rec.type === 'critical' ? '!!' : rec.type === 'success' ? 'V' : '*'}
-                    </span>
-                    <span>{rec.message}</span>
-                    {rec.current !== undefined && rec.target !== undefined && (
-                      <span className="text-xs text-gray-400 whitespace-nowrap">({rec.current} → {rec.target})</span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Data Quality Warnings */}
-            {myBlogResult.data_quality.warnings.length > 0 && (
-              <div className="bg-gray-50 border border-gray-200 rounded p-3 mb-4">
-                <p className="text-xs text-gray-400 mb-1 font-medium">데이터 품질 안내</p>
-                {myBlogResult.data_quality.warnings.map((w, i) => (
-                  <p key={i} className="text-xs text-gray-400">{w}</p>
-                ))}
-              </div>
-            )}
-            {myBlogResult.data_quality?.limitation_summary && (
-              <p className="text-xs text-gray-400 mb-4 italic">{myBlogResult.data_quality.limitation_summary}</p>
-            )}
-          </div>
-          )
-        })()}
 
         {/* Results */}
         {results && results.results.length > 0 && (
@@ -3676,6 +3260,37 @@ function KeywordSearchContent() {
       </div>
 
       {/* 게임형 튜토리얼 */}
+      {/* Floating Blog Compare Widget */}
+      {(results || keywordStatuses.some(s => s.status === 'completed')) && (
+        <FloatingBlogCompare
+          myBlogId={myBlogId}
+          setMyBlogId={setMyBlogId}
+          currentKeyword={
+            keywordStatuses.length > 0
+              ? (keywordStatuses.find(s => s.keyword === activeTab)?.keyword || keywordStatuses.find(s => s.status === 'completed')?.keyword || '')
+              : (results?.keyword || keyword || '')
+          }
+          myBlogResult={
+            keywordStatuses.length > 0
+              ? (myBlogResults[activeTab] || null)
+              : myBlogResult
+          }
+          isAnalyzing={
+            keywordStatuses.length > 0
+              ? (myBlogAnalyzing[activeTab] || false)
+              : Object.values(myBlogAnalyzing).some(v => v)
+          }
+          onAnalyze={() => {
+            if (keywordStatuses.length > 0) {
+              const status = keywordStatuses.find(s => s.keyword === activeTab)
+              if (status?.result) analyzeMyBlogForKeyword(status.keyword, status.result)
+            } else {
+              analyzeMyBlog()
+            }
+          }}
+        />
+      )}
+
       <Tutorial
         steps={keywordAnalysisTutorialSteps}
         tutorialKey="keyword-search"

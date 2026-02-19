@@ -25,6 +25,8 @@ export default function FunnelSimulation({ funnelData }: FunnelSimulationProps) 
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 500 })
 
   const engine = useSimulationEngine(funnelData)
+  const engineRef = useRef(engine)
+  engineRef.current = engine
 
   const hasNodes = (funnelData.nodes?.length || 0) > 0
   const hasTrafficNode = funnelData.nodes?.some((n: any) => n.type === 'traffic')
@@ -35,52 +37,58 @@ export default function FunnelSimulation({ funnelData }: FunnelSimulationProps) 
     const measure = () => {
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect()
-        setCanvasSize({ width: rect.width, height: Math.max(400, rect.height) })
+        if (rect.width > 0 && rect.height > 0) {
+          setCanvasSize({ width: rect.width, height: Math.max(400, rect.height) })
+        }
       }
     }
-    measure()
+    // Delay measurement to ensure DOM is rendered
+    const timer = setTimeout(measure, 50)
     window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
-  }, [])
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('resize', measure)
+    }
+  }, [phase])
 
   // 완료 감지
   useEffect(() => {
     if (phase === 'running' && engine.stats.isComplete) {
-      engine.stop()
+      engineRef.current.stop()
       setPhase('complete')
     }
-  }, [phase, engine.stats.isComplete, engine])
+  }, [phase, engine.stats.isComplete])
 
   const handleStart = useCallback(() => {
     setPhase('running')
     setPaused(false)
-    engine.start(
+    engineRef.current.start(
       { totalParticles, speed },
       canvasSize.width,
       canvasSize.height
     )
-  }, [totalParticles, speed, canvasSize, engine])
+  }, [totalParticles, speed, canvasSize])
 
   const handlePause = useCallback(() => {
-    engine.togglePause()
+    engineRef.current.togglePause()
     setPaused(p => !p)
-  }, [engine])
+  }, [])
 
   const handleStop = useCallback(() => {
-    engine.stop()
+    engineRef.current.stop()
     setPhase('complete')
-  }, [engine])
+  }, [])
 
   const handleSpeedChange = useCallback((newSpeed: number) => {
     setSpeed(newSpeed)
-    engine.setSpeed(newSpeed)
-  }, [engine])
+    engineRef.current.setSpeed(newSpeed)
+  }, [])
 
   const handleRestart = useCallback(() => {
-    engine.stop()
+    engineRef.current.stop()
     setPhase('setup')
     setPaused(false)
-  }, [engine])
+  }, [])
 
   // ── 설정 화면 ──
   if (phase === 'setup') {

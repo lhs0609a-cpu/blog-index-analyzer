@@ -4,13 +4,22 @@ import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import {
   Calculator, DollarSign, Users, MousePointer, TrendingUp,
-  ChevronDown, Info, BarChart3
+  Info, BarChart3
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
+import apiClient from '@/lib/api/client'
+
+const FALLBACK_PRESETS: Record<string, IndustryPreset> = {
+  '병원/의원': { label: '병원/의원', avg_order_value: 500000, traffic_to_consult: 0.03, consult_to_purchase: 0.4, avg_cpc: 2000, description: '피부과, 성형외과, 치과 등' },
+  '학원/교육': { label: '학원/교육', avg_order_value: 300000, traffic_to_consult: 0.05, consult_to_purchase: 0.35, avg_cpc: 1200, description: '학원, 온라인 교육' },
+  '인테리어': { label: '인테리어', avg_order_value: 3000000, traffic_to_consult: 0.02, consult_to_purchase: 0.25, avg_cpc: 1500, description: '인테리어 업체' },
+  '쇼핑몰': { label: '쇼핑몰', avg_order_value: 50000, traffic_to_consult: 0.08, consult_to_purchase: 0.3, avg_cpc: 500, description: '의류, 잡화 등 이커머스' },
+  '맛집/카페': { label: '맛집/카페', avg_order_value: 15000, traffic_to_consult: 0.1, consult_to_purchase: 0.5, avg_cpc: 300, description: '음식점, 카페' },
+  '전문서비스': { label: '전문서비스', avg_order_value: 1000000, traffic_to_consult: 0.03, consult_to_purchase: 0.3, avg_cpc: 1800, description: '법률, 세무, 컨설팅' },
+}
 
 interface IndustryPreset {
   label: string
@@ -38,13 +47,13 @@ export default function ReverseCalculator() {
 
   const loadPresets = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/funnel-designer/industry-presets`)
-      if (res.ok) {
-        const data = await res.json()
-        setPresets(data.presets || {})
+      const { data } = await apiClient.get('/api/funnel-designer/industry-presets')
+      setPresets(data.presets || {})
+    } catch {
+      // 서버 실패 시 하드코딩 폴백
+      if (Object.keys(presets).length === 0) {
+        setPresets(FALLBACK_PRESETS)
       }
-    } catch (error) {
-      console.error('Failed to load presets:', error)
     }
   }
 
@@ -61,9 +70,12 @@ export default function ReverseCalculator() {
 
   // 역산 계산
   const calculation = useMemo(() => {
-    const requiredPurchases = Math.ceil(targetRevenue / avgOrderValue)
-    const requiredConsults = Math.ceil(requiredPurchases / (purchaseRate / 100))
-    const requiredTraffic = Math.ceil(requiredConsults / (consultRate / 100))
+    const safeAvgOrderValue = Math.max(avgOrderValue, 1)
+    const safePurchaseRate = Math.max(purchaseRate, 0.1)
+    const safeConsultRate = Math.max(consultRate, 0.1)
+    const requiredPurchases = Math.ceil(targetRevenue / safeAvgOrderValue)
+    const requiredConsults = Math.ceil(requiredPurchases / (safePurchaseRate / 100))
+    const requiredTraffic = Math.ceil(requiredConsults / (safeConsultRate / 100))
     const estimatedAdCost = requiredTraffic * avgCpc
     const roas = estimatedAdCost > 0 ? (targetRevenue / estimatedAdCost) * 100 : 0
 

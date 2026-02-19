@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import {
   Plus, RotateCcw, Layout, ChevronDown
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
+import apiClient from '@/lib/api/client'
 
 // ReactFlow는 브라우저 API(window, document)를 사용하므로 SSR 비활성화
 const ReactFlowWrapper = dynamic(() => import('./ReactFlowCanvas'), { ssr: false })
@@ -34,6 +34,23 @@ export default function FunnelCanvas({
   const [showAddMenu, setShowAddMenu] = useState(false)
   const [showTemplateMenu, setShowTemplateMenu] = useState(false)
   const [templateList, setTemplateList] = useState<Record<string, TemplateInfo[]>>({})
+  const [templateLoadError, setTemplateLoadError] = useState(false)
+
+  const addMenuRef = useRef<HTMLDivElement>(null)
+  const templateMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
+        setShowAddMenu(false)
+      }
+      if (templateMenuRef.current && !templateMenuRef.current.contains(e.target as Node)) {
+        setShowTemplateMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   useEffect(() => {
     loadTemplateList()
@@ -41,33 +58,28 @@ export default function FunnelCanvas({
 
   const loadTemplateList = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/funnel-designer/templates`)
-      if (res.ok) {
-        const data = await res.json()
-        setTemplateList(data.templates || {})
-      }
-    } catch (error) {
-      console.error('Failed to load templates:', error)
+      const { data } = await apiClient.get('/api/funnel-designer/templates')
+      setTemplateList(data.templates || {})
+      setTemplateLoadError(false)
+    } catch {
+      setTemplateLoadError(true)
     }
   }
 
   const applyTemplate = async (industry: string, templateId: string) => {
     try {
-      const res = await fetch(`${API_BASE}/api/funnel-designer/templates/${encodeURIComponent(industry)}`)
-      if (res.ok) {
-        const data = await res.json()
-        const template = data.templates?.find((t: any) => t.id === templateId)
-        if (template) {
-          onFunnelDataChange({
-            nodes: template.nodes,
-            edges: template.edges,
-          })
-          onIndustryChange(industry)
-          toast.success(`"${template.name}" 템플릿이 적용되었습니다`)
-        }
+      const { data } = await apiClient.get(`/api/funnel-designer/templates/${encodeURIComponent(industry)}`)
+      const template = data.templates?.find((t: any) => t.id === templateId)
+      if (template) {
+        onFunnelDataChange({
+          nodes: template.nodes,
+          edges: template.edges,
+        })
+        onIndustryChange(industry)
+        toast.success(`"${template.name}" 템플릿이 적용되었습니다`)
       }
-    } catch (error) {
-      toast.error('템플릿 불러오기 실패')
+    } catch {
+      // apiClient handles error display
     }
     setShowTemplateMenu(false)
   }
@@ -83,7 +95,7 @@ export default function FunnelCanvas({
       id: `n${Date.now()}`,
       type,
       position: { x: 200 + Math.random() * 200, y: 100 + Math.random() * 200 },
-      data: { label: labels[type] || '새 노드', traffic: 0, conversionRate: 0 },
+      data: { label: labels[type] || '새 노드', traffic: 0, conversionRate: 80 },
     }
     onFunnelDataChange({
       nodes: [...funnelData.nodes, newNode],
@@ -93,6 +105,7 @@ export default function FunnelCanvas({
   }
 
   const clearCanvas = () => {
+    if (funnelData.nodes?.length && !confirm('캔버스의 모든 노드와 연결을 삭제합니다. 계속하시겠습니까?')) return
     onFunnelDataChange({ nodes: [], edges: [] })
     toast.success('캔버스가 초기화되었습니다')
   }
@@ -102,7 +115,7 @@ export default function FunnelCanvas({
       {/* 툴바 */}
       <div className="bg-white rounded-xl p-4 shadow-sm flex items-center gap-3 flex-wrap">
         {/* 노드 추가 */}
-        <div className="relative">
+        <div className="relative" ref={addMenuRef}>
           <button
             onClick={() => setShowAddMenu(!showAddMenu)}
             className="flex items-center gap-1 px-3 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition text-sm"
@@ -132,7 +145,7 @@ export default function FunnelCanvas({
         </div>
 
         {/* 템플릿 적용 */}
-        <div className="relative">
+        <div className="relative" ref={templateMenuRef}>
           <button
             onClick={() => setShowTemplateMenu(!showTemplateMenu)}
             className="flex items-center gap-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm"
@@ -143,6 +156,9 @@ export default function FunnelCanvas({
           </button>
           {showTemplateMenu && (
             <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-xl border z-50 min-w-[280px] max-h-80 overflow-y-auto">
+              {templateLoadError && (
+                <p className="p-4 text-sm text-red-500 text-center">템플릿을 불러올 수 없습니다. 잠시 후 다시 시도해주세요.</p>
+              )}
               {Object.entries(templateList).map(([industry, templates]) => (
                 <div key={industry}>
                   <p className="px-4 py-2 text-xs font-semibold text-gray-400 bg-gray-50">{industry}</p>

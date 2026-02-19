@@ -175,19 +175,19 @@ def delete_funnel(funnel_id: int, user_id: int) -> bool:
         cursor = conn.cursor()
         cursor.execute("""
             UPDATE funnels SET is_deleted = TRUE, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ? AND user_id = ?
+            WHERE id = ? AND user_id = ? AND is_deleted = FALSE
         """, (funnel_id, user_id))
         return cursor.rowcount > 0
 
 
-def update_funnel_health(funnel_id: int, score: int, details: dict) -> bool:
+def update_funnel_health(funnel_id: int, user_id: int, score: int, details: dict) -> bool:
     """퍼널 헬스 스코어 업데이트"""
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
             UPDATE funnels SET health_score = ?, health_details = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        """, (score, json.dumps(details, ensure_ascii=False), funnel_id))
+            WHERE id = ? AND user_id = ?
+        """, (score, json.dumps(details, ensure_ascii=False), funnel_id, user_id))
         return cursor.rowcount > 0
 
 

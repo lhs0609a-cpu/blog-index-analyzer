@@ -7,8 +7,7 @@ import {
   Lightbulb, TrendingUp, Clock
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
+import apiClient from '@/lib/api/client'
 
 interface AiFunnelDoctorProps {
   funnelId: number | null
@@ -55,21 +54,21 @@ export default function AiFunnelDoctor({ funnelId, funnelData }: AiFunnelDoctorP
   const loadHistory = async () => {
     if (!funnelId) return
     try {
-      const res = await fetch(`${API_BASE}/api/funnel-designer/funnels/${funnelId}/diagnoses?diagnosis_type=doctor`)
-      if (res.ok) {
-        const data = await res.json()
-        setHistory(data.diagnoses || [])
-      }
-    } catch (error) {
-      console.error('Failed to load diagnosis history:', error)
+      const { data } = await apiClient.get(`/api/funnel-designer/funnels/${funnelId}/diagnoses?diagnosis_type=doctor`)
+      setHistory(data.diagnoses || [])
+    } catch {
+      // apiClient handles error display
     }
   }
 
+  const [showSaveGuide, setShowSaveGuide] = useState(false)
+
   const runDiagnosis = async () => {
     if (!funnelId) {
-      toast.error('먼저 퍼널을 저장해주세요')
+      setShowSaveGuide(true)
       return
     }
+    setShowSaveGuide(false)
     if (!funnelData.nodes?.length) {
       toast.error('퍼널에 노드가 없습니다')
       return
@@ -77,23 +76,16 @@ export default function AiFunnelDoctor({ funnelId, funnelData }: AiFunnelDoctorP
 
     setLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/api/funnel-designer/funnels/${funnelId}/ai-doctor`, {
-        method: 'POST',
-      })
-      if (res.ok) {
-        const data = await res.json()
-        if (data.success) {
-          setResult(data.result)
-          toast.success('AI 진단 완료!')
-          loadHistory()
-        } else {
-          toast.error(data.message || '진단 실패')
-        }
+      const { data } = await apiClient.post(`/api/funnel-designer/funnels/${funnelId}/ai-doctor`)
+      if (data.success) {
+        setResult(data.result)
+        toast.success('AI 진단 완료!')
+        loadHistory()
       } else {
-        toast.error('서버 오류')
+        toast.error(data.message || '진단 실패')
       }
-    } catch (error) {
-      toast.error('진단 실패')
+    } catch {
+      // apiClient handles error display
     } finally {
       setLoading(false)
     }
@@ -127,6 +119,11 @@ export default function AiFunnelDoctor({ funnelId, funnelData }: AiFunnelDoctorP
             </button>
           )}
         </div>
+        {showSaveGuide && (
+          <p className="mt-3 text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
+            상단의 <strong>'저장'</strong> 버튼을 눌러 퍼널을 먼저 저장해주세요.
+          </p>
+        )}
       </div>
 
       {/* 진단 이력 */}

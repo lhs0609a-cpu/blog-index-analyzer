@@ -962,19 +962,22 @@ def get_platform_stats() -> Dict:
 
 # ============ 게시판 중복 체크 ============
 
-def is_title_duplicate(title: str, hours: int = 72) -> bool:
-    """최근 N시간 이내 동일 제목 존재 여부 (Supabase + SQLite 모두 체크)
+def is_title_duplicate(title: str, hours: int = 720) -> bool:
+    """최근 N시간 이내 동일/유사 제목 존재 여부 (Supabase + SQLite 모두 체크)
 
     Args:
         title: 검사할 제목
-        hours: 검색 범위 (기본 72시간=3일)
+        hours: 검색 범위 (기본 720시간=30일)
 
     Returns:
         True면 중복 존재
     """
     cutoff = (datetime.now() - timedelta(hours=hours)).isoformat()
 
-    # 1) Supabase 체크
+    # 유사 제목 검사를 위해 접두사 추출 (공백/이모지 접미사 제거)
+    title_prefix = title.strip()[:15] if len(title.strip()) > 15 else title.strip()
+
+    # 1) Supabase 체크 (정확 매치)
     if USE_SUPABASE and supabase:
         try:
             response = (
@@ -991,18 +994,31 @@ def is_title_duplicate(title: str, hours: int = 72) -> bool:
         except Exception as e:
             logger.warning(f"Supabase duplicate check failed: {e}")
 
-    # 2) SQLite fallback 체크
+    # 2) SQLite 체크 (정확 매치 + 유사 매치)
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+
+        # 정확 매치
         cursor.execute(
             "SELECT 1 FROM posts WHERE title = ? AND created_at > ? AND is_deleted = FALSE LIMIT 1",
             (title, cutoff),
         )
-        row = cursor.fetchone()
-        conn.close()
-        if row:
+        if cursor.fetchone():
+            conn.close()
             return True
+
+        # 유사 매치 (접두사 일치) - 앞 15자가 같으면 유사 제목으로 판단
+        if len(title_prefix) >= 8:
+            cursor.execute(
+                "SELECT 1 FROM posts WHERE title LIKE ? AND created_at > ? AND is_deleted = FALSE LIMIT 1",
+                (f"{title_prefix}%", cutoff),
+            )
+            if cursor.fetchone():
+                conn.close()
+                return True
+
+        conn.close()
     except Exception as e:
         logger.warning(f"SQLite duplicate check failed: {e}")
 

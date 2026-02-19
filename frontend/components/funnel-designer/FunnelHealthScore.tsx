@@ -7,12 +7,10 @@ import {
   ShieldCheck, BarChart3
 } from 'lucide-react'
 import {
-  RadialBarChart, RadialBar, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell
+  RadialBarChart, RadialBar, ResponsiveContainer
 } from 'recharts'
 import toast from 'react-hot-toast'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
+import apiClient from '@/lib/api/client'
 
 interface FunnelHealthScoreProps {
   funnelId: number | null
@@ -51,11 +49,14 @@ export default function FunnelHealthScore({ funnelId, funnelData }: FunnelHealth
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<HealthResult | null>(null)
 
+  const [showSaveGuide, setShowSaveGuide] = useState(false)
+
   const runHealthCheck = async () => {
     if (!funnelId) {
-      toast.error('먼저 퍼널을 저장해주세요')
+      setShowSaveGuide(true)
       return
     }
+    setShowSaveGuide(false)
     if (!funnelData.nodes?.length) {
       toast.error('퍼널에 노드가 없습니다')
       return
@@ -63,18 +64,11 @@ export default function FunnelHealthScore({ funnelId, funnelData }: FunnelHealth
 
     setLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/api/funnel-designer/funnels/${funnelId}/health-score`, {
-        method: 'POST',
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setResult(data.health_score)
-        toast.success('헬스 스코어 채점 완료!')
-      } else {
-        toast.error('채점 실패')
-      }
-    } catch (error) {
-      toast.error('서버 오류')
+      const { data } = await apiClient.post(`/api/funnel-designer/funnels/${funnelId}/health-score`)
+      setResult(data.health_score)
+      toast.success('헬스 스코어 채점 완료!')
+    } catch {
+      // apiClient handles error display
     } finally {
       setLoading(false)
     }
@@ -110,6 +104,11 @@ export default function FunnelHealthScore({ funnelId, funnelData }: FunnelHealth
           {loading ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Activity className="w-5 h-5" />}
           {loading ? '채점 중...' : '채점하기'}
         </button>
+        {showSaveGuide && (
+          <p className="mt-3 text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
+            상단의 <strong>'저장'</strong> 버튼을 눌러 퍼널을 먼저 저장해주세요.
+          </p>
+        )}
       </div>
 
       {result && (

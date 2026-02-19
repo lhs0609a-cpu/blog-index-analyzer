@@ -1016,8 +1016,9 @@ def fill_template(template: str, user: VirtualUser) -> str:
     return result
 
 
-# ============ 제목 변형 시스템 (고정 제목 중복 방지) ============
+# ============ 제목 변형 시스템 (고유 제목 생성) ============
 
+# 제목 접미사 그룹
 TITLE_SUFFIXES_EMOTION = [
     "ㅠㅠ", "ㅜㅜ", "ㅋㅋ", "ㅋㅋㅋ", "ㅎㅎ", "ㅎ", "..", "...", ";;;",
     "ㄷㄷ", "ㅠ", "ㅜ", "ㅋ", "!!", "!", "~", "ㅎㅎㅎ",
@@ -1046,17 +1047,234 @@ ALL_TITLE_SUFFIXES = (
     + TITLE_SUFFIXES_TAG
 )
 
+# ★ 제목 앞 수식어 (조합으로 고유 제목 생성)
+TITLE_PREFIXES = [
+    "", "", "", "",  # 50% 확률로 접두사 없음
+    "솔직히 ", "근데 ", "아 ", "음 ", "오늘 ",
+    "갑자기 ", "혹시 ", "진짜 ", "와 ", "헐 ",
+    "어제 ", "방금 ", "대충 ",
+]
+
+# ★ 제목 주제 수식어 (주제+기간 조합)
+TITLE_TOPIC_MODIFIERS = [
+    "블로그", "포스팅", "키워드", "상위노출", "방문자",
+    "이웃", "댓글", "조회수", "수익", "체험단",
+    "글쓰기", "사진", "검색유입", "C-Rank", "지수",
+]
+
+TITLE_PERIOD_MODIFIERS = [
+    "1개월", "2개월", "3개월", "4개월", "5개월", "6개월",
+    "8개월", "10개월", "1년", "100일", "반년",
+    "2주", "한달", "두달", "석달",
+]
+
+# ★ 완전히 새로운 제목 생성용 패턴
+UNIQUE_TITLE_PATTERNS = {
+    "question": [
+        "{prefix}{topic} {period}차인데 이게 맞나요",
+        "{prefix}{topic} 관련 질문 하나만요",
+        "{prefix}{period} 했는데 {topic}이 안돼요",
+        "{prefix}{topic} 어떻게 하는거예요",
+        "{prefix}이거 {topic} 관련인데 도움좀",
+        "{prefix}{period}째 {topic} 중인데 조언 부탁",
+        "{prefix}{topic} 경험자분 좀 알려주세요",
+        "{prefix}요즘 {topic} 너무 어려워요",
+        "{prefix}누가 {topic} 좀 설명해주세요",
+        "{prefix}{topic} 하시는 분들 어떠세요",
+    ],
+    "free": [
+        "{prefix}오늘 {topic} 하면서 느낀 점",
+        "{prefix}{topic} 관련 잡담",
+        "{prefix}그냥 {topic} 이야기 좀 할게요",
+        "{prefix}{period}차 {topic} 현황",
+        "{prefix}요즘 {topic} 근황",
+        "{prefix}오늘의 {topic} 기록",
+        "{prefix}일기 대신 {topic} 이야기",
+        "{prefix}심심해서 {topic} 이야기 씀",
+        "{prefix}{topic} 하다가 생각난 것",
+        "{prefix}블로그 {period} 됐네요",
+    ],
+    "tip": [
+        "{prefix}{period} 해보고 알게된 {topic} 팁",
+        "{prefix}{topic} 이것만 알면 됨",
+        "{prefix}제가 해본 {topic} 방법 공유",
+        "{prefix}{topic} 효과 봤던 방법 알려드림",
+        "{prefix}{period} 삽질 끝에 깨달은 {topic}",
+        "{prefix}{topic} 쉽게 하는 법 정리",
+        "{prefix}초보한테 알려주는 {topic} 핵심",
+        "{prefix}{topic} 실전 경험담 나눔",
+        "{prefix}드디어 깨달은 {topic} 비결",
+        "{prefix}{topic} 이거 모르면 손해",
+    ],
+    "success": [
+        "{prefix}{period}만에 {topic} 성공했어요",
+        "{prefix}드디어 {topic} 해냈습니다",
+        "{prefix}{topic} 달성 인증",
+        "{prefix}{period} 걸려서 {topic} 됐음",
+        "{prefix}블로그 {period}차 {topic} 후기",
+        "{prefix}목표했던 {topic} 드디어 달성",
+        "{prefix}{topic} 처음 성공한 날",
+        "{prefix}{period} 노력 끝에 {topic} 성과",
+    ],
+}
+
+# ★ 고유 내용 생성용 문장 풀
+CONTENT_OPENERS = {
+    "question": [
+        "질문 하나만 할게요", "궁금한게 있는데요", "이거 아시는 분 있나요",
+        "도움이 필요해서 글 올립니다", "혹시 경험자분 계신가요",
+        "초보 질문이라 부끄럽지만", "이런 경험 있으신 분",
+        "답답해서 글 남겨요", "조언 좀 부탁드려요", "이게 정상인건지 모르겠어요",
+    ],
+    "free": [
+        "그냥 끄적여봅니다", "일기 대신 써봐요", "오늘 느낀 점 기록",
+        "블로그 하면서 생각한 것", "잡담하고 싶어서 왔어요",
+        "심심해서 글 씀", "오늘의 블로그 현황", "그냥 나누고 싶은 이야기",
+        "소소한 근황 공유", "블로그 일지 남겨요",
+    ],
+    "tip": [
+        "제가 직접 해본 방법이에요", "이거 진짜 효과 있었어요",
+        "초보분들 참고하세요", "제 경험 공유합니다",
+        "삽질 끝에 알게 된 방법", "이거 하나로 바뀌었어요",
+        "실전에서 통한 방법", "요즘 제가 쓰는 전략",
+        "모르면 손해인 팁", "이 방법 꼭 해보세요",
+    ],
+    "success": [
+        "드디어 해냈어요", "성공했습니다!!", "감격스러워서 글 남겨요",
+        "포기 안하길 잘했어요", "꿈만 같은 결과",
+        "꾸준히 한 보람이 있네요", "진짜 눈물날뻔 했어요",
+        "이 기분 공유하고 싶어서", "드디어 목표 달성", "기분 좋아서 자랑합니다",
+    ],
+}
+
+CONTENT_BODIES = {
+    "question": [
+        "블로그 {months}개월째인데 방문자가 하루 {visitors}명밖에 안돼요",
+        "포스팅 {posts}개 쌓았는데 상위노출이 한번도 안됐어요",
+        "이웃 {neighbors}명인데 실제 방문하는 사람은 거의 없어요",
+        "키워드 분석해서 쓰는데도 검색에 안잡혀요",
+        "경쟁 낮은 키워드만 골라 쓰는데도 효과가 없어요",
+        "매일 {posts_per_day}개씩 올리는데 이게 맞는건지 모르겠어요",
+        "다른 블로그 보면 쉽게 하는것 같은데 저만 안되는 느낌",
+        "수익이 {months}개월째 0원이에요 뭐가 문제일까요",
+        "글 하나에 {hours}시간씩 투자하는데 조회수가 한자리에요",
+        "사진도 많이 넣고 글도 길게 쓰는데 반응이 없어요",
+    ],
+    "free": [
+        "오늘 포스팅 {posts_per_day}개 발행 완료",
+        "블로그 {months}개월차 소소한 일상",
+        "방문자 {visitors}명 넘기는게 목표인데 쉽지 않네요",
+        "요즘 글감이 고갈돼서 뭘 써야할지 고민",
+        "퇴근하고 블로그 쓰는 일상이 반복되는 중",
+        "주말에 몰아서 {posts_per_day}개 써놨어요",
+        "이웃분들이랑 소통하는게 제일 재밌어요",
+        "오늘 첫 댓글 달렸는데 기분 좋네요",
+        "블로그 하면서 글쓰기 실력이 늘은 것 같아요",
+        "조용히 꾸준히 하고 있습니다",
+    ],
+    "tip": [
+        "키워드를 제목에 자연스럽게 넣으세요",
+        "사진은 직접 찍은 것만 올리세요",
+        "소제목을 3~4개 넣으면 가독성이 확 올라가요",
+        "글 발행 시간대가 중요해요 오전 9~11시가 좋아요",
+        "이웃 소통을 꾸준히 하면 초기 유입이 생겨요",
+        "본문 2000자 이상은 써야 상위노출에 유리해요",
+        "태그는 5~8개가 적당합니다",
+        "시리즈물로 같은 주제를 3편 이상 쓰면 전문성이 올라가요",
+        "경쟁 낮은 롱테일 키워드부터 공략하세요",
+        "리뷰 쓸 때 단점도 꼭 포함하면 신뢰도가 올라가요",
+    ],
+    "success": [
+        "상위노출 처음 달성! 키워드는 {keyword}",
+        "일방문자 {visitors}명 돌파했어요",
+        "이웃 {neighbors}명 달성 기념",
+        "애드포스트 첫 수익 발생",
+        "체험단 처음으로 합격했어요",
+        "글 {posts}개 달성 기념",
+        "블로그 {months}개월 지속 성공",
+        "검색 유입이 처음으로 100을 넘었어요",
+        "첫 협찬 제의를 받았습니다",
+        "목표했던 키워드 1페이지 진입 성공",
+    ],
+}
+
+CONTENT_CLOSERS = [
+    "비슷한 경험 있으신 분 공유해주세요",
+    "조언 부탁드려요",
+    "다들 어떻게 하고 계시나요?",
+    "화이팅입니다!",
+    "같이 성장해요",
+    "의견이나 팁 있으면 댓글 남겨주세요",
+    "읽어주셔서 감사합니다",
+    "공감하시면 좋아요 부탁드려요",
+    "힘들지만 포기하지 맙시다",
+    "다들 오늘도 수고하셨어요",
+    "블로그 하시는 분들 다 응원합니다",
+    "궁금한거 있으면 댓글로 물어보세요",
+]
+
+
+def _generate_unique_title(category: str, user: VirtualUser) -> str:
+    """카테고리와 유저 정보 기반으로 고유한 제목 생성.
+
+    패턴 조합으로 수천 가지의 고유 제목 생성 가능.
+    """
+    patterns = UNIQUE_TITLE_PATTERNS.get(category, UNIQUE_TITLE_PATTERNS["free"])
+    pattern = random.choice(patterns)
+
+    prefix = random.choice(TITLE_PREFIXES)
+    topic = random.choice(TITLE_TOPIC_MODIFIERS)
+    period = random.choice(TITLE_PERIOD_MODIFIERS)
+
+    title = pattern.format(prefix=prefix, topic=topic, period=period)
+
+    # 30% 확률로 감정 접미사 추가
+    if random.random() < 0.3:
+        suffix = random.choice(ALL_TITLE_SUFFIXES)
+        title = f"{title} {suffix}"
+
+    return title.strip()
+
+
+def _generate_unique_content(category: str, user: VirtualUser) -> str:
+    """카테고리와 유저 정보 기반으로 고유한 본문 생성.
+
+    3파트(오프너 + 본문 + 클로저) 조합으로 고유 콘텐츠 생성.
+    """
+    months = str(user.blog_months) if user.blog_months > 0 else str(random.randint(1, 18))
+    visitors = str(random.choice([10, 15, 20, 30, 40, 50, 80, 100, 150, 200, 300, 500]))
+    posts = str(random.choice([20, 30, 50, 70, 80, 100, 120, 150, 200, 300]))
+    neighbors = str(random.choice([30, 50, 80, 100, 150, 200, 300, 500, 700, 1000]))
+    posts_per_day = str(random.choice([1, 2, 3, 4, 5]))
+    hours = str(random.choice([1, 2, 3, 4]))
+    keyword = random.choice(TEMPLATE_DATA["keyword"])
+
+    opener = random.choice(CONTENT_OPENERS.get(category, CONTENT_OPENERS["free"]))
+    bodies = CONTENT_BODIES.get(category, CONTENT_BODIES["free"])
+    # 본문 1~2개 조합
+    body_parts = random.sample(bodies, min(random.randint(1, 2), len(bodies)))
+    closer = random.choice(CONTENT_CLOSERS)
+
+    # 변수 치환
+    replacements = {
+        "{months}": months, "{visitors}": visitors, "{posts}": posts,
+        "{neighbors}": neighbors, "{posts_per_day}": posts_per_day,
+        "{hours}": hours, "{keyword}": keyword,
+    }
+
+    parts = [opener] + body_parts + [closer]
+    result_parts = []
+    for part in parts:
+        for k, v in replacements.items():
+            part = part.replace(k, v)
+        result_parts.append(part)
+
+    return "\n\n".join(result_parts)
+
 
 def _add_title_variation(title: str) -> str:
-    """고정 제목(placeholder 없는 제목)에 자연스러운 변형 접미사 추가.
-
-    변형 패턴:
-    - 감정 표현: "슬럼프 온듯" → "슬럼프 온듯 ㅠㅠ"
-    - 기간 표현: "블로그 하기 싫다" → "블로그 하기 싫다 (3개월차)"
-    - 감탄 표현: "번아웃 왔어요" → "번아웃 왔어요 진짜"
-    """
+    """고정 제목(placeholder 없는 제목)에 자연스러운 변형 접미사 추가."""
     suffix = random.choice(ALL_TITLE_SUFFIXES)
-    # 이미 비슷한 접미사가 있으면 다른 카테고리에서 선택
     if suffix.strip("()") in title:
         pool = random.choice([
             TITLE_SUFFIXES_EMOTION,
@@ -1065,7 +1283,6 @@ def _add_title_variation(title: str) -> str:
             TITLE_SUFFIXES_TAG,
         ])
         suffix = random.choice(pool)
-    # 공백 + 접미사
     return f"{title} {suffix}"
 
 
@@ -1179,7 +1396,7 @@ def generate_reply(parent_comment: str, original_poster: VirtualUser, replier: V
 # ============ 게시글 생성 ============
 
 def generate_natural_post(user: VirtualUser = None, category: str = None) -> Dict:
-    """자연스러운 게시글 생성"""
+    """자연스러운 게시글 생성 - 항상 고유한 제목과 내용을 생성"""
     if user is None:
         user = generate_virtual_user()
 
@@ -1199,25 +1416,30 @@ def generate_natural_post(user: VirtualUser = None, category: str = None) -> Dic
     else:
         mood = random.choice(list(Mood))
 
-    # 템플릿 선택
-    mood_templates = POST_TEMPLATES_BY_MOOD.get(mood, {})
-    category_templates = mood_templates.get(category, [])
+    # ★ 50% 확률로 새로운 고유 생성기 사용, 50% 템플릿 사용
+    use_unique_generator = random.random() < 0.5
 
-    if not category_templates:
-        # 폴백: 기본 템플릿
-        category_templates = POST_TEMPLATES_BY_MOOD[Mood.CURIOUS].get("question", [
-            {"title": "블로그 질문이요", "content": "질문 있는데요..."}
-        ])
+    if use_unique_generator:
+        # 새로운 조합형 생성기 - 수천 가지 고유 조합 가능
+        title = _generate_unique_title(category, user)
+        content = _generate_unique_content(category, user)
+    else:
+        # 기존 템플릿 기반 (변형 강화)
+        mood_templates = POST_TEMPLATES_BY_MOOD.get(mood, {})
+        category_templates = mood_templates.get(category, [])
 
-    template = random.choice(category_templates)
+        if not category_templates:
+            # 폴백: 고유 생성기 사용
+            title = _generate_unique_title(category, user)
+            content = _generate_unique_content(category, user)
+        else:
+            template = random.choice(category_templates)
+            title = fill_template(template["title"], user)
+            content = fill_template(template["content"], user)
 
-    # 템플릿 채우기
-    title = fill_template(template["title"], user)
-    content = fill_template(template["content"], user)
-
-    # 고정 제목(placeholder가 없었던 제목)에 변형 적용
-    if "{" not in template["title"]:
-        title = _add_title_variation(title)
+            # 고정 제목(placeholder가 없었던 제목)에 변형 적용
+            if "{" not in template["title"]:
+                title = _add_title_variation(title)
 
     # 자연스러운 변환 적용
     transformer = NaturalTextTransformer()
@@ -1288,15 +1510,20 @@ def generate_daily_natural_content(
         if post_time > now:
             post_time = now - timedelta(minutes=random.randint(1, 60))
 
-        # 게시글 생성 (최대 3회 재시도)
+        # 게시글 생성 (최대 10회 재시도 - 고유 제목 보장)
         user = generate_virtual_user()
         post = None
-        for _attempt in range(3):
+        for _attempt in range(10):
             candidate = generate_natural_post(user)
             title = candidate["title"]
 
-            # (1) 배치 내 중복 체크
-            if title in used_titles_in_batch:
+            # (1) 배치 내 중복 체크 (접두사 15자 기준)
+            title_prefix = title.strip()[:15]
+            is_batch_dup = any(
+                existing.strip()[:15] == title_prefix
+                for existing in used_titles_in_batch
+            )
+            if is_batch_dup:
                 continue
 
             # (2) DB 중복 체크 (72시간)

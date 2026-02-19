@@ -3743,31 +3743,35 @@ def save_funnel_campaign(
 ) -> int:
     """퍼널 캠페인 저장"""
     conn = get_ad_db()
-    cursor = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    # 지표 계산
-    cpm = (spend / impressions * 1000) if impressions > 0 else 0
-    cpc = (spend / clicks) if clicks > 0 else 0
-    ctr = (clicks / impressions * 100) if impressions > 0 else 0
-    cpa = (spend / conversions) if conversions > 0 else 0
-    roas = (revenue / spend * 100) if spend > 0 else 0
-    conversion_rate = (conversions / clicks * 100) if clicks > 0 else 0
+        # 지표 계산
+        cpm = (spend / impressions * 1000) if impressions > 0 else 0
+        cpc = (spend / clicks) if clicks > 0 else 0
+        ctr = (clicks / impressions * 100) if impressions > 0 else 0
+        cpa = (spend / conversions) if conversions > 0 else 0
+        roas = (revenue / spend * 100) if spend > 0 else 0
+        conversion_rate = (conversions / clicks * 100) if clicks > 0 else 0
 
-    cursor.execute("""
-        INSERT OR REPLACE INTO funnel_campaigns
-        (user_id, campaign_id, campaign_name, platform, objective, funnel_stage,
-         bidding_strategy, daily_budget, impressions, reach, clicks, conversions,
-         spend, revenue, cpm, cpc, ctr, cpa, roas, conversion_rate, last_updated)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    """, (user_id, campaign_id, campaign_name, platform, objective, funnel_stage,
-          bidding_strategy, daily_budget, impressions, reach, clicks, conversions,
-          spend, revenue, cpm, cpc, ctr, cpa, roas, conversion_rate))
+        cursor.execute("""
+            INSERT OR REPLACE INTO funnel_campaigns
+            (user_id, campaign_id, campaign_name, platform, objective, funnel_stage,
+             bidding_strategy, daily_budget, impressions, reach, clicks, conversions,
+             spend, revenue, cpm, cpc, ctr, cpa, roas, conversion_rate, last_updated)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        """, (user_id, campaign_id, campaign_name, platform, objective, funnel_stage,
+              bidding_strategy, daily_budget, impressions, reach, clicks, conversions,
+              spend, revenue, cpm, cpc, ctr, cpa, roas, conversion_rate))
 
-    campaign_id_result = cursor.lastrowid
-    conn.commit()
-    conn.close()
-
-    return campaign_id_result
+        campaign_id_result = cursor.lastrowid
+        conn.commit()
+        return campaign_id_result
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def get_funnel_campaigns(
@@ -3777,25 +3781,29 @@ def get_funnel_campaigns(
 ) -> List[Dict[str, Any]]:
     """퍼널 캠페인 목록 조회"""
     conn = get_ad_db()
-    cursor = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    query = "SELECT * FROM funnel_campaigns WHERE user_id = ? AND is_active = 1"
-    params = [user_id]
+        query = "SELECT * FROM funnel_campaigns WHERE user_id = ? AND is_active = 1"
+        params = [user_id]
 
-    if funnel_stage:
-        query += " AND funnel_stage = ?"
-        params.append(funnel_stage)
-    if platform:
-        query += " AND platform = ?"
-        params.append(platform)
+        if funnel_stage:
+            query += " AND funnel_stage = ?"
+            params.append(funnel_stage)
+        if platform:
+            query += " AND platform = ?"
+            params.append(platform)
 
-    query += " ORDER BY daily_budget DESC"
-    cursor.execute(query, params)
+        query += " ORDER BY daily_budget DESC"
+        cursor.execute(query, params)
 
-    rows = cursor.fetchall()
-    conn.close()
-
-    return [dict(row) for row in rows]
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def save_funnel_stage_metrics(
@@ -3821,25 +3829,29 @@ def save_funnel_stage_metrics(
 ) -> int:
     """퍼널 단계별 성과 저장"""
     conn = get_ad_db()
-    cursor = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    cursor.execute("""
-        INSERT OR REPLACE INTO funnel_stage_metrics
-        (user_id, stage, analysis_date, campaign_count, total_budget, total_spend,
-         total_impressions, total_reach, total_clicks, total_conversions, total_revenue,
-         avg_cpm, avg_cpc, avg_ctr, avg_cpa, avg_roas,
-         cpm_vs_benchmark, cpc_vs_benchmark, cpa_vs_benchmark)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (user_id, stage, analysis_date, campaign_count, total_budget, total_spend,
-          total_impressions, total_reach, total_clicks, total_conversions, total_revenue,
-          avg_cpm, avg_cpc, avg_ctr, avg_cpa, avg_roas,
-          cpm_vs_benchmark, cpc_vs_benchmark, cpa_vs_benchmark))
+        cursor.execute("""
+            INSERT OR REPLACE INTO funnel_stage_metrics
+            (user_id, stage, analysis_date, campaign_count, total_budget, total_spend,
+             total_impressions, total_reach, total_clicks, total_conversions, total_revenue,
+             avg_cpm, avg_cpc, avg_ctr, avg_cpa, avg_roas,
+             cpm_vs_benchmark, cpc_vs_benchmark, cpa_vs_benchmark)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, stage, analysis_date, campaign_count, total_budget, total_spend,
+              total_impressions, total_reach, total_clicks, total_conversions, total_revenue,
+              avg_cpm, avg_cpc, avg_ctr, avg_cpa, avg_roas,
+              cpm_vs_benchmark, cpc_vs_benchmark, cpa_vs_benchmark))
 
-    metrics_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-
-    return metrics_id
+        metrics_id = cursor.lastrowid
+        conn.commit()
+        return metrics_id
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def get_funnel_stage_metrics(
@@ -3849,34 +3861,38 @@ def get_funnel_stage_metrics(
 ) -> List[Dict[str, Any]]:
     """퍼널 단계별 성과 조회"""
     conn = get_ad_db()
-    cursor = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    if stage and date:
-        cursor.execute("""
-            SELECT * FROM funnel_stage_metrics
-            WHERE user_id = ? AND stage = ? AND analysis_date = ?
-        """, (user_id, stage, date))
-    elif stage:
-        cursor.execute("""
-            SELECT * FROM funnel_stage_metrics
-            WHERE user_id = ? AND stage = ?
-            ORDER BY analysis_date DESC LIMIT 30
-        """, (user_id, stage))
-    elif date:
-        cursor.execute("""
-            SELECT * FROM funnel_stage_metrics
-            WHERE user_id = ? AND analysis_date = ?
-        """, (user_id, date))
-    else:
-        cursor.execute("""
-            SELECT * FROM funnel_stage_metrics
-            WHERE user_id = ? AND analysis_date = date('now')
-        """, (user_id,))
+        if stage and date:
+            cursor.execute("""
+                SELECT * FROM funnel_stage_metrics
+                WHERE user_id = ? AND stage = ? AND analysis_date = ?
+            """, (user_id, stage, date))
+        elif stage:
+            cursor.execute("""
+                SELECT * FROM funnel_stage_metrics
+                WHERE user_id = ? AND stage = ?
+                ORDER BY analysis_date DESC LIMIT 30
+            """, (user_id, stage))
+        elif date:
+            cursor.execute("""
+                SELECT * FROM funnel_stage_metrics
+                WHERE user_id = ? AND analysis_date = ?
+            """, (user_id, date))
+        else:
+            cursor.execute("""
+                SELECT * FROM funnel_stage_metrics
+                WHERE user_id = ? AND analysis_date = date('now')
+            """, (user_id,))
 
-    rows = cursor.fetchall()
-    conn.close()
-
-    return [dict(row) for row in rows]
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def save_funnel_flow_analysis(
@@ -3894,23 +3910,27 @@ def save_funnel_flow_analysis(
 ) -> int:
     """퍼널 흐름 분석 저장"""
     conn = get_ad_db()
-    cursor = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    cursor.execute("""
-        INSERT OR REPLACE INTO funnel_flow_analysis
-        (user_id, analysis_date, tofu_reach, mofu_clicks, bofu_conversions,
-         tofu_to_mofu_rate, mofu_to_bofu_rate, overall_conversion_rate,
-         cost_per_tofu, cost_per_mofu, cost_per_bofu)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (user_id, analysis_date, tofu_reach, mofu_clicks, bofu_conversions,
-          tofu_to_mofu_rate, mofu_to_bofu_rate, overall_conversion_rate,
-          cost_per_tofu, cost_per_mofu, cost_per_bofu))
+        cursor.execute("""
+            INSERT OR REPLACE INTO funnel_flow_analysis
+            (user_id, analysis_date, tofu_reach, mofu_clicks, bofu_conversions,
+             tofu_to_mofu_rate, mofu_to_bofu_rate, overall_conversion_rate,
+             cost_per_tofu, cost_per_mofu, cost_per_bofu)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, analysis_date, tofu_reach, mofu_clicks, bofu_conversions,
+              tofu_to_mofu_rate, mofu_to_bofu_rate, overall_conversion_rate,
+              cost_per_tofu, cost_per_mofu, cost_per_bofu))
 
-    flow_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-
-    return flow_id
+        flow_id = cursor.lastrowid
+        conn.commit()
+        return flow_id
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def get_funnel_flow_analysis(
@@ -3919,19 +3939,23 @@ def get_funnel_flow_analysis(
 ) -> List[Dict[str, Any]]:
     """퍼널 흐름 분석 조회"""
     conn = get_ad_db()
-    cursor = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT * FROM funnel_flow_analysis
-        WHERE user_id = ?
-        AND analysis_date >= date('now', ?)
-        ORDER BY analysis_date DESC
-    """, (user_id, f"-{days} days"))
+        cursor.execute("""
+            SELECT * FROM funnel_flow_analysis
+            WHERE user_id = ?
+            AND analysis_date >= date('now', ?)
+            ORDER BY analysis_date DESC
+        """, (user_id, f"-{days} days"))
 
-    rows = cursor.fetchall()
-    conn.close()
-
-    return [dict(row) for row in rows]
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def save_funnel_recommendation(
@@ -3949,23 +3973,27 @@ def save_funnel_recommendation(
 ) -> int:
     """퍼널 입찰 권장사항 저장"""
     conn = get_ad_db()
-    cursor = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    cursor.execute("""
-        INSERT INTO funnel_bidding_recommendations
-        (user_id, campaign_id, campaign_name, funnel_stage, current_strategy,
-         recommended_strategy, reason, expected_improvement, priority,
-         recommended_bid, recommended_budget)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (user_id, campaign_id, campaign_name, funnel_stage, current_strategy,
-          recommended_strategy, reason, expected_improvement, priority,
-          recommended_bid, recommended_budget))
+        cursor.execute("""
+            INSERT INTO funnel_bidding_recommendations
+            (user_id, campaign_id, campaign_name, funnel_stage, current_strategy,
+             recommended_strategy, reason, expected_improvement, priority,
+             recommended_bid, recommended_budget)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, campaign_id, campaign_name, funnel_stage, current_strategy,
+              recommended_strategy, reason, expected_improvement, priority,
+              recommended_bid, recommended_budget))
 
-    rec_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-
-    return rec_id
+        rec_id = cursor.lastrowid
+        conn.commit()
+        return rec_id
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def get_funnel_recommendations(
@@ -3974,43 +4002,51 @@ def get_funnel_recommendations(
 ) -> List[Dict[str, Any]]:
     """퍼널 입찰 권장사항 조회"""
     conn = get_ad_db()
-    cursor = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    if include_applied:
-        cursor.execute("""
-            SELECT * FROM funnel_bidding_recommendations
-            WHERE user_id = ?
-            ORDER BY priority ASC, created_at DESC
-        """, (user_id,))
-    else:
-        cursor.execute("""
-            SELECT * FROM funnel_bidding_recommendations
-            WHERE user_id = ? AND is_applied = 0
-            ORDER BY priority ASC, created_at DESC
-        """, (user_id,))
+        if include_applied:
+            cursor.execute("""
+                SELECT * FROM funnel_bidding_recommendations
+                WHERE user_id = ?
+                ORDER BY priority ASC, created_at DESC
+            """, (user_id,))
+        else:
+            cursor.execute("""
+                SELECT * FROM funnel_bidding_recommendations
+                WHERE user_id = ? AND is_applied = 0
+                ORDER BY priority ASC, created_at DESC
+            """, (user_id,))
 
-    rows = cursor.fetchall()
-    conn.close()
-
-    return [dict(row) for row in rows]
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def apply_funnel_recommendation(user_id: int, recommendation_id: int) -> bool:
     """퍼널 권장사항 적용"""
     conn = get_ad_db()
-    cursor = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    cursor.execute("""
-        UPDATE funnel_bidding_recommendations
-        SET is_applied = 1, applied_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND user_id = ?
-    """, (recommendation_id, user_id))
+        cursor.execute("""
+            UPDATE funnel_bidding_recommendations
+            SET is_applied = 1, applied_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND user_id = ?
+        """, (recommendation_id, user_id))
 
-    affected = cursor.rowcount
-    conn.commit()
-    conn.close()
-
-    return affected > 0
+        affected = cursor.rowcount
+        conn.commit()
+        return affected > 0
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def save_funnel_budget_allocation(
@@ -4032,25 +4068,29 @@ def save_funnel_budget_allocation(
 ) -> int:
     """퍼널 예산 배분 저장"""
     conn = get_ad_db()
-    cursor = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    cursor.execute("""
-        INSERT OR REPLACE INTO funnel_budget_allocation
-        (user_id, allocation_date, strategy, total_budget,
-         tofu_budget, tofu_percentage, mofu_budget, mofu_percentage,
-         bofu_budget, bofu_percentage, current_tofu_pct, current_mofu_pct,
-         current_bofu_pct, adjustment_needed, recommendation)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (user_id, allocation_date, strategy, total_budget,
-          tofu_budget, tofu_percentage, mofu_budget, mofu_percentage,
-          bofu_budget, bofu_percentage, current_tofu_pct, current_mofu_pct,
-          current_bofu_pct, adjustment_needed, recommendation))
+        cursor.execute("""
+            INSERT OR REPLACE INTO funnel_budget_allocation
+            (user_id, allocation_date, strategy, total_budget,
+             tofu_budget, tofu_percentage, mofu_budget, mofu_percentage,
+             bofu_budget, bofu_percentage, current_tofu_pct, current_mofu_pct,
+             current_bofu_pct, adjustment_needed, recommendation)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, allocation_date, strategy, total_budget,
+              tofu_budget, tofu_percentage, mofu_budget, mofu_percentage,
+              bofu_budget, bofu_percentage, current_tofu_pct, current_mofu_pct,
+              current_bofu_pct, adjustment_needed, recommendation))
 
-    alloc_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-
-    return alloc_id
+        alloc_id = cursor.lastrowid
+        conn.commit()
+        return alloc_id
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def get_funnel_budget_allocation(
@@ -4059,24 +4099,28 @@ def get_funnel_budget_allocation(
 ) -> Optional[Dict[str, Any]]:
     """퍼널 예산 배분 조회"""
     conn = get_ad_db()
-    cursor = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    if date:
-        cursor.execute("""
-            SELECT * FROM funnel_budget_allocation
-            WHERE user_id = ? AND allocation_date = ?
-        """, (user_id, date))
-    else:
-        cursor.execute("""
-            SELECT * FROM funnel_budget_allocation
-            WHERE user_id = ?
-            ORDER BY allocation_date DESC LIMIT 1
-        """, (user_id,))
+        if date:
+            cursor.execute("""
+                SELECT * FROM funnel_budget_allocation
+                WHERE user_id = ? AND allocation_date = ?
+            """, (user_id, date))
+        else:
+            cursor.execute("""
+                SELECT * FROM funnel_budget_allocation
+                WHERE user_id = ?
+                ORDER BY allocation_date DESC LIMIT 1
+            """, (user_id,))
 
-    row = cursor.fetchone()
-    conn.close()
-
-    return dict(row) if row else None
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 _ad_optimization_db: Optional[AdOptimizationDB] = None

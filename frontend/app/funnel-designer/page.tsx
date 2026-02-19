@@ -1,21 +1,19 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion } from 'framer-motion'
 import {
   GitBranch, Calculator, Palette, Activity, Stethoscope, Users,
   RefreshCw, Save, FolderOpen, Trash2, Plus, Play
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { useAuthStore } from '@/lib/stores/auth'
+import apiClient from '@/lib/api/client'
 import ReverseCalculator from '@/components/funnel-designer/ReverseCalculator'
 import FunnelCanvas from '@/components/funnel-designer/FunnelCanvas'
 import FunnelHealthScore from '@/components/funnel-designer/FunnelHealthScore'
 import AiFunnelDoctor from '@/components/funnel-designer/AiFunnelDoctor'
 import PersonaWalkThrough from '@/components/funnel-designer/PersonaWalkThrough'
 import FunnelSimulation from '@/components/funnel-designer/FunnelSimulation'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
 
 type TabId = 'calculator' | 'canvas' | 'health' | 'doctor' | 'persona' | 'simulation'
 
@@ -39,9 +37,6 @@ interface SavedFunnel {
 }
 
 export default function FunnelDesignerPage() {
-  const { user } = useAuthStore()
-  const userId = user?.id || 1
-
   const [activeTab, setActiveTab] = useState<TabId>('calculator')
   const [loading, setLoading] = useState(false)
 
@@ -53,21 +48,32 @@ export default function FunnelDesignerPage() {
   const [savedFunnels, setSavedFunnels] = useState<SavedFunnel[]>([])
   const [showFunnelList, setShowFunnelList] = useState(false)
 
+  const funnelListRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (funnelListRef.current && !funnelListRef.current.contains(e.target as Node)) {
+        setShowFunnelList(false)
+      }
+    }
+    if (showFunnelList) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showFunnelList])
+
+  const loadFunnelList = useCallback(async () => {
+    try {
+      const { data } = await apiClient.get('/api/funnel-designer/funnels')
+      setSavedFunnels(data.funnels || [])
+    } catch {
+      // apiClient handles error toasts
+    }
+  }, [])
+
   useEffect(() => {
     loadFunnelList()
-  }, [userId])
-
-  const loadFunnelList = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/funnel-designer/funnels?user_id=${userId}`)
-      if (res.ok) {
-        const data = await res.json()
-        setSavedFunnels(data.funnels || [])
-      }
-    } catch (error) {
-      console.error('Failed to load funnels:', error)
-    }
-  }
+  }, [loadFunnelList])
 
   const saveFunnel = async () => {
     if (!funnelData.nodes?.length) {
@@ -77,39 +83,22 @@ export default function FunnelDesignerPage() {
 
     setLoading(true)
     try {
-      if (currentFunnelId) {
-        const res = await fetch(`${API_BASE}/api/funnel-designer/funnels/${currentFunnelId}?user_id=${userId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: currentFunnelName,
-            industry: currentIndustry || null,
-            funnel_data: funnelData,
-          }),
-        })
-        if (res.ok) {
-          toast.success('퍼널이 저장되었습니다')
-          loadFunnelList()
-        }
-      } else {
-        const res = await fetch(`${API_BASE}/api/funnel-designer/funnels?user_id=${userId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: currentFunnelName,
-            industry: currentIndustry || null,
-            funnel_data: funnelData,
-          }),
-        })
-        if (res.ok) {
-          const data = await res.json()
-          setCurrentFunnelId(data.funnel_id)
-          toast.success('새 퍼널이 생성되었습니다')
-          loadFunnelList()
-        }
+      const body = {
+        name: currentFunnelName,
+        industry: currentIndustry || null,
+        funnel_data: funnelData,
       }
-    } catch (error) {
-      toast.error('저장 실패')
+      if (currentFunnelId) {
+        await apiClient.put(`/api/funnel-designer/funnels/${currentFunnelId}`, body)
+        toast.success('퍼널이 저장되었습니다')
+      } else {
+        const { data } = await apiClient.post('/api/funnel-designer/funnels', body)
+        setCurrentFunnelId(data.funnel_id)
+        toast.success('새 퍼널이 생성되었습니다')
+      }
+      loadFunnelList()
+    } catch {
+      // apiClient handles error display
     } finally {
       setLoading(false)
     }
@@ -118,40 +107,34 @@ export default function FunnelDesignerPage() {
   const loadFunnel = async (funnelId: number) => {
     setLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/api/funnel-designer/funnels/${funnelId}?user_id=${userId}`)
-      if (res.ok) {
-        const data = await res.json()
-        const funnel = data.funnel
-        setCurrentFunnelId(funnel.id)
-        setCurrentFunnelName(funnel.name)
-        setCurrentIndustry(funnel.industry || '')
-        setFunnelData(funnel.funnel_data)
-        setShowFunnelList(false)
-        toast.success(`"${funnel.name}" 불러오기 완료`)
-      }
-    } catch (error) {
-      toast.error('불러오기 실패')
+      const { data } = await apiClient.get(`/api/funnel-designer/funnels/${funnelId}`)
+      const funnel = data.funnel
+      setCurrentFunnelId(funnel.id)
+      setCurrentFunnelName(funnel.name)
+      setCurrentIndustry(funnel.industry || '')
+      setFunnelData(funnel.funnel_data)
+      setShowFunnelList(false)
+      toast.success(`"${funnel.name}" 불러오기 완료`)
+    } catch {
+      // apiClient handles error display
     } finally {
       setLoading(false)
     }
   }
 
   const deleteFunnel = async (funnelId: number) => {
+    if (!confirm('정말로 이 퍼널을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return
     try {
-      const res = await fetch(`${API_BASE}/api/funnel-designer/funnels/${funnelId}?user_id=${userId}`, {
-        method: 'DELETE',
-      })
-      if (res.ok) {
-        if (currentFunnelId === funnelId) {
-          setCurrentFunnelId(null)
-          setCurrentFunnelName('새 퍼널')
-          setFunnelData({ nodes: [], edges: [] })
-        }
-        toast.success('퍼널이 삭제되었습니다')
-        loadFunnelList()
+      await apiClient.delete(`/api/funnel-designer/funnels/${funnelId}`)
+      if (currentFunnelId === funnelId) {
+        setCurrentFunnelId(null)
+        setCurrentFunnelName('새 퍼널')
+        setFunnelData({ nodes: [], edges: [] })
       }
-    } catch (error) {
-      toast.error('삭제 실패')
+      toast.success('퍼널이 삭제되었습니다')
+      loadFunnelList()
+    } catch {
+      // apiClient handles error display
     }
   }
 
@@ -194,7 +177,7 @@ export default function FunnelDesignerPage() {
                 <Plus className="w-4 h-4" />
                 새 퍼널
               </button>
-              <div className="relative">
+              <div className="relative" ref={funnelListRef}>
                 <button
                   onClick={() => setShowFunnelList(!showFunnelList)}
                   className="flex items-center gap-1 px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition text-sm"

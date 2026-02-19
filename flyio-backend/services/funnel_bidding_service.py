@@ -8,11 +8,9 @@ Funnel-Based Bidding Service - 퍼널 기반 입찰 최적화 서비스
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
 from enum import Enum
 from typing import List, Dict, Optional, Any
 import logging
-import math
 
 logger = logging.getLogger(__name__)
 
@@ -268,9 +266,7 @@ class FunnelBiddingOptimizer:
     }
 
     def __init__(self):
-        self.campaigns: Dict[str, FunnelCampaign] = {}
-        self.stage_metrics: Dict[FunnelStage, FunnelStageMetrics] = {}
-        self.recommendations: List[BiddingRecommendation] = []
+        pass
 
     def classify_campaign(self, objective: str) -> FunnelStage:
         """캠페인 목표로 퍼널 단계 분류"""
@@ -330,15 +326,15 @@ class FunnelBiddingOptimizer:
                 if benchmark.get('cpa') and metrics.avg_cpa > 0:
                     metrics.cpa_vs_benchmark = ((benchmark['cpa'] - metrics.avg_cpa) / benchmark['cpa']) * 100
 
-        self.stage_metrics = stage_data
         return stage_data
 
     def analyze_funnel_flow(
         self,
-        campaigns: List[FunnelCampaign]
+        campaigns: List[FunnelCampaign],
+        stage_metrics: Dict = None
     ) -> FunnelFlowAnalysis:
         """퍼널 흐름 분석"""
-        stage_metrics = self.calculate_stage_metrics(campaigns)
+        stage_metrics = stage_metrics or self.calculate_stage_metrics(campaigns)
 
         tofu = stage_metrics[FunnelStage.TOFU]
         mofu = stage_metrics[FunnelStage.MOFU]
@@ -417,14 +413,19 @@ class FunnelBiddingOptimizer:
 
             recommendations = []
             if current_tofu_pct < plan.tofu_percentage - 10:
-                recommendations.append(f"TOFU 예산을 {plan.tofu_percentage - current_tofu_pct:.1f}%p 증가")
+                recommendations.append(f"TOFU 예산을 현재 {current_tofu_pct:.0f}%에서 {plan.tofu_percentage:.0f}%로 증가시키세요")
             elif current_tofu_pct > plan.tofu_percentage + 10:
-                recommendations.append(f"TOFU 예산을 {current_tofu_pct - plan.tofu_percentage:.1f}%p 감소")
+                recommendations.append(f"TOFU 예산을 현재 {current_tofu_pct:.0f}%에서 {plan.tofu_percentage:.0f}%로 감소시키세요")
+
+            if current_mofu_pct < plan.mofu_percentage - 10:
+                recommendations.append(f"MOFU 예산을 현재 {current_mofu_pct:.0f}%에서 {plan.mofu_percentage:.0f}%로 증가시키세요")
+            elif current_mofu_pct > plan.mofu_percentage + 10:
+                recommendations.append(f"MOFU 예산을 현재 {current_mofu_pct:.0f}%에서 {plan.mofu_percentage:.0f}%로 감소시키세요")
 
             if current_bofu_pct < plan.bofu_percentage - 10:
-                recommendations.append(f"BOFU 예산을 {plan.bofu_percentage - current_bofu_pct:.1f}%p 증가")
+                recommendations.append(f"BOFU 예산을 현재 {current_bofu_pct:.0f}%에서 {plan.bofu_percentage:.0f}%로 증가시키세요")
             elif current_bofu_pct > plan.bofu_percentage + 10:
-                recommendations.append(f"BOFU 예산을 {current_bofu_pct - plan.bofu_percentage:.1f}%p 감소")
+                recommendations.append(f"BOFU 예산을 현재 {current_bofu_pct:.0f}%에서 {plan.bofu_percentage:.0f}%로 감소시키세요")
 
             plan.recommendation = ", ".join(recommendations) if recommendations else "현재 배분이 적절합니다"
         else:
@@ -434,11 +435,12 @@ class FunnelBiddingOptimizer:
 
     def generate_bidding_recommendations(
         self,
-        campaigns: List[FunnelCampaign]
+        campaigns: List[FunnelCampaign],
+        stage_metrics: Dict = None
     ) -> List[BiddingRecommendation]:
         """입찰 전략 권장사항 생성"""
         recommendations = []
-        stage_metrics = self.calculate_stage_metrics(campaigns)
+        stage_metrics = stage_metrics or self.calculate_stage_metrics(campaigns)
 
         for campaign in campaigns:
             stage = campaign.funnel_stage
@@ -527,7 +529,6 @@ class FunnelBiddingOptimizer:
 
         # 우선순위로 정렬
         recommendations.sort(key=lambda x: x.priority)
-        self.recommendations = recommendations
         return recommendations
 
     def get_stage_recommendations(self, stage: FunnelStage) -> Dict[str, Any]:
@@ -590,8 +591,8 @@ class FunnelBiddingOptimizer:
     def get_summary(self, campaigns: List[FunnelCampaign]) -> Dict[str, Any]:
         """전체 퍼널 요약"""
         stage_metrics = self.calculate_stage_metrics(campaigns)
-        flow_analysis = self.analyze_funnel_flow(campaigns)
-        recommendations = self.generate_bidding_recommendations(campaigns)
+        flow_analysis = self.analyze_funnel_flow(campaigns, stage_metrics)
+        recommendations = self.generate_bidding_recommendations(campaigns, stage_metrics)
 
         total_budget = sum(c.daily_budget for c in campaigns)
         total_spend = sum(c.spend for c in campaigns)

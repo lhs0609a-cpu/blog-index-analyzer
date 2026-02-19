@@ -7,8 +7,7 @@ import {
   Lightbulb, MessageCircle
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
+import apiClient from '@/lib/api/client'
 
 interface PersonaWalkThroughProps {
   funnelId: number | null
@@ -46,6 +45,7 @@ interface WalkResult {
 
 export default function PersonaWalkThrough({ funnelId, funnelData }: PersonaWalkThroughProps) {
   const [personas, setPersonas] = useState<Record<string, Persona>>({})
+  const [personaLoadError, setPersonaLoadError] = useState(false)
   const [selectedPersona, setSelectedPersona] = useState<Persona | null>(null)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<WalkResult | null>(null)
@@ -56,13 +56,11 @@ export default function PersonaWalkThrough({ funnelId, funnelData }: PersonaWalk
 
   const loadPersonas = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/funnel-designer/personas`)
-      if (res.ok) {
-        const data = await res.json()
-        setPersonas(data.personas || {})
-      }
-    } catch (error) {
-      console.error('Failed to load personas:', error)
+      const { data } = await apiClient.get('/api/funnel-designer/personas')
+      setPersonas(data.personas || {})
+      setPersonaLoadError(false)
+    } catch {
+      setPersonaLoadError(true)
     }
   }
 
@@ -83,24 +81,17 @@ export default function PersonaWalkThrough({ funnelId, funnelData }: PersonaWalk
     setLoading(true)
     setResult(null)
     try {
-      const res = await fetch(`${API_BASE}/api/funnel-designer/funnels/${funnelId}/persona-walkthrough?user_id=1`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ persona_id: selectedPersona.id }),
+      const { data } = await apiClient.post(`/api/funnel-designer/funnels/${funnelId}/persona-walkthrough`, {
+        persona_id: selectedPersona.id,
       })
-      if (res.ok) {
-        const data = await res.json()
-        if (data.success) {
-          setResult(data.result)
-          toast.success('시뮬레이션 완료!')
-        } else {
-          toast.error(data.message || '시뮬레이션 실패')
-        }
+      if (data.success) {
+        setResult(data.result)
+        toast.success('시뮬레이션 완료!')
       } else {
-        toast.error('서버 오류')
+        toast.error(data.message || '시뮬레이션 실패')
       }
-    } catch (error) {
-      toast.error('시뮬레이션 실패')
+    } catch {
+      // apiClient handles error display
     } finally {
       setLoading(false)
     }
@@ -114,6 +105,11 @@ export default function PersonaWalkThrough({ funnelId, funnelData }: PersonaWalk
           <Users className="w-5 h-5 text-purple-500" />
           페르소나 선택
         </h3>
+        {personaLoadError && Object.keys(personas).length === 0 && (
+          <p className="mb-3 text-sm text-red-500 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+            페르소나 목록을 불러올 수 없습니다. 잠시 후 다시 시도해주세요.
+          </p>
+        )}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {Object.values(personas).map((persona) => (
             <button

@@ -5,11 +5,7 @@ import ReactFlow, {
   Background,
   Controls,
   MiniMap,
-  addEdge,
-  useNodesState,
-  useEdgesState,
   Connection,
-  Edge,
   Node,
   MarkerType,
 } from 'reactflow'
@@ -46,19 +42,17 @@ export default function ReactFlowCanvas({ funnelData, onFunnelDataChange }: Reac
   )
 
   const onNodesChange = useCallback((changes: any) => {
-    // position 등 변경사항 반영
     let updatedNodes = [...(funnelData.nodes || [])]
+    let changed = false
     for (const change of changes) {
-      if (change.type === 'position' && change.position) {
-        updatedNodes = updatedNodes.map(n =>
-          n.id === change.id ? { ...n, position: change.position } : n
-        )
-      }
       if (change.type === 'remove') {
         updatedNodes = updatedNodes.filter(n => n.id !== change.id)
+        changed = true
       }
     }
-    onFunnelDataChange({ nodes: updatedNodes, edges: funnelData.edges })
+    if (changed) {
+      onFunnelDataChange({ nodes: updatedNodes, edges: funnelData.edges })
+    }
   }, [funnelData, onFunnelDataChange])
 
   const onEdgesChange = useCallback((changes: any) => {

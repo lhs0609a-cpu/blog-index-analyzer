@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { getApiUrl } from '@/lib/api/apiConfig'
 import {
   Plus, Store, Star, TrendingUp, TrendingDown, AlertTriangle, Search,
-  Loader2, Trash2, RefreshCw, BarChart3, MessageSquare, Tag, Globe
+  Loader2, Trash2, RefreshCw, BarChart3, MessageSquare, Tag, Globe, CheckCircle
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
@@ -24,6 +24,17 @@ interface StoreInfo {
     recent_7d_reviews: number
     response_rate: number
   }
+}
+
+interface Review {
+  id: string
+  platform: string
+  author_name: string
+  rating: number
+  content: string
+  review_date: string
+  sentiment: string
+  collected_at: string
 }
 
 interface PlaceResult {
@@ -106,6 +117,12 @@ export default function ReputationDashboard() {
   const [urlResult, setUrlResult] = useState<{platform: string; place_id: string} | null>(null)
   const [urlStoreName, setUrlStoreName] = useState('')
   const [collecting, setCollecting] = useState(false)
+  const [collectionResult, setCollectionResult] = useState<{
+    collected_count: number
+    by_platform: Record<string, number>
+  } | null>(null)
+  const [showCollectionSuccess, setShowCollectionSuccess] = useState(false)
+  const [recentReviews, setRecentReviews] = useState<Review[]>([])
 
   const fetchStores = useCallback(async () => {
     try {
@@ -123,6 +140,14 @@ export default function ReputationDashboard() {
       setLoading(false)
     }
   }, [selectedStore])
+
+  const fetchRecentReviews = useCallback(async (storeId: string) => {
+    try {
+      const res = await fetch(`${getApiUrl()}/api/reputation/reviews?store_id=${storeId}&limit=5`)
+      const data = await res.json()
+      if (data.success) setRecentReviews(data.reviews || [])
+    } catch { /* silent */ }
+  }, [])
 
   const fetchDashboard = useCallback(async (storeId: string) => {
     setDashboardLoading(true)
@@ -146,8 +171,9 @@ export default function ReputationDashboard() {
   useEffect(() => {
     if (selectedStore) {
       fetchDashboard(selectedStore)
+      fetchRecentReviews(selectedStore)
     }
-  }, [selectedStore, fetchDashboard])
+  }, [selectedStore, fetchDashboard, fetchRecentReviews])
 
   // 가게 검색 (카카오 + 네이버 통합)
   const searchPlaces = async () => {
@@ -295,26 +321,39 @@ export default function ReputationDashboard() {
   // 수동 리뷰 수집
   const collectReviews = async (storeId: string) => {
     setCollecting(true)
+    setCollectionResult(null)
+    setShowCollectionSuccess(false)
     try {
       const res = await fetch(`${getApiUrl()}/api/reputation/stores/${storeId}/collect`, { method: 'POST' })
       const data = await res.json()
       if (data.success) {
-        const byPlatform = data.by_platform
-        if (byPlatform && Object.keys(byPlatform).length > 0) {
-          const details = Object.entries(byPlatform)
-            .map(([p, c]) => `${platformLabel(p as string)} ${c}건`)
-            .join(', ')
-          toast.success(`새 리뷰 ${data.collected_count}건 수집 (${details})`)
-        } else {
-          toast.success(`${data.collected_count}건의 새 리뷰를 수집했습니다`)
-        }
+        setCollectionResult({
+          collected_count: data.collected_count,
+          by_platform: data.by_platform || {},
+        })
+        setShowCollectionSuccess(true)
+        setTimeout(() => setShowCollectionSuccess(false), 8000)
         fetchDashboard(storeId)
+        fetchRecentReviews(storeId)
+      } else {
+        toast.error(data.message || '수집 실패')
       }
     } catch {
       toast.error('수집 실패')
     } finally {
       setCollecting(false)
     }
+  }
+
+  const formatRelativeTime = (dateStr: string) => {
+    const diff = Date.now() - new Date(dateStr).getTime()
+    const mins = Math.floor(diff / 60000)
+    if (mins < 1) return '방금 전'
+    if (mins < 60) return `${mins}분 전`
+    const hours = Math.floor(mins / 60)
+    if (hours < 24) return `${hours}시간 전`
+    const days = Math.floor(hours / 24)
+    return `${days}일 전`
   }
 
   const platformLabel = (p: string) => {
@@ -417,6 +456,60 @@ export default function ReputationDashboard() {
       {/* 대시보드 본문 */}
       {selectedStore && dashboard && !dashboardLoading && (
         <>
+          {/* 수집 상태 배너 */}
+          {collecting && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center gap-3">
+              <Loader2 className="w-5 h-5 text-blue-500 animate-spin flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-blue-800">리뷰를 수집하고 있습니다...</p>
+                <p className="text-xs text-blue-600">네이버 · 카카오 · 구글에서 최신 리뷰를 가져오는 중</p>
+              </div>
+              <div className="w-32 h-1.5 bg-blue-200 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: '60%' }} />
+              </div>
+            </div>
+          )}
+
+          {!collecting && showCollectionSuccess && collectionResult && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+              <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+              <p className="text-sm font-medium text-green-800">
+                새 리뷰 {collectionResult.collected_count}건 수집 완료
+                {Object.keys(collectionResult.by_platform).length > 0 && (
+                  <span className="text-green-600 font-normal ml-1">
+                    ({Object.entries(collectionResult.by_platform).map(([p, c]) => `${platformLabel(p)} ${c}건`).join(', ')})
+                  </span>
+                )}
+              </p>
+            </div>
+          )}
+
+          {/* 수집 버튼 영역 */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center justify-between">
+            <div className="text-sm text-gray-500">
+              {dashboard.store?.last_crawled_at ? (
+                <>마지막 수집: {formatRelativeTime(dashboard.store.last_crawled_at)} · </>
+              ) : null}
+              총 {dashboard.stats?.total_reviews || 0}건의 리뷰
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => collectReviews(selectedStore)}
+                disabled={collecting}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                {collecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                리뷰 새로 수집
+              </button>
+              <Link
+                href="/reputation-monitor/reviews"
+                className="flex items-center gap-2 px-4 py-2.5 bg-[#0064FF] text-white rounded-lg text-sm font-medium hover:bg-[#0052CC] transition-colors"
+              >
+                리뷰 전체 보기
+              </Link>
+            </div>
+          </div>
+
           {/* 통계 카드 5개 */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
@@ -483,24 +576,6 @@ export default function ReputationDashboard() {
               </div>
               <div className="text-xs text-gray-500 mt-1">건의 새 리뷰</div>
             </div>
-          </div>
-
-          {/* 수동 수집 버튼 + 리뷰 관리 링크 */}
-          <div className="flex gap-3">
-            <button
-              onClick={() => collectReviews(selectedStore)}
-              disabled={collecting}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
-            >
-              {collecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-              리뷰 새로 수집
-            </button>
-            <Link
-              href="/reputation-monitor/reviews"
-              className="flex items-center gap-2 px-4 py-2.5 bg-[#0064FF] text-white rounded-lg text-sm font-medium hover:bg-[#0052CC] transition-colors"
-            >
-              리뷰 전체 보기
-            </Link>
           </div>
 
           {/* 2열 레이아웃: 감성 트렌드 + 카테고리 분석 */}
@@ -652,6 +727,60 @@ export default function ReputationDashboard() {
                     </span>
                   ))}
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* 최근 리뷰 미리보기 */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-[#0064FF]" />
+                최근 리뷰
+              </h3>
+              <Link href="/reputation-monitor/reviews" className="text-sm text-[#0064FF] hover:underline">
+                전체 보기 →
+              </Link>
+            </div>
+            {recentReviews.length === 0 ? (
+              <div className="text-center py-8 text-gray-400">
+                <MessageSquare className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">아직 수집된 리뷰가 없습니다</p>
+                <p className="text-xs mt-1">&apos;리뷰 새로 수집&apos; 버튼을 눌러보세요</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {recentReviews.map(review => (
+                  <div key={review.id} className="flex items-start gap-3 p-3 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-medium text-gray-800">{review.author_name}</span>
+                        <div className="flex items-center gap-0.5">
+                          {[1, 2, 3, 4, 5].map(i => (
+                            <Star
+                              key={i}
+                              className={`w-3 h-3 ${i <= review.rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200'}`}
+                            />
+                          ))}
+                        </div>
+                        <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
+                          review.sentiment === 'positive' ? 'bg-green-100 text-green-700' :
+                          review.sentiment === 'negative' ? 'bg-red-100 text-red-700' :
+                          'bg-gray-100 text-gray-600'
+                        }`}>
+                          {review.sentiment === 'positive' ? '긍정' : review.sentiment === 'negative' ? '부정' : '중립'}
+                        </span>
+                        <span className="text-[10px] text-gray-400 px-1.5 py-0.5 bg-gray-50 rounded">
+                          {platformLabel(review.platform)}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600 line-clamp-2">{review.content || '(내용 없음)'}</p>
+                    </div>
+                    <span className="text-[10px] text-gray-400 flex-shrink-0 mt-1">
+                      {review.review_date || review.collected_at?.split('T')[0]}
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
           </div>

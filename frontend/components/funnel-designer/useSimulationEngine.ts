@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useEffect } from 'react'
 
 // ── 타입 정의 ──
 
@@ -80,8 +80,8 @@ function computeNodeCoords(
 
   return nodes.map(n => ({
     id: n.id,
-    x: (n.position.x - minX) * scale + offsetX,
-    y: (n.position.y - minY) * scale + offsetY,
+    x: ((n.position?.x ?? 0) - minX) * scale + offsetX,
+    y: ((n.position?.y ?? 0) - minY) * scale + offsetY,
     type: n.type || 'content',
     label: n.data?.label || n.id,
     conversionRate: n.data?.conversionRate ?? 80,
@@ -480,6 +480,15 @@ export function useSimulationEngine(
     // 최종 통계 동기화
     syncStats()
   }, [syncStats])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (spawnTimerRef.current) clearInterval(spawnTimerRef.current)
+      if (hudIntervalRef.current) clearInterval(hudIntervalRef.current)
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
+    }
+  }, [])
 
   return {
     stats,
