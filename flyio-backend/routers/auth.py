@@ -159,8 +159,11 @@ async def register(request: RegisterRequest):
     """User registration endpoint"""
     user_db = get_user_db()
 
+    # Normalize email to lowercase
+    email = request.email.lower().strip()
+
     # Check if user already exists
-    existing_user = user_db.get_user_by_email(request.email)
+    existing_user = user_db.get_user_by_email(email)
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -178,7 +181,7 @@ async def register(request: RegisterRequest):
     hashed_password = get_password_hash(request.password)
     try:
         user_id = user_db.create_user(
-            email=request.email,
+            email=email,
             hashed_password=hashed_password,
             name=request.name
         )
@@ -195,7 +198,7 @@ async def register(request: RegisterRequest):
     # Create access token
     access_token = create_access_token(data={"sub": str(user_id)})
 
-    logger.info(f"User registered: {request.email}")
+    logger.info(f"User registered: {email}")
 
     return TokenResponse(
         access_token=access_token,
@@ -210,8 +213,11 @@ async def login(request: LoginRequest):
     """User login endpoint"""
     user_db = get_user_db()
 
+    # Normalize email to lowercase
+    email = request.email.lower().strip()
+
     # Get user
-    user = user_db.get_user_by_email(request.email)
+    user = user_db.get_user_by_email(email)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -237,7 +243,7 @@ async def login(request: LoginRequest):
     # Create access token
     access_token = create_access_token(data={"sub": str(user["id"])})
 
-    logger.info(f"User logged in: {request.email}")
+    logger.info(f"User logged in: {email}")
 
     return TokenResponse(
         access_token=access_token,

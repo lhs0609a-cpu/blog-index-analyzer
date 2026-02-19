@@ -107,7 +107,7 @@ class UserDB:
             logger.info("User tables initialized")
 
     def create_user(self, email: str, hashed_password: str, name: Optional[str] = None) -> int:
-        """Create a new user and return the user ID"""
+        """Create a new user and return the user ID (email normalized to lowercase)"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -115,15 +115,15 @@ class UserDB:
                 INSERT INTO users (email, hashed_password, name)
                 VALUES (?, ?, ?)
                 """,
-                (email, hashed_password, name)
+                (email.lower(), hashed_password, name)
             )
             return cursor.lastrowid
 
     def get_user_by_email(self, email: str) -> Optional[Dict]:
-        """Get user by email"""
+        """Get user by email (case-insensitive)"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
+            cursor.execute("SELECT * FROM users WHERE LOWER(email) = LOWER(?)", (email,))
             row = cursor.fetchone()
             if row:
                 return dict(row)

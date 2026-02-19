@@ -91,7 +91,7 @@ class Settings(BaseSettings):
     # JWT Authentication (SECRET_KEY must be set via environment variable)
     SECRET_KEY: str = ""  # Required: Set via SECRET_KEY environment variable
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 days (7 * 24 * 60)
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # CORS - main.py에서 ALLOWED_ORIGINS 화이트리스트로 오버라이드됨
@@ -169,6 +169,9 @@ class Settings(BaseSettings):
 
     # Kakao API
     KAKAO_REST_API_KEY: str = ""
+
+    # Google Places API (New)
+    GOOGLE_PLACES_API_KEY: str = ""
 
     # 토스페이먼츠 결제
     TOSS_CLIENT_KEY: str = ""  # 클라이언트 키 (프론트엔드용)

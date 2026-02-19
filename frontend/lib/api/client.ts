@@ -73,21 +73,28 @@ apiClient.interceptors.response.use(
         message = data.message
       }
 
+      // 인증 관련 요청(로그인/회원가입)은 각 페이지에서 직접 에러를 처리하므로 여기서 toast 표시하지 않음
+      const requestUrl = error.config?.url || ''
+      const isAuthRequest = requestUrl.includes('/api/auth/login') || requestUrl.includes('/api/auth/register')
+
       if (status === 401) {
         // Unauthorized - clear token and redirect to login
-        if (typeof window !== 'undefined') {
+        // 단, 로그인/회원가입 요청 자체의 401은 리다이렉트 하지 않음 (에러 메시지 표시 위해)
+        if (typeof window !== 'undefined' && !isAuthRequest) {
           localStorage.removeItem('auth_token')
           window.location.href = '/login'
         }
-      } else if (status === 404) {
-        toast.error('요청한 리소스를 찾을 수 없습니다')
-      } else if (status === 422) {
-        // Validation error
-        toast.error(`입력 오류: ${message}`)
-      } else if (status === 500) {
-        toast.error('서버 오류가 발생했습니다')
-      } else {
-        toast.error(message)
+      } else if (!isAuthRequest) {
+        // 인증 요청이 아닌 경우에만 toast 표시
+        if (status === 404) {
+          toast.error('요청한 리소스를 찾을 수 없습니다')
+        } else if (status === 422) {
+          toast.error(`입력 오류: ${message}`)
+        } else if (status === 500) {
+          toast.error('서버 오류가 발생했습니다')
+        } else {
+          toast.error(message)
+        }
       }
     } else if (error.request) {
       // Request made but no response

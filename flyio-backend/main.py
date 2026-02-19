@@ -425,7 +425,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return JSONResponse(
                 status_code=429,
                 content={"detail": "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."},
-                headers={"Retry-After": "60", **get_cors_headers()}
+                headers={"Retry-After": "60", **get_cors_headers(request)}
             )
 
         # 시간당 제한 체크
@@ -435,7 +435,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return JSONResponse(
                 status_code=429,
                 content={"detail": "시간당 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요."},
-                headers={"Retry-After": "300", **get_cors_headers()}
+                headers={"Retry-After": "300", **get_cors_headers(request)}
             )
 
         # 기록 추가
@@ -473,9 +473,18 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 
 # CORS 헤더 헬퍼 함수 (에러 응답용 - 미들웨어가 처리하지 못하는 경우)
-def get_cors_headers():
+def get_cors_headers(request: Request = None):
+    origin = "*"
+    if request:
+        req_origin = request.headers.get("origin", "")
+        if req_origin in ALLOWED_ORIGINS:
+            origin = req_origin
+        elif ALLOWED_ORIGINS:
+            origin = ALLOWED_ORIGINS[0]
+    elif ALLOWED_ORIGINS:
+        origin = ALLOWED_ORIGINS[0]
     return {
-        "Access-Control-Allow-Origin": ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else "*",
+        "Access-Control-Allow-Origin": origin,
         "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
         "Access-Control-Allow-Headers": "*",
     }
@@ -489,7 +498,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(
         status_code=422,
         content={"detail": exc.errors()},
-        headers=get_cors_headers()
+        headers=get_cors_headers(request)
     )
 
 # HTTP 예외 핸들러 (CORS 헤더 포함)
@@ -499,7 +508,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail},
-        headers=get_cors_headers()
+        headers=get_cors_headers(request)
     )
 
 # 일반 예외 핸들러 (CORS 헤더 포함)
@@ -509,7 +518,7 @@ async def general_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content={"detail": "Internal server error"},
-        headers=get_cors_headers()
+        headers=get_cors_headers(request)
     )
 
 
