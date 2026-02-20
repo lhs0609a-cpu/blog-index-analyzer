@@ -103,7 +103,7 @@ export default function BlueOceanPage() {
   const [selectedKeyword, setSelectedKeyword] = useState<BlueOceanKeyword | null>(null)
 
   // P1-2: 무료 사용자 접근 제한 (베이직 이상 필요)
-  const userPlan = user?.subscription?.plan_type || 'free'
+  const userPlan = user?.plan || 'free'
   const isFreePlan = userPlan === 'free'
 
   // 무료 사용자 차단 UI

@@ -140,12 +140,17 @@ async def get_my_winnable_keywords(
 
         blog_level = blog_data.get('level', 5)
 
-        # 사용자 플랜 조회
+        # 사용자 플랜 조회 (관리자는 business 플랜)
         user_plan = 'free'
         if user_id:
-            subscription = await get_user_subscription(user_id)
-            if subscription:
-                user_plan = subscription.get('plan', 'free')
+            try:
+                from database.user_db import get_user_db
+                udb = get_user_db()
+                user_plan = udb.get_user_effective_plan(user_id)
+            except Exception:
+                subscription = get_user_subscription(user_id)
+                if subscription:
+                    user_plan = subscription.get('plan_type', 'free')
 
         # 서비스 호출
         service = get_profitable_keyword_service()

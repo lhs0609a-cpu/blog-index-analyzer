@@ -359,6 +359,51 @@ class ReputationDB:
         finally:
             conn.close()
 
+    def purge_blog_reviews(self, store_id: str = None) -> int:
+        """
+        DB에서 블로그 리뷰(구매자 리뷰가 아닌 것) 삭제
+
+        블로그 리뷰 판별 기준:
+        - rating=0 (별점 없음) AND content가 짧거나 블로그 제목 패턴
+        - content에 '[블로그 리뷰]' 접두사
+        - content에 '⭐' 이모지 포함 (블로그 제목 패턴)
+        - author_name이 '블로거'
+        """
+        conn = self._get_connection()
+        try:
+            if store_id:
+                base_where = "store_id = ? AND "
+                base_params: list = [store_id]
+            else:
+                base_where = ""
+                base_params = []
+
+            total_deleted = 0
+
+            # 1) rating=0이고 content가 블로그 제목 패턴인 것
+            result = conn.execute(f"""
+                DELETE FROM reviews WHERE {base_where}rating = 0 AND (
+                    content LIKE '%⭐%'
+                    OR content LIKE '[블로그 리뷰]%'
+                    OR content LIKE '%블로그%리뷰%'
+                    OR author_name = '블로거'
+                )
+            """, base_params)
+            total_deleted += result.rowcount
+
+            # 2) rating=0이고 content가 5자 미만 (빈 리뷰)
+            result = conn.execute(f"""
+                DELETE FROM reviews WHERE {base_where}rating = 0 AND LENGTH(TRIM(content)) < 5
+            """, base_params)
+            total_deleted += result.rowcount
+
+            conn.commit()
+            logger.info(f"Purged {total_deleted} blog/invalid reviews" +
+                        (f" for store {store_id}" if store_id else " globally"))
+            return total_deleted
+        finally:
+            conn.close()
+
     def get_review_count(self, store_id: str, platform: str = None, sentiment: str = None) -> int:
         conn = self._get_connection()
         try:
@@ -379,9 +424,9 @@ class ReputationDB:
     def get_dashboard_stats(self, store_id: str) -> Dict:
         conn = self._get_connection()
         try:
-            # 전체 리뷰 수 및 평균 평점
+            # 전체 리뷰 수 및 평균 평점 (rating=0인 블로그 리뷰는 평점 계산에서 제외)
             total = conn.execute(
-                "SELECT COUNT(*) as cnt, AVG(rating) as avg_rating FROM reviews WHERE store_id = ?",
+                "SELECT COUNT(*) as cnt, AVG(CASE WHEN rating > 0 THEN rating END) as avg_rating FROM reviews WHERE store_id = ?",
                 (store_id,)
             ).fetchone()
 
@@ -394,7 +439,7 @@ class ReputationDB:
                 ).fetchone()
                 sentiment_counts[s] = row[0] if row else 0
 
-            # 플랫폼별 평균 평점
+            # 플랫폼별 평균 평점 (rating=0 제외)
             platform_stats = {}
             platforms = conn.execute(
                 "SELECT DISTINCT platform FROM reviews WHERE store_id = ?",
@@ -403,7 +448,7 @@ class ReputationDB:
             for p in platforms:
                 pname = p[0]
                 prow = conn.execute(
-                    "SELECT COUNT(*) as cnt, AVG(rating) as avg_rating FROM reviews WHERE store_id = ? AND platform = ?",
+                    "SELECT COUNT(*) as cnt, AVG(CASE WHEN rating > 0 THEN rating END) as avg_rating FROM reviews WHERE store_id = ? AND platform = ?",
                     (store_id, pname)
                 ).fetchone()
                 platform_stats[pname] = {
@@ -441,12 +486,14 @@ class ReputationDB:
         try:
             since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
             rows = conn.execute("""
-                SELECT DATE(collected_at) as date, AVG(rating) as avg_rating, COUNT(*) as count
+                SELECT DATE(collected_at) as date,
+                    AVG(CASE WHEN rating > 0 THEN rating END) as avg_rating,
+                    COUNT(*) as count
                 FROM reviews WHERE store_id = ? AND collected_at >= ?
                 GROUP BY DATE(collected_at)
                 ORDER BY date
             """, (store_id, since)).fetchall()
-            return [{"date": r[0], "avg_rating": round(r[1], 1), "count": r[2]} for r in rows]
+            return [{"date": r[0], "avg_rating": round(r[1], 1) if r[1] else 0, "count": r[2]} for r in rows]
         finally:
             conn.close()
 
@@ -501,7 +548,7 @@ class ReputationDB:
             rows = conn.execute("""
                 SELECT platform,
                     COUNT(*) as total,
-                    AVG(rating) as avg_rating,
+                    AVG(CASE WHEN rating > 0 THEN rating END) as avg_rating,
                     SUM(CASE WHEN sentiment = 'positive' THEN 1 ELSE 0 END) as positive,
                     SUM(CASE WHEN sentiment = 'negative' THEN 1 ELSE 0 END) as negative,
                     SUM(CASE WHEN response_status IN ('generated', 'applied') THEN 1 ELSE 0 END) as responded
@@ -619,28 +666,29 @@ class ReputationDB:
             conn.close()
 
     def upsert_alert_setting(self, store_id: str, user_id: str, alert_type: str,
-                             condition: dict, channel: str = "in_app") -> str:
+                             condition: dict, channel: str = "in_app",
+                             is_active: bool = True) -> str:
         setting_id = str(uuid.uuid4())
         conn = self._get_connection()
         try:
-            # 기존 설정 확인
+            # 기존 설정 확인 (활성/비활성 모두)
             existing = conn.execute(
-                "SELECT id FROM alert_settings WHERE store_id = ? AND alert_type = ? AND is_active = 1",
+                "SELECT id FROM alert_settings WHERE store_id = ? AND alert_type = ?",
                 (store_id, alert_type)
             ).fetchone()
 
             if existing:
                 conn.execute("""
-                    UPDATE alert_settings SET condition_json = ?, notification_channel = ?
+                    UPDATE alert_settings SET condition_json = ?, notification_channel = ?, is_active = ?
                     WHERE id = ?
-                """, (json.dumps(condition, ensure_ascii=False), channel, existing[0]))
+                """, (json.dumps(condition, ensure_ascii=False), channel, 1 if is_active else 0, existing[0]))
                 setting_id = existing[0]
             else:
                 conn.execute("""
-                    INSERT INTO alert_settings (id, store_id, user_id, alert_type, condition_json, notification_channel)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO alert_settings (id, store_id, user_id, alert_type, condition_json, notification_channel, is_active)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, (setting_id, store_id, user_id, alert_type,
-                      json.dumps(condition, ensure_ascii=False), channel))
+                      json.dumps(condition, ensure_ascii=False), channel, 1 if is_active else 0))
             conn.commit()
             return setting_id
         finally:

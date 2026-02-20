@@ -139,12 +139,20 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
 
 def user_to_response(user: dict) -> dict:
     """Convert user dict to response format (exclude password)"""
+    # 관리자/프리미엄 부여 사용자는 effective plan 사용
+    plan = user.get("plan", "free")
+    try:
+        user_db = get_user_db()
+        plan = user_db.get_user_effective_plan(user["id"])
+    except Exception:
+        pass
+
     return {
         "id": user["id"],
         "email": user["email"],
         "name": user.get("name"),
         "blog_id": user.get("blog_id"),
-        "plan": user.get("plan", "free"),
+        "plan": plan,
         "is_active": bool(user.get("is_active", True)),
         "is_verified": bool(user.get("is_verified", False)),
         "is_admin": bool(user.get("is_admin", False)),

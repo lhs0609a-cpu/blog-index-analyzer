@@ -23,6 +23,8 @@ interface TemplateInfo {
   id: string
   name: string
   description: string
+  nodes?: any[]
+  edges?: any[]
 }
 
 export default function FunnelCanvas({
@@ -58,7 +60,8 @@ export default function FunnelCanvas({
 
   const loadTemplateList = async () => {
     try {
-      const { data } = await apiClient.get('/api/funnel-designer/templates')
+      // full=true로 노드/엣지 포함 전체 데이터를 한 번에 로드
+      const { data } = await apiClient.get('/api/funnel-designer/templates?full=true')
       setTemplateList(data.templates || {})
       setTemplateLoadError(false)
     } catch {
@@ -66,20 +69,19 @@ export default function FunnelCanvas({
     }
   }
 
-  const applyTemplate = async (industry: string, templateId: string) => {
-    try {
-      const { data } = await apiClient.get(`/api/funnel-designer/templates/${encodeURIComponent(industry)}`)
-      const template = data.templates?.find((t: any) => t.id === templateId)
-      if (template) {
-        onFunnelDataChange({
-          nodes: template.nodes,
-          edges: template.edges,
-        })
-        onIndustryChange(industry)
-        toast.success(`"${template.name}" 템플릿이 적용되었습니다`)
-      }
-    } catch {
-      // apiClient handles error display
+  const applyTemplate = (industry: string, templateId: string) => {
+    // 이미 로드된 전체 데이터에서 직접 찾기 (추가 API 호출 불필요)
+    const templates = templateList[industry]
+    const template = templates?.find((t) => t.id === templateId)
+    if (template?.nodes && template?.edges) {
+      onFunnelDataChange({
+        nodes: template.nodes,
+        edges: template.edges,
+      })
+      onIndustryChange(industry)
+      toast.success(`"${template.name}" 템플릿이 적용되었습니다`)
+    } else {
+      toast.error('템플릿 데이터를 찾을 수 없습니다')
     }
     setShowTemplateMenu(false)
   }
@@ -118,7 +120,7 @@ export default function FunnelCanvas({
         <div className="relative" ref={addMenuRef}>
           <button
             onClick={() => setShowAddMenu(!showAddMenu)}
-            className="flex items-center gap-1 px-3 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition text-sm"
+            className="flex items-center gap-1 px-3 py-2 bg-[#0064FF] text-white rounded-lg hover:bg-[#0052D4] transition text-sm"
           >
             <Plus className="w-4 h-4" />
             노드 추가

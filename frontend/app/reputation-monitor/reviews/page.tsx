@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { getApiUrl } from '@/lib/api/apiConfig'
 import {
   Star, Loader2, MessageSquare, Shield, Copy, Check,
@@ -125,7 +125,10 @@ export default function ReviewsPage() {
     fetchReviews()
   }, [fetchReviews])
 
-  // 수집 중 폴링
+  // 수집 중 폴링 — useRef로 최신 reviews 참조하여 stale closure 방지
+  const reviewsRef = useRef(reviews)
+  reviewsRef.current = reviews
+
   useEffect(() => {
     if (!collecting || !storeId) return
     const interval = setInterval(async () => {
@@ -136,7 +139,7 @@ export default function ReviewsPage() {
         const res = await fetch(url)
         const data = await res.json()
         if (data.success) {
-          const oldIds = new Set(reviews.map(r => r.id))
+          const oldIds = new Set(reviewsRef.current.map(r => r.id))
           const freshIds = new Set<string>()
           data.reviews.forEach((r: Review) => {
             if (!oldIds.has(r.id)) freshIds.add(r.id)
@@ -151,7 +154,7 @@ export default function ReviewsPage() {
       } catch { /* silent */ }
     }, 3000)
     return () => clearInterval(interval)
-  }, [collecting, storeId, platformFilter, sentimentFilter, reviews])
+  }, [collecting, storeId, platformFilter, sentimentFilter])
 
   // 수동 리뷰 수집
   const collectReviews = async () => {
@@ -163,11 +166,15 @@ export default function ReviewsPage() {
       const res = await fetch(`${getApiUrl()}/api/reputation/stores/${storeId}/collect`, { method: 'POST' })
       const data = await res.json()
       if (data.success) {
+        const purged = data.purged_blog_reviews || 0
         setCollectionResult({
           collected_count: data.collected_count,
           by_platform: data.by_platform || {},
         })
         setShowCollectionSuccess(true)
+        if (purged > 0) {
+          toast.success(`블로그 리뷰 ${purged}건 자동 정리됨`)
+        }
         setTimeout(() => setShowCollectionSuccess(false), 8000)
         fetchReviews()
       } else {

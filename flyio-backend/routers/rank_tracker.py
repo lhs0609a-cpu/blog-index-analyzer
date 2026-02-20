@@ -83,7 +83,23 @@ def classify_rank(rank: Optional[int]) -> str:
 
 
 def check_plan_limit(user_id: int, limit_type: str) -> dict:
-    """플랜 제한 확인"""
+    """플랜 제한 확인 (관리자는 business 플랜)"""
+    # 관리자 체크
+    try:
+        from database.user_db import get_user_db
+        user_db = get_user_db()
+        user = user_db.get_user_by_id(user_id)
+        if user and user.get('is_admin'):
+            limits = PLAN_LIMITS[PlanType.BUSINESS]
+            limit_value = limits.get(limit_type, -1)
+            return {
+                "limit": limit_value,
+                "plan_type": "business",
+                "is_unlimited": limit_value == -1
+            }
+    except Exception:
+        pass
+
     subscription = get_user_subscription(user_id)
     if not subscription:
         # 기본 무료 플랜
@@ -452,9 +468,14 @@ async def export_to_excel(
     if not blog:
         raise HTTPException(status_code=404, detail="블로그를 찾을 수 없습니다.")
 
-    # 플랜 확인 (Excel 내보내기는 Pro 이상)
-    subscription = get_user_subscription(user_id)
-    plan_type = subscription.get('plan_type', 'free') if subscription else 'free'
+    # 플랜 확인 (Excel 내보내기는 Pro 이상, 관리자는 허용)
+    try:
+        from database.user_db import get_user_db
+        udb = get_user_db()
+        plan_type = udb.get_user_effective_plan(user_id)
+    except Exception:
+        subscription = get_user_subscription(user_id)
+        plan_type = subscription.get('plan_type', 'free') if subscription else 'free'
     if plan_type in ['free', 'basic']:
         raise HTTPException(
             status_code=403,

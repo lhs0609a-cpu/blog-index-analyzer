@@ -67,20 +67,34 @@ async def get_industry_presets():
 
 
 @router.get("/templates")
-async def get_templates():
-    """전체 템플릿 목록 (노드/엣지 제외 메타 정보만)"""
+async def get_templates(full: bool = Query(False, description="노드/엣지 포함 여부")):
+    """전체 템플릿 목록"""
     result = {}
     for industry, templates in FUNNEL_TEMPLATES.items():
-        result[industry] = [
-            {"id": t["id"], "name": t["name"], "description": t["description"]}
-            for t in templates
-        ]
+        if full:
+            # 노드/엣지 포함 전체 데이터
+            result[industry] = templates
+        else:
+            # 메타 정보만
+            result[industry] = [
+                {"id": t["id"], "name": t["name"], "description": t["description"]}
+                for t in templates
+            ]
     return {"templates": result}
 
 
+@router.get("/templates/by-industry")
+async def get_industry_templates(industry: str = Query(..., description="업종명")):
+    """특정 업종의 퍼널 템플릿 (노드+엣지 포함) — query param 방식"""
+    templates = FUNNEL_TEMPLATES.get(industry)
+    if not templates:
+        raise HTTPException(status_code=404, detail=f"업종 '{industry}' 템플릿을 찾을 수 없습니다")
+    return {"industry": industry, "templates": templates}
+
+
 @router.get("/templates/{industry}")
-async def get_industry_templates(industry: str):
-    """특정 업종의 퍼널 템플릿 (노드+엣지 포함)"""
+async def get_industry_templates_path(industry: str):
+    """특정 업종의 퍼널 템플릿 (하위호환용 path param)"""
     templates = FUNNEL_TEMPLATES.get(industry)
     if not templates:
         raise HTTPException(status_code=404, detail=f"업종 '{industry}' 템플릿을 찾을 수 없습니다")

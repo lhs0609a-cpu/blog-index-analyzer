@@ -1,6 +1,11 @@
 """
 리뷰 크롤링 서비스
-네이버 플레이스, 구글 리뷰, 카카오맵 수집 + 감성 분석
+네이버 플레이스, 구글 리뷰, 카카오맵에서 실제 방문자/구매자 리뷰만 수집 + 감성 분석
+
+핵심 원칙:
+- 블로그 리뷰(getFsasReviews)는 수집하지 않음 — 방문자 리뷰(getVisitorReviews)만 사용
+- rating이 1~5 범위이고 body(내용)가 있는 리뷰만 유효한 방문자 리뷰로 인정
+- rating=0이고 body도 없는 항목은 블로그 글이나 광고이므로 필터링
 """
 import httpx
 import json
@@ -8,18 +13,23 @@ import os
 import re
 import logging
 import random
-import time
 import urllib.parse
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
-# User-Agent 로테이션 (blogs.py 패턴 동일)
-USER_AGENTS = [
-    "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1",
-    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36",
+# User-Agent 로테이션 — 최신 브라우저 UA (2026)
+PC_USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:134.0) Gecko/20100101 Firefox/134.0",
+]
+
+MOBILE_USER_AGENTS = [
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36",
+    "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36",
 ]
 
 # 감성 분석 키워드
@@ -38,168 +48,464 @@ POSITIVE_KEYWORDS = [
 
 
 class ReviewCrawler:
-    """플랫폼별 리뷰 수집기"""
+    """
+    방문자/구매자 리뷰 전용 수집기
+
+    수집 대상: 네이버 플레이스 방문자 리뷰, 구글 리뷰, 카카오맵 리뷰
+    수집 제외: 블로그 리뷰, 광고성 리뷰, 별점/내용 없는 빈 항목
+    """
+
+    # 방문자 리뷰 GraphQL 쿼리 (getVisitorReviews만 사용, getFsasReviews 사용 금지)
+    VISITOR_REVIEW_QUERY = """query getVisitorReviews($input: VisitorReviewsInput) {
+  visitorReviews(input: $input) {
+    items {
+      id
+      rating
+      author {
+        nickname
+        from
+        imageUrl
+      }
+      body
+      thumbnail
+      created
+      reply {
+        body
+        created
+        modifyDate
+      }
+      visitCount
+    }
+    total
+    starDistribution {
+      score
+      count
+    }
+  }
+}"""
 
     def __init__(self):
         self.timeout = httpx.Timeout(15.0, connect=5.0)
 
-    def _get_headers(self) -> Dict:
+    def _get_pc_headers(self) -> Dict:
+        """PC 브라우저 헤더 (Sec-Ch-Ua 포함)"""
+        ua = random.choice(PC_USER_AGENTS)
         return {
-            "User-Agent": random.choice(USER_AGENTS),
+            "User-Agent": ua,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Sec-Ch-Ua": '"Chromium";v="133", "Not(A:Brand";v="99", "Google Chrome";v="133"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"Windows"',
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Upgrade-Insecure-Requests": "1",
+        }
+
+    def _get_mobile_headers(self) -> Dict:
+        """모바일 브라우저 헤더"""
+        return {
+            "User-Agent": random.choice(MOBILE_USER_AGENTS),
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8",
+            "Accept-Language": "ko-KR,ko;q=0.9",
             "Referer": "https://m.search.naver.com/",
         }
 
-    # ===== 네이버 플레이스 =====
-
-    async def crawl_naver_place(self, place_id: str, max_reviews: int = 50) -> List[Dict]:
+    @staticmethod
+    def _is_valid_visitor_review(body: str, rating: int) -> bool:
         """
-        네이버 플레이스 리뷰 수집
+        방문자/구매자 리뷰 유효성 검증
 
-        방법: 네이버 플레이스 모바일 API를 통한 리뷰 데이터 수집
-        - /api/v1/reviews/place/{place_id} 형태의 내부 API 사용
-        - 또는 HTML 파싱 폴백
+        유효 조건 (하나라도 충족):
+        - rating이 1~5 범위 (실제 별점이 있는 리뷰)
+        - body가 5자 이상 (내용이 있는 텍스트 리뷰)
+
+        무효 (블로그/광고일 가능성):
+        - rating=0이고 body가 비어있거나 5자 미만
         """
-        reviews = []
+        has_valid_rating = isinstance(rating, (int, float)) and 1 <= rating <= 5
+        has_valid_body = isinstance(body, str) and len(body.strip()) >= 5
+        return has_valid_rating or has_valid_body
 
-        # 방법 1: 네이버 플레이스 GraphQL/API
+    @staticmethod
+    def _parse_visitor_review_item(item: dict) -> Optional[Dict]:
+        """
+        GraphQL visitorReviews 응답 아이템을 표준 리뷰 형식으로 변환
+
+        반환 None이면 유효하지 않은 항목 (블로그/광고 등)
+        """
+        body = (item.get("body") or "").strip()
+        rating = item.get("rating", 0)
+
+        # 유효성 검증 — 블로그 글/광고 필터링
+        if not ReviewCrawler._is_valid_visitor_review(body, rating):
+            return None
+
+        author_data = item.get("author") or {}
+        return {
+            "platform_review_id": str(item.get("id", "")),
+            "author_name": author_data.get("nickname", "익명"),
+            "rating": int(rating) if rating else 0,
+            "content": body,
+            "review_date": item.get("created", ""),
+            "visit_count": item.get("visitCount", 0),
+            "review_type": "visitor",  # 방문자 리뷰 명시
+        }
+
+    # ===== 네이버 플레이스 — 방문자(구매자) 리뷰 전용 =====
+
+    async def crawl_naver_place(self, place_id: str, max_reviews: int = 50, store_name: str = "") -> List[Dict]:
+        """
+        네이버 플레이스 방문자(구매자) 리뷰만 수집
+
+        수집 전략 (모두 getVisitorReviews만 사용):
+        1순위: PC Map GraphQL API (pcmap-api.place.naver.com)
+        2순위: 모바일 GraphQL API (api.place.naver.com)
+        3순위: 모바일 HTML 파싱 (m.place.naver.com/review/visitor)
+
+        절대 수집하지 않음:
+        - getFsasReviews (블로그 리뷰) — 블로그 글 제목이 리뷰로 표시되는 문제
+        - rating=0 + body 없는 항목 — 광고/이벤트성 콘텐츠
+        """
+        logger.info(f"[Naver] Starting visitor review crawl: place_id={place_id}, store='{store_name}'")
+
+        # 가짜 ID 감지 (좌표 기반 naver_xxxxx_xxxxx)
+        self._last_resolved_id = None
+        if place_id.startswith("naver_"):
+            logger.warning(f"[Naver] Fake place_id detected: {place_id}, resolving...")
+            real_id = await self._resolve_fake_naver_id(place_id, store_name)
+            if real_id:
+                logger.info(f"[Naver] Resolved: {place_id} -> {real_id}")
+                self._last_resolved_id = real_id
+                place_id = real_id
+            else:
+                logger.warning(f"[Naver] Could not resolve fake place_id: {place_id}")
+                return []
+
+        # 1순위: PC Map GraphQL API (방문자 리뷰)
         try:
-            api_reviews = await self._crawl_naver_api(place_id, max_reviews)
-            if api_reviews:
-                return api_reviews
+            reviews = await self._crawl_visitor_reviews_pcmap(place_id, max_reviews)
+            if reviews:
+                logger.info(f"[Naver] PCMap API: {len(reviews)} visitor reviews collected")
+                return reviews
         except Exception as e:
-            logger.warning(f"Naver API method failed for {place_id}: {e}")
+            logger.warning(f"[Naver] PCMap API failed: {e}", exc_info=True)
 
-        # 방법 2: 모바일 HTML 파싱 폴백
+        # 2순위: 모바일 GraphQL API (방문자 리뷰)
         try:
-            html_reviews = await self._crawl_naver_html(place_id, max_reviews)
-            if html_reviews:
-                return html_reviews
+            reviews = await self._crawl_visitor_reviews_mobile(place_id, max_reviews)
+            if reviews:
+                logger.info(f"[Naver] Mobile API: {len(reviews)} visitor reviews collected")
+                return reviews
         except Exception as e:
-            logger.warning(f"Naver HTML method failed for {place_id}: {e}")
+            logger.warning(f"[Naver] Mobile API failed: {e}", exc_info=True)
 
-        return reviews
+        # 3순위: HTML 파싱 (방문자 리뷰 탭 페이지)
+        try:
+            reviews = await self._crawl_visitor_reviews_html(place_id, max_reviews)
+            if reviews:
+                logger.info(f"[Naver] HTML parse: {len(reviews)} visitor reviews collected")
+                return reviews
+        except Exception as e:
+            logger.warning(f"[Naver] HTML parse failed: {e}", exc_info=True)
 
-    async def _crawl_naver_api(self, place_id: str, max_reviews: int) -> List[Dict]:
-        """네이버 플레이스 내부 API를 통한 리뷰 수집"""
+        logger.warning(f"[Naver] No visitor reviews found for place_id={place_id}")
+        return []
+
+    async def _resolve_fake_naver_id(self, fake_id: str, store_name: str = "") -> Optional[str]:
+        """
+        좌표 기반 가짜 네이버 ID를 실제 place_id로 변환
+        search_naver_place()의 폴백 메소드 (Map API / GraphQL / 모바일 검색) 재활용
+        """
+        if not store_name:
+            logger.warning(f"Cannot resolve fake ID {fake_id}: no store_name provided")
+            return None
+
+        logger.info(f"Resolving fake ID {fake_id} for store '{store_name}'")
+
+        # search_naver_place()를 직접 호출하여 폴백 검색 활용
+        # 이 함수는 Open API → Map API → GraphQL → Mobile 순으로 시도
+        try:
+            results = await self.search_naver_place(store_name)
+            for result in results:
+                place_id = result.get("place_id", "")
+                # 진짜 numeric ID만 사용
+                if place_id and place_id.isdigit():
+                    logger.info(f"Resolved fake ID via search: {fake_id} -> {place_id} (name: {result.get('name', '')})")
+                    return place_id
+            logger.warning(f"search_naver_place returned {len(results)} results but none had real IDs")
+        except Exception as e:
+            logger.warning(f"search_naver_place failed for resolution: {e}")
+
+        # 추가 시도: 모바일 네이버 검색에서 직접 place ID 추출
+        try:
+            encoded_query = urllib.parse.quote(store_name)
+            url = f"https://m.search.naver.com/search.naver?where=m_local&query={encoded_query}"
+            headers = {
+                "User-Agent": random.choice(MOBILE_USER_AGENTS),
+                "Accept": "text/html",
+                "Accept-Language": "ko-KR,ko;q=0.9",
+            }
+            async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
+                resp = await client.get(url, headers=headers)
+                logger.info(f"[Resolution] Mobile search status={resp.status_code}, html_length={len(resp.text)}")
+                if resp.status_code == 200:
+                    place_ids = re.findall(r'/place/(\d+)', resp.text)
+                    logger.info(f"[Resolution] Mobile search found {len(place_ids)} place IDs: {place_ids[:5]}")
+                    if place_ids:
+                        real_id = place_ids[0]
+                        logger.info(f"Resolved via mobile search: {fake_id} -> {real_id}")
+                        return real_id
+        except Exception as e:
+            logger.warning(f"Mobile search resolution failed: {e}")
+
+        logger.warning(f"All resolution methods failed for fake ID {fake_id} (store: '{store_name}')")
+        return None
+
+    async def _get_naver_session_cookies(
+        self, client: httpx.AsyncClient, place_id: str, use_pc: bool = True
+    ) -> Dict:
+        """네이버 플레이스 방문자 리뷰 페이지에서 세션 쿠키 획득"""
+        if use_pc:
+            url = f"https://pcmap.place.naver.com/place/{place_id}/review/visitor"
+            headers = self._get_pc_headers()
+        else:
+            url = f"https://m.place.naver.com/place/{place_id}/review/visitor"
+            headers = self._get_mobile_headers()
+
+        try:
+            resp = await client.get(url, headers=headers)
+            cookies = dict(resp.cookies)
+            logger.info(f"[Naver {'PC' if use_pc else 'Mobile'}] Cookie fetch: status={resp.status_code}, cookies={list(cookies.keys())}")
+            return cookies
+        except Exception as e:
+            logger.warning(f"[Naver {'PC' if use_pc else 'Mobile'}] Cookie fetch failed: {e}")
+            return {}
+
+    def _build_visitor_review_payload(self, place_id: str, page: int, per_page: int = 10) -> list:
+        """getVisitorReviews GraphQL 페이로드 생성 (방문자 리뷰 전용)"""
+        return [{
+            "operationName": "getVisitorReviews",
+            "variables": {
+                "input": {
+                    "businessId": place_id,
+                    "businessType": "place",
+                    "item": "0",
+                    "bookingBusinessId": None,
+                    "page": page,
+                    "display": per_page,
+                    "isPhotoUsed": False,
+                    "theme": "0",
+                    "sortType": "latest",
+                },
+                "id": place_id,
+            },
+            "query": self.VISITOR_REVIEW_QUERY,
+        }]
+
+    def _parse_graphql_visitor_response(self, data: any, source: str) -> Tuple[List[Dict], int]:
+        """
+        GraphQL 응답에서 방문자 리뷰 파싱 + 블로그/광고 필터링
+
+        Returns: (유효한 리뷰 목록, 전체 리뷰 수)
+        """
+        if not data or not isinstance(data, list) or len(data) == 0:
+            logger.warning(f"[{source}] Unexpected response format: {type(data)}")
+            return [], 0
+
+        first_result = data[0]
+        if "errors" in first_result:
+            logger.warning(f"[{source}] GraphQL errors: {first_result['errors']}")
+            return [], 0
+
+        visitor_reviews = first_result.get("data", {}).get("visitorReviews") or {}
+        items = visitor_reviews.get("items") or []
+        total = visitor_reviews.get("total", 0)
+
+        valid_reviews = []
+        skipped = 0
+        for item in items:
+            review = self._parse_visitor_review_item(item)
+            if review:
+                valid_reviews.append(review)
+            else:
+                skipped += 1
+
+        if skipped > 0:
+            logger.info(f"[{source}] Filtered {skipped} invalid items (no body/rating)")
+
+        return valid_reviews, total
+
+    async def _crawl_visitor_reviews_pcmap(self, place_id: str, max_reviews: int) -> List[Dict]:
+        """
+        PC Map GraphQL API — 방문자(구매자) 리뷰만 수집
+
+        API: pcmap-api.place.naver.com/place/graphql
+        쿼리: getVisitorReviews (블로그 리뷰 getFsasReviews 사용 금지)
+        """
         reviews = []
         page = 1
-        per_page = 10
+        chrome_ua = random.choice(PC_USER_AGENTS)
 
         async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
-            while len(reviews) < max_reviews:
-                url = f"https://api.place.naver.com/graphql"
-                # GraphQL 쿼리로 리뷰 요청
-                payload = [{
-                    "operationName": "getVisitorReviews",
-                    "variables": {
-                        "input": {
-                            "businessId": place_id,
-                            "businessType": "place",
-                            "item": "0",
-                            "bookingBusinessId": None,
-                            "page": page,
-                            "display": per_page,
-                            "isPhotoUsed": False,
-                            "theme": "0",
-                            "entry": "place/reviews",
-                            "query": ""
-                        },
-                        "id": place_id
-                    },
-                    "query": """
-                        query getVisitorReviews($input: VisitorReviewsInput) {
-                            visitorReviews(input: $input) {
-                                items {
-                                    id
-                                    rating
-                                    author { nickname }
-                                    body
-                                    created
-                                }
-                                total
-                            }
-                        }
-                    """
-                }]
+            cookies = await self._get_naver_session_cookies(client, place_id, use_pc=True)
 
+            api_url = "https://pcmap-api.place.naver.com/place/graphql"
+
+            while len(reviews) < max_reviews:
+                payload = self._build_visitor_review_payload(place_id, page)
                 headers = {
-                    **self._get_headers(),
+                    "User-Agent": chrome_ua,
                     "Content-Type": "application/json",
-                    "Referer": f"https://m.place.naver.com/place/{place_id}/review/visitor",
+                    "Accept": "*/*",
+                    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+                    "Accept-Encoding": "gzip, deflate, br",
+                    "Referer": f"https://pcmap.place.naver.com/place/{place_id}/review/visitor",
+                    "Origin": "https://pcmap.place.naver.com",
+                    "Sec-Ch-Ua": '"Chromium";v="133", "Not(A:Brand";v="99", "Google Chrome";v="133"',
+                    "Sec-Ch-Ua-Mobile": "?0",
+                    "Sec-Ch-Ua-Platform": '"Windows"',
+                    "Sec-Fetch-Dest": "empty",
+                    "Sec-Fetch-Mode": "cors",
+                    "Sec-Fetch-Site": "same-origin",
                 }
 
                 try:
-                    resp = await client.post(url, json=payload, headers=headers)
+                    resp = await client.post(api_url, json=payload, headers=headers, cookies=cookies)
+                    logger.info(f"[PCMap] status={resp.status_code}, place={place_id}, page={page}")
+
                     if resp.status_code != 200:
+                        logger.warning(f"[PCMap] HTTP error: {resp.status_code}, body={resp.text[:300]}")
                         break
 
                     data = resp.json()
-                    if not data or not isinstance(data, list):
+                    page_reviews, total = self._parse_graphql_visitor_response(data, "PCMap")
+
+                    logger.info(f"[PCMap] Got {len(page_reviews)} valid visitor reviews, total={total}, page={page}")
+
+                    if not page_reviews:
                         break
 
-                    visitor_reviews = data[0].get("data", {}).get("visitorReviews", {})
-                    items = visitor_reviews.get("items", [])
+                    reviews.extend(page_reviews)
 
-                    if not items:
+                    if len(reviews) >= total:
                         break
-
-                    for item in items:
-                        review = {
-                            "platform_review_id": str(item.get("id", "")),
-                            "author_name": item.get("author", {}).get("nickname", "익명"),
-                            "rating": item.get("rating", 0),
-                            "content": item.get("body", ""),
-                            "review_date": item.get("created", ""),
-                        }
-                        reviews.append(review)
 
                     page += 1
-                    # 차단 방지 딜레이
                     await self._random_delay()
 
                 except Exception as e:
-                    logger.warning(f"Naver API page {page} error: {e}")
+                    logger.error(f"[PCMap] Page {page} error: {e}", exc_info=True)
                     break
 
+        logger.info(f"[PCMap] Collected {len(reviews)} visitor reviews for place_id={place_id}")
         return reviews[:max_reviews]
 
-    async def _crawl_naver_html(self, place_id: str, max_reviews: int) -> List[Dict]:
-        """네이버 플레이스 HTML 파싱 (폴백)"""
+    async def _crawl_visitor_reviews_mobile(self, place_id: str, max_reviews: int) -> List[Dict]:
+        """
+        모바일 GraphQL API — 방문자(구매자) 리뷰만 수집
+
+        API: api.place.naver.com/graphql
+        쿼리: getVisitorReviews (블로그 리뷰 getFsasReviews 사용 금지)
+        """
+        reviews = []
+        page = 1
+        mobile_ua = random.choice(MOBILE_USER_AGENTS)
+
+        async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
+            cookies = await self._get_naver_session_cookies(client, place_id, use_pc=False)
+
+            while len(reviews) < max_reviews:
+                payload = self._build_visitor_review_payload(place_id, page)
+                headers = {
+                    "User-Agent": mobile_ua,
+                    "Content-Type": "application/json",
+                    "Accept": "*/*",
+                    "Accept-Language": "ko-KR,ko;q=0.9",
+                    "Referer": f"https://m.place.naver.com/place/{place_id}/review/visitor",
+                    "Origin": "https://m.place.naver.com",
+                }
+
+                try:
+                    resp = await client.post(
+                        "https://api.place.naver.com/graphql",
+                        json=payload, headers=headers, cookies=cookies,
+                    )
+                    logger.info(f"[Mobile] status={resp.status_code}, place={place_id}, page={page}")
+
+                    if resp.status_code != 200:
+                        logger.warning(f"[Mobile] HTTP error: {resp.status_code}, body={resp.text[:300]}")
+                        break
+
+                    data = resp.json()
+                    page_reviews, total = self._parse_graphql_visitor_response(data, "Mobile")
+
+                    logger.info(f"[Mobile] Got {len(page_reviews)} valid visitor reviews, total={total}, page={page}")
+
+                    if not page_reviews:
+                        break
+
+                    reviews.extend(page_reviews)
+
+                    if len(reviews) >= total:
+                        break
+
+                    page += 1
+                    await self._random_delay()
+
+                except Exception as e:
+                    logger.error(f"[Mobile] Page {page} error: {e}", exc_info=True)
+                    break
+
+        logger.info(f"[Mobile] Collected {len(reviews)} visitor reviews for place_id={place_id}")
+        return reviews[:max_reviews]
+
+    async def _crawl_visitor_reviews_html(self, place_id: str, max_reviews: int) -> List[Dict]:
+        """
+        HTML 파싱 폴백 — 방문자 리뷰 탭 페이지에서 직접 추출
+
+        URL: m.place.naver.com/place/{place_id}/review/visitor
+        (블로그 리뷰 탭 /review/ugc 사용 금지)
+        """
         reviews = []
 
         async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
             url = f"https://m.place.naver.com/place/{place_id}/review/visitor"
-            headers = self._get_headers()
+            headers = self._get_mobile_headers()
 
             try:
                 resp = await client.get(url, headers=headers)
+                logger.info(f"[HTML] status={resp.status_code}, length={len(resp.text)}, place={place_id}")
                 if resp.status_code != 200:
                     return reviews
 
                 html = resp.text
 
-                # __NEXT_DATA__ JSON에서 리뷰 추출 시도
+                # __NEXT_DATA__ JSON에서 방문자 리뷰 추출
                 next_data_match = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL)
                 if next_data_match:
                     try:
                         next_data = json.loads(next_data_match.group(1))
-                        # props.pageProps 내부에서 리뷰 데이터 탐색
                         page_props = next_data.get("props", {}).get("pageProps", {})
                         initial_data = page_props.get("initialData", {})
 
-                        # 여러 가능한 경로 탐색
-                        review_items = self._find_reviews_in_json(initial_data)
+                        review_items = self._find_visitor_reviews_in_json(initial_data)
                         for item in review_items[:max_reviews]:
-                            reviews.append(item)
+                            # HTML 파싱에서도 유효성 검증 적용
+                            if self._is_valid_visitor_review(item.get("content", ""), item.get("rating", 0)):
+                                item["review_type"] = "visitor"
+                                reviews.append(item)
 
                         if reviews:
+                            logger.info(f"[HTML] Found {len(reviews)} visitor reviews from __NEXT_DATA__")
                             return reviews
-                    except json.JSONDecodeError:
-                        pass
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"[HTML] __NEXT_DATA__ parse error: {e}")
 
-                # HTML 직접 파싱
+                # HTML 직접 파싱 (방문자 리뷰 요소)
                 soup = BeautifulSoup(html, "html.parser")
                 review_elements = soup.select("li.pui__X35jYm") or soup.select("[class*='review']")
 
@@ -209,59 +515,69 @@ class ReviewCrawler:
                         content_el = elem.select_one("[class*='text'], [class*='body']")
                         rating_el = elem.select_one("[class*='star'], [class*='rating']")
 
-                        review = {
+                        content = content_el.get_text(strip=True) if content_el else ""
+                        rating = self._parse_rating(rating_el)
+
+                        # 방문자 리뷰 유효성 검증
+                        if not self._is_valid_visitor_review(content, rating):
+                            continue
+
+                        reviews.append({
                             "platform_review_id": f"naver_{hash(elem.text[:50])}",
                             "author_name": author.get_text(strip=True) if author else "익명",
-                            "rating": self._parse_rating(rating_el),
-                            "content": content_el.get_text(strip=True) if content_el else "",
+                            "rating": rating,
+                            "content": content,
                             "review_date": "",
-                        }
-                        if review["content"]:
-                            reviews.append(review)
+                            "review_type": "visitor",
+                        })
                     except Exception:
                         continue
 
             except Exception as e:
-                logger.warning(f"Naver HTML parse error for {place_id}: {e}")
+                logger.warning(f"[HTML] Parse error for {place_id}: {e}")
 
         return reviews
 
-    def _find_reviews_in_json(self, data, depth=0) -> List[Dict]:
-        """JSON 구조에서 리뷰 데이터를 재귀적으로 탐색"""
+    def _find_visitor_reviews_in_json(self, data, depth=0) -> List[Dict]:
+        """JSON 구조에서 방문자 리뷰 데이터를 재귀적으로 탐색 (visitorReviews 우선)"""
         if depth > 10:
             return []
 
         reviews = []
 
         if isinstance(data, dict):
-            # "visitorReviews" 또는 "reviews" 키 탐색
-            for key in ["visitorReviews", "reviews", "reviewItems", "items"]:
+            # visitorReviews를 최우선으로 탐색 (블로그/fsas 키는 무시)
+            for key in ["visitorReviews", "reviews", "reviewItems"]:
                 if key in data:
                     sub = data[key]
                     if isinstance(sub, dict) and "items" in sub:
                         sub = sub["items"]
                     if isinstance(sub, list):
                         for item in sub:
-                            if isinstance(item, dict) and ("body" in item or "content" in item or "text" in item):
+                            if isinstance(item, dict) and ("body" in item or "content" in item):
+                                body = item.get("body", item.get("content", ""))
+                                rating = item.get("rating", item.get("score", 0))
                                 reviews.append({
                                     "platform_review_id": str(item.get("id", item.get("reviewId", ""))),
                                     "author_name": self._extract_author(item),
-                                    "rating": item.get("rating", item.get("score", 0)),
-                                    "content": item.get("body", item.get("content", item.get("text", ""))),
+                                    "rating": rating,
+                                    "content": body,
                                     "review_date": item.get("created", item.get("date", "")),
                                 })
                         if reviews:
                             return reviews
 
-            # 재귀 탐색
-            for v in data.values():
-                found = self._find_reviews_in_json(v, depth + 1)
+            # 재귀 탐색 (fsasReviews 키는 건너뜀)
+            for k, v in data.items():
+                if k in ("fsasReviews", "blogReviews", "ugcReviews"):
+                    continue  # 블로그 리뷰 관련 키 무시
+                found = self._find_visitor_reviews_in_json(v, depth + 1)
                 if found:
                     return found
 
         elif isinstance(data, list):
             for item in data:
-                found = self._find_reviews_in_json(item, depth + 1)
+                found = self._find_visitor_reviews_in_json(item, depth + 1)
                 if found:
                     return found
 
@@ -279,11 +595,9 @@ class ReviewCrawler:
         if not element:
             return 0
         text = element.get_text(strip=True)
-        # "별점 4" 또는 "4/5" 또는 "★★★★" 형태 파싱
         num_match = re.search(r'(\d)', text)
         if num_match:
             return int(num_match.group(1))
-        # 별 문자 카운트
         return text.count("★") or text.count("⭐")
 
     # ===== 구글 리뷰 =====
@@ -463,7 +777,7 @@ class ReviewCrawler:
         async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
             url = f"https://search.google.com/local/reviews?placeid={place_id}&hl=ko"
             headers = {
-                "User-Agent": random.choice(USER_AGENTS),
+                "User-Agent": random.choice(MOBILE_USER_AGENTS),
                 "Accept": "text/html,application/xhtml+xml",
                 "Accept-Language": "ko-KR,ko;q=0.9",
             }
@@ -681,7 +995,7 @@ class ReviewCrawler:
                 # 카카오맵 리뷰 API
                 url = f"https://place.map.kakao.com/commentlist/v/{place_id}/{page}"
                 headers = {
-                    "User-Agent": random.choice(USER_AGENTS),
+                    "User-Agent": random.choice(MOBILE_USER_AGENTS),
                     "Accept": "application/json",
                     "Referer": f"https://place.map.kakao.com/{place_id}",
                 }
@@ -730,7 +1044,7 @@ class ReviewCrawler:
         async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
             url = f"https://place.map.kakao.com/{place_id}"
             headers = {
-                "User-Agent": random.choice(USER_AGENTS),
+                "User-Agent": random.choice(MOBILE_USER_AGENTS),
                 "Accept": "text/html",
                 "Accept-Language": "ko-KR,ko;q=0.9",
             }
@@ -845,7 +1159,7 @@ class ReviewCrawler:
                 try:
                     url2 = f"https://search.map.kakao.com/mapsearch/map.daum?callback=jQuery&q={urllib.parse.quote(query)}"
                     headers2 = {
-                        "User-Agent": random.choice(USER_AGENTS),
+                        "User-Agent": random.choice(MOBILE_USER_AGENTS),
                         "Referer": "https://map.kakao.com/",
                     }
                     resp2 = await client.get(url2, headers=headers2)
@@ -930,17 +1244,25 @@ class ReviewCrawler:
     async def search_naver_place(self, query: str) -> List[Dict]:
         """네이버 플레이스 검색 (가게 등록 시 사용)"""
         # 1순위: 네이버 검색 Open API (공식 API, 안정적)
-        results = await self.search_naver_open_api(query)
-        if results:
-            logger.info(f"Naver Open API returned {len(results)} results for '{query}'")
-            return results
+        open_api_results = await self.search_naver_open_api(query)
+        # 모든 결과가 진짜 place_id를 가지고 있으면 바로 리턴
+        has_real_ids = any(
+            not r["place_id"].startswith("naver_") for r in open_api_results
+        ) if open_api_results else False
+        if open_api_results and has_real_ids:
+            logger.info(f"Naver Open API returned {len(open_api_results)} results with real IDs for '{query}'")
+            return open_api_results
+
+        # Open API 결과가 가짜 ID만 있으면 다른 방법으로 진짜 ID 찾기
+        if open_api_results:
+            logger.info(f"Naver Open API returned {len(open_api_results)} results with FAKE IDs for '{query}', trying fallbacks...")
 
         results = []
         encoded_query = urllib.parse.quote(query)
 
         async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
-            # 2차: 네이버 지도 API (스크래핑 폴백)
-            url = f"https://map.naver.com/p/api/search/allSearch?query={encoded_query}&type=all"
+            # 2차: 네이버 지도 API (스크래핑 폴백) — searchCoord 필수
+            url = f"https://map.naver.com/p/api/search/allSearch?query={encoded_query}&type=all&searchCoord=126.9783882;37.5666103"
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "Accept": "application/json, text/plain, */*",
@@ -954,7 +1276,9 @@ class ReviewCrawler:
                 logger.info(f"Naver search response status: {resp.status_code} for query: {query}")
                 if resp.status_code == 200:
                     data = resp.json()
-                    places = data.get("result", {}).get("place", {}).get("list", [])
+                    result_data = data.get("result") or {}
+                    place_data = result_data.get("place") or {}
+                    places = place_data.get("list") or []
                     for p in places[:10]:
                         results.append({
                             "place_id": p.get("id", ""),
@@ -1026,7 +1350,7 @@ class ReviewCrawler:
                 try:
                     url3 = f"https://m.search.naver.com/search.naver?where=m_local&query={encoded_query}&sm=mob_sug.pre"
                     headers3 = {
-                        "User-Agent": random.choice(USER_AGENTS),
+                        "User-Agent": random.choice(MOBILE_USER_AGENTS),
                         "Accept": "text/html",
                         "Accept-Language": "ko-KR,ko;q=0.9",
                     }
@@ -1058,8 +1382,29 @@ class ReviewCrawler:
                 except Exception as e:
                     logger.warning(f"Naver mobile local search fallback error: {e}")
 
-        logger.info(f"Naver search results for '{query}': {len(results)} places found")
-        return results
+        # 폴백에서 진짜 ID를 찾으면 Open API 메타데이터와 병합
+        if results:
+            logger.info(f"Naver fallback search found {len(results)} results with real IDs for '{query}'")
+            # Open API 결과의 이름/주소를 매칭하여 보강
+            if open_api_results:
+                for result in results:
+                    for oapi in open_api_results:
+                        # 이름이 유사하면 Open API의 메타데이터를 보강
+                        if oapi["name"] in result["name"] or result["name"] in oapi["name"]:
+                            if not result.get("category") and oapi.get("category"):
+                                result["category"] = oapi["category"]
+                            if not result.get("phone") and oapi.get("phone"):
+                                result["phone"] = oapi["phone"]
+                            break
+            return results
+
+        # 폴백도 실패하면 Open API 결과라도 리턴 (가짜 ID지만 이름/주소 정보는 있음)
+        if open_api_results:
+            logger.warning(f"All fallbacks failed, returning Open API results with fake IDs for '{query}'")
+            return open_api_results
+
+        logger.info(f"Naver search results for '{query}': 0 places found")
+        return []
 
     # ===== URL 파싱 =====
 
@@ -1144,6 +1489,8 @@ class ReviewCrawler:
         """
         감성 분석 — 룰 기반 (비용 0원)
         별점 + 키워드 조합으로 판별
+
+        방문자 리뷰 전용: rating 1~5 + body 텍스트 기반 분석
         """
         if not content and rating > 0:
             if rating <= 2:

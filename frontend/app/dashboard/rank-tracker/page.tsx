@@ -41,7 +41,7 @@ export default function RankTrackerPage() {
   const { isAuthenticated, user } = useAuthStore()
 
   // P1-2: 무료 사용자 접근 제한 (베이직 이상 필요)
-  const userPlan = user?.subscription?.plan_type || 'free'
+  const userPlan = user?.plan || 'free'
   const isFreePlan = userPlan === 'free'
 
   const [blogs, setBlogs] = useState<TrackedBlog[]>([])

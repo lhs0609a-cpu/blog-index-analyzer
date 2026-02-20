@@ -39,6 +39,7 @@ class AlertSettingRequest(BaseModel):
     alert_type: str  # 'negative_review' | 'rating_drop' | 'keyword_mention'
     condition: dict  # {"min_rating": 3} or {"keywords": ["불만"]}
     notification_channel: str = "in_app"
+    is_active: bool = True
 
 
 class TemplateCreateRequest(BaseModel):
@@ -172,11 +173,19 @@ async def get_review(review_id: str):
 
 @router.post("/stores/{store_id}/collect")
 async def collect_reviews(store_id: str):
-    """가게 리뷰 수동 수집"""
+    """가게 리뷰 수동 수집 — 기존 블로그 리뷰도 자동 정리"""
     db = get_reputation_db()
     store = db.get_store(store_id)
     if not store:
         raise HTTPException(status_code=404, detail="가게를 찾을 수 없습니다")
+
+    logger.info(f"[CollectAPI] Manual collect triggered: store_id={store_id}, name='{store.get('store_name')}', "
+                f"naver={store.get('naver_place_id')}, google={store.get('google_place_id')}, kakao={store.get('kakao_place_id')}")
+
+    # 수집 전 기존 블로그 리뷰 정리
+    purged = db.purge_blog_reviews(store_id)
+    if purged > 0:
+        logger.info(f"[CollectAPI] Purged {purged} old blog reviews before collection")
 
     collected = 0
     platforms_collected = {}
@@ -197,11 +206,26 @@ async def collect_reviews(store_id: str):
                 collected += count
                 platforms_collected[platform] = count
             except Exception as e:
-                logger.error(f"{platform} review collection failed: {e}")
+                logger.error(f"[CollectAPI] {platform} review collection failed: {e}", exc_info=True)
                 platforms_collected[platform] = 0
+        else:
+            logger.info(f"[CollectAPI] Skipping {platform}: no place_id registered")
 
     db.update_last_crawled(store_id)
-    return {"success": True, "collected_count": collected, "by_platform": platforms_collected}
+    logger.info(f"[CollectAPI] Collection complete: total={collected}, purged_blog={purged}, by_platform={platforms_collected}")
+    return {"success": True, "collected_count": collected, "purged_blog_reviews": purged, "by_platform": platforms_collected}
+
+
+@router.post("/stores/{store_id}/purge-blog-reviews")
+async def purge_blog_reviews(store_id: str):
+    """기존 블로그 리뷰 일괄 삭제 (별점 0 + 블로그 제목 패턴)"""
+    db = get_reputation_db()
+    store = db.get_store(store_id)
+    if not store:
+        raise HTTPException(status_code=404, detail="가게를 찾을 수 없습니다")
+
+    purged = db.purge_blog_reviews(store_id)
+    return {"success": True, "purged_count": purged, "message": f"블로그 리뷰 {purged}건이 삭제되었습니다"}
 
 
 # ===== AI 답변 =====
@@ -232,14 +256,19 @@ async def generate_ai_response(review_id: str, req: GenerateResponseRequest):
     return result
 
 
+class UpdateResponseRequest(BaseModel):
+    response: str
+    status: str = "applied"
+
+
 @router.put("/reviews/{review_id}/response")
-async def update_review_response(review_id: str, response: str = Query(...), status: str = Query("applied")):
+async def update_review_response(review_id: str, req: UpdateResponseRequest):
     """답변 수정/저장 (사장님이 수정한 후 저장)"""
     db = get_reputation_db()
     review = db.get_review(review_id)
     if not review:
         raise HTTPException(status_code=404, detail="리뷰를 찾을 수 없습니다")
-    db.update_review_response(review_id, response, status)
+    db.update_review_response(review_id, req.response, req.status)
     return {"success": True}
 
 
@@ -304,7 +333,7 @@ async def update_alert_settings(
     user_id: str = Query("demo_user"),
     req: AlertSettingRequest = ...,
 ):
-    """알림 설정 변경"""
+    """알림 설정 변경 (is_active=false 시 비활성화)"""
     db = get_reputation_db()
     setting_id = db.upsert_alert_setting(
         store_id=store_id,
@@ -312,6 +341,7 @@ async def update_alert_settings(
         alert_type=req.alert_type,
         condition=req.condition,
         channel=req.notification_channel,
+        is_active=req.is_active,
     )
     return {"success": True, "setting_id": setting_id}
 
@@ -630,23 +660,62 @@ async def _collect_reviews_for_store(store_id: str, platform: str, place_id: str
     """가게의 리뷰 수집 + 감성 분석 + DB 저장"""
     db = get_reputation_db()
     collected = 0
+    logger.info(f"[Collect] Starting: store_id={store_id}, platform={platform}, place_id={place_id}")
 
     try:
+        raw_reviews = []
         if platform == "naver_place":
-            raw_reviews = await crawler.crawl_naver_place(place_id, max_reviews=50)
+            # 가짜 ID인 경우 store_name 전달하여 자동 해결
+            store_name = ""
+            store = db.get_store(store_id)
+            if store:
+                store_name = store.get("store_name", "")
+            logger.info(f"[Collect] Naver crawl start: place_id={place_id}, is_fake={place_id.startswith('naver_')}, store_name='{store_name}'")
+            raw_reviews = await crawler.crawl_naver_place(place_id, max_reviews=50, store_name=store_name)
+            logger.info(f"[Collect] Naver crawl result: {len(raw_reviews)} raw reviews")
+            # 가짜 ID가 해결되었으면 DB 업데이트
+            if place_id.startswith("naver_") and raw_reviews:
+                resolved_id = getattr(crawler, '_last_resolved_id', None)
+                if resolved_id:
+                    try:
+                        conn = db._get_connection()
+                        conn.execute(
+                            "UPDATE monitored_stores SET naver_place_id = ? WHERE id = ?",
+                            (resolved_id, store_id)
+                        )
+                        conn.commit()
+                        conn.close()
+                        logger.info(f"[Collect] Updated store naver_place_id: {place_id} -> {resolved_id}")
+                    except Exception as e:
+                        logger.warning(f"[Collect] Failed to update resolved place_id: {e}")
         elif platform == "google":
             raw_reviews = await crawler.crawl_google_reviews(place_id, max_reviews=50)
+            logger.info(f"[Collect] Google crawl result: {len(raw_reviews)} raw reviews")
         elif platform == "kakao":
             raw_reviews = await crawler.crawl_kakao_reviews(place_id, max_reviews=50)
+            logger.info(f"[Collect] Kakao crawl result: {len(raw_reviews)} raw reviews")
         else:
+            logger.warning(f"[Collect] Unknown platform: {platform}")
             return 0
 
+        skipped = 0
         for raw in raw_reviews:
-            # 감성 분석
-            sentiment_result = crawler.analyze_sentiment(
-                raw.get("content", ""),
-                raw.get("rating", 0),
+            content = raw.get("content", "").strip()
+            rating = raw.get("rating", 0)
+
+            # 방문자/구매자 리뷰 유효성 검증 — 블로그 글/광고 필터링
+            is_blog = (
+                (rating == 0 and len(content) < 5) or  # 별점 없고 내용도 없음
+                "⭐" in content or  # 블로그 제목 패턴
+                content.startswith("[블로그 리뷰]") or  # 이전 블로그 리뷰 형식
+                (rating == 0 and raw.get("author_name") == "블로거")  # 블로거 작성
             )
+            if is_blog:
+                skipped += 1
+                continue
+
+            # 감성 분석
+            sentiment_result = crawler.analyze_sentiment(content, rating)
 
             # DB 저장 (중복 무시)
             review_id = db.add_review(
@@ -654,8 +723,8 @@ async def _collect_reviews_for_store(store_id: str, platform: str, place_id: str
                 platform=platform,
                 platform_review_id=raw.get("platform_review_id", ""),
                 author_name=raw.get("author_name", "익명"),
-                rating=raw.get("rating", 0),
-                content=raw.get("content", ""),
+                rating=rating,
+                content=content,
                 review_date=raw.get("review_date", ""),
                 sentiment=sentiment_result["sentiment"],
                 sentiment_score=sentiment_result["score"],
@@ -665,6 +734,9 @@ async def _collect_reviews_for_store(store_id: str, platform: str, place_id: str
 
             if review_id:
                 collected += 1
+
+        if skipped > 0:
+            logger.info(f"[Collect] Filtered out {skipped} blog/invalid reviews for store {store_id}")
 
         db.update_last_crawled(store_id)
         logger.info(f"Collected {collected} new reviews for store {store_id}")

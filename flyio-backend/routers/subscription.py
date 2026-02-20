@@ -169,6 +169,26 @@ async def get_plan_info(plan_type: str):
 @router.get("/me")
 async def get_my_subscription(user_id: int = Query(..., description="사용자 ID")):
     """내 구독 정보 조회"""
+    # 관리자 체크 - business 플랜으로 반환
+    try:
+        user_db_inst = get_user_db()
+        user = user_db_inst.get_user_by_id(user_id)
+        if user and user.get('is_admin'):
+            business_limits = PLAN_LIMITS[PlanType.BUSINESS]
+            return {
+                "user_id": user_id,
+                "plan_type": "business",
+                "plan_name": "비즈니스 (관리자)",
+                "billing_cycle": None,
+                "status": "active",
+                "started_at": None,
+                "expires_at": None,
+                "cancelled_at": None,
+                "plan_limits": business_limits
+            }
+    except Exception:
+        pass
+
     subscription = get_user_subscription(user_id)
 
     # 고아 구독 검증 (삭제된 사용자의 구독이 새 사용자에게 할당되는 문제 방지)

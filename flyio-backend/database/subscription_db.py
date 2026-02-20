@@ -552,6 +552,22 @@ def increment_usage(user_id: int, usage_type: str) -> Dict:
 
 def check_usage_limit(user_id: int, usage_type: str) -> Dict:
     """사용량 제한 확인"""
+    # 관리자 체크 - 무제한 허용
+    try:
+        from database.user_db import get_user_db
+        user_db = get_user_db()
+        user = user_db.get_user_by_id(user_id)
+        if user and user.get('is_admin'):
+            return {
+                "allowed": True,
+                "used": 0,
+                "limit": -1,
+                "remaining": -1,
+                "plan": "business"
+            }
+    except Exception:
+        pass
+
     subscription = get_user_subscription(user_id)
 
     # 고아 구독 검증 (users와 subscriptions가 별도 DB인 경우 발생 가능)
@@ -607,6 +623,21 @@ async def check_feature_access(user_id: int, feature: str) -> Dict:
     Returns:
         dict with 'allowed' (bool) and 'plan' (str)
     """
+    # 관리자 체크 - 모든 기능 접근 허용
+    try:
+        from database.user_db import get_user_db
+        user_db = get_user_db()
+        user = user_db.get_user_by_id(user_id)
+        if user and user.get('is_admin'):
+            return {
+                "allowed": True,
+                "plan": "business",
+                "feature": feature,
+                "required_plans": ["business"]
+            }
+    except Exception:
+        pass
+
     # 기능별 최소 플랜 요구사항
     feature_requirements = {
         "winner_keywords": ["pro", "business"],  # Pro 이상
