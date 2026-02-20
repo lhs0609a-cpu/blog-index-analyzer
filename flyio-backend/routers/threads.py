@@ -452,7 +452,7 @@ async def api_update_post(
 ):
     """게시물 수정"""
     post = get_post(post_id)
-    if not post or post["campaign_id"] != campaign_id:
+    if not post or post.get("campaign_id") != campaign_id:
         raise HTTPException(status_code=404, detail="Post not found")
 
     update_data = {k: v for k, v in data.model_dump(exclude_none=True).items()}
@@ -460,6 +460,8 @@ async def api_update_post(
         raise HTTPException(status_code=400, detail="No data to update")
 
     success = update_post(post_id, **update_data)
+    if not success:
+        raise HTTPException(status_code=500, detail="Post update failed")
     return {"success": success}
 
 
@@ -471,7 +473,7 @@ async def api_regenerate_post(
 ):
     """게시물 AI 재생성"""
     post = get_post(post_id)
-    if not post or post["campaign_id"] != campaign_id:
+    if not post or post.get("campaign_id") != campaign_id:
         raise HTTPException(status_code=404, detail="Post not found")
 
     campaign = get_campaign(campaign_id)

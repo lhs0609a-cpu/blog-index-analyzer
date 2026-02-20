@@ -98,6 +98,7 @@ export default function XCampaignDetailPage() {
       }
     } catch (error) {
       console.error('Error fetching campaign data:', error);
+      toast.error('캠페인 데이터를 불러오는데 실패했습니다');
     }
     setLoading(false);
   };

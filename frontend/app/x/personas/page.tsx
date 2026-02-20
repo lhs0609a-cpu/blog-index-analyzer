@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr';
 
@@ -36,8 +37,9 @@ export default function XPersonasPage() {
         const data = await res.json();
         setPersonas(data.personas || []);
       }
-    } catch {
-      // 페르소나 로드 실패 무시
+    } catch (error) {
+      console.error('Error fetching personas:', error);
+      toast.error('페르소나를 불러오는데 실패했습니다');
     }
     setLoading(false);
   };
@@ -52,9 +54,11 @@ export default function XPersonasPage() {
 
       if (res.ok) {
         setPersonas(prev => prev.filter(p => p.id !== personaId));
+        toast.success('페르소나가 삭제되었습니다');
       }
-    } catch {
-      // 페르소나 삭제 실패 무시
+    } catch (error) {
+      console.error('Error deleting persona:', error);
+      toast.error('페르소나 삭제에 실패했습니다');
     }
   };
 

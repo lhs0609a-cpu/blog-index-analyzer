@@ -25,8 +25,18 @@ X_AUTH_URL = "https://twitter.com/i/oauth2/authorize"
 X_TOKEN_URL = "https://api.twitter.com/2/oauth2/token"
 X_API_BASE = "https://api.twitter.com/2"
 
-# PKCE 코드 저장 (실제로는 Redis 등 사용 권장)
-_pkce_store: Dict[str, str] = {}
+# PKCE 코드 저장 (TTL 10분, 자동 정리)
+import time as _time
+_pkce_store: Dict[str, tuple] = {}  # {state: (code_verifier, timestamp)}
+_PKCE_TTL = 600  # 10분
+
+
+def _cleanup_pkce():
+    """만료된 PKCE 항목 정리"""
+    now = _time.time()
+    expired = [k for k, (_, ts) in _pkce_store.items() if now - ts > _PKCE_TTL]
+    for k in expired:
+        _pkce_store.pop(k, None)
 
 
 def generate_pkce() -> tuple[str, str]:
@@ -40,8 +50,9 @@ def generate_pkce() -> tuple[str, str]:
 
 def get_auth_url(state: str) -> str:
     """X OAuth 2.0 인증 URL 생성"""
+    _cleanup_pkce()
     code_verifier, code_challenge = generate_pkce()
-    _pkce_store[state] = code_verifier
+    _pkce_store[state] = (code_verifier, _time.time())
 
     params = {
         "response_type": "code",
@@ -58,7 +69,8 @@ def get_auth_url(state: str) -> str:
 
 async def exchange_code_for_token(code: str, state: str) -> Optional[Dict]:
     """인증 코드를 액세스 토큰으로 교환"""
-    code_verifier = _pkce_store.pop(state, None)
+    entry = _pkce_store.pop(state, None)
+    code_verifier = entry[0] if entry else None
     if not code_verifier:
         logger.error("PKCE code_verifier not found for state")
         return None

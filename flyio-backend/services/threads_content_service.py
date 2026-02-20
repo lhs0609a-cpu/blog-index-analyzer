@@ -303,16 +303,22 @@ layer가 "storyline"이면 브랜드와 연결되는 여정입니다.
                     # JSON 파싱
                     try:
                         # ```json ... ``` 제거
-                        if "```" in content:
-                            content = content.split("```")[1]
-                            if content.startswith("json"):
-                                content = content[4:]
+                        import re
+                        code_block = re.search(r'```(?:json)?\s*(.*?)\s*```', content, re.DOTALL)
+                        if code_block:
+                            content = code_block.group(1)
 
                         generated = json.loads(content.strip())
 
+                        # AI가 dict를 반환한 경우 list로 변환
+                        if isinstance(generated, dict):
+                            generated = [generated]
+                        if not isinstance(generated, list):
+                            raise json.JSONDecodeError("Expected list", content, 0)
+
                         # 원본 구조와 병합
                         for i, item in enumerate(batch):
-                            if i < len(generated):
+                            if i < len(generated) and isinstance(generated[i], dict):
                                 item["content"] = generated[i].get("content", "")
                                 item["hashtags"] = generated[i].get("hashtags", [])
                             else:
@@ -320,7 +326,7 @@ layer가 "storyline"이면 브랜드와 연결되는 여정입니다.
 
                         return batch
 
-                    except json.JSONDecodeError as e:
+                    except (json.JSONDecodeError, TypeError, IndexError) as e:
                         logger.error(f"JSON parse error: {e}")
                         return self._generate_template_content(persona, campaign, batch)
                 else:

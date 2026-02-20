@@ -649,7 +649,7 @@ def save_threads_account(
             UPDATE threads_accounts
             SET username = ?, access_token = ?, token_expires_at = ?, is_active = 1
             WHERE id = ?
-        """, (username, access_token, token_expires_at.isoformat(), existing['id']))
+        """, (username, access_token, token_expires_at.isoformat() if token_expires_at else None, existing['id']))
         account_id = existing['id']
     else:
         # 새로 생성
@@ -658,7 +658,7 @@ def save_threads_account(
             INSERT INTO threads_accounts (
                 id, user_id, threads_user_id, username, access_token, token_expires_at
             ) VALUES (?, ?, ?, ?, ?, ?)
-        """, (account_id, user_id, threads_user_id, username, access_token, token_expires_at.isoformat()))
+        """, (account_id, user_id, threads_user_id, username, access_token, token_expires_at.isoformat() if token_expires_at else None))
 
     conn.commit()
     conn.close()
@@ -719,6 +719,7 @@ def get_accounts_needing_refresh() -> List[Dict]:
     cursor.execute("""
         SELECT * FROM threads_accounts
         WHERE is_active = 1
+        AND token_expires_at IS NOT NULL
         AND datetime(token_expires_at) < datetime('now', '+7 days')
     """)
 

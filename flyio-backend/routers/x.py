@@ -218,7 +218,7 @@ async def get_x_campaign(campaign_id: str):
 @router.put("/campaigns/{campaign_id}")
 async def update_x_campaign(campaign_id: str, request: XCampaignUpdate):
     """X 캠페인 업데이트"""
-    update_data = request.dict(exclude_unset=True)
+    update_data = request.model_dump(exclude_unset=True)
     success = x_db.update_x_campaign(campaign_id, **update_data)
     if not success:
         raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
@@ -432,7 +432,7 @@ async def get_x_persona(persona_id: str):
 @router.put("/personas/{persona_id}")
 async def update_x_persona(persona_id: str, request: XPersonaUpdate):
     """X 페르소나 업데이트"""
-    update_data = request.dict(exclude_unset=True)
+    update_data = request.model_dump(exclude_unset=True)
     success = x_db.update_x_persona(persona_id, **update_data)
     if not success:
         raise HTTPException(status_code=404, detail="페르소나를 찾을 수 없습니다.")

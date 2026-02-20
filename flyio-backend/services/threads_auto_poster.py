@@ -74,24 +74,26 @@ class ThreadsAutoPoster:
         from database.threads_db import get_db_connection
 
         conn = get_db_connection()
-        cursor = conn.cursor()
+        try:
+            cursor = conn.cursor()
 
-        # 현재 시간 기준으로 발행해야 할 게시물 조회
-        now = datetime.now().isoformat()
+            # 현재 시간 기준으로 발행해야 할 게시물 조회
+            now = datetime.now().isoformat()
 
-        cursor.execute("""
-            SELECT p.*, c.user_id, c.status as campaign_status
-            FROM content_posts p
-            JOIN campaigns c ON p.campaign_id = c.id
-            WHERE p.status = 'scheduled'
-            AND p.scheduled_at <= ?
-            AND c.status = 'active'
-            ORDER BY p.scheduled_at ASC
-            LIMIT 10
-        """, (now,))
+            cursor.execute("""
+                SELECT p.*, c.user_id, c.status as campaign_status
+                FROM content_posts p
+                JOIN campaigns c ON p.campaign_id = c.id
+                WHERE p.status = 'scheduled'
+                AND p.scheduled_at <= ?
+                AND c.status = 'active'
+                ORDER BY p.scheduled_at ASC
+                LIMIT 10
+            """, (now,))
 
-        posts = cursor.fetchall()
-        conn.close()
+            posts = cursor.fetchall()
+        finally:
+            conn.close()
 
         for post in posts:
             post_dict = dict(post)

@@ -74,6 +74,7 @@ export default function XPersonaDetailPage() {
       }
     } catch (error) {
       console.error('Error fetching persona:', error);
+      toast.error('페르소나 데이터를 불러오는데 실패했습니다');
     }
     setLoading(false);
   };

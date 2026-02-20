@@ -135,8 +135,9 @@ export default function XAutopilotPage() {
         const data = await accountsRes.json();
         setAccounts(data.accounts || []);
       }
-    } catch {
-      // 데이터 로드 실패 무시
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast.error('데이터를 불러오는데 실패했습니다');
     }
     setLoading(false);
   };
@@ -170,8 +171,9 @@ export default function XAutopilotPage() {
       if (res.ok) {
         setAccounts(prev => prev.filter(a => a.id !== accountId));
       }
-    } catch {
-      // 연결 해제 실패 무시
+    } catch (error) {
+      console.error('Error disconnecting:', error);
+      toast.error('계정 연결 해제에 실패했습니다');
     }
   };
 
