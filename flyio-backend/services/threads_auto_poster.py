@@ -26,6 +26,7 @@ class ThreadsAutoPoster:
     def __init__(self):
         self._running = False
         self._thread: Optional[threading.Thread] = None
+        self._stop_event = threading.Event()
         self._interval = 60  # 1분마다 체크
 
     def start(self, interval_seconds: int = 60):
@@ -43,25 +44,30 @@ class ThreadsAutoPoster:
     def stop(self):
         """스케줄러 중지"""
         self._running = False
+        self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=5)
         logger.info("Threads auto poster stopped")
 
     def _run_loop(self):
-        """메인 루프"""
-        while self._running:
-            try:
-                # 비동기 작업 실행
-                asyncio.run(self._check_and_post())
-                asyncio.run(self._check_token_refresh())
-            except Exception as e:
-                logger.error(f"Auto poster error: {e}")
+        """메인 루프 - 단일 이벤트 루프 재사용"""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            while self._running:
+                try:
+                    loop.run_until_complete(self._check_and_post())
+                    loop.run_until_complete(self._check_token_refresh())
+                except Exception as e:
+                    logger.error(f"Auto poster error: {e}")
 
-            # 대기
-            for _ in range(self._interval):
-                if not self._running:
-                    break
-                threading.Event().wait(1)
+                # 대기 (1초 단위로 _running 체크)
+                for _ in range(self._interval):
+                    if not self._running:
+                        break
+                    self._stop_event.wait(1)
+        finally:
+            loop.close()
 
     async def _check_and_post(self):
         """예약된 게시물 확인 및 발행"""

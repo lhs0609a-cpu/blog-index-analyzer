@@ -182,6 +182,11 @@ class Settings(BaseSettings):
     THREADS_APP_SECRET: str = ""
     THREADS_REDIRECT_URI: str = "https://www.blrank.co.kr/threads/callback"
 
+    # X (Twitter) API
+    X_CLIENT_ID: str = ""
+    X_CLIENT_SECRET: str = ""
+    X_REDIRECT_URI: str = "https://www.blrank.co.kr/x/callback"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

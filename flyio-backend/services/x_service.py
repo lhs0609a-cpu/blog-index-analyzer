@@ -12,12 +12,14 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Any
 from urllib.parse import urlencode
 
+from config import settings
+
 logger = logging.getLogger(__name__)
 
-# X API 설정
-X_CLIENT_ID = os.environ.get("X_CLIENT_ID", "")
-X_CLIENT_SECRET = os.environ.get("X_CLIENT_SECRET", "")
-X_REDIRECT_URI = os.environ.get("X_REDIRECT_URI", "https://naverpay-delivery-tracker.fly.dev/api/x/auth/callback")
+# X API 설정 (config.py에서 가져옴)
+X_CLIENT_ID = settings.X_CLIENT_ID
+X_CLIENT_SECRET = settings.X_CLIENT_SECRET
+X_REDIRECT_URI = settings.X_REDIRECT_URI
 
 X_AUTH_URL = "https://twitter.com/i/oauth2/authorize"
 X_TOKEN_URL = "https://api.twitter.com/2/oauth2/token"

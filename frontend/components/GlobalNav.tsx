@@ -17,7 +17,9 @@ import {
   Home,
   LayoutDashboard,
   Eye,
-  GitBranch
+  GitBranch,
+  MessageCircle,
+  Radio
 } from 'lucide-react'
 import { useAuthStore } from '@/lib/stores/auth'
 import UsageIndicator from './UsageIndicator'
@@ -74,14 +76,28 @@ const navItems = [
     description: '마케팅 퍼널 설계 & AI 진단'
   },
   {
+    label: 'Threads',
+    href: '/threads',
+    icon: MessageCircle,
+    badge: 'BETA',
+    badgeColor: 'bg-purple-500 text-white',
+    description: 'AI 스레드 자동 마케팅'
+  },
+  {
+    label: 'X 자동화',
+    href: '/x',
+    icon: Radio,
+    badge: 'BETA',
+    badgeColor: 'bg-gray-800 text-white',
+    description: 'AI 트위터/X 자동 포스팅'
+  },
+  {
     label: '대시보드',
     href: '/dashboard',
     icon: LayoutDashboard,
     description: '내 분석 현황'
   }
 ]
-
-// SNS 자동화 메뉴 - 추후 유저 풀 확보 후 재활성화
 
 export default function GlobalNav() {
   const pathname = usePathname()
@@ -161,7 +177,6 @@ export default function GlobalNav() {
                   )
                 })}
 
-                {/* SNS 자동화 메뉴 제거 - 추후 유저 풀 확보 후 재활성화 */}
               </nav>
 
               {/* Right Section */}
@@ -354,8 +369,6 @@ export default function GlobalNav() {
                   )
                 })}
               </div>
-
-              {/* SNS 자동화 섹션 제거 - 추후 유저 풀 확보 후 재활성화 */}
 
               {/* Bottom Section */}
               <div className="p-4 border-t space-y-2">

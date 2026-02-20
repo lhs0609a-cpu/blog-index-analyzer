@@ -189,7 +189,7 @@ async def api_get_persona(persona_id: str):
 @router.patch("/personas/{persona_id}")
 async def api_update_persona(persona_id: str, data: PersonaUpdate):
     """페르소나 수정"""
-    update_data = {k: v for k, v in data.dict().items() if v is not None}
+    update_data = {k: v for k, v in data.model_dump(exclude_none=True).items()}
     if not update_data:
         raise HTTPException(status_code=400, detail="No data to update")
 
@@ -264,7 +264,7 @@ async def api_get_campaign(campaign_id: str):
 @router.patch("/campaigns/{campaign_id}")
 async def api_update_campaign(campaign_id: str, data: CampaignUpdate):
     """캠페인 수정"""
-    update_data = {k: v for k, v in data.dict().items() if v is not None}
+    update_data = {k: v for k, v in data.model_dump(exclude_none=True).items()}
     if not update_data:
         raise HTTPException(status_code=400, detail="No data to update")
 
@@ -455,7 +455,7 @@ async def api_update_post(
     if not post or post["campaign_id"] != campaign_id:
         raise HTTPException(status_code=404, detail="Post not found")
 
-    update_data = {k: v for k, v in data.dict().items() if v is not None}
+    update_data = {k: v for k, v in data.model_dump(exclude_none=True).items()}
     if not update_data:
         raise HTTPException(status_code=400, detail="No data to update")
 
