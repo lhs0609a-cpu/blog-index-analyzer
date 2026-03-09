@@ -499,7 +499,9 @@ class SearchInsights(BaseModel):
     average_image_count: float = 0  # 평균 이미지 수
     average_video_count: float = 0  # 평균 영상 수
     # 월간 검색량
-    monthly_search_volume: int = 0  # 월간 검색량
+    monthly_search_volume: int = 0  # 월간 검색량 (총합)
+    monthly_pc_search: int = 0  # PC 검색량
+    monthly_mobile_search: int = 0  # 모바일 검색량
 
 
 class KeywordSearchResponse(BaseModel):
@@ -3785,17 +3787,24 @@ async def search_keyword_with_tabs(
 
     # 월간 검색량 조회 (미리 시작한 태스크 결과 가져오기)
     monthly_search_volume = 0
+    monthly_pc_search = 0
+    monthly_mobile_search = 0
     try:
         related_result = await search_volume_task
         if related_result.success and related_result.keywords:
+            matched_kw = None
             # 정확히 일치하는 키워드의 검색량을 찾음
             for kw in related_result.keywords:
                 if kw.keyword.replace(" ", "") == keyword.replace(" ", ""):
-                    monthly_search_volume = kw.monthly_total_search or 0
+                    matched_kw = kw
                     break
             # 정확히 일치하는 것이 없으면 첫 번째 키워드 사용
-            if monthly_search_volume == 0 and related_result.keywords:
-                monthly_search_volume = related_result.keywords[0].monthly_total_search or 0
+            if matched_kw is None and related_result.keywords:
+                matched_kw = related_result.keywords[0]
+            if matched_kw:
+                monthly_search_volume = matched_kw.monthly_total_search or 0
+                monthly_pc_search = matched_kw.monthly_pc_search or 0
+                monthly_mobile_search = matched_kw.monthly_mobile_search or 0
     except Exception as e:
         logger.warning(f"Failed to fetch monthly search volume: {e}")
 
@@ -3811,7 +3820,9 @@ async def search_keyword_with_tabs(
         average_content_length=avg_content_length,
         average_image_count=avg_image_count,
         average_video_count=avg_video_count,
-        monthly_search_volume=monthly_search_volume
+        monthly_search_volume=monthly_search_volume,
+        monthly_pc_search=monthly_pc_search,
+        monthly_mobile_search=monthly_mobile_search
     )
 
     # Auto-collect learning samples from search results

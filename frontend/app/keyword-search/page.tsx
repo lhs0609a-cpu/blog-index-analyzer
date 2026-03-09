@@ -85,6 +85,10 @@ interface KeywordSearchInsights {
   average_content_length?: number  // 평균 글자수
   average_image_count?: number  // 평균 이미지 수
   average_video_count?: number  // 평균 영상 수
+  // 월간 검색량
+  monthly_search_volume?: number  // 월간 검색량 (총합)
+  monthly_pc_search?: number  // PC 검색량
+  monthly_mobile_search?: number  // 모바일 검색량
 }
 
 interface KeywordSearchResponse {
@@ -1565,10 +1569,10 @@ function KeywordSearchContent() {
                               <span className="text-2xl">📊</span>
                               키워드 인사이트
                             </h4>
-                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-9 gap-4">
                               <div className="bg-white rounded-lg p-4 text-center">
                                 <div className="text-2xl font-bold text-orange-600">
-                                  {status.result?.insights?.monthly_search_volume
+                                  {status.result?.insights?.monthly_search_volume != null
                                     ? status.result.insights.monthly_search_volume >= 10000
                                       ? `${(status.result.insights.monthly_search_volume / 10000).toFixed(1)}만`
                                       : status.result.insights.monthly_search_volume >= 1000
@@ -1576,7 +1580,31 @@ function KeywordSearchContent() {
                                         : status.result.insights.monthly_search_volume.toLocaleString()
                                     : '-'}
                                 </div>
-                                <div className="text-xs text-gray-600 mt-1">월검색량</div>
+                                <div className="text-xs text-gray-600 mt-1">월검색량(총합)</div>
+                              </div>
+                              <div className="bg-white rounded-lg p-4 text-center">
+                                <div className="text-2xl font-bold text-blue-600">
+                                  {status.result?.insights?.monthly_pc_search != null
+                                    ? status.result.insights.monthly_pc_search >= 10000
+                                      ? `${(status.result.insights.monthly_pc_search / 10000).toFixed(1)}만`
+                                      : status.result.insights.monthly_pc_search >= 1000
+                                        ? `${(status.result.insights.monthly_pc_search / 1000).toFixed(1)}천`
+                                        : status.result.insights.monthly_pc_search.toLocaleString()
+                                    : '-'}
+                                </div>
+                                <div className="text-xs text-gray-600 mt-1">PC 검색량</div>
+                              </div>
+                              <div className="bg-white rounded-lg p-4 text-center">
+                                <div className="text-2xl font-bold text-green-600">
+                                  {status.result?.insights?.monthly_mobile_search != null
+                                    ? status.result.insights.monthly_mobile_search >= 10000
+                                      ? `${(status.result.insights.monthly_mobile_search / 10000).toFixed(1)}만`
+                                      : status.result.insights.monthly_mobile_search >= 1000
+                                        ? `${(status.result.insights.monthly_mobile_search / 1000).toFixed(1)}천`
+                                        : status.result.insights.monthly_mobile_search.toLocaleString()
+                                    : '-'}
+                                </div>
+                                <div className="text-xs text-gray-600 mt-1">모바일 검색량</div>
                               </div>
                               <div className="bg-white rounded-lg p-4 text-center">
                                 <div className="text-2xl font-bold text-[#0064FF]">
