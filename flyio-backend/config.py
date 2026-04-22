@@ -173,6 +173,10 @@ class Settings(BaseSettings):
     # Google Places API (New)
     GOOGLE_PLACES_API_KEY: str = ""
 
+    # Google Custom Search API (Influencer Discovery)
+    GOOGLE_CSE_API_KEY: str = ""  # 별도 키 or GOOGLE_PLACES_API_KEY 재사용 가능
+    GOOGLE_CSE_ID: str = ""       # Programmable Search Engine ID (cx)
+
     # 토스페이먼츠 결제
     TOSS_CLIENT_KEY: str = ""  # 클라이언트 키 (프론트엔드용)
     TOSS_SECRET_KEY: str = ""  # 시크릿 키 (백엔드용)
@@ -186,6 +190,13 @@ class Settings(BaseSettings):
     X_CLIENT_ID: str = ""
     X_CLIENT_SECRET: str = ""
     X_REDIRECT_URI: str = "https://www.blrank.co.kr/x/callback"
+
+    # YouTube Data API v3 (Influencer Discovery)
+    YOUTUBE_API_KEY: str = ""
+
+    # Instagram Business Discovery (Meta Graph API)
+    INSTAGRAM_BUSINESS_TOKEN: str = ""
+    INSTAGRAM_BUSINESS_USER_ID: str = ""
 
     class Config:
         env_file = ".env"

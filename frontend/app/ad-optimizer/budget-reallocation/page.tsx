@@ -303,7 +303,14 @@ export default function BudgetReallocationPage() {
                   예상 ROAS 개선: +{recommendation.expected_roas_gain?.toFixed(1)}%
                 </p>
               </div>
-              <button className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg">
+              <button
+                onClick={() => {
+                  setActiveTab('plan')
+                  setSelectedStrategy('balanced')
+                  generatePlan()
+                }}
+                className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg"
+              >
                 바로 적용
               </button>
             </div>

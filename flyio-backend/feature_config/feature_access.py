@@ -566,6 +566,25 @@ FEATURES: Dict[str, FeatureConfig] = {
     ),
 
     # ============ 광고 최적화 (Ad Optimization) ============
+    "influencerDiscovery": FeatureConfig(
+        name="influencerDiscovery",
+        display_name="인플루언서 발굴",
+        description="멀티플랫폼 인플루언서 검색 및 프로필 분석",
+        category="premium",
+        access={
+            Plan.GUEST: AccessLevel.NONE,
+            Plan.FREE: AccessLevel.LIMITED,
+            Plan.BASIC: AccessLevel.LIMITED,
+            Plan.PRO: AccessLevel.FULL,
+            Plan.BUSINESS: AccessLevel.FULL
+        },
+        limits={
+            Plan.FREE: {"daily_searches": 3, "platforms": ["youtube"]},
+            Plan.BASIC: {"daily_searches": 10, "platforms": ["youtube", "instagram", "tiktok"]},
+            Plan.PRO: {"daily_searches": 50, "platforms": ["youtube", "instagram", "tiktok", "threads", "facebook", "x"]},
+            Plan.BUSINESS: {"daily_searches": -1, "platforms": ["youtube", "instagram", "tiktok", "threads", "facebook", "x"]}
+        }
+    ),
     "adOptimizer": FeatureConfig(
         name="adOptimizer",
         display_name="네이버 광고 자동 최적화",

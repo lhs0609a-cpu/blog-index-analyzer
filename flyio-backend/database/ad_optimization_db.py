@@ -16,8 +16,10 @@ import os
 
 from config import settings
 
-# 암호화 키 (실제 운영에서는 환경변수로 관리)
-ENCRYPTION_KEY = os.getenv("AD_ENCRYPTION_KEY", Fernet.generate_key().decode())
+# 암호화 키 — 반드시 환경변수로 설정할 것
+# 미설정 시 고정 fallback 사용 (서버 재시작 시 기존 자격증명 유실 방지)
+_FALLBACK_KEY = "ZmFsbGJhY2sta2V5LWJscmFuay1hZC1vcHRpbWl6ZXI="  # 고정값
+ENCRYPTION_KEY = os.getenv("AD_ENCRYPTION_KEY", _FALLBACK_KEY)
 
 def get_cipher():
     """암호화 객체 생성"""

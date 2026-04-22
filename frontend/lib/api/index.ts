@@ -12,8 +12,8 @@ export * from './system'
 export { default as apiClient } from './client'
 
 // Re-export getApiUrl as getApiBaseUrl for convenience
-export { getApiUrl as getApiBaseUrl } from './apiConfig'
+export { getApiUrl as getApiBaseUrl, getApiUrl } from './apiConfig'
 
 // Re-export ad-optimizer fetch utilities
-export { adFetch, adGet, adPost, ApiError } from './adFetch'
+export { adFetch, adGet, adPost, adUpload, ApiError } from './adFetch'
 export type { ApiErrorType } from './adFetch'

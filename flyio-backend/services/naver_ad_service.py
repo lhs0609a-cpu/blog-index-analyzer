@@ -151,6 +151,27 @@ class NaverAdApiClient:
         """캠페인 상세 조회"""
         return await self._request("GET", f"/ncc/campaigns/{campaign_id}")
 
+    async def create_campaign(
+        self,
+        name: str,
+        daily_budget: int = 10000,
+        campaign_tp: str = "WEB_SITE",
+        use_daily_budget: bool = True,
+    ) -> dict:
+        """캠페인 생성 (파워링크 기본)
+        campaign_tp: WEB_SITE(파워링크), SHOPPING(쇼핑검색), POWER_CONTENTS(파워컨텐츠), BRAND_SEARCH(브랜드검색), PLACE(플레이스)
+        """
+        data = {
+            "name": name,
+            "campaignTp": campaign_tp,
+            "customerId": int(self.customer_id),
+            "dailyBudget": daily_budget,
+            "useDailyBudget": use_daily_budget,
+            "trackingMode": "TRACKING_DISABLED",
+            "deliveryMethod": "STANDARD",
+        }
+        return await self._request("POST", "/ncc/campaigns", data)
+
     # ============ 광고그룹 관리 ============
 
     async def get_ad_groups(self, campaign_id: str = None) -> List[dict]:
@@ -250,6 +271,56 @@ class NaverAdApiClient:
             "showDetail": "1" if show_detail else "0"
         }
         return await self._request("GET", "/keywordstool", params)
+
+    async def get_keywords_volume_batch(self, keywords: List[str]) -> Dict[str, dict]:
+        """여러 키워드의 월 검색량을 배치로 조회.
+        네이버 /keywordstool은 hintKeywords 최대 5개까지 받음.
+        반환: { normalized_keyword: { monthly_pc, monthly_mobile, monthly_total, comp_idx } }
+        응답에 없는 키워드는 결과에 포함 안 됨 (= 검색량 0 또는 매우 낮음).
+        """
+        if not keywords:
+            return {}
+        # 최대 5개
+        batch = keywords[:5]
+        params = {
+            "hintKeywords": ",".join(batch),
+            "showDetail": "1",
+        }
+        try:
+            resp = await self._request("GET", "/keywordstool", params)
+        except Exception as e:
+            logger.warning(f"volume batch failed for {batch}: {e}")
+            return {}
+
+        # 응답 형식: {"keywordList": [{relKeyword, monthlyPcQcCnt, monthlyMobileQcCnt, compIdx, ...}]}
+        items = resp.get("keywordList", []) if isinstance(resp, dict) else (resp if isinstance(resp, list) else [])
+        result: Dict[str, dict] = {}
+        for it in items:
+            rel = (it.get("relKeyword") or "").strip()
+            if not rel:
+                continue
+            # 네이버는 "< 10" 표기로 올 수 있어 int 변환 안전 처리
+            def _to_int(v):
+                if v is None:
+                    return 0
+                if isinstance(v, (int, float)):
+                    return int(v)
+                s = str(v).replace(",", "").strip()
+                if s in ("< 10", "<10"):
+                    return 5  # 10 미만으로 인정
+                try:
+                    return int(float(s))
+                except (ValueError, TypeError):
+                    return 0
+            pc = _to_int(it.get("monthlyPcQcCnt"))
+            mo = _to_int(it.get("monthlyMobileQcCnt"))
+            result[rel] = {
+                "monthly_pc": pc,
+                "monthly_mobile": mo,
+                "monthly_total": pc + mo,
+                "comp_idx": it.get("compIdx", ""),
+            }
+        return result
 
     async def get_keyword_estimate(self, keywords: List[str]) -> List[dict]:
         """키워드 예상 성과 조회"""

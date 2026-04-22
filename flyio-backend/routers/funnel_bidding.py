@@ -63,44 +63,49 @@ class AnalyzeRequest(BaseModel):
     campaign_ids: Optional[List[str]] = None
 
 
+# ============ Helper: 캠페인 로딩 공통 함수 ============
+
+def _load_campaigns(user_id: int, stage: str = None, platform: str = None) -> tuple[List[FunnelCampaign], bool]:
+    """DB에서 캠페인 로드. 없으면 샘플 데이터 반환. Returns (campaigns, is_sample)"""
+    db_campaigns = get_funnel_campaigns(user_id, stage, platform)
+
+    if not db_campaigns:
+        return _generate_sample_campaigns(user_id), True
+
+    campaigns = [
+        FunnelCampaign(
+            campaign_id=c['campaign_id'],
+            campaign_name=c['campaign_name'],
+            platform=c['platform'],
+            objective=CampaignObjective(c['objective']) if c.get('objective') else CampaignObjective.TRAFFIC,
+            funnel_stage=FunnelStage(c['funnel_stage']),
+            bidding_strategy=BiddingStrategy(c['bidding_strategy']) if c.get('bidding_strategy') else BiddingStrategy.LOWEST_COST_CLICK,
+            daily_budget=c['daily_budget'],
+            impressions=c.get('impressions', 0),
+            reach=c.get('reach', 0),
+            clicks=c.get('clicks', 0),
+            conversions=c.get('conversions', 0),
+            spend=c.get('spend', 0),
+            revenue=c.get('revenue', 0)
+        )
+        for c in db_campaigns
+    ]
+    return campaigns, False
+
+
 # ============ API Endpoints ============
 
 @router.get("/summary")
 async def get_funnel_summary(user_id: int = Depends(get_user_id_with_fallback)):
     """퍼널 전체 요약"""
     try:
-        # DB에서 캠페인 로드
-        db_campaigns = get_funnel_campaigns(user_id)
-
-        if not db_campaigns:
-            # 샘플 데이터 생성
-            sample_campaigns = _generate_sample_campaigns(user_id)
-            campaigns = sample_campaigns
-        else:
-            # DB 데이터를 FunnelCampaign 객체로 변환
-            campaigns = []
-            for c in db_campaigns:
-                campaigns.append(FunnelCampaign(
-                    campaign_id=c['campaign_id'],
-                    campaign_name=c['campaign_name'],
-                    platform=c['platform'],
-                    objective=CampaignObjective(c['objective']) if c.get('objective') else CampaignObjective.TRAFFIC,
-                    funnel_stage=FunnelStage(c['funnel_stage']),
-                    bidding_strategy=BiddingStrategy(c['bidding_strategy']) if c.get('bidding_strategy') else BiddingStrategy.LOWEST_COST_CLICK,
-                    daily_budget=c['daily_budget'],
-                    impressions=c.get('impressions', 0),
-                    reach=c.get('reach', 0),
-                    clicks=c.get('clicks', 0),
-                    conversions=c.get('conversions', 0),
-                    spend=c.get('spend', 0),
-                    revenue=c.get('revenue', 0)
-                ))
-
+        campaigns, is_sample = _load_campaigns(user_id)
         summary = funnel_bidding_optimizer.get_summary(campaigns)
 
         return {
             "success": True,
             "summary": summary,
+            "sample_data": is_sample,
             "stages": [s.value for s in FunnelStage],
             "objectives": [o.value for o in CampaignObjective],
             "strategies": [s.value for s in BiddingStrategy]
@@ -118,42 +123,39 @@ async def get_campaigns(
 ):
     """퍼널 캠페인 목록 조회"""
     try:
-        db_campaigns = get_funnel_campaigns(user_id, stage, platform)
+        campaigns, is_sample = _load_campaigns(user_id, stage, platform)
 
-        if not db_campaigns:
-            # 샘플 데이터 반환
-            sample = _generate_sample_campaigns(user_id)
+        if is_sample:
             if stage:
-                sample = [c for c in sample if c.funnel_stage.value == stage]
+                campaigns = [c for c in campaigns if c.funnel_stage.value == stage]
             if platform:
-                sample = [c for c in sample if c.platform == platform]
+                campaigns = [c for c in campaigns if c.platform == platform]
 
-            campaigns = []
-            for c in sample:
-                campaigns.append({
-                    "campaign_id": c.campaign_id,
-                    "campaign_name": c.campaign_name,
-                    "platform": c.platform,
-                    "objective": c.objective.value,
-                    "funnel_stage": c.funnel_stage.value,
-                    "bidding_strategy": c.bidding_strategy.value,
-                    "daily_budget": c.daily_budget,
-                    "impressions": c.impressions,
-                    "reach": c.reach,
-                    "clicks": c.clicks,
-                    "conversions": c.conversions,
-                    "spend": c.spend,
-                    "revenue": c.revenue,
-                    "cpm": c.cpm,
-                    "cpc": c.cpc,
-                    "ctr": c.ctr,
-                    "cpa": c.cpa,
-                    "roas": c.roas,
-                    "conversion_rate": c.conversion_rate
-                })
-            return {"success": True, "campaigns": campaigns, "sample_data": True}
+            campaign_dicts = [{
+                "campaign_id": c.campaign_id,
+                "campaign_name": c.campaign_name,
+                "platform": c.platform,
+                "objective": c.objective.value,
+                "funnel_stage": c.funnel_stage.value,
+                "bidding_strategy": c.bidding_strategy.value,
+                "daily_budget": c.daily_budget,
+                "impressions": c.impressions,
+                "reach": c.reach,
+                "clicks": c.clicks,
+                "conversions": c.conversions,
+                "spend": c.spend,
+                "revenue": c.revenue,
+                "cpm": c.cpm,
+                "cpc": c.cpc,
+                "ctr": c.ctr,
+                "cpa": c.cpa,
+                "roas": c.roas,
+                "conversion_rate": c.conversion_rate
+            } for c in campaigns]
+            return {"success": True, "campaigns": campaign_dicts, "sample_data": True}
 
-        return {"success": True, "campaigns": db_campaigns}
+        db_campaigns = get_funnel_campaigns(user_id, stage, platform)
+        return {"success": True, "campaigns": db_campaigns, "sample_data": False}
     except Exception as e:
         logger.error(f"Failed to get campaigns: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -204,32 +206,7 @@ async def get_stage_metrics(
 ):
     """퍼널 단계별 성과 조회"""
     try:
-        # DB에서 캠페인 로드
-        db_campaigns = get_funnel_campaigns(user_id)
-
-        if not db_campaigns:
-            sample = _generate_sample_campaigns(user_id)
-            campaigns = sample
-        else:
-            campaigns = [
-                FunnelCampaign(
-                    campaign_id=c['campaign_id'],
-                    campaign_name=c['campaign_name'],
-                    platform=c['platform'],
-                    objective=CampaignObjective(c['objective']) if c.get('objective') else CampaignObjective.TRAFFIC,
-                    funnel_stage=FunnelStage(c['funnel_stage']),
-                    bidding_strategy=BiddingStrategy(c['bidding_strategy']) if c.get('bidding_strategy') else BiddingStrategy.LOWEST_COST_CLICK,
-                    daily_budget=c['daily_budget'],
-                    impressions=c.get('impressions', 0),
-                    reach=c.get('reach', 0),
-                    clicks=c.get('clicks', 0),
-                    conversions=c.get('conversions', 0),
-                    spend=c.get('spend', 0),
-                    revenue=c.get('revenue', 0)
-                )
-                for c in db_campaigns
-            ]
-
+        campaigns, is_sample = _load_campaigns(user_id)
         stage_metrics = funnel_bidding_optimizer.calculate_stage_metrics(campaigns)
 
         result = {}
@@ -256,7 +233,7 @@ async def get_stage_metrics(
                 "cpa_vs_benchmark": metrics.cpa_vs_benchmark
             }
 
-        return {"success": True, "stage_metrics": result}
+        return {"success": True, "stage_metrics": result, "sample_data": is_sample}
     except Exception as e:
         logger.error(f"Failed to get stage metrics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -266,35 +243,12 @@ async def get_stage_metrics(
 async def get_funnel_flow(user_id: int = Depends(get_user_id_with_fallback)):
     """퍼널 흐름 분석"""
     try:
-        db_campaigns = get_funnel_campaigns(user_id)
-
-        if not db_campaigns:
-            sample = _generate_sample_campaigns(user_id)
-            campaigns = sample
-        else:
-            campaigns = [
-                FunnelCampaign(
-                    campaign_id=c['campaign_id'],
-                    campaign_name=c['campaign_name'],
-                    platform=c['platform'],
-                    objective=CampaignObjective(c['objective']) if c.get('objective') else CampaignObjective.TRAFFIC,
-                    funnel_stage=FunnelStage(c['funnel_stage']),
-                    bidding_strategy=BiddingStrategy(c['bidding_strategy']) if c.get('bidding_strategy') else BiddingStrategy.LOWEST_COST_CLICK,
-                    daily_budget=c['daily_budget'],
-                    impressions=c.get('impressions', 0),
-                    reach=c.get('reach', 0),
-                    clicks=c.get('clicks', 0),
-                    conversions=c.get('conversions', 0),
-                    spend=c.get('spend', 0),
-                    revenue=c.get('revenue', 0)
-                )
-                for c in db_campaigns
-            ]
-
+        campaigns, is_sample = _load_campaigns(user_id)
         flow = funnel_bidding_optimizer.analyze_funnel_flow(campaigns)
 
         return {
             "success": True,
+            "sample_data": is_sample,
             "funnel_flow": {
                 "tofu_reach": flow.tofu_reach,
                 "mofu_clicks": flow.mofu_clicks,
@@ -319,30 +273,7 @@ async def run_analysis(
 ):
     """퍼널 분석 실행"""
     try:
-        db_campaigns = get_funnel_campaigns(user_id)
-
-        if not db_campaigns:
-            sample = _generate_sample_campaigns(user_id)
-            campaigns = sample
-        else:
-            campaigns = [
-                FunnelCampaign(
-                    campaign_id=c['campaign_id'],
-                    campaign_name=c['campaign_name'],
-                    platform=c['platform'],
-                    objective=CampaignObjective(c['objective']) if c.get('objective') else CampaignObjective.TRAFFIC,
-                    funnel_stage=FunnelStage(c['funnel_stage']),
-                    bidding_strategy=BiddingStrategy(c['bidding_strategy']) if c.get('bidding_strategy') else BiddingStrategy.LOWEST_COST_CLICK,
-                    daily_budget=c['daily_budget'],
-                    impressions=c.get('impressions', 0),
-                    reach=c.get('reach', 0),
-                    clicks=c.get('clicks', 0),
-                    conversions=c.get('conversions', 0),
-                    spend=c.get('spend', 0),
-                    revenue=c.get('revenue', 0)
-                )
-                for c in db_campaigns
-            ]
+        campaigns, is_sample = _load_campaigns(user_id)
 
         # 특정 캠페인만 분석
         if request.campaign_ids:
@@ -470,31 +401,7 @@ async def get_budget_allocation(
 ):
     """퍼널별 예산 배분 조회"""
     try:
-        db_campaigns = get_funnel_campaigns(user_id)
-
-        if not db_campaigns:
-            sample = _generate_sample_campaigns(user_id)
-            campaigns = sample
-        else:
-            campaigns = [
-                FunnelCampaign(
-                    campaign_id=c['campaign_id'],
-                    campaign_name=c['campaign_name'],
-                    platform=c['platform'],
-                    objective=CampaignObjective(c['objective']) if c.get('objective') else CampaignObjective.TRAFFIC,
-                    funnel_stage=FunnelStage(c['funnel_stage']),
-                    bidding_strategy=BiddingStrategy(c['bidding_strategy']) if c.get('bidding_strategy') else BiddingStrategy.LOWEST_COST_CLICK,
-                    daily_budget=c['daily_budget'],
-                    impressions=c.get('impressions', 0),
-                    reach=c.get('reach', 0),
-                    clicks=c.get('clicks', 0),
-                    conversions=c.get('conversions', 0),
-                    spend=c.get('spend', 0),
-                    revenue=c.get('revenue', 0)
-                )
-                for c in db_campaigns
-            ]
-
+        campaigns, is_sample = _load_campaigns(user_id)
         allocation = funnel_bidding_optimizer.recommend_budget_allocation(campaigns, strategy)
 
         return {
@@ -518,7 +425,8 @@ async def get_budget_allocation(
                 },
                 "adjustment_needed": allocation.adjustment_needed,
                 "recommendation": allocation.recommendation
-            }
+            },
+            "sample_data": is_sample
         }
     except Exception as e:
         logger.error(f"Failed to get budget allocation: {e}")
@@ -530,33 +438,9 @@ async def apply_budget_allocation(
     request: BudgetAllocationRequest,
     user_id: int = Depends(get_user_id_with_fallback)
 ):
-    """예산 배분 적용"""
+    """예산 배분 계획 저장 (실제 광고 플랫폼 예산 변경 아님)"""
     try:
-        db_campaigns = get_funnel_campaigns(user_id)
-
-        if not db_campaigns:
-            sample = _generate_sample_campaigns(user_id)
-            campaigns = sample
-        else:
-            campaigns = [
-                FunnelCampaign(
-                    campaign_id=c['campaign_id'],
-                    campaign_name=c['campaign_name'],
-                    platform=c['platform'],
-                    objective=CampaignObjective(c['objective']) if c.get('objective') else CampaignObjective.TRAFFIC,
-                    funnel_stage=FunnelStage(c['funnel_stage']),
-                    bidding_strategy=BiddingStrategy(c['bidding_strategy']) if c.get('bidding_strategy') else BiddingStrategy.LOWEST_COST_CLICK,
-                    daily_budget=c['daily_budget'],
-                    impressions=c.get('impressions', 0),
-                    reach=c.get('reach', 0),
-                    clicks=c.get('clicks', 0),
-                    conversions=c.get('conversions', 0),
-                    spend=c.get('spend', 0),
-                    revenue=c.get('revenue', 0)
-                )
-                for c in db_campaigns
-            ]
-
+        campaigns, _ = _load_campaigns(user_id)
         allocation = funnel_bidding_optimizer.recommend_budget_allocation(campaigns, request.strategy)
 
         # 저장
@@ -679,8 +563,9 @@ async def get_allocation_strategies():
 # ============ Helper Functions ============
 
 def _generate_sample_campaigns(user_id: int) -> List[FunnelCampaign]:
-    """샘플 캠페인 데이터 생성"""
+    """샘플 캠페인 데이터 생성 (user_id 기반 고정 시드로 일관된 데이터)"""
     import random
+    rng = random.Random(user_id)  # user_id별 고정 시드
 
     campaigns = [
         # TOFU 캠페인
@@ -692,11 +577,11 @@ def _generate_sample_campaigns(user_id: int) -> List[FunnelCampaign]:
             funnel_stage=FunnelStage.TOFU,
             bidding_strategy=BiddingStrategy.LOWEST_COST_REACH,
             daily_budget=300000,
-            impressions=150000 + random.randint(-10000, 10000),
-            reach=120000 + random.randint(-5000, 5000),
-            clicks=750 + random.randint(-50, 50),
+            impressions=150000 + rng.randint(-10000, 10000),
+            reach=120000 + rng.randint(-5000, 5000),
+            clicks=750 + rng.randint(-50, 50),
             conversions=0,
-            spend=280000 + random.randint(-10000, 10000),
+            spend=280000 + rng.randint(-10000, 10000),
             revenue=0
         ),
         FunnelCampaign(
@@ -707,11 +592,11 @@ def _generate_sample_campaigns(user_id: int) -> List[FunnelCampaign]:
             funnel_stage=FunnelStage.TOFU,
             bidding_strategy=BiddingStrategy.TARGET_CPM,
             daily_budget=200000,
-            impressions=100000 + random.randint(-5000, 5000),
-            reach=85000 + random.randint(-3000, 3000),
-            clicks=500 + random.randint(-30, 30),
+            impressions=100000 + rng.randint(-5000, 5000),
+            reach=85000 + rng.randint(-3000, 3000),
+            clicks=500 + rng.randint(-30, 30),
             conversions=0,
-            spend=190000 + random.randint(-8000, 8000),
+            spend=190000 + rng.randint(-8000, 8000),
             revenue=0
         ),
 
@@ -724,12 +609,12 @@ def _generate_sample_campaigns(user_id: int) -> List[FunnelCampaign]:
             funnel_stage=FunnelStage.MOFU,
             bidding_strategy=BiddingStrategy.MAXIMIZE_CLICKS,
             daily_budget=400000,
-            impressions=80000 + random.randint(-4000, 4000),
-            reach=60000 + random.randint(-2000, 2000),
-            clicks=2400 + random.randint(-100, 100),
-            conversions=48 + random.randint(-5, 5),
-            spend=380000 + random.randint(-15000, 15000),
-            revenue=960000 + random.randint(-50000, 50000)
+            impressions=80000 + rng.randint(-4000, 4000),
+            reach=60000 + rng.randint(-2000, 2000),
+            clicks=2400 + rng.randint(-100, 100),
+            conversions=48 + rng.randint(-5, 5),
+            spend=380000 + rng.randint(-15000, 15000),
+            revenue=960000 + rng.randint(-50000, 50000)
         ),
         FunnelCampaign(
             campaign_id="mofu_engagement_01",
@@ -739,12 +624,12 @@ def _generate_sample_campaigns(user_id: int) -> List[FunnelCampaign]:
             funnel_stage=FunnelStage.MOFU,
             bidding_strategy=BiddingStrategy.LOWEST_COST_CLICK,
             daily_budget=250000,
-            impressions=60000 + random.randint(-3000, 3000),
-            reach=45000 + random.randint(-2000, 2000),
-            clicks=1800 + random.randint(-80, 80),
-            conversions=27 + random.randint(-3, 3),
-            spend=240000 + random.randint(-10000, 10000),
-            revenue=540000 + random.randint(-30000, 30000)
+            impressions=60000 + rng.randint(-3000, 3000),
+            reach=45000 + rng.randint(-2000, 2000),
+            clicks=1800 + rng.randint(-80, 80),
+            conversions=27 + rng.randint(-3, 3),
+            spend=240000 + rng.randint(-10000, 10000),
+            revenue=540000 + rng.randint(-30000, 30000)
         ),
         FunnelCampaign(
             campaign_id="mofu_lead_01",
@@ -754,12 +639,12 @@ def _generate_sample_campaigns(user_id: int) -> List[FunnelCampaign]:
             funnel_stage=FunnelStage.MOFU,
             bidding_strategy=BiddingStrategy.TARGET_CPC,
             daily_budget=350000,
-            impressions=70000 + random.randint(-3500, 3500),
-            reach=55000 + random.randint(-2500, 2500),
-            clicks=2100 + random.randint(-100, 100),
-            conversions=63 + random.randint(-5, 5),
-            spend=340000 + random.randint(-12000, 12000),
-            revenue=1260000 + random.randint(-60000, 60000)
+            impressions=70000 + rng.randint(-3500, 3500),
+            reach=55000 + rng.randint(-2500, 2500),
+            clicks=2100 + rng.randint(-100, 100),
+            conversions=63 + rng.randint(-5, 5),
+            spend=340000 + rng.randint(-12000, 12000),
+            revenue=1260000 + rng.randint(-60000, 60000)
         ),
 
         # BOFU 캠페인
@@ -771,12 +656,12 @@ def _generate_sample_campaigns(user_id: int) -> List[FunnelCampaign]:
             funnel_stage=FunnelStage.BOFU,
             bidding_strategy=BiddingStrategy.TARGET_CPA,
             daily_budget=500000,
-            impressions=25000 + random.randint(-1500, 1500),
-            reach=20000 + random.randint(-1000, 1000),
-            clicks=1500 + random.randint(-75, 75),
-            conversions=75 + random.randint(-8, 8),
-            spend=480000 + random.randint(-20000, 20000),
-            revenue=2250000 + random.randint(-100000, 100000)
+            impressions=25000 + rng.randint(-1500, 1500),
+            reach=20000 + rng.randint(-1000, 1000),
+            clicks=1500 + rng.randint(-75, 75),
+            conversions=75 + rng.randint(-8, 8),
+            spend=480000 + rng.randint(-20000, 20000),
+            revenue=2250000 + rng.randint(-100000, 100000)
         ),
         FunnelCampaign(
             campaign_id="bofu_sales_01",
@@ -786,12 +671,12 @@ def _generate_sample_campaigns(user_id: int) -> List[FunnelCampaign]:
             funnel_stage=FunnelStage.BOFU,
             bidding_strategy=BiddingStrategy.TARGET_ROAS,
             daily_budget=600000,
-            impressions=40000 + random.randint(-2000, 2000),
-            reach=32000 + random.randint(-1500, 1500),
-            clicks=2000 + random.randint(-100, 100),
-            conversions=100 + random.randint(-10, 10),
-            spend=580000 + random.randint(-25000, 25000),
-            revenue=2900000 + random.randint(-150000, 150000)
+            impressions=40000 + rng.randint(-2000, 2000),
+            reach=32000 + rng.randint(-1500, 1500),
+            clicks=2000 + rng.randint(-100, 100),
+            conversions=100 + rng.randint(-10, 10),
+            spend=580000 + rng.randint(-25000, 25000),
+            revenue=2900000 + rng.randint(-150000, 150000)
         ),
         FunnelCampaign(
             campaign_id="bofu_purchase_01",
@@ -801,12 +686,12 @@ def _generate_sample_campaigns(user_id: int) -> List[FunnelCampaign]:
             funnel_stage=FunnelStage.BOFU,
             bidding_strategy=BiddingStrategy.MAXIMIZE_CONVERSIONS,
             daily_budget=450000,
-            impressions=35000 + random.randint(-1800, 1800),
-            reach=28000 + random.randint(-1200, 1200),
-            clicks=1750 + random.randint(-90, 90),
-            conversions=87 + random.randint(-9, 9),
-            spend=430000 + random.randint(-18000, 18000),
-            revenue=2610000 + random.randint(-130000, 130000)
+            impressions=35000 + rng.randint(-1800, 1800),
+            reach=28000 + rng.randint(-1200, 1200),
+            clicks=1750 + rng.randint(-90, 90),
+            conversions=87 + rng.randint(-9, 9),
+            spend=430000 + rng.randint(-18000, 18000),
+            revenue=2610000 + rng.randint(-130000, 130000)
         )
     ]
 

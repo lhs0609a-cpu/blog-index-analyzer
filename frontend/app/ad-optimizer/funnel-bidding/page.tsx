@@ -214,9 +214,10 @@ export default function FunnelBiddingPage() {
     }
   }
 
-  const loadAllocation = async () => {
+  const loadAllocation = async (strategyOverride?: string) => {
     try {
-      const data = await adGet<{ allocation: any }>(`/api/ads/funnel-bidding/budget-allocation?strategy=${selectedStrategy}`, { userId })
+      const strategy = strategyOverride || selectedStrategy
+      const data = await adGet<{ allocation: any }>(`/api/ads/funnel-bidding/budget-allocation?strategy=${strategy}`, { userId })
       setAllocation(data.allocation)
     } catch (error) {
       console.error('Failed to load allocation:', error)
@@ -246,7 +247,7 @@ export default function FunnelBiddingPage() {
   }
 
   const applyAllocation = async () => {
-    if (!confirm('예산 배분을 적용하시겠습니까? 실제 광고 예산이 변경됩니다.')) return
+    if (!confirm('예산 배분 계획을 저장하시겠습니까? 실제 광고 플랫폼에는 반영되지 않으며, 참고용 계획으로 저장됩니다.')) return
     try {
       await adPost('/api/ads/funnel-bidding/budget-allocation/apply', { strategy: selectedStrategy }, { userId, showToast: false })
       toast.success('예산 배분이 적용되었습니다')
@@ -703,7 +704,7 @@ export default function FunnelBiddingPage() {
                     key={strategy.id}
                     onClick={() => {
                       setSelectedStrategy(strategy.id)
-                      loadAllocation()
+                      loadAllocation(strategy.id)
                     }}
                     className={`p-4 rounded-lg border-2 text-left transition ${
                       selectedStrategy === strategy.id

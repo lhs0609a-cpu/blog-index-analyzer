@@ -256,6 +256,82 @@ def init_naver_ad_tables():
         )
     """)
 
+    # 대량 업로드 작업 테이블
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS bulk_upload_jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            status VARCHAR(20) DEFAULT 'pending',
+            filename VARCHAR(300),
+            campaign_prefix VARCHAR(200),
+            keywords_per_group INTEGER DEFAULT 500,
+            bid INTEGER DEFAULT 100,
+            daily_budget INTEGER DEFAULT 10000,
+            total_keywords INTEGER DEFAULT 0,
+            processed_count INTEGER DEFAULT 0,
+            succeeded_count INTEGER DEFAULT 0,
+            failed_count INTEGER DEFAULT 0,
+            campaigns_created INTEGER DEFAULT 0,
+            ad_groups_created INTEGER DEFAULT 0,
+            current_step VARCHAR(200),
+            error_message TEXT,
+            campaign_ids TEXT,
+            ad_group_ids TEXT,
+            started_at TIMESTAMP,
+            completed_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # 대량 업로드 실패 상세 테이블
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS bulk_upload_failures (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id INTEGER NOT NULL,
+            keyword VARCHAR(100),
+            bid INTEGER,
+            ad_group_id VARCHAR(100),
+            reason TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (job_id) REFERENCES bulk_upload_jobs(id)
+        )
+    """)
+
+    # 검색량 필터링 작업 테이블
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS volume_filter_jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            status VARCHAR(20) DEFAULT 'pending',
+            filename VARCHAR(300),
+            min_volume INTEGER DEFAULT 10,
+            total_keywords INTEGER DEFAULT 0,
+            processed_count INTEGER DEFAULT 0,
+            passed_count INTEGER DEFAULT 0,
+            failed_api_count INTEGER DEFAULT 0,
+            current_step VARCHAR(200),
+            error_message TEXT,
+            started_at TIMESTAMP,
+            completed_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # 필터 통과 키워드 테이블 (검색량 있는 것만)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS volume_filter_results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id INTEGER NOT NULL,
+            keyword VARCHAR(100) NOT NULL,
+            monthly_pc INTEGER DEFAULT 0,
+            monthly_mobile INTEGER DEFAULT 0,
+            monthly_total INTEGER DEFAULT 0,
+            comp_idx VARCHAR(20),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (job_id) REFERENCES volume_filter_jobs(id)
+        )
+    """)
+
     # 인덱스 생성
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_kp_user_date ON keyword_performance(user_id, date)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_kp_keyword ON keyword_performance(keyword_id)")
@@ -263,10 +339,200 @@ def init_naver_ad_tables():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_ek_user ON excluded_keywords(user_id, is_active)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_dk_user ON discovered_keywords(user_id, status)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_ol_user_type ON optimization_logs(user_id, log_type)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_buj_user ON bulk_upload_jobs(user_id, status)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_buf_job ON bulk_upload_failures(job_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_vfj_user ON volume_filter_jobs(user_id, status)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_vfr_job ON volume_filter_results(job_id, monthly_total DESC)")
 
     conn.commit()
     conn.close()
     logger.info("Naver Ad optimization tables initialized")
+
+
+# ============ 대량 업로드 작업 관리 ============
+
+def create_bulk_upload_job(
+    user_id: int, filename: str, campaign_prefix: str,
+    keywords_per_group: int, bid: int, daily_budget: int, total_keywords: int
+) -> int:
+    """대량 업로드 작업 생성 → job_id 반환"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO bulk_upload_jobs
+        (user_id, status, filename, campaign_prefix, keywords_per_group, bid,
+         daily_budget, total_keywords, current_step)
+        VALUES (?, 'pending', ?, ?, ?, ?, ?, ?, '대기 중')
+    """, (user_id, filename, campaign_prefix, keywords_per_group, bid, daily_budget, total_keywords))
+    conn.commit()
+    job_id = cursor.lastrowid
+    conn.close()
+    return job_id
+
+
+def update_bulk_upload_job(job_id: int, **fields):
+    """작업 상태 업데이트"""
+    if not fields:
+        return
+    conn = get_connection()
+    cursor = conn.cursor()
+    cols = ", ".join(f"{k} = ?" for k in fields.keys())
+    values = list(fields.values()) + [job_id]
+    cursor.execute(f"UPDATE bulk_upload_jobs SET {cols} WHERE id = ?", values)
+    conn.commit()
+    conn.close()
+
+
+def get_bulk_upload_job(job_id: int, user_id: Optional[int] = None) -> Optional[dict]:
+    """작업 조회"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    if user_id is not None:
+        cursor.execute("SELECT * FROM bulk_upload_jobs WHERE id = ? AND user_id = ?", (job_id, user_id))
+    else:
+        cursor.execute("SELECT * FROM bulk_upload_jobs WHERE id = ?", (job_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def list_bulk_upload_jobs(user_id: int, limit: int = 20) -> List[dict]:
+    """작업 목록"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM bulk_upload_jobs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+        (user_id, limit)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def add_bulk_upload_failure(job_id: int, keyword: str, bid: int, ad_group_id: str, reason: str):
+    """실패 키워드 기록"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO bulk_upload_failures (job_id, keyword, bid, ad_group_id, reason)
+        VALUES (?, ?, ?, ?, ?)
+    """, (job_id, keyword, bid, ad_group_id, reason))
+    conn.commit()
+    conn.close()
+
+
+def get_bulk_upload_failures(job_id: int) -> List[dict]:
+    """작업의 실패 키워드 전체 조회"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM bulk_upload_failures WHERE job_id = ? ORDER BY id",
+        (job_id,)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# ============ 검색량 필터링 작업 관리 ============
+
+def create_volume_filter_job(
+    user_id: int, filename: str, min_volume: int, total_keywords: int
+) -> int:
+    """필터링 작업 생성"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO volume_filter_jobs
+        (user_id, status, filename, min_volume, total_keywords, current_step)
+        VALUES (?, 'pending', ?, ?, ?, '대기 중')
+    """, (user_id, filename, min_volume, total_keywords))
+    conn.commit()
+    job_id = cursor.lastrowid
+    conn.close()
+    return job_id
+
+
+def update_volume_filter_job(job_id: int, **fields):
+    if not fields:
+        return
+    conn = get_connection()
+    cursor = conn.cursor()
+    cols = ", ".join(f"{k} = ?" for k in fields.keys())
+    values = list(fields.values()) + [job_id]
+    cursor.execute(f"UPDATE volume_filter_jobs SET {cols} WHERE id = ?", values)
+    conn.commit()
+    conn.close()
+
+
+def get_volume_filter_job(job_id: int, user_id: Optional[int] = None) -> Optional[dict]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    if user_id is not None:
+        cursor.execute("SELECT * FROM volume_filter_jobs WHERE id = ? AND user_id = ?", (job_id, user_id))
+    else:
+        cursor.execute("SELECT * FROM volume_filter_jobs WHERE id = ?", (job_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def list_volume_filter_jobs(user_id: int, limit: int = 20) -> List[dict]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM volume_filter_jobs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+        (user_id, limit)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def add_volume_filter_results(job_id: int, results: List[dict]):
+    """필터 통과 키워드 대량 저장 (results: [{keyword, monthly_pc, monthly_mobile, monthly_total, comp_idx}])"""
+    if not results:
+        return
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.executemany("""
+        INSERT INTO volume_filter_results
+        (job_id, keyword, monthly_pc, monthly_mobile, monthly_total, comp_idx)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, [
+        (job_id, r["keyword"], r.get("monthly_pc", 0), r.get("monthly_mobile", 0),
+         r.get("monthly_total", 0), r.get("comp_idx", ""))
+        for r in results
+    ])
+    conn.commit()
+    conn.close()
+
+
+def get_volume_filter_results(job_id: int, limit: Optional[int] = None) -> List[dict]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    if limit:
+        cursor.execute(
+            "SELECT * FROM volume_filter_results WHERE job_id = ? ORDER BY monthly_total DESC LIMIT ?",
+            (job_id, limit)
+        )
+    else:
+        cursor.execute(
+            "SELECT * FROM volume_filter_results WHERE job_id = ? ORDER BY monthly_total DESC",
+            (job_id,)
+        )
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def count_volume_filter_results(job_id: int) -> int:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) as cnt FROM volume_filter_results WHERE job_id = ?", (job_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row["cnt"] if row else 0
 
 
 # ============ 최적화 설정 ============

@@ -1,13 +1,15 @@
 """
 네이버 광고 자동 최적화 API 라우터
 """
-from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends
+from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends, UploadFile, File, Form
 from pydantic import BaseModel, Field
 from routers.auth_deps import get_user_id_with_fallback
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 import logging
 import asyncio
+import io
+import re
 
 from services.naver_ad_service import (
     NaverAdOptimizer,
@@ -43,7 +45,20 @@ from database.naver_ad_db import (
     get_efficiency_history,
     save_trending_keywords,
     get_trending_keywords,
-    update_trending_keyword_status
+    update_trending_keyword_status,
+    # 대량 등록
+    create_bulk_upload_job,
+    update_bulk_upload_job,
+    get_bulk_upload_job,
+    list_bulk_upload_jobs,
+    get_bulk_upload_failures,
+    # 검색량 필터
+    create_volume_filter_job,
+    update_volume_filter_job,
+    get_volume_filter_job,
+    list_volume_filter_jobs,
+    get_volume_filter_results,
+    count_volume_filter_results,
 )
 
 logger = logging.getLogger(__name__)
@@ -98,6 +113,17 @@ class BulkKeywordAddRequest(BaseModel):
     ad_group_id: str = Field(..., description="광고그룹 ID")
     keywords: List[str] = Field(..., description="키워드 목록")
     default_bid: int = Field(default=100, description="기본 입찰가")
+
+
+class KeywordWithBid(BaseModel):
+    keyword: str = Field(..., description="키워드")
+    bid: int = Field(..., description="입찰가 (원)")
+
+
+class BulkKeywordWithBidRequest(BaseModel):
+    ad_group_id: str = Field(..., description="광고그룹 ID")
+    items: List[KeywordWithBid] = Field(..., description="키워드+입찰가 목록")
+    default_bid: int = Field(default=100, description="개별 입찰가가 없을 때의 기본값")
 
 
 # ============ 대시보드 ============
@@ -546,6 +572,686 @@ async def bulk_add_keywords(
         }
     except Exception as e:
         logger.error(f"Bulk add error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/keywords/bulk-add-with-bids")
+async def bulk_add_keywords_with_bids(
+    request: BulkKeywordWithBidRequest,
+    user_id: int = Depends(get_user_id_with_fallback)
+):
+    """키워드별 개별 입찰가로 대량 추가"""
+    try:
+        optimizer = get_optimizer()
+
+        from services.naver_ad_service import KeywordSuggestion
+        suggestions = [
+            KeywordSuggestion(
+                keyword=item.keyword,
+                suggested_bid=item.bid if item.bid and item.bid >= 70 else request.default_bid
+            )
+            for item in request.items
+        ]
+
+        added = await optimizer.bulk_manager.bulk_add_keywords(
+            request.ad_group_id,
+            suggestions,
+            request.default_bid
+        )
+
+        save_optimization_log(
+            user_id, "bulk_add_with_bids",
+            f"키워드 대량 추가(개별 입찰가): {len(added)}개",
+            {"count": len(added), "ad_group_id": request.ad_group_id}
+        )
+
+        return {
+            "success": True,
+            "message": f"{len(added)}개 키워드가 개별 입찰가로 추가되었습니다",
+            "added_count": len(added),
+            "total_requested": len(request.items)
+        }
+    except Exception as e:
+        logger.error(f"Bulk add with bids error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _parse_keyword_excel(file_bytes: bytes, default_bid: int, force_default_bid: bool = False) -> Dict[str, Any]:
+    """엑셀/CSV 파일에서 키워드+입찰가 파싱.
+    컬럼: '키워드'(필수), '입찰가'(선택). 헤더가 없으면 1열=키워드, 2열=입찰가로 해석.
+    force_default_bid=True면 엑셀의 입찰가를 무시하고 모든 키워드에 default_bid 적용.
+    """
+    import openpyxl
+
+    items: List[Dict[str, Any]] = []
+    errors: List[str] = []
+    seen = set()
+
+    # 엑셀 시도
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True, read_only=True)
+        ws = wb.active
+        rows = list(ws.iter_rows(values_only=True))
+    except Exception:
+        # CSV fallback
+        try:
+            text = file_bytes.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            text = file_bytes.decode("cp949", errors="replace")
+        import csv
+        rows = [tuple(r) for r in csv.reader(io.StringIO(text))]
+
+    if not rows:
+        return {"items": [], "errors": ["파일이 비어있습니다"], "total": 0}
+
+    # 헤더 감지
+    header = rows[0]
+    header_cells = [str(c).strip() if c is not None else "" for c in header]
+    header_lower = [h.lower() for h in header_cells]
+
+    kw_idx = 0
+    bid_idx = 1
+    has_header = False
+
+    kw_aliases = ["키워드", "keyword", "kw"]
+    bid_aliases = ["입찰가", "bid", "bidamt", "입찰", "cpc"]
+
+    for i, h in enumerate(header_lower):
+        if h in kw_aliases:
+            kw_idx = i
+            has_header = True
+        elif h in bid_aliases:
+            bid_idx = i
+            has_header = True
+
+    data_rows = rows[1:] if has_header else rows
+    kw_pattern = re.compile(r"^[\w가-힣\s\-\+]{1,40}$", re.UNICODE)
+
+    for lineno, row in enumerate(data_rows, start=2 if has_header else 1):
+        if not row or all(c is None or str(c).strip() == "" for c in row):
+            continue
+
+        raw_kw = row[kw_idx] if kw_idx < len(row) else None
+        raw_bid = row[bid_idx] if bid_idx < len(row) else None
+
+        if raw_kw is None:
+            continue
+        keyword = str(raw_kw).strip()
+        if not keyword:
+            continue
+
+        # 네이버 키워드 제약: 공백/특수문자 과다 필터
+        if len(keyword) > 40:
+            errors.append(f"{lineno}행: 키워드 길이 초과 ({keyword[:20]}...)")
+            continue
+        if not kw_pattern.match(keyword):
+            errors.append(f"{lineno}행: 허용되지 않는 문자 ({keyword})")
+            continue
+        if keyword in seen:
+            continue
+        seen.add(keyword)
+
+        bid = default_bid
+        if not force_default_bid and raw_bid is not None and str(raw_bid).strip() != "":
+            try:
+                bid_val = int(float(str(raw_bid).replace(",", "").strip()))
+                if bid_val < 70:
+                    errors.append(f"{lineno}행: 입찰가 최소 70원 ({bid_val}) → {default_bid}원 적용")
+                    bid = default_bid
+                elif bid_val > 100000:
+                    errors.append(f"{lineno}행: 입찰가 최대 100000원 초과 ({bid_val}) → 100000원 적용")
+                    bid = 100000
+                else:
+                    bid = bid_val
+            except (ValueError, TypeError):
+                errors.append(f"{lineno}행: 입찰가 파싱 실패 ({raw_bid}) → {default_bid}원 적용")
+                bid = default_bid
+
+        items.append({"keyword": keyword, "bid": bid, "row": lineno})
+
+    return {"items": items, "errors": errors, "total": len(items)}
+
+
+# ============ 검색량 필터링 (50만 규모) ============
+
+@router.post("/keywords/volume-filter")
+async def start_volume_filter(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(..., description="엑셀/CSV - A열 키워드"),
+    min_volume: int = Form(default=10, description="월 총 검색량 최소치"),
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """검색량 필터링 작업 시작
+    - 업로드된 키워드를 네이버 /keywordstool로 5개씩 배치 조회
+    - 월 PC+모바일 검색량 >= min_volume 인 것만 수집
+    - job_id 반환 → 완료 후 그 결과로 scale-register 가능
+    """
+    try:
+        if min_volume < 0 or min_volume > 100000:
+            raise HTTPException(status_code=400, detail="min_volume 범위 오류 (0~100000)")
+
+        content = await file.read()
+        if len(content) > 100 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="파일은 100MB 이하")
+
+        # 엑셀 파싱 - 키워드만 추출 (입찰가 무시)
+        parsed = _parse_keyword_excel(content, default_bid=100, force_default_bid=True)
+        if parsed["total"] == 0:
+            raise HTTPException(status_code=400, detail="유효 키워드 없음")
+
+        keywords = [item["keyword"] for item in parsed["items"]]
+        total = len(keywords)
+
+        # 계정 연동 확인
+        account = get_ad_account(user_id)
+        if not account or not account.get("is_connected"):
+            raise HTTPException(status_code=400, detail="네이버 광고 계정을 먼저 연동하세요")
+
+        job_id = create_volume_filter_job(
+            user_id=user_id,
+            filename=file.filename or "uploaded.xlsx",
+            min_volume=min_volume,
+            total_keywords=total,
+        )
+
+        async def _run():
+            from services.volume_filter import VolumeFilterService, VolumeFilterConfig
+            from services.naver_ad_service import NaverAdApiClient
+
+            try:
+                client = NaverAdApiClient()
+                client.customer_id = account.get("customer_id")
+                client.api_key = account.get("api_key")
+                client.secret_key = account.get("secret_key")
+
+                svc = VolumeFilterService(client)
+                cfg = VolumeFilterConfig(
+                    job_id=job_id, user_id=user_id, min_volume=min_volume,
+                )
+                await svc.run(cfg, keywords)
+            except Exception as e:
+                logger.exception(f"[Filter {job_id}] 실행 실패")
+                update_volume_filter_job(
+                    job_id, status="failed",
+                    error_message=str(e)[:1000],
+                    completed_at=datetime.now().isoformat(),
+                )
+
+        background_tasks.add_task(_run)
+
+        # 예상 시간: total / 5 * 0.4초
+        estimated_seconds = int(total / 5 * 0.4)
+
+        save_optimization_log(
+            user_id, "volume_filter_start",
+            f"검색량 필터 시작 (job #{job_id}): {total}개 (임계치 {min_volume})",
+            {"job_id": job_id, "total": total, "min_volume": min_volume}
+        )
+
+        return {
+            "success": True,
+            "job_id": job_id,
+            "total_keywords": total,
+            "min_volume": min_volume,
+            "estimated_seconds": estimated_seconds,
+            "estimated_minutes": round(estimated_seconds / 60, 1),
+            "message": f"백그라운드 필터링 시작 (예상 {estimated_seconds // 60}분)",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("volume filter start error")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/keywords/volume-filter/{job_id}/status")
+async def get_volume_filter_status(
+    job_id: int,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """검색량 필터 진행 상태"""
+    job = get_volume_filter_job(job_id, user_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다")
+
+    total = job.get("total_keywords", 0) or 0
+    processed = job.get("processed_count", 0) or 0
+    progress = int(processed / total * 100) if total > 0 else 0
+
+    return {
+        "success": True,
+        "job": {**job, "progress_percent": progress},
+    }
+
+
+@router.get("/keywords/volume-filter/jobs")
+async def list_volume_filter_jobs_route(
+    user_id: int = Depends(get_user_id_with_fallback),
+    limit: int = Query(default=20),
+):
+    jobs = list_volume_filter_jobs(user_id, limit=limit)
+    return {"success": True, "count": len(jobs), "jobs": jobs}
+
+
+@router.get("/keywords/volume-filter/{job_id}/results")
+async def get_volume_filter_results_route(
+    job_id: int,
+    user_id: int = Depends(get_user_id_with_fallback),
+    limit: Optional[int] = Query(default=None),
+    format: str = Query(default="json", description="json 또는 csv"),
+):
+    """필터 통과 키워드 조회"""
+    job = get_volume_filter_job(job_id, user_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다")
+
+    results = get_volume_filter_results(job_id, limit=limit)
+
+    if format == "csv":
+        from fastapi.responses import StreamingResponse
+        import csv
+        import io as _io
+
+        buf = _io.StringIO()
+        buf.write("\ufeff")
+        writer = csv.writer(buf)
+        writer.writerow(["키워드", "PC검색량", "모바일검색량", "총검색량", "경쟁도"])
+        for r in results:
+            writer.writerow([r["keyword"], r["monthly_pc"], r["monthly_mobile"],
+                             r["monthly_total"], r.get("comp_idx", "")])
+        buf.seek(0)
+        return StreamingResponse(
+            iter([buf.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="filtered_job_{job_id}.csv"'},
+        )
+
+    return {"success": True, "count": len(results), "results": results}
+
+
+class FilterToRegisterRequest(BaseModel):
+    campaign_prefix: str = Field(..., description="캠페인 prefix")
+    bid: int = Field(default=100)
+    keywords_per_group: int = Field(default=500)
+    daily_budget: int = Field(default=10000)
+    campaign_tp: str = Field(default="WEB_SITE")
+    min_volume_override: Optional[int] = Field(default=None, description="등록 시 재필터링 임계치 (생략 시 필터 job의 min_volume 사용)")
+
+
+@router.post("/keywords/volume-filter/{job_id}/register")
+async def register_from_filter(
+    job_id: int,
+    request: FilterToRegisterRequest,
+    background_tasks: BackgroundTasks,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """필터 통과 키워드로 대량 등록 job 시작"""
+    try:
+        job = get_volume_filter_job(job_id, user_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="필터 작업을 찾을 수 없습니다")
+        if job["status"] not in ("completed", "completed_with_errors"):
+            raise HTTPException(status_code=400, detail="필터링이 아직 완료되지 않았습니다")
+
+        # 통과 키워드 로드
+        raw_results = get_volume_filter_results(job_id)
+        min_v = request.min_volume_override if request.min_volume_override is not None else job["min_volume"]
+        keywords = [r["keyword"] for r in raw_results if r["monthly_total"] >= min_v]
+
+        if not keywords:
+            raise HTTPException(status_code=400, detail="등록할 키워드가 없습니다")
+
+        if request.bid < 70 or request.bid > 100000:
+            raise HTTPException(status_code=400, detail="입찰가 70~100000원")
+        if not request.campaign_prefix or len(request.campaign_prefix) < 2:
+            raise HTTPException(status_code=400, detail="campaign_prefix 필수")
+
+        account = get_ad_account(user_id)
+        if not account or not account.get("is_connected"):
+            raise HTTPException(status_code=400, detail="광고 계정 연동 필요")
+
+        per_group = request.keywords_per_group
+        num_ad_groups = (len(keywords) + per_group - 1) // per_group
+        num_campaigns = (num_ad_groups + 999) // 1000
+
+        register_job_id = create_bulk_upload_job(
+            user_id=user_id,
+            filename=f"filter_job_{job_id}_result",
+            campaign_prefix=request.campaign_prefix,
+            keywords_per_group=per_group,
+            bid=request.bid,
+            daily_budget=request.daily_budget,
+            total_keywords=len(keywords),
+        )
+
+        async def _run():
+            from services.bulk_upload_orchestrator import BulkUploadOrchestrator, BulkJobConfig
+            from services.naver_ad_service import NaverAdApiClient
+
+            try:
+                client = NaverAdApiClient()
+                client.customer_id = account.get("customer_id")
+                client.api_key = account.get("api_key")
+                client.secret_key = account.get("secret_key")
+
+                orchestrator = BulkUploadOrchestrator(client)
+                cfg = BulkJobConfig(
+                    job_id=register_job_id, user_id=user_id,
+                    campaign_prefix=request.campaign_prefix,
+                    keywords_per_group=per_group,
+                    bid=request.bid,
+                    daily_budget=request.daily_budget,
+                    campaign_tp=request.campaign_tp,
+                )
+                await orchestrator.run(cfg, keywords)
+            except Exception as e:
+                logger.exception(f"[Job {register_job_id}] 실행 실패")
+                update_bulk_upload_job(
+                    register_job_id, status="failed",
+                    error_message=str(e)[:1000],
+                    completed_at=datetime.now().isoformat(),
+                )
+
+        background_tasks.add_task(_run)
+
+        save_optimization_log(
+            user_id, "filter_to_register",
+            f"필터 #{job_id} → 등록 #{register_job_id}: {len(keywords)}개 키워드",
+            {"filter_job": job_id, "register_job": register_job_id, "total": len(keywords)}
+        )
+
+        return {
+            "success": True,
+            "filter_job_id": job_id,
+            "register_job_id": register_job_id,
+            "total_keywords": len(keywords),
+            "estimated": {
+                "campaigns": num_campaigns,
+                "ad_groups": num_ad_groups,
+            },
+            "message": f"등록 작업 시작 (#{register_job_id})",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("filter-to-register error")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ 대량 등록 (10만 규모) ============
+
+@router.post("/keywords/scale-register")
+async def scale_register_keywords(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(..., description="엑셀 또는 CSV - A열 키워드"),
+    campaign_prefix: str = Form(..., description="캠페인 이름 prefix (예: bulk_20260422)"),
+    bid: int = Form(default=100, description="전체 키워드에 적용할 입찰가 (원)"),
+    keywords_per_group: int = Form(default=500, description="광고그룹당 키워드 수 (기본 500)"),
+    daily_budget: int = Form(default=10000, description="캠페인당 일 예산 (원)"),
+    campaign_tp: str = Form(default="WEB_SITE", description="캠페인 유형"),
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """10만 개 규모 키워드 자동 등록
+    - 캠페인/광고그룹 자동 생성
+    - 500개/광고그룹, 1,000그룹/캠페인 자동 분할
+    - 백그라운드 실행, job_id 리턴
+    """
+    try:
+        if bid < 70 or bid > 100000:
+            raise HTTPException(status_code=400, detail="입찰가는 70~100,000원이어야 합니다")
+        if keywords_per_group < 1 or keywords_per_group > 1000:
+            raise HTTPException(status_code=400, detail="광고그룹당 키워드는 1~1000개")
+        if daily_budget < 1000:
+            raise HTTPException(status_code=400, detail="일 예산은 최소 1,000원")
+        if not campaign_prefix or len(campaign_prefix) < 2:
+            raise HTTPException(status_code=400, detail="캠페인 prefix를 입력하세요 (2자 이상)")
+
+        content = await file.read()
+        if len(content) > 50 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="파일은 50MB 이하")
+
+        # 엑셀 파싱 (force_default_bid=True → bid 전체 적용)
+        parsed = _parse_keyword_excel(content, default_bid=bid, force_default_bid=True)
+        if parsed["total"] == 0:
+            raise HTTPException(status_code=400, detail="유효한 키워드가 없습니다")
+
+        keywords = [item["keyword"] for item in parsed["items"]]
+        total = len(keywords)
+
+        # 스케일 계산 & 안전장치
+        per_group = keywords_per_group
+        num_ad_groups = (total + per_group - 1) // per_group
+        num_campaigns = (num_ad_groups + 999) // 1000
+        if num_campaigns > 50:
+            raise HTTPException(
+                status_code=400,
+                detail=f"필요 캠페인 {num_campaigns}개가 너무 많습니다. "
+                       f"keywords_per_group을 늘리거나 키워드 수를 줄이세요"
+            )
+
+        # 광고 계정 연동 확인
+        account = get_ad_account(user_id)
+        if not account or not account.get("is_connected"):
+            raise HTTPException(status_code=400, detail="네이버 광고 계정을 먼저 연동하세요")
+
+        # Job 생성
+        job_id = create_bulk_upload_job(
+            user_id=user_id,
+            filename=file.filename or "uploaded.xlsx",
+            campaign_prefix=campaign_prefix,
+            keywords_per_group=per_group,
+            bid=bid,
+            daily_budget=daily_budget,
+            total_keywords=total,
+        )
+
+        # 백그라운드에서 실제 처리
+        async def _run():
+            from services.bulk_upload_orchestrator import BulkUploadOrchestrator, BulkJobConfig
+            from services.naver_ad_service import NaverAdApiClient
+
+            try:
+                client = NaverAdApiClient()
+                client.customer_id = account.get("customer_id")
+                client.api_key = account.get("api_key")
+                client.secret_key = account.get("secret_key")
+
+                orchestrator = BulkUploadOrchestrator(client)
+                cfg = BulkJobConfig(
+                    job_id=job_id,
+                    user_id=user_id,
+                    campaign_prefix=campaign_prefix,
+                    keywords_per_group=per_group,
+                    bid=bid,
+                    daily_budget=daily_budget,
+                    campaign_tp=campaign_tp,
+                )
+                await orchestrator.run(cfg, keywords)
+            except Exception as e:
+                logger.exception(f"[Job {job_id}] 오케스트레이터 실행 실패")
+                update_bulk_upload_job(
+                    job_id,
+                    status="failed",
+                    error_message=str(e)[:1000],
+                    completed_at=datetime.now().isoformat(),
+                )
+
+        background_tasks.add_task(_run)
+
+        save_optimization_log(
+            user_id, "scale_register_start",
+            f"대량 등록 시작 (job #{job_id}): {total}개 → 캠페인 {num_campaigns}개, 광고그룹 {num_ad_groups}개",
+            {
+                "job_id": job_id,
+                "total": total,
+                "num_campaigns": num_campaigns,
+                "num_ad_groups": num_ad_groups,
+            }
+        )
+
+        return {
+            "success": True,
+            "job_id": job_id,
+            "total_keywords": total,
+            "estimated": {
+                "campaigns": num_campaigns,
+                "ad_groups": num_ad_groups,
+                "keywords_per_group": per_group,
+                "estimated_seconds": int(num_ad_groups * 0.5 + total / 100 * 0.5 + num_campaigns * 0.5),
+            },
+            "parse_errors_count": parsed["errors_count"] if "errors_count" in parsed else len(parsed["errors"]),
+            "message": f"백그라운드 등록 시작 (job #{job_id})",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("scale register error")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/keywords/scale-register/{job_id}/status")
+async def get_scale_register_status(
+    job_id: int,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """대량 등록 작업 진행 상태"""
+    job = get_bulk_upload_job(job_id, user_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다")
+
+    total = job.get("total_keywords", 0) or 0
+    processed = job.get("processed_count", 0) or 0
+    progress = int(processed / total * 100) if total > 0 else 0
+
+    return {
+        "success": True,
+        "job": {
+            **job,
+            "progress_percent": progress,
+        },
+    }
+
+
+@router.get("/keywords/scale-register/jobs")
+async def list_scale_register_jobs(
+    user_id: int = Depends(get_user_id_with_fallback),
+    limit: int = Query(default=20),
+):
+    """사용자의 대량 등록 작업 목록"""
+    jobs = list_bulk_upload_jobs(user_id, limit=limit)
+    return {"success": True, "count": len(jobs), "jobs": jobs}
+
+
+@router.get("/keywords/scale-register/{job_id}/failures")
+async def get_scale_register_failures(
+    job_id: int,
+    user_id: int = Depends(get_user_id_with_fallback),
+    format: str = Query(default="json", description="json 또는 csv"),
+):
+    """실패한 키워드 목록 + CSV 다운로드"""
+    job = get_bulk_upload_job(job_id, user_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다")
+
+    failures = get_bulk_upload_failures(job_id)
+
+    if format == "csv":
+        from fastapi.responses import StreamingResponse
+        import csv
+        import io as _io
+
+        buf = _io.StringIO()
+        buf.write("\ufeff")  # UTF-8 BOM for Excel
+        writer = csv.writer(buf)
+        writer.writerow(["keyword", "bid", "ad_group_id", "reason"])
+        for f in failures:
+            writer.writerow([f["keyword"], f["bid"], f["ad_group_id"], f["reason"]])
+        buf.seek(0)
+        return StreamingResponse(
+            iter([buf.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="failures_job_{job_id}.csv"'},
+        )
+
+    return {"success": True, "count": len(failures), "failures": failures}
+
+
+@router.post("/keywords/upload-excel")
+async def upload_keywords_excel(
+    file: UploadFile = File(..., description="엑셀(.xlsx) 또는 CSV 파일"),
+    default_bid: int = Form(default=100),
+    ad_group_id: Optional[str] = Form(default=None),
+    auto_register: bool = Form(default=False),
+    force_default_bid: bool = Form(default=True, description="엑셀 입찰가 무시하고 default_bid 전체 적용"),
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """엑셀/CSV 업로드로 키워드+입찰가 파싱.
+    - force_default_bid=true(기본): 엑셀 내용과 무관하게 default_bid를 모든 키워드에 일괄 적용
+    - force_default_bid=false: 엑셀 B열 입찰가 우선, 없으면 default_bid 사용
+    - auto_register=false(기본): 파싱 결과만 반환(미리보기)
+    - auto_register=true: 즉시 네이버 광고 API로 등록
+    """
+    try:
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="파일이 없습니다")
+
+        if default_bid < 70 or default_bid > 100000:
+            raise HTTPException(status_code=400, detail="입찰가는 70원~100,000원 사이여야 합니다")
+
+        content = await file.read()
+        if len(content) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="파일 크기가 10MB를 초과합니다")
+
+        parsed = _parse_keyword_excel(content, default_bid, force_default_bid=force_default_bid)
+
+        result: Dict[str, Any] = {
+            "success": True,
+            "filename": file.filename,
+            "total": parsed["total"],
+            "items": parsed["items"][:500],  # 미리보기 최대 500개
+            "items_count": len(parsed["items"]),
+            "errors": parsed["errors"][:100],
+            "errors_count": len(parsed["errors"]),
+            "registered": 0,
+        }
+
+        if auto_register:
+            if not ad_group_id:
+                raise HTTPException(status_code=400, detail="ad_group_id가 필요합니다")
+            if not parsed["items"]:
+                result["message"] = "등록할 키워드가 없습니다"
+                return result
+
+            optimizer = get_optimizer()
+            from services.naver_ad_service import KeywordSuggestion
+            suggestions = [
+                KeywordSuggestion(keyword=it["keyword"], suggested_bid=it["bid"])
+                for it in parsed["items"]
+            ]
+            added = await optimizer.bulk_manager.bulk_add_keywords(
+                ad_group_id, suggestions, default_bid
+            )
+            result["registered"] = len(added)
+
+            save_optimization_log(
+                user_id, "excel_upload_register",
+                f"엑셀 업로드 등록: {len(added)}/{len(parsed['items'])}개",
+                {
+                    "filename": file.filename,
+                    "requested": len(parsed["items"]),
+                    "added": len(added),
+                    "ad_group_id": ad_group_id,
+                }
+            )
+            result["message"] = f"{len(added)}개 키워드가 등록되었습니다"
+        else:
+            result["message"] = f"{parsed['total']}개 키워드 파싱 완료 (미리보기)"
+
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Excel upload error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1065,12 +1771,16 @@ async def refresh_trending_keywords(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class AddTrendingKeywordRequest(BaseModel):
+    keyword: str = Field(..., description="키워드")
+    ad_group_id: str = Field(default="", description="광고그룹 ID (미지정 시 기본 광고그룹)")
+    bid: int = Field(default=100, description="입찰가")
+
+
 @router.post("/trending/add-to-campaign")
 async def add_trending_to_campaign(
+    req: AddTrendingKeywordRequest,
     user_id: int = Depends(get_user_id_with_fallback),
-    keyword: str = Query(..., description="키워드"),
-    ad_group_id: str = Query(..., description="광고그룹 ID"),
-    bid: int = Query(default=100, description="입찰가")
 ):
     """트렌드 키워드를 광고에 추가"""
     try:
@@ -1078,19 +1788,19 @@ async def add_trending_to_campaign(
 
         # 키워드 추가
         result = await optimizer.api.create_keywords([{
-            "nccAdgroupId": ad_group_id,
-            "keyword": keyword,
-            "bidAmt": bid,
+            "nccAdgroupId": req.ad_group_id,
+            "keyword": req.keyword,
+            "bidAmt": req.bid,
             "useGroupBidAmt": False
         }])
 
         # 상태 업데이트
-        update_trending_keyword_status(user_id, keyword, "added")
-        save_optimization_log(user_id, "keyword_added", f"트렌드 키워드 '{keyword}'가 광고에 추가되었습니다")
+        update_trending_keyword_status(user_id, req.keyword, "added")
+        save_optimization_log(user_id, "keyword_added", f"트렌드 키워드 '{req.keyword}'가 광고에 추가되었습니다")
 
         return {
             "success": True,
-            "message": f"키워드 '{keyword}'가 광고에 추가되었습니다",
+            "message": f"키워드 '{req.keyword}'가 광고에 추가되었습니다",
             "result": result
         }
     except Exception as e:

@@ -1,11 +1,11 @@
-app = "bqts"
+app = "blog-index-analyzer"
 primary_region = "nrt"
 
 [build]
   dockerfile = "Dockerfile"
 
 [mounts]
-  source = "bqts_data"
+  source = "blog_index_data"
   destination = "/data"
 
 [http_service]
@@ -17,6 +17,6 @@ primary_region = "nrt"
   processes = ["app"]
 
 [[vm]]
-  memory = "512mb"
+  memory = "1024mb"
   cpu_kind = "shared"
   cpus = 1

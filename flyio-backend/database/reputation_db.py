@@ -77,6 +77,7 @@ class ReputationDB:
                     rating INTEGER,
                     content TEXT,
                     review_date TEXT,
+                    visit_count INTEGER DEFAULT 0,
                     sentiment TEXT DEFAULT 'neutral',
                     sentiment_score REAL DEFAULT 0.0,
                     sentiment_category TEXT,
@@ -88,6 +89,12 @@ class ReputationDB:
                     UNIQUE(platform, platform_review_id)
                 )
             """)
+
+            # visit_count 컬럼 마이그레이션 (기존 테이블에 추가)
+            try:
+                cursor.execute("ALTER TABLE reviews ADD COLUMN visit_count INTEGER DEFAULT 0")
+            except sqlite3.OperationalError:
+                pass  # 이미 존재하면 무시
 
             # 알림 설정
             cursor.execute("""
@@ -166,6 +173,39 @@ class ReputationDB:
                 )
             """)
 
+            # 온라인 언급 스캐너 (긍정/중립/부정)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS online_mentions (
+                    id TEXT PRIMARY KEY,
+                    store_id TEXT NOT NULL,
+                    source_type TEXT NOT NULL,
+                    title TEXT,
+                    snippet TEXT,
+                    url TEXT UNIQUE,
+                    author_name TEXT,
+                    published_date TEXT,
+                    sentiment TEXT DEFAULT 'neutral',
+                    sentiment_score INTEGER DEFAULT 0,
+                    severity_score INTEGER DEFAULT 0,
+                    severity_level TEXT DEFAULT 'none',
+                    matched_keywords TEXT,
+                    is_resolved INTEGER DEFAULT 0,
+                    resolved_note TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (store_id) REFERENCES monitored_stores(id)
+                )
+            """)
+
+            # sentiment/sentiment_score 컬럼 마이그레이션
+            try:
+                cursor.execute("ALTER TABLE online_mentions ADD COLUMN sentiment TEXT DEFAULT 'neutral'")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                cursor.execute("ALTER TABLE online_mentions ADD COLUMN sentiment_score INTEGER DEFAULT 0")
+            except sqlite3.OperationalError:
+                pass
+
             # 인덱스
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_reviews_store ON reviews(store_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_reviews_platform ON reviews(platform)")
@@ -176,6 +216,9 @@ class ReputationDB:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_competitors_store ON competitors(store_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_templates_store ON response_templates(store_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_reports_store ON insight_reports(store_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_mentions_store ON online_mentions(store_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_mentions_severity ON online_mentions(severity_level)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_mentions_resolved ON online_mentions(is_resolved)")
 
             conn.commit()
             logger.info("Reputation DB tables initialized")
@@ -244,6 +287,24 @@ class ReputationDB:
         finally:
             conn.close()
 
+    def update_store_place_ids(self, store_id: str, naver_place_id: str = None,
+                               google_place_id: str = None, kakao_place_id: str = None) -> int:
+        """누락된 플랫폼 ID만 업데이트 (기존 값이 있으면 건드리지 않음)"""
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute("""
+                UPDATE monitored_stores SET
+                    naver_place_id = COALESCE(naver_place_id, ?),
+                    google_place_id = COALESCE(google_place_id, ?),
+                    kakao_place_id = COALESCE(kakao_place_id, ?),
+                    updated_at = datetime('now')
+                WHERE id = ?
+            """, (naver_place_id, google_place_id, kakao_place_id, store_id))
+            conn.commit()
+            return cursor.rowcount
+        finally:
+            conn.close()
+
     def update_last_crawled(self, store_id: str):
         conn = self._get_connection()
         try:
@@ -260,7 +321,8 @@ class ReputationDB:
     def add_review(self, store_id: str, platform: str, platform_review_id: str,
                    author_name: str, rating: int, content: str, review_date: str,
                    sentiment: str = "neutral", sentiment_score: float = 0.0,
-                   sentiment_category: str = None, keywords: List[str] = None) -> Optional[str]:
+                   sentiment_category: str = None, keywords: List[str] = None,
+                   visit_count: int = 0) -> Optional[str]:
         """리뷰 추가. 중복이면 None 반환."""
         review_id = str(uuid.uuid4())
         conn = self._get_connection()
@@ -268,11 +330,12 @@ class ReputationDB:
             conn.execute("""
                 INSERT OR IGNORE INTO reviews
                     (id, store_id, platform, platform_review_id, author_name, rating,
-                     content, review_date, sentiment, sentiment_score, sentiment_category, keywords)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     content, review_date, visit_count, sentiment, sentiment_score,
+                     sentiment_category, keywords)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (review_id, store_id, platform, platform_review_id, author_name, rating,
-                  content, review_date, sentiment, sentiment_score, sentiment_category,
-                  json.dumps(keywords or [], ensure_ascii=False)))
+                  content, review_date, visit_count, sentiment, sentiment_score,
+                  sentiment_category, json.dumps(keywords or [], ensure_ascii=False)))
             conn.commit()
             if conn.total_changes > 0:
                 return review_id
@@ -852,6 +915,167 @@ class ReputationDB:
                 ORDER BY generated_at DESC LIMIT ?
             """, (store_id, limit)).fetchall()
             return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
+
+    # ===== 온라인 언급 (긍정/중립/부정) =====
+
+    def add_mention(self, store_id: str, source_type: str, title: str, snippet: str,
+                    url: str, author_name: str = None, published_date: str = None,
+                    sentiment: str = "neutral", sentiment_score: int = 0,
+                    severity_score: int = 0, severity_level: str = "none",
+                    matched_keywords: List[str] = None) -> Optional[str]:
+        mention_id = str(uuid.uuid4())
+        conn = self._get_connection()
+        try:
+            conn.execute("""
+                INSERT OR IGNORE INTO online_mentions
+                    (id, store_id, source_type, title, snippet, url, author_name,
+                     published_date, sentiment, sentiment_score,
+                     severity_score, severity_level, matched_keywords)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (mention_id, store_id, source_type, title, snippet, url, author_name,
+                  published_date, sentiment, sentiment_score,
+                  severity_score, severity_level,
+                  json.dumps(matched_keywords or [], ensure_ascii=False)))
+            conn.commit()
+            if conn.total_changes > 0:
+                return mention_id
+            return None
+        finally:
+            conn.close()
+
+    def get_mentions(self, store_id: str, source_type: str = None,
+                     severity_level: str = None, sentiment: str = None,
+                     is_resolved: int = None,
+                     limit: int = 50, offset: int = 0) -> List[Dict]:
+        conn = self._get_connection()
+        try:
+            query = "SELECT * FROM online_mentions WHERE store_id = ?"
+            params: list = [store_id]
+            if source_type:
+                query += " AND source_type = ?"
+                params.append(source_type)
+            if severity_level:
+                query += " AND severity_level = ?"
+                params.append(severity_level)
+            if sentiment:
+                query += " AND sentiment = ?"
+                params.append(sentiment)
+            if is_resolved is not None:
+                query += " AND is_resolved = ?"
+                params.append(is_resolved)
+            query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+            rows = conn.execute(query, params).fetchall()
+            results = []
+            for r in rows:
+                d = dict(r)
+                if d.get("matched_keywords"):
+                    try:
+                        d["matched_keywords"] = json.loads(d["matched_keywords"])
+                    except Exception:
+                        d["matched_keywords"] = []
+                results.append(d)
+            return results
+        finally:
+            conn.close()
+
+    def resolve_mention(self, mention_id: str, note: str = None) -> bool:
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute(
+                "UPDATE online_mentions SET is_resolved = 1, resolved_note = ? WHERE id = ?",
+                (note, mention_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        finally:
+            conn.close()
+
+    def delete_mention(self, mention_id: str) -> bool:
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute("DELETE FROM online_mentions WHERE id = ?", (mention_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+        finally:
+            conn.close()
+
+    def get_mention_stats(self, store_id: str) -> Dict:
+        conn = self._get_connection()
+        try:
+            total = conn.execute(
+                "SELECT COUNT(*) FROM online_mentions WHERE store_id = ?", (store_id,)
+            ).fetchone()[0]
+            unresolved = conn.execute(
+                "SELECT COUNT(*) FROM online_mentions WHERE store_id = ? AND is_resolved = 0",
+                (store_id,)
+            ).fetchone()[0]
+            high = conn.execute(
+                "SELECT COUNT(*) FROM online_mentions WHERE store_id = ? AND severity_level = 'high' AND is_resolved = 0",
+                (store_id,)
+            ).fetchone()[0]
+            # 감성별 분포
+            sentiment_rows = conn.execute("""
+                SELECT sentiment, COUNT(*) as cnt FROM online_mentions
+                WHERE store_id = ? GROUP BY sentiment
+            """, (store_id,)).fetchall()
+            by_sentiment = {r[0]: r[1] for r in sentiment_rows}
+            # 소스별 분포
+            source_rows = conn.execute("""
+                SELECT source_type, COUNT(*) as cnt FROM online_mentions
+                WHERE store_id = ? GROUP BY source_type
+            """, (store_id,)).fetchall()
+            by_source = {r[0]: r[1] for r in source_rows}
+            # 심각도별 분포 (부정만)
+            severity_rows = conn.execute("""
+                SELECT severity_level, COUNT(*) as cnt FROM online_mentions
+                WHERE store_id = ? AND sentiment = 'negative' GROUP BY severity_level
+            """, (store_id,)).fetchall()
+            by_severity = {r[0]: r[1] for r in severity_rows}
+            return {
+                "total": total,
+                "unresolved": unresolved,
+                "high_severity": high,
+                "by_sentiment": by_sentiment,
+                "by_source": by_source,
+                "by_severity": by_severity,
+            }
+        finally:
+            conn.close()
+
+    def get_unresolved_count(self, store_id: str) -> int:
+        conn = self._get_connection()
+        try:
+            return conn.execute(
+                "SELECT COUNT(*) FROM online_mentions WHERE store_id = ? AND is_resolved = 0",
+                (store_id,)
+            ).fetchone()[0]
+        finally:
+            conn.close()
+
+    def get_resolved_urls(self, store_id: str) -> set:
+        """이미 처리 완료되거나 오탐 제거된 URL 목록 (재스캔 시 제외용)"""
+        conn = self._get_connection()
+        try:
+            rows = conn.execute(
+                "SELECT url FROM online_mentions WHERE store_id = ?",
+                (store_id,)
+            ).fetchall()
+            return {r[0] for r in rows if r[0]}
+        finally:
+            conn.close()
+
+    def get_last_scan_time(self, store_id: str) -> Optional[str]:
+        conn = self._get_connection()
+        try:
+            row = conn.execute(
+                "SELECT MAX(created_at) FROM online_mentions WHERE store_id = ?",
+                (store_id,)
+            ).fetchone()
+            return row[0] if row and row[0] else None
         finally:
             conn.close()
 

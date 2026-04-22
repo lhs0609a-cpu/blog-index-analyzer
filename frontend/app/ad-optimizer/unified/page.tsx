@@ -25,7 +25,7 @@ import {
 import AdOptimizerTutorial, { TutorialStartButton } from '@/components/ad-optimizer/AdOptimizerTutorial'
 import { FeatureHelpCard, QuickStartGuide } from '@/components/ad-optimizer/FeatureHelpCard'
 import { adGet, adPost } from '@/lib/api/adFetch'
-import { DemoBanner } from '@/components/ad-optimizer/DemoBadge'
+
 
 // 대시보드 탭 타입
 type DashboardTab = 'overview' | 'platforms' | 'budget' | 'insights'
@@ -611,9 +611,9 @@ export default function UnifiedAdOptimizerPage() {
               >
                 <HelpCircle className="w-5 h-5" />
               </button>
-              <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
+              <Link href="/ad-optimizer/anomaly-detection" className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
                 <Bell className="w-5 h-5" />
-              </button>
+              </Link>
             </div>
           </div>
 
@@ -1024,31 +1024,38 @@ export default function UnifiedAdOptimizerPage() {
                 </div>
 
                 {/* 오늘의 하이라이트 */}
-                <DemoBanner />
-                <div className="bg-gradient-to-br from-green-50 to-emerald-100 rounded-2xl p-5 border border-green-200">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Award className="w-5 h-5 text-green-600" />
-                    <h3 className="font-bold text-green-800">오늘의 성과</h3>
+                {dashboardSummary && (
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-100 rounded-2xl p-5 border border-green-200">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Award className="w-5 h-5 text-green-600" />
+                      <h3 className="font-bold text-green-800">성과 요약</h3>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-green-700">
+                          ₩{(dashboardSummary.total_spend / 10000).toFixed(0)}
+                          <span className="text-sm">만</span>
+                        </p>
+                        <p className="text-xs text-green-600">총 광고비</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-green-700">
+                          ₩{(dashboardSummary.total_revenue / 10000).toFixed(0)}
+                          <span className="text-sm">만</span>
+                        </p>
+                        <p className="text-xs text-green-600">총 매출</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-green-700">{dashboardSummary.total_conversions}</p>
+                        <p className="text-xs text-green-600">총 전환수</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-bold text-green-700">{dashboardSummary.avg_roas.toFixed(0)}%</p>
+                        <p className="text-xs text-green-600">평균 ROAS</p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-green-700">47</p>
-                      <p className="text-xs text-green-600">최적화 횟수</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-green-700">₩82K</p>
-                      <p className="text-xs text-green-600">예상 절감액</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-green-700">+12%</p>
-                      <p className="text-xs text-green-600">CTR 개선</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-green-700">+8%</p>
-                      <p className="text-xs text-green-600">전환율 상승</p>
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           </motion.div>
@@ -1285,9 +1292,9 @@ export default function UnifiedAdOptimizerPage() {
                   <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
                     <TrendingUp className="w-5 h-5 text-green-600" />
                   </div>
-                  <span className="text-sm text-gray-500">AI 권장 증액</span>
+                  <span className="text-sm text-gray-500">AI 권장 예산</span>
                 </div>
-                <p className="text-3xl font-bold text-green-600">+₩230<span className="text-lg text-green-400">만</span></p>
+                <p className="text-3xl font-bold text-green-600">₩{(budgetAllocations.reduce((s, p) => s + p.suggestedBudget, 0) / 10000).toFixed(0)}<span className="text-lg text-green-400">만</span></p>
               </div>
 
               <div className="bg-white rounded-2xl p-5 shadow-sm">
@@ -1295,9 +1302,9 @@ export default function UnifiedAdOptimizerPage() {
                   <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
                     <Target className="w-5 h-5 text-orange-600" />
                   </div>
-                  <span className="text-sm text-gray-500">예상 ROAS</span>
+                  <span className="text-sm text-gray-500">평균 ROAS</span>
                 </div>
-                <p className="text-3xl font-bold text-gray-900">412<span className="text-lg text-gray-400">%</span></p>
+                <p className="text-3xl font-bold text-gray-900">{budgetAllocations.length > 0 ? (budgetAllocations.reduce((s, p) => s + p.performance, 0) / budgetAllocations.length).toFixed(0) : '0'}<span className="text-lg text-gray-400">%</span></p>
               </div>
 
               <div className="bg-white rounded-2xl p-5 shadow-sm">
@@ -1305,9 +1312,9 @@ export default function UnifiedAdOptimizerPage() {
                   <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
                     <Percent className="w-5 h-5 text-purple-600" />
                   </div>
-                  <span className="text-sm text-gray-500">최적화 잠재력</span>
+                  <span className="text-sm text-gray-500">연동 플랫폼</span>
                 </div>
-                <p className="text-3xl font-bold text-purple-600">+18<span className="text-lg text-purple-400">%</span></p>
+                <p className="text-3xl font-bold text-purple-600">{budgetAllocations.length}<span className="text-lg text-purple-400">개</span></p>
               </div>
             </div>
 
@@ -1322,10 +1329,13 @@ export default function UnifiedAdOptimizerPage() {
                     </h3>
                     <FeatureHelpCard featureId="budget-reallocation" variant="button" />
                   </div>
-                  <button className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity flex items-center gap-2">
+                  <Link
+                    href="/ad-optimizer/budget-reallocation"
+                    className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity flex items-center gap-2"
+                  >
                     <Sparkles className="w-4 h-4" />
                     AI 최적화 적용
-                  </button>
+                  </Link>
                 </div>
                 <div className="p-4 space-y-4">
                   {budgetAllocations.map((platform, idx) => {
@@ -1399,27 +1409,25 @@ export default function UnifiedAdOptimizerPage() {
                     </div>
                   </div>
                   <div className="space-y-3">
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
-                      <div className="flex items-center gap-2 mb-1">
-                        <ArrowUpRight className="w-4 h-4 text-green-300" />
-                        <span className="font-medium text-sm">네이버 예산 증액 권장</span>
+                    {budgetAllocations.length > 0 ? budgetAllocations.slice(0, 3).map((p, i) => {
+                      const diff = p.suggestedBudget - p.currentBudget
+                      const isIncrease = diff > 0
+                      return (
+                        <div key={i} className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
+                          <div className="flex items-center gap-2 mb-1">
+                            {isIncrease ? <ArrowUpRight className="w-4 h-4 text-green-300" /> : <ArrowDownRight className="w-4 h-4 text-orange-300" />}
+                            <span className="font-medium text-sm">{p.name} {isIncrease ? '증액 권장' : '감액 권장'}</span>
+                          </div>
+                          <p className="text-xs text-white/80">
+                            ROAS {p.performance}% · {isIncrease ? '성과 우수, 확장 여력 있음' : '전환율 하락, 타겟팅 재검토 필요'}
+                          </p>
+                        </div>
+                      )
+                    }) : (
+                      <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 text-center">
+                        <p className="text-sm text-white/70">플랫폼 연동 후 분석을 시작합니다</p>
                       </div>
-                      <p className="text-xs text-white/80">ROAS가 평균 이상이며, 경쟁 키워드 점유율 확대 가능</p>
-                    </div>
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
-                      <div className="flex items-center gap-2 mb-1">
-                        <ArrowDownRight className="w-4 h-4 text-orange-300" />
-                        <span className="font-medium text-sm">Google Ads 예산 조정</span>
-                      </div>
-                      <p className="text-xs text-white/80">최근 7일 전환율 하락, 타겟팅 재검토 필요</p>
-                    </div>
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Flame className="w-4 h-4 text-yellow-300" />
-                        <span className="font-medium text-sm">Meta 광고 스케일업</span>
-                      </div>
-                      <p className="text-xs text-white/80">리타겟팅 캠페인 성과 우수, 확장 여력 있음</p>
-                    </div>
+                    )}
                   </div>
                 </div>
 
@@ -1430,22 +1438,26 @@ export default function UnifiedAdOptimizerPage() {
                     예산 변경 이력
                   </h3>
                   <div className="space-y-3">
-                    {[
-                      { date: '12/28', platform: '네이버', change: '+₩50만', reason: 'AI 자동 증액' },
-                      { date: '12/25', platform: 'Meta', change: '+₩30만', reason: '수동 조정' },
-                      { date: '12/22', platform: 'Google', change: '-₩20만', reason: 'AI 자동 감액' }
-                    ].map((log, i) => (
-                      <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                        <div>
-                          <span className="text-xs text-gray-400">{log.date}</span>
-                          <p className="text-sm font-medium text-gray-900">{log.platform}</p>
+                    {budgetAllocations.length > 0 ? budgetAllocations.map((p, i) => {
+                      const diff = p.suggestedBudget - p.currentBudget
+                      const isIncrease = diff > 0
+                      return (
+                        <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                          <div>
+                            <span className="text-lg mr-2">{p.icon}</span>
+                            <span className="text-sm font-medium text-gray-900">{p.name}</span>
+                          </div>
+                          <div className="text-right">
+                            <p className={`text-sm font-bold ${isIncrease ? 'text-green-600' : 'text-red-600'}`}>
+                              {isIncrease ? '+' : ''}₩{(diff / 10000).toFixed(0)}만 권장
+                            </p>
+                            <span className="text-xs text-gray-500">ROAS {p.performance}%</span>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className={`text-sm font-bold ${log.change.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>{log.change}</p>
-                          <span className="text-xs text-gray-500">{log.reason}</span>
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    }) : (
+                      <p className="text-sm text-gray-400 text-center py-4">연동된 플랫폼이 없습니다</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1566,7 +1578,13 @@ export default function UnifiedAdOptimizerPage() {
 
             {/* 추가 인사이트 요청 */}
             <div className="mt-6 text-center">
-              <button className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-medium hover:opacity-90 transition-opacity flex items-center gap-2 mx-auto">
+              <button
+                onClick={() => {
+                  loadAIInsights()
+                  toast.success('인사이트를 다시 분석하고 있습니다')
+                }}
+                className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-medium hover:opacity-90 transition-opacity flex items-center gap-2 mx-auto"
+              >
                 <RefreshCw className="w-4 h-4" />
                 더 많은 인사이트 분석하기
               </button>

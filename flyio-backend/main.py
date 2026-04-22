@@ -301,6 +301,23 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Funnel Designer DB init failed: {e}")
 
+    # 인플루언서 발굴 DB 초기화
+    try:
+        from database.influencer_db import init_influencer_tables
+        init_influencer_tables()
+        logger.info("✅ Influencer discovery DB initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ Influencer DB init failed: {e}")
+
+    # 인플루언서 자동 수집 스케줄러 시작
+    try:
+        from services.influencer_auto_collector import get_auto_collector
+        auto_collector = get_auto_collector()
+        auto_collector.start()
+        logger.info("✅ Influencer auto collector started (daily 03:10 KST)")
+    except Exception as e:
+        logger.warning(f"⚠️ Influencer auto collector failed to start: {e}")
+
     # 평판 모니터링 DB 초기화 + 백그라운드 스케줄러
     try:
         from database.reputation_db import init_reputation_tables
@@ -325,6 +342,13 @@ async def lifespan(app: FastAPI):
         ("threads_auto_poster", "services.threads_auto_poster"),
         ("backup_scheduler", "services.backup_service"),
     ]
+
+    # 인플루언서 자동 수집 스케줄러 중지
+    try:
+        from services.influencer_auto_collector import get_auto_collector
+        get_auto_collector().stop()
+    except Exception:
+        pass
 
     for scheduler_name, module_name in schedulers_to_stop:
         try:
@@ -594,6 +618,7 @@ from routers import marketplace
 from routers import reputation
 from routers import funnel_designer
 from routers import competitive_analysis
+from routers import influencer_discovery
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
@@ -641,6 +666,7 @@ app.include_router(marketplace.router, prefix="/api", tags=["마켓플레이스"
 app.include_router(reputation.router, tags=["평판모니터링"])
 app.include_router(funnel_designer.router, tags=["퍼널디자이너"])
 app.include_router(competitive_analysis.router, tags=["경쟁력분석"])
+app.include_router(influencer_discovery.router, tags=["인플루언서발굴"])
 
 
 if __name__ == "__main__":

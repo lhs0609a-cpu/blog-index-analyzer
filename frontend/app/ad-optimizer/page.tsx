@@ -1440,6 +1440,63 @@ export default function AdOptimizerPage() {
         {/* 키워드 발굴 탭 */}
         {activeTab === 'discover' && (
           <div className="space-y-6">
+            {/* 검색량 필터링 (권장) */}
+            <Link
+              href="/ad-optimizer/volume-filter"
+              className="block bg-gradient-to-r from-emerald-500 to-teal-700 rounded-2xl p-6 text-white hover:shadow-xl transition-shadow"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <Filter className="w-6 h-6" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold mb-1">🎯 검색량 필터링 → 자동 등록 (50만 규모, 권장)</h3>
+                  <p className="text-teal-100 text-sm">
+                    엑셀 → 월 검색량 ≥10만 필터링 → 캠페인 자동 생성 → 광고 등록 (검색량 없는 키워드 자동 제외)
+                  </p>
+                </div>
+                <ArrowUpRight className="w-5 h-5" />
+              </div>
+            </Link>
+
+            {/* 대량 등록 (10만) - 필터 없이 */}
+            <Link
+              href="/ad-optimizer/scale-upload"
+              className="block bg-gradient-to-r from-purple-600 to-indigo-700 rounded-2xl p-6 text-white hover:shadow-xl transition-shadow"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <Flame className="w-6 h-6" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold mb-1">🚀 대량 등록 (10만 규모, 필터 없음)</h3>
+                  <p className="text-indigo-100 text-sm">
+                    검색량 체크 없이 엑셀의 모든 키워드를 곧바로 등록. 검색량 걸러진 엑셀이 있을 때 사용.
+                  </p>
+                </div>
+                <ArrowUpRight className="w-5 h-5" />
+              </div>
+            </Link>
+
+            {/* 엑셀 단건 일괄 등록 */}
+            <Link
+              href="/ad-optimizer/keyword-upload"
+              className="block bg-gradient-to-r from-indigo-500 to-blue-600 rounded-2xl p-6 text-white hover:shadow-xl transition-shadow"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <Download className="w-6 h-6 rotate-180" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold mb-1">📋 엑셀/CSV 단건 등록 (최대 500개)</h3>
+                  <p className="text-indigo-100 text-sm">
+                    단일 광고그룹에 키워드 대량 등록 (500개 이하). 10만 개 이상은 위 "대량 등록" 사용.
+                  </p>
+                </div>
+                <ArrowUpRight className="w-5 h-5" />
+              </div>
+            </Link>
+
             {/* 전환 키워드 발굴 안내 */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}

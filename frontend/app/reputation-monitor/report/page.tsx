@@ -187,7 +187,7 @@ export default function ReportPage() {
     if (!compSearchQuery.trim()) return
     setCompSearching(true)
     try {
-      const res = await fetch(`${getApiUrl()}/api/reputation/search-place?query=${encodeURIComponent(compSearchQuery)}&platform=naver`)
+      const res = await fetch(`${getApiUrl()}/api/reputation/search-unified?query=${encodeURIComponent(compSearchQuery)}`)
       const data = await res.json()
       if (data.success) setCompSearchResults(data.places)
     } catch {

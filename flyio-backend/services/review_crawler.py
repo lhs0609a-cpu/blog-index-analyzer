@@ -4,8 +4,10 @@
 
 핵심 원칙:
 - 블로그 리뷰(getFsasReviews)는 수집하지 않음 — 방문자 리뷰(getVisitorReviews)만 사용
-- rating이 1~5 범위이고 body(내용)가 있는 리뷰만 유효한 방문자 리뷰로 인정
-- rating=0이고 body도 없는 항목은 블로그 글이나 광고이므로 필터링
+- originType='영수증'인 리뷰만 수집 (네이버 영수증 리뷰는 rating=None이 정상)
+- visitCount >= 1이면 실제 방문 인증 리뷰
+- GraphQL API 차단 시 __APOLLO_STATE__ 파싱으로 폴백
+- HTML 폴백에서도 visitorReviews/VisitorReview 키만 탐색하여 블로그 리뷰 혼입 차단
 """
 import httpx
 import json
@@ -64,23 +66,16 @@ class ReviewCrawler:
       author {
         nickname
         from
-        imageUrl
       }
       body
-      thumbnail
       created
       reply {
         body
         created
-        modifyDate
       }
       visitCount
     }
     total
-    starDistribution {
-      score
-      count
-    }
   }
 }"""
 
@@ -115,20 +110,33 @@ class ReviewCrawler:
         }
 
     @staticmethod
-    def _is_valid_visitor_review(body: str, rating: int) -> bool:
+    def _is_valid_visitor_review(body: str, rating, visit_count: int = 0,
+                                  origin_type: str = "") -> bool:
         """
-        방문자/구매자 리뷰 유효성 검증
+        방문자/구매자 리뷰(영수증 리뷰) 유효성 검증
 
         유효 조건 (하나라도 충족):
-        - rating이 1~5 범위 (실제 별점이 있는 리뷰)
-        - body가 5자 이상 (내용이 있는 텍스트 리뷰)
+        - originType이 있음: '영수증', '예약' 등 네이버 인증 방문 리뷰
+        - rating이 1~5 범위 (GraphQL 응답에서 별점이 있는 경우)
+        - visitCount >= 1 (실제 방문 인증)
 
-        무효 (블로그/광고일 가능성):
-        - rating=0이고 body가 비어있거나 5자 미만
+        무효 (블로그/광고):
+        - originType이 없고, rating=0이고, visitCount=0인 항목
         """
-        has_valid_rating = isinstance(rating, (int, float)) and 1 <= rating <= 5
-        has_valid_body = isinstance(body, str) and len(body.strip()) >= 5
-        return has_valid_rating or has_valid_body
+        # 네이버 인증 방문 리뷰: 영수증, 예약 등 (rating=None이 정상)
+        if origin_type in ("영수증", "예약"):
+            return True
+
+        # visitCount >= 1이면 실제 방문자
+        if isinstance(visit_count, (int, float)) and visit_count >= 1:
+            return True
+
+        # rating 1~5이면 유효한 별점 리뷰
+        if isinstance(rating, (int, float)) and 1 <= rating <= 5:
+            has_body = isinstance(body, str) and len(body.strip()) >= 1
+            return has_body
+
+        return False
 
     @staticmethod
     def _parse_visitor_review_item(item: dict) -> Optional[Dict]:
@@ -136,12 +144,15 @@ class ReviewCrawler:
         GraphQL visitorReviews 응답 아이템을 표준 리뷰 형식으로 변환
 
         반환 None이면 유효하지 않은 항목 (블로그/광고 등)
+        영수증 리뷰: originType='영수증', rating은 None일 수 있음
         """
         body = (item.get("body") or "").strip()
-        rating = item.get("rating", 0)
+        rating = item.get("rating")  # None이 정상 (영수증 리뷰)
+        visit_count = item.get("visitCount", 0) or 0
+        origin_type = item.get("originType", "")
 
-        # 유효성 검증 — 블로그 글/광고 필터링
-        if not ReviewCrawler._is_valid_visitor_review(body, rating):
+        # 유효성 검증 — 영수증/방문자 리뷰만 통과
+        if not ReviewCrawler._is_valid_visitor_review(body, rating, visit_count, origin_type):
             return None
 
         author_data = item.get("author") or {}
@@ -151,8 +162,9 @@ class ReviewCrawler:
             "rating": int(rating) if rating else 0,
             "content": body,
             "review_date": item.get("created", ""),
-            "visit_count": item.get("visitCount", 0),
-            "review_type": "visitor",  # 방문자 리뷰 명시
+            "visit_count": visit_count,
+            "origin_type": origin_type,
+            "review_type": "visitor",
         }
 
     # ===== 네이버 플레이스 — 방문자(구매자) 리뷰 전용 =====
@@ -299,7 +311,7 @@ class ReviewCrawler:
                     "display": per_page,
                     "isPhotoUsed": False,
                     "theme": "0",
-                    "sortType": "latest",
+                    "sort": "latest",
                 },
                 "id": place_id,
             },
@@ -467,6 +479,11 @@ class ReviewCrawler:
         """
         HTML 파싱 폴백 — 방문자 리뷰 탭 페이지에서 직접 추출
 
+        파싱 우선순위:
+        1. __APOLLO_STATE__ (네이버 현재 방식 — VisitorReview:XXX 엔트리)
+        2. __NEXT_DATA__ (레거시 방식)
+        3. HTML 직접 파싱 (최후 수단)
+
         URL: m.place.naver.com/place/{place_id}/review/visitor
         (블로그 리뷰 탭 /review/ugc 사용 금지)
         """
@@ -484,7 +501,22 @@ class ReviewCrawler:
 
                 html = resp.text
 
-                # __NEXT_DATA__ JSON에서 방문자 리뷰 추출
+                # 1순위: __APOLLO_STATE__ (현재 네이버 방식)
+                apollo_match = re.search(
+                    r'window\.__APOLLO_STATE__\s*=\s*(\{.*?\});\s*',
+                    html, re.DOTALL
+                )
+                if apollo_match:
+                    try:
+                        apollo_state = json.loads(apollo_match.group(1))
+                        reviews = self._parse_apollo_state_reviews(apollo_state)
+                        if reviews:
+                            logger.info(f"[HTML] Found {len(reviews)} visitor reviews from __APOLLO_STATE__")
+                            return reviews[:max_reviews]
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"[HTML] __APOLLO_STATE__ parse error: {e}")
+
+                # 2순위: __NEXT_DATA__ (레거시)
                 next_data_match = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL)
                 if next_data_match:
                     try:
@@ -494,10 +526,8 @@ class ReviewCrawler:
 
                         review_items = self._find_visitor_reviews_in_json(initial_data)
                         for item in review_items[:max_reviews]:
-                            # HTML 파싱에서도 유효성 검증 적용
-                            if self._is_valid_visitor_review(item.get("content", ""), item.get("rating", 0)):
-                                item["review_type"] = "visitor"
-                                reviews.append(item)
+                            item["review_type"] = "visitor"
+                            reviews.append(item)
 
                         if reviews:
                             logger.info(f"[HTML] Found {len(reviews)} visitor reviews from __NEXT_DATA__")
@@ -505,9 +535,13 @@ class ReviewCrawler:
                     except json.JSONDecodeError as e:
                         logger.warning(f"[HTML] __NEXT_DATA__ parse error: {e}")
 
-                # HTML 직접 파싱 (방문자 리뷰 요소)
+                # 3순위: HTML 직접 파싱 (최후 수단)
                 soup = BeautifulSoup(html, "html.parser")
-                review_elements = soup.select("li.pui__X35jYm") or soup.select("[class*='review']")
+                review_elements = (
+                    soup.select("li.pui__X35jYm")
+                    or soup.select("[class*='visitor'] [class*='review']")
+                    or soup.select("[class*='review']")
+                )
 
                 for elem in review_elements[:max_reviews]:
                     try:
@@ -516,11 +550,10 @@ class ReviewCrawler:
                         rating_el = elem.select_one("[class*='star'], [class*='rating']")
 
                         content = content_el.get_text(strip=True) if content_el else ""
-                        rating = self._parse_rating(rating_el)
-
-                        # 방문자 리뷰 유효성 검증
-                        if not self._is_valid_visitor_review(content, rating):
+                        if not content:
                             continue
+
+                        rating = self._parse_rating(rating_el)
 
                         reviews.append({
                             "platform_review_id": f"naver_{hash(elem.text[:50])}",
@@ -528,6 +561,8 @@ class ReviewCrawler:
                             "rating": rating,
                             "content": content,
                             "review_date": "",
+                            "visit_count": 0,
+                            "origin_type": "",
                             "review_type": "visitor",
                         })
                     except Exception:
@@ -539,38 +574,44 @@ class ReviewCrawler:
         return reviews
 
     def _find_visitor_reviews_in_json(self, data, depth=0) -> List[Dict]:
-        """JSON 구조에서 방문자 리뷰 데이터를 재귀적으로 탐색 (visitorReviews 우선)"""
+        """JSON 구조에서 방문자 리뷰 데이터를 재귀적으로 탐색 (visitorReviews만 탐색)"""
         if depth > 10:
             return []
 
         reviews = []
 
         if isinstance(data, dict):
-            # visitorReviews를 최우선으로 탐색 (블로그/fsas 키는 무시)
-            for key in ["visitorReviews", "reviews", "reviewItems"]:
-                if key in data:
-                    sub = data[key]
-                    if isinstance(sub, dict) and "items" in sub:
-                        sub = sub["items"]
-                    if isinstance(sub, list):
-                        for item in sub:
-                            if isinstance(item, dict) and ("body" in item or "content" in item):
-                                body = item.get("body", item.get("content", ""))
-                                rating = item.get("rating", item.get("score", 0))
-                                reviews.append({
-                                    "platform_review_id": str(item.get("id", item.get("reviewId", ""))),
-                                    "author_name": self._extract_author(item),
-                                    "rating": rating,
-                                    "content": body,
-                                    "review_date": item.get("created", item.get("date", "")),
-                                })
-                        if reviews:
-                            return reviews
+            # visitorReviews 키만 탐색 — "reviews", "reviewItems" 등 범용 키는 블로그 리뷰 혼입 원인
+            if "visitorReviews" in data:
+                sub = data["visitorReviews"]
+                if isinstance(sub, dict) and "items" in sub:
+                    sub = sub["items"]
+                if isinstance(sub, list):
+                    for item in sub:
+                        if isinstance(item, dict) and ("body" in item or "content" in item):
+                            body = item.get("body", item.get("content", ""))
+                            rating = item.get("rating")
+                            visit_count = item.get("visitCount", 0) or 0
+                            origin_type = item.get("originType", "")
+                            # 유효성 검증
+                            if not self._is_valid_visitor_review(body, rating, visit_count, origin_type):
+                                continue
+                            reviews.append({
+                                "platform_review_id": str(item.get("id", "")),
+                                "author_name": self._extract_author(item),
+                                "rating": int(rating) if rating else 0,
+                                "content": body,
+                                "review_date": item.get("created", item.get("date", "")),
+                                "visit_count": visit_count,
+                                "origin_type": origin_type,
+                            })
+                    if reviews:
+                        return reviews
 
-            # 재귀 탐색 (fsasReviews 키는 건너뜀)
+            # 재귀 탐색 (블로그 리뷰 관련 키는 건너뜀)
             for k, v in data.items():
-                if k in ("fsasReviews", "blogReviews", "ugcReviews"):
-                    continue  # 블로그 리뷰 관련 키 무시
+                if k in ("fsasReviews", "blogReviews", "ugcReviews", "reviews", "reviewItems"):
+                    continue  # 블로그 리뷰 및 범용 키 무시
                 found = self._find_visitor_reviews_in_json(v, depth + 1)
                 if found:
                     return found
@@ -580,6 +621,58 @@ class ReviewCrawler:
                 found = self._find_visitor_reviews_in_json(item, depth + 1)
                 if found:
                     return found
+
+        return reviews
+
+    def _parse_apollo_state_reviews(self, apollo_state: dict) -> List[Dict]:
+        """
+        __APOLLO_STATE__에서 VisitorReview 엔트리를 추출
+
+        네이버 플레이스 HTML에 포함된 Apollo Client 캐시에서
+        VisitorReview:XXXXX 키 패턴의 영수증 리뷰를 파싱
+        """
+        reviews = []
+
+        for key, value in apollo_state.items():
+            if not key.startswith("VisitorReview:") or not isinstance(value, dict):
+                continue
+
+            # ACTIVE 상태만
+            if value.get("status") and value.get("status") != "ACTIVE":
+                continue
+
+            origin_type = value.get("originType", "")
+            visit_count = value.get("visitCount", 0) or 0
+            rating = value.get("rating")  # None이 정상 (영수증 리뷰)
+            body = (value.get("body") or "").strip()
+
+            # 유효성 검증
+            if not self._is_valid_visitor_review(body, rating, visit_count, origin_type):
+                continue
+
+            # author 참조 해결 (Apollo __ref 패턴)
+            author_name = "익명"
+            author_ref = value.get("author")
+            if isinstance(author_ref, dict) and "__ref" in author_ref:
+                author_data = apollo_state.get(author_ref["__ref"], {})
+                author_name = author_data.get("nickname", "익명")
+            elif isinstance(author_ref, str):
+                author_name = author_ref
+
+            # nickname 필드가 직접 있는 경우
+            if author_name == "익명" and value.get("nickname"):
+                author_name = value["nickname"]
+
+            reviews.append({
+                "platform_review_id": str(value.get("id") or value.get("reviewId") or key.split(":")[-1]),
+                "author_name": author_name,
+                "rating": int(rating) if rating else 0,
+                "content": body,
+                "review_date": value.get("created", ""),
+                "visit_count": visit_count,
+                "origin_type": origin_type,
+                "review_type": "visitor",
+            })
 
         return reviews
 
@@ -1123,38 +1216,39 @@ class ReviewCrawler:
         """카카오맵 장소 검색"""
         from config import settings as app_settings
         kakao_key = os.environ.get('KAKAO_REST_API_KEY', '') or app_settings.KAKAO_REST_API_KEY
-        if not kakao_key:
-            logger.warning("KAKAO_REST_API_KEY not configured")
-            return []
 
         results = []
         async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
-            url = f"https://dapi.kakao.com/v2/local/search/keyword.json?query={urllib.parse.quote(query)}&size=10"
-            headers = {
-                "Authorization": f"KakaoAK {kakao_key}",
-                "Accept": "application/json",
-            }
+            # 방법 1: 카카오 REST API (API 키 필요)
+            if kakao_key:
+                url = f"https://dapi.kakao.com/v2/local/search/keyword.json?query={urllib.parse.quote(query)}&size=10"
+                headers = {
+                    "Authorization": f"KakaoAK {kakao_key}",
+                    "Accept": "application/json",
+                }
 
-            try:
-                resp = await client.get(url, headers=headers)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    for doc in data.get("documents", []):
-                        results.append({
-                            "place_id": doc.get("id", ""),
-                            "name": doc.get("place_name", ""),
-                            "category": doc.get("category_name", "").split(" > ")[-1] if doc.get("category_name") else "",
-                            "address": doc.get("address_name", ""),
-                            "road_address": doc.get("road_address_name", ""),
-                            "phone": doc.get("phone", ""),
-                            "rating": "",
-                            "review_count": 0,
-                            "platform": "kakao",
-                        })
-            except Exception as e:
-                logger.warning(f"Kakao place search error: {e}")
+                try:
+                    resp = await client.get(url, headers=headers)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        for doc in data.get("documents", []):
+                            results.append({
+                                "place_id": doc.get("id", ""),
+                                "name": doc.get("place_name", ""),
+                                "category": doc.get("category_name", "").split(" > ")[-1] if doc.get("category_name") else "",
+                                "address": doc.get("address_name", ""),
+                                "road_address": doc.get("road_address_name", ""),
+                                "phone": doc.get("phone", ""),
+                                "rating": "",
+                                "review_count": 0,
+                                "platform": "kakao",
+                            })
+                except Exception as e:
+                    logger.warning(f"Kakao place search error: {e}")
+            else:
+                logger.info("KAKAO_REST_API_KEY not configured, using fallback search")
 
-            # 폴백: 카카오맵 내부 검색 API
+            # 방법 2 (폴백): 카카오맵 내부 검색 API (API 키 불필요)
             if not results:
                 try:
                     url2 = f"https://search.map.kakao.com/mapsearch/map.daum?callback=jQuery&q={urllib.parse.quote(query)}"

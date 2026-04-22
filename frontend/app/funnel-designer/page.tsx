@@ -47,6 +47,8 @@ export default function FunnelDesignerPage() {
   const [funnelData, setFunnelData] = useState<any>({ nodes: [], edges: [] })
   const [savedFunnels, setSavedFunnels] = useState<SavedFunnel[]>([])
   const [showFunnelList, setShowFunnelList] = useState(false)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const lastSavedDataRef = useRef<string>('')
 
   const funnelListRef = useRef<HTMLDivElement>(null)
 
@@ -61,6 +63,20 @@ export default function FunnelDesignerPage() {
       return () => document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [showFunnelList])
+
+  // 퍼널 데이터 변경 추적
+  const handleFunnelDataChange = useCallback((newData: any) => {
+    setFunnelData(newData)
+    setHasUnsavedChanges(JSON.stringify(newData) !== lastSavedDataRef.current)
+  }, [])
+
+  // 미저장 변경사항 확인
+  const confirmDiscardChanges = useCallback(() => {
+    if (hasUnsavedChanges && funnelData.nodes?.length > 0) {
+      return confirm('저장하지 않은 변경사항이 있습니다. 계속하시겠습니까?')
+    }
+    return true
+  }, [hasUnsavedChanges, funnelData.nodes])
 
   const loadFunnelList = useCallback(async () => {
     try {
@@ -96,6 +112,8 @@ export default function FunnelDesignerPage() {
         setCurrentFunnelId(data.funnel_id)
         toast.success('새 퍼널이 생성되었습니다')
       }
+      lastSavedDataRef.current = JSON.stringify(funnelData)
+      setHasUnsavedChanges(false)
       loadFunnelList()
     } catch {
       // apiClient handles error display
@@ -105,6 +123,8 @@ export default function FunnelDesignerPage() {
   }
 
   const loadFunnel = async (funnelId: number) => {
+    if (!confirmDiscardChanges()) return
+
     setLoading(true)
     try {
       const { data } = await apiClient.get(`/api/funnel-designer/funnels/${funnelId}`)
@@ -113,6 +133,8 @@ export default function FunnelDesignerPage() {
       setCurrentFunnelName(funnel.name)
       setCurrentIndustry(funnel.industry || '')
       setFunnelData(funnel.funnel_data)
+      lastSavedDataRef.current = JSON.stringify(funnel.funnel_data)
+      setHasUnsavedChanges(false)
       setShowFunnelList(false)
       toast.success(`"${funnel.name}" 불러오기 완료`)
     } catch {
@@ -139,25 +161,29 @@ export default function FunnelDesignerPage() {
   }
 
   const newFunnel = () => {
+    if (!confirmDiscardChanges()) return
+
     setCurrentFunnelId(null)
     setCurrentFunnelName('새 퍼널')
     setCurrentIndustry('')
     setFunnelData({ nodes: [], edges: [] })
+    lastSavedDataRef.current = JSON.stringify({ nodes: [], edges: [] })
+    setHasUnsavedChanges(false)
     toast.success('새 퍼널이 생성되었습니다')
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 헤더 */}
-      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white">
+      <div className="bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white">
         <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <GitBranch className="w-8 h-8" />
-                <h1 className="text-3xl font-bold">퍼널 디자이너</h1>
+                <h1 className="text-3xl font-black tracking-tight">퍼널 디자이너</h1>
               </div>
-              <p className="text-purple-100">
+              <p className="text-blue-100">
                 마케팅 퍼널을 시각적으로 설계하고, AI가 진단합니다
               </p>
             </div>
@@ -218,10 +244,14 @@ export default function FunnelDesignerPage() {
               <button
                 onClick={saveFunnel}
                 disabled={loading}
-                className="flex items-center gap-1 px-4 py-2 bg-white text-purple-600 rounded-lg hover:bg-purple-50 transition text-sm font-medium disabled:opacity-50"
+                className={`flex items-center gap-1 px-4 py-2 rounded-lg transition text-sm font-medium disabled:opacity-50 ${
+                  hasUnsavedChanges
+                    ? 'bg-yellow-400 text-yellow-900 hover:bg-yellow-300'
+                    : 'bg-white text-[#0064FF] hover:bg-blue-50'
+                }`}
               >
                 {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                저장
+                {hasUnsavedChanges ? '저장 (변경됨)' : '저장'}
               </button>
             </div>
           </div>
@@ -230,16 +260,16 @@ export default function FunnelDesignerPage() {
 
       {/* 탭 네비게이션 */}
       <div className="bg-white border-b sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex gap-1">
+        <div className="max-w-7xl mx-auto px-4 py-2">
+          <div className="flex gap-2">
             {TABS.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-3 border-b-2 transition text-sm ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-full transition text-sm font-medium ${
                   activeTab === tab.id
-                    ? 'border-purple-500 text-purple-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    ? 'bg-[#0064FF] text-white shadow-lg shadow-blue-500/25'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
                 }`}
               >
                 <tab.icon className="w-4 h-4" />
@@ -258,7 +288,7 @@ export default function FunnelDesignerPage() {
         {activeTab === 'canvas' && (
           <FunnelCanvas
             funnelData={funnelData}
-            onFunnelDataChange={setFunnelData}
+            onFunnelDataChange={handleFunnelDataChange}
             currentIndustry={currentIndustry}
             onIndustryChange={setCurrentIndustry}
           />

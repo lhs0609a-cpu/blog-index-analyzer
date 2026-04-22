@@ -2,9 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { getApiUrl } from '@/lib/api/apiConfig'
+import { useAuthStore } from '@/lib/stores/auth'
 import {
   Plus, Store, Star, TrendingUp, TrendingDown, AlertTriangle, Search,
-  Loader2, Trash2, RefreshCw, BarChart3, MessageSquare, Tag, Globe, CheckCircle
+  Loader2, Trash2, RefreshCw, BarChart3, MessageSquare, Tag, Globe, CheckCircle,
+  Radar, ExternalLink, Eye, Filter, ShieldAlert, X
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
@@ -97,7 +99,38 @@ interface DashboardData {
   keyword_frequency: KeywordFreq[]
 }
 
+interface OnlineMention {
+  id: string
+  store_id: string
+  source_type: string
+  title: string
+  snippet: string
+  url: string
+  author_name: string
+  published_date: string
+  sentiment: 'positive' | 'neutral' | 'negative'
+  sentiment_score: number
+  severity_score: number
+  severity_level: 'none' | 'low' | 'medium' | 'high'
+  matched_keywords: string[]
+  is_resolved: number
+  resolved_note: string | null
+  created_at: string
+}
+
+interface MentionStats {
+  total: number
+  unresolved: number
+  high_severity: number
+  by_sentiment: Record<string, number>
+  by_source: Record<string, number>
+  by_severity: Record<string, number>
+}
+
 export default function ReputationDashboard() {
+  const { user } = useAuthStore()
+  const userId = user?.id || user?.email || 'demo_user'
+
   const [stores, setStores] = useState<StoreInfo[]>([])
   const [selectedStore, setSelectedStore] = useState<string | null>(null)
   const [dashboard, setDashboard] = useState<DashboardData | null>(null)
@@ -120,18 +153,34 @@ export default function ReputationDashboard() {
   const [collectionResult, setCollectionResult] = useState<{
     collected_count: number
     by_platform: Record<string, number>
+    platform_ids?: Record<string, string | null>
   } | null>(null)
   const [showCollectionSuccess, setShowCollectionSuccess] = useState(false)
   const [recentReviews, setRecentReviews] = useState<Review[]>([])
 
+  // 온라인 언급 탭
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'mentions'>('dashboard')
+  const [mentions, setMentions] = useState<OnlineMention[]>([])
+  const [mentionStats, setMentionStats] = useState<MentionStats | null>(null)
+  const [mentionLoading, setMentionLoading] = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [scanResult, setScanResult] = useState<{ new_mentions: number; high_severity_new: number; cached: boolean; new_by_sentiment?: Record<string, number> } | null>(null)
+  const [mentionFilter, setMentionFilter] = useState({
+    sentiment: '' as string,
+    severity: '' as string,
+    source: '' as string,
+    resolved: '' as string,
+  })
+
   const fetchStores = useCallback(async () => {
     try {
-      const res = await fetch(`${getApiUrl()}/api/reputation/stores?user_id=demo_user`)
+      const res = await fetch(`${getApiUrl()}/api/reputation/stores?user_id=${userId}`)
       const data = await res.json()
       if (data.success) {
         setStores(data.stores)
-        if (data.stores.length > 0 && !selectedStore) {
-          setSelectedStore(data.stores[0].id)
+        // 첫 로드 시에만 첫 번째 가게 자동 선택 (selectedStore가 없을 때)
+        if (data.stores.length > 0) {
+          setSelectedStore((prev) => prev || data.stores[0].id)
         }
       }
     } catch (err) {
@@ -139,7 +188,7 @@ export default function ReputationDashboard() {
     } finally {
       setLoading(false)
     }
-  }, [selectedStore])
+  }, [userId])
 
   const fetchRecentReviews = useCallback(async (storeId: string) => {
     try {
@@ -164,6 +213,94 @@ export default function ReputationDashboard() {
     }
   }, [])
 
+  const fetchMentions = useCallback(async (storeId: string) => {
+    setMentionLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (mentionFilter.sentiment) params.set('sentiment', mentionFilter.sentiment)
+      if (mentionFilter.severity) params.set('severity_level', mentionFilter.severity)
+      if (mentionFilter.source) params.set('source_type', mentionFilter.source)
+      if (mentionFilter.resolved !== '') params.set('is_resolved', mentionFilter.resolved)
+      const qs = params.toString()
+      const res = await fetch(`${getApiUrl()}/api/reputation/mentions/${storeId}${qs ? `?${qs}` : ''}`)
+      const data = await res.json()
+      if (data.success) setMentions(data.mentions || [])
+    } catch { /* silent */ }
+    finally { setMentionLoading(false) }
+  }, [mentionFilter])
+
+  const fetchMentionStats = useCallback(async (storeId: string) => {
+    try {
+      const res = await fetch(`${getApiUrl()}/api/reputation/mentions/${storeId}/stats`)
+      const data = await res.json()
+      if (data.success) setMentionStats(data.stats)
+    } catch { /* silent */ }
+  }, [])
+
+  const scanMentions = async (storeId: string) => {
+    setScanning(true)
+    setScanResult(null)
+    try {
+      const res = await fetch(`${getApiUrl()}/api/reputation/mentions/scan/${storeId}`, { method: 'POST' })
+      const data = await res.json()
+      if (data.success) {
+        setScanResult({
+          new_mentions: data.new_mentions,
+          high_severity_new: data.high_severity_new || 0,
+          cached: data.cached || false,
+          new_by_sentiment: data.new_by_sentiment,
+        })
+        if (data.cached) {
+          toast('최근 6시간 내 스캔 기록이 있습니다', { icon: 'info' })
+        } else {
+          toast.success(`새 언급 ${data.new_mentions}건 수집 완료`)
+        }
+        fetchMentions(storeId)
+        fetchMentionStats(storeId)
+      }
+    } catch {
+      toast.error('스캔 실패')
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  const resolveMention = async (mentionId: string) => {
+    try {
+      const res = await fetch(`${getApiUrl()}/api/reputation/mentions/${mentionId}/resolve`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: '처리 완료' }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success('처리 완료')
+        if (selectedStore) {
+          fetchMentions(selectedStore)
+          fetchMentionStats(selectedStore)
+        }
+      }
+    } catch {
+      toast.error('처리 실패')
+    }
+  }
+
+  const deleteMention = async (mentionId: string) => {
+    try {
+      const res = await fetch(`${getApiUrl()}/api/reputation/mentions/${mentionId}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (data.success) {
+        toast.success('오탐 제거 완료')
+        if (selectedStore) {
+          fetchMentions(selectedStore)
+          fetchMentionStats(selectedStore)
+        }
+      }
+    } catch {
+      toast.error('삭제 실패')
+    }
+  }
+
   useEffect(() => {
     fetchStores()
   }, [fetchStores])
@@ -172,8 +309,15 @@ export default function ReputationDashboard() {
     if (selectedStore) {
       fetchDashboard(selectedStore)
       fetchRecentReviews(selectedStore)
+      fetchMentionStats(selectedStore)
     }
-  }, [selectedStore, fetchDashboard, fetchRecentReviews])
+  }, [selectedStore, fetchDashboard, fetchRecentReviews, fetchMentionStats])
+
+  useEffect(() => {
+    if (selectedStore && activeTab === 'mentions') {
+      fetchMentions(selectedStore)
+    }
+  }, [selectedStore, activeTab, fetchMentions])
 
   // 가게 검색 (카카오 + 네이버 통합)
   const searchPlaces = async () => {
@@ -239,7 +383,7 @@ export default function ReputationDashboard() {
         body.naver_place_id = urlResult.place_id
       }
 
-      const res = await fetch(`${getApiUrl()}/api/reputation/stores?user_id=demo_user`, {
+      const res = await fetch(`${getApiUrl()}/api/reputation/stores?user_id=${userId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -281,7 +425,7 @@ export default function ReputationDashboard() {
         body.naver_place_id = place.place_id
       }
 
-      const res = await fetch(`${getApiUrl()}/api/reputation/stores?user_id=demo_user`, {
+      const res = await fetch(`${getApiUrl()}/api/reputation/stores?user_id=${userId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -306,7 +450,7 @@ export default function ReputationDashboard() {
   const deleteStore = async (storeId: string) => {
     if (!confirm('이 가게를 모니터링 목록에서 삭제할까요?')) return
     try {
-      await fetch(`${getApiUrl()}/api/reputation/stores/${storeId}?user_id=demo_user`, { method: 'DELETE' })
+      await fetch(`${getApiUrl()}/api/reputation/stores/${storeId}?user_id=${userId}`, { method: 'DELETE' })
       toast.success('삭제 완료')
       setStores(prev => prev.filter(s => s.id !== storeId))
       if (selectedStore === storeId) {
@@ -330,9 +474,11 @@ export default function ReputationDashboard() {
         setCollectionResult({
           collected_count: data.collected_count,
           by_platform: data.by_platform || {},
+          platform_ids: data.platform_ids || undefined,
         })
         setShowCollectionSuccess(true)
         setTimeout(() => setShowCollectionSuccess(false), 8000)
+        fetchStores() // 플랫폼 연결 상태가 변경됐을 수 있으므로 갱신
         fetchDashboard(storeId)
         fetchRecentReviews(storeId)
       } else {
@@ -383,6 +529,82 @@ export default function ReputationDashboard() {
       case 'price': return 'bg-blue-500'
       default: return 'bg-gray-500'
     }
+  }
+
+  const sourceLabel = (s: string) => {
+    switch (s) {
+      case 'blog': return '블로그'
+      case 'cafe': return '카페'
+      case 'kin': return '지식iN'
+      case 'news': return '뉴스'
+      case 'web': return '웹'
+      default: return s
+    }
+  }
+
+  const sourceColor = (s: string) => {
+    switch (s) {
+      case 'blog': return 'bg-green-100 text-green-700'
+      case 'cafe': return 'bg-orange-100 text-orange-700'
+      case 'kin': return 'bg-blue-100 text-blue-700'
+      case 'news': return 'bg-purple-100 text-purple-700'
+      case 'web': return 'bg-gray-100 text-gray-700'
+      default: return 'bg-gray-100 text-gray-700'
+    }
+  }
+
+  const severityBadge = (level: string) => {
+    switch (level) {
+      case 'high': return 'bg-red-100 text-red-700 border-red-200'
+      case 'medium': return 'bg-yellow-100 text-yellow-700 border-yellow-200'
+      case 'low': return 'bg-blue-100 text-blue-700 border-blue-200'
+      default: return 'bg-gray-100 text-gray-700 border-gray-200'
+    }
+  }
+
+  const severityLabel = (level: string) => {
+    switch (level) {
+      case 'high': return '심각'
+      case 'medium': return '주의'
+      case 'low': return '경미'
+      default: return level
+    }
+  }
+
+  const sentimentBadge = (s: string) => {
+    switch (s) {
+      case 'positive': return 'bg-green-100 text-green-700 border-green-200'
+      case 'negative': return 'bg-red-100 text-red-700 border-red-200'
+      default: return 'bg-gray-100 text-gray-600 border-gray-200'
+    }
+  }
+
+  const sentimentLabel = (s: string) => {
+    switch (s) {
+      case 'positive': return '긍정'
+      case 'negative': return '부정'
+      default: return '중립'
+    }
+  }
+
+  const sentimentIcon = (s: string) => {
+    switch (s) {
+      case 'positive': return '+'
+      case 'negative': return '-'
+      default: return '~'
+    }
+  }
+
+  const highlightKeywords = (text: string, keywords: string[]) => {
+    if (!keywords || keywords.length === 0) return text
+    const escaped = keywords.map(kw => kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    const regex = new RegExp(`(${escaped.join('|')})`, 'gi')
+    const parts = text.split(regex)
+    return parts.map((part, i) =>
+      keywords.some(kw => kw.toLowerCase() === part.toLowerCase())
+        ? <mark key={i} className="bg-red-200 text-red-900 px-0.5 rounded">{part}</mark>
+        : part
+    )
   }
 
   if (loading) {
@@ -453,8 +675,332 @@ export default function ReputationDashboard() {
         )}
       </div>
 
+      {/* 탭 전환 */}
+      {selectedStore && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-1 flex gap-1">
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'dashboard'
+                ? 'bg-[#0064FF] text-white'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            리뷰 대시보드
+          </button>
+          <button
+            onClick={() => setActiveTab('mentions')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-colors relative ${
+              activeTab === 'mentions'
+                ? 'bg-[#0064FF] text-white'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <Radar className="w-4 h-4" />
+            온라인 언급
+            {mentionStats && mentionStats.unresolved > 0 && activeTab !== 'mentions' && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                {mentionStats.unresolved > 99 ? '99+' : mentionStats.unresolved}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* 온라인 언급 탭 */}
+      {selectedStore && activeTab === 'mentions' && (
+        <div className="space-y-4">
+          {/* 스캔 버튼 + 결과 */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center justify-between">
+            <div className="text-sm text-gray-500">
+              온라인에서 업체 관련 부정 언급을 자동 검색합니다
+            </div>
+            <button
+              onClick={() => scanMentions(selectedStore)}
+              disabled={scanning}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#0064FF] text-white rounded-lg text-sm font-medium hover:bg-[#0052CC] transition-colors disabled:opacity-50"
+            >
+              {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radar className="w-4 h-4" />}
+              {scanning ? '스캔 중...' : '지금 스캔'}
+            </button>
+          </div>
+
+          {scanning && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center gap-3">
+              <Loader2 className="w-5 h-5 text-blue-500 animate-spin flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-blue-800">온라인 부정 언급을 검색하고 있습니다...</p>
+                <p className="text-xs text-blue-600">블로그 · 카페 · 지식iN · 뉴스 · 웹 5개 소스에서 수집 중</p>
+              </div>
+            </div>
+          )}
+
+          {scanResult && !scanning && (
+            <div className={`border rounded-xl p-4 flex items-center gap-3 ${
+              scanResult.cached ? 'bg-gray-50 border-gray-200' :
+              scanResult.new_mentions > 0 ? 'bg-orange-50 border-orange-200' : 'bg-green-50 border-green-200'
+            }`}>
+              {scanResult.cached ? (
+                <Eye className="w-5 h-5 text-gray-500 flex-shrink-0" />
+              ) : scanResult.new_mentions > 0 ? (
+                <ShieldAlert className="w-5 h-5 text-orange-500 flex-shrink-0" />
+              ) : (
+                <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+              )}
+              <div className="text-sm font-medium">
+                {scanResult.cached
+                  ? '최근 스캔 결과를 표시합니다'
+                  : scanResult.new_mentions > 0
+                    ? (
+                      <span>
+                        새 언급 {scanResult.new_mentions}건 수집
+                        {scanResult.new_by_sentiment && (
+                          <span className="font-normal text-gray-600 ml-1">
+                            (긍정 {scanResult.new_by_sentiment.positive || 0} /
+                            중립 {scanResult.new_by_sentiment.neutral || 0} /
+                            부정 {scanResult.new_by_sentiment.negative || 0})
+                          </span>
+                        )}
+                      </span>
+                    )
+                    : '새로운 언급이 없습니다'}
+              </div>
+            </div>
+          )}
+
+          {/* 상단 요약 카드 */}
+          {mentionStats && (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <Radar className="w-4 h-4 text-[#0064FF]" />
+                  <span className="text-xs text-gray-500">총 언급</span>
+                </div>
+                <div className="text-2xl font-bold text-gray-900">{mentionStats.total}</div>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <TrendingUp className="w-4 h-4 text-green-500" />
+                  <span className="text-xs text-gray-500">긍정</span>
+                </div>
+                <div className="text-2xl font-bold text-green-600">{mentionStats.by_sentiment?.positive || 0}</div>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <MessageSquare className="w-4 h-4 text-gray-500" />
+                  <span className="text-xs text-gray-500">중립</span>
+                </div>
+                <div className="text-2xl font-bold text-gray-600">{mentionStats.by_sentiment?.neutral || 0}</div>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <TrendingDown className="w-4 h-4 text-red-500" />
+                  <span className="text-xs text-gray-500">부정</span>
+                </div>
+                <div className="text-2xl font-bold text-red-600">{mentionStats.by_sentiment?.negative || 0}</div>
+                {mentionStats.high_severity > 0 && (
+                  <div className="text-[10px] text-red-500 mt-0.5">심각 {mentionStats.high_severity}건</div>
+                )}
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <Globe className="w-4 h-4 text-purple-500" />
+                  <span className="text-xs text-gray-500">소스 분포</span>
+                </div>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {Object.entries(mentionStats.by_source).map(([src, cnt]) => (
+                    <span key={src} className={`text-[10px] px-1.5 py-0.5 rounded ${sourceColor(src)}`}>
+                      {sourceLabel(src)} {cnt}
+                    </span>
+                  ))}
+                  {Object.keys(mentionStats.by_source).length === 0 && (
+                    <span className="text-xs text-gray-400">-</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 필터 바 */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Filter className="w-4 h-4 text-gray-500" />
+              <span className="text-sm font-medium text-gray-700">필터</span>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <select
+                value={mentionFilter.sentiment}
+                onChange={e => setMentionFilter(prev => ({ ...prev, sentiment: e.target.value }))}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#0064FF]/30"
+              >
+                <option value="">감성 전체</option>
+                <option value="positive">긍정</option>
+                <option value="neutral">중립</option>
+                <option value="negative">부정</option>
+              </select>
+              <select
+                value={mentionFilter.severity}
+                onChange={e => setMentionFilter(prev => ({ ...prev, severity: e.target.value }))}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#0064FF]/30"
+              >
+                <option value="">심각도 전체</option>
+                <option value="high">심각</option>
+                <option value="medium">주의</option>
+                <option value="low">경미</option>
+              </select>
+              <select
+                value={mentionFilter.source}
+                onChange={e => setMentionFilter(prev => ({ ...prev, source: e.target.value }))}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#0064FF]/30"
+              >
+                <option value="">소스 전체</option>
+                <option value="blog">블로그</option>
+                <option value="cafe">카페</option>
+                <option value="kin">지식iN</option>
+                <option value="news">뉴스</option>
+                <option value="web">웹</option>
+              </select>
+              <select
+                value={mentionFilter.resolved}
+                onChange={e => setMentionFilter(prev => ({ ...prev, resolved: e.target.value }))}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#0064FF]/30"
+              >
+                <option value="">상태 전체</option>
+                <option value="0">미처리</option>
+                <option value="1">처리완료</option>
+              </select>
+              {(mentionFilter.sentiment || mentionFilter.severity || mentionFilter.source || mentionFilter.resolved !== '') && (
+                <button
+                  onClick={() => setMentionFilter({ sentiment: '', severity: '', source: '', resolved: '' })}
+                  className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  초기화
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 언급 리스트 */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-4">
+              <Radar className="w-4 h-4 text-[#0064FF]" />
+              온라인 언급 목록
+              <span className="text-sm font-normal text-gray-400">({mentions.length}건)</span>
+            </h3>
+
+            {mentionLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 text-[#0064FF] animate-spin" />
+              </div>
+            ) : mentions.length === 0 ? (
+              <div className="text-center py-12 text-gray-400">
+                <Radar className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">수집된 언급이 없습니다</p>
+                <p className="text-xs mt-1">&apos;지금 스캔&apos; 버튼을 눌러 검색해보세요</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {mentions.map(mention => (
+                  <div
+                    key={mention.id}
+                    className={`p-4 rounded-lg border transition-colors ${
+                      mention.is_resolved
+                        ? 'border-gray-100 bg-gray-50 opacity-70'
+                        : mention.sentiment === 'negative' && mention.severity_level === 'high'
+                          ? 'border-red-200 bg-red-50/30'
+                          : mention.sentiment === 'negative'
+                            ? 'border-red-100 bg-red-50/10'
+                            : mention.sentiment === 'positive'
+                              ? 'border-green-100 bg-green-50/10'
+                              : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                          {/* 감성 뱃지 */}
+                          <span className={`px-2 py-0.5 text-[10px] font-bold rounded border ${sentimentBadge(mention.sentiment)}`}>
+                            {sentimentIcon(mention.sentiment)} {sentimentLabel(mention.sentiment)}
+                          </span>
+                          {/* 부정일 때만 심각도 표시 */}
+                          {mention.sentiment === 'negative' && mention.severity_level !== 'none' && (
+                            <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded border ${severityBadge(mention.severity_level)}`}>
+                              {severityLabel(mention.severity_level)}
+                            </span>
+                          )}
+                          <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${sourceColor(mention.source_type)}`}>
+                            {sourceLabel(mention.source_type)}
+                          </span>
+                          {mention.is_resolved === 1 && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-green-100 text-green-700">
+                              처리완료
+                            </span>
+                          )}
+                          {mention.sentiment_score !== 0 && (
+                            <span className={`text-[10px] ${mention.sentiment_score > 0 ? 'text-green-500' : mention.sentiment_score < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                              감성 {mention.sentiment_score > 0 ? '+' : ''}{mention.sentiment_score}
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="text-sm font-semibold text-gray-800 mb-1 line-clamp-1">
+                          {highlightKeywords(mention.title, mention.matched_keywords)}
+                        </h4>
+                        <p className="text-xs text-gray-500 line-clamp-2 mb-2">
+                          {highlightKeywords(mention.snippet, mention.matched_keywords)}
+                        </p>
+                        <div className="flex items-center gap-3 text-[10px] text-gray-400">
+                          {mention.author_name && <span>{mention.author_name}</span>}
+                          {mention.published_date && <span>{mention.published_date}</span>}
+                          {mention.matched_keywords && mention.matched_keywords.length > 0 && (
+                            <span className="flex items-center gap-1">
+                              <Tag className="w-3 h-3" />
+                              {mention.matched_keywords.slice(0, 4).join(', ')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1.5 flex-shrink-0">
+                        {mention.url && (
+                          <a
+                            href={mention.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[#0064FF] border border-[#0064FF]/30 rounded-md hover:bg-[#0064FF]/5 transition-colors"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            원문
+                          </a>
+                        )}
+                        {!mention.is_resolved && (
+                          <button
+                            onClick={() => resolveMention(mention.id)}
+                            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-green-700 border border-green-200 rounded-md hover:bg-green-50 transition-colors"
+                          >
+                            <CheckCircle className="w-3 h-3" />
+                            처리
+                          </button>
+                        )}
+                        <button
+                          onClick={() => deleteMention(mention.id)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-500 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          제거
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 대시보드 본문 */}
-      {selectedStore && dashboard && !dashboardLoading && (
+      {selectedStore && activeTab === 'dashboard' && dashboard && !dashboardLoading && (
         <>
           {/* 수집 상태 배너 */}
           {collecting && (
@@ -473,14 +1019,31 @@ export default function ReputationDashboard() {
           {!collecting && showCollectionSuccess && collectionResult && (
             <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
               <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-              <p className="text-sm font-medium text-green-800">
-                새 리뷰 {collectionResult.collected_count}건 수집 완료
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-800">
+                  새 리뷰 {collectionResult.collected_count}건 수집 완료
+                </p>
                 {Object.keys(collectionResult.by_platform).length > 0 && (
-                  <span className="text-green-600 font-normal ml-1">
-                    ({Object.entries(collectionResult.by_platform).map(([p, c]) => `${platformLabel(p)} ${c}건`).join(', ')})
-                  </span>
+                  <p className="text-xs text-green-600 mt-0.5">
+                    {Object.entries(collectionResult.by_platform).map(([p, c]) => `${platformLabel(p)} ${c}건`).join(' · ')}
+                  </p>
                 )}
-              </p>
+                {collectionResult.platform_ids && (
+                  <div className="flex gap-2 mt-2">
+                    {(['naver_place_id', 'google_place_id', 'kakao_place_id'] as const).map(key => {
+                      const connected = !!collectionResult.platform_ids?.[key]
+                      const label = key === 'naver_place_id' ? '네이버' : key === 'google_place_id' ? '구글' : '카카오'
+                      return (
+                        <span key={key} className={`text-[10px] px-2 py-0.5 rounded-full ${
+                          connected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'
+                        }`}>
+                          {label} {connected ? '연결됨' : '미연결'}
+                        </span>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -509,6 +1072,44 @@ export default function ReputationDashboard() {
               </Link>
             </div>
           </div>
+
+          {/* 플랫폼 연결 상태 */}
+          {dashboard.store && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <Globe className="w-4 h-4 text-[#0064FF]" />
+                플랫폼 연결 상태
+              </h3>
+              <div className="flex gap-4">
+                {([
+                  { key: 'naver_place_id', label: '네이버', platform: 'naver_place', color: 'green' },
+                  { key: 'google_place_id', label: '구글', platform: 'google', color: 'blue' },
+                  { key: 'kakao_place_id', label: '카카오', platform: 'kakao', color: 'yellow' },
+                ] as const).map(({ key, label, platform, color }) => {
+                  const connected = !!dashboard.store[key as keyof StoreInfo]
+                  const reviewCount = dashboard.stats?.platform_stats?.[platform]?.count || 0
+                  return (
+                    <div key={key} className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
+                      connected ? 'border-gray-200 bg-white' : 'border-dashed border-gray-200 bg-gray-50'
+                    }`}>
+                      <div className={`w-2 h-2 rounded-full ${connected ? `bg-${color}-500` : 'bg-gray-300'}`}
+                        style={{ backgroundColor: connected ? (color === 'green' ? '#22c55e' : color === 'blue' ? '#3b82f6' : '#eab308') : '#d1d5db' }}
+                      />
+                      <span className={`text-sm font-medium ${connected ? 'text-gray-800' : 'text-gray-400'}`}>
+                        {label}
+                      </span>
+                      {connected && (
+                        <span className="text-xs text-gray-500">{reviewCount}건</span>
+                      )}
+                      {!connected && (
+                        <span className="text-[10px] text-gray-400">미연결</span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* 통계 카드 5개 */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -819,7 +1420,7 @@ export default function ReputationDashboard() {
         </>
       )}
 
-      {selectedStore && dashboardLoading && (
+      {selectedStore && activeTab === 'dashboard' && dashboardLoading && (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="w-8 h-8 text-[#0064FF] animate-spin" />
         </div>

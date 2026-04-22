@@ -72,7 +72,7 @@ export default function AnomalyDetectionPage() {
   const [summary, setSummary] = useState<AnomalySummary | null>(null);
   const [anomalyTypes, setAnomalyTypes] = useState<AnomalyType[]>([]);
   const [thresholds, setThresholds] = useState<Record<string, Threshold>>({});
-  const [selectedPlatform, setSelectedPlatform] = useState<string>("naver");
+  const [selectedPlatform, setSelectedPlatform] = useState<string>("naver_searchad");
   const [severityFilter, setSeverityFilter] = useState<string>("");
   const [showResolved, setShowResolved] = useState(false);
 
@@ -328,8 +328,13 @@ export default function AnomalyDetectionPage() {
             {/* Platform Tabs - 플랫폼별 고유 디자인 적용 */}
             <div className="mb-4">
               <div className="flex gap-2 flex-wrap">
-                {["naver", "google", "meta", "kakao"].map((platformId) => {
-                  const style = PLATFORM_STYLES[platformId];
+                {[
+                  { id: "naver_searchad", display: "naver" },
+                  { id: "google_ads", display: "google" },
+                  { id: "meta_ads", display: "meta" },
+                  { id: "kakao_moment", display: "kakao" },
+                ].map(({ id: platformId, display }) => {
+                  const style = PLATFORM_STYLES[display];
                   const isSelected = selectedPlatform === platformId;
                   return (
                     <button
@@ -515,10 +520,10 @@ export default function AnomalyDetectionPage() {
                 onChange={(e) => setSelectedPlatform(e.target.value)}
                 className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2"
               >
-                <option value="naver">네이버</option>
-                <option value="google">구글</option>
-                <option value="meta">메타</option>
-                <option value="kakao">카카오</option>
+                <option value="naver_searchad">네이버</option>
+                <option value="google_ads">구글</option>
+                <option value="meta_ads">메타</option>
+                <option value="kakao_moment">카카오</option>
               </select>
             </div>
 
@@ -591,17 +596,68 @@ export default function AnomalyDetectionPage() {
           </div>
         )}
 
-        {/* History Tab */}
+        {/* History Tab — 해결된 알림 자동 포함 */}
         {activeTab === "history" && (
           <div>
-            <div className="text-center py-12 bg-gray-800 rounded-lg">
-              <div className="text-4xl mb-3">📊</div>
-              <div className="text-gray-400">
-                상단의 "해결된 알림 포함" 옵션을 활성화하면
-                <br />
-                알림 목록 탭에서 전체 히스토리를 확인할 수 있습니다.
-              </div>
-            </div>
+            {(() => {
+              const resolvedAlerts = alerts.filter((a) => a.resolved_at);
+              if (!showResolved) {
+                return (
+                  <div className="text-center py-12 bg-gray-800 rounded-lg">
+                    <div className="text-4xl mb-3">📊</div>
+                    <div className="text-gray-400 mb-4">
+                      해결된 알림 히스토리를 보려면 아래 버튼을 클릭하세요.
+                    </div>
+                    <button
+                      onClick={() => {
+                        setShowResolved(true);
+                        setActiveTab("alerts");
+                      }}
+                      className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg"
+                    >
+                      해결된 알림 포함하여 보기
+                    </button>
+                  </div>
+                );
+              }
+              if (resolvedAlerts.length === 0) {
+                return (
+                  <div className="text-center py-12 bg-gray-800 rounded-lg text-gray-400">
+                    해결된 알림이 없습니다.
+                  </div>
+                );
+              }
+              return (
+                <div className="space-y-3">
+                  <p className="text-gray-400 text-sm mb-4">
+                    총 {resolvedAlerts.length}건의 해결된 알림
+                  </p>
+                  {resolvedAlerts.map((alert) => (
+                    <div
+                      key={alert.alert_id || alert.id}
+                      className="bg-gray-800 rounded-lg p-4 border-l-4 border-green-600 opacity-75"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">{getAnomalyTypeIcon(alert.anomaly_type)}</span>
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${getSeverityColor(alert.severity)}`}>
+                            {getSeverityLabel(alert.severity)}
+                          </span>
+                          <span className="font-medium">{getAnomalyTypeLabel(alert.anomaly_type)}</span>
+                          <span className="text-green-500 text-sm">[해결됨]</span>
+                        </div>
+                        <div className="text-gray-500 text-sm">
+                          {formatDate(alert.detected_at)}
+                          {alert.resolved_at && (
+                            <span className="ml-2 text-green-500">→ {formatDate(alert.resolved_at)}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         )}
 

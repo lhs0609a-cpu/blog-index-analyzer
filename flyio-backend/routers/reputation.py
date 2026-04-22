@@ -11,12 +11,14 @@ import asyncio
 from database.reputation_db import get_reputation_db
 from services.review_crawler import ReviewCrawler
 from services.review_ai_service import ReviewAIService
+from services.mention_scanner import MentionScanner
 
 router = APIRouter(prefix="/api/reputation", tags=["평판모니터링"])
 logger = logging.getLogger(__name__)
 
 crawler = ReviewCrawler()
 ai_service = ReviewAIService()
+mention_scanner = MentionScanner()
 
 
 # ===== Request/Response Models =====
@@ -98,6 +100,9 @@ async def create_store(
             asyncio.create_task(
                 _collect_reviews_for_store(result["id"], "kakao", req.kakao_place_id)
             )
+
+        # 누락된 플랫폼 자동 발견 (백그라운드)
+        asyncio.create_task(_discover_cross_platform_ids(result["id"]))
 
         # 기본 알림 설정 생성 (별점 2 이하 알림)
         db.upsert_alert_setting(
@@ -182,6 +187,11 @@ async def collect_reviews(store_id: str):
     logger.info(f"[CollectAPI] Manual collect triggered: store_id={store_id}, name='{store.get('store_name')}', "
                 f"naver={store.get('naver_place_id')}, google={store.get('google_place_id')}, kakao={store.get('kakao_place_id')}")
 
+    # 누락된 플랫폼 자동 발견 (수집 전 실행)
+    await _discover_cross_platform_ids(store_id)
+    # 발견 후 최신 store 정보 다시 로드
+    store = db.get_store(store_id)
+
     # 수집 전 기존 블로그 리뷰 정리
     purged = db.purge_blog_reviews(store_id)
     if purged > 0:
@@ -213,7 +223,22 @@ async def collect_reviews(store_id: str):
 
     db.update_last_crawled(store_id)
     logger.info(f"[CollectAPI] Collection complete: total={collected}, purged_blog={purged}, by_platform={platforms_collected}")
-    return {"success": True, "collected_count": collected, "purged_blog_reviews": purged, "by_platform": platforms_collected}
+
+    # 최신 store 정보로 플랫폼 연결 상태 반환
+    updated_store = db.get_store(store_id)
+    platform_ids = {
+        "naver_place_id": updated_store.get("naver_place_id") if updated_store else None,
+        "google_place_id": updated_store.get("google_place_id") if updated_store else None,
+        "kakao_place_id": updated_store.get("kakao_place_id") if updated_store else None,
+    }
+
+    return {
+        "success": True,
+        "collected_count": collected,
+        "purged_blog_reviews": purged,
+        "by_platform": platforms_collected,
+        "platform_ids": platform_ids,
+    }
 
 
 @router.post("/stores/{store_id}/purge-blog-reviews")
@@ -654,7 +679,228 @@ async def generate_competitor_analysis(store_id: str = Query(...)):
     return result
 
 
+# ===== 온라인 언급 스캐너 (긍정/중립/부정) =====
+
+class MentionResolveRequest(BaseModel):
+    note: Optional[str] = None
+
+
+class MentionScanRequest(BaseModel):
+    keywords: Optional[List[str]] = None
+
+
+@router.post("/mentions/scan/{store_id}")
+async def scan_mentions(store_id: str, req: MentionScanRequest = None):
+    """온라인 언급 수동 스캔 (긍정/중립/부정 전체)"""
+    db = get_reputation_db()
+    store = db.get_store(store_id)
+    if not store:
+        raise HTTPException(status_code=404, detail="가게를 찾을 수 없습니다")
+
+    # 6시간 내 재스캔 방지
+    last_scan = db.get_last_scan_time(store_id)
+    if last_scan:
+        from datetime import datetime, timedelta
+        try:
+            last_dt = datetime.fromisoformat(last_scan.replace("Z", "+00:00"))
+            if datetime.utcnow() - last_dt.replace(tzinfo=None) < timedelta(hours=6):
+                stats = db.get_mention_stats(store_id)
+                return {
+                    "success": True,
+                    "message": "최근 6시간 내 스캔 기록이 있습니다",
+                    "new_mentions": 0,
+                    "high_severity_new": 0,
+                    "new_by_sentiment": {"positive": 0, "neutral": 0, "negative": 0},
+                    "total_scanned": 0,
+                    "stats": stats,
+                    "cached": True,
+                }
+        except Exception:
+            pass
+
+    business_name = store["store_name"]
+    keywords = req.keywords if req else None
+
+    # 스캔 실행
+    mentions = await mention_scanner.scan_mentions(business_name, store_id, keywords)
+
+    # 기존 URL 목록 (중복 저장 방지)
+    existing_urls = db.get_resolved_urls(store_id)
+
+    # DB 저장
+    new_count = 0
+    high_count = 0
+    by_sentiment = {"positive": 0, "neutral": 0, "negative": 0}
+    for m in mentions:
+        if m.get("url") in existing_urls:
+            continue
+        mention_id = db.add_mention(
+            store_id=store_id,
+            source_type=m["source_type"],
+            title=m["title"],
+            snippet=m["snippet"],
+            url=m.get("url", ""),
+            author_name=m.get("author_name"),
+            published_date=m.get("published_date"),
+            sentiment=m.get("sentiment", "neutral"),
+            sentiment_score=m.get("sentiment_score", 0),
+            severity_score=m.get("severity_score", 0),
+            severity_level=m.get("severity_level", "none"),
+            matched_keywords=m.get("matched_keywords", []),
+        )
+        if mention_id:
+            new_count += 1
+            s = m.get("sentiment", "neutral")
+            by_sentiment[s] = by_sentiment.get(s, 0) + 1
+            if m.get("severity_level") == "high":
+                high_count += 1
+
+    stats = db.get_mention_stats(store_id)
+    return {
+        "success": True,
+        "new_mentions": new_count,
+        "high_severity_new": high_count,
+        "new_by_sentiment": by_sentiment,
+        "total_scanned": len(mentions),
+        "stats": stats,
+        "cached": False,
+    }
+
+
+@router.get("/mentions/{store_id}")
+async def get_mentions(
+    store_id: str,
+    source_type: Optional[str] = Query(None),
+    severity_level: Optional[str] = Query(None),
+    sentiment: Optional[str] = Query(None),
+    is_resolved: Optional[int] = Query(None),
+    limit: int = Query(50),
+    offset: int = Query(0),
+):
+    """온라인 언급 목록 조회 (감성/소스/심각도 필터)"""
+    db = get_reputation_db()
+    mentions = db.get_mentions(store_id, source_type, severity_level, sentiment, is_resolved, limit, offset)
+    return {"success": True, "mentions": mentions, "total": len(mentions)}
+
+
+@router.get("/mentions/{store_id}/stats")
+async def get_mention_stats(store_id: str):
+    """감성별/소스별/심각도별 언급 통계"""
+    db = get_reputation_db()
+    stats = db.get_mention_stats(store_id)
+    return {"success": True, "stats": stats}
+
+
+@router.put("/mentions/{mention_id}/resolve")
+async def resolve_mention(mention_id: str, req: MentionResolveRequest = None):
+    """언급 처리 완료 표시"""
+    db = get_reputation_db()
+    note = req.note if req else None
+    resolved = db.resolve_mention(mention_id, note)
+    if not resolved:
+        raise HTTPException(status_code=404, detail="언급을 찾을 수 없습니다")
+    return {"success": True}
+
+
+@router.delete("/mentions/{mention_id}")
+async def delete_mention(mention_id: str):
+    """오탐 언급 삭제"""
+    db = get_reputation_db()
+    deleted = db.delete_mention(mention_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="언급을 찾을 수 없습니다")
+    return {"success": True}
+
+
 # ===== 내부 함수 =====
+
+async def _discover_cross_platform_ids(store_id: str):
+    """누락된 플랫폼 ID를 가게 이름으로 자동 발견하여 DB 업데이트"""
+    db = get_reputation_db()
+    store = db.get_store(store_id)
+    if not store:
+        return
+
+    store_name = store.get("store_name", "")
+    if not store_name:
+        return
+
+    missing = []
+    if not store.get("naver_place_id"):
+        missing.append("naver")
+    if not store.get("google_place_id"):
+        missing.append("google")
+    if not store.get("kakao_place_id"):
+        missing.append("kakao")
+
+    if not missing:
+        return
+
+    logger.info(f"[CrossPlatform] Discovering missing platforms for '{store_name}': {missing}")
+
+    # 주소 포함 검색어로 정확도 향상
+    search_query = store_name
+    if store.get("address"):
+        # 주소에서 시/구 부분만 추출하여 검색어에 추가
+        addr_parts = store["address"].split()
+        if len(addr_parts) >= 2:
+            search_query = f"{addr_parts[0]} {addr_parts[1]} {store_name}"
+
+    discovered = {}
+
+    for platform in missing:
+        try:
+            if platform == "naver":
+                results = await crawler.search_naver_place(search_query)
+            elif platform == "google":
+                results = await crawler.search_google_place(search_query)
+            elif platform == "kakao":
+                results = await crawler.search_kakao_place(search_query)
+            else:
+                continue
+
+            if results and len(results) > 0:
+                # 이름이 가장 유사한 결과 선택
+                best = None
+                for r in results:
+                    r_name = r.get("name", "").strip()
+                    if r_name == store_name or store_name in r_name or r_name in store_name:
+                        best = r
+                        break
+                if not best:
+                    best = results[0]
+
+                place_id = best.get("place_id")
+                if place_id:
+                    discovered[platform] = place_id
+                    logger.info(f"[CrossPlatform] Found {platform} ID for '{store_name}': {place_id}")
+
+            await asyncio.sleep(0.5)  # 플랫폼 간 딜레이
+        except Exception as e:
+            logger.warning(f"[CrossPlatform] {platform} search failed for '{store_name}': {e}")
+
+    if not discovered:
+        logger.info(f"[CrossPlatform] No new platforms discovered for '{store_name}'")
+        return
+
+    # DB 업데이트
+    db.update_store_place_ids(
+        store_id=store_id,
+        naver_place_id=discovered.get("naver"),
+        google_place_id=discovered.get("google"),
+        kakao_place_id=discovered.get("kakao"),
+    )
+    logger.info(f"[CrossPlatform] Updated store '{store_name}' with new IDs: {discovered}")
+
+    # 새로 발견된 플랫폼에서 리뷰 수집
+    platform_field_map = {"naver": "naver_place", "google": "google", "kakao": "kakao"}
+    for plat, pid in discovered.items():
+        try:
+            count = await _collect_reviews_for_store(store_id, platform_field_map[plat], pid)
+            logger.info(f"[CrossPlatform] Collected {count} reviews from newly discovered {plat}")
+        except Exception as e:
+            logger.warning(f"[CrossPlatform] Collection from {plat} failed: {e}")
+
 
 async def _collect_reviews_for_store(store_id: str, platform: str, place_id: str) -> int:
     """가게의 리뷰 수집 + 감성 분석 + DB 저장"""
@@ -671,7 +917,7 @@ async def _collect_reviews_for_store(store_id: str, platform: str, place_id: str
             if store:
                 store_name = store.get("store_name", "")
             logger.info(f"[Collect] Naver crawl start: place_id={place_id}, is_fake={place_id.startswith('naver_')}, store_name='{store_name}'")
-            raw_reviews = await crawler.crawl_naver_place(place_id, max_reviews=50, store_name=store_name)
+            raw_reviews = await crawler.crawl_naver_place(place_id, max_reviews=500, store_name=store_name)
             logger.info(f"[Collect] Naver crawl result: {len(raw_reviews)} raw reviews")
             # 가짜 ID가 해결되었으면 DB 업데이트
             if place_id.startswith("naver_") and raw_reviews:
@@ -689,10 +935,10 @@ async def _collect_reviews_for_store(store_id: str, platform: str, place_id: str
                     except Exception as e:
                         logger.warning(f"[Collect] Failed to update resolved place_id: {e}")
         elif platform == "google":
-            raw_reviews = await crawler.crawl_google_reviews(place_id, max_reviews=50)
+            raw_reviews = await crawler.crawl_google_reviews(place_id, max_reviews=500)
             logger.info(f"[Collect] Google crawl result: {len(raw_reviews)} raw reviews")
         elif platform == "kakao":
-            raw_reviews = await crawler.crawl_kakao_reviews(place_id, max_reviews=50)
+            raw_reviews = await crawler.crawl_kakao_reviews(place_id, max_reviews=500)
             logger.info(f"[Collect] Kakao crawl result: {len(raw_reviews)} raw reviews")
         else:
             logger.warning(f"[Collect] Unknown platform: {platform}")
@@ -703,12 +949,24 @@ async def _collect_reviews_for_store(store_id: str, platform: str, place_id: str
             content = raw.get("content", "").strip()
             rating = raw.get("rating", 0)
 
-            # 방문자/구매자 리뷰 유효성 검증 — 블로그 글/광고 필터링
-            is_blog = (
-                (rating == 0 and len(content) < 5) or  # 별점 없고 내용도 없음
+            visit_count = raw.get("visit_count", 0)
+            origin_type = raw.get("origin_type", "")
+
+            # 영수증/예약 리뷰 판별: originType이 있거나 visitCount >= 1
+            is_receipt = origin_type in ("영수증", "예약") or visit_count >= 1
+
+            # rating=0 + 영수증 아님 → 블로그/광고
+            if rating == 0 and not is_receipt:
+                skipped += 1
+                continue
+
+            # 블로그 리뷰 패턴 감지 (영수증 리뷰가 아닌 경우에만 적용)
+            is_blog = not is_receipt and (
                 "⭐" in content or  # 블로그 제목 패턴
                 content.startswith("[블로그 리뷰]") or  # 이전 블로그 리뷰 형식
-                (rating == 0 and raw.get("author_name") == "블로거")  # 블로거 작성
+                raw.get("author_name") == "블로거" or  # 블로거 작성
+                "http://" in content or "https://" in content or  # URL 포함
+                content.count("#") >= 5  # 과도한 해시태그
             )
             if is_blog:
                 skipped += 1
@@ -730,6 +988,7 @@ async def _collect_reviews_for_store(store_id: str, platform: str, place_id: str
                 sentiment_score=sentiment_result["score"],
                 sentiment_category=sentiment_result.get("category"),
                 keywords=sentiment_result.get("keywords", []),
+                visit_count=visit_count,
             )
 
             if review_id:
@@ -808,6 +1067,14 @@ async def reputation_monitor_loop():
 
             for store in stores:
                 try:
+                    # 누락된 플랫폼 자동 발견
+                    try:
+                        await _discover_cross_platform_ids(store["id"])
+                        # 발견 후 최신 정보 다시 로드
+                        store = db.get_store(store["id"]) or store
+                    except Exception as e:
+                        logger.warning(f"[Reputation] Cross-platform discovery failed for store {store['id']}: {e}")
+
                     # 모든 등록된 플랫폼에서 수집
                     platform_fields = [
                         ("naver_place_id", "naver_place"),

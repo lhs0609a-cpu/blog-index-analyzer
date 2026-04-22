@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { getApiUrl } from '@/lib/api/apiConfig'
+import { useAuthStore } from '@/lib/stores/auth'
 import { Bell, Loader2, Save, Star, MessageSquare, TrendingDown, Shield } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -20,6 +21,9 @@ interface StoreInfo {
 }
 
 export default function AlertsPage() {
+  const { user } = useAuthStore()
+  const userId = user?.id || user?.email || 'demo_user'
+
   const [stores, setStores] = useState<StoreInfo[]>([])
   const [selectedStore, setSelectedStore] = useState<string | null>(null)
   const [settings, setSettings] = useState<AlertSetting[]>([])
@@ -38,7 +42,7 @@ export default function AlertsPage() {
   useEffect(() => {
     const loadStores = async () => {
       try {
-        const res = await fetch(`${getApiUrl()}/api/reputation/stores?user_id=demo_user`)
+        const res = await fetch(`${getApiUrl()}/api/reputation/stores?user_id=${userId}`)
         const data = await res.json()
         if (data.success && data.stores.length > 0) {
           setStores(data.stores)
@@ -96,53 +100,40 @@ export default function AlertsPage() {
     setSaving(true)
 
     try {
+      const baseUrl = `${getApiUrl()}/api/reputation/alerts/settings?store_id=${selectedStore}&user_id=${userId}`
+      const putSetting = (body: Record<string, unknown>) =>
+        fetch(baseUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+
       const updates = []
 
-      // 부정 리뷰 알림
-      if (negativeEnabled) {
-        updates.push(
-          fetch(`${getApiUrl()}/api/reputation/alerts/settings?store_id=${selectedStore}&user_id=demo_user`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              alert_type: 'negative_review',
-              condition: { min_rating: negativeMinRating },
-              notification_channel: channel,
-            }),
-          })
-        )
-      }
+      // 부정 리뷰 알림 (활성/비활성 모두 저장)
+      updates.push(putSetting({
+        alert_type: 'negative_review',
+        condition: { min_rating: negativeMinRating },
+        notification_channel: channel,
+        is_active: negativeEnabled,
+      }))
 
       // 키워드 감지 알림
-      if (keywordEnabled && keywordList.trim()) {
-        const keywords = keywordList.split(',').map(k => k.trim()).filter(Boolean)
-        updates.push(
-          fetch(`${getApiUrl()}/api/reputation/alerts/settings?store_id=${selectedStore}&user_id=demo_user`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              alert_type: 'keyword_mention',
-              condition: { keywords },
-              notification_channel: channel,
-            }),
-          })
-        )
-      }
+      const keywords = keywordList.split(',').map(k => k.trim()).filter(Boolean)
+      updates.push(putSetting({
+        alert_type: 'keyword_mention',
+        condition: { keywords },
+        notification_channel: channel,
+        is_active: keywordEnabled && keywords.length > 0,
+      }))
 
       // 평점 하락 알림
-      if (ratingDropEnabled) {
-        updates.push(
-          fetch(`${getApiUrl()}/api/reputation/alerts/settings?store_id=${selectedStore}&user_id=demo_user`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              alert_type: 'rating_drop',
-              condition: { threshold: ratingDropThreshold },
-              notification_channel: channel,
-            }),
-          })
-        )
-      }
+      updates.push(putSetting({
+        alert_type: 'rating_drop',
+        condition: { threshold: ratingDropThreshold },
+        notification_channel: channel,
+        is_active: ratingDropEnabled,
+      }))
 
       await Promise.all(updates)
       toast.success('알림 설정이 저장되었습니다')

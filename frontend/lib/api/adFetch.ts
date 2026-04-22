@@ -252,3 +252,50 @@ export function adGet<T = any>(path: string, opts?: Omit<AdFetchOptions, 'method
 export function adPost<T = any>(path: string, body?: any, opts?: Omit<AdFetchOptions, 'method' | 'body'>) {
   return adFetch<T>(path, { ...opts, method: 'POST', body: body ? JSON.stringify(body) : undefined })
 }
+
+/**
+ * 파일 업로드 (multipart/form-data)
+ * - Content-Type은 브라우저가 boundary와 함께 자동 설정하므로 직접 설정하면 안 됨
+ */
+export async function adUpload<T = any>(
+  path: string,
+  formData: FormData,
+  opts?: { timeout?: number; showToast?: boolean }
+): Promise<T> {
+  const { timeout = 120000, showToast = true } = opts || {}
+  const baseUrl = getApiUrl()
+  const token = getAuthToken()
+  const headers: Record<string, string> = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  const controller = new AbortController()
+  const tid = setTimeout(() => controller.abort(), timeout)
+
+  try {
+    const res = await fetch(`${baseUrl}${path}`, {
+      method: 'POST',
+      headers,
+      body: formData,
+      signal: controller.signal,
+    })
+
+    if (res.status === 401 || res.status === 403) {
+      handleAuthError()
+      throw new ApiError('auth', getErrorMessage('auth'), res.status)
+    }
+
+    if (!res.ok) {
+      const detail = await extractErrorDetail(res)
+      const type = classifyError(res.status)
+      throw new ApiError(type, getErrorMessage(type, detail), res.status, detail)
+    }
+
+    return (await res.json()) as T
+  } catch (e) {
+    const err = e instanceof ApiError ? e : new ApiError('unknown', (e as Error)?.message || '업로드 실패')
+    if (showToast) toast.error(err.message)
+    throw err
+  } finally {
+    clearTimeout(tid)
+  }
+}
