@@ -4,6 +4,7 @@
 from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends, UploadFile, File, Form
 from pydantic import BaseModel, Field
 from routers.auth_deps import get_user_id_with_fallback
+from routers.admin import require_admin
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 import logging
@@ -825,6 +826,124 @@ async def start_volume_filter(
         raise
     except Exception as e:
         logger.exception("volume filter start error")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ 관리자 전용: AI 키워드 자동 확장 ============
+
+class AiKeywordExpandRequest(BaseModel):
+    seeds: List[str] = Field(..., description="씨앗 키워드 목록 (1~50개)")
+    min_volume: int = Field(default=5, description="월 총 검색량 최소치")
+    max_total_kept: int = Field(default=10000, description="최종 저장 최대 키워드 수")
+    max_api_calls: int = Field(default=2000, description="네이버 API 총 호출 상한")
+    max_depth: int = Field(default=3, description="BFS 확장 깊이")
+    top_n_per_level: int = Field(default=50, description="각 레벨에서 다음 확장 대상 상위 개수")
+    core_terms: List[str] = Field(default=[], description="반드시 포함돼야 할 앵커 단어 목록 (비우면 씨앗에서 자동 추출)")
+    blacklist: List[str] = Field(default=[], description="포함되면 즉시 제외할 단어 목록")
+
+
+@router.post("/keywords/ai-expand")
+async def start_ai_keyword_expand(
+    request: AiKeywordExpandRequest,
+    background_tasks: BackgroundTasks,
+    admin: dict = Depends(require_admin),
+):
+    """씨앗 키워드에서 출발해 네이버 연관검색어를 BFS 확장하며 검색량 필터링.
+    관리자만 사용 가능. 기존 volume_filter_jobs 테이블을 재사용하므로
+    진행률 조회/결과 다운로드/광고 등록 플로우를 그대로 쓸 수 있다.
+    """
+    try:
+        seeds = [s.strip() for s in request.seeds if s and s.strip()]
+        if not seeds:
+            raise HTTPException(status_code=400, detail="씨앗 키워드가 비어있습니다")
+        if len(seeds) > 50:
+            raise HTTPException(status_code=400, detail="씨앗은 최대 50개까지 허용됩니다")
+        if request.min_volume < 0 or request.min_volume > 100000:
+            raise HTTPException(status_code=400, detail="min_volume 범위 오류")
+        if request.max_total_kept <= 0 or request.max_total_kept > 100000:
+            raise HTTPException(status_code=400, detail="max_total_kept 범위 오류 (1~100000)")
+        if request.max_api_calls <= 0 or request.max_api_calls > 20000:
+            raise HTTPException(status_code=400, detail="max_api_calls 범위 오류 (1~20000)")
+        if request.max_depth < 0 or request.max_depth > 5:
+            raise HTTPException(status_code=400, detail="max_depth 범위 오류 (0~5)")
+
+        admin_id = admin["id"]
+        account = get_ad_account(admin_id)
+        if not account or not account.get("is_connected"):
+            raise HTTPException(status_code=400, detail="네이버 광고 계정을 먼저 연동하세요")
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"AI확장_{seeds[0][:20]}_{ts}"
+
+        # 기존 필터 테이블을 재사용 (total_keywords = max_api_calls 기준으로 표기)
+        job_id = create_volume_filter_job(
+            user_id=admin_id,
+            filename=filename,
+            min_volume=request.min_volume,
+            total_keywords=request.max_api_calls,
+            test_size=0,
+            min_pass_rate_pct=0.0,
+            auto_continue_on_canary=True,
+        )
+        update_volume_filter_job(
+            job_id,
+            current_step=f"AI 확장 대기: 씨앗 {len(seeds)}개",
+        )
+
+        async def _run():
+            from services.ai_keyword_expander import AiKeywordExpander, AiExpandConfig
+            from services.naver_ad_service import NaverAdApiClient
+            try:
+                client = NaverAdApiClient()
+                client.customer_id = account.get("customer_id")
+                client.api_key = account.get("api_key")
+                client.secret_key = account.get("secret_key")
+
+                expander = AiKeywordExpander(client)
+                cfg = AiExpandConfig(
+                    job_id=job_id,
+                    user_id=admin_id,
+                    seeds=seeds,
+                    min_volume=request.min_volume,
+                    max_total_kept=request.max_total_kept,
+                    max_api_calls=request.max_api_calls,
+                    max_depth=request.max_depth,
+                    top_n_per_level=request.top_n_per_level,
+                    core_terms=request.core_terms or None,
+                    blacklist=request.blacklist or None,
+                )
+                await expander.run(cfg)
+            except Exception as e:
+                logger.exception(f"[AiExpand {job_id}] 실행 실패")
+                update_volume_filter_job(
+                    job_id, status="failed",
+                    error_message=str(e)[:1000],
+                    completed_at=datetime.now().isoformat(),
+                )
+
+        background_tasks.add_task(_run)
+
+        save_optimization_log(
+            admin_id, "ai_keyword_expand_start",
+            f"AI 키워드 확장 시작 (job #{job_id}): 씨앗 {len(seeds)}개, "
+            f"depth {request.max_depth}, max_api {request.max_api_calls}",
+            {"job_id": job_id, "seeds": seeds[:10], "seed_count": len(seeds),
+             "min_volume": request.min_volume, "max_api_calls": request.max_api_calls},
+        )
+
+        return {
+            "success": True,
+            "job_id": job_id,
+            "seed_count": len(seeds),
+            "min_volume": request.min_volume,
+            "max_api_calls": request.max_api_calls,
+            "estimated_minutes": round(request.max_api_calls * 0.35 / 60, 1),
+            "message": f"AI 확장 시작. 씨앗 {len(seeds)}개 → 예상 {round(request.max_api_calls * 0.35 / 60, 1)}분",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("ai keyword expand start error")
         raise HTTPException(status_code=500, detail=str(e))
 
 

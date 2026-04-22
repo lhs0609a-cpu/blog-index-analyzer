@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   Upload, FileSpreadsheet, AlertTriangle, Filter, Loader2,
   Trash2, Play, Info, Download, RefreshCw, X, Rocket, CheckCircle2,
-  Pause, StopCircle, ArrowRight, BeakerIcon
+  Pause, StopCircle, ArrowRight, BeakerIcon, Sparkles
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/lib/stores/auth'
@@ -79,8 +79,18 @@ export default function VolumeFilterPage() {
   const [dailyBudget, setDailyBudget] = useState(10000)
   const [registering, setRegistering] = useState(false)
   const [actionInFlight, setActionInFlight] = useState(false)
+  // AI 키워드 확장 (관리자 전용)
+  const [aiSeeds, setAiSeeds] = useState('')
+  const [aiMinVolume, setAiMinVolume] = useState(5)
+  const [aiMaxKept, setAiMaxKept] = useState(10000)
+  const [aiMaxApiCalls, setAiMaxApiCalls] = useState(2000)
+  const [aiMaxDepth, setAiMaxDepth] = useState(3)
+  const [aiCoreTerms, setAiCoreTerms] = useState('')
+  const [aiBlacklist, setAiBlacklist] = useState('')
+  const [aiStarting, setAiStarting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const isAdmin = !!user?.is_admin
 
   useEffect(() => {
     if (!isAuthenticated && !user) window.location.href = '/login'
@@ -180,6 +190,52 @@ export default function VolumeFilterPage() {
       setShowRegisterForm(false)
     } catch {} finally {
       setStarting(false)
+    }
+  }
+
+  const handleAiExpand = async () => {
+    const seeds = aiSeeds
+      .split(/[\n,]/)
+      .map(s => s.trim())
+      .filter(Boolean)
+    if (seeds.length === 0) { toast.error('씨앗 키워드를 입력하세요'); return }
+    if (seeds.length > 50) { toast.error('씨앗은 최대 50개'); return }
+    if (aiMinVolume < 0 || aiMinVolume > 100000) { toast.error('임계치 오류'); return }
+    if (aiMaxApiCalls <= 0 || aiMaxApiCalls > 20000) { toast.error('API 호출 상한 오류'); return }
+    if (aiMaxKept <= 0 || aiMaxKept > 100000) { toast.error('최대 키워드 수 오류'); return }
+    if (aiMaxDepth < 0 || aiMaxDepth > 5) { toast.error('depth는 0~5'); return }
+
+    const coreTerms = aiCoreTerms.split(/[\n,]/).map(s => s.trim()).filter(Boolean)
+    const blacklist = aiBlacklist.split(/[\n,]/).map(s => s.trim()).filter(Boolean)
+
+    const estMin = Math.round(aiMaxApiCalls * 0.35 / 60 * 10) / 10
+    const anchorPreview = coreTerms.length > 0
+      ? `수동 앵커 ${coreTerms.length}개 (${coreTerms.slice(0, 3).join(', ')}${coreTerms.length > 3 ? '…' : ''})`
+      : `씨앗 자동 추출 (드리프트 방지)`
+    const msg = `AI 키워드 자동 확장 시작:\n\n· 씨앗: ${seeds.length}개 (${seeds.slice(0, 3).join(', ')}${seeds.length > 3 ? '…' : ''})\n· 필수 앵커: ${anchorPreview}\n· 제외 단어: ${blacklist.length}개\n· 임계치: 월 ${aiMinVolume} 이상\n· BFS 깊이: ${aiMaxDepth}\n· API 상한: ${aiMaxApiCalls}회 (예상 ${estMin}분)\n· 최대 확보: ${aiMaxKept}개\n\n계속?`
+    if (!confirm(msg)) return
+
+    setAiStarting(true)
+    try {
+      const res = await adPost<{ success: boolean; job_id: number; estimated_minutes: number; message: string }>(
+        '/api/naver-ad/keywords/ai-expand',
+        {
+          seeds,
+          min_volume: aiMinVolume,
+          max_total_kept: aiMaxKept,
+          max_api_calls: aiMaxApiCalls,
+          max_depth: aiMaxDepth,
+          top_n_per_level: 50,
+          core_terms: coreTerms,
+          blacklist,
+        }
+      )
+      toast.success(`AI 확장 시작 (#${res.job_id})`)
+      setCurrentJobId(res.job_id)
+      setPreviewResults([])
+      setShowRegisterForm(false)
+    } catch {} finally {
+      setAiStarting(false)
     }
   }
 
@@ -308,6 +364,116 @@ export default function VolumeFilterPage() {
             </div>
           </div>
         </div>
+
+        {/* 관리자 전용: AI 키워드 자동 확장 */}
+        {isAdmin && (
+          <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl border-2 border-purple-300 p-6 mb-6">
+            <div className="flex items-center gap-2 mb-1">
+              <Sparkles className="w-5 h-5 text-purple-600" />
+              <h2 className="font-semibold text-gray-900">AI 키워드 자동 확장</h2>
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-600 text-white">ADMIN</span>
+            </div>
+            <p className="text-sm text-gray-700 mb-4">
+              씨앗 키워드에서 출발해 네이버 연관검색어를 <b>BFS로 자동 확장</b>하며
+              검색량 있는 키워드만 수집합니다. 파일 업로드 불필요.
+            </p>
+
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                씨앗 키워드 (줄바꿈 또는 쉼표로 구분, 최대 50개)
+              </label>
+              <textarea
+                value={aiSeeds}
+                onChange={(e) => setAiSeeds(e.target.value)}
+                placeholder={'예:\n대출\n신용대출\n사업자대출'}
+                rows={4}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  필수 앵커 단어 <span className="text-xs font-normal text-gray-500">(비우면 씨앗에서 자동 추출)</span>
+                </label>
+                <textarea
+                  value={aiCoreTerms}
+                  onChange={(e) => setAiCoreTerms(e.target.value)}
+                  placeholder={'예:\n대출\n상환\n대환\n자금\n금융'}
+                  rows={3}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"
+                />
+                <p className="text-xs text-gray-500 mt-1">💡 키워드에 이 중 <b>하나라도</b> 포함돼야 채택됨. 드리프트(예: 대출 → 마케팅대행) 방지.</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  제외 단어 <span className="text-xs font-normal text-gray-500">(포함 시 즉시 컷)</span>
+                </label>
+                <textarea
+                  value={aiBlacklist}
+                  onChange={(e) => setAiBlacklist(e.target.value)}
+                  placeholder={'예:\n마케팅\n대행\n블로그\n광고'}
+                  rows={3}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"
+                />
+                <p className="text-xs text-gray-500 mt-1">⚠️ 키워드에 이 중 <b>하나라도</b> 들어가면 버림.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">최소 월 검색량</label>
+                <input
+                  type="number" min={0} max={100000}
+                  value={aiMinVolume}
+                  onChange={(e) => setAiMinVolume(Number(e.target.value) || 0)}
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">BFS 깊이 (0~5)</label>
+                <input
+                  type="number" min={0} max={5}
+                  value={aiMaxDepth}
+                  onChange={(e) => setAiMaxDepth(Number(e.target.value) || 0)}
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">API 호출 상한</label>
+                <input
+                  type="number" min={1} max={20000} step={100}
+                  value={aiMaxApiCalls}
+                  onChange={(e) => setAiMaxApiCalls(Number(e.target.value) || 0)}
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">최대 확보 개수</label>
+                <input
+                  type="number" min={1} max={100000} step={500}
+                  value={aiMaxKept}
+                  onChange={(e) => setAiMaxKept(Number(e.target.value) || 0)}
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="text-xs text-gray-600 mb-3">
+              💡 예상 소요: API 상한 × 0.35초 ≈ <b>{Math.round(aiMaxApiCalls * 0.35 / 60 * 10) / 10}분</b>.
+              각 레벨에서 검색량 상위 50개만 다음 depth 확장 대상으로 선택.
+            </div>
+
+            <button
+              onClick={handleAiExpand}
+              disabled={aiStarting}
+              className="w-full bg-purple-600 text-white py-3 rounded-lg font-medium hover:bg-purple-700 disabled:bg-gray-300 flex items-center justify-center gap-2"
+            >
+              {aiStarting ? <><Loader2 className="w-4 h-4 animate-spin" /> 시작 중...</> :
+                <><Sparkles className="w-4 h-4" /> AI 확장 시작</>}
+            </button>
+          </div>
+        )}
 
         {/* 업로드 + 설정 */}
         <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
