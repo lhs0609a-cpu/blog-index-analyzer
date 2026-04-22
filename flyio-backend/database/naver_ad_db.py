@@ -302,7 +302,7 @@ def init_naver_ad_tables():
         CREATE TABLE IF NOT EXISTS volume_filter_jobs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            status VARCHAR(20) DEFAULT 'pending',
+            status VARCHAR(30) DEFAULT 'pending',
             filename VARCHAR(300),
             min_volume INTEGER DEFAULT 10,
             total_keywords INTEGER DEFAULT 0,
@@ -313,9 +313,43 @@ def init_naver_ad_tables():
             error_message TEXT,
             started_at TIMESTAMP,
             completed_at TIMESTAMP,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            -- 캐너리
+            test_size INTEGER DEFAULT 10000,
+            min_pass_rate_pct REAL DEFAULT 2.0,
+            auto_continue_on_canary INTEGER DEFAULT 1,
+            canary_evaluated_at TIMESTAMP,
+            canary_pass_rate REAL,
+            canary_passed INTEGER DEFAULT 0,
+            -- 제어
+            should_cancel INTEGER DEFAULT 0,
+            should_pause INTEGER DEFAULT 0,
+            keywords_file VARCHAR(500)
         )
     """)
+
+    # 기존 테이블 마이그레이션 (컬럼 없을 때 ALTER)
+    def _ensure_column(table: str, column: str, decl: str):
+        cursor.execute(f"PRAGMA table_info({table})")
+        cols = [row[1] for row in cursor.fetchall()]
+        if column not in cols:
+            try:
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+            except Exception:
+                pass
+
+    for col, decl in [
+        ("test_size", "INTEGER DEFAULT 10000"),
+        ("min_pass_rate_pct", "REAL DEFAULT 2.0"),
+        ("auto_continue_on_canary", "INTEGER DEFAULT 1"),
+        ("canary_evaluated_at", "TIMESTAMP"),
+        ("canary_pass_rate", "REAL"),
+        ("canary_passed", "INTEGER DEFAULT 0"),
+        ("should_cancel", "INTEGER DEFAULT 0"),
+        ("should_pause", "INTEGER DEFAULT 0"),
+        ("keywords_file", "VARCHAR(500)"),
+    ]:
+        _ensure_column("volume_filter_jobs", col, decl)
 
     # 필터 통과 키워드 테이블 (검색량 있는 것만)
     cursor.execute("""
@@ -437,20 +471,36 @@ def get_bulk_upload_failures(job_id: int) -> List[dict]:
 # ============ 검색량 필터링 작업 관리 ============
 
 def create_volume_filter_job(
-    user_id: int, filename: str, min_volume: int, total_keywords: int
+    user_id: int, filename: str, min_volume: int, total_keywords: int,
+    test_size: int = 10000, min_pass_rate_pct: float = 2.0,
+    auto_continue_on_canary: bool = True, keywords_file: Optional[str] = None
 ) -> int:
     """필터링 작업 생성"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO volume_filter_jobs
-        (user_id, status, filename, min_volume, total_keywords, current_step)
-        VALUES (?, 'pending', ?, ?, ?, '대기 중')
-    """, (user_id, filename, min_volume, total_keywords))
+        (user_id, status, filename, min_volume, total_keywords, current_step,
+         test_size, min_pass_rate_pct, auto_continue_on_canary, keywords_file)
+        VALUES (?, 'pending', ?, ?, ?, '대기 중', ?, ?, ?, ?)
+    """, (user_id, filename, min_volume, total_keywords,
+          test_size, min_pass_rate_pct, 1 if auto_continue_on_canary else 0, keywords_file))
     conn.commit()
     job_id = cursor.lastrowid
     conn.close()
     return job_id
+
+
+def set_volume_filter_control(job_id: int, should_cancel: Optional[bool] = None,
+                              should_pause: Optional[bool] = None):
+    """취소/일시정지 플래그 설정"""
+    updates = {}
+    if should_cancel is not None:
+        updates["should_cancel"] = 1 if should_cancel else 0
+    if should_pause is not None:
+        updates["should_pause"] = 1 if should_pause else 0
+    if updates:
+        update_volume_filter_job(job_id, **updates)
 
 
 def update_volume_filter_job(job_id: int, **fields):

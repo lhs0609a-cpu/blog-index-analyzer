@@ -59,6 +59,7 @@ from database.naver_ad_db import (
     list_volume_filter_jobs,
     get_volume_filter_results,
     count_volume_filter_results,
+    set_volume_filter_control,
 )
 
 logger = logging.getLogger(__name__)
@@ -719,22 +720,26 @@ async def start_volume_filter(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="엑셀/CSV - A열 키워드"),
     min_volume: int = Form(default=10, description="월 총 검색량 최소치"),
+    test_size: int = Form(default=10000, description="캐너리 테스트 크기 (0=비활성)"),
+    min_pass_rate_pct: float = Form(default=2.0, description="캐너리 최소 통과율(%)"),
+    auto_continue_on_canary: bool = Form(default=True, description="캐너리 통과시 자동 계속"),
     user_id: int = Depends(get_user_id_with_fallback),
 ):
     """검색량 필터링 작업 시작
-    - 업로드된 키워드를 네이버 /keywordstool로 5개씩 배치 조회
-    - 월 PC+모바일 검색량 >= min_volume 인 것만 수집
-    - job_id 반환 → 완료 후 그 결과로 scale-register 가능
+    - 캐너리: 첫 test_size개 처리 후 통과율 평가 → 임계치 이상이면 자동 계속, 미만이면 중단
+    - auto_continue_on_canary=False면 캐너리 통과 여부와 무관하게 미달 시 대기
+    - 취소/일시정지/재개 가능
     """
     try:
         if min_volume < 0 or min_volume > 100000:
             raise HTTPException(status_code=400, detail="min_volume 범위 오류 (0~100000)")
+        if test_size < 0:
+            raise HTTPException(status_code=400, detail="test_size 범위 오류")
 
         content = await file.read()
         if len(content) > 100 * 1024 * 1024:
             raise HTTPException(status_code=400, detail="파일은 100MB 이하")
 
-        # 엑셀 파싱 - 키워드만 추출 (입찰가 무시)
         parsed = _parse_keyword_excel(content, default_bid=100, force_default_bid=True)
         if parsed["total"] == 0:
             raise HTTPException(status_code=400, detail="유효 키워드 없음")
@@ -742,22 +747,30 @@ async def start_volume_filter(
         keywords = [item["keyword"] for item in parsed["items"]]
         total = len(keywords)
 
-        # 계정 연동 확인
         account = get_ad_account(user_id)
         if not account or not account.get("is_connected"):
             raise HTTPException(status_code=400, detail="네이버 광고 계정을 먼저 연동하세요")
 
+        # Job 생성 (keywords_file 경로 미리 확보하려면 id 필요해서 후처리)
         job_id = create_volume_filter_job(
             user_id=user_id,
             filename=file.filename or "uploaded.xlsx",
             min_volume=min_volume,
             total_keywords=total,
+            test_size=test_size,
+            min_pass_rate_pct=min_pass_rate_pct,
+            auto_continue_on_canary=auto_continue_on_canary,
         )
+
+        # 키워드를 파일로 저장 (재개용)
+        from services.volume_filter import VolumeFilterService
+        from database.naver_ad_db import DATA_DIR
+        kw_path = VolumeFilterService.save_keywords_file(job_id, keywords, DATA_DIR)
+        update_volume_filter_job(job_id, keywords_file=kw_path)
 
         async def _run():
             from services.volume_filter import VolumeFilterService, VolumeFilterConfig
             from services.naver_ad_service import NaverAdApiClient
-
             try:
                 client = NaverAdApiClient()
                 client.customer_id = account.get("customer_id")
@@ -767,6 +780,9 @@ async def start_volume_filter(
                 svc = VolumeFilterService(client)
                 cfg = VolumeFilterConfig(
                     job_id=job_id, user_id=user_id, min_volume=min_volume,
+                    test_size=test_size,
+                    min_pass_rate_pct=min_pass_rate_pct,
+                    auto_continue_on_canary=auto_continue_on_canary,
                 )
                 await svc.run(cfg, keywords)
             except Exception as e:
@@ -779,13 +795,13 @@ async def start_volume_filter(
 
         background_tasks.add_task(_run)
 
-        # 예상 시간: total / 5 * 0.4초
         estimated_seconds = int(total / 5 * 0.4)
 
         save_optimization_log(
             user_id, "volume_filter_start",
-            f"검색량 필터 시작 (job #{job_id}): {total}개 (임계치 {min_volume})",
-            {"job_id": job_id, "total": total, "min_volume": min_volume}
+            f"검색량 필터 시작 (job #{job_id}): {total}개 (임계치 {min_volume}, 캐너리 {test_size})",
+            {"job_id": job_id, "total": total, "min_volume": min_volume,
+             "test_size": test_size}
         )
 
         return {
@@ -793,15 +809,126 @@ async def start_volume_filter(
             "job_id": job_id,
             "total_keywords": total,
             "min_volume": min_volume,
+            "test_size": test_size,
+            "min_pass_rate_pct": min_pass_rate_pct,
             "estimated_seconds": estimated_seconds,
             "estimated_minutes": round(estimated_seconds / 60, 1),
-            "message": f"백그라운드 필터링 시작 (예상 {estimated_seconds // 60}분)",
+            "canary_estimated_seconds": int(test_size / 5 * 0.4) if test_size else 0,
+            "message": (
+                f"백그라운드 필터링 시작. 캐너리 {test_size}개 테스트 "
+                f"(예상 {int(test_size / 5 * 0.4 / 60)}분) 후 자동 판단"
+                if test_size else
+                f"백그라운드 필터링 시작 (예상 {estimated_seconds // 60}분)"
+            ),
         }
     except HTTPException:
         raise
     except Exception as e:
         logger.exception("volume filter start error")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/keywords/volume-filter/{job_id}/cancel")
+async def cancel_volume_filter(
+    job_id: int,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """실행 중인 필터 작업 취소 (진행 상태 보존 안 됨)"""
+    job = get_volume_filter_job(job_id, user_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다")
+    if job["status"] not in ("pending", "running"):
+        raise HTTPException(status_code=400, detail=f"취소할 수 없는 상태입니다: {job['status']}")
+
+    set_volume_filter_control(job_id, should_cancel=True)
+    return {"success": True, "message": "취소 요청됨. 최대 수 초 내 반영"}
+
+
+@router.post("/keywords/volume-filter/{job_id}/pause")
+async def pause_volume_filter(
+    job_id: int,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """실행 중인 필터 작업 일시정지 (나중에 재개 가능)"""
+    job = get_volume_filter_job(job_id, user_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다")
+    if job["status"] != "running":
+        raise HTTPException(status_code=400, detail=f"일시정지 불가 상태: {job['status']}")
+
+    set_volume_filter_control(job_id, should_pause=True)
+    return {"success": True, "message": "일시정지 요청됨. 최대 수 초 내 반영"}
+
+
+@router.post("/keywords/volume-filter/{job_id}/resume")
+async def resume_volume_filter(
+    job_id: int,
+    background_tasks: BackgroundTasks,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """일시정지/캐너리실패 작업 재개"""
+    job = get_volume_filter_job(job_id, user_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다")
+    if job["status"] not in ("paused", "canary_failed"):
+        raise HTTPException(status_code=400,
+                            detail=f"재개 불가 상태: {job['status']}")
+
+    kw_file = job.get("keywords_file")
+    if not kw_file:
+        raise HTTPException(status_code=500, detail="키워드 파일 경로 없음 (복구 불가)")
+
+    from services.volume_filter import VolumeFilterService, VolumeFilterConfig
+    keywords = VolumeFilterService.load_keywords_file(kw_file)
+    if not keywords:
+        raise HTTPException(status_code=500, detail="키워드 파일 누락 (복구 불가)")
+
+    account = get_ad_account(user_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="네이버 광고 계정 연동 필요")
+
+    start_index = job.get("processed_count", 0) or 0
+
+    async def _run():
+        from services.naver_ad_service import NaverAdApiClient
+        try:
+            client = NaverAdApiClient()
+            client.customer_id = account.get("customer_id")
+            client.api_key = account.get("api_key")
+            client.secret_key = account.get("secret_key")
+
+            svc = VolumeFilterService(client)
+            cfg = VolumeFilterConfig(
+                job_id=job_id, user_id=user_id,
+                min_volume=job.get("min_volume", 10),
+                test_size=job.get("test_size", 10000),
+                min_pass_rate_pct=job.get("min_pass_rate_pct", 2.0),
+                # 재개 시 캐너리 무시 (이미 평가됐거나, 사용자가 "재개"로 강제 진행)
+                auto_continue_on_canary=True,
+            )
+            await svc.run(cfg, keywords, start_index=start_index)
+        except Exception as e:
+            logger.exception(f"[Filter {job_id}] 재개 실패")
+            update_volume_filter_job(
+                job_id, status="failed",
+                error_message=str(e)[:1000],
+                completed_at=datetime.now().isoformat(),
+            )
+
+    background_tasks.add_task(_run)
+
+    save_optimization_log(
+        user_id, "volume_filter_resume",
+        f"필터 재개 (job #{job_id}) at {start_index}/{len(keywords)}",
+        {"job_id": job_id, "start_index": start_index}
+    )
+
+    return {
+        "success": True,
+        "message": f"재개 요청됨 ({start_index}/{len(keywords)}부터)",
+        "start_index": start_index,
+        "total": len(keywords),
+    }
 
 
 @router.get("/keywords/volume-filter/{job_id}/status")
