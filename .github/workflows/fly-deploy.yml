@@ -1,0 +1,48 @@
+name: Deploy Backend to Fly.io
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'flyio-backend/**'
+      - '.github/workflows/fly-deploy.yml'
+  workflow_dispatch:  # 수동 실행 허용
+
+concurrency:
+  group: fly-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy app
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flyio-backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        run: flyctl deploy --remote-only -a blog-index-analyzer
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Verify health
+        run: |
+          sleep 5
+          for i in 1 2 3 4 5; do
+            code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 30 https://blog-index-analyzer.fly.dev/health || echo "000")
+            if [ "$code" = "200" ]; then
+              echo "✅ Health check passed"
+              exit 0
+            fi
+            echo "Attempt $i: HTTP $code - retrying in 5s..."
+            sleep 5
+          done
+          echo "❌ Health check failed after 5 attempts"
+          exit 1
