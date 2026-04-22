@@ -381,9 +381,15 @@ app = FastAPI(
 # CORS 설정 - 프로덕션 도메인만 허용
 ALLOWED_ORIGINS = [
     "https://blog-index-analyzer.vercel.app",
+    "https://blog-index-analyzer-lv33.vercel.app",
+    "https://blog-index-analyzer-lv33-fewfs-projects-83cc0821.vercel.app",
     "https://www.blrank.co.kr",
     "https://blrank.co.kr",
 ]
+
+# Vercel 프리뷰 배포 (PR마다 생성) 자동 허용 regex
+import re
+ALLOWED_ORIGIN_REGEX = re.compile(r"^https://blog-index-analyzer(-[\w-]+)?-fewfs-projects-83cc0821\.vercel\.app$")
 
 # 개발 환경에서는 localhost 추가
 if settings.DEBUG or settings.APP_ENV == "development":
@@ -396,6 +402,7 @@ if settings.DEBUG or settings.APP_ENV == "development":
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX.pattern,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
