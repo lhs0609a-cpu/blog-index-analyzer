@@ -142,44 +142,53 @@ class AiKeywordExpander:
             or state["ad_groups_in_current_campaign"] >= MAX_AD_GROUPS_PER_CAMPAIGN
         )
         if need_new_campaign:
-            state["campaigns_used"] += 1
-            cname = f"{config.campaign_prefix}_{state['campaigns_used']:03d}"
+            # 시도 번호는 attempted 카운터로 별도 관리, 성공 시에만 campaigns_used 증가
+            state["campaign_attempts"] = state.get("campaign_attempts", 0) + 1
+            cname = f"{config.campaign_prefix}_{state['campaign_attempts']:03d}"
             try:
                 camp = await self.api.create_campaign(
                     name=cname,
                     daily_budget=config.daily_budget,
                     campaign_tp=config.campaign_tp,
                 )
-                state["current_campaign_id"] = camp.get("nccCampaignId")
-                state["ad_groups_in_current_campaign"] = 0
-                if not state["current_campaign_id"]:
+                cid = camp.get("nccCampaignId")
+                if not cid:
                     raise ValueError(f"캠페인 ID 없음: {camp}")
-                logger.info(f"[AiExpand {config.job_id}] 캠페인 생성: {cname}")
+                state["current_campaign_id"] = cid
+                state["ad_groups_in_current_campaign"] = 0
+                state["campaigns_used"] += 1  # 성공 확정 후 증가
+                logger.info(f"[AiExpand {config.job_id}] 캠페인 생성 ✓: {cname} ({cid})")
                 await asyncio.sleep(REGISTER_API_DELAY)
             except Exception as e:
-                logger.error(f"[AiExpand {config.job_id}] 캠페인 생성 실패 '{cname}': {e}")
+                err = str(e)[:500]
+                state["last_error"] = f"캠페인 생성 실패: {err}"
+                logger.error(f"[AiExpand {config.job_id}] 캠페인 생성 실패 '{cname}': {err}")
                 state["register_failed"] += 1
                 return False
 
         # 새 광고그룹 생성
-        state["ad_groups_used"] += 1
-        gname = f"{config.campaign_prefix}_grp_{state['ad_groups_used']:04d}"
+        state["ad_group_attempts"] = state.get("ad_group_attempts", 0) + 1
+        gname = f"{config.campaign_prefix}_grp_{state['ad_group_attempts']:04d}"
         try:
             ag = await self.api.create_ad_group(
                 campaign_id=state["current_campaign_id"],
                 name=gname,
                 bid_amt=config.bid,
             )
-            state["current_ad_group_id"] = ag.get("nccAdgroupId")
+            gid = ag.get("nccAdgroupId")
+            if not gid:
+                raise ValueError(f"광고그룹 ID 없음: {ag}")
+            state["current_ad_group_id"] = gid
             state["keywords_in_current_group"] = 0
             state["ad_groups_in_current_campaign"] += 1
-            if not state["current_ad_group_id"]:
-                raise ValueError(f"광고그룹 ID 없음: {ag}")
-            logger.info(f"[AiExpand {config.job_id}] 광고그룹 생성: {gname}")
+            state["ad_groups_used"] += 1  # 성공 확정 후 증가
+            logger.info(f"[AiExpand {config.job_id}] 광고그룹 생성 ✓: {gname} ({gid})")
             await asyncio.sleep(REGISTER_API_DELAY)
             return True
         except Exception as e:
-            logger.error(f"[AiExpand {config.job_id}] 광고그룹 생성 실패 '{gname}': {e}")
+            err = str(e)[:500]
+            state["last_error"] = f"광고그룹 생성 실패: {err}"
+            logger.error(f"[AiExpand {config.job_id}] 광고그룹 생성 실패 '{gname}': {err}")
             state["register_failed"] += 1
             return False
 
@@ -415,9 +424,13 @@ class AiKeywordExpander:
 
                 # 진행률 업데이트
                 pct = min(99, int(api_calls / config.max_api_calls * 100))
+                camp_att = stream_state.get("campaign_attempts", 0)
+                grp_att = stream_state.get("ad_group_attempts", 0)
+                camp_ok = stream_state["campaigns_used"]
+                grp_ok = stream_state["ad_groups_used"]
                 stream_note = (
-                    f" · 등록 {stream_state['registered']}개"
-                    f" (캠페인 {stream_state['campaigns_used']}, 그룹 {stream_state['ad_groups_used']})"
+                    f" · 등록 {stream_state['registered']}개 "
+                    f"(캠페인 {camp_ok}/{camp_att}, 그룹 {grp_ok}/{grp_att})"
                     if stream_enabled else ""
                 )
                 update_volume_filter_job(
@@ -439,10 +452,14 @@ class AiKeywordExpander:
             if stream_enabled and stream_state["stream_buffer"]:
                 await self._stream_register(stream_state, config)
 
+            camp_att = stream_state.get("campaign_attempts", 0)
+            grp_att = stream_state.get("ad_group_attempts", 0)
+            camp_ok = stream_state["campaigns_used"]
+            grp_ok = stream_state["ad_groups_used"]
             final_stream_note = (
                 f", 네이버 등록 {stream_state['registered']}개 "
-                f"(캠페인 {stream_state['campaigns_used']}, 그룹 {stream_state['ad_groups_used']}"
-                f"{', 실패 ' + str(stream_state['register_failed']) if stream_state['register_failed'] else ''}"
+                f"(캠페인 {camp_ok}/{camp_att} 성공, 그룹 {grp_ok}/{grp_att} 성공"
+                f"{', 키워드실패 ' + str(stream_state['register_failed']) if stream_state['register_failed'] else ''}"
                 f"{', 형식오류 ' + str(stream_state.get('skipped_invalid', 0)) if stream_state.get('skipped_invalid') else ''})"
                 if stream_enabled else ""
             )
