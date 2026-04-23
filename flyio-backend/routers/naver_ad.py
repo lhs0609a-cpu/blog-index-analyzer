@@ -829,6 +829,37 @@ async def start_volume_filter(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============ 관리자 전용: AI 씨앗/앵커 제안 ============
+
+class AiSuggestSeedsRequest(BaseModel):
+    topic: str = Field(..., description="주제 또는 카테고리 (예: 대출, 성형외과, 인테리어)")
+    target_count: int = Field(default=10000, description="목표 수집 키워드 수")
+
+
+@router.post("/keywords/ai-suggest-seeds")
+async def ai_suggest_seeds(
+    request: AiSuggestSeedsRequest,
+    admin: dict = Depends(require_admin),
+):
+    """주제 + 목표 개수 → GPT가 씨앗/앵커/블랙리스트 + BFS 파라미터 자동 제안.
+    관리자 전용. 응답을 프론트에서 보여주고 사용자가 수정 후 실제 확장 돌림.
+    """
+    topic = (request.topic or "").strip()
+    if not topic:
+        raise HTTPException(status_code=400, detail="topic이 비어있습니다")
+    if len(topic) > 100:
+        raise HTTPException(status_code=400, detail="topic이 너무 깁니다 (최대 100자)")
+    if request.target_count <= 0 or request.target_count > 200000:
+        raise HTTPException(status_code=400, detail="target_count 범위 오류 (1~200000)")
+
+    from services.ai_seed_suggester import suggest_keyword_setup
+    result = await suggest_keyword_setup(topic, request.target_count)
+    if not result.get("success"):
+        raise HTTPException(status_code=502, detail=result.get("message", "AI 제안 실패"))
+
+    return result
+
+
 # ============ 관리자 전용: AI 키워드 자동 확장 ============
 
 class AiKeywordExpandRequest(BaseModel):
@@ -840,6 +871,14 @@ class AiKeywordExpandRequest(BaseModel):
     top_n_per_level: int = Field(default=50, description="각 레벨에서 다음 확장 대상 상위 개수")
     core_terms: List[str] = Field(default=[], description="반드시 포함돼야 할 앵커 단어 목록 (비우면 씨앗에서 자동 추출)")
     blacklist: List[str] = Field(default=[], description="포함되면 즉시 제외할 단어 목록")
+    # 실시간 캠페인 등록 옵션
+    stream_register: bool = Field(default=False, description="수집과 동시에 네이버 캠페인 실시간 등록")
+    campaign_prefix: str = Field(default="", description="실시간 등록 시 캠페인 이름 prefix")
+    bid: int = Field(default=100, description="키워드 공통 입찰가 (원)")
+    daily_budget: int = Field(default=10000, description="캠페인 일 예산 (원)")
+    campaign_tp: str = Field(default="WEB_SITE", description="캠페인 유형")
+    keywords_per_ad_group: int = Field(default=1000, description="광고그룹당 키워드 수")
+    stream_batch_size: int = Field(default=10, description="몇 개 찰 때마다 등록할지 (작을수록 실시간)")
 
 
 @router.post("/keywords/ai-expand")
@@ -866,6 +905,15 @@ async def start_ai_keyword_expand(
             raise HTTPException(status_code=400, detail="max_api_calls 범위 오류 (1~20000)")
         if request.max_depth < 0 or request.max_depth > 5:
             raise HTTPException(status_code=400, detail="max_depth 범위 오류 (0~5)")
+        if request.stream_register:
+            if not request.campaign_prefix or len(request.campaign_prefix) < 2:
+                raise HTTPException(status_code=400, detail="실시간 등록 시 campaign_prefix 필수 (2자 이상)")
+            if request.bid < 70 or request.bid > 100000:
+                raise HTTPException(status_code=400, detail="입찰가 70~100000원")
+            if request.stream_batch_size < 1 or request.stream_batch_size > 100:
+                raise HTTPException(status_code=400, detail="stream_batch_size 1~100")
+            if request.keywords_per_ad_group < 10 or request.keywords_per_ad_group > 1000:
+                raise HTTPException(status_code=400, detail="keywords_per_ad_group 10~1000")
 
         admin_id = admin["id"]
         account = get_ad_account(admin_id)
@@ -911,6 +959,13 @@ async def start_ai_keyword_expand(
                     top_n_per_level=request.top_n_per_level,
                     core_terms=request.core_terms or None,
                     blacklist=request.blacklist or None,
+                    stream_register=request.stream_register,
+                    campaign_prefix=request.campaign_prefix,
+                    bid=request.bid,
+                    daily_budget=request.daily_budget,
+                    campaign_tp=request.campaign_tp,
+                    keywords_per_ad_group=request.keywords_per_ad_group,
+                    stream_batch_size=request.stream_batch_size,
                 )
                 await expander.run(cfg)
             except Exception as e:

@@ -85,9 +85,23 @@ export default function VolumeFilterPage() {
   const [aiMaxKept, setAiMaxKept] = useState(10000)
   const [aiMaxApiCalls, setAiMaxApiCalls] = useState(2000)
   const [aiMaxDepth, setAiMaxDepth] = useState(3)
+  const [aiTopNPerLevel, setAiTopNPerLevel] = useState(50)
   const [aiCoreTerms, setAiCoreTerms] = useState('')
   const [aiBlacklist, setAiBlacklist] = useState('')
   const [aiStarting, setAiStarting] = useState(false)
+  // AI 제안
+  const [aiTopic, setAiTopic] = useState('')
+  const [aiTargetCount, setAiTargetCount] = useState(100000)
+  const [aiSuggesting, setAiSuggesting] = useState(false)
+  const [aiSuggestionNote, setAiSuggestionNote] = useState('')
+  // 실시간 캠페인 등록 옵션
+  const [aiStreamRegister, setAiStreamRegister] = useState(false)
+  const [aiCampaignPrefix, setAiCampaignPrefix] = useState(
+    `AI_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`
+  )
+  const [aiBid, setAiBid] = useState(100)
+  const [aiDailyBudget, setAiDailyBudget] = useState(10000)
+  const [aiStreamBatch, setAiStreamBatch] = useState(10)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const isAdmin = !!user?.is_admin
@@ -193,6 +207,44 @@ export default function VolumeFilterPage() {
     }
   }
 
+  const handleAiSuggest = async () => {
+    const topic = aiTopic.trim()
+    if (!topic) { toast.error('주제를 입력하세요 (예: 대출, 성형외과)'); return }
+    if (aiTargetCount <= 0 || aiTargetCount > 200000) { toast.error('목표 수 1~200000'); return }
+
+    setAiSuggesting(true)
+    try {
+      const res = await adPost<{
+        success: boolean
+        suggestion: {
+          seeds: string[]
+          core_terms: string[]
+          blacklist: string[]
+          max_depth: number
+          top_n_per_level: number
+          suggested_max_api_calls: number
+          estimated_keywords: string
+          rationale: string
+        }
+      }>('/api/naver-ad/keywords/ai-suggest-seeds', { topic, target_count: aiTargetCount })
+
+      const s = res.suggestion
+      setAiSeeds(s.seeds.join('\n'))
+      setAiCoreTerms(s.core_terms.join('\n'))
+      setAiBlacklist(s.blacklist.join('\n'))
+      setAiMaxDepth(s.max_depth)
+      setAiTopNPerLevel(s.top_n_per_level)
+      setAiMaxApiCalls(s.suggested_max_api_calls)
+      setAiMaxKept(Math.max(aiTargetCount, 1000))
+      setAiSuggestionNote(`📊 예상 수집: ${s.estimated_keywords}\n💡 ${s.rationale}`)
+      toast.success('AI 제안 완료. 아래에서 수정 후 실행하세요.')
+    } catch (e: any) {
+      toast.error(`AI 제안 실패: ${e?.message || 'OpenAI 키 설정 확인'}`)
+    } finally {
+      setAiSuggesting(false)
+    }
+  }
+
   const handleAiExpand = async () => {
     const seeds = aiSeeds
       .split(/[\n,]/)
@@ -208,11 +260,20 @@ export default function VolumeFilterPage() {
     const coreTerms = aiCoreTerms.split(/[\n,]/).map(s => s.trim()).filter(Boolean)
     const blacklist = aiBlacklist.split(/[\n,]/).map(s => s.trim()).filter(Boolean)
 
+    if (aiStreamRegister) {
+      if (!aiCampaignPrefix || aiCampaignPrefix.length < 2) { toast.error('캠페인 prefix는 2자 이상'); return }
+      if (aiBid < 70 || aiBid > 100000) { toast.error('입찰가 70~100000원'); return }
+      if (aiStreamBatch < 1 || aiStreamBatch > 100) { toast.error('배치 크기 1~100'); return }
+    }
+
     const estMin = Math.round(aiMaxApiCalls * 0.35 / 60 * 10) / 10
     const anchorPreview = coreTerms.length > 0
       ? `수동 앵커 ${coreTerms.length}개 (${coreTerms.slice(0, 3).join(', ')}${coreTerms.length > 3 ? '…' : ''})`
       : `씨앗 자동 추출 (드리프트 방지)`
-    const msg = `AI 키워드 자동 확장 시작:\n\n· 씨앗: ${seeds.length}개 (${seeds.slice(0, 3).join(', ')}${seeds.length > 3 ? '…' : ''})\n· 필수 앵커: ${anchorPreview}\n· 제외 단어: ${blacklist.length}개\n· 임계치: 월 ${aiMinVolume} 이상\n· BFS 깊이: ${aiMaxDepth}\n· API 상한: ${aiMaxApiCalls}회 (예상 ${estMin}분)\n· 최대 확보: ${aiMaxKept}개\n\n계속?`
+    const streamLine = aiStreamRegister
+      ? `\n\n🚀 실시간 캠페인 등록 ON:\n· prefix: ${aiCampaignPrefix}\n· 입찰가: ${aiBid.toLocaleString()}원\n· 일예산: ${aiDailyBudget.toLocaleString()}원/캠페인\n· 배치: ${aiStreamBatch}개 찰 때마다 즉시 등록\n⚠️ 실제 네이버 광고가 바로 생성됨. 비즈머니 확인 필수.`
+      : ''
+    const msg = `AI 키워드 자동 확장 시작:\n\n· 씨앗: ${seeds.length}개 (${seeds.slice(0, 3).join(', ')}${seeds.length > 3 ? '…' : ''})\n· 필수 앵커: ${anchorPreview}\n· 제외 단어: ${blacklist.length}개\n· 임계치: 월 ${aiMinVolume} 이상\n· BFS 깊이: ${aiMaxDepth}\n· API 상한: ${aiMaxApiCalls}회 (예상 ${estMin}분)\n· 최대 확보: ${aiMaxKept}개${streamLine}\n\n계속?`
     if (!confirm(msg)) return
 
     setAiStarting(true)
@@ -225,9 +286,15 @@ export default function VolumeFilterPage() {
           max_total_kept: aiMaxKept,
           max_api_calls: aiMaxApiCalls,
           max_depth: aiMaxDepth,
-          top_n_per_level: 50,
+          top_n_per_level: aiTopNPerLevel,
           core_terms: coreTerms,
           blacklist,
+          stream_register: aiStreamRegister,
+          campaign_prefix: aiStreamRegister ? aiCampaignPrefix : '',
+          bid: aiBid,
+          daily_budget: aiDailyBudget,
+          stream_batch_size: aiStreamBatch,
+          keywords_per_ad_group: 1000,
         }
       )
       toast.success(`AI 확장 시작 (#${res.job_id})`)
@@ -378,9 +445,53 @@ export default function VolumeFilterPage() {
               검색량 있는 키워드만 수집합니다. 파일 업로드 불필요.
             </p>
 
+            {/* Step 0: AI 자동 제안 */}
+            <div className="bg-gradient-to-r from-indigo-100 to-purple-100 border border-indigo-300 rounded-lg p-4 mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles className="w-4 h-4 text-indigo-700" />
+                <span className="text-sm font-semibold text-indigo-900">
+                  Step 0. 귀찮으면 AI에게 맡겨봐 (주제만 알려주면 씨앗/앵커 자동 생성)
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end mb-2">
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">주제 / 카테고리</label>
+                  <input
+                    type="text"
+                    value={aiTopic}
+                    onChange={(e) => setAiTopic(e.target.value)}
+                    placeholder="예: 대출, 성형외과, 인테리어, 다이어트"
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">목표 키워드 수</label>
+                  <input
+                    type="number" min={100} max={200000} step={1000}
+                    value={aiTargetCount}
+                    onChange={(e) => setAiTargetCount(Number(e.target.value) || 10000)}
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={handleAiSuggest}
+                disabled={aiSuggesting}
+                className="w-full bg-indigo-600 text-white py-2 rounded font-medium hover:bg-indigo-700 disabled:bg-gray-300 flex items-center justify-center gap-2 text-sm"
+              >
+                {aiSuggesting ? <><Loader2 className="w-4 h-4 animate-spin" /> AI 추천 생성 중...</> :
+                  <><Sparkles className="w-4 h-4" /> 씨앗/앵커 AI 추천 받기</>}
+              </button>
+              {aiSuggestionNote && (
+                <div className="mt-2 p-2 bg-white/70 rounded text-xs text-gray-700 whitespace-pre-line">
+                  {aiSuggestionNote}
+                </div>
+              )}
+            </div>
+
             <div className="mb-3">
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                씨앗 키워드 (줄바꿈 또는 쉼표로 구분, 최대 50개)
+                씨앗 키워드 (줄바꿈 또는 쉼표로 구분, 최대 50개) <span className="text-xs font-normal text-gray-500">— AI 추천 결과를 자유롭게 수정하세요</span>
               </label>
               <textarea
                 value={aiSeeds}
@@ -420,7 +531,7 @@ export default function VolumeFilterPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">최소 월 검색량</label>
                 <input
@@ -440,6 +551,16 @@ export default function VolumeFilterPage() {
                 />
               </div>
               <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">레벨당 상위 N</label>
+                <input
+                  type="number" min={10} max={2000} step={10}
+                  value={aiTopNPerLevel}
+                  onChange={(e) => setAiTopNPerLevel(Number(e.target.value) || 50)}
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                />
+                <p className="text-[10px] text-gray-500 mt-0.5">클수록 넓게</p>
+              </div>
+              <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">API 호출 상한</label>
                 <input
                   type="number" min={1} max={20000} step={100}
@@ -451,7 +572,7 @@ export default function VolumeFilterPage() {
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">최대 확보 개수</label>
                 <input
-                  type="number" min={1} max={100000} step={500}
+                  type="number" min={1} max={200000} step={500}
                   value={aiMaxKept}
                   onChange={(e) => setAiMaxKept(Number(e.target.value) || 0)}
                   className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
@@ -464,13 +585,74 @@ export default function VolumeFilterPage() {
               각 레벨에서 검색량 상위 50개만 다음 depth 확장 대상으로 선택.
             </div>
 
+            {/* 실시간 캠페인 등록 */}
+            <div className="bg-white/60 border border-purple-200 rounded-lg p-3 mb-3">
+              <label className="flex items-center gap-2 cursor-pointer mb-2">
+                <input
+                  type="checkbox"
+                  checked={aiStreamRegister}
+                  onChange={(e) => setAiStreamRegister(e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm font-semibold text-purple-900">
+                  🚀 실시간 캠페인 등록 (수집하면서 동시에 네이버에 등록)
+                </span>
+              </label>
+              {aiStreamRegister && (
+                <>
+                  <p className="text-xs text-purple-800 mb-3 pl-6">
+                    ⚠️ 배치 크기만큼 찰 때마다 <b>즉시 네이버 캠페인/광고그룹/키워드가 생성</b>됩니다. 비즈머니 잔액/일 예산 확인 필수.
+                  </p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pl-6">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">캠페인 prefix</label>
+                      <input
+                        type="text"
+                        value={aiCampaignPrefix}
+                        onChange={(e) => setAiCampaignPrefix(e.target.value)}
+                        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">입찰가 (70~)</label>
+                      <input
+                        type="number" min={70} max={100000}
+                        value={aiBid}
+                        onChange={(e) => setAiBid(Number(e.target.value) || 100)}
+                        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">일 예산 (원/캠페인)</label>
+                      <input
+                        type="number" min={1000} step={1000}
+                        value={aiDailyBudget}
+                        onChange={(e) => setAiDailyBudget(Number(e.target.value) || 10000)}
+                        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">배치 크기 (1~100)</label>
+                      <input
+                        type="number" min={1} max={100}
+                        value={aiStreamBatch}
+                        onChange={(e) => setAiStreamBatch(Number(e.target.value) || 10)}
+                        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+                      />
+                      <p className="text-xs text-gray-500 mt-0.5">작을수록 실시간, 커질수록 빠름</p>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
             <button
               onClick={handleAiExpand}
               disabled={aiStarting}
               className="w-full bg-purple-600 text-white py-3 rounded-lg font-medium hover:bg-purple-700 disabled:bg-gray-300 flex items-center justify-center gap-2"
             >
               {aiStarting ? <><Loader2 className="w-4 h-4 animate-spin" /> 시작 중...</> :
-                <><Sparkles className="w-4 h-4" /> AI 확장 시작</>}
+                <><Sparkles className="w-4 h-4" /> {aiStreamRegister ? 'AI 확장 + 실시간 등록 시작' : 'AI 확장 시작 (수집만)'}</>}
             </button>
           </div>
         )}
