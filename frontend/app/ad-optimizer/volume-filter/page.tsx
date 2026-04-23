@@ -230,7 +230,7 @@ export default function VolumeFilterPage() {
           estimated_keywords: string
           rationale: string
         }
-      }>('/api/naver-ad/keywords/ai-suggest-seeds', { topic, target_count: aiTargetCount })
+      }>('/api/naver-ad/keywords/ai-suggest-seeds', { topic, target_count: aiTargetCount }, { timeout: 180000 })
 
       const s = res.suggestion
       setAiSeeds(s.seeds.join('\n'))
@@ -269,7 +269,7 @@ export default function VolumeFilterPage() {
       }>('/api/naver-ad/keywords/ai-amplify-seeds', {
         seeds,
         target_count: aiAmplifyTarget,
-      })
+      }, { timeout: 180000 })
       setAiSeeds(res.seeds.join('\n'))
       const axesStr = Object.entries(res.axes || {})
         .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.slice(0, 5).join(', ') + (v.length > 5 ? '…' : '') : ''}`)

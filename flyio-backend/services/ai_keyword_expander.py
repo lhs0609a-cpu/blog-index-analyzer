@@ -69,11 +69,14 @@ _COMPOUND_SUFFIXES: dict = {
 }
 
 def _derive_core_terms(seeds: List[str]) -> List[str]:
-    """씨앗에서 의미 토큰 추출.
-    - 원문 씨앗 포함
-    - 공백 분리 토큰(2자+) 포함
-    - 한글 복합어 접미사 분해 (의사대출 → 의사 + 대출)
-    - 같은 계열 형제어 추가 (대출 씨앗 → 자금/론/대환 앵커 자동 추가)
+    """씨앗에서 앵커 토큰 추출.
+    - 원문 씨앗 포함 (예: "카페대출")
+    - 공백 분리 토큰(2자+)만 포함 (공백 쓰면 명시적 분리 의도)
+    - 복합어 접미사 감지 → 접미사 + 형제어만 앵커로 추가
+      (예: "카페대출" 씨앗 → 앵커 {카페대출, 대출, 자금, 론, 대환, 마통, 마이너스통장})
+    - ⚠️ prefix(카페/강화도카페 등)는 앵커로 추가하지 않음.
+      "카페" 앵커 두면 "강화도카페/강남역카페" 같은 무관 키워드 전부 통과해버리기 때문.
+      도메인 시그널은 오로지 접미사(대출/자금/론…)로 강제.
     """
     tokens: Set[str] = set()
     matched_suffixes: Set[str] = set()
@@ -86,16 +89,11 @@ def _derive_core_terms(seeds: List[str]) -> List[str]:
             w = w.strip()
             if len(w) >= 2:
                 tokens.add(w)
-        # 복합어 접미사 분해: 가장 긴 접미사 우선
         s_nospace = s.replace(" ", "")
         for suffix in sorted(_COMPOUND_SUFFIXES.keys(), key=len, reverse=True):
             if s_nospace.endswith(suffix) and len(s_nospace) > len(suffix):
-                prefix = s_nospace[: -len(suffix)]
-                if len(prefix) >= 2:
-                    tokens.add(prefix)
-                    matched_suffixes.add(suffix)
+                matched_suffixes.add(suffix)
                 break
-    # 매칭된 접미사마다 형제어 일괄 추가
     for suffix in matched_suffixes:
         for sib in _COMPOUND_SUFFIXES[suffix]:
             tokens.add(sib)
@@ -190,32 +188,56 @@ class AiKeywordExpander:
         buf = state["stream_buffer"]
         while buf:
             if not await self._ensure_capacity(state, config):
-                # 캠페인/그룹 생성 실패 — 이번 배치는 포기
                 state["register_failed"] += len(buf)
                 buf.clear()
                 return
 
-            # 이 그룹에 넣을 수 있는 최대 개수
             room = config.keywords_per_ad_group - state["keywords_in_current_group"]
             take = min(len(buf), room, MAX_KEYWORDS_PER_POST)
-            batch = buf[:take]
+            raw_batch = buf[:take]
+
+            # 키워드 사전 검증 — 네이버 제약: 길이 1~35, 공백 단독 불가
+            valid_batch: List[str] = []
+            for kw in raw_batch:
+                k = (kw or "").strip()
+                if not k or len(k) > 35 or len(k.replace(" ", "")) < 1:
+                    state["register_failed"] += 1
+                    state["skipped_invalid"] = state.get("skipped_invalid", 0) + 1
+                    continue
+                valid_batch.append(k)
+
+            del buf[:take]
+
+            if not valid_batch:
+                continue
+
             payload = [
                 {"nccAdgroupId": state["current_ad_group_id"],
                  "keyword": kw, "bidAmt": config.bid, "useGroupBidAmt": False}
-                for kw in batch
+                for kw in valid_batch
             ]
             try:
                 resp = await self.api.create_keywords(payload)
                 added = len(resp) if isinstance(resp, list) else 0
                 state["registered"] += added
-                state["register_failed"] += len(batch) - added
-                state["keywords_in_current_group"] += len(batch)
+                state["register_failed"] += len(valid_batch) - added
+                state["keywords_in_current_group"] += added  # 실제 등록된 것만 카운트
+                if added > 0 and "last_error" in state:
+                    state.pop("last_error", None)  # 성공하면 이전 에러 지움
             except Exception as e:
-                logger.error(f"[AiExpand {config.job_id}] 키워드 등록 실패: {e}")
-                state["register_failed"] += len(batch)
-                state["keywords_in_current_group"] += len(batch)  # 시도한 건 센다
+                err_msg = str(e)[:500]
+                state["last_error"] = err_msg
+                state["consecutive_failures"] = state.get("consecutive_failures", 0) + 1
+                logger.error(f"[AiExpand {config.job_id}] 키워드 등록 실패: {err_msg}")
+                state["register_failed"] += len(valid_batch)
+                # ⚠️ keywords_in_current_group 증가 안 시킴 — 아무것도 안 들어갔으니까.
+                # 연속 실패 5회면 그룹 교체 (같은 그룹 계속 때려도 성공 못 함).
+                if state["consecutive_failures"] >= 5:
+                    state["keywords_in_current_group"] = config.keywords_per_ad_group
+                    state["consecutive_failures"] = 0
+            else:
+                state["consecutive_failures"] = 0
 
-            del buf[:take]
             await asyncio.sleep(REGISTER_API_DELAY)
 
     async def run(self, config: AiExpandConfig) -> dict:
@@ -420,9 +442,14 @@ class AiKeywordExpander:
             final_stream_note = (
                 f", 네이버 등록 {stream_state['registered']}개 "
                 f"(캠페인 {stream_state['campaigns_used']}, 그룹 {stream_state['ad_groups_used']}"
-                f"{', 실패 ' + str(stream_state['register_failed']) if stream_state['register_failed'] else ''})"
+                f"{', 실패 ' + str(stream_state['register_failed']) if stream_state['register_failed'] else ''}"
+                f"{', 형식오류 ' + str(stream_state.get('skipped_invalid', 0)) if stream_state.get('skipped_invalid') else ''})"
                 if stream_enabled else ""
             )
+            # 등록 에러 있으면 사용자에게 보이게
+            err_note = ""
+            if stream_enabled and stream_state.get("last_error"):
+                err_note = f" · 네이버 에러: {stream_state['last_error'][:200]}"
             update_volume_filter_job(
                 job_id, status="completed",
                 processed_count=api_calls,
@@ -430,8 +457,9 @@ class AiKeywordExpander:
                 completed_at=datetime.now().isoformat(),
                 current_step=(
                     f"완료: 씨앗 {len(seeds)}개 → {kept_count}개 키워드 확보 "
-                    f"(API {api_calls}회, 검색량 ≥ {config.min_volume}){final_stream_note}"
+                    f"(API {api_calls}회, 검색량 ≥ {config.min_volume}){final_stream_note}{err_note}"
                 ),
+                error_message=stream_state.get("last_error") if stream_enabled else None,
             )
             logger.info(f"[AiExpand {job_id}] 완료: {kept_count}개 (api {api_calls}회, 등록 {stream_state['registered']}개)")
             return {
