@@ -24,6 +24,7 @@ API_DELAY = 0.35  # 네이버 /keywordstool rate limit
 DB_FLUSH_BATCH = 200
 CONTROL_CHECK_EVERY = 10  # API 호출 10회마다 취소 체크
 # 실시간 캠페인 등록 관련
+MAX_CAMPAIGNS_PER_ACCOUNT = 200     # 네이버 계정당 파워링크 캠페인 한도
 MAX_AD_GROUPS_PER_CAMPAIGN = 1000   # 네이버 제한
 MAX_KEYWORDS_PER_AD_GROUP = 1000    # 네이버 제한
 MAX_KEYWORDS_PER_POST = 100         # /ncc/keywords 한 번 호출 최대
@@ -142,6 +143,14 @@ class AiKeywordExpander:
             or state["ad_groups_in_current_campaign"] >= MAX_AD_GROUPS_PER_CAMPAIGN
         )
         if need_new_campaign:
+            # 계정 한도 체크 — 기존 캠페인 + 이번 실행에서 만든 거
+            if state["campaigns_used"] >= MAX_CAMPAIGNS_PER_ACCOUNT:
+                state["last_error"] = (
+                    f"계정당 캠페인 {MAX_CAMPAIGNS_PER_ACCOUNT}개 한도 도달. "
+                    "기존 캠페인을 정리하거나 다른 계정 사용하세요."
+                )
+                logger.error(f"[AiExpand {config.job_id}] {state['last_error']}")
+                return False
             # 시도 번호는 attempted 카운터로 별도 관리, 성공 시에만 campaigns_used 증가
             state["campaign_attempts"] = state.get("campaign_attempts", 0) + 1
             cname = f"{config.campaign_prefix}_{state['campaign_attempts']:03d}"
