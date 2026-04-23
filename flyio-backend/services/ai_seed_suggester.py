@@ -119,8 +119,10 @@ async def suggest_keyword_setup(topic: str, target_count: int = 10000) -> Dict[s
         f"위 조건에 맞는 네이버 키워드 수집 세팅을 제안해주세요."
     )
 
+    # 동적 max_tokens — target_count 기준. 500 씨앗 + 앵커 60 + blacklist 15 ≈ 6000 토큰 여유
+    sug_dyn_max = max(2000, min(6000, int(target_count / 100)))
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=55.0) as client:
             resp = await client.post(
                 OPENAI_URL,
                 headers={
@@ -133,7 +135,7 @@ async def suggest_keyword_setup(topic: str, target_count: int = 10000) -> Dict[s
                         {"role": "system", "content": SYSTEM_PROMPT},
                         {"role": "user", "content": user_prompt},
                     ],
-                    "max_tokens": 8000,
+                    "max_tokens": sug_dyn_max,
                     "temperature": 0.5,
                     "response_format": {"type": "json_object"},
                 },
@@ -240,8 +242,11 @@ async def amplify_seeds(seeds: list, target_count: int) -> Dict[str, Any]:
         "위 패턴으로 {target}개 씨앗 생성해주세요. 원본 씨앗 포함 + 중복 없이.".format(target=target)
     )
 
+    # 동적 max_tokens: 한글 씨앗 1개 ≈ 8~15 토큰 + JSON 오버헤드. 여유 있게 1.5배.
+    # 500 씨앗이면 약 4500 토큰. 8000 박으면 GPT가 더 오래 생각해서 Fly proxy 60s 초과.
+    dyn_max = max(1500, min(6000, int(target * 12)))
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=55.0) as client:
             resp = await client.post(
                 OPENAI_URL,
                 headers={
@@ -254,7 +259,7 @@ async def amplify_seeds(seeds: list, target_count: int) -> Dict[str, Any]:
                         {"role": "system", "content": AMPLIFY_SYSTEM_PROMPT},
                         {"role": "user", "content": user_prompt},
                     ],
-                    "max_tokens": 8000,
+                    "max_tokens": dyn_max,
                     "temperature": 0.4,
                     "response_format": {"type": "json_object"},
                 },

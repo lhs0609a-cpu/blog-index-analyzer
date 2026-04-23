@@ -281,7 +281,21 @@ export default function VolumeFilterPage() {
       )
       toast.success(`씨앗 ${res.input_count}→${res.output_count}개로 증폭됨`)
     } catch (e: any) {
-      toast.error(`증폭 실패: ${e?.message || ''}`)
+      const msg = String(e?.message || '')
+      const is502 = msg.includes('502') || msg.toLowerCase().includes('bad gateway')
+      const isTimeout = msg.toLowerCase().includes('timeout') || msg.toLowerCase().includes('abort')
+      if (is502 || isTimeout) {
+        toast.error(
+          `GPT 응답이 너무 오래 걸려요. 목표 씨앗 수를 ${Math.max(50, Math.floor(aiAmplifyTarget / 2))}개로 줄여서 다시 시도하세요.`,
+          { duration: 8000 }
+        )
+        setAiAmplifyNote(
+          `⚠️ 타임아웃/502: GPT 응답이 Fly.io 프록시 한도 초과.\n` +
+          `해결: 목표 씨앗을 100~150개로 낮춰 여러 번 증폭 → 매번 결과 누적`
+        )
+      } else {
+        toast.error(`증폭 실패: ${msg.slice(0, 200)}`)
+      }
     } finally {
       setAiAmplifying(false)
     }
