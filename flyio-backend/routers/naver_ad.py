@@ -849,8 +849,8 @@ async def ai_suggest_seeds(
         raise HTTPException(status_code=400, detail="topic이 비어있습니다")
     if len(topic) > 100:
         raise HTTPException(status_code=400, detail="topic이 너무 깁니다 (최대 100자)")
-    if request.target_count <= 0 or request.target_count > 200000:
-        raise HTTPException(status_code=400, detail="target_count 범위 오류 (1~200000)")
+    if request.target_count <= 0 or request.target_count > 1000000:
+        raise HTTPException(status_code=400, detail="target_count 범위 오류 (1~1000000)")
 
     from services.ai_seed_suggester import suggest_keyword_setup
     result = await suggest_keyword_setup(topic, request.target_count)
@@ -895,14 +895,14 @@ async def start_ai_keyword_expand(
         seeds = [s.strip() for s in request.seeds if s and s.strip()]
         if not seeds:
             raise HTTPException(status_code=400, detail="씨앗 키워드가 비어있습니다")
-        if len(seeds) > 50:
-            raise HTTPException(status_code=400, detail="씨앗은 최대 50개까지 허용됩니다")
+        if len(seeds) > 500:
+            raise HTTPException(status_code=400, detail="씨앗은 최대 500개까지 허용됩니다")
         if request.min_volume < 0 or request.min_volume > 100000:
             raise HTTPException(status_code=400, detail="min_volume 범위 오류")
-        if request.max_total_kept <= 0 or request.max_total_kept > 100000:
-            raise HTTPException(status_code=400, detail="max_total_kept 범위 오류 (1~100000)")
-        if request.max_api_calls <= 0 or request.max_api_calls > 20000:
-            raise HTTPException(status_code=400, detail="max_api_calls 범위 오류 (1~20000)")
+        if request.max_total_kept <= 0 or request.max_total_kept > 1000000:
+            raise HTTPException(status_code=400, detail="max_total_kept 범위 오류 (1~1000000)")
+        if request.max_api_calls <= 0 or request.max_api_calls > 50000:
+            raise HTTPException(status_code=400, detail="max_api_calls 범위 오류 (1~50000)")
         if request.max_depth < 0 or request.max_depth > 5:
             raise HTTPException(status_code=400, detail="max_depth 범위 오류 (0~5)")
         if request.stream_register:

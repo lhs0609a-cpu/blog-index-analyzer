@@ -210,7 +210,7 @@ export default function VolumeFilterPage() {
   const handleAiSuggest = async () => {
     const topic = aiTopic.trim()
     if (!topic) { toast.error('주제를 입력하세요 (예: 대출, 성형외과)'); return }
-    if (aiTargetCount <= 0 || aiTargetCount > 200000) { toast.error('목표 수 1~200000'); return }
+    if (aiTargetCount <= 0 || aiTargetCount > 1000000) { toast.error('목표 수 1~1000000'); return }
 
     setAiSuggesting(true)
     try {
@@ -251,7 +251,7 @@ export default function VolumeFilterPage() {
       .map(s => s.trim())
       .filter(Boolean)
     if (seeds.length === 0) { toast.error('씨앗 키워드를 입력하세요'); return }
-    if (seeds.length > 50) { toast.error('씨앗은 최대 50개'); return }
+    if (seeds.length > 500) { toast.error('씨앗은 최대 500개'); return }
     if (aiMinVolume < 0 || aiMinVolume > 100000) { toast.error('임계치 오류'); return }
     if (aiMaxApiCalls <= 0 || aiMaxApiCalls > 20000) { toast.error('API 호출 상한 오류'); return }
     if (aiMaxKept <= 0 || aiMaxKept > 100000) { toast.error('최대 키워드 수 오류'); return }
@@ -467,7 +467,7 @@ export default function VolumeFilterPage() {
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">목표 키워드 수</label>
                   <input
-                    type="number" min={100} max={200000} step={1000}
+                    type="number" min={100} max={1000000} step={1000}
                     value={aiTargetCount}
                     onChange={(e) => setAiTargetCount(Number(e.target.value) || 10000)}
                     className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
@@ -491,7 +491,7 @@ export default function VolumeFilterPage() {
 
             <div className="mb-3">
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                씨앗 키워드 (줄바꿈 또는 쉼표로 구분, 최대 50개) <span className="text-xs font-normal text-gray-500">— AI 추천 결과를 자유롭게 수정하세요</span>
+                씨앗 키워드 (줄바꿈 또는 쉼표로 구분, 최대 500개) <span className="text-xs font-normal text-gray-500">— AI 추천 결과를 자유롭게 수정하세요. 10만+ 목표면 수백 개 조합 씨앗이 생성됨</span>
               </label>
               <textarea
                 value={aiSeeds}
@@ -563,7 +563,7 @@ export default function VolumeFilterPage() {
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">API 호출 상한</label>
                 <input
-                  type="number" min={1} max={20000} step={100}
+                  type="number" min={1} max={50000} step={100}
                   value={aiMaxApiCalls}
                   onChange={(e) => setAiMaxApiCalls(Number(e.target.value) || 0)}
                   className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
@@ -572,7 +572,7 @@ export default function VolumeFilterPage() {
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">최대 확보 개수</label>
                 <input
-                  type="number" min={1} max={200000} step={500}
+                  type="number" min={1} max={1000000} step={1000}
                   value={aiMaxKept}
                   onChange={(e) => setAiMaxKept(Number(e.target.value) || 0)}
                   className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
