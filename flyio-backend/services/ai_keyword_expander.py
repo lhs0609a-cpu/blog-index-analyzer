@@ -247,23 +247,35 @@ class AiKeywordExpander:
         level_buffer: List[dict] = []  # 이번 레벨 결과 (top_n 선별용)
         current_depth = 0
 
+        def _promote_level_to_queue() -> None:
+            """현재 level_buffer 상위 N개를 다음 depth로 queue에 밀어넣음."""
+            nonlocal current_depth, level_buffer
+            if level_buffer and current_depth < config.max_depth:
+                level_buffer.sort(key=lambda x: x["monthly_total"], reverse=True)
+                for item in level_buffer[:config.top_n_per_level]:
+                    if item["keyword"] not in seen_expanded:
+                        queue.append((item["keyword"], current_depth + 1))
+            level_buffer = []
+            current_depth += 1
+
         try:
-            while queue and api_calls < config.max_api_calls and kept_count < config.max_total_kept:
+            while (queue or level_buffer) and api_calls < config.max_api_calls and kept_count < config.max_total_kept:
+                # 큐가 비어있지만 이번 레벨 결과가 남아있으면 다음 depth로 승격
+                if not queue:
+                    if current_depth >= config.max_depth:
+                        break  # 최대 depth 도달 + 큐 빔 → 종료
+                    _promote_level_to_queue()
+                    if not queue:
+                        break  # 승격해도 큐가 비면 더 확장할 게 없음
+                    logger.info(
+                        f"[AiExpand {job_id}] depth {current_depth}로 승격, queue {len(queue)}개"
+                    )
+
                 kw, depth = queue.pop(0)
                 norm = kw.strip()
                 if not norm or norm in seen_expanded:
                     continue
                 seen_expanded.add(norm)
-
-                # 레벨 전환 시: 이번 레벨 상위 top_n을 다음 레벨 확장 대상으로
-                if depth > current_depth:
-                    if level_buffer and current_depth < config.max_depth:
-                        level_buffer.sort(key=lambda x: x["monthly_total"], reverse=True)
-                        for item in level_buffer[:config.top_n_per_level]:
-                            if item["keyword"] not in seen_expanded:
-                                queue.append((item["keyword"], current_depth + 1))
-                    level_buffer = []
-                    current_depth = depth
 
                 # 취소 체크
                 if api_calls % CONTROL_CHECK_EVERY == 0:
