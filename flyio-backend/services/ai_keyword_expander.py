@@ -53,15 +53,52 @@ class AiExpandConfig:
     stream_batch_size: int = 10         # 몇 개 찰 때마다 등록할지 (작을수록 실시간성 up, 속도 down)
 
 
+_COMPOUND_SUFFIXES: dict = {
+    "대출": ["대출", "자금", "론", "대환", "마통", "마이너스통장"],
+    "자금": ["자금", "대출", "론", "지원금"],
+    "론": ["론", "대출", "자금"],
+    "금융": ["금융", "대출", "자금"],
+    "병원": ["병원", "의원", "클리닉"],
+    "의원": ["의원", "병원", "클리닉"],
+    "수술": ["수술", "시술", "성형"],
+    "성형": ["성형", "수술", "시술"],
+    "시공": ["시공", "공사", "인테리어", "리모델링"],
+    "인테리어": ["인테리어", "시공", "리모델링"],
+    "리모델링": ["리모델링", "인테리어", "시공"],
+    "매매": ["매매", "거래", "매물"],
+}
+
 def _derive_core_terms(seeds: List[str]) -> List[str]:
-    """씨앗에서 의미 토큰 추출. 공백 분리 + 2자 이상만, 중복 제거."""
+    """씨앗에서 의미 토큰 추출.
+    - 원문 씨앗 포함
+    - 공백 분리 토큰(2자+) 포함
+    - 한글 복합어 접미사 분해 (의사대출 → 의사 + 대출)
+    - 같은 계열 형제어 추가 (대출 씨앗 → 자금/론/대환 앵커 자동 추가)
+    """
     tokens: Set[str] = set()
+    matched_suffixes: Set[str] = set()
     for s in seeds:
-        tokens.add(s.strip())
+        s = s.strip()
+        if not s:
+            continue
+        tokens.add(s)
         for w in s.split():
             w = w.strip()
             if len(w) >= 2:
                 tokens.add(w)
+        # 복합어 접미사 분해: 가장 긴 접미사 우선
+        s_nospace = s.replace(" ", "")
+        for suffix in sorted(_COMPOUND_SUFFIXES.keys(), key=len, reverse=True):
+            if s_nospace.endswith(suffix) and len(s_nospace) > len(suffix):
+                prefix = s_nospace[: -len(suffix)]
+                if len(prefix) >= 2:
+                    tokens.add(prefix)
+                    matched_suffixes.add(suffix)
+                break
+    # 매칭된 접미사마다 형제어 일괄 추가
+    for suffix in matched_suffixes:
+        for sib in _COMPOUND_SUFFIXES[suffix]:
+            tokens.add(sib)
     return [t for t in tokens if t]
 
 

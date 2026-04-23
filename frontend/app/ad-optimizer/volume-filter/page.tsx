@@ -94,6 +94,10 @@ export default function VolumeFilterPage() {
   const [aiTargetCount, setAiTargetCount] = useState(100000)
   const [aiSuggesting, setAiSuggesting] = useState(false)
   const [aiSuggestionNote, setAiSuggestionNote] = useState('')
+  // 씨앗 증폭
+  const [aiAmplifyTarget, setAiAmplifyTarget] = useState(100)
+  const [aiAmplifying, setAiAmplifying] = useState(false)
+  const [aiAmplifyNote, setAiAmplifyNote] = useState('')
   // 실시간 캠페인 등록 옵션
   const [aiStreamRegister, setAiStreamRegister] = useState(false)
   const [aiCampaignPrefix, setAiCampaignPrefix] = useState(
@@ -245,6 +249,44 @@ export default function VolumeFilterPage() {
     }
   }
 
+  const handleAiAmplify = async () => {
+    const seeds = aiSeeds.split(/[\n,]/).map(s => s.trim()).filter(Boolean)
+    if (seeds.length === 0) { toast.error('씨앗 키워드를 먼저 입력하세요'); return }
+    if (seeds.length > 100) { toast.error('원본 씨앗은 최대 100개'); return }
+    if (aiAmplifyTarget < seeds.length || aiAmplifyTarget > 500) {
+      toast.error(`목표 개수는 ${seeds.length}~500 사이`); return
+    }
+
+    setAiAmplifying(true)
+    try {
+      const res = await adPost<{
+        success: boolean
+        seeds: string[]
+        input_count: number
+        output_count: number
+        detected_pattern: string
+        axes: Record<string, string[]>
+      }>('/api/naver-ad/keywords/ai-amplify-seeds', {
+        seeds,
+        target_count: aiAmplifyTarget,
+      })
+      setAiSeeds(res.seeds.join('\n'))
+      const axesStr = Object.entries(res.axes || {})
+        .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.slice(0, 5).join(', ') + (v.length > 5 ? '…' : '') : ''}`)
+        .join('\n')
+      setAiAmplifyNote(
+        `✨ ${res.input_count}개 → ${res.output_count}개 증폭 완료\n` +
+        `📐 패턴: ${res.detected_pattern || '(미감지)'}\n` +
+        (axesStr ? `🔀 축:\n${axesStr}` : '')
+      )
+      toast.success(`씨앗 ${res.input_count}→${res.output_count}개로 증폭됨`)
+    } catch (e: any) {
+      toast.error(`증폭 실패: ${e?.message || ''}`)
+    } finally {
+      setAiAmplifying(false)
+    }
+  }
+
   const handleAiExpand = async () => {
     const seeds = aiSeeds
       .split(/[\n,]/)
@@ -253,8 +295,8 @@ export default function VolumeFilterPage() {
     if (seeds.length === 0) { toast.error('씨앗 키워드를 입력하세요'); return }
     if (seeds.length > 500) { toast.error('씨앗은 최대 500개'); return }
     if (aiMinVolume < 0 || aiMinVolume > 100000) { toast.error('임계치 오류'); return }
-    if (aiMaxApiCalls <= 0 || aiMaxApiCalls > 20000) { toast.error('API 호출 상한 오류'); return }
-    if (aiMaxKept <= 0 || aiMaxKept > 100000) { toast.error('최대 키워드 수 오류'); return }
+    if (aiMaxApiCalls <= 0 || aiMaxApiCalls > 50000) { toast.error('API 호출 상한 오류 (1~50000)'); return }
+    if (aiMaxKept <= 0 || aiMaxKept > 1000000) { toast.error('최대 키워드 수 오류 (1~1000000)'); return }
     if (aiMaxDepth < 0 || aiMaxDepth > 5) { toast.error('depth는 0~5'); return }
 
     const coreTerms = aiCoreTerms.split(/[\n,]/).map(s => s.trim()).filter(Boolean)
@@ -500,6 +542,57 @@ export default function VolumeFilterPage() {
                 rows={4}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"
               />
+              {(() => {
+                const seedCount = aiSeeds.split(/[\n,]/).map(s => s.trim()).filter(Boolean).length
+                const ceiling = seedCount + aiMaxDepth * aiTopNPerLevel  // BFS 자연 상한 (상수 중복 배제 전)
+                const warn = seedCount > 0 && seedCount < 100 && aiMaxKept >= 30000
+                return (
+                  <div className={`mt-1 text-xs ${warn ? 'text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1.5' : 'text-gray-500'}`}>
+                    {warn && '⚠️ '}
+                    씨앗 {seedCount}개 × depth {aiMaxDepth} × 레벨당 {aiTopNPerLevel} → BFS 자연 상한 <b>~{ceiling.toLocaleString()}회 API</b> 호출.
+                    실제 수집 키워드는 그 1.5~2배 수준.
+                    {warn && ` 목표 ${aiMaxKept.toLocaleString()}개에 비해 씨앗이 부족합니다. AI 증폭 또는 씨앗 200개+ 권장.`}
+                  </div>
+                )
+              })()}
+
+              {/* 씨앗 증폭 버튼 */}
+              <div className="mt-3 bg-gradient-to-r from-pink-50 to-purple-50 border border-pink-200 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles className="w-4 h-4 text-pink-600" />
+                  <span className="text-sm font-semibold text-pink-900">
+                    씨앗 AI 증폭 (위에 10개 주면 아래 버튼으로 N개로 펼쳐줌)
+                  </span>
+                </div>
+                <div className="flex gap-2 items-end">
+                  <div className="flex-shrink-0">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">목표 씨앗 수</label>
+                    <input
+                      type="number" min={2} max={500} step={10}
+                      value={aiAmplifyTarget}
+                      onChange={(e) => setAiAmplifyTarget(Number(e.target.value) || 100)}
+                      className="w-24 border border-gray-300 rounded px-2 py-1.5 text-sm"
+                    />
+                  </div>
+                  <button
+                    onClick={handleAiAmplify}
+                    disabled={aiAmplifying}
+                    className="flex-1 bg-pink-600 text-white py-2 rounded font-medium hover:bg-pink-700 disabled:bg-gray-300 flex items-center justify-center gap-2 text-sm"
+                  >
+                    {aiAmplifying ? <><Loader2 className="w-4 h-4 animate-spin" /> 증폭 중...</> :
+                      <><Sparkles className="w-4 h-4" /> 현재 씨앗을 {aiAmplifyTarget}개로 증폭</>}
+                  </button>
+                </div>
+                {aiAmplifyNote && (
+                  <div className="mt-2 p-2 bg-white/70 rounded text-xs text-gray-700 whitespace-pre-line">
+                    {aiAmplifyNote}
+                  </div>
+                )}
+                <p className="text-[11px] text-pink-700 mt-2">
+                  💡 예: "의사대출, 약사대출, 한의사대출" 3개 → "치과의사대출, 수의사대출, 개원자금, 닥터론, 의사마이너스통장…" 등 {aiAmplifyTarget}개로 확장.
+                  원본 씨앗은 반드시 포함됨.
+                </p>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">

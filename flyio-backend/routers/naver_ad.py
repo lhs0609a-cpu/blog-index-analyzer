@@ -860,6 +860,36 @@ async def ai_suggest_seeds(
     return result
 
 
+# ============ 관리자 전용: 씨앗 AI 증폭 ============
+
+class AiAmplifySeedsRequest(BaseModel):
+    seeds: List[str] = Field(..., description="원본 씨앗 (1~100개)")
+    target_count: int = Field(default=50, description="목표 씨앗 수 (입력의 N배, 최대 500)")
+
+
+@router.post("/keywords/ai-amplify-seeds")
+async def ai_amplify_seeds(
+    request: AiAmplifySeedsRequest,
+    admin: dict = Depends(require_admin),
+):
+    """씨앗 N개를 GPT가 패턴 분석해서 target_count개로 펼침.
+    예: 10개 → 50개 (5배). 원본 씨앗은 결과에 반드시 포함.
+    """
+    seeds = [s.strip() for s in request.seeds if s and s.strip()]
+    if not seeds:
+        raise HTTPException(status_code=400, detail="씨앗이 비어있습니다")
+    if len(seeds) > 100:
+        raise HTTPException(status_code=400, detail="원본 씨앗 최대 100개")
+    if request.target_count < len(seeds) or request.target_count > 500:
+        raise HTTPException(status_code=400, detail=f"target_count 범위 오류 ({len(seeds)}~500)")
+
+    from services.ai_seed_suggester import amplify_seeds
+    result = await amplify_seeds(seeds, request.target_count)
+    if not result.get("success"):
+        raise HTTPException(status_code=502, detail=result.get("message", "AI 증폭 실패"))
+    return result
+
+
 # ============ 관리자 전용: AI 키워드 자동 확장 ============
 
 class AiKeywordExpandRequest(BaseModel):
