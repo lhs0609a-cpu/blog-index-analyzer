@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Activity, Users, Target, TrendingUp, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://blog-index-analyzer.fly.dev';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr';
 
 interface Variant {
   weight: number;

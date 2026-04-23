@@ -1,10 +1,12 @@
 // 동적 API URL 관리
-// Fly.io 클라우드 서버 사용 (사용자 설치 불필요)
+// 프로덕션: AWS Lightsail (api.blrank.co.kr). 환경변수로 오버라이드 가능.
 
 const STORAGE_KEY = 'blog_analyzer_api_url';
 
-// Fly.io 프로덕션 서버 URL
-const PRODUCTION_API_URL = 'https://blog-index-analyzer.fly.dev';
+// 프로덕션 API URL — NEXT_PUBLIC_API_URL 우선, 없으면 Lightsail 기본값
+const PRODUCTION_API_URL =
+  (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_API_URL) ||
+  'https://api.blrank.co.kr';
 // 로컬 개발 서버 URL
 const LOCAL_API_URL = 'http://localhost:8000';
 

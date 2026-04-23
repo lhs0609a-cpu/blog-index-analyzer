@@ -29,7 +29,7 @@ function formatCount(n: number): string {
   return String(n)
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://blog-index-analyzer.fly.dev'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
 
 export default function ProfileDetailModal({
   profile,

@@ -14,7 +14,7 @@ import PlatformFilterBar, {
 import SearchResults from '@/components/influencer-discovery/SearchResults'
 import ProfileDetailModal from '@/components/influencer-discovery/ProfileDetailModal'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://blog-index-analyzer.fly.dev'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr'
 
 export default function InfluencerDiscoveryPage() {
   const { user, isAuthenticated } = useAuthStore()

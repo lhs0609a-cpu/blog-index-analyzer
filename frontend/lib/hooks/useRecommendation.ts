@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://blog-index-analyzer.fly.dev';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr';
 
 interface KeywordRecommendation {
   keyword: string;
