@@ -3,10 +3,19 @@
 
 const STORAGE_KEY = 'blog_analyzer_api_url';
 
+// URL에 프로토콜이 빠져있으면 https:// 자동 추가 (Vercel env 설정 실수 방어)
+function normalizeUrl(url: string): string {
+  if (!url) return url;
+  const trimmed = url.trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
 // 프로덕션 API URL — NEXT_PUBLIC_API_URL 우선, 없으면 Fly.io 기본값
-const PRODUCTION_API_URL =
+const PRODUCTION_API_URL = normalizeUrl(
   (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_API_URL) ||
-  'https://blog-index-analyzer.fly.dev';
+  'https://blog-index-analyzer.fly.dev'
+);
 // 로컬 개발 서버 URL
 const LOCAL_API_URL = 'http://localhost:8000';
 
