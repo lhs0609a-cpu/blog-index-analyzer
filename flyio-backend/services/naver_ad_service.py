@@ -185,8 +185,11 @@ class NaverAdApiClient:
         """광고그룹 상세 조회"""
         return await self._request("GET", f"/ncc/adgroups/{ad_group_id}")
 
-    async def create_ad_group(self, campaign_id: str, name: str, bid_amt: int = 70) -> dict:
-        """광고그룹 생성"""
+    async def create_ad_group(self, campaign_id: str, name: str, bid_amt: int = 70,
+                              business_channel_id: str = None,
+                              pc_channel_id: str = None,
+                              mobile_channel_id: str = None) -> dict:
+        """광고그룹 생성. 파워링크는 businessChannelId 필수."""
         data = {
             "nccCampaignId": campaign_id,
             "name": name,
@@ -198,7 +201,17 @@ class NaverAdApiClient:
             "dailyBudget": 0,
             "useDailyBudget": False
         }
+        if business_channel_id:
+            data["businessChannelId"] = business_channel_id
+        if pc_channel_id:
+            data["pcChannelId"] = pc_channel_id
+        if mobile_channel_id:
+            data["mobileChannelId"] = mobile_channel_id
         return await self._request("POST", "/ncc/adgroups", data)
+
+    async def list_business_channels(self) -> List[dict]:
+        """비즈채널 목록. 파워링크 광고그룹에 연결할 사이트(WEB_SITE) ID 조회용."""
+        return await self._request("GET", "/ncc/channels")
 
     # ============ 키워드 관리 ============
 

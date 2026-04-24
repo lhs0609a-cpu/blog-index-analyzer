@@ -183,6 +183,7 @@ class AiKeywordExpander:
                 campaign_id=state["current_campaign_id"],
                 name=gname,
                 bid_amt=config.bid,
+                business_channel_id=state.get("business_channel_id"),
             )
             gid = ag.get("nccAdgroupId")
             if not gid:
@@ -316,8 +317,43 @@ class AiKeywordExpander:
             "ad_groups_used": 0,
             "registered": 0,
             "register_failed": 0,
+            "business_channel_id": None,
         }
         stream_enabled = bool(config.stream_register and config.campaign_prefix)
+
+        # 스트림 등록 전제: 비즈채널(사이트) 등록돼 있어야 광고그룹 생성 가능.
+        # 없으면 모든 키워드 등록이 400 Bad Request → 사전 가드.
+        if stream_enabled:
+            try:
+                channels = await self.api.list_business_channels()
+                web_site = [c for c in channels if c.get("channelTp") == "WEB_SITE" and c.get("status") in ("ELIGIBLE", None)]
+                if not web_site:
+                    # 상태 상관없이 전체에서 WEB_SITE 첫 것 시도
+                    web_site = [c for c in channels if c.get("channelTp") == "WEB_SITE"]
+                if not web_site:
+                    update_volume_filter_job(
+                        job_id, status="failed",
+                        error_message=(
+                            "네이버 광고 계정에 비즈채널(사이트 URL)이 등록돼 있지 않습니다. "
+                            "searchad.naver.com에 로그인해서 도구 > 비즈채널 관리 > 웹사이트 추가한 뒤 재실행하세요."
+                        ),
+                        completed_at=datetime.now().isoformat(),
+                        current_step="비즈채널 미등록",
+                    )
+                    return {"success": False, "error": "no business channel"}
+                stream_state["business_channel_id"] = web_site[0].get("nccBusinessChannelId")
+                logger.info(
+                    f"[AiExpand {job_id}] 비즈채널: {web_site[0].get('name') or web_site[0].get('url')} "
+                    f"({stream_state['business_channel_id']})"
+                )
+            except Exception as e:
+                update_volume_filter_job(
+                    job_id, status="failed",
+                    error_message=f"비즈채널 조회 실패: {str(e)[:500]}",
+                    completed_at=datetime.now().isoformat(),
+                    current_step="비즈채널 조회 실패",
+                )
+                return {"success": False, "error": f"channel lookup: {e}"}
 
         # BFS: [(keyword, depth)]
         queue: List[tuple] = [(s, 0) for s in seeds]

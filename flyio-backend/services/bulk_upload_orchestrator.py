@@ -58,6 +58,31 @@ class BulkUploadOrchestrator:
         )
 
         try:
+            # 0. 비즈채널 조회 — 광고그룹 생성 필수
+            business_channel_id: Optional[str] = None
+            try:
+                channels = await self.api.list_business_channels()
+                web_site = [c for c in channels if c.get("channelTp") == "WEB_SITE"]
+                if not web_site:
+                    update_bulk_upload_job(
+                        job_id, status="failed",
+                        error_message=(
+                            "비즈채널(사이트 URL) 미등록. searchad.naver.com → "
+                            "도구 > 비즈채널 관리 > 웹사이트 추가 후 재실행."
+                        ),
+                        completed_at=datetime.now().isoformat(),
+                    )
+                    return {"success": False, "error": "no business channel"}
+                business_channel_id = web_site[0].get("nccBusinessChannelId")
+                logger.info(f"[Job {job_id}] 비즈채널 확보: {business_channel_id}")
+            except Exception as e:
+                update_bulk_upload_job(
+                    job_id, status="failed",
+                    error_message=f"비즈채널 조회 실패: {str(e)[:500]}",
+                    completed_at=datetime.now().isoformat(),
+                )
+                return {"success": False, "error": f"channel lookup: {e}"}
+
             # 1. 광고그룹 단위로 청크 분할
             per_group = max(1, min(config.keywords_per_group, MAX_KEYWORDS_PER_AD_GROUP))
             ad_group_chunks = [
@@ -126,6 +151,7 @@ class BulkUploadOrchestrator:
                         campaign_id=campaign_id,
                         name=ad_group_name,
                         bid_amt=config.bid,
+                        business_channel_id=business_channel_id,
                     )
                     ad_group_id = ag.get("nccAdgroupId")
                     if not ad_group_id:
