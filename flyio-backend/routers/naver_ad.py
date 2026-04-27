@@ -2681,7 +2681,7 @@ async def import_ad_templates_from_naver(
             if sample_ad is None and isinstance(a, dict):
                 sample_ad = a
             try:
-                # 'ad' 필드가 dict / JSON 문자열 / 누락 모든 케이스 대응
+                ad_type = (a or {}).get("type") or ""
                 raw_ad = (a or {}).get("ad")
                 if isinstance(raw_ad, str):
                     try:
@@ -2691,31 +2691,38 @@ async def import_ad_templates_from_naver(
                 elif isinstance(raw_ad, dict):
                     ad = raw_ad
                 else:
-                    # ad 필드 자체가 없는 경우 — ad 본체가 a 자체에 평면적으로 들어있는 케이스
                     ad = a if isinstance(a, dict) else {}
 
                 pc = ad.get("pc") if isinstance(ad.get("pc"), dict) else {}
                 mo = ad.get("mobile") if isinstance(ad.get("mobile"), dict) else {}
 
-                # === 헤드라인 / 설명 (TEXT_45 단일 / RSP_AD 복수 모두 대응) ===
-                headline_pc = _first_str(
-                    pc.get("headline"), pc.get("title"),
-                    ad.get("headline"), ad.get("title"),
-                    ad.get("headlines"),  # RSP_AD 배열
-                    pc.get("headlines"),
-                    (a or {}).get("headline"),
-                )
-                description_pc = _first_str(
-                    pc.get("description"), pc.get("desc"),
-                    ad.get("description"), ad.get("desc"),
-                    ad.get("descriptions"),  # RSP_AD 배열
-                    pc.get("descriptions"),
-                    (a or {}).get("description"),
-                )
+                # ─── RSA_AD: assets 배열에서 HEADLINE/DESCRIPTION/URL 분리 ───
+                # 새 시스템(RSA_AD)은 assets 배열 사용. 각 asset에 linkType과 assetData.text.
+                headlines: List[str] = []
+                descriptions: List[str] = []
+                if ad_type == "RSA_AD" or (a or {}).get("assets"):
+                    assets = (a or {}).get("assets") or ad.get("assets") or []
+                    if isinstance(assets, list):
+                        for asset in assets:
+                            if not isinstance(asset, dict):
+                                continue
+                            link_type = asset.get("linkType") or ""
+                            asset_data = asset.get("assetData") or {}
+                            text_v = asset_data.get("text") if isinstance(asset_data, dict) else None
+                            if not text_v or not isinstance(text_v, str):
+                                continue
+                            text_v = text_v.strip()
+                            if not text_v:
+                                continue
+                            if link_type == "HEADLINE":
+                                headlines.append(text_v)
+                            elif link_type == "DESCRIPTION":
+                                descriptions.append(text_v)
+
+                # ─── URLs (RSA_AD 기준: pc.display, pc.final / 레거시 폴백 포함) ───
                 display_url = _first_str(
+                    pc.get("display"), pc.get("displayUrl"), pc.get("display_url"),
                     ad.get("displayUrl"), ad.get("display_url"),
-                    pc.get("displayUrl"),
-                    ad.get("pcDisplayUrl"),
                     (a or {}).get("displayUrl"),
                 )
                 final_url_pc = _first_str(
@@ -2728,7 +2735,25 @@ async def import_ad_templates_from_naver(
                     ad.get("finalMobileUrl"),
                 ) or final_url_pc
 
-                # display_url이 비어도 final_url_pc 도메인 추출해 폴백 (네이버는 display 필드 누락 흔함)
+                # 레거시 TEXT_45: 단일 headline/description 폴백
+                if not headlines:
+                    legacy_h = _first_str(
+                        pc.get("headline"), pc.get("title"),
+                        ad.get("headline"), ad.get("title"),
+                        ad.get("headlines"), pc.get("headlines"),
+                    )
+                    if legacy_h:
+                        headlines = [legacy_h]
+                if not descriptions:
+                    legacy_d = _first_str(
+                        pc.get("description"), pc.get("desc"),
+                        ad.get("description"), ad.get("desc"),
+                        ad.get("descriptions"), pc.get("descriptions"),
+                    )
+                    if legacy_d:
+                        descriptions = [legacy_d]
+
+                # display_url이 비면 final_url_pc 도메인으로 폴백
                 if not display_url and final_url_pc:
                     try:
                         from urllib.parse import urlparse
@@ -2737,48 +2762,49 @@ async def import_ad_templates_from_naver(
                             display_url = f"{u.scheme or 'https'}://{u.netloc}"
                     except Exception:
                         pass
-
-                headline_mobile_v = _first_str(
-                    mo.get("headline"), mo.get("title"),
-                    ad.get("headlines"),
-                ) or None
-                description_mobile_v = _first_str(
-                    mo.get("description"), mo.get("desc"),
-                    ad.get("descriptions"),
-                ) or None
+                if not display_url:
+                    display_url = final_url_pc
 
                 if sample_field_check is None:
                     sample_field_check = {
-                        "ad_type": (a or {}).get("type"),
-                        "headline_pc": headline_pc[:30] if headline_pc else "",
-                        "description_pc": description_pc[:30] if description_pc else "",
+                        "ad_type": ad_type,
+                        "headlines_count": len(headlines),
+                        "descriptions_count": len(descriptions),
+                        "headlines_sample": headlines[:3],
+                        "descriptions_sample": [d[:30] for d in descriptions[:2]],
                         "display_url": display_url,
                         "final_url_pc": final_url_pc,
                         "ad_top_keys": list((a or {}).keys()) if isinstance(a, dict) else [],
                         "ad_inner_keys": list(ad.keys()) if isinstance(ad, dict) else [],
                         "pc_keys": list(pc.keys()) if isinstance(pc, dict) else [],
                     }
-                if not (headline_pc and description_pc and final_url_pc):
-                    # display_url 없어도 위에서 도메인 폴백했으니 여기 도달하면 진짜 누락
+
+                if not (headlines and descriptions and final_url_pc):
                     ads_missing_field += 1
                     continue
-                if not display_url:
-                    # 폴백 실패: 그래도 final URL은 있으니 final로 대체
-                    display_url = final_url_pc
-                res = db.get_or_create_template(
-                    user_id, customer_id,
-                    headline_pc=headline_pc[:15],  # 네이버 PC 헤드라인 15자 한도
-                    description_pc=description_pc[:45],  # 45자 한도
-                    display_url=display_url,
-                    final_url_pc=final_url_pc,
-                    headline_mobile=(headline_mobile_v[:15] if headline_mobile_v else None),
-                    description_mobile=(description_mobile_v[:45] if description_mobile_v else None),
-                    final_url_mobile=final_url_mobile or None,
-                )
-                if res.get("created"):
-                    tpl_imported += 1
-                else:
-                    tpl_skipped += 1
+
+                # RSA_AD: 헤드라인 × 설명 페어를 N=min(len(h), len(d)) 만큼 생성
+                # (cross-product는 너무 많아짐 — 인덱스 매칭이 자연스러움)
+                # headlines가 더 많으면 description을 라운드로빈
+                pair_n = max(len(headlines), len(descriptions))
+                pair_n = min(pair_n, 10)  # 광고당 최대 10개 템플릿
+                for i in range(pair_n):
+                    h = headlines[i % len(headlines)]
+                    d = descriptions[i % len(descriptions)]
+                    res = db.get_or_create_template(
+                        user_id, customer_id,
+                        headline_pc=h[:15],
+                        description_pc=d[:45],
+                        display_url=display_url,
+                        final_url_pc=final_url_pc,
+                        headline_mobile=h[:15],
+                        description_mobile=d[:45],
+                        final_url_mobile=final_url_mobile or final_url_pc,
+                    )
+                    if res.get("created"):
+                        tpl_imported += 1
+                    else:
+                        tpl_skipped += 1
             except Exception as e:
                 errors.append(f"ad-parse: {str(e)[:120]}")
 
