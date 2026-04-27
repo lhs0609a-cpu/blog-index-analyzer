@@ -147,30 +147,55 @@ class BulkUploadOrchestrator:
                 current_step=f"캠페인 {num_campaigns}개 / 광고그룹 {num_ad_groups}개 생성 예정",
             )
 
-            # 3. 캠페인 생성
+            # 3. 캠페인 생성 — 이름 중복 시 timestamp suffix로 자동 재시도
+            import time as _time
+            run_suffix = str(int(_time.time()))[-6:]  # 6자리 epoch suffix (실행마다 다름)
             created_campaigns: List[str] = []
             for c_idx in range(num_campaigns):
-                campaign_name = f"{config.campaign_prefix}_{c_idx + 1:03d}"
-                try:
-                    campaign = await self.api.create_campaign(
-                        name=campaign_name,
-                        daily_budget=config.daily_budget,
-                        campaign_tp=config.campaign_tp,
-                    )
-                    campaign_id = campaign.get("nccCampaignId")
-                    if not campaign_id:
-                        raise ValueError(f"캠페인 ID 없음: {campaign}")
+                base_name = f"{config.campaign_prefix}_{c_idx + 1:03d}"
+                campaign_name = base_name
+                campaign_id: Optional[str] = None
+                last_err: Optional[Exception] = None
+
+                # 최대 3회: 첫 시도 + 충돌 시 suffix 2회
+                for attempt in range(3):
+                    try:
+                        campaign = await self.api.create_campaign(
+                            name=campaign_name,
+                            daily_budget=config.daily_budget,
+                            campaign_tp=config.campaign_tp,
+                        )
+                        cid = campaign.get("nccCampaignId")
+                        if not cid:
+                            raise ValueError(f"캠페인 ID 없음: {campaign}")
+                        campaign_id = cid
+                        logger.info(f"[Job {job_id}] 캠페인 생성: {campaign_name} = {cid}")
+                        break
+                    except Exception as e:
+                        last_err = e
+                        # 이름 중복 (code 3506) 시 suffix 추가 후 재시도
+                        if "already in use" in str(e) or "3506" in str(e):
+                            campaign_name = f"{base_name}_{run_suffix}_{attempt}"
+                            logger.warning(
+                                f"[Job {job_id}] 캠페인 이름 중복 → '{campaign_name}'으로 재시도"
+                            )
+                            await asyncio.sleep(API_RATE_LIMIT_DELAY)
+                            continue
+                        else:
+                            break  # 다른 에러는 즉시 중단
+
+                if campaign_id:
                     created_campaigns.append(campaign_id)
-                    logger.info(f"[Job {job_id}] 캠페인 생성: {campaign_name} = {campaign_id}")
-                except Exception as e:
-                    logger.error(f"[Job {job_id}] 캠페인 생성 실패 '{campaign_name}': {e}")
+                else:
+                    err_str = str(last_err) if last_err else "unknown"
+                    logger.error(f"[Job {job_id}] 캠페인 생성 최종 실패 '{base_name}': {err_str}")
                     update_bulk_upload_job(
                         job_id,
                         status="failed",
-                        error_message=f"캠페인 생성 실패: {str(e)[:500]}",
+                        error_message=f"캠페인 생성 실패: {err_str[:500]}",
                         completed_at=datetime.now().isoformat(),
                     )
-                    return {"success": False, "error": str(e)}
+                    return {"success": False, "error": err_str}
 
                 await asyncio.sleep(API_RATE_LIMIT_DELAY)
 

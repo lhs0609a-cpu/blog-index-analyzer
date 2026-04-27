@@ -153,25 +153,48 @@ class AiKeywordExpander:
                 return False
             # 시도 번호는 attempted 카운터로 별도 관리, 성공 시에만 campaigns_used 증가
             state["campaign_attempts"] = state.get("campaign_attempts", 0) + 1
-            cname = f"{config.campaign_prefix}_{state['campaign_attempts']:03d}"
-            try:
-                camp = await self.api.create_campaign(
-                    name=cname,
-                    daily_budget=config.daily_budget,
-                    campaign_tp=config.campaign_tp,
-                )
-                cid = camp.get("nccCampaignId")
-                if not cid:
-                    raise ValueError(f"캠페인 ID 없음: {camp}")
+            base_cname = f"{config.campaign_prefix}_{state['campaign_attempts']:03d}"
+            cname = base_cname
+
+            # 이름 중복(code 3506) 시 timestamp suffix로 자동 재시도 (최대 3회)
+            import time as _time
+            run_suffix = str(int(_time.time()))[-6:]
+            cid: Optional[str] = None
+            last_err: Optional[Exception] = None
+            for attempt in range(3):
+                try:
+                    camp = await self.api.create_campaign(
+                        name=cname,
+                        daily_budget=config.daily_budget,
+                        campaign_tp=config.campaign_tp,
+                    )
+                    new_cid = camp.get("nccCampaignId")
+                    if not new_cid:
+                        raise ValueError(f"캠페인 ID 없음: {camp}")
+                    cid = new_cid
+                    logger.info(f"[AiExpand {config.job_id}] 캠페인 생성 ✓: {cname} ({cid})")
+                    break
+                except Exception as e:
+                    last_err = e
+                    if "already in use" in str(e) or "3506" in str(e):
+                        cname = f"{base_cname}_{run_suffix}_{attempt}"
+                        logger.warning(
+                            f"[AiExpand {config.job_id}] 캠페인 이름 중복 → '{cname}'으로 재시도"
+                        )
+                        await asyncio.sleep(REGISTER_API_DELAY)
+                        continue
+                    else:
+                        break
+
+            if cid:
                 state["current_campaign_id"] = cid
                 state["ad_groups_in_current_campaign"] = 0
                 state["campaigns_used"] += 1  # 성공 확정 후 증가
-                logger.info(f"[AiExpand {config.job_id}] 캠페인 생성 ✓: {cname} ({cid})")
                 await asyncio.sleep(REGISTER_API_DELAY)
-            except Exception as e:
-                err = str(e)[:500]
+            else:
+                err = str(last_err)[:500] if last_err else "unknown"
                 state["last_error"] = f"캠페인 생성 실패: {err}"
-                logger.error(f"[AiExpand {config.job_id}] 캠페인 생성 실패 '{cname}': {err}")
+                logger.error(f"[AiExpand {config.job_id}] 캠페인 생성 실패 '{base_cname}': {err}")
                 state["register_failed"] += 1
                 return False
 
