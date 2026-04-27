@@ -133,14 +133,18 @@ export default function AdTemplatesPage() {
     const t = toast.loading('네이버에서 소재 가져오는 중... (광고그룹 수에 따라 1~2분 소요)')
     try {
       const res = await adPost<any>('/api/naver-ad/ad-templates/import', {}, { timeout: 180000 })
-      console.log('[ad-templates] import 응답', res)
+      console.log('[ad-templates] import 응답 전체', res)
+      console.log('[ad-templates] sample_ad_raw:', res?.sample_ad_raw)
+      console.log('[ad-templates] sample_field_check:', res?.sample_field_check)
+      console.log('[ad-templates] sample_ext_raw:', res?.sample_ext_raw)
+      console.log('[ad-templates] errors:', res?.errors)
       toast.dismiss(t)
       const lines = [
         `소재 ${res?.templates_imported ?? 0}개 가져옴 (중복 제외 ${res?.templates_skipped_duplicate ?? 0})`,
         `확장소재 ${res?.extensions_imported ?? 0}개 가져옴 (중복 제외 ${res?.extensions_skipped_duplicate ?? 0})`,
-        `광고그룹 ${res?.ad_groups_scanned ?? 0}개 스캔`,
+        `광고그룹 ${res?.ad_groups_scanned ?? 0}개 / 소재 응답 ${res?.ads_total_seen ?? 0}건 (필드누락 ${res?.ads_missing_field ?? 0}) / 확장 응답 ${res?.exts_total_seen ?? 0}건`,
       ]
-      toast.success(lines.join('\n'), { duration: 6000 })
+      toast.success(lines.join('\n'), { duration: 8000 })
       load()
     } catch (e: any) {
       console.error('[ad-templates] import 실패', e, e?.response)

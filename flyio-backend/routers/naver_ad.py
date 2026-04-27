@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 import logging
 import asyncio
 import io
+import json as _json_lib
 import re
 
 from services.naver_ad_service import (
@@ -2550,7 +2551,13 @@ async def import_ad_templates_from_naver(
     tpl_skipped = 0
     ext_imported = 0
     ext_skipped = 0
+    ads_total_seen = 0
+    ads_missing_field = 0
+    exts_total_seen = 0
     errors: List[str] = []
+    sample_ad: Optional[Dict[str, Any]] = None
+    sample_ext: Optional[Dict[str, Any]] = None
+    sample_field_check: Optional[Dict[str, Any]] = None
 
     for ag in ad_groups:
         ag_id = ag.get("nccAdgroupId") if isinstance(ag, dict) else None
@@ -2567,16 +2574,60 @@ async def import_ad_templates_from_naver(
             ads = []
 
         for a in ads:
+            ads_total_seen += 1
+            if sample_ad is None and isinstance(a, dict):
+                # 첫 ad 원본 구조 1건만 응답에 포함 — 디버깅용
+                sample_ad = a
             try:
-                ad = (a or {}).get("ad") or {}
-                pc = ad.get("pc") or {}
-                mo = ad.get("mobile") or {}
-                headline_pc = (pc.get("headline") or ad.get("headline") or "").strip()
-                description_pc = (pc.get("description") or ad.get("description") or "").strip()
-                display_url = (ad.get("displayUrl") or "").strip()
-                final_url_pc = (pc.get("final") or ad.get("finalUrl") or "").strip()
-                final_url_mobile = (mo.get("final") or ad.get("finalMobileUrl") or final_url_pc).strip()
+                # 'ad' 필드가 dict 가 아니라 JSON 문자열로 오는 경우 대응
+                raw_ad = (a or {}).get("ad")
+                if isinstance(raw_ad, str):
+                    try:
+                        ad = _json_lib.loads(raw_ad)
+                    except Exception:
+                        ad = {}
+                elif isinstance(raw_ad, dict):
+                    ad = raw_ad
+                else:
+                    ad = {}
+                pc = ad.get("pc") if isinstance(ad.get("pc"), dict) else {}
+                mo = ad.get("mobile") if isinstance(ad.get("mobile"), dict) else {}
+                # 다양한 필드명 폴백 (네이버 API 버전별)
+                headline_pc = (
+                    pc.get("headline") or pc.get("title")
+                    or ad.get("headline") or ad.get("title")
+                    or (a or {}).get("headline") or ""
+                ).strip()
+                description_pc = (
+                    pc.get("description") or pc.get("desc")
+                    or ad.get("description") or ad.get("desc")
+                    or (a or {}).get("description") or ""
+                ).strip()
+                display_url = (
+                    ad.get("displayUrl") or ad.get("display_url")
+                    or pc.get("displayUrl")
+                    or (a or {}).get("displayUrl") or ""
+                ).strip()
+                final_url_pc = (
+                    pc.get("final") or pc.get("finalUrl") or pc.get("landingUrl")
+                    or ad.get("finalUrl") or ad.get("landingUrl")
+                    or (a or {}).get("finalUrl") or ""
+                ).strip()
+                final_url_mobile = (
+                    mo.get("final") or mo.get("finalUrl") or mo.get("landingUrl")
+                    or ad.get("finalMobileUrl") or final_url_pc or ""
+                ).strip()
+                if sample_field_check is None:
+                    sample_field_check = {
+                        "headline_pc": bool(headline_pc),
+                        "description_pc": bool(description_pc),
+                        "display_url": bool(display_url),
+                        "final_url_pc": bool(final_url_pc),
+                        "ad_top_keys": list((a or {}).keys()) if isinstance(a, dict) else [],
+                        "ad_inner_keys": list(ad.keys()) if isinstance(ad, dict) else [],
+                    }
                 if not (headline_pc and description_pc and display_url and final_url_pc):
+                    ads_missing_field += 1
                     continue
                 res = db.get_or_create_template(
                     user_id, customer_id,
@@ -2584,8 +2635,8 @@ async def import_ad_templates_from_naver(
                     description_pc=description_pc,
                     display_url=display_url,
                     final_url_pc=final_url_pc,
-                    headline_mobile=(mo.get("headline") or "").strip() or None,
-                    description_mobile=(mo.get("description") or "").strip() or None,
+                    headline_mobile=(mo.get("headline") or mo.get("title") or "").strip() or None,
+                    description_mobile=(mo.get("description") or mo.get("desc") or "").strip() or None,
                     final_url_mobile=final_url_mobile or None,
                 )
                 if res.get("created"):
@@ -2605,11 +2656,17 @@ async def import_ad_templates_from_naver(
             exts = []
 
         for ex in exts:
+            exts_total_seen += 1
+            if sample_ext is None and isinstance(ex, dict):
+                sample_ext = ex
             try:
-                kind = (ex or {}).get("type") or ""
+                kind = (ex or {}).get("type") or (ex or {}).get("kind") or ""
                 if not kind:
                     continue
                 payload = _extract_ext_payload(ex)
+                if not payload:
+                    # payload 추출 실패 시 ex 자체를 payload로
+                    payload = {k: v for k, v in (ex or {}).items() if k not in ("ownerId", "nccAdExtensionId", "createdDate", "editedDate")}
                 if not payload:
                     continue
                 res = db.get_or_create_extension(user_id, customer_id, kind, payload)
@@ -2629,5 +2686,11 @@ async def import_ad_templates_from_naver(
         "templates_skipped_duplicate": tpl_skipped,
         "extensions_imported": ext_imported,
         "extensions_skipped_duplicate": ext_skipped,
+        "ads_total_seen": ads_total_seen,
+        "ads_missing_field": ads_missing_field,
+        "exts_total_seen": exts_total_seen,
+        "sample_ad_raw": sample_ad,
+        "sample_ext_raw": sample_ext,
+        "sample_field_check": sample_field_check,
         "errors": errors[:20],
     }
