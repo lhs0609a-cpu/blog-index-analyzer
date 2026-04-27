@@ -111,3 +111,23 @@ tmp/
 nul
 
 .vercel
+
+# 사업 계획서·개인 문서 (민감)
+docs/*.docx
+docs/*.hwpx
+docs/capture_screenshots.py
+docs/create_business_plan.py
+docs/create_official_business_plan.py
+
+# 자동 생성·대용량 데이터
+flyio-backend/data/backups/
+flyio-backend/data/correlation_archive/
+flyio-backend/data/correlation_report.json
+flyio-backend/data/correlation_validation.csv
+flyio-backend/data/correlation_validation.json
+posts_temp.json
+scoring_audit.py
+screenshots/
+
+# 개인 Claude Code 설정
+.claude/settings.local.json
