@@ -207,12 +207,11 @@ class NaverAdApiClient:
                               pc_channel_id: str = None,
                               mobile_channel_id: str = None,
                               target_tp: str = "WEB_SITE") -> dict:
-        """광고그룹 생성. 파워링크는 businessChannelId 필수.
+        """광고그룹 생성. 파워링크는 pcChannelId + mobileChannelId 필수.
 
-        400 Bad Request 자주 나는 누락 필드:
-        - useKeywordPlus / keywordPlusWeight (파워링크 필수)
-        - targetTp (광고그룹 타입)
-        - bidAmt 최소 70원 미만
+        검증 로그(2026-04-27): payload에 businessChannelId만 보내면 네이버가
+        code 3604 'Invalid Biz Channel number' 반환. 광고그룹 API는
+        pcChannelId / mobileChannelId 둘 다 필요. 같은 비즈채널 ID 사용 가능.
         """
         data = {
             "nccCampaignId": campaign_id,
@@ -229,12 +228,17 @@ class NaverAdApiClient:
             "keywordPlusWeight": 100,
             "targetTp": target_tp,
         }
+        # 광고그룹은 pcChannelId + mobileChannelId 둘 다 필요.
+        # 별도 지정 안 하면 비즈채널 ID로 PC/Mobile 모두 사용.
+        effective_pc = pc_channel_id or business_channel_id
+        effective_mobile = mobile_channel_id or business_channel_id
+        if effective_pc:
+            data["pcChannelId"] = effective_pc
+        if effective_mobile:
+            data["mobileChannelId"] = effective_mobile
+        # businessChannelId는 일부 API 변형에서 추가로 요구할 수 있어 호환성 유지
         if business_channel_id:
             data["businessChannelId"] = business_channel_id
-        if pc_channel_id:
-            data["pcChannelId"] = pc_channel_id
-        if mobile_channel_id:
-            data["mobileChannelId"] = mobile_channel_id
         return await self._request("POST", "/ncc/adgroups", data)
 
     async def list_business_channels(self) -> List[dict]:

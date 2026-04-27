@@ -461,8 +461,18 @@ export default function VolumeFilterPage() {
           )
           const job = res?.job
           setRegisterStatus(job)
+
+          // 진행 중에도 실패가 있으면 raw 로그를 즉시 보여주기 (대기 줄임)
+          if (job && (job.failed_count || 0) > 0) {
+            try {
+              const failures = await adGet<{ failures: any[] }>(
+                `/api/naver-ad/keywords/scale-register/${registerJobId}/failures`
+              )
+              setRegisterFailures(failures?.failures || [])
+            } catch {}
+          }
+
           if (job && ['completed', 'failed', 'cancelled', 'completed_with_errors'].includes(job.status)) {
-            // 실패 상세 가져오기
             try {
               const failures = await adGet<{ failures: any[] }>(
                 `/api/naver-ad/keywords/scale-register/${registerJobId}/failures`
