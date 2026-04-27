@@ -2597,13 +2597,36 @@ async def import_ad_templates_from_naver(
 
     seen_ext_ids: set = set()
 
-    # ── 확장소재: 계정 전체 한 번에 조회 (광고그룹 단위 조회는 네이버가 404 반환) ──
+    # ── 확장소재: 다중 fallback 전략 ──
+    # 1) 계정 전체 (no params) — 가장 깔끔한 케이스
+    # 2) 비어있으면 → 캠페인 ID 모두 돌면서 ?ownerId={cp_id}
+    # 광고그룹 단위는 네이버가 404 반환하므로 시도 안 함
+    all_exts: List[Any] = []
     try:
         all_ext_resp = await client.get_ad_extensions(owner_id=None)
         all_exts = _unwrap_list(all_ext_resp)
     except Exception as e:
         errors.append(f"exts-all: {str(e)[:120]}")
-        all_exts = []
+
+    # 폴백: 계정 전체 0건이면 캠페인 ID 별로 시도
+    if not all_exts:
+        try:
+            cps = await client.get_campaigns()
+            cps_list = _unwrap_list(cps)
+        except Exception as e:
+            errors.append(f"campaigns: {str(e)[:120]}")
+            cps_list = []
+        for cp in cps_list:
+            cid = cp.get("nccCampaignId") if isinstance(cp, dict) else None
+            if not cid:
+                continue
+            try:
+                cp_ext_resp = await client.get_ad_extensions(owner_id=cid)
+                cp_list = _unwrap_list(cp_ext_resp)
+                all_exts.extend(cp_list)
+            except Exception as e:
+                errors.append(f"exts-cp({cid}): {str(e)[:120]}")
+            await asyncio.sleep(0.15)
 
     for ex in all_exts:
         ext_id = (ex or {}).get("nccAdExtensionId") if isinstance(ex, dict) else None

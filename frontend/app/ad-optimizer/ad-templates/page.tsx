@@ -145,6 +145,16 @@ export default function AdTemplatesPage() {
         `광고그룹 ${res?.ad_groups_scanned ?? 0}개 / 소재 응답 ${res?.ads_total_seen ?? 0}건 (필드누락 ${res?.ads_missing_field ?? 0}) / 확장 응답 ${res?.exts_total_seen ?? 0}건`,
       ]
       toast.success(lines.join('\n'), { duration: 8000 })
+
+      // 임포트 실패 시 진단 정보 alert로 즉시 노출
+      if ((res?.templates_imported ?? 0) === 0 && (res?.ads_total_seen ?? 0) > 0) {
+        const sampleStr = JSON.stringify(res?.sample_ad_raw, null, 2).slice(0, 2000)
+        const fieldCheck = JSON.stringify(res?.sample_field_check, null, 2)
+        const diagnosticMsg = `[소재 파싱 실패 진단]\n\nads_total_seen=${res?.ads_total_seen}, ads_missing_field=${res?.ads_missing_field}\n\n=== sample_ad_raw (첫 ad 원본) ===\n${sampleStr}\n\n=== 추출된 필드 결과 ===\n${fieldCheck}\n\n이 내용을 복사해서 알려주세요.`
+        console.warn(diagnosticMsg)
+        // alert로도 노출 — 캡처해서 공유 용이
+        alert(diagnosticMsg)
+      }
       load()
     } catch (e: any) {
       console.error('[ad-templates] import 실패', e, e?.response)
