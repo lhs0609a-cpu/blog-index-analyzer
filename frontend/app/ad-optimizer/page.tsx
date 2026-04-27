@@ -115,21 +115,10 @@ interface EfficiencySummary {
   avg_roas_after: number
 }
 
-interface TrendingKeyword {
-  keyword: string
-  search_volume_current: number
-  search_volume_change_rate: number
-  competition_level: string
-  suggested_bid: number
-  opportunity_score: number
-  trend_score: number
-  recommendation_reason: string
-}
-
 export default function AdOptimizerPage() {
   const { isAuthenticated, user } = useAuthStore()
   const { allowed: hasAccess, isLocked, upgradeHint } = useFeature('adOptimizer')
-  const [activeTab, setActiveTab] = useState<'connect' | 'dashboard' | 'efficiency' | 'trending' | 'keywords' | 'discover' | 'excluded' | 'settings' | 'logs'>('connect')
+  const [activeTab, setActiveTab] = useState<'connect' | 'dashboard' | 'efficiency' | 'discover' | 'excluded' | 'settings' | 'logs'>('connect')
   const [isLoading, setIsLoading] = useState(false)
   const userId = user?.id
 
@@ -145,10 +134,6 @@ export default function AdOptimizerPage() {
   // 효율 추적 상태
   const [efficiency, setEfficiency] = useState<EfficiencySummary | null>(null)
   const [efficiencyHistory, setEfficiencyHistory] = useState<any[]>([])
-
-  // 트렌드 키워드 상태
-  const [trendingKeywords, setTrendingKeywords] = useState<TrendingKeyword[]>([])
-  const [isRefreshingTrending, setIsRefreshingTrending] = useState(false)
 
   // 대시보드 상태
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null)
@@ -523,18 +508,6 @@ export default function AdOptimizerPage() {
     }
   }, [userId])
 
-  // 트렌드 키워드 로드
-  const loadTrendingKeywords = useCallback(async () => {
-    try {
-      const data = await adGet('/api/naver-ad/trending/keywords?limit=20', { userId })
-      if (data) {
-        setTrendingKeywords(data.data || [])
-      }
-    } catch (error) {
-      console.error('Trending keywords load error:', error)
-    }
-  }, [userId])
-
   // 계정 연동 해제
   const disconnectAccount = async () => {
     if (!confirm('정말로 계정 연동을 해제하시겠습니까?')) return
@@ -545,31 +518,6 @@ export default function AdOptimizerPage() {
       setAdAccount(null)
       setConnectForm({ customer_id: '', api_key: '', secret_key: '', name: '' })
       setActiveTab('connect')
-    } catch (error) {
-      // adFetch handles error toasts automatically
-    }
-  }
-
-  // 트렌드 키워드 새로고침
-  const refreshTrendingKeywords = async () => {
-    setIsRefreshingTrending(true)
-    try {
-      await adPost('/api/naver-ad/trending/refresh', undefined, { userId })
-      toast.success('트렌드 키워드가 업데이트되었습니다')
-      loadTrendingKeywords()
-    } catch (error) {
-      // adFetch handles error toasts automatically
-    } finally {
-      setIsRefreshingTrending(false)
-    }
-  }
-
-  // 트렌드 키워드를 캠페인에 추가
-  const addTrendingToCampaign = async (keyword: string) => {
-    try {
-      await adPost('/api/naver-ad/trending/add-to-campaign', { keyword }, { userId })
-      toast.success(`"${keyword}" 키워드가 캠페인에 추가되었습니다`)
-      loadTrendingKeywords()
     } catch (error) {
       // adFetch handles error toasts automatically
     }
@@ -590,8 +538,7 @@ export default function AdOptimizerPage() {
       loadEfficiency()
       loadEfficiencyHistory()
     }
-    if (activeTab === 'trending') loadTrendingKeywords()
-  }, [activeTab, loadExcludedKeywords, loadLogs, loadEfficiency, loadEfficiencyHistory, loadTrendingKeywords])
+  }, [activeTab, loadExcludedKeywords, loadLogs, loadEfficiency, loadEfficiencyHistory])
 
   // 자동 새로고침 (1분마다)
   useEffect(() => {
@@ -825,11 +772,9 @@ export default function AdOptimizerPage() {
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
           {[
             { id: 'connect', label: '계정 연동', icon: Link2 },
+            { id: 'discover', label: '키워드 발굴·자동등록', icon: Sparkles },
             { id: 'dashboard', label: '대시보드', icon: BarChart3 },
             { id: 'efficiency', label: '효율 추적', icon: Wallet },
-            { id: 'trending', label: '트렌드 키워드', icon: Flame },
-            { id: 'keywords', label: '키워드 관리', icon: Search },
-            { id: 'discover', label: '키워드 발굴', icon: Sparkles },
             { id: 'excluded', label: '제외 키워드', icon: XCircle },
             { id: 'settings', label: '설정', icon: Settings },
             { id: 'logs', label: '로그', icon: History }
@@ -1114,115 +1059,6 @@ export default function AdOptimizerPage() {
           </div>
         )}
 
-        {/* 트렌드 키워드 탭 */}
-        {activeTab === 'trending' && (
-          <div className="space-y-6">
-            {/* 헤더 */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-gradient-to-r from-orange-500 to-red-600 rounded-2xl p-6 text-white"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center">
-                    <Flame className="w-8 h-8" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold">트렌드 키워드 추천</h2>
-                    <p className="text-orange-100">검색량이 급상승하는 키워드를 놓치지 마세요</p>
-                  </div>
-                </div>
-                <button
-                  onClick={refreshTrendingKeywords}
-                  disabled={isRefreshingTrending}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl text-sm font-medium transition-colors"
-                >
-                  {isRefreshingTrending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="w-4 h-4" />
-                  )}
-                  새로고침
-                </button>
-              </div>
-            </motion.div>
-
-            {/* 트렌드 키워드 목록 */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-white rounded-2xl p-6 shadow-sm"
-            >
-              {trendingKeywords.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <Flame className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                  <p>트렌드 키워드를 불러오는 중...</p>
-                  <button
-                    onClick={refreshTrendingKeywords}
-                    className="mt-4 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
-                  >
-                    트렌드 키워드 가져오기
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {trendingKeywords.map((kw, idx) => (
-                    <motion.div
-                      key={idx}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: idx * 0.05 }}
-                      className="flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors"
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3">
-                          <span className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 font-bold text-sm">
-                            {idx + 1}
-                          </span>
-                          <div>
-                            <h4 className="font-semibold text-gray-900">{kw.keyword}</h4>
-                            <p className="text-sm text-gray-500">{kw.recommendation_reason}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-6">
-                        <div className="text-right">
-                          <p className="text-sm text-gray-500">검색량</p>
-                          <p className="font-semibold">{formatNumber(kw.search_volume_current)}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm text-gray-500">변화율</p>
-                          <p className={`font-semibold ${kw.search_volume_change_rate >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {kw.search_volume_change_rate >= 0 ? '+' : ''}{(kw.search_volume_change_rate * 100).toFixed(1)}%
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm text-gray-500">기회점수</p>
-                          <p className="font-semibold text-[#0064FF]">{(kw.opportunity_score * 100).toFixed(0)}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm text-gray-500">추천입찰가</p>
-                          <p className="font-semibold">{formatCurrency(kw.suggested_bid)}</p>
-                        </div>
-                        <button
-                          onClick={() => addTrendingToCampaign(kw.keyword)}
-                          className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors"
-                        >
-                          <Plus className="w-4 h-4" />
-                          캠페인 추가
-                        </button>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          </div>
-        )}
-
         {/* 대시보드 탭 */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
@@ -1440,11 +1276,65 @@ export default function AdOptimizerPage() {
         {/* 키워드 발굴 탭 */}
         {activeTab === 'discover' && (
           <div className="space-y-6">
-            {/* 검색량 필터링 (권장) */}
-            <Link
-              href="/ad-optimizer/volume-filter"
-              className="block bg-gradient-to-r from-emerald-500 to-teal-700 rounded-2xl p-6 text-white hover:shadow-xl transition-shadow"
-            >
+            {/* ===== 1순위: 자동 운영 ===== */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-1 bg-rose-100 text-rose-700 text-xs font-bold rounded-full">1순위</span>
+                <h2 className="text-base font-bold text-gray-800">한 번 켜두면 자동으로 굴러가는 핵심 기능</h2>
+              </div>
+
+              {/* HERO: 24h 자동 키워드 풀 */}
+              <Link
+                href="/ad-optimizer/keyword-pool"
+                className="block bg-gradient-to-r from-rose-500 via-pink-600 to-fuchsia-600 rounded-2xl p-6 text-white hover:shadow-2xl hover:scale-[1.01] transition-all shadow-lg shadow-rose-500/30 relative overflow-hidden"
+              >
+                <div className="absolute top-2 right-3 px-2 py-0.5 bg-white/20 rounded-full text-[10px] font-bold tracking-wider">RECOMMENDED</div>
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 bg-white/25 rounded-2xl flex items-center justify-center flex-shrink-0">
+                    <Zap className="w-7 h-7" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-extrabold mb-1">🔥 24시간 자동 키워드 풀</h3>
+                    <p className="text-rose-50 text-sm">
+                      시드 1번 등록 → 매일 새 키워드 자동 발굴·중복 제외·즉시 광고 등록 (계정 한도 10만개까지)
+                    </p>
+                  </div>
+                  <ArrowUpRight className="w-6 h-6" />
+                </div>
+              </Link>
+
+              {/* 소재 가져오기 */}
+              <Link
+                href="/ad-optimizer/ad-templates"
+                className="block bg-gradient-to-r from-amber-500 to-orange-600 rounded-2xl p-5 text-white hover:shadow-xl transition-shadow"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Download className="w-6 h-6" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-bold mb-1">🎨 소재·확장소재 풀 — 기존 광고 가져오기</h3>
+                    <p className="text-amber-50 text-sm">
+                      네이버에 이미 등록된 소재/확장소재를 한 번에 끌어와 라운드로빈 풀로 사용 (자동 등록 시 자동 매칭)
+                    </p>
+                  </div>
+                  <ArrowUpRight className="w-5 h-5" />
+                </div>
+              </Link>
+            </div>
+
+            {/* ===== 2순위: 엑셀로 직접 등록 ===== */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">2순위</span>
+                <h2 className="text-base font-bold text-gray-800">엑셀 가지고 있을 때 — 수동 대량 등록</h2>
+              </div>
+
+              {/* 검색량 필터링 (권장) */}
+              <Link
+                href="/ad-optimizer/volume-filter"
+                className="block bg-gradient-to-r from-emerald-500 to-teal-700 rounded-2xl p-5 text-white hover:shadow-xl transition-shadow"
+              >
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
                   <Filter className="w-6 h-6" />
@@ -1481,7 +1371,7 @@ export default function AdOptimizerPage() {
             {/* 엑셀 단건 일괄 등록 */}
             <Link
               href="/ad-optimizer/keyword-upload"
-              className="block bg-gradient-to-r from-indigo-500 to-blue-600 rounded-2xl p-6 text-white hover:shadow-xl transition-shadow"
+              className="block bg-gradient-to-r from-indigo-500 to-blue-600 rounded-2xl p-5 text-white hover:shadow-xl transition-shadow"
             >
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -1496,6 +1386,14 @@ export default function AdOptimizerPage() {
                 <ArrowUpRight className="w-5 h-5" />
               </div>
             </Link>
+            </div>
+
+            {/* ===== 3순위: 시드로 키워드만 발굴 ===== */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs font-bold rounded-full">3순위</span>
+                <h2 className="text-base font-bold text-gray-800">시드만 있을 때 — AI 키워드 발굴</h2>
+              </div>
 
             {/* 전환 키워드 발굴 안내 */}
             <motion.div
@@ -1605,6 +1503,7 @@ export default function AdOptimizerPage() {
                 </div>
               )}
             </motion.div>
+            </div>
           </div>
         )}
 
