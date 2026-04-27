@@ -206,12 +206,21 @@ class NaverAdApiClient:
                               business_channel_id: str = None,
                               pc_channel_id: str = None,
                               mobile_channel_id: str = None,
-                              target_tp: str = "WEB_SITE") -> dict:
-        """광고그룹 생성. 파워링크는 pcChannelId + mobileChannelId 필수.
+                              adgroup_type: str = "WEB_SITE") -> dict:
+        """광고그룹 생성. 파워링크는 adgroupType + pcChannelId + mobileChannelId 필수.
 
-        검증 로그(2026-04-27): payload에 businessChannelId만 보내면 네이버가
-        code 3604 'Invalid Biz Channel number' 반환. 광고그룹 API는
-        pcChannelId / mobileChannelId 둘 다 필요. 같은 비즈채널 ID 사용 가능.
+        근본 원인 추적 로그 (2026-04-27):
+        - code 3604 'Invalid Biz Channel number': businessChannelId만 보내면 거부 →
+          pcChannelId + mobileChannelId 둘 다 비즈채널 ID로 채워야 함
+        - code 3734 'Invalid type of ad group / 광고그룹 유형이 없습니다':
+          targetTp는 광고그룹 유형 필드가 아님. adgroupType 필드를 별도로 보내야 함
+
+        adgroup_type 가능 값:
+        - WEB_SITE: 파워링크 (기본)
+        - SHOPPING_NO_PRD / SHOPPING_PRD_GROUP: 쇼핑검색
+        - POWER_CONTENTS: 파워컨텐츠
+        - BRAND_SEARCH: 브랜드검색
+        - PLACE: 플레이스
         """
         data = {
             "nccCampaignId": campaign_id,
@@ -226,7 +235,8 @@ class NaverAdApiClient:
             # 파워링크 필수
             "useKeywordPlus": False,
             "keywordPlusWeight": 100,
-            "targetTp": target_tp,
+            # ⭐ 핵심 fix: 광고그룹 유형은 adgroupType 필드. targetTp가 아님.
+            "adgroupType": adgroup_type,
         }
         # 광고그룹은 pcChannelId + mobileChannelId 둘 다 필요.
         # 별도 지정 안 하면 비즈채널 ID로 PC/Mobile 모두 사용.
