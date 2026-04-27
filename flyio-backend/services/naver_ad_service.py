@@ -131,11 +131,25 @@ class NaverAdApiClient:
             else:
                 raise ValueError(f"Unsupported method: {method}")
 
-            response.raise_for_status()
+            if response.status_code >= 400:
+                # 400/422 등은 본문에 진짜 원인이 들어있음. 호출자/사용자가 볼 수 있도록 예외에 포함.
+                body_text = (response.text or "")[:1000]
+                logger.error(
+                    f"Naver Ad API Error {response.status_code} {method} {endpoint}: {body_text}"
+                )
+                # data 일부도 디버깅 위해 (민감정보 제외)
+                if data and method != "GET":
+                    log_data = {k: v for k, v in data.items() if k not in ("customerId",)}
+                    logger.error(f"Request payload: {log_data}")
+                raise httpx.HTTPStatusError(
+                    f"{response.status_code} {method} {endpoint}: {body_text}",
+                    request=response.request,
+                    response=response,
+                )
+
             return response.json() if response.text else {}
 
-        except httpx.HTTPStatusError as e:
-            logger.error(f"API Error: {e.response.status_code} - {e.response.text}")
+        except httpx.HTTPStatusError:
             raise
         except Exception as e:
             logger.error(f"Request Error: {e}")
@@ -188,18 +202,29 @@ class NaverAdApiClient:
     async def create_ad_group(self, campaign_id: str, name: str, bid_amt: int = 70,
                               business_channel_id: str = None,
                               pc_channel_id: str = None,
-                              mobile_channel_id: str = None) -> dict:
-        """광고그룹 생성. 파워링크는 businessChannelId 필수."""
+                              mobile_channel_id: str = None,
+                              target_tp: str = "WEB_SITE") -> dict:
+        """광고그룹 생성. 파워링크는 businessChannelId 필수.
+
+        400 Bad Request 자주 나는 누락 필드:
+        - useKeywordPlus / keywordPlusWeight (파워링크 필수)
+        - targetTp (광고그룹 타입)
+        - bidAmt 최소 70원 미만
+        """
         data = {
             "nccCampaignId": campaign_id,
             "name": name,
-            "bidAmt": bid_amt,
-            "contentsNetworkBidAmt": bid_amt,
+            "bidAmt": max(70, bid_amt),  # 최소 70원
+            "contentsNetworkBidAmt": max(70, bid_amt),
             "useCntsNetworkBidAmt": False,
             "mobileNetworkBidWeight": 100,
             "pcNetworkBidWeight": 100,
             "dailyBudget": 0,
-            "useDailyBudget": False
+            "useDailyBudget": False,
+            # 파워링크 필수
+            "useKeywordPlus": False,
+            "keywordPlusWeight": 100,
+            "targetTp": target_tp,
         }
         if business_channel_id:
             data["businessChannelId"] = business_channel_id

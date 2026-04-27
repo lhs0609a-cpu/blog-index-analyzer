@@ -19,7 +19,8 @@ import {
   Eye,
   GitBranch,
   MessageCircle,
-  Radio
+  Radio,
+  Search
 } from 'lucide-react'
 import { useAuthStore } from '@/lib/stores/auth'
 import UsageIndicator from './UsageIndicator'
@@ -60,22 +61,6 @@ const navItems = [
     description: 'AI가 찾아주는 가성비 광고 타겟팅'
   },
   {
-    label: '평판 모니터링',
-    href: '/reputation-monitor',
-    icon: Eye,
-    badge: 'NEW',
-    badgeColor: 'bg-red-500 text-white',
-    description: '리뷰 감시 + AI 답변'
-  },
-  {
-    label: '퍼널 디자이너',
-    href: '/funnel-designer',
-    icon: GitBranch,
-    badge: 'BETA',
-    badgeColor: 'bg-orange-500 text-white',
-    description: '마케팅 퍼널 설계 & AI 진단'
-  },
-  {
     label: 'Threads',
     href: '/threads',
     icon: MessageCircle,
@@ -90,6 +75,14 @@ const navItems = [
     badge: 'BETA',
     badgeColor: 'bg-gray-800 text-white',
     description: 'AI 트위터/X 자동 포스팅'
+  },
+  {
+    label: '인플루언서',
+    href: '/influencer-discovery',
+    icon: Search,
+    badge: 'NEW',
+    badgeColor: 'bg-pink-500 text-white',
+    description: '멀티플랫폼 인플루언서 발굴'
   },
   {
     label: '대시보드',
