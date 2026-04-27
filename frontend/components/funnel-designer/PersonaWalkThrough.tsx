@@ -102,7 +102,7 @@ export default function PersonaWalkThrough({ funnelId, funnelData }: PersonaWalk
       {/* 페르소나 선택 */}
       <div className="bg-white rounded-xl p-6 shadow-sm">
         <h3 className="font-semibold mb-4 flex items-center gap-2">
-          <Users className="w-5 h-5 text-purple-500" />
+          <Users className="w-5 h-5 text-[#0064FF]" />
           페르소나 선택
         </h3>
         {personaLoadError && Object.keys(personas).length === 0 && (
@@ -117,12 +117,12 @@ export default function PersonaWalkThrough({ funnelId, funnelData }: PersonaWalk
               onClick={() => { setSelectedPersona(persona); setResult(null) }}
               className={`p-3 rounded-lg border-2 text-left transition ${
                 selectedPersona?.id === persona.id
-                  ? 'border-purple-500 bg-purple-50'
+                  ? 'border-[#0064FF] bg-blue-50'
                   : 'border-gray-200 hover:border-gray-300'
               }`}
             >
               <div className="flex items-center gap-2 mb-1">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-indigo-400 flex items-center justify-center text-white text-xs font-bold">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#0064FF] to-[#3182F6] flex items-center justify-center text-white text-xs font-bold">
                   {persona.name.charAt(0)}
                 </div>
                 <div>
@@ -131,7 +131,7 @@ export default function PersonaWalkThrough({ funnelId, funnelData }: PersonaWalk
                 </div>
               </div>
               <p className="text-xs text-gray-500 mt-1">{persona.occupation}</p>
-              <p className="text-xs text-purple-600 mt-1">{persona.spending_habit}</p>
+              <p className="text-xs text-[#0064FF] mt-1">{persona.spending_habit}</p>
             </button>
           ))}
         </div>
@@ -142,7 +142,7 @@ export default function PersonaWalkThrough({ funnelId, funnelData }: PersonaWalk
         <div className="bg-white rounded-xl p-6 shadow-sm">
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-4">
-              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-400 to-indigo-400 flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
+              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#0064FF] to-[#3182F6] flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
                 {selectedPersona.name.charAt(0)}
               </div>
               <div>
@@ -152,7 +152,7 @@ export default function PersonaWalkThrough({ funnelId, funnelData }: PersonaWalk
                 </p>
                 <p className="text-sm text-gray-600 mt-2">{selectedPersona.description}</p>
                 <div className="flex flex-wrap gap-2 mt-3">
-                  <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded text-xs">{selectedPersona.spending_habit}</span>
+                  <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs">{selectedPersona.spending_habit}</span>
                   <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs">{selectedPersona.decision_style}</span>
                   <span className="px-2 py-1 bg-green-50 text-green-700 rounded text-xs">디지털: {selectedPersona.digital_literacy}</span>
                 </div>
@@ -166,7 +166,7 @@ export default function PersonaWalkThrough({ funnelId, funnelData }: PersonaWalk
             <button
               onClick={runSimulation}
               disabled={loading}
-              className="flex items-center gap-2 px-5 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition disabled:opacity-50 font-medium flex-shrink-0"
+              className="flex items-center gap-2 px-5 py-3 bg-[#0064FF] text-white rounded-lg hover:bg-[#0052D4] transition disabled:opacity-50 font-medium flex-shrink-0"
             >
               {loading ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Users className="w-5 h-5" />}
               {loading ? '시뮬레이션 중...' : '시뮬레이션 시작'}
@@ -182,7 +182,7 @@ export default function PersonaWalkThrough({ funnelId, funnelData }: PersonaWalk
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-gradient-to-r from-purple-500 to-indigo-500 rounded-xl p-6 text-white"
+            className="bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-xl p-6 text-white"
           >
             <div className="flex items-center justify-between">
               <div>
@@ -205,7 +205,7 @@ export default function PersonaWalkThrough({ funnelId, funnelData }: PersonaWalk
           {/* 단계별 여정 */}
           <div className="space-y-3">
             <h4 className="font-semibold flex items-center gap-2">
-              <MessageCircle className="w-5 h-5 text-purple-500" />
+              <MessageCircle className="w-5 h-5 text-[#0064FF]" />
               단계별 여정
             </h4>
             {(result.steps || []).map((step, i) => {
@@ -283,7 +283,7 @@ export default function PersonaWalkThrough({ funnelId, funnelData }: PersonaWalk
               <ul className="space-y-2">
                 {result.improvement_suggestions.map((sug, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm">
-                    <span className="text-purple-500 mt-0.5">•</span>
+                    <span className="text-[#0064FF] mt-0.5">•</span>
                     <span className="text-gray-700">{sug}</span>
                   </li>
                 ))}

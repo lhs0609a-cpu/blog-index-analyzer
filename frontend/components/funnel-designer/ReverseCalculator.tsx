@@ -12,13 +12,14 @@ import {
 
 import apiClient from '@/lib/api/client'
 
+// 백엔드 INDUSTRY_PRESETS와 동일하게 유지 (flyio-backend/data/funnel_templates.py)
 const FALLBACK_PRESETS: Record<string, IndustryPreset> = {
-  '병원/의원': { label: '병원/의원', avg_order_value: 500000, traffic_to_consult: 0.03, consult_to_purchase: 0.4, avg_cpc: 2000, description: '피부과, 성형외과, 치과 등' },
-  '학원/교육': { label: '학원/교육', avg_order_value: 300000, traffic_to_consult: 0.05, consult_to_purchase: 0.35, avg_cpc: 1200, description: '학원, 온라인 교육' },
-  '인테리어': { label: '인테리어', avg_order_value: 3000000, traffic_to_consult: 0.02, consult_to_purchase: 0.25, avg_cpc: 1500, description: '인테리어 업체' },
-  '쇼핑몰': { label: '쇼핑몰', avg_order_value: 50000, traffic_to_consult: 0.08, consult_to_purchase: 0.3, avg_cpc: 500, description: '의류, 잡화 등 이커머스' },
-  '맛집/카페': { label: '맛집/카페', avg_order_value: 15000, traffic_to_consult: 0.1, consult_to_purchase: 0.5, avg_cpc: 300, description: '음식점, 카페' },
-  '전문서비스': { label: '전문서비스', avg_order_value: 1000000, traffic_to_consult: 0.03, consult_to_purchase: 0.3, avg_cpc: 1800, description: '법률, 세무, 컨설팅' },
+  '병원/의원': { label: '병원/의원', avg_order_value: 500000, traffic_to_consult: 0.03, consult_to_purchase: 0.40, avg_cpc: 2500, description: '성형외과, 피부과, 치과 등 의료기관' },
+  '이커머스': { label: '이커머스', avg_order_value: 50000, traffic_to_consult: 0.05, consult_to_purchase: 0.30, avg_cpc: 800, description: '온라인 쇼핑몰, 스마트스토어' },
+  '교육/컨설팅': { label: '교육/컨설팅', avg_order_value: 300000, traffic_to_consult: 0.04, consult_to_purchase: 0.25, avg_cpc: 1500, description: '학원, 온라인 강의, 컨설팅 서비스' },
+  '요식업': { label: '요식업', avg_order_value: 30000, traffic_to_consult: 0.08, consult_to_purchase: 0.50, avg_cpc: 500, description: '음식점, 카페, 배달 전문점' },
+  '부동산': { label: '부동산', avg_order_value: 5000000, traffic_to_consult: 0.02, consult_to_purchase: 0.15, avg_cpc: 3000, description: '부동산 중개, 분양, 인테리어' },
+  '뷰티/미용': { label: '뷰티/미용', avg_order_value: 80000, traffic_to_consult: 0.06, consult_to_purchase: 0.35, avg_cpc: 1000, description: '네일샵, 헤어살롱, 에스테틱' },
 }
 
 interface IndustryPreset {
@@ -89,7 +90,7 @@ export default function ReverseCalculator() {
   }, [targetRevenue, avgOrderValue, consultRate, purchaseRate, avgCpc])
 
   const waterfallData = [
-    { name: '목표 매출', value: targetRevenue, color: '#8b5cf6' },
+    { name: '목표 매출', value: targetRevenue, color: '#0064FF' },
     { name: '필요 구매', value: calculation.requiredPurchases, color: '#22c55e' },
     { name: '필요 상담', value: calculation.requiredConsults, color: '#f59e0b' },
     { name: '필요 유입', value: calculation.requiredTraffic, color: '#3b82f6' },
@@ -107,7 +108,7 @@ export default function ReverseCalculator() {
       {/* 업종 선택 */}
       <div className="bg-white rounded-xl p-6 shadow-sm">
         <h3 className="font-semibold mb-4 flex items-center gap-2">
-          <BarChart3 className="w-5 h-5 text-purple-500" />
+          <BarChart3 className="w-5 h-5 text-[#0064FF]" />
           업종 선택
         </h3>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -117,7 +118,7 @@ export default function ReverseCalculator() {
               onClick={() => applyPreset(key)}
               className={`p-3 rounded-lg border-2 text-left transition text-sm ${
                 selectedIndustry === key
-                  ? 'border-purple-500 bg-purple-50'
+                  ? 'border-[#0064FF] bg-blue-50'
                   : 'border-gray-200 hover:border-gray-300'
               }`}
             >
@@ -132,7 +133,7 @@ export default function ReverseCalculator() {
         {/* 입력 패널 */}
         <div className="bg-white rounded-xl p-6 shadow-sm">
           <h3 className="font-semibold mb-4 flex items-center gap-2">
-            <Calculator className="w-5 h-5 text-purple-500" />
+            <Calculator className="w-5 h-5 text-[#0064FF]" />
             역산 입력
           </h3>
           <div className="space-y-5">

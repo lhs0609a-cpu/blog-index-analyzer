@@ -200,7 +200,7 @@ export default function SimulationResults({ stats, nodeCoords, onRestart }: Simu
       <div className="flex justify-center">
         <button
           onClick={onRestart}
-          className="flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition font-medium"
+          className="flex items-center gap-2 px-6 py-3 bg-[#0064FF] text-white rounded-xl hover:bg-[#0052D4] transition font-medium"
         >
           <RotateCcw className="w-5 h-5" />
           다시 시뮬레이션

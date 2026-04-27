@@ -6,8 +6,11 @@ import ReactFlow, {
   Controls,
   MiniMap,
   Connection,
-  Node,
+  NodeChange,
+  EdgeChange,
   MarkerType,
+  applyNodeChanges,
+  applyEdgeChanges,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { nodeTypes } from './FunnelCanvasNodes'
@@ -24,7 +27,7 @@ const defaultEdgeOptions = {
 }
 
 export default function ReactFlowCanvas({ funnelData, onFunnelDataChange }: ReactFlowCanvasProps) {
-  // 노드 데이터 변경 핸들러
+  // 노드 데이터 변경 핸들러 (더블클릭 편집용)
   const handleNodeDataChange = useCallback((nodeId: string, newData: any) => {
     const updatedNodes = funnelData.nodes.map((n: any) =>
       n.id === nodeId ? { ...n, data: { ...n.data, ...newData } } : n
@@ -41,47 +44,36 @@ export default function ReactFlowCanvas({ funnelData, onFunnelDataChange }: Reac
     [funnelData.nodes, handleNodeDataChange]
   )
 
-  const onNodesChange = useCallback((changes: any) => {
-    let updatedNodes = [...(funnelData.nodes || [])]
-    let changed = false
-    for (const change of changes) {
-      if (change.type === 'remove') {
-        updatedNodes = updatedNodes.filter(n => n.id !== change.id)
-        changed = true
-      }
-    }
-    if (changed) {
-      onFunnelDataChange({ nodes: updatedNodes, edges: funnelData.edges })
-    }
+  // React Flow의 모든 노드 변경 처리 (position, dimensions, select, remove 등)
+  const onNodesChange = useCallback((changes: NodeChange[]) => {
+    const currentNodes = funnelData.nodes || []
+    const updatedNodes = applyNodeChanges(changes, currentNodes)
+    onFunnelDataChange({ nodes: updatedNodes, edges: funnelData.edges })
   }, [funnelData, onFunnelDataChange])
 
-  const onEdgesChange = useCallback((changes: any) => {
-    let updatedEdges = [...(funnelData.edges || [])]
-    for (const change of changes) {
-      if (change.type === 'remove') {
-        updatedEdges = updatedEdges.filter(e => e.id !== change.id)
-      }
-    }
+  // React Flow의 모든 엣지 변경 처리
+  const onEdgesChange = useCallback((changes: EdgeChange[]) => {
+    const currentEdges = funnelData.edges || []
+    const updatedEdges = applyEdgeChanges(changes, currentEdges)
     onFunnelDataChange({ nodes: funnelData.nodes, edges: updatedEdges })
   }, [funnelData, onFunnelDataChange])
 
   const onConnect = useCallback((params: Connection) => {
+    // 중복 엣지 방지 (같은 source→target 이미 존재하면 무시)
+    const existing = (funnelData.edges || []).find(
+      (e: any) => e.source === params.source && e.target === params.target
+    )
+    if (existing) return
+
     const newEdge = {
       ...params,
-      id: `e${params.source}-${params.target}`,
+      id: `e${params.source}-${params.target}-${Date.now()}`,
       animated: true,
     }
     onFunnelDataChange({
       nodes: funnelData.nodes,
       edges: [...(funnelData.edges || []), newEdge],
     })
-  }, [funnelData, onFunnelDataChange])
-
-  const onNodeDragStop = useCallback((_event: any, node: Node) => {
-    const updatedNodes = funnelData.nodes.map((n: any) =>
-      n.id === node.id ? { ...n, position: node.position } : n
-    )
-    onFunnelDataChange({ nodes: updatedNodes, edges: funnelData.edges })
   }, [funnelData, onFunnelDataChange])
 
   return (
@@ -91,7 +83,6 @@ export default function ReactFlowCanvas({ funnelData, onFunnelDataChange }: Reac
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onConnect={onConnect}
-      onNodeDragStop={onNodeDragStop}
       nodeTypes={nodeTypes}
       defaultEdgeOptions={defaultEdgeOptions}
       fitView

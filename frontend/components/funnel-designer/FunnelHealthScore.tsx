@@ -29,7 +29,7 @@ interface HealthResult {
 }
 
 const GRADE_COLORS: Record<string, string> = {
-  S: 'text-purple-600',
+  S: 'text-[#0064FF]',
   A: 'text-green-600',
   B: 'text-blue-600',
   C: 'text-amber-600',
@@ -43,7 +43,7 @@ const SEVERITY_STYLES: Record<string, { bg: string; text: string; icon: any }> =
   low: { bg: 'bg-blue-50 border-blue-200', text: 'text-blue-700', icon: CheckCircle },
 }
 
-const CATEGORY_COLORS = ['#8b5cf6', '#3b82f6', '#f59e0b', '#22c55e', '#ef4444']
+const CATEGORY_COLORS = ['#0064FF', '#3b82f6', '#f59e0b', '#22c55e', '#ef4444']
 
 export default function FunnelHealthScore({ funnelId, funnelData }: FunnelHealthScoreProps) {
   const [loading, setLoading] = useState(false)
@@ -91,7 +91,7 @@ export default function FunnelHealthScore({ funnelId, funnelData }: FunnelHealth
     <div className="space-y-6">
       {/* 채점 버튼 */}
       <div className="bg-white rounded-xl p-6 shadow-sm text-center">
-        <ShieldCheck className="w-12 h-12 text-purple-500 mx-auto mb-3" />
+        <ShieldCheck className="w-12 h-12 text-[#0064FF] mx-auto mb-3" />
         <h3 className="text-lg font-semibold mb-2">퍼널 헬스 스코어</h3>
         <p className="text-sm text-gray-500 mb-4">
           5개 카테고리(채널 다양성, 전환 논리, 이탈 방지, 데이터 추적, 비용 효율)로 퍼널을 채점합니다
@@ -99,7 +99,7 @@ export default function FunnelHealthScore({ funnelId, funnelData }: FunnelHealth
         <button
           onClick={runHealthCheck}
           disabled={loading}
-          className="inline-flex items-center gap-2 px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition disabled:opacity-50 font-medium"
+          className="inline-flex items-center gap-2 px-6 py-3 bg-[#0064FF] text-white rounded-lg hover:bg-[#0052D4] transition disabled:opacity-50 font-medium"
         >
           {loading ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Activity className="w-5 h-5" />}
           {loading ? '채점 중...' : '채점하기'}
@@ -156,7 +156,7 @@ export default function FunnelHealthScore({ funnelId, funnelData }: FunnelHealth
               className="bg-white rounded-xl p-6 shadow-sm"
             >
               <h4 className="font-semibold mb-4 flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-purple-500" />
+                <BarChart3 className="w-5 h-5 text-[#0064FF]" />
                 카테고리별 점수
               </h4>
               <div className="space-y-3">

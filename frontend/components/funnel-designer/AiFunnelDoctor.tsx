@@ -95,7 +95,7 @@ export default function AiFunnelDoctor({ funnelId, funnelData }: AiFunnelDoctorP
     <div className="space-y-6">
       {/* 진단 시작 */}
       <div className="bg-white rounded-xl p-6 shadow-sm text-center">
-        <Stethoscope className="w-12 h-12 text-purple-500 mx-auto mb-3" />
+        <Stethoscope className="w-12 h-12 text-[#0064FF] mx-auto mb-3" />
         <h3 className="text-lg font-semibold mb-2">AI 퍼널 닥터</h3>
         <p className="text-sm text-gray-500 mb-4">
           GPT가 퍼널 구조의 논리적 허점을 진단하고 개선안을 제시합니다
@@ -104,7 +104,7 @@ export default function AiFunnelDoctor({ funnelId, funnelData }: AiFunnelDoctorP
           <button
             onClick={runDiagnosis}
             disabled={loading}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition disabled:opacity-50 font-medium"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-[#0064FF] text-white rounded-lg hover:bg-[#0052D4] transition disabled:opacity-50 font-medium"
           >
             {loading ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Stethoscope className="w-5 h-5" />}
             {loading ? '진단 중...' : '진단 시작'}
@@ -160,7 +160,7 @@ export default function AiFunnelDoctor({ funnelId, funnelData }: AiFunnelDoctorP
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-gradient-to-r from-purple-500 to-indigo-500 rounded-xl p-6 text-white"
+            className="bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-xl p-6 text-white"
           >
             <div className="flex items-start gap-3">
               <Lightbulb className="w-6 h-6 mt-0.5 flex-shrink-0" />

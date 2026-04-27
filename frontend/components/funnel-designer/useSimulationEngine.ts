@@ -224,27 +224,38 @@ export function useSimulationEngine(
       }
     }
 
-    // 노드별 통과/이탈 집계
-    for (const p of particles) {
-      if (!nodeStatsMap.has(p.fromNodeId)) {
-        nodeStatsMap.set(p.fromNodeId, { arrived: 0, passed: 0, dropped: 0 })
-      }
-    }
-
-    // 누적 통계 업데이트
+    // 누적 통계 업데이트: 파티클이 어느 노드를 거쳤는지 추적
+    // - arrived: 해당 노드에 도착한 적 있는 파티클 수
+    // - passed: 해당 노드를 통과하고 다음 노드로 이동 중이거나 이미 지나간 파티클
+    // - dropped: 해당 노드에서 이탈한 파티클
     const cumulativeNodeStats = new Map<string, { arrived: number; passed: number; dropped: number }>()
     for (const p of particles) {
+      // fromNodeId = 현재 파티클이 있는(또는 마지막으로 있었던) 노드
       const key = p.fromNodeId
       if (!cumulativeNodeStats.has(key)) {
         cumulativeNodeStats.set(key, { arrived: 0, passed: 0, dropped: 0 })
       }
       const entry = cumulativeNodeStats.get(key)!
       entry.arrived++
-      if (p.state === 'passed' || (p.state === 'moving' && p.fromNodeId !== key)) {
-        entry.passed++
-      }
+
       if (p.state === 'dropped') {
         entry.dropped++
+      } else if (p.state === 'passed') {
+        // passed 상태 = 최종 완료(revenue 도달 or 더 이상 엣지 없음)
+        entry.passed++
+      } else if (p.state === 'moving' && p.toNodeId) {
+        // 다음 노드로 이동 중 = 이 노드를 통과한 것
+        entry.passed++
+      }
+    }
+
+    // 이동 중인 파티클의 출발 노드도 기록 (이미 지나간 노드)
+    for (const p of particles) {
+      if (p.state === 'moving' && p.toNodeId) {
+        const targetKey = p.toNodeId
+        if (!cumulativeNodeStats.has(targetKey)) {
+          cumulativeNodeStats.set(targetKey, { arrived: 0, passed: 0, dropped: 0 })
+        }
       }
     }
 

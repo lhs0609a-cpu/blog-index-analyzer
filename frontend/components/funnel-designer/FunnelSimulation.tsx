@@ -62,11 +62,24 @@ export default function FunnelSimulation({ funnelData }: FunnelSimulationProps) 
   const handleStart = useCallback(() => {
     setPhase('running')
     setPaused(false)
-    engineRef.current.start(
-      { totalParticles, speed },
-      canvasSize.width,
-      canvasSize.height
-    )
+    // running phase로 전환 후 DOM 렌더 대기 → 실제 컨테이너 크기 측정 후 엔진 시작
+    requestAnimationFrame(() => {
+      let w = canvasSize.width
+      let h = canvasSize.height
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect()
+        if (rect.width > 0 && rect.height > 0) {
+          w = rect.width
+          h = Math.max(400, rect.height)
+          setCanvasSize({ width: w, height: h })
+        }
+      }
+      engineRef.current.start(
+        { totalParticles, speed },
+        w,
+        h
+      )
+    })
   }, [totalParticles, speed, canvasSize])
 
   const handlePause = useCallback(() => {
@@ -96,8 +109,8 @@ export default function FunnelSimulation({ funnelData }: FunnelSimulationProps) 
       <div className="max-w-2xl mx-auto">
         <div className="bg-white rounded-xl border p-8">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-100 rounded-full mb-4">
-              <Play className="w-8 h-8 text-purple-600" />
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
+              <Play className="w-8 h-8 text-[#0064FF]" />
             </div>
             <h2 className="text-2xl font-bold text-gray-900">퍼널 시뮬레이션</h2>
             <p className="text-gray-500 mt-2">
@@ -138,8 +151,8 @@ export default function FunnelSimulation({ funnelData }: FunnelSimulationProps) 
                       onClick={() => setTotalParticles(opt)}
                       className={`flex-1 py-3 rounded-lg border text-sm font-medium transition ${
                         totalParticles === opt
-                          ? 'bg-purple-600 text-white border-purple-600'
-                          : 'bg-white text-gray-700 border-gray-200 hover:border-purple-300'
+                          ? 'bg-[#0064FF] text-white border-[#0064FF]'
+                          : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300'
                       }`}
                     >
                       {opt}명
@@ -161,8 +174,8 @@ export default function FunnelSimulation({ funnelData }: FunnelSimulationProps) 
                       onClick={() => setSpeed(opt)}
                       className={`flex-1 py-3 rounded-lg border text-sm font-medium transition ${
                         speed === opt
-                          ? 'bg-purple-600 text-white border-purple-600'
-                          : 'bg-white text-gray-700 border-gray-200 hover:border-purple-300'
+                          ? 'bg-[#0064FF] text-white border-[#0064FF]'
+                          : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300'
                       }`}
                     >
                       {opt}x
@@ -183,7 +196,7 @@ export default function FunnelSimulation({ funnelData }: FunnelSimulationProps) 
               {/* 시작 버튼 */}
               <button
                 onClick={handleStart}
-                className="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-bold text-lg hover:from-purple-700 hover:to-indigo-700 transition flex items-center justify-center gap-2"
+                className="w-full py-4 bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white rounded-xl font-bold text-lg hover:from-[#0052D4] hover:to-[#2970E0] transition flex items-center justify-center gap-2"
               >
                 <Play className="w-6 h-6" />
                 시뮬레이션 시작
@@ -211,7 +224,7 @@ export default function FunnelSimulation({ funnelData }: FunnelSimulationProps) 
           {/* 진행률 바 */}
           <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden mb-4">
             <div
-              className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full transition-all duration-300"
+              className="h-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-full transition-all duration-300"
               style={{ width: `${engine.stats.progress}%` }}
             />
           </div>
@@ -261,7 +274,7 @@ export default function FunnelSimulation({ funnelData }: FunnelSimulationProps) 
                 onClick={() => handleSpeedChange(opt)}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
                   speed === opt
-                    ? 'bg-purple-600 text-white'
+                    ? 'bg-[#0064FF] text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >

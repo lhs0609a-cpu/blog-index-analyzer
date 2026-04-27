@@ -57,12 +57,31 @@ function FunnelNode({ id, data, type }: NodeProps<FunnelNodeData>) {
     : 'text-red-600'
 
   const handleSave = () => {
+    // conversionRate 범위 유효성 검증
+    const clampedRate = Math.max(0, Math.min(100, Number(editRate)))
+    const clampedTraffic = Math.max(0, Number(editTraffic))
     data.onDataChange?.(id, {
       label: editLabel,
-      traffic: Number(editTraffic),
-      conversionRate: Number(editRate),
+      traffic: clampedTraffic,
+      conversionRate: clampedRate,
     })
     setIsEditing(false)
+  }
+
+  const handleCancel = () => {
+    // 취소 시 현재 데이터값으로 리셋
+    setEditLabel(data.label || '')
+    setEditTraffic(String(data.traffic || 0))
+    setEditRate(String(data.conversionRate || 0))
+    setIsEditing(false)
+  }
+
+  const handleStartEdit = () => {
+    // 편집 시작 시 항상 최신 데이터로 초기화
+    setEditLabel(data.label || '')
+    setEditTraffic(String(data.traffic || 0))
+    setEditRate(String(data.conversionRate || 0))
+    setIsEditing(true)
   }
 
   return (
@@ -74,7 +93,7 @@ function FunnelNode({ id, data, type }: NodeProps<FunnelNodeData>) {
       </div>
 
       {/* Body */}
-      <div className="p-3" onDoubleClick={() => setIsEditing(true)}>
+      <div className="p-3" onDoubleClick={handleStartEdit}>
         {isEditing ? (
           <div className="space-y-2">
             <input
@@ -110,7 +129,7 @@ function FunnelNode({ id, data, type }: NodeProps<FunnelNodeData>) {
                 확인
               </button>
               <button
-                onClick={() => setIsEditing(false)}
+                onClick={handleCancel}
                 className="flex-1 px-2 py-1 bg-gray-200 text-gray-700 rounded text-xs hover:bg-gray-300"
               >
                 취소
