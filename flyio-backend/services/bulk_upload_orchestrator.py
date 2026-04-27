@@ -269,7 +269,8 @@ class BulkUploadOrchestrator:
                         for kw in batch
                     ]
                     try:
-                        resp = await self.api.create_keywords(payload)
+                        # 네이버 API는 nccAdgroupId를 URL query에 요구 — ad_group_id 명시 전달
+                        resp = await self.api.create_keywords(payload, ad_group_id=ad_group_id)
                         added_n = len(resp) if isinstance(resp, list) else 0
                         ag_succeeded += added_n
                         # 응답이 일부만 성공일 수 있음 - 차이는 실패로 기록

@@ -284,9 +284,18 @@ class NaverAdApiClient:
         """키워드 상세 조회"""
         return await self._request("GET", f"/ncc/keywords/{keyword_id}")
 
-    async def create_keywords(self, keywords: List[dict]) -> List[dict]:
-        """키워드 대량 추가 (최대 100개)"""
-        return await self._request("POST", "/ncc/keywords", keywords)
+    async def create_keywords(self, keywords: List[dict], ad_group_id: str = None) -> List[dict]:
+        """키워드 대량 추가 (최대 100개).
+
+        근본 원인 (2026-04-27 검증):
+          {"detail":"Parameter conditions \"nccAdgroupId\" not met for actual request parameters"}
+        네이버는 nccAdgroupId를 URL query parameter로 요구. body 안의 nccAdgroupId만으론
+        부족. 호출자가 ad_group_id를 명시하면 URL에 자동 부착.
+        """
+        endpoint = "/ncc/keywords"
+        if ad_group_id:
+            endpoint = f"/ncc/keywords?nccAdgroupId={ad_group_id}"
+        return await self._request("POST", endpoint, keywords)
 
     async def update_keyword(self, keyword_id: str, data: dict) -> dict:
         """키워드 수정 (입찰가 등)"""
@@ -1145,7 +1154,7 @@ class BulkKeywordManager:
             ]
 
             try:
-                response = await self.api.create_keywords(keyword_data)
+                response = await self.api.create_keywords(keyword_data, ad_group_id=ad_group_id)
                 results.extend(response)
                 logger.info(f"Added {len(batch)} keywords to ad group {ad_group_id}")
             except Exception as e:

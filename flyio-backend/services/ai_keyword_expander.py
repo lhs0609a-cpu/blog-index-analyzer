@@ -259,7 +259,8 @@ class AiKeywordExpander:
                 for kw in valid_batch
             ]
             try:
-                resp = await self.api.create_keywords(payload)
+                # 네이버 API는 nccAdgroupId를 URL query에 요구
+                resp = await self.api.create_keywords(payload, ad_group_id=state["current_ad_group_id"])
                 added = len(resp) if isinstance(resp, list) else 0
                 state["registered"] += added
                 state["register_failed"] += len(valid_batch) - added

@@ -2117,13 +2117,13 @@ async def add_trending_to_campaign(
     try:
         optimizer = get_optimizer()
 
-        # 키워드 추가
+        # 키워드 추가 — nccAdgroupId는 URL query에 별도 전달 필요
         result = await optimizer.api.create_keywords([{
             "nccAdgroupId": req.ad_group_id,
             "keyword": req.keyword,
             "bidAmt": req.bid,
             "useGroupBidAmt": False
-        }])
+        }], ad_group_id=req.ad_group_id)
 
         # 상태 업데이트
         update_trending_keyword_status(user_id, req.keyword, "added")
