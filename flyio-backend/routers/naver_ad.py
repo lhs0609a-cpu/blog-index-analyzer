@@ -2353,19 +2353,36 @@ async def keyword_pool_admin_run(
 @router.get("/keyword-pool/stats")
 async def keyword_pool_stats(user_id: int = Depends(get_user_id_with_fallback)):
     """본인 풀/등록 상태."""
-    account = get_ad_account(user_id)
-    if not account:
-        return {"success": False, "message": "광고 계정 미연결", "pool": {}, "registered": {}}
-    customer_id = int(account.get("customer_id"))
-    pool = get_keyword_pool_db()
-    reg = get_registered_keywords_db()
-    return {
-        "success": True,
-        "customer_id": customer_id,
-        "pool": pool.stats(customer_id),
-        "registered": reg.stats(customer_id),
-        "account_cap": 100_000,
-    }
+    try:
+        account = get_ad_account(user_id)
+        if not account:
+            return {"success": False, "message": "광고 계정 미연결", "pool": {}, "registered": {}, "account_cap": 100_000}
+        customer_id = int(account.get("customer_id"))
+        pool = get_keyword_pool_db()
+        reg = get_registered_keywords_db()
+        try:
+            pool_stats = pool.stats(customer_id)
+        except Exception as e:
+            logger.error(f"keyword-pool/stats pool.stats 실패: {e}", exc_info=True)
+            pool_stats = {"error": f"{type(e).__name__}: {str(e)[:200]}"}
+        try:
+            reg_stats = reg.stats(customer_id)
+        except Exception as e:
+            logger.error(f"keyword-pool/stats reg.stats 실패: {e}", exc_info=True)
+            reg_stats = {"error": f"{type(e).__name__}: {str(e)[:200]}"}
+        return {
+            "success": True,
+            "customer_id": customer_id,
+            "pool": pool_stats,
+            "registered": reg_stats,
+            "account_cap": 100_000,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        logger.error(f"keyword-pool/stats 전체 실패: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
 
 
 class PoolSeedsRequest(BaseModel):
@@ -2378,17 +2395,24 @@ async def keyword_pool_add_seeds(
     user_id: int = Depends(get_user_id_with_fallback),
 ):
     """초기 시드 추가 — 자동 수집의 첫 input."""
-    account = get_ad_account(user_id)
-    if not account or not account.get("is_connected"):
-        raise HTTPException(status_code=400, detail="광고 계정 미연결")
-    customer_id = int(account.get("customer_id"))
-    pool = get_keyword_pool_db()
-    items = [
-        {"keyword": s.strip(), "seed": s.strip(), "source": "user_seed", "monthly_total": 0}
-        for s in request.seeds if s and s.strip()
-    ]
-    added = pool.add_candidates(user_id, customer_id, items)
-    return {"success": True, "added": added, "total_input": len(items)}
+    try:
+        account = get_ad_account(user_id)
+        if not account or not account.get("is_connected"):
+            raise HTTPException(status_code=400, detail="광고 계정 미연결")
+        customer_id = int(account.get("customer_id"))
+        pool = get_keyword_pool_db()
+        items = [
+            {"keyword": s.strip(), "seed": s.strip(), "source": "user_seed", "monthly_total": 0}
+            for s in request.seeds if s and s.strip()
+        ]
+        added = pool.add_candidates(user_id, customer_id, items)
+        return {"success": True, "added": added, "total_input": len(items)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        logger.error(f"keyword-pool/seeds 실패: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
 
 
 # ============ P4: 소재 템플릿 CRUD ============
