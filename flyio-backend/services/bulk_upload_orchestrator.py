@@ -62,23 +62,70 @@ class BulkUploadOrchestrator:
             business_channel_id: Optional[str] = None
             try:
                 channels = await self.api.list_business_channels()
+                logger.info(f"[Job {job_id}] 비즈채널 raw 응답 ({len(channels) if channels else 0}개): {channels}")
+
+                # 1차: WEB_SITE channelTp (네이버 표준)
                 web_site = [c for c in channels if c.get("channelTp") == "WEB_SITE"]
+
+                # 2차 fallback: channelTp 변형값 (SITE, WEBSITE 등)
                 if not web_site:
+                    web_site = [
+                        c for c in channels
+                        if str(c.get("channelTp", "")).upper() in ("WEB_SITE", "SITE", "WEBSITE", "WEB")
+                    ]
+
+                # 3차 fallback: URL 필드가 있는 모든 채널
+                if not web_site:
+                    web_site = [
+                        c for c in channels
+                        if any(str(c.get(k, "")).startswith("http") for k in ("siteUrl", "url", "channelKey"))
+                    ]
+
+                # 4차 최후: 첫 번째 사용 가능한 채널 (있으면)
+                if not web_site and channels:
+                    web_site = [channels[0]]
+                    logger.warning(f"[Job {job_id}] 표준 필터 실패, 첫 채널 사용: {channels[0]}")
+
+                if not web_site:
+                    # raw 응답을 error_message에 포함해 사용자가 디버그 가능
+                    raw_preview = str(channels)[:500] if channels else "(empty list)"
                     update_bulk_upload_job(
                         job_id, status="failed",
                         error_message=(
                             "비즈채널(사이트 URL) 미등록. searchad.naver.com → "
-                            "도구 > 비즈채널 관리 > 웹사이트 추가 후 재실행."
+                            "도구 > 비즈채널 관리 > 웹사이트 추가 후 재실행. "
+                            f"[API 응답: {raw_preview}]"
                         ),
                         completed_at=datetime.now().isoformat(),
                     )
                     return {"success": False, "error": "no business channel"}
-                business_channel_id = web_site[0].get("nccBusinessChannelId")
-                logger.info(f"[Job {job_id}] 비즈채널 확보: {business_channel_id}")
+
+                channel = web_site[0]
+                business_channel_id = (
+                    channel.get("nccBusinessChannelId")
+                    or channel.get("businessChannelId")
+                    or channel.get("nccChannelId")
+                    or channel.get("id")
+                )
+                logger.info(
+                    f"[Job {job_id}] 비즈채널 확보: id={business_channel_id} "
+                    f"channelTp={channel.get('channelTp')} keys={list(channel.keys())}"
+                )
+
+                if not business_channel_id:
+                    update_bulk_upload_job(
+                        job_id, status="failed",
+                        error_message=(
+                            f"비즈채널 ID 추출 실패. 응답 필드: {list(channel.keys())}. "
+                            f"raw: {str(channel)[:300]}"
+                        ),
+                        completed_at=datetime.now().isoformat(),
+                    )
+                    return {"success": False, "error": "no business channel id"}
             except Exception as e:
                 update_bulk_upload_job(
                     job_id, status="failed",
-                    error_message=f"비즈채널 조회 실패: {str(e)[:500]}",
+                    error_message=f"비즈채널 조회 실패 [{type(e).__name__}]: {str(e)[:800]}",
                     completed_at=datetime.now().isoformat(),
                 )
                 return {"success": False, "error": f"channel lookup: {e}"}

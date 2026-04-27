@@ -326,30 +326,74 @@ class AiKeywordExpander:
         if stream_enabled:
             try:
                 channels = await self.api.list_business_channels()
-                web_site = [c for c in channels if c.get("channelTp") == "WEB_SITE" and c.get("status") in ("ELIGIBLE", None)]
+                logger.info(f"[AiExpand {job_id}] 비즈채널 raw 응답 ({len(channels) if channels else 0}개): {channels}")
+
+                # 1차: 표준 WEB_SITE + ELIGIBLE
+                web_site = [
+                    c for c in channels
+                    if c.get("channelTp") == "WEB_SITE" and c.get("status") in ("ELIGIBLE", None)
+                ]
+                # 2차: status 무시 WEB_SITE
                 if not web_site:
-                    # 상태 상관없이 전체에서 WEB_SITE 첫 것 시도
                     web_site = [c for c in channels if c.get("channelTp") == "WEB_SITE"]
+                # 3차: channelTp 변형값
                 if not web_site:
+                    web_site = [
+                        c for c in channels
+                        if str(c.get("channelTp", "")).upper() in ("WEB_SITE", "SITE", "WEBSITE", "WEB")
+                    ]
+                # 4차: URL 필드 보유
+                if not web_site:
+                    web_site = [
+                        c for c in channels
+                        if any(str(c.get(k, "")).startswith("http") for k in ("siteUrl", "url", "channelKey"))
+                    ]
+                # 5차: 첫 번째 사용 가능 채널
+                if not web_site and channels:
+                    web_site = [channels[0]]
+                    logger.warning(f"[AiExpand {job_id}] 표준 필터 실패, 첫 채널 사용: {channels[0]}")
+
+                if not web_site:
+                    raw_preview = str(channels)[:500] if channels else "(empty list)"
                     update_volume_filter_job(
                         job_id, status="failed",
                         error_message=(
                             "네이버 광고 계정에 비즈채널(사이트 URL)이 등록돼 있지 않습니다. "
-                            "searchad.naver.com에 로그인해서 도구 > 비즈채널 관리 > 웹사이트 추가한 뒤 재실행하세요."
+                            "searchad.naver.com에 로그인해서 도구 > 비즈채널 관리 > 웹사이트 추가한 뒤 재실행하세요. "
+                            f"[API 응답: {raw_preview}]"
                         ),
                         completed_at=datetime.now().isoformat(),
                         current_step="비즈채널 미등록",
                     )
                     return {"success": False, "error": "no business channel"}
-                stream_state["business_channel_id"] = web_site[0].get("nccBusinessChannelId")
-                logger.info(
-                    f"[AiExpand {job_id}] 비즈채널: {web_site[0].get('name') or web_site[0].get('url')} "
-                    f"({stream_state['business_channel_id']})"
+
+                channel = web_site[0]
+                stream_state["business_channel_id"] = (
+                    channel.get("nccBusinessChannelId")
+                    or channel.get("businessChannelId")
+                    or channel.get("nccChannelId")
+                    or channel.get("id")
                 )
+                logger.info(
+                    f"[AiExpand {job_id}] 비즈채널: {channel.get('name') or channel.get('url') or channel.get('siteUrl')} "
+                    f"id={stream_state['business_channel_id']} channelTp={channel.get('channelTp')} keys={list(channel.keys())}"
+                )
+
+                if not stream_state["business_channel_id"]:
+                    update_volume_filter_job(
+                        job_id, status="failed",
+                        error_message=(
+                            f"비즈채널 ID 추출 실패. 응답 필드: {list(channel.keys())}. "
+                            f"raw: {str(channel)[:300]}"
+                        ),
+                        completed_at=datetime.now().isoformat(),
+                        current_step="비즈채널 ID 추출 실패",
+                    )
+                    return {"success": False, "error": "no business channel id"}
             except Exception as e:
                 update_volume_filter_job(
                     job_id, status="failed",
-                    error_message=f"비즈채널 조회 실패: {str(e)[:500]}",
+                    error_message=f"비즈채널 조회 실패 [{type(e).__name__}]: {str(e)[:800]}",
                     completed_at=datetime.now().isoformat(),
                     current_step="비즈채널 조회 실패",
                 )
