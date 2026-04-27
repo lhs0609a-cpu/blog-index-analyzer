@@ -1,0 +1,57 @@
+name: SERP measurement cron
+
+# 매일 KST 04:00 (UTC 19:00 전날) admin 측정 endpoint 호출
+# B 검증 결과에 따라 시계열 lifecycle 메트릭(노출 유지율/인덱싱 지연/누락 비율)을
+# 누적하기 위해 등록된 모든 활성 블로그를 측정.
+#
+# 필요 GitHub Secrets:
+#   CRON_TOKEN — 백엔드 CRON_TOKEN과 동일 값
+#
+# Backend env (fly.io secrets):
+#   fly secrets set CRON_TOKEN=<random-uuid-or-strong-string>
+
+on:
+  schedule:
+    - cron: "0 19 * * *"   # UTC 19:00 = KST 04:00
+  workflow_dispatch:        # 수동 실행 허용
+    inputs:
+      max_blogs:
+        description: "이번 실행에서 측정할 최대 블로그 수"
+        required: false
+        default: "50"
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25      # 백엔드 백그라운드 큐잉만 하므로 짧음. 측정은 비동기.
+
+    steps:
+      - name: Trigger SERP measurement
+        env:
+          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
+          BACKEND_URL: https://blog-index-analyzer.fly.dev
+          MAX_BLOGS: ${{ github.event.inputs.max_blogs || '50' }}
+        run: |
+          if [ -z "$CRON_TOKEN" ]; then
+            echo "::error::CRON_TOKEN secret 미설정"
+            exit 1
+          fi
+
+          response=$(curl -sS -w "\n%{http_code}" \
+            -X POST "${BACKEND_URL}/api/rank-tracker/admin/measure-all?max_blogs=${MAX_BLOGS}" \
+            -H "Authorization: Bearer ${CRON_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --max-time 60)
+
+          body=$(echo "$response" | head -n -1)
+          status=$(echo "$response" | tail -n 1)
+
+          echo "status=$status"
+          echo "body=$body"
+
+          if [ "$status" != "200" ]; then
+            echo "::error::측정 트리거 실패 status=$status"
+            exit 1
+          fi
+
+          echo "::notice::측정 큐잉 완료: $body"

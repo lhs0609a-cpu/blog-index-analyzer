@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, Loader2, Sparkles, TrendingUp, Award, Zap, AlertCircle, BarChart3, ArrowLeft, Target, PenTool, Lightbulb, ChevronRight, Lock, HelpCircle } from 'lucide-react'
+import { Search, Loader2, Sparkles, TrendingUp, Award, Zap, AlertCircle, BarChart3, ArrowLeft, Target, PenTool, Lightbulb, ChevronRight, Lock, HelpCircle, Clock, CheckCircle } from 'lucide-react'
 import Confetti from 'react-confetti'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useWindowSize } from '@/lib/hooks/useWindowSize'
 import { analyzeBlog, saveBlogToList } from '@/lib/api/blog'
+import { registerBlog, startRankCheck, getTrackedBlogs } from '@/lib/api/rankTracker'
 import type { BlogIndexResult } from '@/lib/types/api'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/lib/stores/auth'
@@ -863,92 +864,281 @@ function DetailedMetricsSection({ result, isFreeUser }: { result: any; isFreeUse
         ))}
       </div>
 
-      {/* 핵심 지표 탭 */}
-      {activeTab === 'core' && (
-        <div className="space-y-6">
-          {Object.entries(result.index.score_breakdown).map(([key, value]: [string, any], index) => {
-            const labels: Record<string, { name: string; simple: string; tooltip: string }> = {
-              c_rank: {
-                name: '네이버 신뢰점수',
-                simple: '블로그 신뢰도',
-                tooltip: '네이버가 블로그를 얼마나 신뢰하는지 나타내는 점수입니다. 주제 일관성, 콘텐츠 품질, 활동 이력, 운영자 신뢰도를 종합 평가합니다.'
-              },
-              dia: {
-                name: '문서 품질점수',
-                simple: '글 퀄리티',
-                tooltip: '개별 글의 품질을 평가하는 점수입니다. 주제 적합도, 경험/정보 풍부함, 독창성, 최신성을 기준으로 측정합니다.'
-              }
-            }
+      {/* 핵심 지표 탭 — 2026 알고리즘 기반 6신호 분리 측정 */}
+      {activeTab === 'core' && (() => {
+        const sb = result.index.score_breakdown
+        const cDetail = sb.c_rank_detail
+        const dDetail = sb.dia_detail
 
-            const percentage = value
-            const scoreLevel = percentage >= 80 ? '최상' : percentage >= 60 ? '양호' : percentage >= 40 ? '보통' : '개선필요'
-            const scoreColor = percentage >= 80 ? 'text-green-600' : percentage >= 60 ? 'text-blue-600' : percentage >= 40 ? 'text-yellow-600' : 'text-red-600'
+        // 6신호 (c_rank_detail + dia_detail). detail이 없으면 상위 점수로 폴백.
+        const signals: Array<{
+          key: string
+          group: 'C-Rank' | 'D.I.A.+'
+          name: string
+          simple: string
+          tooltip: string
+          score: number
+        }> = [
+          {
+            key: 'context',
+            group: 'C-Rank',
+            name: '카테고리 집중도',
+            simple: 'Context 추정 · 카테고리 개수 기반',
+            tooltip: '실제 측정값: 블로그의 카테고리 개수. (1~3개=90점, 4~5=75점, 6~10=60점, 11+=40점)\n\n네이버 진짜 신호: 31개 분야별 의미적 집중도. 외부에서는 측정 불가능하므로 카테고리 개수로 근사 추정.',
+            score: cDetail?.context ?? sb.c_rank ?? 0,
+          },
+          {
+            key: 'content',
+            group: 'C-Rank',
+            name: '평균 글 길이',
+            simple: 'Content 추정 · RSS 본문 길이 기반',
+            tooltip: '실제 측정값: RSS description 평균 길이 × 7 보정. (3000자+=95점, 2000+=85, 1500+=75, 1000+=65, 500+=50)\n\n네이버 진짜 신호: 글자수+이미지+영상+구조+엔티티. 외부에서는 본문 풀파싱 없이 길이만 측정.',
+            score: cDetail?.content ?? sb.c_rank ?? 0,
+          },
+          {
+            key: 'chain',
+            group: 'C-Rank',
+            name: '이웃 규모',
+            simple: 'Chain 추정 · 이웃 수 기반',
+            tooltip: '실제 측정값: 블로그 이웃 수. (5000+=95점, 2000+=85, 1000+=75, 500+=65)\n\n네이버 진짜 신호: 공감·댓글·스크랩·체류시간. 외부에서는 측정 불가능하므로 이웃 수로 근사. ⚠️ 이웃은 매수 가능해 노이즈 큼.',
+            score: cDetail?.chain ?? sb.c_rank ?? 0,
+          },
+          {
+            key: 'depth',
+            group: 'D.I.A.+',
+            name: '발행 누적량',
+            simple: 'Depth 추정 · 총 포스팅 수 기반',
+            tooltip: '실제 측정값: 총 포스팅 개수. (2000+=95점, 1000+=85, 500+=75, 200+=65)\n\n네이버 진짜 신호: 개별 글의 직접 경험·후기 표현 비중. 외부에서는 글 단위 측정이 어려워 발행량으로 근사.',
+            score: dDetail?.depth ?? sb.dia ?? 0,
+          },
+          {
+            key: 'information',
+            group: 'D.I.A.+',
+            name: '최근 활동성',
+            simple: 'Information 추정 · 마지막 글 일수',
+            tooltip: '실제 측정값: 가장 최근 글로부터의 경과 일수. (1일 이내=95점, 3일 이내=85, 7일 이내=75)\n\n네이버 진짜 신호: 엔티티·표·목록 등 정보 구조화 수준. 최근성과는 별개 — 현재는 활동 빈도로 대체 추정.',
+            score: dDetail?.information ?? sb.dia ?? 0,
+          },
+          {
+            key: 'accuracy',
+            group: 'D.I.A.+',
+            name: '누적 방문자',
+            simple: 'Accuracy 추정 · 누적 방문자 기반',
+            tooltip: '실제 측정값: 블로그 누적 방문자 수. (1000만+=95점, 500만+=88, 100만+=80, 50만+=70)\n\n네이버 진짜 신호: 검색 쿼리-문서 의도 부합도(딥매칭). CTR/이탈률은 외부 측정 불가능 — 누적 방문자로 인기도 근사.',
+            score: dDetail?.accuracy ?? sb.dia ?? 0,
+          },
+        ]
 
-            return (
-              <motion.div
-                key={key}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.1 + index * 0.1 }}
-                className="bg-white/50 rounded-2xl p-5"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-bold text-lg text-gray-900">{labels[key]?.name || key}</span>
-                      <div className="group relative">
-                        <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
-                        <div className="absolute left-0 bottom-full mb-2 w-72 p-3 bg-gray-900 text-white text-sm rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 shadow-xl">
-                          {labels[key]?.tooltip || '점수 설명'}
-                          <div className="absolute left-4 top-full border-8 border-transparent border-t-gray-900" />
+        const weakest = signals.reduce((min, s) => (s.score < min.score ? s : min), signals[0])
+        const strongest = signals.reduce((max, s) => (s.score > max.score ? s : max), signals[0])
+        const avg = signals.reduce((sum, s) => sum + s.score, 0) / signals.length
+
+        return (
+          <div className="space-y-6">
+            {/* 알고리즘 컨텍스트 배너 — 정직성 패치 */}
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-gray-700">
+                  <strong className="text-amber-900">아래 점수는 추정치입니다.</strong>{' '}
+                  네이버 공식 '블로그 지수'는 존재하지 않고, C-Rank·D.I.A.+ 내부 점수도 비공개입니다.
+                  체류시간·CTR·스크롤 깊이는 외부에서 측정 불가능합니다.
+                  아래는 <strong>외부에서 수집 가능한 6개 raw 신호</strong>로 알고리즘 신호를 근사 추정한 결과입니다.
+                </div>
+              </div>
+              <div className="text-xs text-amber-800/80 pl-7">
+                각 카드의 <strong>?</strong> 아이콘에 마우스를 올리면 실제 측정한 raw 값과 네이버 진짜 신호와의 갭을 확인할 수 있습니다.
+              </div>
+            </div>
+
+            {/* C-Rank 그룹 */}
+            <div>
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
+                <span className="px-2 py-1 bg-[#0064FF] text-white text-xs font-bold rounded">C-Rank 추정</span>
+                <span className="text-sm font-medium text-gray-600">출처(블로그) 신뢰도 신호 근사</span>
+                <span className="text-xs text-gray-400">· raw 입력: 카테고리 수 / 글 길이 / 이웃 수</span>
+              </div>
+              <div className="space-y-3">
+                {signals.filter((s) => s.group === 'C-Rank').map((signal, index) => {
+                  const v = signal.score
+                  const level = v >= 80 ? '최상' : v >= 60 ? '양호' : v >= 40 ? '보통' : '개선필요'
+                  const color = v >= 80 ? 'text-green-600' : v >= 60 ? 'text-blue-600' : v >= 40 ? 'text-yellow-600' : 'text-red-600'
+                  return (
+                    <motion.div
+                      key={signal.key}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.05 + index * 0.05 }}
+                      className="bg-white/50 rounded-2xl p-5"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-bold text-lg text-gray-900">{signal.name}</span>
+                            <div className="group relative">
+                              <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                              <div className="absolute left-0 bottom-full mb-2 w-80 p-3 bg-gray-900 text-white text-sm rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 shadow-xl whitespace-pre-line">
+                                {signal.tooltip}
+                                <div className="absolute left-4 top-full border-8 border-transparent border-t-gray-900" />
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-sm text-gray-500">{signal.simple}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-[#0064FF]">{v.toFixed(0)}점</div>
+                          <div className={`text-sm font-medium ${color}`}>{level}</div>
                         </div>
                       </div>
-                    </div>
-                    <div className="text-sm text-gray-500">{labels[key]?.simple || ''}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-[#0064FF]">
-                      {value.toFixed(0)}점
-                    </div>
-                    <div className={`text-sm font-medium ${scoreColor}`}>
-                      {scoreLevel}
-                    </div>
-                  </div>
-                </div>
-                <div className="relative h-3 bg-gray-200 rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${percentage}%` }}
-                    transition={{ delay: 0.3 + index * 0.1, duration: 0.5 }}
-                    className={`absolute inset-y-0 left-0 rounded-full ${
-                      percentage >= 80 ? 'bg-gradient-to-r from-green-500 to-green-400' :
-                      percentage >= 60 ? 'bg-gradient-to-r from-[#0064FF] to-[#3182F6]' :
-                      percentage >= 40 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
-                      'bg-gradient-to-r from-red-500 to-red-400'
-                    }`}
-                  />
-                </div>
-              </motion.div>
-            )
-          })}
-
-          {/* 핵심 지표 요약 카드 */}
-          <div className="mt-4 p-4 bg-gradient-to-r from-[#0064FF]/5 to-[#3182F6]/5 rounded-xl border border-blue-100">
-            <div className="flex items-center gap-2 mb-2">
-              <Sparkles className="w-5 h-5 text-[#0064FF]" />
-              <span className="font-bold text-gray-900">핵심 지표 요약</span>
+                      <div className="relative h-3 bg-gray-200 rounded-full overflow-hidden">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${v}%` }}
+                          transition={{ delay: 0.2 + index * 0.05, duration: 0.5 }}
+                          className={`absolute inset-y-0 left-0 rounded-full ${
+                            v >= 80 ? 'bg-gradient-to-r from-green-500 to-green-400' :
+                            v >= 60 ? 'bg-gradient-to-r from-[#0064FF] to-[#3182F6]' :
+                            v >= 40 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
+                            'bg-gradient-to-r from-red-500 to-red-400'
+                          }`}
+                        />
+                      </div>
+                    </motion.div>
+                  )
+                })}
+              </div>
             </div>
-            <p className="text-sm text-gray-600">
-              {result.index.score_breakdown.c_rank >= 70 && result.index.score_breakdown.dia >= 70
-                ? '우수한 블로그입니다! 신뢰도와 콘텐츠 품질 모두 높은 수준을 유지하고 있습니다.'
-                : result.index.score_breakdown.c_rank >= result.index.score_breakdown.dia
-                  ? '블로그 신뢰도는 좋습니다. 콘텐츠 품질을 더 높이면 상위 노출에 유리합니다.'
-                  : '콘텐츠 품질은 좋습니다. 꾸준한 활동으로 블로그 신뢰도를 쌓아가세요.'
-              }
-            </p>
+
+            {/* D.I.A.+ 그룹 */}
+            <div>
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
+                <span className="px-2 py-1 bg-purple-600 text-white text-xs font-bold rounded">D.I.A.+ 추정</span>
+                <span className="text-sm font-medium text-gray-600">개별 문서 품질 신호 근사</span>
+                <span className="text-xs text-gray-400">· raw 입력: 총 발행 / 최근 활동 / 누적 방문자</span>
+              </div>
+              <div className="space-y-3">
+                {signals.filter((s) => s.group === 'D.I.A.+').map((signal, index) => {
+                  const v = signal.score
+                  const level = v >= 80 ? '최상' : v >= 60 ? '양호' : v >= 40 ? '보통' : '개선필요'
+                  const color = v >= 80 ? 'text-green-600' : v >= 60 ? 'text-blue-600' : v >= 40 ? 'text-yellow-600' : 'text-red-600'
+                  return (
+                    <motion.div
+                      key={signal.key}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.25 + index * 0.05 }}
+                      className="bg-white/50 rounded-2xl p-5"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-bold text-lg text-gray-900">{signal.name}</span>
+                            <div className="group relative">
+                              <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                              <div className="absolute left-0 bottom-full mb-2 w-80 p-3 bg-gray-900 text-white text-sm rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 shadow-xl whitespace-pre-line">
+                                {signal.tooltip}
+                                <div className="absolute left-4 top-full border-8 border-transparent border-t-gray-900" />
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-sm text-gray-500">{signal.simple}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-purple-600">{v.toFixed(0)}점</div>
+                          <div className={`text-sm font-medium ${color}`}>{level}</div>
+                        </div>
+                      </div>
+                      <div className="relative h-3 bg-gray-200 rounded-full overflow-hidden">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${v}%` }}
+                          transition={{ delay: 0.4 + index * 0.05, duration: 0.5 }}
+                          className={`absolute inset-y-0 left-0 rounded-full ${
+                            v >= 80 ? 'bg-gradient-to-r from-green-500 to-green-400' :
+                            v >= 60 ? 'bg-gradient-to-r from-purple-500 to-purple-400' :
+                            v >= 40 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
+                            'bg-gradient-to-r from-red-500 to-red-400'
+                          }`}
+                        />
+                      </div>
+                    </motion.div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* 신호 기반 진단 요약 */}
+            <div className="mt-4 p-4 bg-gradient-to-r from-[#0064FF]/5 to-purple-500/5 rounded-xl border border-blue-100">
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles className="w-5 h-5 text-[#0064FF]" />
+                <span className="font-bold text-gray-900">신호 기반 진단</span>
+              </div>
+              <div className="space-y-1.5 text-sm text-gray-700">
+                <p>
+                  6개 신호 평균 <strong className="text-[#0064FF]">{avg.toFixed(0)}점</strong>
+                  {' · '}가장 강한 신호 <strong className="text-green-600">{strongest.name}({strongest.score.toFixed(0)})</strong>
+                  {' · '}가장 약한 신호 <strong className="text-red-600">{weakest.name}({weakest.score.toFixed(0)})</strong>
+                </p>
+                <p className="text-gray-600">
+                  {weakest.score < 40
+                    ? `「${weakest.name}」 신호가 임계값(40) 아래입니다. 이 신호 개선이 노출에 가장 큰 영향을 줍니다.`
+                    : weakest.score < 60
+                      ? `「${weakest.name}」를 60점 이상으로 끌어올리면 다음 등급 진입이 빨라집니다.`
+                      : '6개 신호가 모두 안정적입니다. 가장 약한 신호를 80점 이상으로 끌어올려 상위 1% 진입을 노리세요.'}
+                </p>
+              </div>
+            </div>
+
+            {/* A-2 raw signals 정직성 박스 — 실제 수집한 값 그대로 노출 */}
+            {sb.raw_signals && (
+              <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-xl">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-xs font-mono uppercase tracking-wider text-gray-500">raw signals</span>
+                  <span className="text-xs text-gray-400">실제 수집한 측정값 (추정·보정 전)</span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                  {[
+                    { label: '카테고리 개수', value: sb.raw_signals.category_count, unit: '개' },
+                    { label: '카테고리 엔트로피', value: sb.raw_signals.category_entropy, unit: 'bits', help: '0=한 카테고리 집중, ↑일수록 분산' },
+                    { label: '평균 글 길이 (RSS)', value: sb.raw_signals.avg_post_length, unit: '자', help: 'RSS 요약 기준' },
+                    { label: '평균 발행 간격', value: sb.raw_signals.posting_interval_days, unit: '일' },
+                    { label: '최근 글 경과일', value: sb.raw_signals.recent_activity_days, unit: '일' },
+                    { label: '이웃 수', value: sb.raw_signals.neighbor_count, unit: '명' },
+                    { label: '총 포스팅', value: sb.raw_signals.total_posts, unit: '개' },
+                    { label: '누적 방문자', value: sb.raw_signals.total_visitors, unit: '명' },
+                    // 풀파싱 신호 (있을 때만 의미있음)
+                    { label: '풀파싱 표본 수', value: sb.raw_signals.fullparse_n, unit: '개', help: '최근 N개 포스트 풀파싱' },
+                    { label: '평균 공감수 ⭐', value: sb.raw_signals.fullparse_avg_likes, unit: '개', help: '진짜 Chain 신호' },
+                    { label: '평균 댓글수 ⭐', value: sb.raw_signals.fullparse_avg_comments, unit: '개', help: '진짜 Chain 신호' },
+                    { label: '평균 이미지 (풀)', value: sb.raw_signals.fullparse_avg_images, unit: '개', help: '본문 실측' },
+                    { label: '평균 동영상', value: sb.raw_signals.fullparse_avg_videos, unit: '개' },
+                    { label: '평균 본문 길이', value: sb.raw_signals.fullparse_avg_content_length, unit: '자', help: 'HTML 제거 후' },
+                    { label: '평균 문단 수', value: sb.raw_signals.fullparse_avg_paragraphs, unit: '개' },
+                    { label: '평균 소제목 수', value: sb.raw_signals.fullparse_avg_headings, unit: '개' },
+                    { label: '지도 포함 비율', value: sb.raw_signals.fullparse_has_map_ratio, unit: '', help: '0~1, 맛집/여행 신호' },
+                  ].map((m) => (
+                    <div key={m.label} className="bg-white rounded-lg p-2.5 border border-gray-100">
+                      <div className="text-gray-500 mb-0.5">{m.label}</div>
+                      <div className="font-mono font-semibold text-gray-900">
+                        {m.value === null || m.value === undefined ? '—' : `${typeof m.value === 'number' ? m.value.toLocaleString() : m.value}${m.unit}`}
+                      </div>
+                      {m.help && <div className="text-[10px] text-gray-400 mt-0.5">{m.help}</div>}
+                    </div>
+                  ))}
+                </div>
+                {sb.raw_signals.data_sources && sb.raw_signals.data_sources.length > 0 && (
+                  <div className="mt-3 text-[11px] text-gray-500">
+                    데이터 소스: {sb.raw_signals.data_sources.join(', ')}
+                    {sb.raw_signals.data_sources.includes('estimated') && (
+                      <span className="ml-2 text-amber-600 font-medium">⚠️ 일부 값은 RSS 실패 시 blog_id 시드 기반 추정값</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* 콘텐츠 품질 탭 (블로그 신뢰도 + 글 품질 세부) */}
       {activeTab === 'content' && (
@@ -1052,6 +1242,109 @@ function DetailedMetricsSection({ result, isFreeUser }: { result: any; isFreeUse
     </div>
   )
 }
+
+// B-2 검증 결과 활용: 분석 후 시계열 추적 시작 버튼
+function StartTrackingButton({
+  blogId,
+  blogName,
+  userId,
+}: {
+  blogId: string
+  blogName: string
+  userId: number | string
+}) {
+  const router = useRouter()
+  const [status, setStatus] = useState<'idle' | 'checking' | 'registering' | 'measuring' | 'done' | 'already'>('idle')
+
+  // 이미 추적 중인지 확인
+  useEffect(() => {
+    let mounted = true
+    setStatus('checking')
+    getTrackedBlogs(userId)
+      .then((data) => {
+        if (!mounted) return
+        const exists = data.blogs?.some((b) => b.blog_id === blogId)
+        setStatus(exists ? 'already' : 'idle')
+      })
+      .catch(() => {
+        if (mounted) setStatus('idle')
+      })
+    return () => {
+      mounted = false
+    }
+  }, [blogId, userId])
+
+  const handleStart = async () => {
+    setStatus('registering')
+    try {
+      await registerBlog(userId, blogId)
+      toast.success('추적 등록 완료. 첫 측정을 시작합니다…')
+
+      setStatus('measuring')
+      try {
+        await startRankCheck(userId, blogId, 20, true)
+      } catch {
+        // 측정 실패해도 등록은 됐으므로 continue
+      }
+      setStatus('done')
+      toast.success('시계열 추적이 시작됐습니다!')
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail || e?.message || '추적 시작 실패'
+      toast.error(msg)
+      setStatus('idle')
+    }
+  }
+
+  if (status === 'checking') {
+    return (
+      <div className="text-sm text-gray-500 inline-flex items-center gap-2">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        추적 상태 확인 중…
+      </div>
+    )
+  }
+
+  if (status === 'already' || status === 'done') {
+    return (
+      <button
+        onClick={() => router.push(`/dashboard/rank-tracker/${blogId}`)}
+        className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-purple-600 text-white font-semibold hover:shadow-xl shadow-md hover:bg-purple-700 transition-all"
+      >
+        <CheckCircle className="w-5 h-5" />
+        시계열 추적 중 — 대시보드 보기
+      </button>
+    )
+  }
+
+  if (status === 'registering' || status === 'measuring') {
+    return (
+      <button
+        disabled
+        className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-purple-300 text-white font-semibold cursor-not-allowed"
+      >
+        <Loader2 className="w-5 h-5 animate-spin" />
+        {status === 'registering' ? '등록 중…' : '첫 측정 중…'}
+      </button>
+    )
+  }
+
+  return (
+    <div>
+      <button
+        onClick={handleStart}
+        className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold hover:shadow-xl shadow-md transition-all"
+      >
+        <Clock className="w-5 h-5" />
+        시계열 추적 시작
+      </button>
+      <div className="text-xs text-gray-500 mt-2 max-w-md mx-auto">
+        매일 SERP 순위를 측정해 인덱싱 지연 · 노출 유지율 · 누락 비율을 추적합니다.
+        단일 시점 점수보다 robust한 운영 진단입니다.
+      </div>
+    </div>
+  )
+}
+
 
 export default function AnalyzePage() {
   const router = useRouter()
@@ -1224,9 +1517,15 @@ export default function AnalyzePage() {
             <h1 className="text-5xl font-bold mb-4">
               <span className="gradient-text">블로그 분석</span>
             </h1>
-            <p className="text-gray-600 text-lg">
-              블로그 ID를 입력하고 지수를 확인하세요
+            <p className="text-gray-600 text-lg mb-3">
+              블로그 ID를 입력하고 운영 건강도를 확인하세요
             </p>
+            <Link
+              href="/analyze-post"
+              className="inline-flex items-center gap-2 text-sm text-[#0064FF] hover:underline font-medium"
+            >
+              개별 포스트 1개를 진단하려면 → 포스트 단위 진단
+            </Link>
           </div>
 
           {/* Search Form */}
@@ -1501,23 +1800,52 @@ export default function AnalyzePage() {
                     </motion.div>
                   </div>
 
+                  {/* 자동 학습 배지 */}
+                  {result.index.score_breakdown?.weights_used?.is_learned && (
+                    <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 bg-purple-50 border border-purple-200 rounded-full text-sm">
+                      <CheckCircle className="w-4 h-4 text-purple-600" />
+                      <span className="text-purple-700 font-medium">데이터 학습된 가중치 적용</span>
+                      {result.index.score_breakdown.weights_used.learned_meta?.n && (
+                        <span className="text-xs text-purple-500">
+                          n={result.index.score_breakdown.weights_used.learned_meta.n}
+                        </span>
+                      )}
+                      {result.index.score_breakdown.weights_used.learned_meta?.trained_at && (
+                        <span className="text-xs text-purple-400">
+                          · 갱신 {new Date(result.index.score_breakdown.weights_used.learned_meta.trained_at).toLocaleDateString('ko-KR')}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                   <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
                     {[
-                      { label: '총점', value: `${result.index.total_score.toFixed(1)}/100`, icon: '🎯' },
-                      { label: '포스트', value: result.stats.total_posts, icon: '📝' },
-                      { label: '방문자', value: result.stats.total_visitors.toLocaleString(), icon: '👥' },
-                      { label: '이웃', value: result.stats.neighbor_count, icon: '❤️' },
+                      { label: '운영 건강도', value: `${result.index.total_score.toFixed(1)}/100`, icon: '🎯', isScore: true },
+                      { label: '포스트', value: result.stats.total_posts, icon: '📝', isScore: false },
+                      { label: '방문자', value: result.stats.total_visitors.toLocaleString(), icon: '👥', isScore: false },
+                      { label: '이웃', value: result.stats.neighbor_count, icon: '❤️', isScore: false },
                     ].map((stat, index) => (
                       <motion.div
                         key={stat.label}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.4 + index * 0.1 }}
-                        className="text-center p-4 rounded-2xl bg-white/50"
+                        className="text-center p-4 rounded-2xl bg-white/50 relative"
                       >
                         <div className="text-3xl mb-2">{stat.icon}</div>
                         <div className="text-2xl font-bold">{stat.value}</div>
-                        <div className="text-sm text-gray-600">{stat.label}</div>
+                        <div className="text-sm text-gray-600 flex items-center justify-center gap-1">
+                          {stat.label}
+                          {stat.isScore && (
+                            <div className="group relative">
+                              <HelpCircle className="w-3.5 h-3.5 text-gray-400 cursor-help" />
+                              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-72 p-3 bg-gray-900 text-white text-xs rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-20 shadow-xl text-left whitespace-pre-line font-normal leading-relaxed">
+                                {`외부 수집 가능한 raw 신호로 추정한 블로그 운영 건강도입니다.\n\n⚠️ 이 점수와 실제 네이버 SERP 순위 사이의 상관관계는 자체 검증(n=67) 결과 ρ=0.04로 거의 무관했습니다. \"이 점수가 높으면 검색 상위에 노출된다\"는 보장이 아닙니다.\n\n순위 예측 목적이라면 SERP 순위 추적 도구(판다랭크 등)를 병행하세요.`}
+                                <div className="absolute left-1/2 -translate-x-1/2 top-full border-8 border-transparent border-t-gray-900" />
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </motion.div>
                     ))}
                   </div>
@@ -1856,18 +2184,29 @@ export default function AnalyzePage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 1.4 }}
-                  className="text-center py-8"
+                  className="text-center py-8 space-y-4"
                 >
-                  <button
-                    onClick={() => {
-                      setBlogId('')
-                      setResult(null)
-                      window.scrollTo({ top: 0, behavior: 'smooth' })
-                    }}
-                    className="px-8 py-4 rounded-full bg-[#0064FF] text-white font-semibold hover:shadow-xl shadow-lg shadow-[#0064FF]/15 transition-all duration-300"
-                  >
-                    다른 블로그 분석하기
-                  </button>
+                  {/* 시계열 추적 시작 — B 검증 후 추가 */}
+                  {isAuthenticated && user?.id && (
+                    <StartTrackingButton
+                      blogId={result.blog.blog_id}
+                      blogName={result.blog.blog_name}
+                      userId={user.id}
+                    />
+                  )}
+
+                  <div>
+                    <button
+                      onClick={() => {
+                        setBlogId('')
+                        setResult(null)
+                        window.scrollTo({ top: 0, behavior: 'smooth' })
+                      }}
+                      className="px-8 py-4 rounded-full bg-[#0064FF] text-white font-semibold hover:shadow-xl shadow-lg shadow-[#0064FF]/15 transition-all duration-300"
+                    >
+                      다른 블로그 분석하기
+                    </button>
+                  </div>
                 </motion.div>
               </motion.div>
             )}

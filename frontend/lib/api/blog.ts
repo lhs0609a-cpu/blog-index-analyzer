@@ -28,6 +28,83 @@ export async function analyzeBlog(
 }
 
 /**
+ * 포스트 단위 분석 (B-3 검증 결과 반영)
+ *
+ * 블로그 단위 점수가 SERP와 ρ≈0.04로 약함을 발견 후 추가된 endpoint.
+ * D.I.A.+ 알고리즘이 문서 단위라는 공식 발표와 정합.
+ *
+ * 검증된 카테고리별 강한 신호:
+ * - 여행: image_count ρ=0.369
+ * - IT: content_length ρ=0.339
+ */
+export interface PostLifecycleData {
+  samples: number
+  tracked_days: number
+  first_indexed_at: string | null
+  last_indexed_at: string | null
+  indexing_delay_days: number | null
+  total_exposure_days: number
+  exposure_rate: number
+  max_consecutive_exposure_days: number
+  drop_count: number
+  avg_blog_rank: number | null
+  avg_view_rank: number | null
+}
+
+export interface PostAnalysisResult {
+  success: boolean
+  post_url: string
+  keyword: string
+  category: string
+  analysis: {
+    title_has_keyword: boolean
+    title_keyword_position: number
+    content_length: number
+    image_count: number
+    video_count: number
+    keyword_count: number
+    keyword_density: number
+    like_count: number
+    comment_count: number
+    post_age_days: number | null
+    has_map: boolean
+    has_link: boolean
+    heading_count: number
+    paragraph_count: number
+    fetch_method: string
+  }
+  post_score: {
+    total: number
+    title_match: number
+    keyword_density: number
+    content_richness: number
+    structural: number
+    engagement: number
+    freshness: number
+  }
+  validated_signals_for_category: Array<{
+    signal: string
+    rho: number
+    guide: string
+  }>
+  lifecycle: PostLifecycleData | null
+  disclaimer: string
+}
+
+export async function analyzePost(
+  postUrl: string,
+  keyword: string = '',
+  userId?: number | string
+): Promise<PostAnalysisResult> {
+  const response = await apiClient.post<PostAnalysisResult>('/api/blogs/analyze-post', {
+    post_url: postUrl,
+    keyword,
+    user_id: userId !== undefined ? Number(userId) : undefined,
+  })
+  return response.data
+}
+
+/**
  * Get job status - DEPRECATED
  * This endpoint no longer exists as Backend now processes requests synchronously
  * Kept for backward compatibility but will always throw an error

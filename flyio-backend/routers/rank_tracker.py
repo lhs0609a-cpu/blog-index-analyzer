@@ -4,11 +4,13 @@
 - 순위 확인 실행
 - 결과 조회 및 통계
 """
-from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends
+from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends, Header
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timedelta
+import os
+import json
 import uuid
 import logging
 import asyncio
@@ -404,6 +406,132 @@ async def get_statistics(
     return statistics
 
 
+# ============ B-2 검증 결과 활용: 노출 유지일수 + 인덱싱 속도 ============
+
+@router.get("/lifecycle/{post_keyword_id}")
+async def get_post_lifecycle(post_keyword_id: int):
+    """
+    포스트-키워드 페어의 SERP lifecycle.
+
+    단일 시점 SERP 순위가 ρ≈0.04로 noisy(B 검증 n=436)임을 발견 후 도입.
+    시계열 기반 robust 메트릭으로 전환:
+    - 인덱싱 지연 (발행 → 첫 노출)
+    - 누적/연속 노출 일수
+    - 노출 유지율, 누락 전환 횟수
+    """
+    db = get_rank_tracker_db()
+    return db.get_post_lifecycle(post_keyword_id)
+
+
+# ============ 관리자 cron 측정 endpoint ============
+
+@router.post("/admin/measure-all")
+async def admin_measure_all(
+    background_tasks: BackgroundTasks,
+    authorization: Optional[str] = Header(None),
+    user_id: Optional[int] = Query(None, description="특정 사용자만 측정 (선택)"),
+    max_blogs: int = Query(50, description="이번 실행에서 측정할 최대 블로그 수"),
+):
+    """
+    등록된 모든 활성 블로그를 백그라운드로 SERP 측정.
+
+    인증: Authorization: Bearer {CRON_TOKEN}
+    환경변수 CRON_TOKEN과 일치해야 호출 가능.
+
+    GitHub Actions cron이 매일 호출하여 시계열 데이터 누적.
+    B 검증 결과: 단일 시점 ρ≈0.04, 시계열 데이터로 robust한 lifecycle 메트릭 계산이 목적.
+    """
+    expected = os.environ.get("CRON_TOKEN", "").strip()
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="CRON_TOKEN 환경변수가 설정되지 않음. 서버 운영자에게 문의."
+        )
+
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authorization Bearer 토큰 필요")
+
+    provided = authorization.split(" ", 1)[1].strip()
+    # 타이밍 공격 방지 — hmac.compare_digest
+    import hmac as _hmac
+    if not _hmac.compare_digest(provided, expected):
+        raise HTTPException(status_code=403, detail="잘못된 cron 토큰")
+
+    db = get_rank_tracker_db()
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+        if user_id:
+            cursor.execute("""
+                SELECT id, user_id, blog_id, blog_name FROM tracked_blogs
+                WHERE is_active = 1 AND user_id = ? LIMIT ?
+            """, (user_id, max_blogs))
+        else:
+            cursor.execute("""
+                SELECT id, user_id, blog_id, blog_name FROM tracked_blogs
+                WHERE is_active = 1 LIMIT ?
+            """, (max_blogs,))
+        blogs = [dict(r) for r in cursor.fetchall()]
+
+    if not blogs:
+        return {"success": True, "queued": 0, "message": "측정할 활성 블로그가 없습니다."}
+
+    # 백그라운드로 각 블로그 측정 작업 큐
+    queued = 0
+    for b in blogs:
+        # 동일 사용자 진행 중 작업 있으면 스킵
+        if db.get_user_running_task(b["user_id"]):
+            logger.info(f"User {b['user_id']} already has running task, skipping {b['blog_id']}")
+            continue
+        task_id = f"cron-{uuid.uuid4().hex[:12]}"
+        db.create_check_task(task_id, b["user_id"], b["id"])
+        background_tasks.add_task(
+            run_rank_check,
+            task_id=task_id,
+            tracked_blog_id=b["id"],
+            blog_id=b["blog_id"],
+            max_posts=50,
+            force_refresh=True,
+        )
+        queued += 1
+
+    logger.info(f"[CRON] queued {queued}/{len(blogs)} blog measurements")
+    return {
+        "success": True,
+        "queued": queued,
+        "total_active": len(blogs),
+        "skipped_running": len(blogs) - queued,
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
+@router.get("/indexing-stats/{blog_id}")
+async def get_blog_indexing_stats(
+    blog_id: str,
+    user_id: int = Query(..., description="사용자 ID")
+):
+    """
+    블로그 전체 인덱싱 통계.
+
+    - 등록한 키워드 중 한 번도 노출 안 된 비율 (저품질/색인 누락 추정)
+    - 평균 인덱싱 지연 일수
+    - 평균 노출 유지율
+    """
+    db = get_rank_tracker_db()
+    blog = db.get_tracked_blog(user_id, blog_id)
+    if not blog:
+        raise HTTPException(status_code=404, detail="블로그를 찾을 수 없습니다.")
+
+    stats = db.get_blog_indexing_stats(blog['id'])
+
+    # 정직성 표기 — 검증 결과 명시
+    stats["validation_note"] = (
+        "이 메트릭은 단일 시점 SERP 순위(ρ≈0.04, n=436)보다 "
+        "시계열 기반 robust한 신호입니다. 인덱싱 지연이 길거나 "
+        "never_indexed_rate가 높으면 저품질/색인 문제 의심."
+    )
+    return stats
+
+
 # ============ 키워드 관리 API ============
 
 @router.post("/keywords")
@@ -647,6 +775,63 @@ async def run_rank_check(task_id: str, tracked_blog_id: int, blog_id: str,
 
         logger.info(f"Rank check completed for blog {blog_id}")
 
+        # 5. B-2 lifecycle 이상 감지 → 사용자 알림
+        try:
+            await _trigger_lifecycle_alerts(db, tracked_blog_id, blog_id)
+        except Exception as alert_err:
+            logger.warning(f"Alert trigger failed for {blog_id}: {alert_err}")
+
     except Exception as e:
         logger.error(f"Rank check failed for blog {blog_id}: {e}")
         db.complete_task(task_id, str(e))
+
+
+async def _trigger_lifecycle_alerts(db, tracked_blog_id: int, blog_id: str):
+    """측정 완료 직후 lifecycle 이상 감지하고 새 알림 생성.
+
+    중복 방지: 같은 코드의 알림이 24시간 이내 있으면 skip.
+    """
+    alerts = db.detect_lifecycle_alerts(tracked_blog_id)
+    if not alerts:
+        return
+
+    # 사용자 ID 조회
+    with db.get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT user_id FROM tracked_blogs WHERE id = ?", (tracked_blog_id,))
+        row = cur.fetchone()
+        if not row:
+            return
+        user_id = row["user_id"]
+
+    from database.notification_db import get_notification_db
+    ndb = get_notification_db()
+
+    # 최근 24h 내 같은 code 알림이 이미 있는지 검사 (스팸 방지)
+    recent = ndb.get_user_notifications(str(user_id), limit=20, category="serp_lifecycle")
+    recent_codes = set()
+    cutoff_iso = (datetime.now() - timedelta(hours=24)).isoformat() if hasattr(datetime, 'now') else None
+    for n in recent or []:
+        try:
+            d = json.loads(n.get("data") or "{}") if isinstance(n.get("data"), str) else (n.get("data") or {})
+            code = d.get("code")
+            if code and (not cutoff_iso or n.get("created_at", "") >= cutoff_iso):
+                recent_codes.add(code)
+        except Exception:
+            pass
+
+    for alert in alerts:
+        if alert["code"] in recent_codes:
+            continue
+        try:
+            ndb.create_notification(
+                user_id=str(user_id),
+                notification_type="alert",
+                category="serp_lifecycle",
+                title=f"[{blog_id}] {alert['title']}",
+                message=alert["message"],
+                data={"blog_id": blog_id, "code": alert["code"], **alert.get("data", {}), "severity": alert["severity"]},
+            )
+            logger.info(f"Alert created for {blog_id}: {alert['code']}")
+        except Exception as e:
+            logger.warning(f"Failed to create notification: {e}")

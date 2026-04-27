@@ -46,6 +46,52 @@ export interface BlogIndexResult {
     score_breakdown: {
       c_rank: number  // C-Rank (출처 신뢰도) 50%
       dia: number     // D.I.A. (문서 품질) 50%
+      c_rank_detail?: {
+        context: number   // 주제 일관성
+        content: number   // 콘텐츠 품질
+        chain: number     // 소비/생산 연쇄(공감·댓글·체류)
+      }
+      dia_detail?: {
+        depth: number       // 경험·후기 깊이
+        information: number // 정보 풍부도
+        accuracy: number    // 검색 의도 정확도
+      }
+      weights_used?: {
+        c_rank: number
+        dia: number
+        content: number
+        is_learned?: boolean
+        learned_meta?: {
+          n?: number
+          rhos?: Record<string, number>
+          trained_at?: string
+        } | null
+      }
+      keyword_category?: string
+      // A-2 진짜 신호 — 외부에서 실제 수집한 raw 값
+      raw_signals?: {
+        category_count?: number | null
+        category_entropy?: number | null
+        avg_post_length?: number | null
+        avg_image_count?: number | null
+        avg_word_count?: number | null
+        posting_interval_days?: number | null
+        recent_activity_days?: number | null
+        neighbor_count?: number | null
+        total_posts?: number | null
+        total_visitors?: number | null
+        // 풀파싱 (analyze_post로 최근 N개 본문까지 추출)
+        fullparse_n?: number | null
+        fullparse_avg_likes?: number | null
+        fullparse_avg_comments?: number | null
+        fullparse_avg_images?: number | null
+        fullparse_avg_videos?: number | null
+        fullparse_avg_content_length?: number | null
+        fullparse_avg_paragraphs?: number | null
+        fullparse_avg_headings?: number | null
+        fullparse_has_map_ratio?: number | null
+        data_sources?: string[]
+      }
     }
   }
   daily_visitors?: Array<{

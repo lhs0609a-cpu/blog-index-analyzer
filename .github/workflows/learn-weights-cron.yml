@@ -1,0 +1,68 @@
+name: Category weight learning (weekly)
+
+# 매주 일요일 KST 03:00 (UTC 토 18:00) 자동 학습.
+# correlation_validator로 새 측정 데이터를 수집하고
+# learn_category_weights로 누적 archive 기반 가중치 갱신.
+#
+# 결과 파일은 GitHub artifact로 업로드. 백엔드 fly.io에 자동 반영하려면
+# 별도 deploy 단계 추가 필요 (보안상 매뉴얼 검토 권장).
+
+on:
+  schedule:
+    - cron: "0 18 * * 6"   # UTC 토 18:00 = KST 일 03:00
+  workflow_dispatch:
+    inputs:
+      keywords:
+        description: "측정할 키워드 수"
+        required: false
+        default: "60"
+      min_n:
+        description: "카테고리 최소 샘플 수"
+        required: false
+        default: "30"
+
+jobs:
+  learn:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: flyio-backend
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Collect new correlation data
+        working-directory: flyio-backend
+        env:
+          PYTHONIOENCODING: utf-8
+          KEYWORDS: ${{ github.event.inputs.keywords || '60' }}
+        run: |
+          python scripts/correlation_validator.py --keywords ${KEYWORDS} --top 10
+          ls -la data/correlation_archive/ | tail -5
+
+      - name: Learn category weights
+        working-directory: flyio-backend
+        env:
+          PYTHONIOENCODING: utf-8
+          MIN_N: ${{ github.event.inputs.min_n || '30' }}
+        run: |
+          python scripts/learn_category_weights.py --min-n ${MIN_N} --max-age-days 90
+          cat data/learned_category_weights.json | python -m json.tool
+
+      - name: Upload learned weights
+        uses: actions/upload-artifact@v4
+        with:
+          name: learned-category-weights-${{ github.run_id }}
+          path: |
+            flyio-backend/data/learned_category_weights.json
+            flyio-backend/data/correlation_archive/
+          retention-days: 90

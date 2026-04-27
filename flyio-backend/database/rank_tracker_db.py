@@ -500,6 +500,239 @@ class RankTrackerDB:
             "low_count": 0
         }
 
+    # ============ B-2 검증 결과 활용: 노출 유지일수 + 인덱싱 속도 ============
+    # 단일 시점 SERP 순위는 noisy(B 검증 ρ≈0.04). 시계열 기반 robust 메트릭으로 전환.
+
+    def get_post_lifecycle(self, post_keyword_id: int) -> Dict:
+        """
+        포스트-키워드 페어의 SERP lifecycle 분석.
+
+        핵심 메트릭 — B 검증에서 '단일 시점 순위는 noisy하다'는 발견 후 도입:
+        - first_indexed_at: 첫 SERP 등장 시점 (둘 중 어느 탭이든 양수 순위)
+        - indexing_delay_days: 발행일 → 첫 SERP 등장까지 일수 (인덱싱 속도)
+        - total_exposure_days: 누적 노출 일수 (양수 순위 기록된 고유 날짜 수)
+        - max_consecutive_exposure_days: 최대 연속 노출 일수
+        - drop_count: 노출 → 누락 전환 횟수
+        - avg_blog_rank, avg_view_rank: 노출됐을 때만 평균 순위
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # 발행일 + 모든 rank 측정 시점·순위 조회
+            cursor.execute("""
+                SELECT
+                    tp.published_date,
+                    DATE(rh.checked_at) as check_date,
+                    rh.rank_blog_tab,
+                    rh.rank_view_tab
+                FROM rank_history rh
+                JOIN post_keywords pk ON rh.post_keyword_id = pk.id
+                JOIN tracked_posts tp ON pk.tracked_post_id = tp.id
+                WHERE pk.id = ?
+                ORDER BY rh.checked_at ASC
+            """, (post_keyword_id,))
+            rows = [dict(r) for r in cursor.fetchall()]
+
+        if not rows:
+            return {
+                "samples": 0,
+                "first_indexed_at": None,
+                "last_indexed_at": None,
+                "indexing_delay_days": None,
+                "total_exposure_days": 0,
+                "max_consecutive_exposure_days": 0,
+                "drop_count": 0,
+                "avg_blog_rank": None,
+                "avg_view_rank": None,
+            }
+
+        published_date = rows[0].get("published_date")
+
+        # 일자별 노출 여부 집계 (한 날짜에 여러 측정 있을 수 있음)
+        from collections import OrderedDict
+        per_day: "OrderedDict[str, bool]" = OrderedDict()
+        for r in rows:
+            d = r["check_date"]
+            exposed = (
+                (r["rank_blog_tab"] is not None and r["rank_blog_tab"] > 0)
+                or (r["rank_view_tab"] is not None and r["rank_view_tab"] > 0)
+            )
+            per_day[d] = per_day.get(d, False) or exposed
+
+        # 첫/마지막 노출일
+        exposure_days = [d for d, v in per_day.items() if v]
+        first_indexed = exposure_days[0] if exposure_days else None
+        last_indexed = exposure_days[-1] if exposure_days else None
+
+        # 인덱싱 지연 — 발행일이 있어야 계산 가능
+        indexing_delay = None
+        if published_date and first_indexed:
+            try:
+                p = datetime.strptime(str(published_date)[:10], "%Y-%m-%d").date()
+                f = datetime.strptime(first_indexed, "%Y-%m-%d").date()
+                indexing_delay = (f - p).days
+            except Exception:
+                pass
+
+        # 최대 연속 노출 일수 — per_day 시계열 따라
+        max_consec = 0
+        cur_consec = 0
+        prev_date = None
+        for d, exposed in per_day.items():
+            if exposed:
+                cur_date = datetime.strptime(d, "%Y-%m-%d").date()
+                if prev_date and (cur_date - prev_date).days == 1:
+                    cur_consec += 1
+                else:
+                    cur_consec = 1
+                prev_date = cur_date
+                if cur_consec > max_consec:
+                    max_consec = cur_consec
+            else:
+                cur_consec = 0
+                prev_date = None
+
+        # 노출 → 누락 전환 횟수 (drop count)
+        drop_count = 0
+        was_exposed = False
+        for exposed in per_day.values():
+            if was_exposed and not exposed:
+                drop_count += 1
+            was_exposed = exposed
+
+        # 노출됐을 때만의 평균 순위
+        blog_ranks = [r["rank_blog_tab"] for r in rows if r.get("rank_blog_tab")]
+        view_ranks = [r["rank_view_tab"] for r in rows if r.get("rank_view_tab")]
+        avg_blog = round(sum(blog_ranks) / len(blog_ranks), 1) if blog_ranks else None
+        avg_view = round(sum(view_ranks) / len(view_ranks), 1) if view_ranks else None
+
+        return {
+            "samples": len(rows),
+            "tracked_days": len(per_day),
+            "first_indexed_at": first_indexed,
+            "last_indexed_at": last_indexed,
+            "indexing_delay_days": indexing_delay,
+            "total_exposure_days": len(exposure_days),
+            "exposure_rate": round(len(exposure_days) / len(per_day), 3) if per_day else 0,
+            "max_consecutive_exposure_days": max_consec,
+            "drop_count": drop_count,
+            "avg_blog_rank": avg_blog,
+            "avg_view_rank": avg_view,
+        }
+
+    def detect_lifecycle_alerts(self, tracked_blog_id: int) -> List[Dict]:
+        """
+        시계열 lifecycle 이상 감지 → 알림 후보 반환.
+
+        임계값 (검증 결과 기반 보수적):
+        - 미노출률 ≥ 50% (high)        : 저품질/색인 누락 의심
+        - 평균 인덱싱 지연 ≥ 7일 (medium): 색인 문제
+        - 평균 누락 전환 ≥ 3회 (low)    : 노출 불안정
+
+        반환: [{severity, code, title, message, data}, ...]
+        """
+        stats = self.get_blog_indexing_stats(tracked_blog_id)
+        alerts: List[Dict] = []
+
+        if stats["total_tracked_keywords"] == 0:
+            return alerts
+
+        # 1) 미노출률 — 등록 키워드 중 한 번도 SERP 노출 안 됨
+        never = stats["never_indexed_rate"]
+        if never >= 0.5:
+            alerts.append({
+                "severity": "high",
+                "code": "high_never_indexed",
+                "title": "미노출 비율 50% 이상",
+                "message": (
+                    f"등록한 키워드의 {int(never*100)}%가 한 번도 SERP에 노출되지 않았습니다. "
+                    "저품질 또는 색인 누락이 의심됩니다."
+                ),
+                "data": {"never_indexed_rate": never},
+            })
+
+        # 2) 평균 인덱싱 지연
+        delay = stats["avg_indexing_delay_days"]
+        if delay is not None and delay >= 7:
+            alerts.append({
+                "severity": "medium",
+                "code": "slow_indexing",
+                "title": f"평균 인덱싱 지연 {delay:.0f}일",
+                "message": (
+                    f"발행 후 SERP에 등장하기까지 평균 {delay:.0f}일이 걸립니다. "
+                    "글 구조·키워드 매칭을 점검하세요."
+                ),
+                "data": {"avg_indexing_delay_days": delay},
+            })
+
+        # 3) 누락 전환 — 노출 → 누락 빈도
+        drops = stats["avg_drop_count"]
+        if drops >= 3:
+            alerts.append({
+                "severity": "low",
+                "code": "unstable_exposure",
+                "title": "노출이 자주 빠짐",
+                "message": (
+                    f"포스트가 평균 {drops}회 노출됐다가 다시 빠지고 있습니다. "
+                    "콘텐츠 품질 개선이 필요합니다."
+                ),
+                "data": {"avg_drop_count": drops},
+            })
+
+        return alerts
+
+    def get_blog_indexing_stats(self, tracked_blog_id: int) -> Dict:
+        """
+        블로그 전체의 인덱싱 통계.
+
+        - 등록된 포스트들의 평균 인덱싱 지연
+        - SERP 누락율 (등록했지만 한 번도 노출 안 된 키워드 비율)
+        - 노출 유지율 분포 (지난 30일 기준 노출/총측정일)
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT pk.id as pk_id
+                FROM post_keywords pk
+                JOIN tracked_posts tp ON pk.tracked_post_id = tp.id
+                WHERE tp.tracked_blog_id = ?
+            """, (tracked_blog_id,))
+            keyword_ids = [row["pk_id"] for row in cursor.fetchall()]
+
+        if not keyword_ids:
+            return {
+                "total_tracked_keywords": 0,
+                "ever_indexed_count": 0,
+                "never_indexed_rate": 0,
+                "avg_indexing_delay_days": None,
+                "avg_exposure_rate": None,
+                "avg_drop_count": None,
+            }
+
+        delays = []
+        rates = []
+        drops = []
+        ever_indexed = 0
+        for pk_id in keyword_ids:
+            life = self.get_post_lifecycle(pk_id)
+            if life["first_indexed_at"]:
+                ever_indexed += 1
+            if life["indexing_delay_days"] is not None:
+                delays.append(life["indexing_delay_days"])
+            if life["tracked_days"] > 0:
+                rates.append(life["exposure_rate"])
+            drops.append(life["drop_count"])
+
+        return {
+            "total_tracked_keywords": len(keyword_ids),
+            "ever_indexed_count": ever_indexed,
+            "never_indexed_rate": round(1 - ever_indexed / len(keyword_ids), 3),
+            "avg_indexing_delay_days": round(sum(delays) / len(delays), 1) if delays else None,
+            "avg_exposure_rate": round(sum(rates) / len(rates), 3) if rates else None,
+            "avg_drop_count": round(sum(drops) / len(drops), 2) if drops else 0,
+        }
+
     # ============ 작업 상태 관리 ============
 
     def create_check_task(self, task_id: str, user_id: int, tracked_blog_id: int,

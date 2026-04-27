@@ -1,0 +1,182 @@
+{
+  "trained_at": "2026-04-27T18:07:52",
+  "total_samples": 436,
+  "min_n": 20,
+  "max_age_days": null,
+  "categories": {
+    "맛집": {
+      "c_rank": {
+        "weight": 0.273,
+        "sub_weights": {
+          "context": 0.55,
+          "content": 0.26,
+          "chain": 0.19
+        }
+      },
+      "dia": {
+        "weight": 0.227,
+        "sub_weights": {
+          "depth": 0.068,
+          "information": 0.789,
+          "accuracy": 0.144
+        }
+      },
+      "_meta": {
+        "n": 97,
+        "rhos": {
+          "context": 0.144,
+          "content": -0.068,
+          "chain": 0.05,
+          "depth": -0.015,
+          "information": -0.172,
+          "accuracy": 0.031
+        },
+        "trained_at": "2026-04-27T18:07:52"
+      }
+    },
+    "여행": {
+      "c_rank": {
+        "weight": 0.301,
+        "sub_weights": {
+          "context": 0.006,
+          "content": 0.621,
+          "chain": 0.373
+        }
+      },
+      "dia": {
+        "weight": 0.199,
+        "sub_weights": {
+          "information": 0.483,
+          "accuracy": 0.517
+        }
+      },
+      "_meta": {
+        "n": 64,
+        "rhos": {
+          "context": 0.001,
+          "content": 0.138,
+          "chain": -0.083,
+          "information": 0.071,
+          "accuracy": -0.076
+        },
+        "trained_at": "2026-04-27T18:07:52"
+      }
+    },
+    "IT": {
+      "c_rank": {
+        "weight": 0.268,
+        "sub_weights": {
+          "context": 0.759,
+          "content": 0.185,
+          "chain": 0.056
+        }
+      },
+      "dia": {
+        "weight": 0.232,
+        "sub_weights": {
+          "depth": 0.405,
+          "information": 0.246,
+          "accuracy": 0.349
+        }
+      },
+      "_meta": {
+        "n": 69,
+        "rhos": {
+          "context": -0.24,
+          "content": -0.058,
+          "chain": -0.018,
+          "depth": 0.111,
+          "information": -0.067,
+          "accuracy": 0.095
+        },
+        "trained_at": "2026-04-27T18:07:52"
+      }
+    },
+    "육아": {
+      "c_rank": {
+        "weight": 0.349,
+        "sub_weights": {
+          "context": 0.194,
+          "content": 0.064,
+          "chain": 0.743
+        }
+      },
+      "dia": {
+        "weight": 0.151,
+        "sub_weights": {
+          "information": 0.35,
+          "accuracy": 0.65
+        }
+      },
+      "_meta": {
+        "n": 51,
+        "rhos": {
+          "context": 0.073,
+          "content": 0.024,
+          "chain": -0.279,
+          "information": 0.057,
+          "accuracy": 0.105
+        },
+        "trained_at": "2026-04-27T18:07:52"
+      }
+    },
+    "리뷰": {
+      "c_rank": {
+        "weight": 0.297,
+        "sub_weights": {
+          "context": 0.163,
+          "content": 0.391,
+          "chain": 0.447
+        }
+      },
+      "dia": {
+        "weight": 0.203,
+        "sub_weights": {
+          "depth": 0.312,
+          "information": 0.417,
+          "accuracy": 0.271
+        }
+      },
+      "_meta": {
+        "n": 86,
+        "rhos": {
+          "context": 0.066,
+          "content": 0.157,
+          "chain": 0.18,
+          "depth": 0.086,
+          "information": 0.115,
+          "accuracy": 0.075
+        },
+        "trained_at": "2026-04-27T18:07:52"
+      }
+    },
+    "재테크": {
+      "c_rank": {
+        "weight": 0.319,
+        "sub_weights": {
+          "context": 0.283,
+          "content": 0.142,
+          "chain": 0.575
+        }
+      },
+      "dia": {
+        "weight": 0.181,
+        "sub_weights": {
+          "information": 0.338,
+          "accuracy": 0.662
+        }
+      },
+      "_meta": {
+        "n": 69,
+        "rhos": {
+          "context": -0.129,
+          "content": 0.065,
+          "chain": 0.262,
+          "information": 0.087,
+          "accuracy": -0.171
+        },
+        "trained_at": "2026-04-27T18:07:52"
+      }
+    }
+  }
+}

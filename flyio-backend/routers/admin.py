@@ -1679,3 +1679,138 @@ async def get_percentile_stats(admin: dict = Depends(require_admin)):
     except Exception as e:
         logger.error(f"Failed to get percentile stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ B 검증 → 자동 학습 운영자 대시보드 ============
+
+@router.get("/learning-status")
+async def get_learning_status(admin: dict = Depends(require_admin)):
+    """카테고리 가중치 자동 학습 시스템 상태.
+
+    - archive 통계 (파일 수, 누적 샘플 수, 최근/최오래된 시점)
+    - 학습된 가중치 메타 (카테고리별 n, 학습 시각, ρ)
+    - cron 동작 추정 (최근 archive 생성일)
+    """
+    import json as _json
+    from pathlib import Path
+    from datetime import datetime as _dt
+
+    backend_root = Path(__file__).resolve().parent.parent
+    archive_dir = backend_root / "data" / "correlation_archive"
+    learned_path = backend_root / "data" / "learned_category_weights.json"
+
+    # archive 통계
+    archive_files = sorted(archive_dir.glob("validation_*.json")) if archive_dir.exists() else []
+    archive_stats = {
+        "file_count": len(archive_files),
+        "oldest_file": archive_files[0].name if archive_files else None,
+        "newest_file": archive_files[-1].name if archive_files else None,
+        "total_samples": 0,
+        "files": [],
+    }
+    for fp in archive_files[-10:]:  # 최근 10개만 상세
+        try:
+            data = _json.loads(fp.read_text(encoding="utf-8"))
+            n = len(data) if isinstance(data, list) else 0
+            archive_stats["files"].append({
+                "name": fp.name,
+                "n": n,
+                "created_at": _dt.fromtimestamp(fp.stat().st_mtime).isoformat(timespec="seconds"),
+            })
+        except Exception as e:
+            archive_stats["files"].append({"name": fp.name, "error": str(e)[:80]})
+
+    # 전체 누적 샘플 수
+    for fp in archive_files:
+        try:
+            data = _json.loads(fp.read_text(encoding="utf-8"))
+            if isinstance(data, list):
+                archive_stats["total_samples"] += len(data)
+        except Exception:
+            pass
+
+    # 학습된 가중치
+    learned: dict = {"exists": False}
+    if learned_path.exists():
+        try:
+            ld = _json.loads(learned_path.read_text(encoding="utf-8"))
+            learned = {
+                "exists": True,
+                "trained_at": ld.get("trained_at"),
+                "total_samples": ld.get("total_samples"),
+                "min_n": ld.get("min_n"),
+                "categories": [
+                    {
+                        "category": cat,
+                        "n": w.get("_meta", {}).get("n", 0),
+                        "rhos": w.get("_meta", {}).get("rhos", {}),
+                        "c_rank_weight": w.get("c_rank", {}).get("weight"),
+                        "dia_weight": w.get("dia", {}).get("weight"),
+                        "c_sub_weights": w.get("c_rank", {}).get("sub_weights", {}),
+                        "d_sub_weights": w.get("dia", {}).get("sub_weights", {}),
+                    }
+                    for cat, w in ld.get("categories", {}).items()
+                ],
+            }
+        except Exception as e:
+            learned = {"exists": True, "error": str(e)[:120]}
+
+    # cron 추정 — 마지막 archive 생성일이 24h 이내면 daily cron OK
+    last_archive_age_hours = None
+    if archive_files:
+        last_mtime = archive_files[-1].stat().st_mtime
+        last_archive_age_hours = round((_dt.now().timestamp() - last_mtime) / 3600, 1)
+
+    return {
+        "archive": archive_stats,
+        "learned": learned,
+        "cron_health": {
+            "last_archive_age_hours": last_archive_age_hours,
+            "daily_cron_likely_ok": last_archive_age_hours is not None and last_archive_age_hours < 30,
+            "weekly_learning_likely_ok": (
+                learned.get("trained_at") is not None and
+                learned.get("trained_at", "") > (_dt.now() - __import__("datetime").timedelta(days=10)).isoformat()
+            ) if learned.get("exists") else False,
+        },
+    }
+
+
+@router.get("/cron-health")
+async def get_cron_health(admin: dict = Depends(require_admin)):
+    """SERP 측정 cron 작업 상태."""
+    from database.rank_tracker_db import get_rank_tracker_db
+    db = get_rank_tracker_db()
+
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+        # 최근 24h 내 작업
+        cursor.execute("""
+            SELECT
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+                SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END) as running
+            FROM rank_check_tasks
+            WHERE started_at >= datetime('now', '-24 hours')
+        """)
+        recent_24h = dict(cursor.fetchone())
+
+        # cron 작업 (task_id LIKE 'cron-%')
+        cursor.execute("""
+            SELECT task_id, status, started_at, completed_at, error_message, total_keywords
+            FROM rank_check_tasks
+            WHERE task_id LIKE 'cron-%'
+            ORDER BY started_at DESC
+            LIMIT 20
+        """)
+        recent_cron = [dict(r) for r in cursor.fetchall()]
+
+        # 활성 추적 블로그
+        cursor.execute("SELECT COUNT(*) as cnt FROM tracked_blogs WHERE is_active = 1")
+        active_blogs = cursor.fetchone()["cnt"]
+
+    return {
+        "recent_24h": recent_24h,
+        "recent_cron_tasks": recent_cron,
+        "active_tracked_blogs": active_blogs,
+    }

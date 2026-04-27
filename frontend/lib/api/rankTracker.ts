@@ -185,6 +185,47 @@ export async function getRankStatistics(
   return response.data
 }
 
+// ============ B-2 검증 결과 활용: 노출 유지일수 + 인덱싱 속도 ============
+
+export interface PostLifecycle {
+  samples: number
+  tracked_days: number
+  first_indexed_at: string | null
+  last_indexed_at: string | null
+  indexing_delay_days: number | null
+  total_exposure_days: number
+  exposure_rate: number
+  max_consecutive_exposure_days: number
+  drop_count: number
+  avg_blog_rank: number | null
+  avg_view_rank: number | null
+}
+
+export interface BlogIndexingStats {
+  total_tracked_keywords: number
+  ever_indexed_count: number
+  never_indexed_rate: number
+  avg_indexing_delay_days: number | null
+  avg_exposure_rate: number | null
+  avg_drop_count: number
+  validation_note?: string
+}
+
+export async function getPostLifecycle(postKeywordId: number): Promise<PostLifecycle> {
+  const response = await apiClient.get(`/api/rank-tracker/lifecycle/${postKeywordId}`)
+  return response.data
+}
+
+export async function getBlogIndexingStats(
+  userId: number | string,
+  blogId: string
+): Promise<BlogIndexingStats> {
+  const response = await apiClient.get(`/api/rank-tracker/indexing-stats/${blogId}`, {
+    params: { user_id: userId },
+  })
+  return response.data
+}
+
 // ============ 키워드 관리 API ============
 
 export async function getKeywords(

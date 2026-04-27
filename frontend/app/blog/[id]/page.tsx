@@ -348,7 +348,9 @@ export default function BlogDetailPage() {
           </h3>
 
           <div className="grid md:grid-cols-5 gap-6">
-            {Object.entries(displayData.index.score_breakdown).map(([key, value]: [string, any], index) => {
+            {Object.entries(displayData.index.score_breakdown)
+              .filter(([key, value]) => typeof value === 'number' && ['trust', 'content', 'engagement', 'seo', 'traffic'].includes(key))
+              .map(([key, value]: [string, any], index) => {
               const labels: Record<string, string> = {
                 trust: '신뢰도',
                 content: '콘텐츠',

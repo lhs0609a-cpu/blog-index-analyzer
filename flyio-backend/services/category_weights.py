@@ -2,9 +2,45 @@
 키워드 카테고리별 가중치 시스템
 - 맛집, 의료, IT, 여행 등 카테고리에 따라 다른 가중치 적용
 - 각 카테고리의 상위 노출 패턴이 다름
+
+자동 학습 (B 검증 → 자동 학습 파이프라인):
+- scripts/learn_category_weights.py가 누적 archive로 카테고리별 ρ 측정
+- 결과를 data/learned_category_weights.json에 저장
+- 이 모듈이 학습값과 hardcoded(수동 추정값) 70/30 blend
 """
+import json
+import os
+from pathlib import Path
 from typing import Dict, Optional
 import re
+
+# 학습된 가중치 캐시 (process 시작 시 1회 로드, 5분 TTL)
+_LEARNED_CACHE: Dict = {"data": None, "loaded_at": 0}
+_LEARNED_TTL = 300  # 5분
+
+
+def _load_learned_weights() -> Dict:
+    """학습된 카테고리 가중치 JSON 로드 (캐시)"""
+    import time
+
+    if _LEARNED_CACHE["data"] is not None and time.time() - _LEARNED_CACHE["loaded_at"] < _LEARNED_TTL:
+        return _LEARNED_CACHE["data"]
+
+    # 백엔드 루트의 data/ 경로
+    here = Path(__file__).resolve().parent.parent  # services -> flyio-backend
+    learned_path = here / "data" / "learned_category_weights.json"
+
+    learned: Dict = {}
+    if learned_path.exists():
+        try:
+            data = json.loads(learned_path.read_text(encoding="utf-8"))
+            learned = data.get("categories", {})
+        except Exception:
+            learned = {}
+
+    _LEARNED_CACHE["data"] = learned
+    _LEARNED_CACHE["loaded_at"] = time.time()
+    return learned
 
 # 카테고리 분류 키워드
 CATEGORY_KEYWORDS = {
@@ -40,7 +76,8 @@ CATEGORY_KEYWORDS = {
     ],
     "육아": [
         "출산", "육아", "유모차", "카시트", "분유", "기저귀", "아기", "유아",
-        "어린이집", "유치원", "장난감", "아기옷"
+        "어린이집", "유치원", "장난감", "아기옷", "이유식", "수면교육", "임신",
+        "신생아", "걸음마", "엄마표", "돌잔치"
     ],
     "반려동물": [
         "강아지", "고양이", "반려동물", "펫", "동물병원", "사료", "간식",
@@ -52,16 +89,28 @@ CATEGORY_KEYWORDS = {
     ],
     "재테크": [
         "주식", "투자", "부동산", "코인", "적금", "예금", "대출", "보험",
-        "카드", "연금", "재테크", "절세"
+        "카드", "연금", "재테크", "절세", "isa", "etf", "청년도약", "청년희망",
+        "퇴직연금", "irp", "연금저축", "통장", "환테크", "비트코인"
+    ],
+    "리뷰": [
+        "후기", "리뷰", "사용기", "솔직", "내돈내산", "구매", "추천템",
+        "추천", "비교", "장단점", "vs", "어떤", "테스트"
     ]
 }
 
 # 카테고리별 가중치 프리셋
 CATEGORY_WEIGHTS = {
     "맛집": {
-        # 맛집은 이미지, 최신성, 지도가 중요
-        "c_rank": {"weight": 0.20},
-        "dia": {"weight": 0.20},
+        # B 검증 R8(n=97): 모든 신호 |ρ|<0.18, freshness 0.177이 그나마 강함
+        # R7(n=32) 결과가 더 큰 샘플에서 무너짐. 보수적 가중치.
+        "c_rank": {
+            "weight": 0.25,
+            "sub_weights": {"context": 0.40, "content": 0.50, "chain": 0.10},
+        },
+        "dia": {
+            "weight": 0.25,
+            "sub_weights": {"depth": 0.20, "information": 0.55, "accuracy": 0.25},
+        },
         "content_factors": {
             "weight": 0.60,
             "sub_weights": {
@@ -83,9 +132,15 @@ CATEGORY_WEIGHTS = {
         }
     },
     "의료": {
-        # 의료는 전문성, 글 길이, 정보성이 중요
-        "c_rank": {"weight": 0.30},          # 블로그 신뢰도 중요
-        "dia": {"weight": 0.30},              # 정보 정확성 중요
+        # 의료는 직접 검증 안 됨 — 도메인 추정. 전문성·글 길이·정보 깊이 중심
+        "c_rank": {
+            "weight": 0.30,
+            "sub_weights": {"context": 0.45, "content": 0.45, "chain": 0.10},
+        },
+        "dia": {
+            "weight": 0.35,
+            "sub_weights": {"depth": 0.30, "information": 0.40, "accuracy": 0.30},
+        },
         "content_factors": {
             "weight": 0.40,
             "sub_weights": {
@@ -107,9 +162,17 @@ CATEGORY_WEIGHTS = {
         }
     },
     "IT": {
-        # IT는 깊이, 정보성, 상세 스펙이 중요
-        "c_rank": {"weight": 0.25},
-        "dia": {"weight": 0.30},              # 정보 깊이 중요
+        # B 검증 R8(n=69): raw_avg_post_length ρ=0.339, post_total 0.316 (안정적으로 강함)
+        # context는 음의 상관(-0.240) — IT는 한 주제만 다루는 블로그보단 다양성 있는 블로그가 SERP 우위
+        # → 글 길이(C-Rank Content) 핵심, Context는 비중 낮춤
+        "c_rank": {
+            "weight": 0.40,
+            "sub_weights": {"context": 0.15, "content": 0.70, "chain": 0.15},
+        },
+        "dia": {
+            "weight": 0.20,
+            "sub_weights": {"depth": 0.30, "information": 0.40, "accuracy": 0.30},
+        },
         "content_factors": {
             "weight": 0.45,
             "sub_weights": {
@@ -131,20 +194,28 @@ CATEGORY_WEIGHTS = {
         }
     },
     "여행": {
-        # 여행은 이미지, 지도, 최신성이 중요
-        "c_rank": {"weight": 0.20},
-        "dia": {"weight": 0.20},
+        # B 검증 R8(n=64): fp_images ρ=0.369 (가장 안정적 강한 신호) ⭐
+        # post_freshness 0.144로 약화 (R7 0.371 → R8 0.144). 이미지가 진짜 결정적.
+        # → content_factors의 image_count 비중 ↑
+        "c_rank": {
+            "weight": 0.20,
+            "sub_weights": {"context": 0.25, "content": 0.60, "chain": 0.15},
+        },
+        "dia": {
+            "weight": 0.25,
+            "sub_weights": {"depth": 0.15, "information": 0.55, "accuracy": 0.30},
+        },
         "content_factors": {
-            "weight": 0.60,
+            "weight": 0.55,
             "sub_weights": {
-                "content_length": 0.12,
-                "heading_count": 0.10,
-                "paragraph_count": 0.08,
-                "image_count": 0.22,          # 여행 사진 매우 중요
+                "content_length": 0.10,
+                "heading_count": 0.08,
+                "paragraph_count": 0.07,
+                "image_count": 0.30,          # B-R8 검증: fp_images ρ=0.369 (안정적 최강 신호)
                 "keyword_count": 0.10,
-                "keyword_density": 0.06,
-                "freshness": 0.18,            # 최신 정보 중요
-                "title_keyword": 0.14,
+                "keyword_density": 0.05,
+                "freshness": 0.12,            # R7→R8 약화 — 비중 낮춤
+                "title_keyword": 0.18,
             }
         },
         "bonus_factors": {
@@ -155,9 +226,15 @@ CATEGORY_WEIGHTS = {
         }
     },
     "뷰티": {
-        # 뷰티는 이미지, 최신성, 상세 리뷰가 중요
-        "c_rank": {"weight": 0.22},
-        "dia": {"weight": 0.23},
+        # 뷰티는 직접 검증 안 됨 — 리뷰 카테고리와 유사 가정
+        "c_rank": {
+            "weight": 0.30,
+            "sub_weights": {"context": 0.30, "content": 0.55, "chain": 0.15},
+        },
+        "dia": {
+            "weight": 0.25,
+            "sub_weights": {"depth": 0.20, "information": 0.55, "accuracy": 0.25},
+        },
         "content_factors": {
             "weight": 0.55,
             "sub_weights": {
@@ -178,10 +255,109 @@ CATEGORY_WEIGHTS = {
             "engagement": 0.06,
         }
     },
+    "육아": {
+        # B 검증 R8(n=51): 모든 신호 |ρ|<0.17, post_freshness 0.168(부호반대) 외 강한 신호 없음
+        # R7 결과(post_total 0.408)는 n=17 노이즈였음. 보수적으로 default 근사.
+        "c_rank": {
+            "weight": 0.30,
+            "sub_weights": {"context": 0.40, "content": 0.50, "chain": 0.10},
+        },
+        "dia": {
+            "weight": 0.20,
+            "sub_weights": {"depth": 0.20, "information": 0.50, "accuracy": 0.30},
+        },
+        "content_factors": {
+            "weight": 0.35,
+            "sub_weights": {
+                "content_length": 0.13,
+                "heading_count": 0.10,
+                "paragraph_count": 0.10,
+                "image_count": 0.13,
+                "keyword_count": 0.13,
+                "keyword_density": 0.07,
+                "freshness": 0.18,
+                "title_keyword": 0.16,
+            }
+        },
+        "bonus_factors": {
+            "has_map": 0.02,
+            "has_link": 0.03,
+            "video_count": 0.04,
+            "engagement": 0.06,
+        }
+    },
+    "리뷰": {
+        # B 검증(n=29): content ρ=0.376(최강), post_total 0.319, context 0.241
+        # → 콘텐츠 점수 결정적. C-Rank Content 비중 최대.
+        "c_rank": {
+            "weight": 0.40,
+            "sub_weights": {"context": 0.30, "content": 0.55, "chain": 0.15},
+        },
+        "dia": {
+            "weight": 0.20,
+            "sub_weights": {"depth": 0.20, "information": 0.55, "accuracy": 0.25},
+        },
+        "content_factors": {
+            "weight": 0.40,
+            "sub_weights": {
+                "content_length": 0.18,
+                "heading_count": 0.12,
+                "paragraph_count": 0.10,
+                "image_count": 0.15,
+                "keyword_count": 0.13,
+                "keyword_density": 0.07,
+                "freshness": 0.13,
+                "title_keyword": 0.12,
+            }
+        },
+        "bonus_factors": {
+            "has_map": 0.01,
+            "has_link": 0.04,
+            "video_count": 0.05,
+            "engagement": 0.05,
+        }
+    },
+    "재테크": {
+        # B 검증 R8(n=69, 금융): 모든 신호 |ρ|<0.13. raw_avg_post_length 0.127이 그나마 강함.
+        # R7 결과(post_length 0.328)는 노이즈였음. 보수적 가중치 (글 길이는 약하게 우선).
+        "c_rank": {
+            "weight": 0.30,
+            "sub_weights": {"context": 0.30, "content": 0.55, "chain": 0.15},
+        },
+        "dia": {
+            "weight": 0.25,
+            "sub_weights": {"depth": 0.25, "information": 0.45, "accuracy": 0.30},
+        },
+        "content_factors": {
+            "weight": 0.35,
+            "sub_weights": {
+                "content_length": 0.22,
+                "heading_count": 0.13,
+                "paragraph_count": 0.12,
+                "image_count": 0.08,
+                "keyword_count": 0.13,
+                "keyword_density": 0.08,
+                "freshness": 0.10,
+                "title_keyword": 0.14,
+            }
+        },
+        "bonus_factors": {
+            "has_map": 0.01,
+            "has_link": 0.05,
+            "video_count": 0.03,
+            "engagement": 0.03,
+        }
+    },
     "default": {
-        # 기본 가중치 (분류 안 되는 키워드)
-        "c_rank": {"weight": 0.25},
-        "dia": {"weight": 0.25},
+        # 기본 가중치 — B 검증 종합 결과 반영
+        "c_rank": {
+            "weight": 0.30,
+            "sub_weights": {"context": 0.40, "content": 0.50, "chain": 0.10},
+        },
+        "dia": {
+            "weight": 0.20,
+            "sub_weights": {"depth": 0.20, "information": 0.50, "accuracy": 0.30},
+        },
         "content_factors": {
             "weight": 0.50,
             "sub_weights": {
@@ -207,28 +383,74 @@ CATEGORY_WEIGHTS = {
 
 def detect_keyword_category(keyword: str) -> str:
     """
-    키워드에서 카테고리 감지
+    키워드에서 카테고리 감지.
 
-    Args:
-        keyword: 검색 키워드
+    매칭 규칙: 도메인 카테고리(맛집/IT/여행/육아/재테크/의료/뷰티/교육/반려동물/인테리어)를
+    먼저 검사. 도메인 매칭 실패 시에만 "리뷰" 같은 메타 카테고리로 폴백.
 
-    Returns:
-        카테고리 이름 (맛집, 의료, IT, 여행, 뷰티, 교육, 육아, 반려동물, 인테리어, 재테크, default)
+    이유: "다이슨 청소기 후기"는 인테리어 도메인이지 리뷰 메타가 아니다.
+    "리뷰"는 도메인 미매칭 키워드의 폴백.
     """
     keyword_lower = keyword.lower().replace(" ", "")
 
-    # 각 카테고리 키워드와 매칭
-    for category, category_keywords in CATEGORY_KEYWORDS.items():
+    # 1단계: 도메인 카테고리 우선 매칭 (메타 카테고리 제외)
+    domain_categories = {k: v for k, v in CATEGORY_KEYWORDS.items() if k != "리뷰"}
+    for category, category_keywords in domain_categories.items():
         for kw in category_keywords:
             if kw in keyword_lower:
                 return category
 
+    # 2단계: 메타(리뷰) 폴백
+    review_keywords = CATEGORY_KEYWORDS.get("리뷰", [])
+    for kw in review_keywords:
+        if kw in keyword_lower:
+            return "리뷰"
+
     return "default"
+
+
+def _blend_weights(manual: Dict, learned: Dict, learned_ratio: float = 0.7) -> Dict:
+    """수동(hardcoded) + 학습값 blend.
+
+    learned_ratio: 학습값 비중 (기본 0.7 — 데이터 기반 우선)
+    """
+    if not learned:
+        return manual
+
+    blended = json.loads(json.dumps(manual))  # deep copy
+
+    # main weights (c_rank, dia)
+    for group in ("c_rank", "dia"):
+        if group in learned and "weight" in learned[group]:
+            m_w = blended.get(group, {}).get("weight", 0.25)
+            l_w = learned[group]["weight"]
+            blended[group]["weight"] = round(l_w * learned_ratio + m_w * (1 - learned_ratio), 3)
+
+        # sub_weights blend
+        l_sub = learned.get(group, {}).get("sub_weights", {})
+        m_sub = blended.get(group, {}).get("sub_weights", {})
+        if l_sub:
+            new_sub = {}
+            keys = set(m_sub.keys()) | set(l_sub.keys())
+            for k in keys:
+                new_sub[k] = round(
+                    l_sub.get(k, 0) * learned_ratio + m_sub.get(k, 0) * (1 - learned_ratio),
+                    3,
+                )
+            # 정규화 — 합 1.0
+            total = sum(new_sub.values())
+            if total > 0:
+                new_sub = {k: round(v / total, 3) for k, v in new_sub.items()}
+            blended[group]["sub_weights"] = new_sub
+
+    return blended
 
 
 def get_category_weights(keyword: str) -> Dict:
     """
-    키워드에 맞는 카테고리별 가중치 반환
+    키워드에 맞는 카테고리별 가중치 반환.
+
+    학습된 가중치가 있으면 hardcoded와 70/30 blend (학습값 우선).
 
     Args:
         keyword: 검색 키워드
@@ -237,7 +459,18 @@ def get_category_weights(keyword: str) -> Dict:
         해당 카테고리의 가중치 딕셔너리
     """
     category = detect_keyword_category(keyword)
-    weights = CATEGORY_WEIGHTS.get(category, CATEGORY_WEIGHTS["default"]).copy()
+    manual = CATEGORY_WEIGHTS.get(category, CATEGORY_WEIGHTS["default"])
+
+    # 학습된 가중치와 blend
+    learned_all = _load_learned_weights()
+    learned_for_cat = learned_all.get(category)
+    if learned_for_cat:
+        weights = _blend_weights(manual, learned_for_cat, learned_ratio=0.7)
+        weights["_learned"] = True
+        weights["_learned_meta"] = learned_for_cat.get("_meta", {})
+    else:
+        weights = json.loads(json.dumps(manual))  # deep copy
+        weights["_learned"] = False
 
     # C-Rank, DIA sub_weights는 기본값 사용
     if "sub_weights" not in weights.get("c_rank", {}):

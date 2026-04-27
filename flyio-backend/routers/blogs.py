@@ -1979,27 +1979,37 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
                     links = soup.select('a[href*="http"]:not([href*="naver.com"]):not([href*="naver.net"])')
                     post_analysis["has_link"] = len(links) > 0
 
-                # 공감 수 (모바일)
-                like_elem = soup.select_one('.u_cnt, .sympathy_count, ._sympathyCount, .like_count, .btn_like_count')
-                if like_elem:
-                    try:
-                        like_text = like_elem.get_text(strip=True)
-                        nums = re.findall(r'\d+', like_text)
-                        if nums:
-                            post_analysis["like_count"] = int(nums[0])
-                    except:
-                        pass
+                # 공감 수 (모바일) — 셀렉터 + 인라인 attribute regex
+                if not post_analysis["like_count"]:
+                    like_elem = soup.select_one('.u_cnt, .sympathy_count, ._sympathyCount, .like_count, .btn_like_count')
+                    if like_elem:
+                        try:
+                            nums = re.findall(r'\d+', like_elem.get_text(strip=True))
+                            if nums:
+                                post_analysis["like_count"] = int(nums[0])
+                        except:
+                            pass
+                    # 인라인 HTML의 sympathyCnt="N" / sympathyCount="N" attribute
+                    if not post_analysis["like_count"]:
+                        m = re.search(r'(?:sympathyCnt|sympathyCount|likeCount)\s*=\s*["\']?(\d+)["\']?', html)
+                        if m:
+                            post_analysis["like_count"] = int(m.group(1))
 
-                # 댓글 수
-                comment_elem = soup.select_one('.comment_count, ._commentCount, .cmt_count, .btn_comment_count')
-                if comment_elem:
-                    try:
-                        cmt_text = comment_elem.get_text(strip=True)
-                        nums = re.findall(r'\d+', cmt_text)
-                        if nums:
-                            post_analysis["comment_count"] = int(nums[0])
-                    except:
-                        pass
+                # 댓글 수 — 셀렉터 + 인라인 attribute regex
+                if not post_analysis["comment_count"]:
+                    comment_elem = soup.select_one('.comment_count, ._commentCount, .cmt_count, .btn_comment_count')
+                    if comment_elem:
+                        try:
+                            nums = re.findall(r'\d+', comment_elem.get_text(strip=True))
+                            if nums:
+                                post_analysis["comment_count"] = int(nums[0])
+                        except:
+                            pass
+                    # 모바일 HTML 인라인 attribute: commentCount="N"
+                    if not post_analysis["comment_count"]:
+                        m = re.search(r'commentCount\s*=\s*["\']?(\d+)["\']?', html)
+                        if m:
+                            post_analysis["comment_count"] = int(m.group(1))
 
                 # 작성일 추출 (여러 방법 시도)
                 from datetime import datetime
@@ -2106,7 +2116,135 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
         import traceback
         logger.error(traceback.format_exc())
 
+    # ===== 포스트 단위 6신호 점수 (D.I.A.+ 문서 평가 모방) =====
+    # 블로그 평균 점수가 SERP 순위와 무관(ρ≈0.04)이라는 검증 결과 → 포스트 단위로 전환
+    post_analysis["post_score"] = calculate_post_score(post_analysis)
+
     return post_analysis
+
+
+def calculate_post_score(p: Dict) -> Dict:
+    """포스트 1개의 D.I.A.+ 모방 6신호 점수.
+
+    SERP 순위와의 상관 검증을 위한 문서 단위 점수.
+    각 신호 0~100, 종합 0~100.
+    """
+    # 1. title_match: 제목에 키워드 포함 + 위치 (앞쪽일수록 ↑)
+    if p.get("title_has_keyword"):
+        pos = p.get("title_keyword_position", -1)
+        if pos == 0:
+            title_score = 95   # 맨 앞
+        elif pos == 1:
+            title_score = 75   # 중간
+        elif pos == 2:
+            title_score = 60   # 끝
+        else:
+            title_score = 50
+    else:
+        title_score = 20  # 키워드 없음
+
+    # 2. keyword_density: 1.5~3% 적정 (네이버 권장)
+    density = p.get("keyword_density", 0) or 0
+    # 1000자당 등장 횟수 → % 환산: density / 10
+    density_pct = density / 10
+    if 1.5 <= density_pct <= 3.0:
+        density_score = 95
+    elif 1.0 <= density_pct < 1.5 or 3.0 < density_pct <= 4.0:
+        density_score = 80
+    elif 0.5 <= density_pct < 1.0 or 4.0 < density_pct <= 6.0:
+        density_score = 60
+    elif density_pct > 0:
+        density_score = 40  # 너무 적거나 과도
+    else:
+        density_score = 20
+
+    # 3. content_richness: 본문 길이 + 이미지 + 동영상 결합
+    length = p.get("content_length", 0) or 0
+    images = p.get("image_count", 0) or 0
+    videos = p.get("video_count", 0) or 0
+
+    if length >= 3000:
+        len_part = 50
+    elif length >= 2000:
+        len_part = 40
+    elif length >= 1000:
+        len_part = 30
+    elif length >= 500:
+        len_part = 20
+    else:
+        len_part = 10
+
+    img_part = min(30, images * 3)       # 이미지 1개당 +3, 최대 30
+    vid_part = min(20, videos * 10)      # 동영상 1개당 +10, 최대 20
+    richness_score = min(100, len_part + img_part + vid_part)
+
+    # 4. structural: 문단/소제목 구조화
+    paragraphs = p.get("paragraph_count", 0) or 0
+    headings = p.get("heading_count", 0) or 0
+    structure_raw = paragraphs * 2 + headings * 5
+    if structure_raw >= 50:
+        structural_score = 95
+    elif structure_raw >= 30:
+        structural_score = 80
+    elif structure_raw >= 15:
+        structural_score = 65
+    elif structure_raw >= 5:
+        structural_score = 45
+    else:
+        structural_score = 25
+
+    # 5. engagement: 공감 + 댓글*2 (댓글이 더 강한 신호)
+    likes = p.get("like_count", 0) or 0
+    comments = p.get("comment_count", 0) or 0
+    engagement = likes + comments * 2
+    if engagement >= 100:
+        engagement_score = 95
+    elif engagement >= 50:
+        engagement_score = 85
+    elif engagement >= 25:
+        engagement_score = 75
+    elif engagement >= 10:
+        engagement_score = 60
+    elif engagement >= 3:
+        engagement_score = 45
+    elif engagement >= 1:
+        engagement_score = 35
+    else:
+        engagement_score = 25
+
+    # 6. freshness: 최근 작성일수록 ↑
+    age = p.get("post_age_days")
+    if age is None:
+        freshness_score = 50  # 측정 불가 시 중립
+    elif age <= 7:
+        freshness_score = 95
+    elif age <= 30:
+        freshness_score = 85
+    elif age <= 90:
+        freshness_score = 70
+    elif age <= 180:
+        freshness_score = 55
+    elif age <= 365:
+        freshness_score = 40
+    else:
+        freshness_score = 25
+
+    # 종합 — 동일 가중치 (1/6). 검증 후 가중치 조정 예정
+    total = round(
+        (title_score + density_score + richness_score
+         + structural_score + engagement_score + freshness_score) / 6,
+        1,
+    )
+
+    return {
+        "total": total,
+        "title_match": title_score,
+        "keyword_density": density_score,
+        "content_richness": richness_score,
+        "structural": structural_score,
+        "engagement": engagement_score,
+        "freshness": freshness_score,
+    }
 
 
 async def scrape_blog_stats_fast(blog_id: str) -> Dict:
@@ -2416,6 +2554,21 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
         "category_count": 0,
         "avg_post_length": None,
         "comment_ratio": None,
+        # A-2 진짜 신호 보강 (외부에서 측정 가능한 raw 값들)
+        "category_entropy": None,         # Shannon entropy — 카테고리 분포 다양성 (낮을수록 집중도 ↑)
+        "avg_image_count": None,          # RSS description의 <img> 카운트 (요약 기준)
+        "avg_word_count": None,           # 포스트당 평균 단어 수 (RSS description 기반)
+        "posting_interval_days": None,    # 평균 발행 간격 (일)
+        # 풀파싱 신호 (analyze_post 호출, 최근 N개 평균)
+        "fullparse_n": None,
+        "fullparse_avg_likes": None,
+        "fullparse_avg_comments": None,
+        "fullparse_avg_images": None,
+        "fullparse_avg_videos": None,
+        "fullparse_avg_content_length": None,
+        "fullparse_avg_paragraphs": None,
+        "fullparse_avg_headings": None,
+        "fullparse_has_map_ratio": None,
         "data_sources": []  # Track which sources provided data
     }
 
@@ -2498,26 +2651,67 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
                         else:
                             stats["total_posts"] = rss_count * 2
 
-                    # 평균 글 길이 계산 (처음 5개) - 항상 RSS에서 가져옴
+                    # 평균 글 길이 + A-2 진짜 신호 계산 (처음 10개) - 항상 RSS에서 가져옴
                     total_len = 0
+                    total_images = 0
+                    total_words = 0
                     valid_items = 0
-                    for item in items[:5]:
+                    for item in items[:10]:
                         desc = item.find('description')
                         if desc:
-                            content = desc.get_text(strip=True)
-                            total_len += len(content)
+                            raw = desc.get_text(strip=True)
+                            total_len += len(raw)
+                            # 이미지 개수: description에서 <img> 출현 카운트
+                            total_images += raw.lower().count('<img') if raw else 0
+                            # 단어 수: 한국어 공백 분리 + 한자/한글 어절
+                            text_only = re.sub(r'<[^>]+>', ' ', raw)
+                            words = [w for w in text_only.split() if len(w) >= 2]
+                            total_words += len(words)
                             valid_items += 1
 
                     if valid_items > 0:
                         analysis_data["avg_post_length"] = total_len // valid_items
+                        analysis_data["avg_image_count"] = round(total_images / valid_items, 1)
+                        analysis_data["avg_word_count"] = total_words // valid_items
 
-                    # 카테고리 수 추정 (고유 카테고리 개수)
-                    categories = set()
+                    # 카테고리 수 + 분포 엔트로피
+                    cat_freq: Dict[str, int] = {}
                     for item in items:
                         cat = item.find('category')
                         if cat:
-                            categories.add(cat.get_text(strip=True))
-                    analysis_data["category_count"] = len(categories) if categories else 3
+                            name = cat.get_text(strip=True)
+                            if name:
+                                cat_freq[name] = cat_freq.get(name, 0) + 1
+                    analysis_data["category_count"] = len(cat_freq) if cat_freq else 3
+                    if cat_freq:
+                        import math
+                        total_cat = sum(cat_freq.values())
+                        # Shannon entropy (bits). 0 = 모든 글이 한 카테고리, 높을수록 분산
+                        entropy = -sum(
+                            (c / total_cat) * math.log2(c / total_cat)
+                            for c in cat_freq.values() if c > 0
+                        )
+                        analysis_data["category_entropy"] = round(entropy, 3)
+
+                    # 평균 발행 간격 (전체 items의 pubDate 차이)
+                    try:
+                        from email.utils import parsedate_to_datetime
+                        dates = []
+                        for item in items[:20]:
+                            p = item.find('pubDate')
+                            if p:
+                                try:
+                                    dates.append(parsedate_to_datetime(p.get_text()))
+                                except:
+                                    pass
+                        if len(dates) >= 2:
+                            dates.sort(reverse=True)
+                            intervals = [(dates[i] - dates[i+1]).days for i in range(len(dates) - 1)]
+                            intervals = [d for d in intervals if d >= 0]
+                            if intervals:
+                                analysis_data["posting_interval_days"] = round(sum(intervals) / len(intervals), 1)
+                    except Exception:
+                        pass
 
                     # 최근 활동일 계산
                     pub = items[0].find('pubDate')
@@ -2529,6 +2723,64 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
                             analysis_data["recent_activity"] = (datetime.now(timezone.utc) - last).days
                         except:
                             analysis_data["recent_activity"] = 7
+
+                    # ===== A-2 풀파싱: 최근 포스트 N개의 진짜 신호 평균 =====
+                    # RSS만으론 RSS description(요약)밖에 못 봄.
+                    # analyze_post를 병렬 호출해 공감·댓글·이미지·문단·소제목·키워드밀도까지 추출.
+                    try:
+                        post_links: List[str] = []
+                        for item in items[:3]:  # 처음 3개만 (성능 제약)
+                            link_elem = item.find('link')
+                            if link_elem and link_elem.get_text(strip=True):
+                                post_links.append(link_elem.get_text(strip=True))
+
+                        if post_links:
+                            post_keyword = keyword or ""
+                            # 동시 풀파싱 (최대 3개 병렬)
+                            post_results = await asyncio.gather(
+                                *[analyze_post(url, post_keyword) for url in post_links],
+                                return_exceptions=True,
+                            )
+                            valid_posts = [
+                                p for p in post_results
+                                if isinstance(p, dict) and p.get("data_fetched")
+                            ]
+                            if valid_posts:
+                                n = len(valid_posts)
+                                analysis_data["fullparse_avg_likes"] = round(
+                                    sum(p.get("like_count", 0) or 0 for p in valid_posts) / n, 1
+                                )
+                                analysis_data["fullparse_avg_comments"] = round(
+                                    sum(p.get("comment_count", 0) or 0 for p in valid_posts) / n, 1
+                                )
+                                analysis_data["fullparse_avg_images"] = round(
+                                    sum(p.get("image_count", 0) or 0 for p in valid_posts) / n, 1
+                                )
+                                analysis_data["fullparse_avg_videos"] = round(
+                                    sum(p.get("video_count", 0) or 0 for p in valid_posts) / n, 1
+                                )
+                                analysis_data["fullparse_avg_content_length"] = round(
+                                    sum(p.get("content_length", 0) or 0 for p in valid_posts) / n
+                                )
+                                analysis_data["fullparse_avg_paragraphs"] = round(
+                                    sum(p.get("paragraph_count", 0) or 0 for p in valid_posts) / n, 1
+                                )
+                                analysis_data["fullparse_avg_headings"] = round(
+                                    sum(p.get("heading_count", 0) or 0 for p in valid_posts) / n, 1
+                                )
+                                analysis_data["fullparse_has_map_ratio"] = round(
+                                    sum(1 for p in valid_posts if p.get("has_map")) / n, 2
+                                )
+                                analysis_data["fullparse_n"] = n
+                                analysis_data["data_sources"].append("fullparse")
+                                logger.info(
+                                    f"Fullparse {blog_id}: n={n}, likes={analysis_data['fullparse_avg_likes']}, "
+                                    f"comments={analysis_data['fullparse_avg_comments']}, "
+                                    f"imgs={analysis_data['fullparse_avg_images']}, "
+                                    f"len={analysis_data['fullparse_avg_content_length']}"
+                                )
+                    except Exception as e:
+                        logger.warning(f"Fullparse failed for {blog_id}: {e}")
 
                     # 이웃 수 추정 (글 수와 활동성 기반)
                     if stats["total_posts"] and stats["total_posts"] > 100:
@@ -2594,10 +2846,19 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
         # C-Rank: Context(주제집중도) + Content(콘텐츠품질) + Chain(연결성)
 
         # Context Score (주제 집중도) - 0~100
+        # A-2 보강: 카테고리 엔트로피 우선 사용. 엔트로피가 낮을수록 = 한 카테고리에 글이 몰림 = 주제 집중도 ↑
         context_score = 50  # Base
-        if analysis_data["category_count"]:
-            # 카테고리가 적을수록 주제 집중도 높음 (1~3개 최적)
-            cats = analysis_data["category_count"]
+        entropy = analysis_data.get("category_entropy")
+        cats = analysis_data.get("category_count") or 0
+        if entropy is not None and cats > 0:
+            # log2(cats)는 카테고리가 균등 분포일 때 최대 엔트로피. 정규화: 0(완벽 집중) ~ 1(완전 분산)
+            import math as _math
+            max_entropy = _math.log2(cats) if cats > 1 else 1.0
+            normalized = entropy / max_entropy if max_entropy > 0 else 0
+            # normalized 0 → 95점, 1 → 35점 (선형)
+            context_score = max(35, min(95, round(95 - normalized * 60)))
+        elif cats > 0:
+            # 엔트로피 못 구한 경우: 기존 카테고리 개수 휴리스틱 폴백
             if cats <= 3:
                 context_score = 90
             elif cats <= 5:
@@ -2608,30 +2869,80 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
                 context_score = 40
 
         # Content Score (콘텐츠 품질) - 0~100
+        # A-2 보강: 글 길이 + 이미지 개수 + 단어 수를 결합
         content_score = 50  # Base
-        # RSS description은 요약이라 실제 글 길이의 10-15% 정도만 포함
-        # 따라서 RSS 길이 × 6~8 정도가 실제 글 길이에 가까움
         avg_len = analysis_data.get("avg_post_length") or 0
         if avg_len > 0 and avg_len < 500:
-            # RSS 요약문이 짧으면 실제 글 길이로 보정 (약 6~8배)
             avg_len = avg_len * 7
 
         if avg_len >= 3000:
-            content_score = 95
+            length_score = 95
         elif avg_len >= 2000:
-            content_score = 85
+            length_score = 85
         elif avg_len >= 1500:
-            content_score = 75
+            length_score = 75
         elif avg_len >= 1000:
-            content_score = 65
+            length_score = 65
         elif avg_len >= 500:
-            content_score = 50
+            length_score = 50
         else:
-            content_score = 35
+            length_score = 35
 
-        # Chain Score (연결성) - 0~100
+        # 이미지 보너스 — 풀파싱 우선, 없으면 RSS 기반
+        avg_imgs = analysis_data.get("fullparse_avg_images") or analysis_data.get("avg_image_count") or 0
+        if avg_imgs >= 10:
+            img_bonus = 15
+        elif avg_imgs >= 5:
+            img_bonus = 10
+        elif avg_imgs >= 2:
+            img_bonus = 5
+        else:
+            img_bonus = 0
+
+        # 단어 수 보너스
+        avg_words = analysis_data.get("avg_word_count") or 0
+        if avg_words >= 200:
+            word_bonus = 10
+        elif avg_words >= 100:
+            word_bonus = 5
+        else:
+            word_bonus = 0
+
+        # 구조 보너스 (풀파싱) — 소제목/문단이 많으면 구조화된 글
+        avg_headings = analysis_data.get("fullparse_avg_headings") or 0
+        avg_paragraphs = analysis_data.get("fullparse_avg_paragraphs") or 0
+        if avg_headings >= 3 or avg_paragraphs >= 8:
+            struct_bonus = 8
+        elif avg_headings >= 1 or avg_paragraphs >= 4:
+            struct_bonus = 4
+        else:
+            struct_bonus = 0
+
+        content_score = min(100, length_score + img_bonus + word_bonus + struct_bonus)
+
+        # Chain Score (연결성/공감 연쇄) - 0~100
+        # A-2 보강: 풀파싱 공감/댓글 우선, 없으면 이웃수 폴백
         chain_score = 50  # Base
-        if stats["neighbor_count"]:
+        avg_likes = analysis_data.get("fullparse_avg_likes")
+        avg_comments = analysis_data.get("fullparse_avg_comments")
+        if avg_likes is not None or avg_comments is not None:
+            # 진짜 신호: 공감 + 댓글*2 (댓글이 더 강한 engagement 신호)
+            engagement = (avg_likes or 0) + (avg_comments or 0) * 2
+            if engagement >= 100:
+                chain_score = 95
+            elif engagement >= 50:
+                chain_score = 85
+            elif engagement >= 25:
+                chain_score = 75
+            elif engagement >= 10:
+                chain_score = 65
+            elif engagement >= 5:
+                chain_score = 55
+            elif engagement >= 1:
+                chain_score = 45
+            else:
+                chain_score = 30
+        elif stats["neighbor_count"]:
             neighbors = stats["neighbor_count"]
             if neighbors >= 5000:
                 chain_score = 95
@@ -2648,14 +2959,17 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
             else:
                 chain_score = 35
 
-        # C-Rank sub-weights (from category weights)
+        # C-Rank sub-weights — B 검증 결과(n=67) 기반 재조정
+        # 측정된 SERP 상관: context ρ=+0.134, content ρ=+0.153, chain ρ=-0.045
+        # → chain은 부호 반대까지 나와 비중 ↓↓, context/content ↑
+        # 기존 default: 0.35 / 0.40 / 0.25 → 신규: 0.40 / 0.50 / 0.10
         if category_weights and 'c_rank' in category_weights:
             c_sub = category_weights['c_rank'].get('sub_weights', {})
-            context_w = c_sub.get('context', 0.35)
-            content_w = c_sub.get('content', 0.40)
-            chain_w = c_sub.get('chain', 0.25)
+            context_w = c_sub.get('context', 0.40)
+            content_w = c_sub.get('content', 0.50)
+            chain_w = c_sub.get('chain', 0.10)
         else:
-            context_w, content_w, chain_w = 0.35, 0.40, 0.25
+            context_w, content_w, chain_w = 0.40, 0.50, 0.10
 
         c_rank_score = (context_score * context_w + content_score * content_w + chain_score * chain_w)
 
@@ -2682,24 +2996,44 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
                 depth_score = 35
 
         # Information Score (정보성) - 0~100
+        # A-2 보강: 최근 활동일 + 평균 발행 간격을 함께 본다 (꾸준함 측정)
         info_score = 50  # Base
-        # 최근 활동 기반 (활발한 블로그 = 정보 업데이트)
         if analysis_data["recent_activity"] is not None:
             days = analysis_data["recent_activity"]
             if days <= 1:
-                info_score = 95
+                recency_score = 95
             elif days <= 3:
-                info_score = 85
+                recency_score = 85
             elif days <= 7:
-                info_score = 75
+                recency_score = 75
             elif days <= 14:
-                info_score = 65
+                recency_score = 65
             elif days <= 30:
-                info_score = 50
+                recency_score = 50
             elif days <= 90:
-                info_score = 35
+                recency_score = 35
             else:
-                info_score = 20
+                recency_score = 20
+        else:
+            recency_score = 50
+
+        # 발행 간격: 평균 1~3일 = 95, 3~7일 = 80, 7~14일 = 65, 14~30일 = 45, 그 이상 = 25
+        interval = analysis_data.get("posting_interval_days")
+        if interval is not None:
+            if interval <= 3:
+                interval_score = 95
+            elif interval <= 7:
+                interval_score = 80
+            elif interval <= 14:
+                interval_score = 65
+            elif interval <= 30:
+                interval_score = 45
+            else:
+                interval_score = 25
+            # 최근성 70% + 발행 간격 30%
+            info_score = round(recency_score * 0.7 + interval_score * 0.3)
+        else:
+            info_score = recency_score
 
         # Accuracy Score (신뢰도/정확성) - 0~100
         accuracy_score = 50  # Base
@@ -2723,27 +3057,35 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
             else:
                 accuracy_score = 30
 
-        # D.I.A. sub-weights (from category weights)
+        # D.I.A. sub-weights — B 검증 결과(n=67) 기반 재조정
+        # 측정 ρ: depth +0.022, information -0.090, accuracy -0.054 (모두 약함)
+        # information이 |ρ| 가장 큼 — 비중 유지/소폭 ↑
+        # depth(=총 발행)는 거의 무관 — 비중 ↓
+        # 기존 default: 0.33 / 0.34 / 0.33 → 신규: 0.20 / 0.50 / 0.30
         if category_weights and 'dia' in category_weights:
             d_sub = category_weights['dia'].get('sub_weights', {})
-            depth_w = d_sub.get('depth', 0.33)
-            info_w = d_sub.get('information', 0.34)
-            acc_w = d_sub.get('accuracy', 0.33)
+            depth_w = d_sub.get('depth', 0.20)
+            info_w = d_sub.get('information', 0.50)
+            acc_w = d_sub.get('accuracy', 0.30)
         else:
-            depth_w, info_w, acc_w = 0.33, 0.34, 0.33
+            depth_w, info_w, acc_w = 0.20, 0.50, 0.30
 
         dia_score = (depth_score * depth_w + info_score * info_w + accuracy_score * acc_w)
 
-        # ===== FINAL SCORE with category + learned weights =====
+        # ===== FINAL SCORE — B 검증 결과 기반 가중치 =====
+        # 측정 ρ: c_rank +0.032, dia +0.015, content_factors(외부 측정 raw) > 둘
+        # → c_rank가 dia보다 약간 신뢰 가능, content_factors는 그대로 핵심
+        # 기존 default: c_rank 0.25 / dia 0.25 / content 0.50
+        # 신규: c_rank 0.30 / dia 0.20 / content 0.50 (c_rank 약간 ↑, dia ↓)
         if category_weights:
-            c_rank_weight = category_weights.get('c_rank', {}).get('weight', 0.25)
-            dia_weight = category_weights.get('dia', {}).get('weight', 0.25)
+            c_rank_weight = category_weights.get('c_rank', {}).get('weight', 0.30)
+            dia_weight = category_weights.get('dia', {}).get('weight', 0.20)
             content_weight = category_weights.get('content_factors', {}).get('weight', 0.50)
             extra_factors = category_weights.get('extra_factors', {})
             bonus_factors = category_weights.get('bonus_factors', {})
         else:
-            c_rank_weight = 0.25
-            dia_weight = 0.25
+            c_rank_weight = 0.30
+            dia_weight = 0.20
             content_weight = 0.50
             extra_factors = {'post_count': 0.05, 'neighbor_count': 0.03, 'visitor_count': 0.02}
             bonus_factors = {'has_map': 0.03, 'has_link': 0.02, 'video_count': 0.05, 'engagement': 0.05}
@@ -2831,7 +3173,7 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
             index["percentile"] = min(index["total_score"], 99)
             index["level_category"] = "마스터" if index["level"] >= 13 else "엘리트" if index["level"] >= 10 else "우수" if index["level"] >= 7 else "성장" if index["level"] >= 4 else "입문"
 
-        # Store detailed breakdown with category info
+        # Store detailed breakdown with category info + A-2 raw signals
         index["score_breakdown"] = {
             "c_rank": round(c_rank_score * c_rank_weight, 1),
             "dia": round(dia_score * dia_weight, 1),
@@ -2848,9 +3190,36 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
             "weights_used": {
                 "c_rank": round(c_rank_weight, 2),
                 "dia": round(dia_weight, 2),
-                "content": round(content_weight, 2)
+                "content": round(content_weight, 2),
+                # 자동 학습 시스템 적용 여부 — UI 배지용
+                "is_learned": bool(category_weights.get("_learned")) if category_weights else False,
+                "learned_meta": (category_weights or {}).get("_learned_meta") if category_weights else None,
             },
-            "keyword_category": keyword_category if keyword else "default"
+            "keyword_category": keyword_category if keyword else "default",
+            # A-2 raw 신호 — 정직성 표기용. UI에서 추정치 옆에 실제 측정한 raw 값을 노출
+            "raw_signals": {
+                "category_count": analysis_data.get("category_count"),
+                "category_entropy": analysis_data.get("category_entropy"),
+                "avg_post_length": analysis_data.get("avg_post_length"),
+                "avg_image_count": analysis_data.get("avg_image_count"),
+                "avg_word_count": analysis_data.get("avg_word_count"),
+                "posting_interval_days": analysis_data.get("posting_interval_days"),
+                "recent_activity_days": analysis_data.get("recent_activity"),
+                "neighbor_count": stats.get("neighbor_count"),
+                "total_posts": stats.get("total_posts"),
+                "total_visitors": stats.get("total_visitors"),
+                # 풀파싱 신호 (analyze_post 평균)
+                "fullparse_n": analysis_data.get("fullparse_n"),
+                "fullparse_avg_likes": analysis_data.get("fullparse_avg_likes"),
+                "fullparse_avg_comments": analysis_data.get("fullparse_avg_comments"),
+                "fullparse_avg_images": analysis_data.get("fullparse_avg_images"),
+                "fullparse_avg_videos": analysis_data.get("fullparse_avg_videos"),
+                "fullparse_avg_content_length": analysis_data.get("fullparse_avg_content_length"),
+                "fullparse_avg_paragraphs": analysis_data.get("fullparse_avg_paragraphs"),
+                "fullparse_avg_headings": analysis_data.get("fullparse_avg_headings"),
+                "fullparse_has_map_ratio": analysis_data.get("fullparse_has_map_ratio"),
+                "data_sources": analysis_data.get("data_sources", [])
+            }
         }
 
     except Exception as e:
@@ -3354,6 +3723,116 @@ async def analyze_blog_endpoint(request: BlogAnalysisRequest):
             message=f"분석 중 오류가 발생했습니다: {str(e)}",
             result=None
         )
+
+
+# ===== Post Analysis Endpoint (B-3 검증 결과 활용) =====
+class PostAnalyzeRequest(BaseModel):
+    post_url: str
+    keyword: str = ""
+    user_id: Optional[int] = None  # 로그인 시 lifecycle 매칭용
+
+
+@router.post("/analyze-post")
+async def analyze_post_endpoint(request: PostAnalyzeRequest):
+    """
+    개별 포스트 분석. analyze_post + post_score 반환.
+
+    B 단계 검증 결과: 블로그 단위 점수보다 포스트 단위 측정이 D.I.A.+ 알고리즘에
+    더 가까움. 사용자가 자신의 글 1개를 진단할 때 사용.
+
+    검증된 카테고리별 강한 신호:
+    - 여행: fp_images ρ=0.369 (이미지 풍부도)
+    - IT: raw_avg_post_length ρ=0.339 (글 길이)
+
+    참고: 종합 점수의 SERP 상관 ρ ≈ 0.04로 약함.
+          이 endpoint는 운영 진단 용도이지 SERP 예측이 아님.
+    """
+    if not request.post_url:
+        raise HTTPException(status_code=400, detail="post_url은 필수입니다")
+
+    # URL 형식 검증 — naver 블로그 포스트 URL
+    if "blog.naver.com" not in request.post_url and "PostView.naver" not in request.post_url:
+        raise HTTPException(status_code=400, detail="네이버 블로그 포스트 URL이 아닙니다")
+
+    keyword = (request.keyword or "").strip()
+
+    try:
+        result = await analyze_post(request.post_url, keyword)
+
+        if not result.get("data_fetched"):
+            raise HTTPException(
+                status_code=502,
+                detail="포스트 콘텐츠를 가져올 수 없습니다. URL을 확인하거나 잠시 후 재시도하세요."
+            )
+
+        # 카테고리 감지 (검증된 신호 가이드 표시용)
+        category = detect_keyword_category(keyword) if keyword else "default"
+
+        # 카테고리별 강한 신호 안내
+        category_strong_signals = {
+            "여행": [{"signal": "image_count", "rho": 0.369, "guide": "이미지 10장 이상 권장"}],
+            "IT": [
+                {"signal": "content_length", "rho": 0.339, "guide": "본문 3000자 이상 권장"},
+                {"signal": "post_total", "rho": 0.316, "guide": "전체적으로 충실한 글이 SERP 상위"},
+            ],
+            "리뷰": [{"signal": "post_total", "rho": 0.212, "guide": "콘텐츠 점수 종합 높이기"}],
+            "맛집": [{"signal": "post_freshness", "rho": 0.177, "guide": "최근 방문 정보 업데이트"}],
+        }.get(category, [])
+
+        # B-2 lifecycle 연동 — user_id가 있고 등록된 포스트면 시계열 데이터 첨부
+        lifecycle_data = None
+        if request.user_id and keyword:
+            try:
+                from database.rank_tracker_db import get_rank_tracker_db
+                # post URL → blog_id, post_no 추출
+                m = re.search(r'blog\.naver\.com/([^/?]+)/(\d+)', request.post_url)
+                if not m:
+                    m = re.search(r'blogId=([^&]+).*logNo=(\d+)', request.post_url)
+                if m:
+                    blog_id_raw, post_no_raw = m.group(1), m.group(2)
+                    rdb = get_rank_tracker_db()
+                    with rdb.get_connection() as conn:
+                        cur = conn.cursor()
+                        cur.execute("""
+                            SELECT pk.id as pk_id
+                            FROM post_keywords pk
+                            JOIN tracked_posts tp ON pk.tracked_post_id = tp.id
+                            JOIN tracked_blogs tb ON tp.tracked_blog_id = tb.id
+                            WHERE tb.user_id = ?
+                              AND tb.blog_id = ?
+                              AND tp.post_id = ?
+                              AND pk.keyword = ?
+                            LIMIT 1
+                        """, (request.user_id, blog_id_raw, post_no_raw, keyword))
+                        row = cur.fetchone()
+                    if row:
+                        lifecycle_data = rdb.get_post_lifecycle(row["pk_id"])
+            except Exception as e:
+                logger.warning(f"Lifecycle lookup failed: {e}")
+
+        return {
+            "success": True,
+            "post_url": request.post_url,
+            "keyword": keyword,
+            "category": category,
+            "analysis": result,
+            "post_score": result.get("post_score"),
+            "validated_signals_for_category": category_strong_signals,
+            "lifecycle": lifecycle_data,  # 등록된 포스트일 때만 None 아님
+            "disclaimer": (
+                "이 점수는 외부 측정 신호 기반 추정치입니다. "
+                "검증(n=436) 결과 종합 점수와 SERP 순위의 ρ ≈ 0.04로 직접 예측력은 약합니다. "
+                "위의 'validated_signals_for_category'는 카테고리별로 통계적으로 검증된 신호입니다."
+            ),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error analyzing post {request.post_url}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"분석 중 오류: {str(e)}")
 
 
 # ===== Blog Index Endpoint (GET) =====

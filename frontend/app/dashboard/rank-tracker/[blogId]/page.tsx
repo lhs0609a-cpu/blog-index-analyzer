@@ -32,6 +32,8 @@ import {
   downloadExcel,
   type RankResult,
   type RankStatistics,
+  getBlogIndexingStats,
+  type BlogIndexingStats,
   type RankHistory,
   type TaskStatus
 } from '@/lib/api/rankTracker'
@@ -66,6 +68,8 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
   const [statistics, setStatistics] = useState<RankStatistics | null>(null)
   const [history, setHistory] = useState<RankHistory[]>([])
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null)
+  // B-2 검증 결과 활용: 노출 유지일수 + 인덱싱 속도
+  const [indexingStats, setIndexingStats] = useState<BlogIndexingStats | null>(null)
 
   // 순위 확인 상태
   const [isChecking, setIsChecking] = useState(false)
@@ -80,9 +84,10 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
     try {
       setIsLoading(true)
 
-      const [resultsData, historyData] = await Promise.all([
+      const [resultsData, historyData, idxStats] = await Promise.all([
         getRankResults(user.id, blogId),
-        getRankHistory(user.id, blogId, 30)
+        getRankHistory(user.id, blogId, 30),
+        getBlogIndexingStats(user.id, blogId).catch(() => null),  // 데이터 없어도 페이지는 떠야 함
       ])
 
       setBlogName(resultsData.blog.blog_name)
@@ -90,6 +95,7 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
       setStatistics(resultsData.statistics)
       setLastCheckedAt(resultsData.last_checked_at)
       setHistory(historyData.history)
+      setIndexingStats(idxStats)
     } catch (error) {
       console.error('Failed to load data:', error)
       toast.error('데이터를 불러오는데 실패했습니다.')
@@ -378,6 +384,76 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
               </div>
             </motion.div>
           </div>
+        )}
+
+        {/* B-2 검증 결과 활용: 시계열 lifecycle 메트릭 */}
+        {indexingStats && indexingStats.total_tracked_keywords > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-2xl border border-purple-100 p-6 mb-8"
+          >
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">시계열 인덱싱 분석</h3>
+                <p className="text-xs text-gray-500 mt-1">
+                  단일 시점 SERP 순위(ρ≈0.04)보다 robust한 시계열 메트릭
+                </p>
+              </div>
+              <span className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded font-medium">
+                B-2 검증 기반
+              </span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <div className="bg-white/70 rounded-xl p-3">
+                <div className="text-xs text-gray-500 mb-1">추적 키워드</div>
+                <div className="text-2xl font-bold text-gray-900">{indexingStats.total_tracked_keywords}</div>
+                <div className="text-xs text-gray-400">개</div>
+              </div>
+              <div className="bg-white/70 rounded-xl p-3">
+                <div className="text-xs text-gray-500 mb-1">미노출 비율</div>
+                <div className={`text-2xl font-bold ${indexingStats.never_indexed_rate > 0.5 ? 'text-red-600' : indexingStats.never_indexed_rate > 0.2 ? 'text-yellow-600' : 'text-green-600'}`}>
+                  {(indexingStats.never_indexed_rate * 100).toFixed(0)}%
+                </div>
+                <div className="text-xs text-gray-400">한 번도 노출 안 됨</div>
+              </div>
+              <div className="bg-white/70 rounded-xl p-3">
+                <div className="text-xs text-gray-500 mb-1">평균 인덱싱 지연</div>
+                <div className="text-2xl font-bold text-gray-900">
+                  {indexingStats.avg_indexing_delay_days !== null
+                    ? `${indexingStats.avg_indexing_delay_days}`
+                    : '—'}
+                </div>
+                <div className="text-xs text-gray-400">발행→첫 노출 (일)</div>
+              </div>
+              <div className="bg-white/70 rounded-xl p-3">
+                <div className="text-xs text-gray-500 mb-1">평균 노출 유지율</div>
+                <div className="text-2xl font-bold text-gray-900">
+                  {indexingStats.avg_exposure_rate !== null
+                    ? `${(indexingStats.avg_exposure_rate * 100).toFixed(0)}%`
+                    : '—'}
+                </div>
+                <div className="text-xs text-gray-400">측정일 중 노출일</div>
+              </div>
+              <div className="bg-white/70 rounded-xl p-3">
+                <div className="text-xs text-gray-500 mb-1">평균 누락 전환</div>
+                <div className="text-2xl font-bold text-gray-900">
+                  {indexingStats.avg_drop_count.toFixed(1)}
+                </div>
+                <div className="text-xs text-gray-400">노출→누락 횟수</div>
+              </div>
+            </div>
+            {indexingStats.validation_note && (
+              <div className="mt-4 text-xs text-gray-600 italic">
+                💡 {indexingStats.validation_note}
+              </div>
+            )}
+            {indexingStats.never_indexed_rate > 0.5 && (
+              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+                <strong>⚠️ 미노출 비율이 50% 이상</strong>입니다. 저품질 또는 색인 누락이 의심됩니다. 본문 길이·이미지·구조화를 점검하세요.
+              </div>
+            )}
+          </motion.div>
         )}
 
         {/* 차트 영역 */}
