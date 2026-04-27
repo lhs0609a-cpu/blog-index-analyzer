@@ -118,9 +118,19 @@ class NaverAdApiClient:
         uri = endpoint
         url = f"{self.BASE_URL}{endpoint}"
         headers = self._get_headers(method, uri)
-        # 디버그: POST/PUT 호출 진입 추적 (광고그룹 400 진단용)
+        # 디버그: POST/PUT 호출 진입 추적
+        # data는 dict(create_campaign/create_ad_group) 또는 list(create_keywords) 둘 다 가능.
         if method in ("POST", "PUT"):
-            logger.info(f"[NaverAd._request] {method} {endpoint} payload_keys={list((data or {}).keys())}")
+            if isinstance(data, dict):
+                logger.info(f"[NaverAd._request] {method} {endpoint} payload_keys={list(data.keys())}")
+            elif isinstance(data, list):
+                sample = data[0] if data and isinstance(data[0], dict) else None
+                logger.info(
+                    f"[NaverAd._request] {method} {endpoint} list_payload n={len(data)} "
+                    f"sample_keys={list(sample.keys()) if sample else None}"
+                )
+            else:
+                logger.info(f"[NaverAd._request] {method} {endpoint} data_type={type(data).__name__}")
 
         try:
             if method == "GET":
@@ -140,10 +150,16 @@ class NaverAdApiClient:
                 logger.error(
                     f"Naver Ad API Error {response.status_code} {method} {endpoint}: {body_text}"
                 )
-                # data 일부도 디버깅 위해 (민감정보 제외)
+                # data 일부도 디버깅 위해 (민감정보 제외). list/dict 둘 다 안전 처리.
                 if data and method != "GET":
-                    log_data = {k: v for k, v in data.items() if k not in ("customerId",)}
-                    logger.error(f"Request payload: {log_data}")
+                    if isinstance(data, dict):
+                        log_data = {k: v for k, v in data.items() if k not in ("customerId",)}
+                        logger.error(f"Request payload: {log_data}")
+                    elif isinstance(data, list):
+                        sample = data[0] if data and isinstance(data[0], dict) else data[:1]
+                        logger.error(f"Request payload: list n={len(data)} sample={sample}")
+                    else:
+                        logger.error(f"Request payload: type={type(data).__name__} value={str(data)[:200]}")
                 raise httpx.HTTPStatusError(
                     f"{response.status_code} {method} {endpoint}: {body_text}",
                     request=response.request,
