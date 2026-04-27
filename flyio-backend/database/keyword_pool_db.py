@@ -2,11 +2,11 @@
 키워드 풀 — 24시간 자동 수집·등록을 위한 큐.
 
 흐름:
-  [수집 워커] keywordstool 호출 → keyword_pool (status=pending)
+  [수집 워커] keywordstool 호출 → naverad_keyword_pool (status=pending)
   [등록 워커] pending pull → 차집합 → 네이버 등록 → status=registered/failed/skipped
 
 테이블:
-  keyword_pool (
+  naverad_keyword_pool (
     id, user_id, account_customer_id, keyword,
     monthly_total, comp_idx, source, status,
     discovered_at, registered_at, ad_group_id, error_message
@@ -52,7 +52,7 @@ class KeywordPoolDB:
         with self._conn() as conn:
             cur = conn.cursor()
             cur.execute("""
-                CREATE TABLE IF NOT EXISTS keyword_pool (
+                CREATE TABLE IF NOT EXISTS naverad_keyword_pool (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER NOT NULL,
                     account_customer_id INTEGER NOT NULL,
@@ -73,11 +73,11 @@ class KeywordPoolDB:
             """)
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS idx_pool_status
-                ON keyword_pool(account_customer_id, status, monthly_total DESC)
+                ON naverad_keyword_pool(account_customer_id, status, monthly_total DESC)
             """)
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS idx_pool_user
-                ON keyword_pool(user_id, status)
+                ON naverad_keyword_pool(user_id, status)
             """)
 
     def add_candidates(
@@ -98,7 +98,7 @@ class KeywordPoolDB:
                     continue
                 try:
                     cur.execute(
-                        """INSERT OR IGNORE INTO keyword_pool
+                        """INSERT OR IGNORE INTO naverad_keyword_pool
                            (user_id, account_customer_id, keyword, monthly_total,
                             monthly_pc, monthly_mobile, comp_idx, source, seed, status)
                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')""",
@@ -134,7 +134,7 @@ class KeywordPoolDB:
             cur = conn.cursor()
             cur.execute(
                 """SELECT id, keyword, monthly_total, monthly_pc, monthly_mobile, comp_idx
-                   FROM keyword_pool
+                   FROM naverad_keyword_pool
                    WHERE account_customer_id = ?
                      AND status = 'pending'
                      AND monthly_total >= ?
@@ -161,7 +161,7 @@ class KeywordPoolDB:
                 placeholders = ",".join("?" * len(chunk))
                 if status == "registered":
                     cur.execute(
-                        f"""UPDATE keyword_pool
+                        f"""UPDATE naverad_keyword_pool
                             SET status='registered', registered_at=CURRENT_TIMESTAMP,
                                 ad_group_id=?, error_message=NULL
                             WHERE id IN ({placeholders})""",
@@ -169,14 +169,14 @@ class KeywordPoolDB:
                     )
                 elif status == "failed":
                     cur.execute(
-                        f"""UPDATE keyword_pool
+                        f"""UPDATE naverad_keyword_pool
                             SET status='failed', error_message=?
                             WHERE id IN ({placeholders})""",
                         [(error_message or "")[:500], *chunk],
                     )
                 else:
                     cur.execute(
-                        f"""UPDATE keyword_pool
+                        f"""UPDATE naverad_keyword_pool
                             SET status=?
                             WHERE id IN ({placeholders})""",
                         [status, *chunk],
@@ -188,7 +188,7 @@ class KeywordPoolDB:
         with self._conn() as conn:
             cur = conn.cursor()
             cur.execute(
-                """SELECT status, COUNT(*) AS n FROM keyword_pool
+                """SELECT status, COUNT(*) AS n FROM naverad_keyword_pool
                    WHERE account_customer_id = ?
                    GROUP BY status""",
                 (account_customer_id,),
@@ -201,7 +201,7 @@ class KeywordPoolDB:
                      MIN(discovered_at) AS first_discovered,
                      MAX(discovered_at) AS last_discovered,
                      MAX(registered_at) AS last_registered
-                   FROM keyword_pool
+                   FROM naverad_keyword_pool
                    WHERE account_customer_id = ?""",
                 (account_customer_id,),
             )
@@ -214,7 +214,7 @@ class KeywordPoolDB:
         with self._conn() as conn:
             cur = conn.cursor()
             cur.execute(
-                """SELECT DISTINCT seed FROM keyword_pool
+                """SELECT DISTINCT seed FROM naverad_keyword_pool
                    WHERE account_customer_id = ? AND seed IS NOT NULL
                    ORDER BY discovered_at DESC LIMIT ?""",
                 (account_customer_id, limit),
