@@ -2595,21 +2595,47 @@ async def import_ad_templates_from_naver(
                     return s.strip()
         return ""
 
-    # 캠페인 레벨 확장소재도 한 번씩 받아두기 (광고그룹 레벨에 안 붙은 경우 대응)
     seen_ext_ids: set = set()
 
-    # 캠페인 ID 수집 (확장소재 캠페인-레벨 조회용)
-    campaign_ids: List[str] = []
+    # ── 확장소재: 계정 전체 한 번에 조회 (광고그룹 단위 조회는 네이버가 404 반환) ──
     try:
-        cps = await client.get_campaigns()
-        cps_list = _unwrap_list(cps)
-        for cp in cps_list:
-            if isinstance(cp, dict):
-                cid = cp.get("nccCampaignId")
-                if cid:
-                    campaign_ids.append(cid)
+        all_ext_resp = await client.get_ad_extensions(owner_id=None)
+        all_exts = _unwrap_list(all_ext_resp)
     except Exception as e:
-        errors.append(f"campaigns: {str(e)[:120]}")
+        errors.append(f"exts-all: {str(e)[:120]}")
+        all_exts = []
+
+    for ex in all_exts:
+        ext_id = (ex or {}).get("nccAdExtensionId") if isinstance(ex, dict) else None
+        if ext_id and ext_id in seen_ext_ids:
+            continue
+        if ext_id:
+            seen_ext_ids.add(ext_id)
+        exts_total_seen += 1
+        if sample_ext is None and isinstance(ex, dict):
+            sample_ext = ex
+        try:
+            kind = (ex or {}).get("type") or (ex or {}).get("kind") or ""
+            if not kind:
+                continue
+            payload = _extract_ext_payload(ex)
+            if not payload:
+                payload = {
+                    k: v for k, v in (ex or {}).items()
+                    if k not in (
+                        "ownerId", "nccAdExtensionId", "createdDate", "editedDate",
+                        "regTime", "editTime", "customerId",
+                    )
+                }
+            if not payload:
+                continue
+            res = db.get_or_create_extension(user_id, customer_id, kind, payload)
+            if res.get("created"):
+                ext_imported += 1
+            else:
+                ext_skipped += 1
+        except Exception as e:
+            errors.append(f"ext-parse: {str(e)[:120]}")
 
     # 광고그룹 응답 wrap 처리
     ad_groups = _unwrap_list(ad_groups)
@@ -2733,93 +2759,11 @@ async def import_ad_templates_from_naver(
             except Exception as e:
                 errors.append(f"ad-parse: {str(e)[:120]}")
 
-        # 3) 확장소재 — 광고그룹 단위
-        try:
-            exts_resp = await client.get_ad_extensions(owner_id=ag_id)
-        except Exception as e:
-            errors.append(f"exts-ag({ag_id}): {str(e)[:120]}")
-            exts_resp = []
-        exts = _unwrap_list(exts_resp)
-
-        for ex in exts:
-            ext_id = (ex or {}).get("nccAdExtensionId") if isinstance(ex, dict) else None
-            if ext_id and ext_id in seen_ext_ids:
-                continue
-            if ext_id:
-                seen_ext_ids.add(ext_id)
-            exts_total_seen += 1
-            if sample_ext is None and isinstance(ex, dict):
-                sample_ext = ex
-            try:
-                kind = (ex or {}).get("type") or (ex or {}).get("kind") or ""
-                if not kind:
-                    continue
-                payload = _extract_ext_payload(ex)
-                if not payload:
-                    payload = {
-                        k: v for k, v in (ex or {}).items()
-                        if k not in (
-                            "ownerId", "nccAdExtensionId", "createdDate", "editedDate",
-                            "regTime", "editTime", "customerId",
-                        )
-                    }
-                if not payload:
-                    continue
-                res = db.get_or_create_extension(user_id, customer_id, kind, payload)
-                if res.get("created"):
-                    ext_imported += 1
-                else:
-                    ext_skipped += 1
-            except Exception as e:
-                errors.append(f"ext-parse: {str(e)[:120]}")
-
-        await asyncio.sleep(0.2)
-
-    # 4) 캠페인 레벨 확장소재 추가 조회 (광고그룹에 안 붙은 캠페인-레벨 항목 끌어오기)
-    for cid in campaign_ids:
-        try:
-            exts_resp = await client.get_ad_extensions(owner_id=cid)
-        except Exception as e:
-            errors.append(f"exts-cp({cid}): {str(e)[:120]}")
-            continue
-        exts = _unwrap_list(exts_resp)
-        for ex in exts:
-            ext_id = (ex or {}).get("nccAdExtensionId") if isinstance(ex, dict) else None
-            if ext_id and ext_id in seen_ext_ids:
-                continue
-            if ext_id:
-                seen_ext_ids.add(ext_id)
-            exts_total_seen += 1
-            if sample_ext is None and isinstance(ex, dict):
-                sample_ext = ex
-            try:
-                kind = (ex or {}).get("type") or (ex or {}).get("kind") or ""
-                if not kind:
-                    continue
-                payload = _extract_ext_payload(ex)
-                if not payload:
-                    payload = {
-                        k: v for k, v in (ex or {}).items()
-                        if k not in (
-                            "ownerId", "nccAdExtensionId", "createdDate", "editedDate",
-                            "regTime", "editTime", "customerId",
-                        )
-                    }
-                if not payload:
-                    continue
-                res = db.get_or_create_extension(user_id, customer_id, kind, payload)
-                if res.get("created"):
-                    ext_imported += 1
-                else:
-                    ext_skipped += 1
-            except Exception as e:
-                errors.append(f"ext-cp-parse: {str(e)[:120]}")
         await asyncio.sleep(0.2)
 
     return {
         "success": True,
         "ad_groups_scanned": len(ad_groups),
-        "campaigns_scanned": len(campaign_ids),
         "templates_imported": tpl_imported,
         "templates_skipped_duplicate": tpl_skipped,
         "extensions_imported": ext_imported,
