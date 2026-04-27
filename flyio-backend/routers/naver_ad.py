@@ -2177,3 +2177,214 @@ async def get_comprehensive_dashboard(user_id: int = Depends(get_user_id_with_fa
     except Exception as e:
         logger.error(f"Comprehensive dashboard error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ Phase 3: 키워드 풀 자동 워커 endpoints ============
+import os as _os
+import hmac as _hmac
+from fastapi import Header
+from database.keyword_pool_db import get_keyword_pool_db
+from database.registered_keywords_db import get_registered_keywords_db
+
+
+def _verify_cron_token(authorization: Optional[str]) -> None:
+    expected = (_os.environ.get("CRON_TOKEN") or "").strip()
+    if not expected:
+        raise HTTPException(status_code=503, detail="CRON_TOKEN 미설정")
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Bearer 토큰 필요")
+    provided = authorization.split(" ", 1)[1].strip()
+    if not _hmac.compare_digest(provided, expected):
+        raise HTTPException(status_code=403, detail="잘못된 cron 토큰")
+
+
+async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30):
+    """수집 1회 — keywordstool로 새 키워드 발굴해 풀에 추가."""
+    from services.naver_ad_service import NaverAdApiClient
+
+    account = get_ad_account(uid)
+    if not account or not account.get("is_connected"):
+        return
+    customer_id = int(account.get("customer_id"))
+
+    pool = get_keyword_pool_db()
+    reg = get_registered_keywords_db()
+    pool_pending = (pool.stats(customer_id).get("by_status") or {}).get("pending", 0)
+    active_reg = int((reg.stats(customer_id) or {}).get("active") or 0)
+    headroom = 100_000 - active_reg - pool_pending
+    if headroom <= 0:
+        logger.info(f"[pool/collect] user={uid} 한도 도달 — skip")
+        return
+    target = min(max_new, headroom)
+
+    seeds = pool.get_recent_seeds(customer_id, limit=20)
+    if not seeds:
+        logger.info(f"[pool/collect] user={uid} 시드 없음 — UI에서 초기 시드 제공 필요")
+        return
+
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    added = 0
+    for seed in seeds[:30]:
+        if added >= target:
+            break
+        try:
+            related = await client.get_related_keywords(seed, show_detail=True)
+        except Exception as e:
+            logger.warning(f"[pool/collect] {seed} API 실패: {e}")
+            continue
+        items = related.get("keywordList", []) if isinstance(related, dict) else []
+        candidates = []
+        for item in items:
+            kw = (item.get("relKeyword") or "").strip()
+            if not kw:
+                continue
+            mt = int(item.get("monthlyPcQcCnt") or 0) + int(item.get("monthlyMobileQcCnt") or 0)
+            if mt < min_volume:
+                continue
+            candidates.append({
+                "keyword": kw, "monthly_total": mt,
+                "monthly_pc": int(item.get("monthlyPcQcCnt") or 0),
+                "monthly_mobile": int(item.get("monthlyMobileQcCnt") or 0),
+                "comp_idx": item.get("compIdx"),
+                "seed": seed,
+            })
+        added += pool.add_candidates(uid, customer_id, candidates)
+        await asyncio.sleep(0.4)
+    logger.info(f"[pool/collect] user={uid} 새 키워드 {added}개")
+
+
+async def _run_pool_register(uid: int, batch: int = 1000, bid: int = 100):
+    """등록 1회 — pending → orchestrator로 일괄."""
+    from services.bulk_upload_orchestrator import BulkUploadOrchestrator, BulkJobConfig
+    from services.naver_ad_service import NaverAdApiClient
+
+    account = get_ad_account(uid)
+    if not account or not account.get("is_connected"):
+        return
+    customer_id = int(account.get("customer_id"))
+
+    pool = get_keyword_pool_db()
+    pending = pool.claim_pending(customer_id, limit=batch, min_volume=30)
+    if not pending:
+        return
+    keywords = [p["keyword"] for p in pending]
+
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    job_id = create_bulk_upload_job(
+        user_id=uid,
+        filename=f"pool_auto_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        campaign_prefix="auto",
+        keywords_per_group=1000,
+        bid=bid,
+        daily_budget=10000,
+        total_keywords=len(keywords),
+    )
+    cfg = BulkJobConfig(
+        job_id=job_id, user_id=uid,
+        campaign_prefix="auto", keywords_per_group=1000,
+        bid=bid, daily_budget=10000, campaign_tp="WEB_SITE",
+    )
+    orchestrator = BulkUploadOrchestrator(client)
+    result = await orchestrator.run(cfg, keywords)
+
+    reg = get_registered_keywords_db()
+    existing = reg.get_existing_set(customer_id, keywords)
+    succeeded_ids = [p["id"] for p in pending if p["keyword"] in existing]
+    failed_ids = [p["id"] for p in pending if p["keyword"] not in existing]
+    pool.mark_status(succeeded_ids, "registered")
+    pool.mark_status(failed_ids, "failed",
+                     error_message=str(result.get("error", "did not register"))[:300])
+    logger.info(f"[pool/register] user={uid} reg={len(succeeded_ids)} fail={len(failed_ids)}")
+
+
+async def _run_pool_workers_for_users(user_ids: List[int]):
+    for uid in user_ids:
+        try:
+            await _run_pool_collect(uid)
+        except Exception as e:
+            logger.warning(f"[pool/run] collect 실패 user={uid}: {e}")
+        try:
+            await _run_pool_register(uid)
+        except Exception as e:
+            logger.warning(f"[pool/run] register 실패 user={uid}: {e}")
+
+
+@router.post("/keyword-pool/admin/run")
+async def keyword_pool_admin_run(
+    background_tasks: BackgroundTasks,
+    authorization: Optional[str] = Header(None),
+    user_id: Optional[int] = Query(None),
+):
+    """24h 자동 워커 — collect + register 통합 트리거 (Bearer 인증)."""
+    _verify_cron_token(authorization)
+
+    target_users: List[int] = []
+    if user_id:
+        target_users = [user_id]
+    else:
+        # 활성 광고 계정 사용자 — naver_ad_db 헬퍼 가정. 없으면 빈 리스트.
+        try:
+            from database.naver_ad_db import list_connected_ad_accounts
+            target_users = [a["user_id"] for a in (list_connected_ad_accounts() or []) if a.get("user_id")]
+        except Exception:
+            target_users = []
+
+    if not target_users:
+        return {"success": True, "queued": 0, "message": "활성 광고 계정 없음"}
+
+    background_tasks.add_task(_run_pool_workers_for_users, target_users)
+    return {
+        "success": True,
+        "queued": len(target_users),
+        "users": target_users,
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
+@router.get("/keyword-pool/stats")
+async def keyword_pool_stats(user_id: int = Depends(get_user_id_with_fallback)):
+    """본인 풀/등록 상태."""
+    account = get_ad_account(user_id)
+    if not account:
+        return {"success": False, "message": "광고 계정 미연결", "pool": {}, "registered": {}}
+    customer_id = int(account.get("customer_id"))
+    pool = get_keyword_pool_db()
+    reg = get_registered_keywords_db()
+    return {
+        "success": True,
+        "customer_id": customer_id,
+        "pool": pool.stats(customer_id),
+        "registered": reg.stats(customer_id),
+        "account_cap": 100_000,
+    }
+
+
+class PoolSeedsRequest(BaseModel):
+    seeds: List[str]
+
+
+@router.post("/keyword-pool/seeds")
+async def keyword_pool_add_seeds(
+    request: PoolSeedsRequest,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """초기 시드 추가 — 자동 수집의 첫 input."""
+    account = get_ad_account(user_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    customer_id = int(account.get("customer_id"))
+    pool = get_keyword_pool_db()
+    items = [
+        {"keyword": s.strip(), "seed": s.strip(), "source": "user_seed", "monthly_total": 0}
+        for s in request.seeds if s and s.strip()
+    ]
+    added = pool.add_candidates(user_id, customer_id, items)
+    return {"success": True, "added": added, "total_input": len(items)}

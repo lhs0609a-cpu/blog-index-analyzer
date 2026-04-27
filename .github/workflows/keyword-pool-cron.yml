@@ -1,0 +1,39 @@
+name: Keyword pool worker (24h auto)
+
+# 매 15분 collect+register 통합 실행.
+# - collect: keywordstool로 새 연관 키워드 풀 추가
+# - register: pending 1000개 네이버 batch 등록
+# 계정당 10만개 한도 도달 시 자동 stop.
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"  # 매 15분
+  workflow_dispatch:
+    inputs:
+      user_id:
+        description: "특정 사용자 ID (생략 시 모든 활성)"
+        required: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Trigger pool worker
+        env:
+          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
+          BACKEND_URL: https://blog-index-analyzer.fly.dev
+          USER_ID: ${{ github.event.inputs.user_id || '' }}
+        run: |
+          if [ -z "$CRON_TOKEN" ]; then
+            echo "::error::CRON_TOKEN secret 미설정"; exit 1
+          fi
+          q=""
+          if [ -n "$USER_ID" ]; then q="?user_id=${USER_ID}"; fi
+          status=$(curl -sS -o /tmp/body.json -w "%{http_code}" \
+            -X POST "${BACKEND_URL}/api/naver-ad/keyword-pool/admin/run${q}" \
+            -H "Authorization: Bearer ${CRON_TOKEN}" \
+            --max-time 60)
+          echo "status=$status"
+          cat /tmp/body.json
+          [ "$status" = "200" ] || { echo "::error::pool run 실패"; exit 1; }
