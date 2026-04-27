@@ -78,6 +78,10 @@ export default function VolumeFilterPage() {
   const [keywordsPerGroup, setKeywordsPerGroup] = useState(500)
   const [dailyBudget, setDailyBudget] = useState(10000)
   const [registering, setRegistering] = useState(false)
+  const [registerJobId, setRegisterJobId] = useState<number | null>(null)
+  const [registerStatus, setRegisterStatus] = useState<any>(null)
+  const [registerFailures, setRegisterFailures] = useState<any[]>([])
+  const [showFullLog, setShowFullLog] = useState(false)
   const [actionInFlight, setActionInFlight] = useState(false)
   // AI 키워드 확장 (관리자 전용)
   const [aiSeeds, setAiSeeds] = useState('')
@@ -424,17 +428,58 @@ export default function VolumeFilterPage() {
     if (!confirm(msg)) return
 
     setRegistering(true)
+    setRegisterJobId(null)
+    setRegisterStatus(null)
+    setRegisterFailures([])
+    setShowFullLog(false)
     try {
       const res = await adPost<{ success: boolean; register_job_id: number }>(
         `/api/naver-ad/keywords/volume-filter/${currentJob.id}/register`,
         { campaign_prefix: campaignPrefix, bid, keywords_per_group: keywordsPerGroup, daily_budget: dailyBudget }
       )
-      toast.success(`등록 작업 시작 (#${res.register_job_id})`)
-      setTimeout(() => { window.location.href = '/ad-optimizer/scale-upload' }, 1500)
-    } catch {} finally {
+      toast.success(`등록 작업 시작 (#${res.register_job_id}) — 같은 페이지에서 진행 상황을 확인하세요`)
+      setRegisterJobId(res.register_job_id)
+      // ❌ redirect 제거 — 사용자가 같은 페이지에서 진행 + 에러 raw 로그 확인하도록
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || err?.message || '등록 시작 실패'
+      toast.error(msg)
+    } finally {
       setRegistering(false)
     }
   }
+
+  // 등록 작업 진행 상황 폴링 (같은 페이지 inline)
+  useEffect(() => {
+    if (!registerJobId) return
+    let stopped = false
+
+    const poll = async () => {
+      while (!stopped) {
+        try {
+          const res = await adGet<{ success: boolean; job: any }>(
+            `/api/naver-ad/keywords/scale-register/${registerJobId}/status`
+          )
+          const job = res?.job
+          setRegisterStatus(job)
+          if (job && ['completed', 'failed', 'cancelled', 'completed_with_errors'].includes(job.status)) {
+            // 실패 상세 가져오기
+            try {
+              const failures = await adGet<{ failures: any[] }>(
+                `/api/naver-ad/keywords/scale-register/${registerJobId}/failures`
+              )
+              setRegisterFailures(failures?.failures || [])
+            } catch {}
+            break
+          }
+        } catch {}
+        await new Promise((r) => setTimeout(r, 2000))
+      }
+    }
+    poll()
+    return () => {
+      stopped = true
+    }
+  }, [registerJobId])
 
   const progress = currentJob?.progress_percent ?? 0
   const canCancel = currentJob && ['pending', 'running'].includes(currentJob.status)
@@ -1035,12 +1080,103 @@ export default function VolumeFilterPage() {
                     </div>
                     <button
                       onClick={handleRegister}
-                      disabled={registering}
+                      disabled={registering || !!registerJobId}
                       className="w-full bg-green-600 text-white py-2.5 rounded-lg font-medium hover:bg-green-700 disabled:bg-gray-300 flex items-center justify-center gap-2"
                     >
                       {registering ? <><Loader2 className="w-4 h-4 animate-spin" /> 시작 중...</> :
+                        registerJobId ? <>등록 작업 #{registerJobId} 진행 중</> :
                         <><CheckCircle2 className="w-4 h-4" /> {currentJob.passed_count.toLocaleString()}개 광고 등록 시작</>}
                     </button>
+
+                    {/* 등록 작업 진행 패널 — redirect 제거하고 같은 페이지에서 표시 */}
+                    {registerJobId && (
+                      <div className="mt-4 border border-blue-200 bg-blue-50 rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="font-bold text-gray-900">
+                            등록 작업 #{registerJobId}
+                            {registerStatus?.status && (
+                              <span className={`ml-2 text-xs px-2 py-0.5 rounded ${
+                                registerStatus.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                registerStatus.status === 'failed' ? 'bg-red-100 text-red-700' :
+                                registerStatus.status === 'completed_with_errors' ? 'bg-orange-100 text-orange-700' :
+                                'bg-blue-100 text-blue-700'
+                              }`}>
+                                {registerStatus.status}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            진행 {registerStatus?.processed_count ?? 0} / {registerStatus?.total_keywords ?? 0}
+                            ({registerStatus?.progress_percent ?? 0}%)
+                          </div>
+                        </div>
+
+                        {registerStatus?.current_step && (
+                          <div className="text-sm text-gray-700">
+                            현재 단계: <strong>{registerStatus.current_step}</strong>
+                          </div>
+                        )}
+
+                        {/* job 자체의 error_message */}
+                        {registerStatus?.error_message && (
+                          <div className="bg-red-50 border border-red-200 rounded p-3 text-xs text-red-800 font-mono whitespace-pre-wrap break-all">
+                            <div className="font-bold mb-1">📋 작업 에러</div>
+                            {registerStatus.error_message}
+                          </div>
+                        )}
+
+                        {/* 실패 상세 — 첫 번째 실패의 reason을 raw로 펼침 */}
+                        {registerFailures.length > 0 && (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="text-sm font-bold text-gray-900">
+                                실패 키워드 {registerStatus?.failed_count ?? registerFailures.length}개
+                                <span className="text-xs text-gray-500 ml-2">
+                                  (대표 실패 사유 표시)
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => setShowFullLog(!showFullLog)}
+                                className="text-xs text-blue-600 hover:underline"
+                              >
+                                {showFullLog ? '간단히 보기' : '전체 raw 로그 보기 ↓'}
+                              </button>
+                            </div>
+
+                            <div className="bg-red-50 border border-red-200 rounded p-3 text-xs font-mono whitespace-pre-wrap break-all">
+                              <div className="text-red-800 font-bold mb-1">대표 사유:</div>
+                              <div className="text-red-700">
+                                {registerFailures[0]?.reason || '-'}
+                              </div>
+                            </div>
+
+                            {showFullLog && (
+                              <div className="bg-gray-900 text-gray-100 rounded p-3 text-xs font-mono whitespace-pre-wrap break-all max-h-96 overflow-auto">
+                                <div className="text-yellow-300 mb-2">
+                                  === 전체 실패 raw 로그 (최대 50개) ===
+                                </div>
+                                {registerFailures.slice(0, 50).map((f, i) => (
+                                  <div key={i} className="border-b border-gray-700 py-1">
+                                    <div className="text-cyan-300">[{i + 1}] keyword: {f.keyword}</div>
+                                    <div className="text-gray-300 pl-2">reason: {f.reason}</div>
+                                    {f.ad_group_id && (
+                                      <div className="text-gray-500 pl-2">ad_group_id: {f.ad_group_id}</div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {registerStatus?.status &&
+                          ['completed', 'failed', 'completed_with_errors'].includes(registerStatus.status) && (
+                            <div className="text-xs text-gray-500 pt-2 border-t border-blue-200">
+                              ✓ 작업 종료. 위 로그를 확인하고 필요하면 재시도하세요.
+                            </div>
+                          )}
+                      </div>
+                    )}
                   </div>
                 )}
               </>
