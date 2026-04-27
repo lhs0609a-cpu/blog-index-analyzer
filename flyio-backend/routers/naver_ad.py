@@ -2388,3 +2388,107 @@ async def keyword_pool_add_seeds(
     ]
     added = pool.add_candidates(user_id, customer_id, items)
     return {"success": True, "added": added, "total_input": len(items)}
+
+
+# ============ P4: 소재 템플릿 CRUD ============
+from database.ad_templates_db import get_ad_templates_db
+
+
+class AdTemplateCreate(BaseModel):
+    headline_pc: str
+    description_pc: str
+    display_url: str
+    final_url_pc: str
+    headline_mobile: Optional[str] = None
+    description_mobile: Optional[str] = None
+    final_url_mobile: Optional[str] = None
+    is_active: bool = True
+
+
+class AdExtensionCreate(BaseModel):
+    kind: str  # PHONE_NUMBER / DESCRIPTION_EXTENSION / SUBLINK ...
+    payload: Dict[str, Any]
+
+
+@router.get("/ad-templates")
+async def list_ad_templates(user_id: int = Depends(get_user_id_with_fallback)):
+    account = get_ad_account(user_id)
+    if not account:
+        return {"success": False, "templates": [], "extensions": []}
+    customer_id = int(account.get("customer_id"))
+    db = get_ad_templates_db()
+    return {
+        "success": True,
+        "customer_id": customer_id,
+        "templates": db.list_templates(user_id, customer_id),
+        "extensions": db.list_extensions(user_id, customer_id, active_only=False),
+    }
+
+
+@router.post("/ad-templates")
+async def create_ad_template(
+    request: AdTemplateCreate,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    account = get_ad_account(user_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    customer_id = int(account.get("customer_id"))
+    db = get_ad_templates_db()
+    tpl_id = db.create_template(
+        user_id, customer_id,
+        headline_pc=request.headline_pc,
+        description_pc=request.description_pc,
+        display_url=request.display_url,
+        final_url_pc=request.final_url_pc,
+        headline_mobile=request.headline_mobile,
+        description_mobile=request.description_mobile,
+        final_url_mobile=request.final_url_mobile,
+        is_active=request.is_active,
+    )
+    return {"success": True, "id": tpl_id}
+
+
+@router.patch("/ad-templates/{tpl_id}/active")
+async def toggle_ad_template(
+    tpl_id: int,
+    is_active: bool = Query(...),
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    db = get_ad_templates_db()
+    db.update_active(tpl_id, is_active)
+    return {"success": True}
+
+
+@router.delete("/ad-templates/{tpl_id}")
+async def delete_ad_template(
+    tpl_id: int,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    db = get_ad_templates_db()
+    db.delete_template(tpl_id, user_id)
+    return {"success": True}
+
+
+@router.post("/ad-templates/extensions")
+async def create_ad_extension_template(
+    request: AdExtensionCreate,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    account = get_ad_account(user_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    customer_id = int(account.get("customer_id"))
+    db = get_ad_templates_db()
+    ext_id = db.create_extension(user_id, customer_id, request.kind, request.payload)
+    return {"success": True, "id": ext_id}
+
+
+@router.delete("/ad-templates/extensions/{ext_id}")
+async def delete_ad_extension_template(
+    ext_id: int,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    db = get_ad_templates_db()
+    db.delete_extension(ext_id, user_id)
+    return {"success": True}

@@ -305,6 +305,73 @@ class NaverAdApiClient:
             endpoint = f"/ncc/keywords?nccAdgroupId={ad_group_id}"
         return await self._request("POST", endpoint, keywords)
 
+    # ============ 광고 소재 (T&D) ============
+    async def create_ad(
+        self,
+        ad_group_id: str,
+        *,
+        headline_pc: str,
+        description_pc: str,
+        display_url: str,
+        final_url_pc: str,
+        headline_mobile: Optional[str] = None,
+        description_mobile: Optional[str] = None,
+        final_url_mobile: Optional[str] = None,
+        ad_type: str = "TEXT_45",
+    ) -> dict:
+        """파워링크 텍스트 소재 1개 생성.
+
+        네이버 검색광고 /ncc/ads:
+        - URL query: nccAdgroupId
+        - body.type: TEXT_45 (PC 15자 + 설명 45자) / TEXT_45_MOBILE 등
+        - body.ad: { pc: {headline, description}, mobile: {...}, displayUrl, finalUrl(s) }
+        """
+        endpoint = f"/ncc/ads?nccAdgroupId={ad_group_id}"
+        payload = {
+            "nccAdgroupId": ad_group_id,
+            "type": ad_type,
+            "ad": {
+                "pc": {
+                    "headline": (headline_pc or "")[:15],
+                    "description": (description_pc or "")[:45],
+                    "final": final_url_pc,
+                },
+                "mobile": {
+                    "headline": (headline_mobile or headline_pc or "")[:15],
+                    "description": (description_mobile or description_pc or "")[:45],
+                    "final": final_url_mobile or final_url_pc,
+                },
+                "headline": (headline_pc or "")[:15],
+                "description": (description_pc or "")[:45],
+                "displayUrl": display_url,
+                "finalUrl": final_url_pc,
+                "finalMobileUrl": final_url_mobile or final_url_pc,
+            },
+        }
+        return await self._request("POST", endpoint, payload)
+
+    # ============ 확장소재 ============
+    async def create_ad_extension(
+        self,
+        owner_id: str,
+        kind: str,
+        content: dict,
+        owner_type: str = "ADGROUP",
+    ) -> dict:
+        """확장소재 1개 생성.
+
+        네이버: /ncc/adextensions
+        - ownerId: 광고그룹 ID 또는 캠페인 ID 또는 비즈채널 ID (owner_type에 따라)
+        - type: PHONE_NUMBER / DESCRIPTION_EXTENSION / SUBLINK / PRICE_LINK / CALCULATION 등
+        """
+        payload = {
+            "ownerId": owner_id,
+            "ownerType": owner_type,
+            "type": kind,
+            **content,
+        }
+        return await self._request("POST", "/ncc/adextensions", payload)
+
     async def update_keyword(self, keyword_id: str, data: dict) -> dict:
         """키워드 수정 (입찰가 등)"""
         return await self._request("PUT", f"/ncc/keywords/{keyword_id}", data)

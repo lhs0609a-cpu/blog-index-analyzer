@@ -15,5 +15,5 @@ export { default as apiClient } from './client'
 export { getApiUrl as getApiBaseUrl, getApiUrl } from './apiConfig'
 
 // Re-export ad-optimizer fetch utilities
-export { adFetch, adGet, adPost, adUpload, ApiError } from './adFetch'
+export { adFetch, adGet, adPost, adPatch, adDelete, adUpload, ApiError } from './adFetch'
 export type { ApiErrorType } from './adFetch'

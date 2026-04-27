@@ -47,6 +47,55 @@ class BulkUploadOrchestrator:
     def __init__(self, api_client: NaverAdApiClient):
         self.api = api_client
 
+    async def _auto_attach_ad_creative(
+        self,
+        user_id: int,
+        customer_id: int,
+        ad_group_id: str,
+    ) -> None:
+        """광고그룹 생성 직후 ad_templates에서 라운드로빈으로 소재 1개 자동 등록.
+
+        템플릿 없으면 silent skip. 등록 실패도 silent (예외는 호출자에서).
+        확장소재(전화번호·부가설명)도 활성 항목 모두 자동 등록.
+        """
+        from database.ad_templates_db import get_ad_templates_db
+
+        tpl_db = get_ad_templates_db()
+        tpl = tpl_db.claim_round_robin(user_id, customer_id)
+        if not tpl:
+            return
+
+        try:
+            await self.api.create_ad(
+                ad_group_id=ad_group_id,
+                headline_pc=tpl["headline_pc"],
+                description_pc=tpl["description_pc"],
+                display_url=tpl["display_url"],
+                final_url_pc=tpl["final_url_pc"],
+                headline_mobile=tpl.get("headline_mobile"),
+                description_mobile=tpl.get("description_mobile"),
+                final_url_mobile=tpl.get("final_url_mobile"),
+            )
+        except Exception as e:
+            logger.warning(
+                f"[orchestrator] 소재 등록 실패 ad_group={ad_group_id} tpl={tpl.get('id')}: {e}"
+            )
+
+        # 확장소재 — 활성 모든 종류 등록 (소재 1개 등록 후)
+        for ext in tpl_db.list_extensions(user_id, customer_id, active_only=True):
+            try:
+                await self.api.create_ad_extension(
+                    owner_id=ad_group_id,
+                    kind=ext.get("kind") or "",
+                    content=ext.get("payload") or {},
+                    owner_type="ADGROUP",
+                )
+                await asyncio.sleep(0.2)
+            except Exception as e:
+                logger.warning(
+                    f"[orchestrator] 확장소재 실패 ext={ext.get('id')} kind={ext.get('kind')}: {e}"
+                )
+
     async def run(self, config: BulkJobConfig, keywords: List[str]) -> Dict[str, Any]:
         """메인 실행 - 키워드 리스트를 받아 캠페인/광고그룹/키워드 자동 생성"""
         job_id = config.job_id
@@ -319,6 +368,20 @@ class BulkUploadOrchestrator:
                     continue
 
                 await asyncio.sleep(API_RATE_LIMIT_DELAY)
+
+                # P4: 광고그룹 생성 직후 라운드로빈으로 소재 1개 자동 등록
+                # 등록 실패해도 키워드는 진행 (소재는 나중에 보정 가능)
+                if customer_id_int > 0:
+                    try:
+                        await self._auto_attach_ad_creative(
+                            user_id=config.user_id,
+                            customer_id=customer_id_int,
+                            ad_group_id=ad_group_id,
+                        )
+                    except Exception as ad_err:
+                        logger.warning(
+                            f"[Job {job_id}] 소재 자동 매칭 실패 (그룹 {ad_group_id}): {ad_err}"
+                        )
 
                 # 이 광고그룹에 키워드 배치 등록 (100개씩)
                 ag_succeeded = 0

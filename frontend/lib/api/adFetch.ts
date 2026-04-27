@@ -254,6 +254,20 @@ export function adPost<T = any>(path: string, body?: any, opts?: Omit<AdFetchOpt
 }
 
 /**
+ * adFetch의 편의 래퍼 - PATCH 요청
+ */
+export function adPatch<T = any>(path: string, body?: any, opts?: Omit<AdFetchOptions, 'method' | 'body'>) {
+  return adFetch<T>(path, { ...opts, method: 'PATCH', body: body ? JSON.stringify(body) : undefined })
+}
+
+/**
+ * adFetch의 편의 래퍼 - DELETE 요청
+ */
+export function adDelete<T = any>(path: string, opts?: Omit<AdFetchOptions, 'method' | 'body'>) {
+  return adFetch<T>(path, { ...opts, method: 'DELETE' })
+}
+
+/**
  * 파일 업로드 (multipart/form-data)
  * - Content-Type은 브라우저가 boundary와 함께 자동 설정하므로 직접 설정하면 안 됨
  */
