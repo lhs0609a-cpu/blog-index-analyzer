@@ -2559,6 +2559,61 @@ async def import_ad_templates_from_naver(
     sample_ext: Optional[Dict[str, Any]] = None
     sample_field_check: Optional[Dict[str, Any]] = None
 
+    def _unwrap_list(resp: Any) -> List[Any]:
+        """네이버 API 응답이 raw list 또는 {list:[...]}/{data:[...]}/{items:[...]} 등 wrap된 경우 풀어냄."""
+        if isinstance(resp, list):
+            return resp
+        if isinstance(resp, dict):
+            for k in ("list", "data", "items", "ads", "extensions", "results", "content"):
+                v = resp.get(k)
+                if isinstance(v, list):
+                    return v
+            # dict인데 wrap key 없으면 단일 객체로 보고 [resp] 반환
+            if resp.get("nccAdId") or resp.get("nccAdExtensionId"):
+                return [resp]
+        return []
+
+    def _first_str(*candidates) -> str:
+        """여러 후보 중 비어있지 않은 첫 문자열 반환. 리스트면 첫 원소 사용."""
+        for c in candidates:
+            if c is None:
+                continue
+            if isinstance(c, list):
+                for item in c:
+                    if isinstance(item, str) and item.strip():
+                        return item.strip()
+                    if isinstance(item, dict):
+                        # RSP_AD: [{text: "..."}, ...] 패턴
+                        s = item.get("text") or item.get("value") or item.get("headline") or item.get("description")
+                        if isinstance(s, str) and s.strip():
+                            return s.strip()
+            elif isinstance(c, str) and c.strip():
+                return c.strip()
+            elif isinstance(c, dict):
+                s = c.get("text") or c.get("value")
+                if isinstance(s, str) and s.strip():
+                    return s.strip()
+        return ""
+
+    # 캠페인 레벨 확장소재도 한 번씩 받아두기 (광고그룹 레벨에 안 붙은 경우 대응)
+    seen_ext_ids: set = set()
+
+    # 캠페인 ID 수집 (확장소재 캠페인-레벨 조회용)
+    campaign_ids: List[str] = []
+    try:
+        cps = await client.get_campaigns()
+        cps_list = _unwrap_list(cps)
+        for cp in cps_list:
+            if isinstance(cp, dict):
+                cid = cp.get("nccCampaignId")
+                if cid:
+                    campaign_ids.append(cid)
+    except Exception as e:
+        errors.append(f"campaigns: {str(e)[:120]}")
+
+    # 광고그룹 응답 wrap 처리
+    ad_groups = _unwrap_list(ad_groups)
+
     for ag in ad_groups:
         ag_id = ag.get("nccAdgroupId") if isinstance(ag, dict) else None
         if not ag_id:
@@ -2566,20 +2621,18 @@ async def import_ad_templates_from_naver(
 
         # 2) 소재 조회
         try:
-            ads = await client.get_ads(ag_id)
+            ads_resp = await client.get_ads(ag_id)
         except Exception as e:
             errors.append(f"ads({ag_id}): {str(e)[:120]}")
-            ads = []
-        if not isinstance(ads, list):
-            ads = []
+            ads_resp = []
+        ads = _unwrap_list(ads_resp)
 
         for a in ads:
             ads_total_seen += 1
             if sample_ad is None and isinstance(a, dict):
-                # 첫 ad 원본 구조 1건만 응답에 포함 — 디버깅용
                 sample_ad = a
             try:
-                # 'ad' 필드가 dict 가 아니라 JSON 문자열로 오는 경우 대응
+                # 'ad' 필드가 dict / JSON 문자열 / 누락 모든 케이스 대응
                 raw_ad = (a or {}).get("ad")
                 if isinstance(raw_ad, str):
                     try:
@@ -2589,54 +2642,88 @@ async def import_ad_templates_from_naver(
                 elif isinstance(raw_ad, dict):
                     ad = raw_ad
                 else:
-                    ad = {}
+                    # ad 필드 자체가 없는 경우 — ad 본체가 a 자체에 평면적으로 들어있는 케이스
+                    ad = a if isinstance(a, dict) else {}
+
                 pc = ad.get("pc") if isinstance(ad.get("pc"), dict) else {}
                 mo = ad.get("mobile") if isinstance(ad.get("mobile"), dict) else {}
-                # 다양한 필드명 폴백 (네이버 API 버전별)
-                headline_pc = (
-                    pc.get("headline") or pc.get("title")
-                    or ad.get("headline") or ad.get("title")
-                    or (a or {}).get("headline") or ""
-                ).strip()
-                description_pc = (
-                    pc.get("description") or pc.get("desc")
-                    or ad.get("description") or ad.get("desc")
-                    or (a or {}).get("description") or ""
-                ).strip()
-                display_url = (
-                    ad.get("displayUrl") or ad.get("display_url")
-                    or pc.get("displayUrl")
-                    or (a or {}).get("displayUrl") or ""
-                ).strip()
-                final_url_pc = (
-                    pc.get("final") or pc.get("finalUrl") or pc.get("landingUrl")
-                    or ad.get("finalUrl") or ad.get("landingUrl")
-                    or (a or {}).get("finalUrl") or ""
-                ).strip()
-                final_url_mobile = (
-                    mo.get("final") or mo.get("finalUrl") or mo.get("landingUrl")
-                    or ad.get("finalMobileUrl") or final_url_pc or ""
-                ).strip()
+
+                # === 헤드라인 / 설명 (TEXT_45 단일 / RSP_AD 복수 모두 대응) ===
+                headline_pc = _first_str(
+                    pc.get("headline"), pc.get("title"),
+                    ad.get("headline"), ad.get("title"),
+                    ad.get("headlines"),  # RSP_AD 배열
+                    pc.get("headlines"),
+                    (a or {}).get("headline"),
+                )
+                description_pc = _first_str(
+                    pc.get("description"), pc.get("desc"),
+                    ad.get("description"), ad.get("desc"),
+                    ad.get("descriptions"),  # RSP_AD 배열
+                    pc.get("descriptions"),
+                    (a or {}).get("description"),
+                )
+                display_url = _first_str(
+                    ad.get("displayUrl"), ad.get("display_url"),
+                    pc.get("displayUrl"),
+                    ad.get("pcDisplayUrl"),
+                    (a or {}).get("displayUrl"),
+                )
+                final_url_pc = _first_str(
+                    pc.get("final"), pc.get("finalUrl"), pc.get("landingUrl"),
+                    ad.get("finalUrl"), ad.get("landingUrl"), ad.get("finalPcUrl"),
+                    (a or {}).get("finalUrl"),
+                )
+                final_url_mobile = _first_str(
+                    mo.get("final"), mo.get("finalUrl"), mo.get("landingUrl"),
+                    ad.get("finalMobileUrl"),
+                ) or final_url_pc
+
+                # display_url이 비어도 final_url_pc 도메인 추출해 폴백 (네이버는 display 필드 누락 흔함)
+                if not display_url and final_url_pc:
+                    try:
+                        from urllib.parse import urlparse
+                        u = urlparse(final_url_pc)
+                        if u.netloc:
+                            display_url = f"{u.scheme or 'https'}://{u.netloc}"
+                    except Exception:
+                        pass
+
+                headline_mobile_v = _first_str(
+                    mo.get("headline"), mo.get("title"),
+                    ad.get("headlines"),
+                ) or None
+                description_mobile_v = _first_str(
+                    mo.get("description"), mo.get("desc"),
+                    ad.get("descriptions"),
+                ) or None
+
                 if sample_field_check is None:
                     sample_field_check = {
-                        "headline_pc": bool(headline_pc),
-                        "description_pc": bool(description_pc),
-                        "display_url": bool(display_url),
-                        "final_url_pc": bool(final_url_pc),
+                        "ad_type": (a or {}).get("type"),
+                        "headline_pc": headline_pc[:30] if headline_pc else "",
+                        "description_pc": description_pc[:30] if description_pc else "",
+                        "display_url": display_url,
+                        "final_url_pc": final_url_pc,
                         "ad_top_keys": list((a or {}).keys()) if isinstance(a, dict) else [],
                         "ad_inner_keys": list(ad.keys()) if isinstance(ad, dict) else [],
+                        "pc_keys": list(pc.keys()) if isinstance(pc, dict) else [],
                     }
-                if not (headline_pc and description_pc and display_url and final_url_pc):
+                if not (headline_pc and description_pc and final_url_pc):
+                    # display_url 없어도 위에서 도메인 폴백했으니 여기 도달하면 진짜 누락
                     ads_missing_field += 1
                     continue
+                if not display_url:
+                    # 폴백 실패: 그래도 final URL은 있으니 final로 대체
+                    display_url = final_url_pc
                 res = db.get_or_create_template(
                     user_id, customer_id,
-                    headline_pc=headline_pc,
-                    description_pc=description_pc,
+                    headline_pc=headline_pc[:15],  # 네이버 PC 헤드라인 15자 한도
+                    description_pc=description_pc[:45],  # 45자 한도
                     display_url=display_url,
                     final_url_pc=final_url_pc,
-                    headline_mobile=(mo.get("headline") or mo.get("title") or "").strip() or None,
-                    description_mobile=(mo.get("description") or mo.get("desc") or "").strip() or None,
+                    headline_mobile=(headline_mobile_v[:15] if headline_mobile_v else None),
+                    description_mobile=(description_mobile_v[:45] if description_mobile_v else None),
                     final_url_mobile=final_url_mobile or None,
                 )
                 if res.get("created"):
@@ -2646,16 +2733,20 @@ async def import_ad_templates_from_naver(
             except Exception as e:
                 errors.append(f"ad-parse: {str(e)[:120]}")
 
-        # 3) 확장소재 조회 (광고그룹 단위)
+        # 3) 확장소재 — 광고그룹 단위
         try:
-            exts = await client.get_ad_extensions(owner_id=ag_id)
+            exts_resp = await client.get_ad_extensions(owner_id=ag_id)
         except Exception as e:
-            errors.append(f"exts({ag_id}): {str(e)[:120]}")
-            exts = []
-        if not isinstance(exts, list):
-            exts = []
+            errors.append(f"exts-ag({ag_id}): {str(e)[:120]}")
+            exts_resp = []
+        exts = _unwrap_list(exts_resp)
 
         for ex in exts:
+            ext_id = (ex or {}).get("nccAdExtensionId") if isinstance(ex, dict) else None
+            if ext_id and ext_id in seen_ext_ids:
+                continue
+            if ext_id:
+                seen_ext_ids.add(ext_id)
             exts_total_seen += 1
             if sample_ext is None and isinstance(ex, dict):
                 sample_ext = ex
@@ -2665,8 +2756,13 @@ async def import_ad_templates_from_naver(
                     continue
                 payload = _extract_ext_payload(ex)
                 if not payload:
-                    # payload 추출 실패 시 ex 자체를 payload로
-                    payload = {k: v for k, v in (ex or {}).items() if k not in ("ownerId", "nccAdExtensionId", "createdDate", "editedDate")}
+                    payload = {
+                        k: v for k, v in (ex or {}).items()
+                        if k not in (
+                            "ownerId", "nccAdExtensionId", "createdDate", "editedDate",
+                            "regTime", "editTime", "customerId",
+                        )
+                    }
                 if not payload:
                     continue
                 res = db.get_or_create_extension(user_id, customer_id, kind, payload)
@@ -2677,11 +2773,53 @@ async def import_ad_templates_from_naver(
             except Exception as e:
                 errors.append(f"ext-parse: {str(e)[:120]}")
 
-        await asyncio.sleep(0.2)  # API rate 보호
+        await asyncio.sleep(0.2)
+
+    # 4) 캠페인 레벨 확장소재 추가 조회 (광고그룹에 안 붙은 캠페인-레벨 항목 끌어오기)
+    for cid in campaign_ids:
+        try:
+            exts_resp = await client.get_ad_extensions(owner_id=cid)
+        except Exception as e:
+            errors.append(f"exts-cp({cid}): {str(e)[:120]}")
+            continue
+        exts = _unwrap_list(exts_resp)
+        for ex in exts:
+            ext_id = (ex or {}).get("nccAdExtensionId") if isinstance(ex, dict) else None
+            if ext_id and ext_id in seen_ext_ids:
+                continue
+            if ext_id:
+                seen_ext_ids.add(ext_id)
+            exts_total_seen += 1
+            if sample_ext is None and isinstance(ex, dict):
+                sample_ext = ex
+            try:
+                kind = (ex or {}).get("type") or (ex or {}).get("kind") or ""
+                if not kind:
+                    continue
+                payload = _extract_ext_payload(ex)
+                if not payload:
+                    payload = {
+                        k: v for k, v in (ex or {}).items()
+                        if k not in (
+                            "ownerId", "nccAdExtensionId", "createdDate", "editedDate",
+                            "regTime", "editTime", "customerId",
+                        )
+                    }
+                if not payload:
+                    continue
+                res = db.get_or_create_extension(user_id, customer_id, kind, payload)
+                if res.get("created"):
+                    ext_imported += 1
+                else:
+                    ext_skipped += 1
+            except Exception as e:
+                errors.append(f"ext-cp-parse: {str(e)[:120]}")
+        await asyncio.sleep(0.2)
 
     return {
         "success": True,
         "ad_groups_scanned": len(ad_groups),
+        "campaigns_scanned": len(campaign_ids),
         "templates_imported": tpl_imported,
         "templates_skipped_duplicate": tpl_skipped,
         "extensions_imported": ext_imported,
