@@ -15,14 +15,17 @@ from database.naver_ad_db import (
     add_bulk_upload_failure,
     update_bulk_upload_job,
 )
+from database.registered_keywords_db import get_registered_keywords_db
 from services.naver_ad_service import NaverAdApiClient, KeywordSuggestion
 
 logger = logging.getLogger(__name__)
 
 # 네이버 광고 플랫폼 제한
-MAX_KEYWORDS_PER_AD_GROUP = 1000       # 하드 리밋 (권장은 500)
-DEFAULT_KEYWORDS_PER_AD_GROUP = 500    # 실무 권장
+# (출처: connectree.net 운영 가이드, 인터애드 가이드)
+MAX_KEYWORDS_PER_AD_GROUP = 1000       # 광고그룹당 키워드 하드 리밋
+DEFAULT_KEYWORDS_PER_AD_GROUP = 1000   # 10만 한도 효율 위해 1000 default
 MAX_AD_GROUPS_PER_CAMPAIGN = 1000      # 캠페인당 광고그룹 한도
+MAX_KEYWORDS_PER_ACCOUNT = 100_000     # 계정당 키워드 총합 하드 리밋
 KEYWORD_BATCH_SIZE = 100               # API 한 번에 보낼 키워드 수
 API_RATE_LIMIT_DELAY = 0.5             # 호출 간 최소 대기(초)
 
@@ -47,14 +50,77 @@ class BulkUploadOrchestrator:
     async def run(self, config: BulkJobConfig, keywords: List[str]) -> Dict[str, Any]:
         """메인 실행 - 키워드 리스트를 받아 캠페인/광고그룹/키워드 자동 생성"""
         job_id = config.job_id
+        original_total = len(keywords)
+        logger.info(f"[Job {job_id}] 대량 등록 시작: {original_total}개 키워드")
+
+        # ===== Phase 1: 중복 차집합 — 같은 계정에 이미 등록된 키워드 제거 =====
+        try:
+            customer_id_int = int(getattr(self.api, "customer_id", 0) or 0)
+        except (TypeError, ValueError):
+            customer_id_int = 0
+
+        if customer_id_int > 0:
+            reg_db = get_registered_keywords_db()
+            new_keywords = reg_db.filter_new(customer_id_int, keywords)
+            skipped_dup = original_total - len(new_keywords)
+            if skipped_dup > 0:
+                logger.info(
+                    f"[Job {job_id}] 중복 제거: {skipped_dup}개 이미 등록됨 → "
+                    f"새로 등록할 키워드 {len(new_keywords)}개"
+                )
+
+            # 계정당 10만개 하드 가드
+            stats = reg_db.stats(customer_id_int) or {}
+            existing_active = int(stats.get("active") or 0)
+            remaining = MAX_KEYWORDS_PER_ACCOUNT - existing_active
+            if remaining <= 0:
+                update_bulk_upload_job(
+                    job_id, status="failed",
+                    error_message=(
+                        f"계정 키워드 한도 도달 ({existing_active:,}/{MAX_KEYWORDS_PER_ACCOUNT:,}). "
+                        "기존 키워드 일부 삭제 또는 다른 계정 사용 필요."
+                    ),
+                    completed_at=datetime.now().isoformat(),
+                )
+                return {"success": False, "error": "account keyword cap"}
+            if len(new_keywords) > remaining:
+                logger.warning(
+                    f"[Job {job_id}] 잔여 한도 {remaining}개로 truncate "
+                    f"(요청 {len(new_keywords)}개)"
+                )
+                new_keywords = new_keywords[:remaining]
+
+            keywords = new_keywords
+        else:
+            logger.warning(f"[Job {job_id}] customer_id 없음 → 중복 차집합/한도 가드 생략")
+
         total = len(keywords)
-        logger.info(f"[Job {job_id}] 대량 등록 시작: {total}개 키워드")
+        if total == 0:
+            update_bulk_upload_job(
+                job_id, status="completed",
+                started_at=datetime.now().isoformat(),
+                completed_at=datetime.now().isoformat(),
+                total_keywords=0,
+                processed_count=0,
+                current_step=f"등록할 새 키워드 없음 (모두 이미 등록됨, 원본 {original_total}개)",
+            )
+            return {
+                "success": True,
+                "skipped_duplicate": original_total,
+                "registered": 0,
+                "message": "모든 키워드가 이미 등록되어 있습니다.",
+            }
 
         update_bulk_upload_job(
             job_id,
             status="running",
             started_at=datetime.now().isoformat(),
-            current_step=f"시작 - {total}개 키워드 준비 중",
+            total_keywords=total,
+            current_step=(
+                f"시작 - {total}개 키워드 준비 중 "
+                f"(중복 {original_total - total}개 자동 제외)"
+                if original_total != total else f"시작 - {total}개 키워드 준비 중"
+            ),
         )
 
         try:
@@ -273,6 +339,27 @@ class BulkUploadOrchestrator:
                         resp = await self.api.create_keywords(payload, ad_group_id=ad_group_id)
                         added_n = len(resp) if isinstance(resp, list) else 0
                         ag_succeeded += added_n
+
+                        # Phase 1: 등록 성공 키워드를 dedup DB에 기록 (다음 시도 차집합)
+                        if customer_id_int > 0 and added_n > 0:
+                            try:
+                                resp_list = resp if isinstance(resp, list) else []
+                                rows_to_save = []
+                                for i, item in enumerate(resp_list):
+                                    if isinstance(item, dict):
+                                        kw_text = item.get("keyword") or (batch[i] if i < len(batch) else "")
+                                        rows_to_save.append({
+                                            "keyword": kw_text,
+                                            "ad_group_id": ad_group_id,
+                                            "campaign_id": campaign_id,
+                                            "bid_amt": config.bid,
+                                            "ncc_keyword_id": item.get("nccKeywordId"),
+                                        })
+                                reg_db = get_registered_keywords_db()
+                                reg_db.insert_batch(config.user_id, customer_id_int, rows_to_save)
+                            except Exception as save_err:
+                                logger.warning(f"[Job {job_id}] dedup DB 저장 실패: {save_err}")
+
                         # 응답이 일부만 성공일 수 있음 - 차이는 실패로 기록
                         shortfall = len(batch) - added_n
                         if shortfall > 0:

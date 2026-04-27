@@ -75,7 +75,7 @@ export default function VolumeFilterPage() {
     `필터등록_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`
   )
   const [bid, setBid] = useState(100)
-  const [keywordsPerGroup, setKeywordsPerGroup] = useState(500)
+  const [keywordsPerGroup, setKeywordsPerGroup] = useState(1000)  // 네이버 한도 max — 10만개 효율
   const [dailyBudget, setDailyBudget] = useState(10000)
   const [registering, setRegistering] = useState(false)
   const [registerJobId, setRegisterJobId] = useState<number | null>(null)
