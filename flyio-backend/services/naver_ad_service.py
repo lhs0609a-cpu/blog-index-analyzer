@@ -114,10 +114,18 @@ class NaverAdApiClient:
         }
 
     async def _request(self, method: str, endpoint: str, data: dict = None) -> dict:
-        """API 요청"""
-        uri = endpoint
+        """API 요청.
+
+        근본 원인 추적 (2026-04-27 검증):
+          403 invalid-signature.
+        네이버 검색광고 API HMAC 서명은 'method + path' 만 사용. query string 제외.
+        endpoint에 ?nccAdgroupId=... 같은 query를 직접 넣으면 서명 계산 시
+        query까지 포함되어 mismatch. 서명에는 path만, URL에는 query 포함.
+        """
+        # 서명용 URI는 path만 (query string 제거)
+        uri_for_sign = endpoint.split("?", 1)[0]
         url = f"{self.BASE_URL}{endpoint}"
-        headers = self._get_headers(method, uri)
+        headers = self._get_headers(method, uri_for_sign)
         # 디버그: POST/PUT 호출 진입 추적
         # data는 dict(create_campaign/create_ad_group) 또는 list(create_keywords) 둘 다 가능.
         if method in ("POST", "PUT"):
