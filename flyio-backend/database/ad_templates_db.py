@@ -173,6 +173,87 @@ class AdTemplatesDB:
             )
             return cur.lastrowid
 
+    def get_or_create_template(
+        self,
+        user_id: int,
+        account_customer_id: int,
+        *,
+        headline_pc: str,
+        description_pc: str,
+        display_url: str,
+        final_url_pc: str,
+        headline_mobile: Optional[str] = None,
+        description_mobile: Optional[str] = None,
+        final_url_mobile: Optional[str] = None,
+    ) -> Dict:
+        """동일 콘텐츠(headline_pc/description_pc/display_url/final_url_pc) 4-tuple로 dedupe.
+        존재 시 기존 row 반환. 없으면 생성 후 새 row 반환.
+        반환 dict: {id, created: bool}
+        """
+        h = (headline_pc or "").strip()
+        d = (description_pc or "").strip()
+        du = (display_url or "").strip()
+        fp = (final_url_pc or "").strip()
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT id FROM ad_templates
+                   WHERE user_id=? AND account_customer_id=?
+                     AND headline_pc=? AND description_pc=?
+                     AND display_url=? AND final_url_pc=?
+                   LIMIT 1""",
+                (user_id, account_customer_id, h, d, du, fp),
+            )
+            row = cur.fetchone()
+            if row:
+                return {"id": row["id"], "created": False}
+            cur.execute(
+                """INSERT INTO ad_templates
+                   (user_id, account_customer_id, headline_pc, description_pc,
+                    headline_mobile, description_mobile, display_url,
+                    final_url_pc, final_url_mobile, is_active)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)""",
+                (
+                    user_id, account_customer_id, h, d,
+                    (headline_mobile or h).strip(),
+                    (description_mobile or d).strip(),
+                    du, fp,
+                    (final_url_mobile or fp).strip(),
+                ),
+            )
+            return {"id": cur.lastrowid, "created": True}
+
+    def get_or_create_extension(
+        self,
+        user_id: int,
+        account_customer_id: int,
+        kind: str,
+        payload: Dict,
+    ) -> Dict:
+        """kind + payload_json 정확 일치로 dedupe."""
+        k = (kind or "").strip()
+        # 정렬된 JSON으로 안정적 비교
+        pj = _json.dumps(payload or {}, ensure_ascii=False, sort_keys=True)
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT id FROM ad_extension_templates
+                   WHERE user_id=? AND account_customer_id=?
+                     AND kind=? AND payload_json=?
+                   LIMIT 1""",
+                (user_id, account_customer_id, k, pj),
+            )
+            row = cur.fetchone()
+            if row:
+                return {"id": row["id"], "created": False}
+            cur.execute(
+                """INSERT INTO ad_extension_templates
+                   (user_id, account_customer_id, kind, payload_json)
+                   VALUES (?, ?, ?, ?)""",
+                (user_id, account_customer_id, k, pj),
+            )
+            return {"id": cur.lastrowid, "created": True}
+
     def update_active(self, template_id: int, is_active: bool) -> int:
         with self._conn() as conn:
             cur = conn.cursor()

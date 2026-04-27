@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Plus, Trash2, Loader2, FileText, Phone } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Loader2, FileText, Phone, Download } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/lib/stores/auth'
 import { adGet, adPost, adDelete, adPatch } from '@/lib/api'
@@ -38,6 +38,7 @@ export default function AdTemplatesPage() {
   const [showForm, setShowForm] = useState(false)
   const [showExtForm, setShowExtForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [importing, setImporting] = useState(false)
 
   // 템플릿 폼
   const [tpl, setTpl] = useState({
@@ -126,6 +127,28 @@ export default function AdTemplatesPage() {
     }
   }
 
+  const handleImportFromNaver = async () => {
+    if (!confirm('네이버 광고 계정에 등록된 소재/확장소재를 모두 가져옵니다. 진행할까요?\n(중복 콘텐츠는 자동 제외됨)')) return
+    setImporting(true)
+    const t = toast.loading('네이버에서 소재 가져오는 중... (광고그룹 수에 따라 1~2분 소요)')
+    try {
+      const res = await adPost<any>('/api/naver-ad/ad-templates/import', {}, { timeout: 180000 })
+      toast.dismiss(t)
+      const lines = [
+        `소재 ${res.templates_imported}개 가져옴 (중복 제외 ${res.templates_skipped_duplicate})`,
+        `확장소재 ${res.extensions_imported}개 가져옴 (중복 제외 ${res.extensions_skipped_duplicate})`,
+        `광고그룹 ${res.ad_groups_scanned}개 스캔`,
+      ]
+      toast.success(lines.join('\n'), { duration: 6000 })
+      load()
+    } catch (e: any) {
+      toast.dismiss(t)
+      toast.error(e?.message || '가져오기 실패')
+    } finally {
+      setImporting(false)
+    }
+  }
+
   const handleDeleteExt = async (id: number) => {
     if (!confirm('확장소재를 삭제하시겠습니까?')) return
     try {
@@ -148,9 +171,38 @@ export default function AdTemplatesPage() {
         </Link>
 
         <h1 className="text-3xl font-bold text-gray-900 mb-2">소재 템플릿</h1>
-        <p className="text-gray-600 mb-6">
+        <p className="text-gray-600 mb-4">
           광고그룹 자동 생성 시 라운드로빈으로 매칭. 템플릿 N개 등록하면 균등 분배됩니다.
         </p>
+
+        {/* 네이버에서 한 번에 가져오기 */}
+        <div className="bg-gradient-to-r from-emerald-50 to-blue-50 border border-emerald-200 rounded-xl p-4 mb-6 flex items-center justify-between gap-4">
+          <div className="flex-1">
+            <div className="text-sm font-bold text-gray-900 mb-0.5">
+              네이버에 이미 등록한 소재/확장소재가 있나요?
+            </div>
+            <div className="text-xs text-gray-600">
+              광고그룹 전체를 스캔해 기존 소재(T&D)와 확장소재(전화번호·부가설명·서브링크 등)를 자동으로 가져옵니다. 중복은 자동 제외.
+            </div>
+          </div>
+          <button
+            onClick={handleImportFromNaver}
+            disabled={importing}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 disabled:bg-gray-300 flex-shrink-0"
+          >
+            {importing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                가져오는 중...
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4" />
+                기존 광고 가져오기
+              </>
+            )}
+          </button>
+        </div>
 
         {/* 템플릿 목록 */}
         <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">

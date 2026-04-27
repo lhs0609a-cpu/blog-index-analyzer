@@ -306,6 +306,24 @@ class NaverAdApiClient:
         return await self._request("POST", endpoint, keywords)
 
     # ============ 광고 소재 (T&D) ============
+    async def get_ads(self, ad_group_id: str) -> List[dict]:
+        """광고그룹의 소재(T&D) 목록 조회.
+
+        네이버: GET /ncc/ads?nccAdgroupId={id}
+        반환 row 예시: { nccAdId, type, ad: {pc:{headline,description,final}, ... displayUrl, finalUrl} }
+        """
+        return await self._request("GET", f"/ncc/ads?nccAdgroupId={ad_group_id}")
+
+    async def get_ad_extensions(self, owner_id: Optional[str] = None) -> List[dict]:
+        """확장소재 목록 조회. owner_id 지정 시 해당 광고그룹/캠페인 소속만.
+
+        네이버: GET /ncc/adextensions?ownerId={id}
+        """
+        endpoint = "/ncc/adextensions"
+        if owner_id:
+            endpoint = f"/ncc/adextensions?ownerId={owner_id}"
+        return await self._request("GET", endpoint)
+
     async def create_ad(
         self,
         ad_group_id: str,

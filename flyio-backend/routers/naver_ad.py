@@ -2492,3 +2492,142 @@ async def delete_ad_extension_template(
     db = get_ad_templates_db()
     db.delete_extension(ext_id, user_id)
     return {"success": True}
+
+
+# 확장소재 응답에서 payload로 보존할 키 (ownerId/Type, ID, 시각 메타 제외)
+_EXT_META_KEYS = {
+    "nccAdExtensionId", "ownerId", "ownerType", "customerId",
+    "type", "status", "statusReason", "regTm", "editTm", "delFlag",
+    "userLock", "inspectStatus", "label", "name",
+}
+
+
+def _extract_ext_payload(item: Dict[str, Any]) -> Dict[str, Any]:
+    """네이버 확장소재 응답에서 payload(= create 시 보낼 본문)만 추출."""
+    out: Dict[str, Any] = {}
+    for k, v in (item or {}).items():
+        if k in _EXT_META_KEYS:
+            continue
+        if v is None:
+            continue
+        out[k] = v
+    return out
+
+
+@router.post("/ad-templates/import")
+async def import_ad_templates_from_naver(
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """네이버에 이미 등록된 광고 소재(T&D) + 확장소재를 끌어와 템플릿으로 저장.
+
+    - 광고그룹 전체 순회 → 각 그룹의 ads, adextensions GET
+    - 동일 콘텐츠는 중복 저장 안 함 (헤드라인+설명+URL 4-tuple / kind+payload 일치)
+    - 비활성 소재(userLock 등)는 그대로 가져오되 is_active=1로 저장 (사용자가 화면에서 토글)
+    """
+    from services.naver_ad_service import NaverAdApiClient
+
+    account = get_ad_account(user_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    customer_id = int(account.get("customer_id"))
+
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    db = get_ad_templates_db()
+
+    # 1) 광고그룹 전체 조회
+    try:
+        ad_groups = await client.get_ad_groups()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"광고그룹 조회 실패: {e}")
+    if not isinstance(ad_groups, list):
+        ad_groups = []
+
+    tpl_imported = 0
+    tpl_skipped = 0
+    ext_imported = 0
+    ext_skipped = 0
+    errors: List[str] = []
+
+    for ag in ad_groups:
+        ag_id = ag.get("nccAdgroupId") if isinstance(ag, dict) else None
+        if not ag_id:
+            continue
+
+        # 2) 소재 조회
+        try:
+            ads = await client.get_ads(ag_id)
+        except Exception as e:
+            errors.append(f"ads({ag_id}): {str(e)[:120]}")
+            ads = []
+        if not isinstance(ads, list):
+            ads = []
+
+        for a in ads:
+            try:
+                ad = (a or {}).get("ad") or {}
+                pc = ad.get("pc") or {}
+                mo = ad.get("mobile") or {}
+                headline_pc = (pc.get("headline") or ad.get("headline") or "").strip()
+                description_pc = (pc.get("description") or ad.get("description") or "").strip()
+                display_url = (ad.get("displayUrl") or "").strip()
+                final_url_pc = (pc.get("final") or ad.get("finalUrl") or "").strip()
+                final_url_mobile = (mo.get("final") or ad.get("finalMobileUrl") or final_url_pc).strip()
+                if not (headline_pc and description_pc and display_url and final_url_pc):
+                    continue
+                res = db.get_or_create_template(
+                    user_id, customer_id,
+                    headline_pc=headline_pc,
+                    description_pc=description_pc,
+                    display_url=display_url,
+                    final_url_pc=final_url_pc,
+                    headline_mobile=(mo.get("headline") or "").strip() or None,
+                    description_mobile=(mo.get("description") or "").strip() or None,
+                    final_url_mobile=final_url_mobile or None,
+                )
+                if res.get("created"):
+                    tpl_imported += 1
+                else:
+                    tpl_skipped += 1
+            except Exception as e:
+                errors.append(f"ad-parse: {str(e)[:120]}")
+
+        # 3) 확장소재 조회 (광고그룹 단위)
+        try:
+            exts = await client.get_ad_extensions(owner_id=ag_id)
+        except Exception as e:
+            errors.append(f"exts({ag_id}): {str(e)[:120]}")
+            exts = []
+        if not isinstance(exts, list):
+            exts = []
+
+        for ex in exts:
+            try:
+                kind = (ex or {}).get("type") or ""
+                if not kind:
+                    continue
+                payload = _extract_ext_payload(ex)
+                if not payload:
+                    continue
+                res = db.get_or_create_extension(user_id, customer_id, kind, payload)
+                if res.get("created"):
+                    ext_imported += 1
+                else:
+                    ext_skipped += 1
+            except Exception as e:
+                errors.append(f"ext-parse: {str(e)[:120]}")
+
+        await asyncio.sleep(0.2)  # API rate 보호
+
+    return {
+        "success": True,
+        "ad_groups_scanned": len(ad_groups),
+        "templates_imported": tpl_imported,
+        "templates_skipped_duplicate": tpl_skipped,
+        "extensions_imported": ext_imported,
+        "extensions_skipped_duplicate": ext_skipped,
+        "errors": errors[:20],
+    }
