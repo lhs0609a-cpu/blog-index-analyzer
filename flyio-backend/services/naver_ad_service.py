@@ -118,6 +118,9 @@ class NaverAdApiClient:
         uri = endpoint
         url = f"{self.BASE_URL}{endpoint}"
         headers = self._get_headers(method, uri)
+        # 디버그: POST/PUT 호출 진입 추적 (광고그룹 400 진단용)
+        if method in ("POST", "PUT"):
+            logger.info(f"[NaverAd._request] {method} {endpoint} payload_keys={list((data or {}).keys())}")
 
         try:
             if method == "GET":

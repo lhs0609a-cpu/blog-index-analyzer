@@ -159,10 +159,16 @@ class BulkUploadOrchestrator:
                     created_ad_groups.append(ad_group_id)
                     logger.info(f"[Job {job_id}] 광고그룹 생성 {g_idx+1}/{num_ad_groups}: {ad_group_name}")
                 except Exception as e:
-                    logger.error(f"[Job {job_id}] 광고그룹 생성 실패 '{ad_group_name}': {e}")
-                    # 해당 청크 전체를 실패 처리
+                    err_type = type(e).__name__
+                    err_str = str(e)
+                    logger.error(
+                        f"[Job {job_id}] 광고그룹 생성 실패 '{ad_group_name}' "
+                        f"[{err_type}]: {err_str[:1500]}"
+                    )
+                    # 해당 청크 전체를 실패 처리 — type 포함 + 본문 길이 확장
+                    failure_reason = f"광고그룹 생성 실패 [{err_type}]: {err_str[:600]}"
                     for kw in chunk:
-                        add_bulk_upload_failure(job_id, kw, config.bid, "", f"광고그룹 생성 실패: {str(e)[:200]}")
+                        add_bulk_upload_failure(job_id, kw, config.bid, "", failure_reason)
                         failed += 1
                         processed += 1
                     update_bulk_upload_job(
