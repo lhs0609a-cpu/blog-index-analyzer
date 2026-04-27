@@ -128,22 +128,25 @@ export default function AdTemplatesPage() {
   }
 
   const handleImportFromNaver = async () => {
-    if (!confirm('네이버 광고 계정에 등록된 소재/확장소재를 모두 가져옵니다. 진행할까요?\n(중복 콘텐츠는 자동 제외됨)')) return
+    console.log('[ad-templates] import 시작')
     setImporting(true)
     const t = toast.loading('네이버에서 소재 가져오는 중... (광고그룹 수에 따라 1~2분 소요)')
     try {
       const res = await adPost<any>('/api/naver-ad/ad-templates/import', {}, { timeout: 180000 })
+      console.log('[ad-templates] import 응답', res)
       toast.dismiss(t)
       const lines = [
-        `소재 ${res.templates_imported}개 가져옴 (중복 제외 ${res.templates_skipped_duplicate})`,
-        `확장소재 ${res.extensions_imported}개 가져옴 (중복 제외 ${res.extensions_skipped_duplicate})`,
-        `광고그룹 ${res.ad_groups_scanned}개 스캔`,
+        `소재 ${res?.templates_imported ?? 0}개 가져옴 (중복 제외 ${res?.templates_skipped_duplicate ?? 0})`,
+        `확장소재 ${res?.extensions_imported ?? 0}개 가져옴 (중복 제외 ${res?.extensions_skipped_duplicate ?? 0})`,
+        `광고그룹 ${res?.ad_groups_scanned ?? 0}개 스캔`,
       ]
       toast.success(lines.join('\n'), { duration: 6000 })
       load()
     } catch (e: any) {
+      console.error('[ad-templates] import 실패', e, e?.response)
       toast.dismiss(t)
-      toast.error(e?.message || '가져오기 실패')
+      const detail = e?.response?.data?.detail || e?.message || '가져오기 실패'
+      toast.error(`가져오기 실패: ${detail}`, { duration: 8000 })
     } finally {
       setImporting(false)
     }
