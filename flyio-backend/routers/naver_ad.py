@@ -2238,7 +2238,7 @@ def _verify_cron_token(authorization: Optional[str]) -> None:
         raise HTTPException(status_code=403, detail="잘못된 cron 토큰")
 
 
-async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 10):
+async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 5):
     """수집 1회 — keywordstool로 새 키워드 발굴해 풀에 추가."""
     from services.naver_ad_service import NaverAdApiClient
     import time as _time
@@ -2285,10 +2285,10 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 10)
     except Exception as e:
         logger.warning(f"[pool/cleanup-childless] 실패: {e}")
 
-    # 시드 자가확장: 가속 모드 — 라운드당 30, min_volume 100, cap 200, 도메인 토큰 검증
+    # 시드 자가확장: 강화 — 라운드당 50, min_volume 30, cap 500, 도메인 토큰 검증
     try:
         promoted = pool.promote_seeds(
-            customer_id, limit=30, min_volume=100, max_total_seeds=200,
+            customer_id, limit=50, min_volume=30, max_total_seeds=500,
             domain_tokens=list(POOL_DOMAIN_TOKENS),
         )
         if promoted:
@@ -2445,13 +2445,13 @@ async def _run_pool_register(uid: int, batch: int = 3000, bid: int = 100):
         return
     customer_id = int(account.get("customer_id"))
 
-    pending = pool.claim_pending(customer_id, limit=batch, min_volume=10)
+    pending = pool.claim_pending(customer_id, limit=batch, min_volume=1)
     if not pending:
         pending_total = (pool.stats(customer_id).get("by_status") or {}).get("pending", 0)
-        logger.warning(f"[pool/register] user={uid} pending 없음 (min_volume=10 필터, 전체 pending={pending_total})")
+        logger.warning(f"[pool/register] user={uid} pending 없음 (전체 pending={pending_total})")
         pool.record_run(uid, customer_id, "register", "no_pending",
                         pending_after=pending_total,
-                        error_message=f"min_volume=10 통과한 pending 없음 (전체 pending={pending_total} — 시드뿐)" if pending_total else "pending 0",
+                        error_message=f"전체 pending={pending_total}" if pending_total else "pending 0",
                         duration_ms=int((_time.monotonic()-t0)*1000))
         return
     keywords = [p["keyword"] for p in pending]
