@@ -2277,6 +2277,14 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
     except Exception as e:
         logger.warning(f"[pool/cleanup] 실패: {e}")
 
+    # 자동 승격 시드 중 자식 0 + 30분 경과 자력 삭제 (user_seed는 면제)
+    try:
+        childless = pool.cleanup_childless_auto_seeds(customer_id, min_age_minutes=30)
+        if childless > 0:
+            logger.warning(f"[pool/cleanup] 자식 0 자동 시드 자력 삭제 {childless}개")
+    except Exception as e:
+        logger.warning(f"[pool/cleanup-childless] 실패: {e}")
+
     # 시드 자가확장: 가속 모드 — 라운드당 30, min_volume 100, cap 200, 도메인 토큰 검증
     try:
         promoted = pool.promote_seeds(

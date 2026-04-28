@@ -256,6 +256,42 @@ class KeywordPoolDB:
             )
             return [r["keyword"] for r in cur.fetchall() if r["keyword"]]
 
+    def cleanup_childless_auto_seeds(
+        self,
+        account_customer_id: int,
+        min_age_minutes: int = 30,
+    ) -> int:
+        """자동 승격된 시드 중 일정 시간 지나도 자식 0인 것 자력 삭제.
+        user_seed는 사용자 의도라 면제."""
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT keyword FROM naverad_keyword_pool sk
+                   WHERE account_customer_id = ?
+                     AND seed = keyword
+                     AND source = 'auto_promoted_seed'
+                     AND datetime(discovered_at) < datetime('now', ?)
+                     AND NOT EXISTS (
+                         SELECT 1 FROM naverad_keyword_pool ck
+                         WHERE ck.account_customer_id = sk.account_customer_id
+                           AND ck.seed = sk.keyword
+                           AND ck.keyword <> ck.seed
+                     )""",
+                (account_customer_id, f"-{min_age_minutes} minutes"),
+            )
+            keywords = [r["keyword"] for r in cur.fetchall()]
+            if not keywords:
+                return 0
+            for kw in keywords:
+                cur.execute(
+                    """DELETE FROM naverad_keyword_pool
+                       WHERE account_customer_id = ?
+                         AND keyword = ?
+                         AND source = 'auto_promoted_seed'""",
+                    (account_customer_id, kw),
+                )
+            return len(keywords)
+
     def cleanup_offdomain(
         self,
         account_customer_id: int,
