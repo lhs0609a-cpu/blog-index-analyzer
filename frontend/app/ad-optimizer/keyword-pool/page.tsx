@@ -45,6 +45,7 @@ interface SeedBreakdown {
   registered: number
   skipped_existing: number
   failed: number
+  source?: string
 }
 
 interface RecentKeyword {
@@ -278,7 +279,7 @@ export default function KeywordPoolPage() {
             <div className="flex items-center gap-2 mb-3 flex-wrap">
               <Database className="w-5 h-5 text-[#0064FF]" />
               <h2 className="font-bold text-gray-900">시드별 발굴 키워드</h2>
-              <span className="text-xs text-gray-500">발굴 자식이 0인 시드는 keywordstool이 응답을 못 주거나 화이트리스트로 차단된 케이스 — X 버튼으로 정리하세요</span>
+              <span className="text-xs text-gray-500">매 15분 cron이 검색량 상위·등록완료 키워드 5개를 자동 시드로 승격합니다 (cap 50). 부적절하면 휴지통으로 빼세요.</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -296,10 +297,14 @@ export default function KeywordPoolPage() {
                 <tbody>
                   {seedBreakdown.map((s) => {
                     const childless = s.total <= 1
+                    const isAuto = s.source === 'auto_promoted_seed'
+                    const isUser = s.source === 'user_seed'
                     return (
                       <tr key={s.seed} className={`border-b border-gray-100 hover:bg-gray-50 ${childless ? 'opacity-60' : ''}`}>
                         <td className="py-2 px-2 font-medium text-gray-900">
                           {s.seed}
+                          {isUser && <span className="ml-2 text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">내 시드</span>}
+                          {isAuto && <span className="ml-2 text-[10px] text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded">자동 승격</span>}
                           {childless && <span className="ml-2 text-[10px] text-gray-400 font-normal">(자식 0)</span>}
                         </td>
                         <td className="py-2 px-2 text-right font-mono">{s.total.toLocaleString()}</td>

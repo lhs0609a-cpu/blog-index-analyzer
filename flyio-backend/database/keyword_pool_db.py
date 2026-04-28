@@ -156,9 +156,17 @@ class KeywordPoolDB:
             return [dict(r) for r in cur.fetchall()]
 
     def seed_breakdown(self, account_customer_id: int) -> List[Dict]:
-        """시드별 발굴 키워드 카운트 — 사용자가 풀 구성을 볼 수 있게."""
+        """시드별 발굴 키워드 카운트 + 시드 origin source — 사용자가 풀 구성을 볼 수 있게."""
         with self._conn() as conn:
             cur = conn.cursor()
+            # 시드 자기 자신 row의 source 매핑
+            cur.execute(
+                """SELECT keyword, source FROM naverad_keyword_pool
+                   WHERE account_customer_id = ? AND seed = keyword""",
+                (account_customer_id,),
+            )
+            source_map = {r["keyword"]: (r["source"] or "unknown") for r in cur.fetchall()}
+
             cur.execute(
                 """SELECT
                      COALESCE(seed, '(시드없음)') AS seed,
@@ -173,7 +181,12 @@ class KeywordPoolDB:
                    ORDER BY total DESC""",
                 (account_customer_id,),
             )
-            return [dict(r) for r in cur.fetchall()]
+            rows = []
+            for r in cur.fetchall():
+                d = dict(r)
+                d["source"] = source_map.get(d["seed"], "unknown")
+                rows.append(d)
+            return rows
 
     def recent_keywords(self, account_customer_id: int, limit: int = 30) -> List[Dict]:
         """최근 풀에 추가된 키워드 샘플 (검수용)."""
@@ -230,6 +243,90 @@ class KeywordPoolDB:
                 (account_customer_id,),
             )
             return [r["keyword"] for r in cur.fetchall() if r["keyword"]]
+
+    def list_seed_whitelist(self, account_customer_id: int) -> List[str]:
+        """화이트리스트에 적용할 시드 — user_seed + auto_promoted_seed."""
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT DISTINCT keyword FROM naverad_keyword_pool
+                   WHERE account_customer_id = ?
+                     AND source IN ('user_seed', 'auto_promoted_seed')""",
+                (account_customer_id,),
+            )
+            return [r["keyword"] for r in cur.fetchall() if r["keyword"]]
+
+    def promote_seeds(
+        self,
+        account_customer_id: int,
+        limit: int = 5,
+        min_volume: int = 1000,
+        max_total_seeds: int = 50,
+    ) -> List[Dict]:
+        """검색량 상위 + 등록 완료된 키워드 중 시드 아닌 것 N개 → 시드로 승격.
+
+        반환: 승격된 키워드 목록 [{keyword, monthly_total}]
+        """
+        with self._conn() as conn:
+            cur = conn.cursor()
+            # 현재 시드(자기 자신을 seed로 가진 것) 카운트
+            cur.execute(
+                """SELECT COUNT(DISTINCT keyword) AS n FROM naverad_keyword_pool
+                   WHERE account_customer_id = ? AND seed = keyword""",
+                (account_customer_id,),
+            )
+            current_seed_count = cur.fetchone()["n"]
+            available = max(0, max_total_seeds - current_seed_count)
+            if available <= 0:
+                return []
+            target = min(limit, available)
+
+            # 후보: registered, 월 검색량 큰 순, 시드 아님, 길이 >= 2
+            cur.execute(
+                """SELECT keyword, monthly_total
+                   FROM naverad_keyword_pool
+                   WHERE account_customer_id = ?
+                     AND status = 'registered'
+                     AND monthly_total >= ?
+                     AND length(keyword) >= 2
+                     AND keyword <> COALESCE(seed, '')
+                   ORDER BY monthly_total DESC
+                   LIMIT ?""",
+                (account_customer_id, min_volume, target * 3),  # 여유 있게 fetch 후 슬라이스
+            )
+            cand_rows = cur.fetchall()
+
+            # 시드 자기 자신과 너무 비슷한 후보 배제 (중복 의미장)
+            cur.execute(
+                """SELECT DISTINCT keyword FROM naverad_keyword_pool
+                   WHERE account_customer_id = ? AND seed = keyword""",
+                (account_customer_id,),
+            )
+            existing_seeds = {r["keyword"] for r in cur.fetchall()}
+
+            promoted: List[Dict] = []
+            for row in cand_rows:
+                if len(promoted) >= target:
+                    break
+                kw = row["keyword"]
+                if kw in existing_seeds:
+                    continue
+                # 같은 의미장 중복 제외 — 기존 시드의 substring/superstring이면 가치 적음
+                if any(s in kw or kw in s for s in existing_seeds if s and len(s) >= 2):
+                    # 기존 시드와 substring 관계지만 다른 표현 — 추가 시드로 가치는 있음.
+                    # 단, 정확히 같은 의미장 확장 — 진행은 하되 표시.
+                    pass
+                # UPDATE: 이 키워드의 seed를 자기 자신으로, source 자동 승격
+                cur.execute(
+                    """UPDATE naverad_keyword_pool
+                       SET seed = keyword, source = 'auto_promoted_seed'
+                       WHERE account_customer_id = ? AND keyword = ?""",
+                    (account_customer_id, kw),
+                )
+                if cur.rowcount > 0:
+                    promoted.append({"keyword": kw, "monthly_total": row["monthly_total"]})
+                    existing_seeds.add(kw)
+            return promoted
 
     def add_candidates(
         self,

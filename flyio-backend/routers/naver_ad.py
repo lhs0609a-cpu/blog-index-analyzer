@@ -2247,6 +2247,18 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
         return
     target = min(max_new, headroom)
 
+    # 시드 자가확장: 검색량 상위 + 등록 완료된 키워드를 새 시드로 승격 (라운드당 5개, 시드 cap 50)
+    try:
+        promoted = pool.promote_seeds(customer_id, limit=5, min_volume=1000, max_total_seeds=50)
+        if promoted:
+            logger.warning(
+                f"[pool/collect] user={uid} 시드 자동 승격 {len(promoted)}개: "
+                + ", ".join(f"{p['keyword']}({p['monthly_total']})" for p in promoted)
+            )
+    except Exception as e:
+        logger.warning(f"[pool/collect] promote_seeds 실패: {e}")
+        promoted = []
+
     seeds = pool.get_recent_seeds(customer_id, limit=20)
     if not seeds:
         logger.warning(f"[pool/collect] user={uid} 시드 없음 — UI에서 초기 시드 제공 필요")
@@ -2256,11 +2268,15 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
                         duration_ms=int((_time.monotonic()-t0)*1000))
         return
 
-    # 사용자가 명시적으로 추가한 시드(user_seed source)만 의미적 화이트리스트로 사용.
+    # 화이트리스트: user_seed + auto_promoted_seed 모두 포함.
     # 발굴 키워드는 이 시드 중 하나와 substring 관계여야 풀에 들어감 → 엉뚱한 키워드 차단.
-    user_seeds = pool.list_user_seeds(customer_id)
-    whitelist = [s for s in user_seeds if s] or seeds  # user_seed 없으면 fallback
-    logger.warning(f"[pool/collect] user={uid} 시작 target={target} seeds={len(seeds)} whitelist={len(whitelist)}")
+    whitelist = pool.list_seed_whitelist(customer_id)
+    if not whitelist:
+        whitelist = seeds  # 폴백
+    logger.warning(
+        f"[pool/collect] user={uid} 시작 target={target} seeds={len(seeds)} "
+        f"whitelist={len(whitelist)} promoted={len(promoted)}"
+    )
 
     client = NaverAdApiClient()
     client.customer_id = account["customer_id"]
