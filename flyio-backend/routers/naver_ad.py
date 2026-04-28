@@ -2892,6 +2892,166 @@ async def keyword_pool_admin_delete_keywords(
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
 
 
+@router.get("/keyword-pool/clicked-keywords")
+async def keyword_pool_clicked_keywords(
+    days: int = 7,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """클릭 발생한 키워드 list — 사용자 검수용. 시드 매칭 여부 표시."""
+    from services.naver_ad_service import NaverAdApiClient
+    from datetime import datetime, timedelta
+    import sqlite3 as _sqlite3
+
+    try:
+        account = get_ad_account(user_id)
+        if not account or not account.get("is_connected"):
+            raise HTTPException(status_code=400, detail="광고 계정 미연결")
+        customer_id = int(account.get("customer_id"))
+
+        reg = get_registered_keywords_db()
+        with _sqlite3.connect(reg.db_path) as conn:
+            rows = conn.execute(
+                "SELECT keyword, ncc_keyword_id FROM registered_keywords WHERE account_customer_id=? AND ncc_keyword_id IS NOT NULL",
+                (customer_id,),
+            ).fetchall()
+        if not rows:
+            return {"success": True, "days": days, "total": 0, "items": []}
+        keyword_map = {r[1]: r[0] for r in rows}
+
+        client = NaverAdApiClient()
+        client.customer_id = account["customer_id"]
+        client.api_key = account["api_key"]
+        client.secret_key = account["secret_key"]
+
+        end_date = datetime.now().strftime("%Y-%m-%d")
+        start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+
+        all_stats: List[dict] = []
+        ids = list(keyword_map.keys())
+        for i in range(0, len(ids), 100):
+            batch = ids[i:i + 100]
+            try:
+                stats = await client.get_stats(
+                    stat_type="KEYWORD", ids=batch,
+                    start_date=start_date, end_date=end_date,
+                )
+                all_stats.extend(stats or [])
+            except Exception as e:
+                logger.warning(f"clicked-keywords stats batch 실패: {e}")
+            await asyncio.sleep(0.3)
+
+        pool = get_keyword_pool_db()
+        user_seeds = [s for s in (pool.list_user_seeds(customer_id) or []) if s and len(s) >= 2]
+
+        def matches_seed(kw: str) -> bool:
+            for s in user_seeds:
+                if s in kw or kw in s:
+                    return True
+            return False
+
+        items = []
+        for stat in all_stats:
+            keyword_id = stat.get("id")
+            if not keyword_id:
+                continue
+            clicks = int(stat.get("clkCnt", 0) or 0)
+            if clicks <= 0:
+                continue
+            kw_text = keyword_map.get(keyword_id)
+            if not kw_text:
+                continue
+            items.append({
+                "keyword_id": keyword_id,
+                "keyword": kw_text,
+                "impressions": int(stat.get("impCnt", 0) or 0),
+                "clicks": clicks,
+                "cost": int(stat.get("salesAmt", 0) or 0),
+                "ctr": float(stat.get("ctr", 0) or 0),
+                "cpc": int(stat.get("cpc", 0) or 0),
+                "matches_seed": matches_seed(kw_text),
+            })
+        # 의도성 X 먼저(False=0), 클릭 많은 순
+        items.sort(key=lambda x: (x["matches_seed"], -x["clicks"]))
+        return {"success": True, "days": days, "total": len(items), "items": items}
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        logger.error(f"clicked-keywords 실패: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
+
+
+class BulkDeleteKeywordsRequest(BaseModel):
+    keyword_ids: List[str]
+
+
+@router.post("/keyword-pool/clicked-keywords/bulk-delete")
+async def keyword_pool_bulk_delete_clicked(
+    request: BulkDeleteKeywordsRequest,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """선택된 키워드 일괄 네이버 삭제 (실패 시 PAUSE) + 풀 mark + reg DB 제거."""
+    from services.naver_ad_service import NaverAdApiClient
+    import sqlite3 as _sqlite3
+
+    try:
+        account = get_ad_account(user_id)
+        if not account or not account.get("is_connected"):
+            raise HTTPException(status_code=400, detail="광고 계정 미연결")
+        customer_id = int(account.get("customer_id"))
+
+        client = NaverAdApiClient()
+        client.customer_id = account["customer_id"]
+        client.api_key = account["api_key"]
+        client.secret_key = account["secret_key"]
+
+        reg = get_registered_keywords_db()
+        pool = get_keyword_pool_db()
+
+        n_deleted = 0
+        n_paused = 0
+        n_failed = 0
+        affected_keywords: List[str] = []
+
+        for kid in request.keyword_ids:
+            with _sqlite3.connect(reg.db_path) as conn:
+                row = conn.execute(
+                    "SELECT keyword FROM registered_keywords WHERE account_customer_id=? AND ncc_keyword_id=?",
+                    (customer_id, kid),
+                ).fetchone()
+            kw_text = row[0] if row else None
+            try:
+                await client.delete_keyword(kid)
+                with _sqlite3.connect(reg.db_path) as conn:
+                    conn.execute(
+                        "DELETE FROM registered_keywords WHERE account_customer_id=? AND ncc_keyword_id=?",
+                        (customer_id, kid),
+                    )
+                n_deleted += 1
+                if kw_text: affected_keywords.append(kw_text)
+            except Exception:
+                try:
+                    await client.pause_keyword(kid)
+                    n_paused += 1
+                    if kw_text: affected_keywords.append(kw_text)
+                except Exception:
+                    n_failed += 1
+            await asyncio.sleep(0.15)
+
+        if affected_keywords:
+            pool.mark_rejected_by_naver(
+                customer_id,
+                [{"keyword": kw, "reason": "사용자 일괄 삭제 (클릭 검수)"} for kw in affected_keywords],
+            )
+        return {"success": True, "deleted": n_deleted, "paused": n_paused, "failed": n_failed}
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        logger.error(f"bulk-delete-clicked 실패: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
+
+
 @router.delete("/keyword-pool/keywords/{keyword}")
 async def keyword_pool_delete_keyword(
     keyword: str,
