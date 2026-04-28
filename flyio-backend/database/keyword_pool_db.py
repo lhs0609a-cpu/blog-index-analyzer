@@ -79,6 +79,74 @@ class KeywordPoolDB:
                 CREATE INDEX IF NOT EXISTS idx_pool_user
                 ON naverad_keyword_pool(user_id, status)
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS naverad_pool_runs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    account_customer_id INTEGER,
+                    kind TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    added INTEGER DEFAULT 0,
+                    registered INTEGER DEFAULT 0,
+                    failed INTEGER DEFAULT 0,
+                    seeds_count INTEGER DEFAULT 0,
+                    pending_after INTEGER,
+                    error_message TEXT,
+                    duration_ms INTEGER,
+                    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_pool_runs_acct
+                ON naverad_pool_runs(account_customer_id, started_at DESC)
+            """)
+
+    def record_run(
+        self,
+        user_id: Optional[int],
+        account_customer_id: Optional[int],
+        kind: str,
+        status: str,
+        added: int = 0,
+        registered: int = 0,
+        failed: int = 0,
+        seeds_count: int = 0,
+        pending_after: Optional[int] = None,
+        error_message: Optional[str] = None,
+        duration_ms: Optional[int] = None,
+    ) -> int:
+        """워커 실행 1건 기록 — 화면 실시간 표시용."""
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """INSERT INTO naverad_pool_runs
+                   (user_id, account_customer_id, kind, status,
+                    added, registered, failed, seeds_count, pending_after,
+                    error_message, duration_ms)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    user_id, account_customer_id, kind, status,
+                    added, registered, failed, seeds_count, pending_after,
+                    (error_message or "")[:500] if error_message else None,
+                    duration_ms,
+                ),
+            )
+            return cur.lastrowid
+
+    def recent_runs(self, account_customer_id: int, limit: int = 20) -> List[Dict]:
+        """최근 N개 실행 이력."""
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT id, kind, status, added, registered, failed,
+                          seeds_count, pending_after, error_message,
+                          duration_ms, started_at
+                   FROM naverad_pool_runs
+                   WHERE account_customer_id = ?
+                   ORDER BY id DESC LIMIT ?""",
+                (account_customer_id, limit),
+            )
+            return [dict(r) for r in cur.fetchall()]
 
     def add_candidates(
         self,

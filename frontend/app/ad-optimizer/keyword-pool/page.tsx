@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Loader2, Plus, RefreshCw, Database, Activity, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Loader2, Plus, RefreshCw, Database, Activity, AlertCircle, CheckCircle2, XCircle, Clock, Zap } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/lib/stores/auth'
 import { adGet, adPost } from '@/lib/api'
@@ -23,12 +23,28 @@ interface RegStats {
   last_at?: string
 }
 
+interface RunRow {
+  id: number
+  kind: 'collect' | 'register' | string
+  status: 'success' | 'partial' | 'failed' | 'no_seed' | 'no_pending' | 'cap_reached' | 'no_account' | string
+  added: number
+  registered: number
+  failed: number
+  seeds_count: number
+  pending_after?: number | null
+  error_message?: string | null
+  duration_ms?: number | null
+  started_at: string
+}
+
 interface PoolStatsResponse {
   success: boolean
   customer_id?: number
   pool: PoolStats
   registered: RegStats
   account_cap: number
+  recent_runs?: RunRow[]
+  now?: string
   message?: string
 }
 
@@ -54,7 +70,7 @@ export default function KeywordPoolPage() {
   useEffect(() => {
     if (!isAuthenticated) return
     load()
-    const t = setInterval(load, 30_000) // 30초마다 자동 갱신
+    const t = setInterval(load, 10_000) // 10초마다 자동 갱신 (실시간 모니터링)
     return () => clearInterval(t)
   }, [isAuthenticated])
 
@@ -89,6 +105,34 @@ export default function KeywordPoolPage() {
   const registered = stats?.pool?.by_status?.registered ?? 0
   const failed = stats?.pool?.by_status?.failed ?? 0
   const usePct = Math.min(100, Math.round((used / cap) * 100))
+  const runs = stats?.recent_runs ?? []
+  const lastRun = runs[0]
+  const lastCollect = runs.find((r) => r.kind === 'collect')
+  const lastRegister = runs.find((r) => r.kind === 'register')
+  const lastError = runs.find((r) => r.status === 'failed' || (r.error_message && r.status !== 'no_seed' && r.status !== 'no_pending' && r.status !== 'cap_reached'))
+
+  // "지금 막 돌았는가" — 최근 90초 이내
+  const nowMs = Date.now()
+  const isFresh = (iso?: string) => {
+    if (!iso) return false
+    const t = new Date(iso.replace(' ', 'T') + 'Z').getTime()
+    return nowMs - t < 90_000
+  }
+  const liveCollect = isFresh(lastCollect?.started_at)
+  const liveRegister = isFresh(lastRegister?.started_at)
+
+  // 다음 cron 예상 시각 — 매 15분(:00, :15, :30, :45 UTC. KST도 동일분단위)
+  const nowDate = new Date()
+  const nextTickMin = Math.ceil((nowDate.getMinutes() + 1) / 15) * 15
+  const nextTick = new Date(nowDate)
+  if (nextTickMin >= 60) {
+    nextTick.setHours(nextTick.getHours() + 1)
+    nextTick.setMinutes(0)
+  } else {
+    nextTick.setMinutes(nextTickMin)
+  }
+  nextTick.setSeconds(0)
+  const minsToNext = Math.max(0, Math.round((nextTick.getTime() - nowDate.getTime()) / 60000))
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white pt-24 pb-12">
@@ -151,6 +195,99 @@ export default function KeywordPoolPage() {
           <StatCard label="실패" value={failed} color="text-red-600" />
         </div>
 
+        {/* 라이브 상태 — 지금 도는지/멈췄는지 한눈에 */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Zap className="w-5 h-5 text-[#0064FF]" />
+                {(liveCollect || liveRegister) && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                )}
+              </div>
+              <h2 className="font-bold text-gray-900">자동화 라이브 상태</h2>
+            </div>
+            <div className="text-xs text-gray-500 inline-flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5" />
+              다음 실행 예정 ~ {minsToNext}분 후 ({nextTick.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })})
+            </div>
+          </div>
+
+          {!lastRun && (
+            <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600">
+              아직 실행 이력이 없습니다. 매 15분 cron tick에 자동 실행됩니다 — 시드를 추가하면 첫 실행에서 키워드를 발굴합니다.
+            </div>
+          )}
+
+          {lastRun && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <RunSummary kind="collect" run={lastCollect} live={liveCollect} />
+              <RunSummary kind="register" run={lastRegister} live={liveRegister} />
+            </div>
+          )}
+
+          {lastError && (
+            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <div>
+                <strong>최근 에러 ({fmtTime(lastError.started_at)})</strong>
+                <div className="mt-1 font-mono text-[11px] break-all">{lastError.error_message || lastError.status}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 실행 이력 — 최근 20건 */}
+        {runs.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Activity className="w-5 h-5 text-[#0064FF]" />
+              <h2 className="font-bold text-gray-900">최근 실행 이력</h2>
+              <span className="text-xs text-gray-500">10초마다 자동 갱신</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 text-xs text-gray-500">
+                    <th className="text-left py-2 px-2">시각</th>
+                    <th className="text-left py-2 px-2">종류</th>
+                    <th className="text-left py-2 px-2">결과</th>
+                    <th className="text-right py-2 px-2">수집/등록/실패</th>
+                    <th className="text-right py-2 px-2">소요</th>
+                    <th className="text-left py-2 px-2">메모</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {runs.map((r) => (
+                    <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-2 px-2 text-xs text-gray-600 font-mono">{fmtTime(r.started_at)}</td>
+                      <td className="py-2 px-2">
+                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                          r.kind === 'collect' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'
+                        }`}>
+                          {r.kind === 'collect' ? '수집' : '등록'}
+                        </span>
+                      </td>
+                      <td className="py-2 px-2"><StatusBadge status={r.status} /></td>
+                      <td className="py-2 px-2 text-right text-xs font-mono">
+                        {r.kind === 'collect'
+                          ? `+${r.added}`
+                          : `${r.registered}/${r.failed}`}
+                      </td>
+                      <td className="py-2 px-2 text-right text-xs text-gray-500">
+                        {r.duration_ms != null ? `${(r.duration_ms / 1000).toFixed(1)}s` : '-'}
+                      </td>
+                      <td className="py-2 px-2 text-xs text-gray-600 max-w-xs truncate" title={r.error_message || ''}>
+                        {r.error_message || '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {/* 시드 추가 */}
         <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-2 mb-3">
@@ -205,6 +342,79 @@ function StatCard({ label, value, color }: { label: string; value: number; color
     <div className="bg-white rounded-xl border border-gray-200 p-4">
       <div className="text-xs text-gray-500 mb-1">{label}</div>
       <div className={`text-2xl font-bold ${color}`}>{value.toLocaleString()}</div>
+    </div>
+  )
+}
+
+function fmtTime(iso?: string): string {
+  if (!iso) return '-'
+  // SQLite는 'YYYY-MM-DD HH:MM:SS' (UTC)로 저장
+  const d = new Date(iso.includes('T') ? iso : iso.replace(' ', 'T') + 'Z')
+  if (isNaN(d.getTime())) return iso
+  const diffSec = Math.round((Date.now() - d.getTime()) / 1000)
+  if (diffSec < 60) return `${diffSec}초 전`
+  if (diffSec < 3600) return `${Math.round(diffSec / 60)}분 전`
+  if (diffSec < 86400) return `${Math.round(diffSec / 3600)}시간 전`
+  return d.toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; cls: string; icon: any }> = {
+    success: { label: '성공', cls: 'bg-green-50 text-green-700 border-green-200', icon: CheckCircle2 },
+    partial: { label: '부분성공', cls: 'bg-yellow-50 text-yellow-700 border-yellow-200', icon: AlertCircle },
+    failed: { label: '실패', cls: 'bg-red-50 text-red-700 border-red-200', icon: XCircle },
+    no_seed: { label: '시드 없음', cls: 'bg-gray-50 text-gray-600 border-gray-200', icon: AlertCircle },
+    no_pending: { label: '대상 없음', cls: 'bg-gray-50 text-gray-600 border-gray-200', icon: AlertCircle },
+    cap_reached: { label: '한도 도달', cls: 'bg-orange-50 text-orange-700 border-orange-200', icon: AlertCircle },
+    no_account: { label: '계정 미연결', cls: 'bg-red-50 text-red-700 border-red-200', icon: XCircle },
+  }
+  const m = map[status] || { label: status, cls: 'bg-gray-50 text-gray-600 border-gray-200', icon: AlertCircle }
+  const Icon = m.icon
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border ${m.cls}`}>
+      <Icon className="w-3 h-3" />
+      {m.label}
+    </span>
+  )
+}
+
+function RunSummary({ kind, run, live }: { kind: 'collect' | 'register'; run?: RunRow; live: boolean }) {
+  const label = kind === 'collect' ? '수집 (keywordstool)' : '등록 (네이버 광고)'
+  if (!run) {
+    return (
+      <div className="p-3 border border-gray-200 rounded-lg bg-gray-50">
+        <div className="text-xs font-medium text-gray-500 mb-1">{label}</div>
+        <div className="text-sm text-gray-500">아직 실행 안 됨</div>
+      </div>
+    )
+  }
+  const isOk = run.status === 'success' || run.status === 'partial'
+  const main = kind === 'collect'
+    ? `새 키워드 +${run.added}개`
+    : `등록 ${run.registered} / 실패 ${run.failed}`
+  return (
+    <div className={`p-3 border rounded-lg ${isOk ? 'border-green-200 bg-green-50/50' : 'border-orange-200 bg-orange-50/40'}`}>
+      <div className="flex items-center justify-between mb-1">
+        <div className="text-xs font-medium text-gray-700 inline-flex items-center gap-1.5">
+          {label}
+          {live && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">
+              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+              LIVE
+            </span>
+          )}
+        </div>
+        <StatusBadge status={run.status} />
+      </div>
+      <div className="text-base font-bold text-gray-900">{main}</div>
+      <div className="text-[11px] text-gray-500 mt-1">
+        {fmtTime(run.started_at)}
+        {run.duration_ms != null && <> · {(run.duration_ms / 1000).toFixed(1)}초</>}
+        {kind === 'collect' && run.seeds_count > 0 && <> · 시드 {run.seeds_count}개 처리</>}
+      </div>
+      {run.error_message && (
+        <div className="text-[11px] text-red-700 mt-1 font-mono break-all">{run.error_message}</div>
+      )}
     </div>
   )
 }

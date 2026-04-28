@@ -2219,25 +2219,41 @@ def _verify_cron_token(authorization: Optional[str]) -> None:
 async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30):
     """수집 1회 — keywordstool로 새 키워드 발굴해 풀에 추가."""
     from services.naver_ad_service import NaverAdApiClient
+    import time as _time
+
+    pool = get_keyword_pool_db()
+    t0 = _time.monotonic()
+    customer_id_for_log: Optional[int] = None
 
     account = get_ad_account(uid)
     if not account or not account.get("is_connected"):
+        pool.record_run(uid, None, "collect", "no_account",
+                        error_message="광고 계정 미연결",
+                        duration_ms=int((_time.monotonic()-t0)*1000))
         return
     customer_id = int(account.get("customer_id"))
+    customer_id_for_log = customer_id
 
-    pool = get_keyword_pool_db()
     reg = get_registered_keywords_db()
     pool_pending = (pool.stats(customer_id).get("by_status") or {}).get("pending", 0)
     active_reg = int((reg.stats(customer_id) or {}).get("active") or 0)
     headroom = 100_000 - active_reg - pool_pending
     if headroom <= 0:
         logger.warning(f"[pool/collect] user={uid} 한도 도달 — skip (active={active_reg}, pending={pool_pending})")
+        pool.record_run(uid, customer_id, "collect", "cap_reached",
+                        pending_after=pool_pending,
+                        error_message=f"active={active_reg}+pending={pool_pending}≥100000",
+                        duration_ms=int((_time.monotonic()-t0)*1000))
         return
     target = min(max_new, headroom)
 
     seeds = pool.get_recent_seeds(customer_id, limit=20)
     if not seeds:
         logger.warning(f"[pool/collect] user={uid} 시드 없음 — UI에서 초기 시드 제공 필요")
+        pool.record_run(uid, customer_id, "collect", "no_seed",
+                        pending_after=pool_pending,
+                        error_message="UI에서 초기 시드 추가 필요",
+                        duration_ms=int((_time.monotonic()-t0)*1000))
         return
     logger.warning(f"[pool/collect] user={uid} 시작 target={target} seeds={len(seeds)}")
 
@@ -2247,13 +2263,18 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
     client.secret_key = account["secret_key"]
 
     added = 0
+    api_errors: List[str] = []
+    seeds_processed = 0
     for seed in seeds[:30]:
         if added >= target:
             break
+        seeds_processed += 1
         try:
             related = await client.get_related_keywords(seed, show_detail=True)
         except Exception as e:
-            logger.warning(f"[pool/collect] {seed} API 실패: {e}")
+            msg = f"{seed}: {type(e).__name__}: {str(e)[:80]}"
+            logger.warning(f"[pool/collect] API 실패 {msg}")
+            api_errors.append(msg)
             continue
         items = related.get("keywordList", []) if isinstance(related, dict) else []
         candidates = []
@@ -2275,23 +2296,43 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
             })
         added += pool.add_candidates(uid, customer_id, candidates)
         await asyncio.sleep(0.4)
-    logger.warning(f"[pool/collect] user={uid} 새 키워드 {added}개 (시드 {len(seeds[:30])}개 처리)")
+    logger.warning(f"[pool/collect] user={uid} 새 키워드 {added}개 (시드 {seeds_processed}개 처리)")
+    pending_after = (pool.stats(customer_id).get("by_status") or {}).get("pending", 0)
+    pool.record_run(
+        uid, customer_id, "collect",
+        "success" if not api_errors else ("partial" if added > 0 else "failed"),
+        added=added, seeds_count=seeds_processed,
+        pending_after=pending_after,
+        error_message=" | ".join(api_errors)[:500] if api_errors else None,
+        duration_ms=int((_time.monotonic()-t0)*1000),
+    )
 
 
 async def _run_pool_register(uid: int, batch: int = 1000, bid: int = 100):
     """등록 1회 — pending → orchestrator로 일괄."""
     from services.bulk_upload_orchestrator import BulkUploadOrchestrator, BulkJobConfig
     from services.naver_ad_service import NaverAdApiClient
+    import time as _time
+
+    pool = get_keyword_pool_db()
+    t0 = _time.monotonic()
 
     account = get_ad_account(uid)
     if not account or not account.get("is_connected"):
+        pool.record_run(uid, None, "register", "no_account",
+                        error_message="광고 계정 미연결",
+                        duration_ms=int((_time.monotonic()-t0)*1000))
         return
     customer_id = int(account.get("customer_id"))
 
-    pool = get_keyword_pool_db()
     pending = pool.claim_pending(customer_id, limit=batch, min_volume=30)
     if not pending:
-        logger.warning(f"[pool/register] user={uid} pending 없음 (min_volume=30 필터)")
+        pending_total = (pool.stats(customer_id).get("by_status") or {}).get("pending", 0)
+        logger.warning(f"[pool/register] user={uid} pending 없음 (min_volume=30 필터, 전체 pending={pending_total})")
+        pool.record_run(uid, customer_id, "register", "no_pending",
+                        pending_after=pending_total,
+                        error_message=f"min_volume=30 통과한 pending 없음 (전체 pending={pending_total} — 시드/저volume뿐)" if pending_total else "pending 0",
+                        duration_ms=int((_time.monotonic()-t0)*1000))
         return
     keywords = [p["keyword"] for p in pending]
     logger.warning(f"[pool/register] user={uid} 시작 batch={len(keywords)}")
@@ -2316,28 +2357,64 @@ async def _run_pool_register(uid: int, batch: int = 1000, bid: int = 100):
         bid=bid, daily_budget=10000, campaign_tp="WEB_SITE",
     )
     orchestrator = BulkUploadOrchestrator(client)
-    result = await orchestrator.run(cfg, keywords)
+    try:
+        result = await orchestrator.run(cfg, keywords)
+    except Exception as e:
+        logger.error(f"[pool/register] orchestrator 실패: {e}", exc_info=True)
+        pool.mark_status([p["id"] for p in pending], "failed",
+                         error_message=f"{type(e).__name__}: {str(e)[:200]}")
+        pool.record_run(uid, customer_id, "register", "failed",
+                        failed=len(pending),
+                        error_message=f"{type(e).__name__}: {str(e)[:300]}",
+                        duration_ms=int((_time.monotonic()-t0)*1000))
+        return
 
     reg = get_registered_keywords_db()
     existing = reg.get_existing_set(customer_id, keywords)
     succeeded_ids = [p["id"] for p in pending if p["keyword"] in existing]
     failed_ids = [p["id"] for p in pending if p["keyword"] not in existing]
     pool.mark_status(succeeded_ids, "registered")
+    err_msg = str(result.get("error", "did not register"))[:300] if not result.get("success") else None
     pool.mark_status(failed_ids, "failed",
-                     error_message=str(result.get("error", "did not register"))[:300])
+                     error_message=err_msg or "orchestrator did not register")
     logger.warning(f"[pool/register] user={uid} reg={len(succeeded_ids)} fail={len(failed_ids)}")
+    pending_after = (pool.stats(customer_id).get("by_status") or {}).get("pending", 0)
+    pool.record_run(
+        uid, customer_id, "register",
+        "success" if len(succeeded_ids) > 0 and len(failed_ids) == 0
+            else ("partial" if len(succeeded_ids) > 0 else "failed"),
+        registered=len(succeeded_ids), failed=len(failed_ids),
+        pending_after=pending_after,
+        error_message=err_msg,
+        duration_ms=int((_time.monotonic()-t0)*1000),
+    )
 
 
 async def _run_pool_workers_for_users(user_ids: List[int]):
+    pool = get_keyword_pool_db()
     for uid in user_ids:
         try:
             await _run_pool_collect(uid)
         except Exception as e:
-            logger.warning(f"[pool/run] collect 실패 user={uid}: {e}")
+            logger.error(f"[pool/run] collect 실패 user={uid}: {e}", exc_info=True)
+            try:
+                acct = get_ad_account(uid)
+                cid = int(acct.get("customer_id")) if acct else None
+                pool.record_run(uid, cid, "collect", "failed",
+                                error_message=f"{type(e).__name__}: {str(e)[:300]}")
+            except Exception:
+                pass
         try:
             await _run_pool_register(uid)
         except Exception as e:
-            logger.warning(f"[pool/run] register 실패 user={uid}: {e}")
+            logger.error(f"[pool/run] register 실패 user={uid}: {e}", exc_info=True)
+            try:
+                acct = get_ad_account(uid)
+                cid = int(acct.get("customer_id")) if acct else None
+                pool.record_run(uid, cid, "register", "failed",
+                                error_message=f"{type(e).__name__}: {str(e)[:300]}")
+            except Exception:
+                pass
 
 
 @router.post("/keyword-pool/admin/run")
@@ -2393,12 +2470,19 @@ async def keyword_pool_stats(user_id: int = Depends(get_user_id_with_fallback)):
         except Exception as e:
             logger.error(f"keyword-pool/stats reg.stats 실패: {e}", exc_info=True)
             reg_stats = {"error": f"{type(e).__name__}: {str(e)[:200]}"}
+        try:
+            recent = pool.recent_runs(customer_id, limit=20)
+        except Exception as e:
+            logger.error(f"keyword-pool/stats recent_runs 실패: {e}", exc_info=True)
+            recent = []
         return {
             "success": True,
             "customer_id": customer_id,
             "pool": pool_stats,
             "registered": reg_stats,
             "account_cap": 100_000,
+            "recent_runs": recent,
+            "now": datetime.now().isoformat(timespec="seconds"),
         }
     except HTTPException:
         raise
