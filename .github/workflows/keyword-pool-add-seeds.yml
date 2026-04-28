@@ -1,0 +1,44 @@
+name: Keyword pool — add seeds (manual)
+
+# 키워드 풀 시드 일괄 추가 — workflow_dispatch 전용.
+# user_id와 콤마구분 시드 입력 → POST /keyword-pool/admin/add-seeds.
+
+on:
+  workflow_dispatch:
+    inputs:
+      user_id:
+        description: "광고 계정 user_id"
+        required: true
+        default: "1"
+      seeds:
+        description: "콤마 구분 시드 (예: 대출,신용대출,사업자대출)"
+        required: true
+
+jobs:
+  add:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Add seeds
+        env:
+          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
+          BACKEND_URL: https://blog-index-analyzer.fly.dev
+          USER_ID: ${{ github.event.inputs.user_id }}
+          SEEDS: ${{ github.event.inputs.seeds }}
+        run: |
+          if [ -z "$CRON_TOKEN" ]; then
+            echo "::error::CRON_TOKEN secret 미설정"; exit 1
+          fi
+          # 콤마구분 → JSON array
+          json_seeds=$(echo "$SEEDS" | python3 -c 'import sys,json; print(json.dumps([s.strip() for s in sys.stdin.read().split(",") if s.strip()]))')
+          body=$(printf '{"user_id": %s, "seeds": %s}' "$USER_ID" "$json_seeds")
+          echo "request: $body"
+          status=$(curl -sS -o /tmp/body.json -w "%{http_code}" \
+            -X POST "${BACKEND_URL}/api/naver-ad/keyword-pool/admin/add-seeds" \
+            -H "Authorization: Bearer ${CRON_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$body" \
+            --max-time 30)
+          echo "status=$status"
+          cat /tmp/body.json
+          [ "$status" = "200" ] || { echo "::error::add-seeds 실패"; exit 1; }
