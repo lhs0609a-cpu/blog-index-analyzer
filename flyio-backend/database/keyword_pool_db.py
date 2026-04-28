@@ -265,6 +265,28 @@ class KeywordPoolDB:
             )
             return [r["keyword"] for r in cur.fetchall() if r["keyword"]]
 
+    def mark_rejected_by_naver(
+        self,
+        account_customer_id: int,
+        items: List[Dict],
+    ) -> int:
+        """노출제한 키워드 풀에서 status='rejected_by_naver' mark + 사유 저장.
+        items: [{'keyword': ..., 'reason': ...}]"""
+        if not items:
+            return 0
+        with self._conn() as conn:
+            cur = conn.cursor()
+            n = 0
+            for it in items:
+                cur.execute(
+                    """UPDATE naverad_keyword_pool
+                       SET status = 'rejected_by_naver', error_message = ?
+                       WHERE account_customer_id = ? AND keyword = ?""",
+                    ((it.get("reason") or "")[:300], account_customer_id, it.get("keyword")),
+                )
+                n += cur.rowcount
+            return n
+
     def get_active_pool_campaign(self, account_customer_id: int) -> Optional[Dict]:
         """현재 풀 active 캠페인 + 광고그룹 카운트."""
         with self._conn() as conn:

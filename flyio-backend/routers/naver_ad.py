@@ -2555,6 +2555,49 @@ async def _run_pool_register(uid: int, batch: int = 3000, bid: int = 100):
         duration_ms=int((_time.monotonic()-t0)*1000),
     )
 
+    # 노출제한 검사 — 이번 라운드 새 광고그룹의 키워드만 (가벼움)
+    try:
+        new_ad_group_ids = result.get("ad_group_ids") or []
+        if new_ad_group_ids:
+            await _inspect_ad_groups(uid, customer_id, client, new_ad_group_ids)
+    except Exception as e:
+        logger.warning(f"[pool/register] inspect 실패: {e}")
+
+
+async def _inspect_ad_groups(uid: int, customer_id: int, client, ad_group_ids: List[str]):
+    """광고그룹들의 키워드 검토 상태 조회 → 노출제한 풀에 mark."""
+    if not ad_group_ids:
+        return 0
+    pool = get_keyword_pool_db()
+    rejected_items: List[Dict] = []
+    for ag_id in ad_group_ids:
+        try:
+            kws = await client.get_keywords(ad_group_id=ag_id) or []
+        except Exception as e:
+            logger.warning(f"[pool/inspect] {ag_id} 조회 실패: {e}")
+            continue
+        for kw in kws:
+            kw_text = kw.get("keyword")
+            if not kw_text:
+                continue
+            review = kw.get("reviewStatus") or ""
+            inspect = kw.get("inspectStatus") or ""
+            status = kw.get("status") or ""
+            is_rejected = (
+                review == "REJECTED"
+                or inspect in ("PROHIBIT", "BUSINESS_PROHIBIT", "REVIEW_REJECTED")
+            )
+            if is_rejected:
+                rejected_items.append({
+                    "keyword": kw_text,
+                    "reason": f"review={review} inspect={inspect} status={status}",
+                })
+        await asyncio.sleep(0.2)
+    n = pool.mark_rejected_by_naver(customer_id, rejected_items)
+    if n > 0:
+        logger.warning(f"[pool/inspect] user={uid} 노출제한 mark {n}개 ({len(ad_group_ids)} 그룹)")
+    return n
+
 
 async def _run_pool_workers_for_users(user_ids: List[int]):
     pool = get_keyword_pool_db()
@@ -2704,6 +2747,46 @@ async def keyword_pool_admin_add_seeds(
     except Exception as e:
         import traceback
         logger.error(f"keyword-pool/admin/add-seeds 실패: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
+
+
+class AdminInspectRequest(BaseModel):
+    user_id: int
+
+
+@router.post("/keyword-pool/admin/inspect-all")
+async def keyword_pool_admin_inspect_all(
+    request: AdminInspectRequest,
+    authorization: Optional[str] = Header(None),
+):
+    """모든 풀 광고그룹 키워드 검토 상태 조회 → 노출제한 mark."""
+    _verify_cron_token(authorization)
+    try:
+        from services.naver_ad_service import NaverAdApiClient
+        account = get_ad_account(request.user_id)
+        if not account or not account.get("is_connected"):
+            raise HTTPException(status_code=400, detail="광고 계정 미연결")
+        customer_id = int(account.get("customer_id"))
+        reg = get_registered_keywords_db()
+        # 광고그룹 list
+        with __import__("sqlite3").connect(reg.db_path) as conn:
+            ag_ids = [r[0] for r in conn.execute(
+                "SELECT DISTINCT ad_group_id FROM registered_keywords WHERE account_customer_id=? AND ad_group_id IS NOT NULL",
+                (customer_id,),
+            ).fetchall()]
+        if not ag_ids:
+            return {"success": True, "ad_groups": 0, "rejected": 0}
+        client = NaverAdApiClient()
+        client.customer_id = account["customer_id"]
+        client.api_key = account["api_key"]
+        client.secret_key = account["secret_key"]
+        n = await _inspect_ad_groups(request.user_id, customer_id, client, ag_ids)
+        return {"success": True, "ad_groups": len(ag_ids), "rejected": n}
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        logger.error(f"keyword-pool/admin/inspect-all 실패: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
 
 
