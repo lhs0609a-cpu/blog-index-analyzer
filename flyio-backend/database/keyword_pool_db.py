@@ -188,6 +188,35 @@ class KeywordPoolDB:
             )
             return [dict(r) for r in cur.fetchall()]
 
+    def delete_seed_with_children(self, account_customer_id: int, seed: str) -> int:
+        """시드와 그 시드로 발굴된 자식 키워드 모두 삭제 — 화면 X 버튼용."""
+        if not seed:
+            return 0
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """DELETE FROM naverad_keyword_pool
+                   WHERE account_customer_id = ?
+                     AND (keyword = ? OR seed = ?)""",
+                (account_customer_id, seed, seed),
+            )
+            return cur.rowcount
+
+    def delete_keywords(self, account_customer_id: int, keywords: List[str]) -> int:
+        """특정 키워드들을 풀에서 일괄 삭제 — admin cleanup용."""
+        if not keywords:
+            return 0
+        with self._conn() as conn:
+            cur = conn.cursor()
+            placeholders = ",".join("?" * len(keywords))
+            cur.execute(
+                f"""DELETE FROM naverad_keyword_pool
+                    WHERE account_customer_id = ?
+                      AND keyword IN ({placeholders})""",
+                [account_customer_id, *keywords],
+            )
+            return cur.rowcount
+
     def list_user_seeds(self, account_customer_id: int) -> List[str]:
         """사용자가 의도적으로 추가한 시드 목록 — substring 필터 기준.
 

@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Loader2, Plus, RefreshCw, Database, Activity, AlertCircle, CheckCircle2, XCircle, Clock, Zap } from 'lucide-react'
+import { ArrowLeft, Loader2, Plus, RefreshCw, Database, Activity, AlertCircle, CheckCircle2, XCircle, Clock, Zap, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/lib/stores/auth'
-import { adGet, adPost } from '@/lib/api'
+import { adGet, adPost, adDelete } from '@/lib/api'
 
 interface PoolStats {
   total?: number
@@ -93,6 +93,17 @@ export default function KeywordPoolPage() {
     const t = setInterval(load, 10_000) // 10초마다 자동 갱신 (실시간 모니터링)
     return () => clearInterval(t)
   }, [isAuthenticated])
+
+  const handleDeleteSeed = async (seed: string, total: number) => {
+    if (!confirm(`시드 "${seed}"와 이 시드로 발굴된 키워드(총 ${total}개)를 풀에서 삭제할까요?\n(이미 네이버 광고에 등록된 키워드는 영향 없음)`)) return
+    try {
+      const res = await adDelete<{ success: boolean; deleted: number }>(`/api/naver-ad/keyword-pool/seeds/${encodeURIComponent(seed)}`)
+      toast.success(`"${seed}" + 자식 ${res.deleted}개 삭제`)
+      load()
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || '삭제 실패')
+    }
+  }
 
   const handleAddSeeds = async () => {
     const seeds = seedInput
@@ -264,10 +275,10 @@ export default function KeywordPoolPage() {
         {/* 시드별 풀 분포 — 어떤 시드에서 몇 개 발굴됐는지 */}
         {seedBreakdown.length > 0 && (
           <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
               <Database className="w-5 h-5 text-[#0064FF]" />
               <h2 className="font-bold text-gray-900">시드별 발굴 키워드</h2>
-              <span className="text-xs text-gray-500">검수용 — 의도한 시드에서만 키워드가 나오는지 확인</span>
+              <span className="text-xs text-gray-500">발굴 자식이 0인 시드는 keywordstool이 응답을 못 주거나 화이트리스트로 차단된 케이스 — X 버튼으로 정리하세요</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -279,19 +290,35 @@ export default function KeywordPoolPage() {
                     <th className="text-right py-2 px-2">신규등록</th>
                     <th className="text-right py-2 px-2">이미있음</th>
                     <th className="text-right py-2 px-2">실패</th>
+                    <th className="text-right py-2 px-2"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {seedBreakdown.map((s) => (
-                    <tr key={s.seed} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-2 px-2 font-medium text-gray-900">{s.seed}</td>
-                      <td className="py-2 px-2 text-right font-mono">{s.total.toLocaleString()}</td>
-                      <td className="py-2 px-2 text-right text-yellow-600 font-mono">{s.pending.toLocaleString()}</td>
-                      <td className="py-2 px-2 text-right text-green-600 font-mono">{s.registered.toLocaleString()}</td>
-                      <td className="py-2 px-2 text-right text-gray-500 font-mono">{s.skipped_existing.toLocaleString()}</td>
-                      <td className="py-2 px-2 text-right text-red-600 font-mono">{s.failed.toLocaleString()}</td>
-                    </tr>
-                  ))}
+                  {seedBreakdown.map((s) => {
+                    const childless = s.total <= 1
+                    return (
+                      <tr key={s.seed} className={`border-b border-gray-100 hover:bg-gray-50 ${childless ? 'opacity-60' : ''}`}>
+                        <td className="py-2 px-2 font-medium text-gray-900">
+                          {s.seed}
+                          {childless && <span className="ml-2 text-[10px] text-gray-400 font-normal">(자식 0)</span>}
+                        </td>
+                        <td className="py-2 px-2 text-right font-mono">{s.total.toLocaleString()}</td>
+                        <td className="py-2 px-2 text-right text-yellow-600 font-mono">{s.pending.toLocaleString()}</td>
+                        <td className="py-2 px-2 text-right text-green-600 font-mono">{s.registered.toLocaleString()}</td>
+                        <td className="py-2 px-2 text-right text-gray-500 font-mono">{s.skipped_existing.toLocaleString()}</td>
+                        <td className="py-2 px-2 text-right text-red-600 font-mono">{s.failed.toLocaleString()}</td>
+                        <td className="py-2 px-2 text-right">
+                          <button
+                            onClick={() => handleDeleteSeed(s.seed, s.total)}
+                            className="text-gray-400 hover:text-red-600 p-1"
+                            title="시드 + 자식 키워드 삭제"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

@@ -2576,6 +2576,56 @@ async def keyword_pool_admin_add_seeds(
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
 
 
+class AdminDeleteRequest(BaseModel):
+    keywords: List[str]
+    user_id: int
+
+
+@router.post("/keyword-pool/admin/delete-keywords")
+async def keyword_pool_admin_delete_keywords(
+    request: AdminDeleteRequest,
+    authorization: Optional[str] = Header(None),
+):
+    """Bearer 토큰으로 풀에서 특정 키워드 일괄 삭제 — cleanup용."""
+    _verify_cron_token(authorization)
+    try:
+        account = get_ad_account(request.user_id)
+        if not account:
+            raise HTTPException(status_code=400, detail=f"user_id={request.user_id} 광고 계정 없음")
+        customer_id = int(account.get("customer_id"))
+        pool = get_keyword_pool_db()
+        deleted = pool.delete_keywords(customer_id, request.keywords)
+        return {"success": True, "deleted": deleted, "user_id": request.user_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        logger.error(f"keyword-pool/admin/delete-keywords 실패: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
+
+
+@router.delete("/keyword-pool/seeds/{seed}")
+async def keyword_pool_delete_seed(
+    seed: str,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """시드와 그 시드로 발굴된 자식 키워드를 풀에서 모두 삭제."""
+    try:
+        account = get_ad_account(user_id)
+        if not account or not account.get("is_connected"):
+            raise HTTPException(status_code=400, detail="광고 계정 미연결")
+        customer_id = int(account.get("customer_id"))
+        pool = get_keyword_pool_db()
+        n = pool.delete_seed_with_children(customer_id, seed)
+        return {"success": True, "deleted": n, "seed": seed}
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        logger.error(f"keyword-pool/seeds DELETE 실패: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
+
+
 @router.post("/keyword-pool/seeds")
 async def keyword_pool_add_seeds(
     request: PoolSeedsRequest,
