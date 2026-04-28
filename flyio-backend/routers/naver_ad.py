@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends, U
 from pydantic import BaseModel, Field
 from routers.auth_deps import get_user_id_with_fallback
 from routers.admin import require_admin
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime, timedelta
 import logging
 import asyncio
@@ -2564,12 +2564,23 @@ async def _run_pool_register(uid: int, batch: int = 3000, bid: int = 100):
         logger.warning(f"[pool/register] inspect 실패: {e}")
 
 
-async def _inspect_ad_groups(uid: int, customer_id: int, client, ad_group_ids: List[str]):
-    """광고그룹들의 키워드 검토 상태 조회 → 노출제한 풀에 mark."""
+async def _inspect_ad_groups(
+    uid: int,
+    customer_id: int,
+    client,
+    ad_group_ids: List[str],
+    delete_from_naver: bool = True,
+):
+    """광고그룹들 키워드 검토 상태 조회 → 노출제한:
+       1) 풀에 mark
+       2) 네이버 광고에서 키워드 DELETE
+       3) registered_keywords DB에서 row 제거 (active 카운트 정확화)"""
     if not ad_group_ids:
         return 0
     pool = get_keyword_pool_db()
+    reg = get_registered_keywords_db()
     rejected_items: List[Dict] = []
+    rejected_naver_ids: List[Tuple[str, str]] = []  # (ncc_keyword_id, keyword)
     for ag_id in ad_group_ids:
         try:
             kws = await client.get_keywords(ad_group_id=ag_id) or []
@@ -2592,11 +2603,38 @@ async def _inspect_ad_groups(uid: int, customer_id: int, client, ad_group_ids: L
                     "keyword": kw_text,
                     "reason": f"review={review} inspect={inspect} status={status}",
                 })
-        await asyncio.sleep(0.2)
-    n = pool.mark_rejected_by_naver(customer_id, rejected_items)
-    if n > 0:
-        logger.warning(f"[pool/inspect] user={uid} 노출제한 mark {n}개 ({len(ad_group_ids)} 그룹)")
-    return n
+                kid = kw.get("nccKeywordId")
+                if kid:
+                    rejected_naver_ids.append((kid, kw_text))
+        await asyncio.sleep(0.15)
+
+    n_mark = pool.mark_rejected_by_naver(customer_id, rejected_items)
+
+    # 네이버에서 실제 DELETE + registered_keywords DB 제거
+    n_deleted = 0
+    if delete_from_naver and rejected_naver_ids:
+        for kid, kw_text in rejected_naver_ids:
+            try:
+                await client.delete_keyword(kid)
+                # registered_keywords DB에서도 row 삭제
+                try:
+                    with __import__("sqlite3").connect(reg.db_path) as conn:
+                        conn.execute(
+                            "DELETE FROM registered_keywords WHERE account_customer_id=? AND ncc_keyword_id=?",
+                            (customer_id, kid),
+                        )
+                except Exception:
+                    pass
+                n_deleted += 1
+                await asyncio.sleep(0.2)
+            except Exception as e:
+                logger.warning(f"[pool/inspect] 네이버 DELETE 실패 {kw_text}({kid}): {e}")
+
+    if n_mark > 0 or n_deleted > 0:
+        logger.warning(
+            f"[pool/inspect] user={uid} mark={n_mark} 네이버삭제={n_deleted} ({len(ad_group_ids)} 그룹)"
+        )
+    return n_mark
 
 
 async def _run_pool_workers_for_users(user_ids: List[int]):

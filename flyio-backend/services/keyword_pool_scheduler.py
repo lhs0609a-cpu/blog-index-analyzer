@@ -34,14 +34,59 @@ class KeywordPoolScheduler:
             max_instances=1,
             coalesce=True,
         )
+        # 매 30분 전체 광고그룹 노출제한 일괄 검사 + 자동 삭제
+        self.scheduler.add_job(
+            self._inspect_full,
+            IntervalTrigger(seconds=1800),
+            id="keyword_pool_inspect_full",
+            name="키워드 풀 전체 노출제한 검사 (30분 주기)",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
         self.scheduler.start()
         self._running = True
-        logger.warning(f"[pool/scheduler] 시작 (interval={interval_seconds}s)")
+        logger.warning(f"[pool/scheduler] 시작 (interval={interval_seconds}s + inspect 1800s)")
 
     def stop(self):
         if self._running:
             self.scheduler.shutdown(wait=False)
             self._running = False
+
+    async def _inspect_full(self):
+        """30분마다 전체 풀 광고그룹 노출제한 검사 + 자동 네이버 DELETE."""
+        try:
+            from routers.naver_ad import _inspect_ad_groups
+            from database.naver_ad_db import list_connected_ad_accounts, get_ad_account
+            from database.registered_keywords_db import get_registered_keywords_db
+            from services.naver_ad_service import NaverAdApiClient
+            import sqlite3
+            accts = list_connected_ad_accounts() or []
+            for a in accts:
+                uid = a.get("user_id")
+                if not uid:
+                    continue
+                account = get_ad_account(uid)
+                if not account or not account.get("is_connected"):
+                    continue
+                customer_id = int(account.get("customer_id"))
+                reg = get_registered_keywords_db()
+                with sqlite3.connect(reg.db_path) as conn:
+                    ag_ids = [r[0] for r in conn.execute(
+                        "SELECT DISTINCT ad_group_id FROM registered_keywords WHERE account_customer_id=? AND ad_group_id IS NOT NULL",
+                        (customer_id,),
+                    ).fetchall()]
+                if not ag_ids:
+                    continue
+                client = NaverAdApiClient()
+                client.customer_id = account["customer_id"]
+                client.api_key = account["api_key"]
+                client.secret_key = account["secret_key"]
+                logger.warning(f"[pool/inspect-full] user={uid} 시작 ({len(ag_ids)} 그룹)")
+                await _inspect_ad_groups(uid, customer_id, client, ag_ids, delete_from_naver=True)
+                logger.warning(f"[pool/inspect-full] user={uid} 완료")
+        except Exception as e:
+            logger.error(f"[pool/inspect-full] 실패: {e}", exc_info=True)
 
     async def _tick(self):
         if self._lock.locked():
