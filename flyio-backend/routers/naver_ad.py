@@ -2339,7 +2339,8 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
     rejected = 0
     api_errors: List[str] = []
     seeds_processed = 0
-    for seed in seeds[:100]:
+    bfs_calls = 0
+    for seed in seeds[:60]:  # 시드 한 라운드 처리 한도 (BFS 추가로 호출 폭증 방지)
         if added >= target:
             break
         seeds_processed += 1
@@ -2352,6 +2353,8 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
             continue
         items = related.get("keywordList", []) if isinstance(related, dict) else []
         candidates = []
+        bfs_top: Optional[str] = None
+        bfs_top_vol = 0
         for item in items:
             kw = (item.get("relKeyword") or "").strip()
             if not kw:
@@ -2371,9 +2374,47 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
                 "comp_idx": item.get("compIdx"),
                 "seed": seed,
             })
+            # BFS 2nd-level 후보: 검색량 ≥ 5000 + 도메인 통과한 것 중 max 1
+            if mt >= 5000 and mt > bfs_top_vol:
+                bfs_top = kw
+                bfs_top_vol = mt
         added += pool.add_candidates(uid, customer_id, candidates)
         await asyncio.sleep(0.4)
-    logger.warning(f"[pool/collect] user={uid} 새 키워드 {added}개 (rejected {rejected}, 시드 {seeds_processed}개)")
+
+        # BFS 2nd-level — 시드당 1개, 발굴 폭 ↑
+        if bfs_top:
+            try:
+                bfs_calls += 1
+                related2 = await client.get_related_keywords(bfs_top, show_detail=True)
+                items2 = related2.get("keywordList", []) if isinstance(related2, dict) else []
+                sub_candidates = []
+                for item2 in items2:
+                    kw2 = (item2.get("relKeyword") or "").strip()
+                    if not kw2:
+                        continue
+                    pc2 = _parse_naver_count(item2.get("monthlyPcQcCnt"))
+                    mob2 = _parse_naver_count(item2.get("monthlyMobileQcCnt"))
+                    mt2 = pc2 + mob2
+                    if mt2 < min_volume:
+                        continue
+                    if not _matches_whitelist(kw2):
+                        rejected += 1
+                        continue
+                    sub_candidates.append({
+                        "keyword": kw2, "monthly_total": mt2,
+                        "monthly_pc": pc2,
+                        "monthly_mobile": mob2,
+                        "comp_idx": item2.get("compIdx"),
+                        "seed": seed,  # origin seed 유지 — 시드 표에 1단 그루핑
+                    })
+                added += pool.add_candidates(uid, customer_id, sub_candidates)
+                await asyncio.sleep(0.4)
+            except Exception as e:
+                logger.warning(f"[pool/collect/BFS] {bfs_top} 실패: {e}")
+    logger.warning(
+        f"[pool/collect] user={uid} 새 키워드 {added}개 "
+        f"(rejected {rejected}, 시드 {seeds_processed}개, BFS {bfs_calls}회)"
+    )
     pending_after = (pool.stats(customer_id).get("by_status") or {}).get("pending", 0)
     err_parts = list(api_errors)
     if rejected > 0:
