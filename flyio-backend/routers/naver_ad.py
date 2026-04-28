@@ -2188,6 +2188,23 @@ from database.keyword_pool_db import get_keyword_pool_db
 from database.registered_keywords_db import get_registered_keywords_db
 
 
+def _parse_naver_count(v) -> int:
+    """네이버 keywordstool 검색량 — 10 미만이면 '< 10' 문자열로 옴. 안전 변환."""
+    if v is None:
+        return 0
+    if isinstance(v, (int, float)):
+        return int(v)
+    s = str(v).strip()
+    if not s:
+        return 0
+    if s.startswith("<"):
+        return 5  # '< 10' → 보수적으로 5
+    try:
+        return int(s)
+    except (ValueError, TypeError):
+        return 0
+
+
 def _verify_cron_token(authorization: Optional[str]) -> None:
     expected = (_os.environ.get("CRON_TOKEN") or "").strip()
     if not expected:
@@ -2214,14 +2231,15 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
     active_reg = int((reg.stats(customer_id) or {}).get("active") or 0)
     headroom = 100_000 - active_reg - pool_pending
     if headroom <= 0:
-        logger.info(f"[pool/collect] user={uid} 한도 도달 — skip")
+        logger.warning(f"[pool/collect] user={uid} 한도 도달 — skip (active={active_reg}, pending={pool_pending})")
         return
     target = min(max_new, headroom)
 
     seeds = pool.get_recent_seeds(customer_id, limit=20)
     if not seeds:
-        logger.info(f"[pool/collect] user={uid} 시드 없음 — UI에서 초기 시드 제공 필요")
+        logger.warning(f"[pool/collect] user={uid} 시드 없음 — UI에서 초기 시드 제공 필요")
         return
+    logger.warning(f"[pool/collect] user={uid} 시작 target={target} seeds={len(seeds)}")
 
     client = NaverAdApiClient()
     client.customer_id = account["customer_id"]
@@ -2243,19 +2261,21 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
             kw = (item.get("relKeyword") or "").strip()
             if not kw:
                 continue
-            mt = int(item.get("monthlyPcQcCnt") or 0) + int(item.get("monthlyMobileQcCnt") or 0)
+            pc = _parse_naver_count(item.get("monthlyPcQcCnt"))
+            mob = _parse_naver_count(item.get("monthlyMobileQcCnt"))
+            mt = pc + mob
             if mt < min_volume:
                 continue
             candidates.append({
                 "keyword": kw, "monthly_total": mt,
-                "monthly_pc": int(item.get("monthlyPcQcCnt") or 0),
-                "monthly_mobile": int(item.get("monthlyMobileQcCnt") or 0),
+                "monthly_pc": pc,
+                "monthly_mobile": mob,
                 "comp_idx": item.get("compIdx"),
                 "seed": seed,
             })
         added += pool.add_candidates(uid, customer_id, candidates)
         await asyncio.sleep(0.4)
-    logger.info(f"[pool/collect] user={uid} 새 키워드 {added}개")
+    logger.warning(f"[pool/collect] user={uid} 새 키워드 {added}개 (시드 {len(seeds[:30])}개 처리)")
 
 
 async def _run_pool_register(uid: int, batch: int = 1000, bid: int = 100):
@@ -2271,8 +2291,10 @@ async def _run_pool_register(uid: int, batch: int = 1000, bid: int = 100):
     pool = get_keyword_pool_db()
     pending = pool.claim_pending(customer_id, limit=batch, min_volume=30)
     if not pending:
+        logger.warning(f"[pool/register] user={uid} pending 없음 (min_volume=30 필터)")
         return
     keywords = [p["keyword"] for p in pending]
+    logger.warning(f"[pool/register] user={uid} 시작 batch={len(keywords)}")
 
     client = NaverAdApiClient()
     client.customer_id = account["customer_id"]
@@ -2303,7 +2325,7 @@ async def _run_pool_register(uid: int, batch: int = 1000, bid: int = 100):
     pool.mark_status(succeeded_ids, "registered")
     pool.mark_status(failed_ids, "failed",
                      error_message=str(result.get("error", "did not register"))[:300])
-    logger.info(f"[pool/register] user={uid} reg={len(succeeded_ids)} fail={len(failed_ids)}")
+    logger.warning(f"[pool/register] user={uid} reg={len(succeeded_ids)} fail={len(failed_ids)}")
 
 
 async def _run_pool_workers_for_users(user_ids: List[int]):
