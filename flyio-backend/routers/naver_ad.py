@@ -2555,11 +2555,16 @@ async def _run_pool_register(uid: int, batch: int = 3000, bid: int = 100):
         duration_ms=int((_time.monotonic()-t0)*1000),
     )
 
-    # 노출제한 검사 — 이번 라운드 새 광고그룹의 키워드만 (가벼움)
+    # 노출제한 검사 — 매 register tick에 전체 풀 광고그룹 일괄 검사 + 자동 삭제
     try:
-        new_ad_group_ids = result.get("ad_group_ids") or []
-        if new_ad_group_ids:
-            await _inspect_ad_groups(uid, customer_id, client, new_ad_group_ids)
+        import sqlite3 as _sqlite3
+        with _sqlite3.connect(reg.db_path) as _conn:
+            all_ag_ids = [r[0] for r in _conn.execute(
+                "SELECT DISTINCT ad_group_id FROM registered_keywords WHERE account_customer_id=? AND ad_group_id IS NOT NULL",
+                (customer_id,),
+            ).fetchall()]
+        if all_ag_ids:
+            await _inspect_ad_groups(uid, customer_id, client, all_ag_ids, delete_from_naver=True)
     except Exception as e:
         logger.warning(f"[pool/register] inspect 실패: {e}")
 

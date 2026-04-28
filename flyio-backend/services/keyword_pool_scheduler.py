@@ -34,12 +34,12 @@ class KeywordPoolScheduler:
             max_instances=1,
             coalesce=True,
         )
-        # 매 30분 전체 광고그룹 노출제한 일괄 검사 + 자동 삭제
+        # 매 10분 전체 광고그룹 노출제한 일괄 검사 + 자동 삭제 (사용자 요청 — 한 번에 다 잡기)
         self.scheduler.add_job(
             self._inspect_full,
-            IntervalTrigger(seconds=1800),
+            IntervalTrigger(seconds=600),
             id="keyword_pool_inspect_full",
-            name="키워드 풀 전체 노출제한 검사 (30분 주기)",
+            name="키워드 풀 전체 노출제한 검사 (10분 주기)",
             replace_existing=True,
             max_instances=1,
             coalesce=True,
