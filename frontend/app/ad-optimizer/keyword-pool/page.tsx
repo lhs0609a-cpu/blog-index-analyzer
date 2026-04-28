@@ -95,6 +95,17 @@ export default function KeywordPoolPage() {
     return () => clearInterval(t)
   }, [isAuthenticated])
 
+  const handleDeleteKeyword = async (keyword: string) => {
+    if (!confirm(`키워드 "${keyword}"를 풀에서 삭제할까요?\n(이미 네이버 광고에 등록된 상태면 영향 없음. pending/이미있음 상태일 때만 풀에서 빠짐)`)) return
+    try {
+      const res = await adDelete<{ success: boolean; deleted: number }>(`/api/naver-ad/keyword-pool/keywords/${encodeURIComponent(keyword)}`)
+      toast.success(`"${keyword}" 풀에서 삭제 (${res.deleted}건)`)
+      load()
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || '삭제 실패')
+    }
+  }
+
   const handleDeleteSeed = async (seed: string, total: number) => {
     if (!confirm(`시드 "${seed}"와 이 시드로 발굴된 키워드(총 ${total}개)를 풀에서 삭제할까요?\n(이미 네이버 광고에 등록된 키워드는 영향 없음)`)) return
     try {
@@ -336,7 +347,7 @@ export default function KeywordPoolPage() {
             <div className="flex items-center gap-2 mb-3">
               <Activity className="w-5 h-5 text-[#0064FF]" />
               <h2 className="font-bold text-gray-900">최근 풀에 추가된 키워드 (최신 30개)</h2>
-              <span className="text-xs text-gray-500">엉뚱한 키워드가 들어갔는지 직접 확인</span>
+              <span className="text-xs text-gray-500">상태: 대기=곧 등록, 신규=등록완료, 이미있음=skip(영향없음), 실패=등록거부 · 부적절하면 X로 빼세요</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -347,6 +358,7 @@ export default function KeywordPoolPage() {
                     <th className="text-right py-2 px-2">월 검색량</th>
                     <th className="text-left py-2 px-2">상태</th>
                     <th className="text-left py-2 px-2">시각</th>
+                    <th className="text-right py-2 px-2"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -368,6 +380,15 @@ export default function KeywordPoolPage() {
                         </span>
                       </td>
                       <td className="py-2 px-2 text-xs text-gray-500 font-mono">{fmtTime(k.discovered_at)}</td>
+                      <td className="py-2 px-2 text-right">
+                        <button
+                          onClick={() => handleDeleteKeyword(k.keyword)}
+                          className="text-gray-400 hover:text-red-600 p-1"
+                          title="이 키워드만 풀에서 삭제"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

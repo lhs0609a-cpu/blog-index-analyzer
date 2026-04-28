@@ -2620,6 +2620,28 @@ async def keyword_pool_admin_delete_keywords(
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
 
 
+@router.delete("/keyword-pool/keywords/{keyword}")
+async def keyword_pool_delete_keyword(
+    keyword: str,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """단일 키워드를 풀에서 삭제 (이미 네이버 등록된 건 영향 없음)."""
+    try:
+        account = get_ad_account(user_id)
+        if not account or not account.get("is_connected"):
+            raise HTTPException(status_code=400, detail="광고 계정 미연결")
+        customer_id = int(account.get("customer_id"))
+        pool = get_keyword_pool_db()
+        n = pool.delete_keywords(customer_id, [keyword])
+        return {"success": True, "deleted": n, "keyword": keyword}
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        logger.error(f"keyword-pool/keywords DELETE 실패: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
+
+
 @router.delete("/keyword-pool/seeds/{seed}")
 async def keyword_pool_delete_seed(
     seed: str,
