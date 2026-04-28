@@ -56,6 +56,17 @@ interface RecentKeyword {
   discovered_at: string
 }
 
+interface ClickedKeyword {
+  keyword_id: string
+  keyword: string
+  impressions: number
+  clicks: number
+  cost: number
+  ctr: number
+  cpc: number
+  matches_seed: boolean
+}
+
 interface PoolStatsResponse {
   success: boolean
   customer_id?: number
@@ -94,6 +105,64 @@ export default function KeywordPoolPage() {
     const t = setInterval(load, 10_000) // 10초마다 자동 갱신 (실시간 모니터링)
     return () => clearInterval(t)
   }, [isAuthenticated])
+
+  // 클릭 키워드 검수 state
+  const [clickedDays, setClickedDays] = useState(7)
+  const [clickedItems, setClickedItems] = useState<ClickedKeyword[]>([])
+  const [clickedLoading, setClickedLoading] = useState(false)
+  const [clickedSelected, setClickedSelected] = useState<Set<string>>(new Set())
+  const [clickedShown, setClickedShown] = useState(false)
+
+  const loadClickedKeywords = async () => {
+    setClickedLoading(true)
+    setClickedShown(true)
+    try {
+      const res = await adGet<{ success: boolean; items: ClickedKeyword[] }>(`/api/naver-ad/keyword-pool/clicked-keywords?days=${clickedDays}`)
+      setClickedItems(res.items || [])
+      setClickedSelected(new Set())
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || '조회 실패')
+    } finally {
+      setClickedLoading(false)
+    }
+  }
+
+  const handleClickedToggle = (kid: string) => {
+    setClickedSelected(prev => {
+      const n = new Set(prev)
+      if (n.has(kid)) n.delete(kid); else n.add(kid)
+      return n
+    })
+  }
+
+  const handleClickedToggleAll = (checked: boolean) => {
+    if (checked) setClickedSelected(new Set(clickedItems.map(i => i.keyword_id)))
+    else setClickedSelected(new Set())
+  }
+
+  const handleClickedSelectMismatch = () => {
+    const ids = clickedItems.filter(i => !i.matches_seed).map(i => i.keyword_id)
+    setClickedSelected(new Set(ids))
+  }
+
+  const handleClickedBulkDelete = async () => {
+    if (clickedSelected.size === 0) {
+      toast.error('선택된 키워드 없음')
+      return
+    }
+    if (!confirm(`선택된 ${clickedSelected.size}개 키워드를 네이버에서 삭제(또는 PAUSE)할까요?`)) return
+    try {
+      const res = await adPost<{ success: boolean; deleted: number; paused: number; failed: number }>(
+        '/api/naver-ad/keyword-pool/clicked-keywords/bulk-delete',
+        { keyword_ids: Array.from(clickedSelected) }
+      )
+      toast.success(`삭제 ${res.deleted} / PAUSE ${res.paused} / 실패 ${res.failed}`)
+      await loadClickedKeywords()
+      load()
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || '일괄 삭제 실패')
+    }
+  }
 
   const handleDeleteKeyword = async (keyword: string) => {
     if (!confirm(`키워드 "${keyword}"를 풀에서 삭제할까요?\n(이미 네이버 광고에 등록된 상태면 영향 없음. pending/이미있음 상태일 때만 풀에서 빠짐)`)) return
@@ -342,6 +411,114 @@ export default function KeywordPoolPage() {
             </div>
           </div>
         )}
+
+        {/* 클릭 키워드 검수 — 일괄 삭제 */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <Activity className="w-5 h-5 text-[#0064FF]" />
+            <h2 className="font-bold text-gray-900">클릭 발생 키워드 검수</h2>
+            <span className="text-xs text-gray-500">사업 무관 키워드(시드 매칭 X) 발견 시 일괄 삭제</span>
+            <div className="ml-auto flex items-center gap-2">
+              <select
+                value={clickedDays}
+                onChange={(e) => setClickedDays(parseInt(e.target.value))}
+                className="text-xs border border-gray-300 rounded px-2 py-1"
+              >
+                <option value="1">최근 1일</option>
+                <option value="7">최근 7일</option>
+                <option value="14">최근 14일</option>
+                <option value="30">최근 30일</option>
+              </select>
+              <button
+                onClick={loadClickedKeywords}
+                disabled={clickedLoading}
+                className="text-xs border border-gray-300 rounded px-3 py-1 hover:bg-gray-50 inline-flex items-center gap-1"
+              >
+                {clickedLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                조회
+              </button>
+            </div>
+          </div>
+
+          {clickedShown && !clickedLoading && clickedItems.length === 0 && (
+            <div className="text-sm text-gray-500 p-3 bg-gray-50 rounded">
+              최근 {clickedDays}일 내 클릭 발생 키워드 없음.
+            </div>
+          )}
+
+          {clickedItems.length > 0 && (
+            <>
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <span className="text-xs text-gray-600">
+                  총 {clickedItems.length}개 / 시드 무관 {clickedItems.filter(i => !i.matches_seed).length}개
+                </span>
+                <button
+                  onClick={handleClickedSelectMismatch}
+                  className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded hover:bg-orange-200"
+                >
+                  시드 무관만 선택
+                </button>
+                <button
+                  onClick={() => handleClickedToggleAll(clickedSelected.size !== clickedItems.length)}
+                  className="text-xs px-2 py-0.5 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                >
+                  {clickedSelected.size === clickedItems.length ? '전체 해제' : '전체 선택'}
+                </button>
+                <button
+                  onClick={handleClickedBulkDelete}
+                  disabled={clickedSelected.size === 0}
+                  className="ml-auto text-xs px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-gray-300 inline-flex items-center gap-1"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  선택 {clickedSelected.size}개 일괄 삭제
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 text-xs text-gray-500">
+                      <th className="text-left py-2 px-2 w-8"></th>
+                      <th className="text-left py-2 px-2">키워드</th>
+                      <th className="text-left py-2 px-2">시드 매칭</th>
+                      <th className="text-right py-2 px-2">노출</th>
+                      <th className="text-right py-2 px-2">클릭</th>
+                      <th className="text-right py-2 px-2">CTR</th>
+                      <th className="text-right py-2 px-2">비용(원)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clickedItems.map((it) => (
+                      <tr
+                        key={it.keyword_id}
+                        className={`border-b border-gray-100 hover:bg-gray-50 ${!it.matches_seed ? 'bg-orange-50/30' : ''}`}
+                      >
+                        <td className="py-2 px-2">
+                          <input
+                            type="checkbox"
+                            checked={clickedSelected.has(it.keyword_id)}
+                            onChange={() => handleClickedToggle(it.keyword_id)}
+                          />
+                        </td>
+                        <td className="py-2 px-2 font-medium">{it.keyword}</td>
+                        <td className="py-2 px-2">
+                          {it.matches_seed ? (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-green-50 text-green-700">매칭</span>
+                          ) : (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-orange-50 text-orange-700">무관</span>
+                          )}
+                        </td>
+                        <td className="py-2 px-2 text-right font-mono text-xs">{it.impressions.toLocaleString()}</td>
+                        <td className="py-2 px-2 text-right font-mono font-medium">{it.clicks.toLocaleString()}</td>
+                        <td className="py-2 px-2 text-right font-mono text-xs">{(it.ctr * 100).toFixed(2)}%</td>
+                        <td className="py-2 px-2 text-right font-mono text-xs">{it.cost.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
 
         {/* 최근 풀 키워드 샘플 — 어떤 키워드가 들어갔는지 직접 검수 */}
         {recentKeywords.length > 0 && (
