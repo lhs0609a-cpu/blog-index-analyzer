@@ -156,7 +156,7 @@ export default function KeywordPoolPage() {
   const lastRun = runs[0]
   const lastCollect = runs.find((r) => r.kind === 'collect')
   const lastRegister = runs.find((r) => r.kind === 'register')
-  const lastError = runs.find((r) => r.status === 'failed' || (r.error_message && r.status !== 'no_seed' && r.status !== 'no_pending' && r.status !== 'cap_reached'))
+  const lastError = runs.find((r) => r.status === 'failed' || (r.error_message && !['no_seed','no_pending','cap_reached','no_new','success','partial'].includes(r.status)))
 
   // "지금 막 돌았는가" — 최근 90초 이내
   const nowMs = Date.now()
