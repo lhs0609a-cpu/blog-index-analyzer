@@ -2628,13 +2628,15 @@ async def _inspect_ad_groups(
 
     n_mark = pool.mark_rejected_by_naver(customer_id, rejected_items)
 
-    # 네이버에서 실제 DELETE + registered_keywords DB 제거
+    # 네이버에서 실제 DELETE — 실패 시 PUT pause로 fallback (광고 노출만 차단)
     n_deleted = 0
+    n_paused = 0
     if delete_from_naver and rejected_naver_ids:
         for kid, kw_text in rejected_naver_ids:
+            ok = False
             try:
                 await client.delete_keyword(kid)
-                # registered_keywords DB에서도 row 삭제
+                # registered_keywords DB에서도 row 삭제 (한도 카운트 정확화)
                 try:
                     with __import__("sqlite3").connect(reg.db_path) as conn:
                         conn.execute(
@@ -2644,9 +2646,17 @@ async def _inspect_ad_groups(
                 except Exception:
                     pass
                 n_deleted += 1
-                await asyncio.sleep(0.2)
+                ok = True
             except Exception as e:
-                logger.warning(f"[pool/inspect] 네이버 DELETE 실패 {kw_text}({kid}): {e}")
+                # DELETE 권한 1018 등 실패 시 — pause(userLock)로 광고 노출만 차단
+                try:
+                    await client.pause_keyword(kid)
+                    n_paused += 1
+                    ok = True
+                except Exception as e2:
+                    logger.warning(f"[pool/inspect] DELETE+PAUSE 모두 실패 {kw_text}({kid}): del={e} pause={e2}")
+            if ok:
+                await asyncio.sleep(0.15)
 
     if n_mark > 0 or n_deleted > 0:
         logger.warning(
