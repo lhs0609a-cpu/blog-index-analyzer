@@ -183,6 +183,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Ad auto optimizer failed to start: {e}")
 
+    # 키워드 풀 스케줄러 — 백엔드 자체 cron (GitHub Actions schedule 신뢰성 낮음)
+    try:
+        from services.keyword_pool_scheduler import keyword_pool_scheduler
+        keyword_pool_scheduler.start(interval_seconds=300)  # 매 5분
+        logger.info("✅ Keyword pool scheduler started (every 5 min)")
+    except Exception as e:
+        logger.warning(f"⚠️ Keyword pool scheduler failed to start: {e}")
+
     # Threads DB 초기화
     try:
         from database.threads_db import init_threads_db
