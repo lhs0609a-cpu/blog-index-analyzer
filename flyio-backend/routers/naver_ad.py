@@ -2543,6 +2543,39 @@ class PoolSeedsRequest(BaseModel):
     seeds: List[str]
 
 
+class AdminSeedsRequest(BaseModel):
+    seeds: List[str]
+    user_id: int
+
+
+@router.post("/keyword-pool/admin/add-seeds")
+async def keyword_pool_admin_add_seeds(
+    request: AdminSeedsRequest,
+    authorization: Optional[str] = Header(None),
+):
+    """Bearer 토큰으로 시드 일괄 추가 — workflow_dispatch / curl 용."""
+    _verify_cron_token(authorization)
+    try:
+        account = get_ad_account(request.user_id)
+        if not account or not account.get("is_connected"):
+            raise HTTPException(status_code=400, detail=f"user_id={request.user_id} 광고 계정 미연결")
+        customer_id = int(account.get("customer_id"))
+        pool = get_keyword_pool_db()
+        items = [
+            {"keyword": s.strip(), "seed": s.strip(), "source": "user_seed", "monthly_total": 0}
+            for s in request.seeds if s and s.strip()
+        ]
+        added = pool.add_candidates(request.user_id, customer_id, items)
+        return {"success": True, "added": added, "total_input": len(items),
+                "user_id": request.user_id, "customer_id": customer_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        logger.error(f"keyword-pool/admin/add-seeds 실패: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
+
+
 @router.post("/keyword-pool/seeds")
 async def keyword_pool_add_seeds(
     request: PoolSeedsRequest,
