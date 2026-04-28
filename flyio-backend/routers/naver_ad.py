@@ -2238,7 +2238,7 @@ def _verify_cron_token(authorization: Optional[str]) -> None:
         raise HTTPException(status_code=403, detail="잘못된 cron 토큰")
 
 
-async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30):
+async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 10):
     """수집 1회 — keywordstool로 새 키워드 발굴해 풀에 추가."""
     from services.naver_ad_service import NaverAdApiClient
     import time as _time
@@ -2353,8 +2353,7 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
             continue
         items = related.get("keywordList", []) if isinstance(related, dict) else []
         candidates = []
-        bfs_top: Optional[str] = None
-        bfs_top_vol = 0
+        bfs_pool: List[tuple] = []  # (kw, volume)
         for item in items:
             kw = (item.get("relKeyword") or "").strip()
             if not kw:
@@ -2374,18 +2373,18 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
                 "comp_idx": item.get("compIdx"),
                 "seed": seed,
             })
-            # BFS 2nd-level 후보: 검색량 ≥ 5000 + 도메인 통과한 것 중 max 1
-            if mt >= 5000 and mt > bfs_top_vol:
-                bfs_top = kw
-                bfs_top_vol = mt
+            # BFS 후보: 검색량 ≥ 1000 + 도메인 통과 + 길이 ≥ 2
+            if mt >= 1000 and len(kw) >= 2:
+                bfs_pool.append((kw, mt))
         added += pool.add_candidates(uid, customer_id, candidates)
-        await asyncio.sleep(0.4)
+        await asyncio.sleep(0.3)
 
-        # BFS 2nd-level — 시드당 1개, 발굴 폭 ↑
-        if bfs_top:
+        # BFS 2nd-level — 시드당 검색량 상위 2개
+        bfs_pool.sort(key=lambda x: -x[1])
+        for bfs_kw, _ in bfs_pool[:2]:
             try:
                 bfs_calls += 1
-                related2 = await client.get_related_keywords(bfs_top, show_detail=True)
+                related2 = await client.get_related_keywords(bfs_kw, show_detail=True)
                 items2 = related2.get("keywordList", []) if isinstance(related2, dict) else []
                 sub_candidates = []
                 for item2 in items2:
@@ -2405,12 +2404,12 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
                         "monthly_pc": pc2,
                         "monthly_mobile": mob2,
                         "comp_idx": item2.get("compIdx"),
-                        "seed": seed,  # origin seed 유지 — 시드 표에 1단 그루핑
+                        "seed": seed,
                     })
                 added += pool.add_candidates(uid, customer_id, sub_candidates)
-                await asyncio.sleep(0.4)
+                await asyncio.sleep(0.3)
             except Exception as e:
-                logger.warning(f"[pool/collect/BFS] {bfs_top} 실패: {e}")
+                logger.warning(f"[pool/collect/BFS] {bfs_kw} 실패: {e}")
     logger.warning(
         f"[pool/collect] user={uid} 새 키워드 {added}개 "
         f"(rejected {rejected}, 시드 {seeds_processed}개, BFS {bfs_calls}회)"
@@ -2446,13 +2445,13 @@ async def _run_pool_register(uid: int, batch: int = 3000, bid: int = 100):
         return
     customer_id = int(account.get("customer_id"))
 
-    pending = pool.claim_pending(customer_id, limit=batch, min_volume=30)
+    pending = pool.claim_pending(customer_id, limit=batch, min_volume=10)
     if not pending:
         pending_total = (pool.stats(customer_id).get("by_status") or {}).get("pending", 0)
-        logger.warning(f"[pool/register] user={uid} pending 없음 (min_volume=30 필터, 전체 pending={pending_total})")
+        logger.warning(f"[pool/register] user={uid} pending 없음 (min_volume=10 필터, 전체 pending={pending_total})")
         pool.record_run(uid, customer_id, "register", "no_pending",
                         pending_after=pending_total,
-                        error_message=f"min_volume=30 통과한 pending 없음 (전체 pending={pending_total} — 시드/저volume뿐)" if pending_total else "pending 0",
+                        error_message=f"min_volume=10 통과한 pending 없음 (전체 pending={pending_total} — 시드뿐)" if pending_total else "pending 0",
                         duration_ms=int((_time.monotonic()-t0)*1000))
         return
     keywords = [p["keyword"] for p in pending]
