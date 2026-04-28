@@ -1,0 +1,28 @@
+name: Keyword pool — inspect all (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      user_id:
+        description: "user_id"
+        required: true
+        default: "1"
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Trigger
+        env:
+          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
+          BACKEND_URL: https://blog-index-analyzer.fly.dev
+          USER_ID: ${{ github.event.inputs.user_id }}
+        run: |
+          body=$(printf '{"user_id": %s}' "$USER_ID")
+          status=$(curl -sS -o /tmp/body.json -w "%{http_code}" \
+            -X POST "${BACKEND_URL}/api/naver-ad/keyword-pool/admin/inspect-all" \
+            -H "Authorization: Bearer ${CRON_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$body" --max-time 600)
+          echo "status=$status"
+          cat /tmp/body.json
+          [ "$status" = "200" ] || exit 1
