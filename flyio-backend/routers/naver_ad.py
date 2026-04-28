@@ -2634,6 +2634,17 @@ async def _inspect_ad_groups(
         logger.warning(
             f"[pool/inspect] user={uid} mark={n_mark} 네이버삭제={n_deleted} ({len(ad_group_ids)} 그룹)"
         )
+    # 실행 이력 기록 — 화면에 보이게
+    try:
+        pool.record_run(
+            uid, customer_id, "inspect",
+            "success" if n_deleted > 0 or n_mark > 0 else "no_new",
+            registered=0, failed=0, skipped=n_deleted,  # skipped 컬럼에 삭제 카운트
+            seeds_count=len(ad_group_ids),
+            error_message=f"광고그룹 {len(ad_group_ids)}개 검사 — mark {n_mark} / 네이버 DELETE {n_deleted}" if (n_mark or n_deleted) else f"검사 {len(ad_group_ids)}개 그룹 — 노출제한 0",
+        )
+    except Exception:
+        pass
     return n_mark
 
 

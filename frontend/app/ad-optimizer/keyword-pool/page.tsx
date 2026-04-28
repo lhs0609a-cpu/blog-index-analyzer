@@ -147,6 +147,7 @@ export default function KeywordPoolPage() {
   const pending = stats?.pool?.by_status?.pending ?? 0
   const registered = stats?.pool?.by_status?.registered ?? 0
   const skippedExisting = stats?.pool?.by_status?.skipped_existing ?? 0
+  const rejectedByNaver = stats?.pool?.by_status?.rejected_by_naver ?? 0
   const failed = stats?.pool?.by_status?.failed ?? 0
   const usePct = Math.min(100, Math.round((used / cap) * 100))
   const seedBreakdown = stats?.seed_breakdown ?? []
@@ -235,10 +236,11 @@ export default function KeywordPoolPage() {
         </div>
 
         {/* 풀 status */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
           <StatCard label="대기 (pending)" value={pending} color="text-yellow-600" />
           <StatCard label="신규 등록" value={registered} color="text-green-600" hint="이번 풀이 새로 등록한 것" />
           <StatCard label="이미 있음" value={skippedExisting} color="text-gray-500" hint="네이버에 이미 등록돼서 skip" />
+          <StatCard label="노출제한 삭제" value={rejectedByNaver} color="text-orange-600" hint="네이버 검토 거부 → 자동 삭제" />
           <StatCard label="실패" value={failed} color="text-red-600" />
         </div>
 
@@ -423,15 +425,22 @@ export default function KeywordPoolPage() {
                       <td className="py-2 px-2 text-xs text-gray-600 font-mono">{fmtTime(r.started_at)}</td>
                       <td className="py-2 px-2">
                         <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                          r.kind === 'collect' ? 'bg-blue-50 text-blue-700' : 'bg-purple-50 text-purple-700'
+                          r.kind === 'collect' ? 'bg-blue-50 text-blue-700' :
+                          r.kind === 'register' ? 'bg-purple-50 text-purple-700' :
+                          r.kind === 'inspect' ? 'bg-orange-50 text-orange-700' :
+                          'bg-gray-50 text-gray-700'
                         }`}>
-                          {r.kind === 'collect' ? '수집' : '등록'}
+                          {r.kind === 'collect' ? '수집' :
+                           r.kind === 'register' ? '등록' :
+                           r.kind === 'inspect' ? '검사' : r.kind}
                         </span>
                       </td>
                       <td className="py-2 px-2"><StatusBadge status={r.status} /></td>
                       <td className="py-2 px-2 text-right text-xs font-mono">
                         {r.kind === 'collect'
                           ? `+${r.added}${r.skipped > 0 ? ` (reject ${r.skipped})` : ''}`
+                          : r.kind === 'inspect'
+                          ? `노출제한 삭제 ${r.skipped}`
                           : `신규 ${r.registered} · 이미있음 ${r.skipped} · 실패 ${r.failed}`}
                       </td>
                       <td className="py-2 px-2 text-right text-xs text-gray-500">
