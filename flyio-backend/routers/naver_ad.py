@@ -2586,18 +2586,12 @@ async def _inspect_ad_groups(
     reg = get_registered_keywords_db()
     rejected_items: List[Dict] = []
     rejected_naver_ids: List[Tuple[str, str]] = []  # (ncc_keyword_id, keyword)
-    sample_logged = False
     for ag_id in ad_group_ids:
         try:
             kws = await client.get_keywords(ad_group_id=ag_id) or []
         except Exception as e:
             logger.warning(f"[pool/inspect] {ag_id} 조회 실패: {e}")
             continue
-        # 첫 키워드 raw 응답 1회 logging — 실제 status field 검증용
-        if not sample_logged and kws:
-            kw0 = kws[0]
-            logger.warning(f"[pool/inspect] sample raw: {dict(kw0)}")
-            sample_logged = True
         for kw in kws:
             kw_text = kw.get("keyword")
             if not kw_text:
