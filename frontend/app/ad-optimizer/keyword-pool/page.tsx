@@ -87,6 +87,13 @@ export default function KeywordPoolPage() {
   const [seedInput, setSeedInput] = useState('')
   const [adding, setAdding] = useState(false)
 
+  // 클릭 키워드 검수 state — useEffect dependency보다 앞에 정의 (TDZ 회피)
+  const [clickedDays, setClickedDays] = useState(7)
+  const [clickedItems, setClickedItems] = useState<ClickedKeyword[]>([])
+  const [clickedLoading, setClickedLoading] = useState(false)
+  const [clickedSelected, setClickedSelected] = useState<Set<string>>(new Set())
+  const [clickedShown, setClickedShown] = useState(false)
+
   const load = async () => {
     setLoading(true)
     try {
@@ -98,28 +105,6 @@ export default function KeywordPoolPage() {
       setLoading(false)
     }
   }
-
-  useEffect(() => {
-    if (!isAuthenticated) return
-    load()
-    loadClickedKeywords()  // 클릭 키워드도 자동 1회 로드
-    const t = setInterval(load, 10_000) // 10초마다 자동 갱신 (실시간 모니터링)
-    return () => clearInterval(t)
-  }, [isAuthenticated])
-
-  // clickedDays 변경 시 자동 재조회
-  useEffect(() => {
-    if (!isAuthenticated || !clickedShown) return
-    loadClickedKeywords()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clickedDays])
-
-  // 클릭 키워드 검수 state
-  const [clickedDays, setClickedDays] = useState(7)
-  const [clickedItems, setClickedItems] = useState<ClickedKeyword[]>([])
-  const [clickedLoading, setClickedLoading] = useState(false)
-  const [clickedSelected, setClickedSelected] = useState<Set<string>>(new Set())
-  const [clickedShown, setClickedShown] = useState(false)
 
   const loadClickedKeywords = async () => {
     setClickedLoading(true)
@@ -134,6 +119,22 @@ export default function KeywordPoolPage() {
       setClickedLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+    load()
+    loadClickedKeywords()  // 클릭 키워드도 자동 1회 로드
+    const t = setInterval(load, 10_000) // 10초마다 자동 갱신 (실시간 모니터링)
+    return () => clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated])
+
+  // clickedDays 변경 시 자동 재조회
+  useEffect(() => {
+    if (!isAuthenticated || !clickedShown) return
+    loadClickedKeywords()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clickedDays])
 
   const handleClickedToggle = (kid: string) => {
     setClickedSelected(prev => {
