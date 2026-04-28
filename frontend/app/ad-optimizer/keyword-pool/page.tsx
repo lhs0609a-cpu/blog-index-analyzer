@@ -290,7 +290,7 @@ export default function KeywordPoolPage() {
             <div className="flex items-center gap-2 mb-3 flex-wrap">
               <Database className="w-5 h-5 text-[#0064FF]" />
               <h2 className="font-bold text-gray-900">시드별 발굴 키워드</h2>
-              <span className="text-xs text-gray-500">매 15분 cron이 검색량 상위·등록완료 키워드 5개를 자동 시드로 승격합니다 (cap 50). 부적절하면 휴지통으로 빼세요.</span>
+              <span className="text-xs text-gray-500">매 15분 cron이 검색량 상위·등록완료 키워드 15개를 자동 시드로 승격합니다 (cap 100). 부적절하면 휴지통으로 빼세요.</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

@@ -2247,9 +2247,9 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
         return
     target = min(max_new, headroom)
 
-    # 시드 자가확장: 검색량 상위 + 등록 완료된 키워드를 새 시드로 승격 (라운드당 5개, 시드 cap 50)
+    # 시드 자가확장: 강도 ↑ — 라운드당 15개, min_volume 300, cap 100
     try:
-        promoted = pool.promote_seeds(customer_id, limit=5, min_volume=1000, max_total_seeds=50)
+        promoted = pool.promote_seeds(customer_id, limit=15, min_volume=300, max_total_seeds=100)
         if promoted:
             logger.warning(
                 f"[pool/collect] user={uid} 시드 자동 승격 {len(promoted)}개: "
@@ -2259,7 +2259,7 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
         logger.warning(f"[pool/collect] promote_seeds 실패: {e}")
         promoted = []
 
-    seeds = pool.get_recent_seeds(customer_id, limit=20)
+    seeds = pool.get_recent_seeds(customer_id, limit=60)
     if not seeds:
         logger.warning(f"[pool/collect] user={uid} 시드 없음 — UI에서 초기 시드 제공 필요")
         pool.record_run(uid, customer_id, "collect", "no_seed",
@@ -2296,7 +2296,7 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
     rejected = 0
     api_errors: List[str] = []
     seeds_processed = 0
-    for seed in seeds[:30]:
+    for seed in seeds[:60]:
         if added >= target:
             break
         seeds_processed += 1
