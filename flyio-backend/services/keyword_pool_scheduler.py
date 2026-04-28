@@ -54,19 +54,21 @@ class KeywordPoolScheduler:
             self._running = False
 
     async def _inspect_full(self):
-        """30분마다 전체 풀 광고그룹 노출제한 검사 + 자동 네이버 DELETE."""
+        """전체 풀 광고그룹 노출제한 검사 + 자동 네이버 DELETE/PAUSE.
+        다중 광고주(B 시나리오) — (user_id, customer_id) 페어 모두 처리."""
         try:
             from routers.naver_ad import _inspect_ad_groups
-            from database.naver_ad_db import list_connected_ad_accounts, get_ad_account
+            from database.naver_ad_db import list_connected_ad_accounts, get_ad_account_by_customer
             from database.registered_keywords_db import get_registered_keywords_db
             from services.naver_ad_service import NaverAdApiClient
             import sqlite3
             accts = list_connected_ad_accounts() or []
             for a in accts:
                 uid = a.get("user_id")
-                if not uid:
+                cid_str = a.get("customer_id")
+                if not uid or not cid_str:
                     continue
-                account = get_ad_account(uid)
+                account = get_ad_account_by_customer(uid, str(cid_str))
                 if not account or not account.get("is_connected"):
                     continue
                 customer_id = int(account.get("customer_id"))
@@ -94,16 +96,24 @@ class KeywordPoolScheduler:
             return
         async with self._lock:
             try:
-                from routers.naver_ad import _run_pool_workers_for_users
+                from routers.naver_ad import _run_pool_collect, _run_pool_register
                 from database.naver_ad_db import list_connected_ad_accounts
                 accts = list_connected_ad_accounts() or []
-                user_ids = [a["user_id"] for a in accts if a.get("user_id")]
-                if not user_ids:
+                if not accts:
                     logger.info("[pool/scheduler] 활성 광고 계정 없음 — skip")
                     return
-                logger.warning(f"[pool/scheduler] tick start — users={user_ids}")
-                await _run_pool_workers_for_users(user_ids)
-                logger.warning(f"[pool/scheduler] tick done — users={user_ids}")
+                pairs = [(int(a["user_id"]), int(a["customer_id"])) for a in accts if a.get("user_id") and a.get("customer_id")]
+                logger.warning(f"[pool/scheduler] tick start — accounts={len(pairs)}")
+                for uid, cid in pairs:
+                    try:
+                        await _run_pool_collect(uid, customer_id=cid)
+                    except Exception as e:
+                        logger.error(f"[pool/scheduler] collect 실패 user={uid} cid={cid}: {e}", exc_info=True)
+                    try:
+                        await _run_pool_register(uid, customer_id=cid)
+                    except Exception as e:
+                        logger.error(f"[pool/scheduler] register 실패 user={uid} cid={cid}: {e}", exc_info=True)
+                logger.warning(f"[pool/scheduler] tick done — accounts={len(pairs)}")
                 # 매 tick에 inspect-full 강제 호출 (pending 없어도 노출제한 검사)
                 try:
                     await self._inspect_full()

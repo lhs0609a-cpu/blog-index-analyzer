@@ -2244,18 +2244,22 @@ def _verify_cron_token(authorization: Optional[str]) -> None:
         raise HTTPException(status_code=403, detail="잘못된 cron 토큰")
 
 
-async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 1):
-    """수집 1회 — keywordstool로 새 키워드 발굴해 풀에 추가."""
+async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new: int = 5000, min_volume: int = 1):
+    """수집 1회 — keywordstool로 새 키워드 발굴해 풀에 추가.
+    customer_id 명시 시 그 광고주만 처리, 없으면 사용자의 가장 최근 광고주."""
     from services.naver_ad_service import NaverAdApiClient
+    from database.naver_ad_db import get_ad_account_by_customer
     import time as _time
 
     pool = get_keyword_pool_db()
     t0 = _time.monotonic()
-    customer_id_for_log: Optional[int] = None
 
-    account = get_ad_account(uid)
+    if customer_id is not None:
+        account = get_ad_account_by_customer(uid, str(customer_id))
+    else:
+        account = get_ad_account(uid)
     if not account or not account.get("is_connected"):
-        pool.record_run(uid, None, "collect", "no_account",
+        pool.record_run(uid, customer_id, "collect", "no_account",
                         error_message="광고 계정 미연결",
                         duration_ms=int((_time.monotonic()-t0)*1000))
         return
@@ -2434,18 +2438,23 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 1):
     )
 
 
-async def _run_pool_register(uid: int, batch: int = 3000, bid: int = 100):
-    """등록 1회 — pending → orchestrator로 일괄."""
+async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch: int = 3000, bid: int = 100):
+    """등록 1회 — pending → orchestrator로 일괄.
+    customer_id 명시 시 그 광고주만 처리, 없으면 사용자의 가장 최근 광고주."""
     from services.bulk_upload_orchestrator import BulkUploadOrchestrator, BulkJobConfig
     from services.naver_ad_service import NaverAdApiClient
+    from database.naver_ad_db import get_ad_account_by_customer
     import time as _time
 
     pool = get_keyword_pool_db()
     t0 = _time.monotonic()
 
-    account = get_ad_account(uid)
+    if customer_id is not None:
+        account = get_ad_account_by_customer(uid, str(customer_id))
+    else:
+        account = get_ad_account(uid)
     if not account or not account.get("is_connected"):
-        pool.record_run(uid, None, "register", "no_account",
+        pool.record_run(uid, customer_id, "register", "no_account",
                         error_message="광고 계정 미연결",
                         duration_ms=int((_time.monotonic()-t0)*1000))
         return
@@ -2733,11 +2742,37 @@ async def keyword_pool_admin_run(
     }
 
 
+@router.get("/keyword-pool/accounts")
+async def keyword_pool_list_accounts(user_id: int = Depends(get_user_id_with_fallback)):
+    """사용자의 모든 활성 광고주 list (B 시나리오 — 다중 광고주)."""
+    from database.naver_ad_db import list_ad_accounts_for_user
+    rows = list_ad_accounts_for_user(user_id) or []
+    return {
+        "success": True,
+        "accounts": [
+            {
+                "customer_id": str(r.get("customer_id")),
+                "name": r.get("name"),
+                "is_connected": bool(r.get("is_connected")),
+                "last_sync_at": r.get("last_sync_at"),
+            }
+            for r in rows
+        ],
+    }
+
+
 @router.get("/keyword-pool/stats")
-async def keyword_pool_stats(user_id: int = Depends(get_user_id_with_fallback)):
-    """본인 풀/등록 상태."""
+async def keyword_pool_stats(
+    user_id: int = Depends(get_user_id_with_fallback),
+    customer_id: Optional[str] = None,
+):
+    """본인 풀/등록 상태 — customer_id 명시 시 그 광고주."""
+    from database.naver_ad_db import get_ad_account_by_customer
     try:
-        account = get_ad_account(user_id)
+        if customer_id:
+            account = get_ad_account_by_customer(user_id, customer_id)
+        else:
+            account = get_ad_account(user_id)
         if not account:
             return {"success": False, "message": "광고 계정 미연결", "pool": {}, "registered": {}, "account_cap": 100_000}
         customer_id = int(account.get("customer_id"))

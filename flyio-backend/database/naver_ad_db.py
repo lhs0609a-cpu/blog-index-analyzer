@@ -1258,6 +1258,34 @@ def list_connected_ad_accounts() -> List[dict]:
     return [dict(r) for r in rows]
 
 
+def list_ad_accounts_for_user(user_id: int) -> List[dict]:
+    """한 사용자의 모든 활성 광고주 list (B 시나리오 — 다중 광고주)."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT * FROM ad_accounts
+        WHERE user_id = ? AND is_active = TRUE
+        ORDER BY updated_at DESC
+    """, (user_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_ad_account_by_customer(user_id: int, customer_id: str) -> Optional[dict]:
+    """user_id + customer_id 조합으로 광고주 1건 조회."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT * FROM ad_accounts
+        WHERE user_id = ? AND customer_id = ? AND is_active = TRUE
+        LIMIT 1
+    """, (user_id, str(customer_id)))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
 def update_ad_account_status(user_id: int, customer_id: str, is_connected: bool, error: str = None):
     """광고 계정 연결 상태 업데이트"""
     conn = get_connection()
