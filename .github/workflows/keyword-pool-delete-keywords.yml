@@ -1,0 +1,42 @@
+name: Keyword pool — delete keywords (manual)
+
+# 풀에서 특정 키워드(시드 포함) 일괄 삭제 — admin Bearer.
+
+on:
+  workflow_dispatch:
+    inputs:
+      user_id:
+        description: "광고 계정 user_id"
+        required: true
+        default: "1"
+      keywords:
+        description: "콤마 구분 (예: 테스트1,테스트2)"
+        required: true
+
+jobs:
+  del:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Delete keywords
+        env:
+          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
+          BACKEND_URL: https://blog-index-analyzer.fly.dev
+          USER_ID: ${{ github.event.inputs.user_id }}
+          KW: ${{ github.event.inputs.keywords }}
+        run: |
+          if [ -z "$CRON_TOKEN" ]; then
+            echo "::error::CRON_TOKEN secret 미설정"; exit 1
+          fi
+          json_kw=$(echo "$KW" | python3 -c 'import sys,json; print(json.dumps([s.strip() for s in sys.stdin.read().split(",") if s.strip()]))')
+          body=$(printf '{"user_id": %s, "keywords": %s}' "$USER_ID" "$json_kw")
+          echo "request: $body"
+          status=$(curl -sS -o /tmp/body.json -w "%{http_code}" \
+            -X POST "${BACKEND_URL}/api/naver-ad/keyword-pool/admin/delete-keywords" \
+            -H "Authorization: Bearer ${CRON_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$body" \
+            --max-time 30)
+          echo "status=$status"
+          cat /tmp/body.json
+          [ "$status" = "200" ] || { echo "::error::delete 실패"; exit 1; }
