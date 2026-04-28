@@ -104,6 +104,11 @@ class KeywordPoolScheduler:
                 logger.warning(f"[pool/scheduler] tick start — users={user_ids}")
                 await _run_pool_workers_for_users(user_ids)
                 logger.warning(f"[pool/scheduler] tick done — users={user_ids}")
+                # 매 tick에 inspect-full 강제 호출 (pending 없어도 노출제한 검사)
+                try:
+                    await self._inspect_full()
+                except Exception as e:
+                    logger.warning(f"[pool/scheduler] inspect-full 호출 실패: {e}")
             except Exception as e:
                 logger.error(f"[pool/scheduler] tick 실패: {type(e).__name__}: {e}", exc_info=True)
 
