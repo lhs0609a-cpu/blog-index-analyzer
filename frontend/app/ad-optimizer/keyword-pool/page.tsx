@@ -102,9 +102,17 @@ export default function KeywordPoolPage() {
   useEffect(() => {
     if (!isAuthenticated) return
     load()
+    loadClickedKeywords()  // 클릭 키워드도 자동 1회 로드
     const t = setInterval(load, 10_000) // 10초마다 자동 갱신 (실시간 모니터링)
     return () => clearInterval(t)
   }, [isAuthenticated])
+
+  // clickedDays 변경 시 자동 재조회
+  useEffect(() => {
+    if (!isAuthenticated || !clickedShown) return
+    loadClickedKeywords()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clickedDays])
 
   // 클릭 키워드 검수 state
   const [clickedDays, setClickedDays] = useState(7)
