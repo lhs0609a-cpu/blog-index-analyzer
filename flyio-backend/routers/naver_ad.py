@@ -2238,7 +2238,7 @@ def _verify_cron_token(authorization: Optional[str]) -> None:
         raise HTTPException(status_code=403, detail="잘못된 cron 토큰")
 
 
-async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 5):
+async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 1):
     """수집 1회 — keywordstool로 새 키워드 발굴해 풀에 추가."""
     from services.naver_ad_service import NaverAdApiClient
     import time as _time
