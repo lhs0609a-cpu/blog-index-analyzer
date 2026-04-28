@@ -26,15 +26,33 @@ interface RegStats {
 interface RunRow {
   id: number
   kind: 'collect' | 'register' | string
-  status: 'success' | 'partial' | 'failed' | 'no_seed' | 'no_pending' | 'cap_reached' | 'no_account' | string
+  status: 'success' | 'partial' | 'failed' | 'no_seed' | 'no_pending' | 'cap_reached' | 'no_account' | 'no_new' | string
   added: number
   registered: number
   failed: number
+  skipped: number
   seeds_count: number
   pending_after?: number | null
   error_message?: string | null
   duration_ms?: number | null
   started_at: string
+}
+
+interface SeedBreakdown {
+  seed: string
+  total: number
+  pending: number
+  registered: number
+  skipped_existing: number
+  failed: number
+}
+
+interface RecentKeyword {
+  keyword: string
+  seed: string | null
+  monthly_total: number
+  status: string
+  discovered_at: string
 }
 
 interface PoolStatsResponse {
@@ -44,6 +62,8 @@ interface PoolStatsResponse {
   registered: RegStats
   account_cap: number
   recent_runs?: RunRow[]
+  seed_breakdown?: SeedBreakdown[]
+  recent_keywords?: RecentKeyword[]
   now?: string
   message?: string
 }
@@ -103,8 +123,11 @@ export default function KeywordPoolPage() {
   const used = stats?.registered?.active ?? 0
   const pending = stats?.pool?.by_status?.pending ?? 0
   const registered = stats?.pool?.by_status?.registered ?? 0
+  const skippedExisting = stats?.pool?.by_status?.skipped_existing ?? 0
   const failed = stats?.pool?.by_status?.failed ?? 0
   const usePct = Math.min(100, Math.round((used / cap) * 100))
+  const seedBreakdown = stats?.seed_breakdown ?? []
+  const recentKeywords = stats?.recent_keywords ?? []
   const runs = stats?.recent_runs ?? []
   const lastRun = runs[0]
   const lastCollect = runs.find((r) => r.kind === 'collect')
@@ -189,9 +212,10 @@ export default function KeywordPoolPage() {
         </div>
 
         {/* 풀 status */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <StatCard label="대기 (pending)" value={pending} color="text-yellow-600" />
-          <StatCard label="등록 완료" value={registered} color="text-green-600" />
+          <StatCard label="신규 등록" value={registered} color="text-green-600" hint="이번 풀이 새로 등록한 것" />
+          <StatCard label="이미 있음" value={skippedExisting} color="text-gray-500" hint="네이버에 이미 등록돼서 skip" />
           <StatCard label="실패" value={failed} color="text-red-600" />
         </div>
 
@@ -237,6 +261,89 @@ export default function KeywordPoolPage() {
           )}
         </div>
 
+        {/* 시드별 풀 분포 — 어떤 시드에서 몇 개 발굴됐는지 */}
+        {seedBreakdown.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Database className="w-5 h-5 text-[#0064FF]" />
+              <h2 className="font-bold text-gray-900">시드별 발굴 키워드</h2>
+              <span className="text-xs text-gray-500">검수용 — 의도한 시드에서만 키워드가 나오는지 확인</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 text-xs text-gray-500">
+                    <th className="text-left py-2 px-2">시드</th>
+                    <th className="text-right py-2 px-2">합계</th>
+                    <th className="text-right py-2 px-2">대기</th>
+                    <th className="text-right py-2 px-2">신규등록</th>
+                    <th className="text-right py-2 px-2">이미있음</th>
+                    <th className="text-right py-2 px-2">실패</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {seedBreakdown.map((s) => (
+                    <tr key={s.seed} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-2 px-2 font-medium text-gray-900">{s.seed}</td>
+                      <td className="py-2 px-2 text-right font-mono">{s.total.toLocaleString()}</td>
+                      <td className="py-2 px-2 text-right text-yellow-600 font-mono">{s.pending.toLocaleString()}</td>
+                      <td className="py-2 px-2 text-right text-green-600 font-mono">{s.registered.toLocaleString()}</td>
+                      <td className="py-2 px-2 text-right text-gray-500 font-mono">{s.skipped_existing.toLocaleString()}</td>
+                      <td className="py-2 px-2 text-right text-red-600 font-mono">{s.failed.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* 최근 풀 키워드 샘플 — 어떤 키워드가 들어갔는지 직접 검수 */}
+        {recentKeywords.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Activity className="w-5 h-5 text-[#0064FF]" />
+              <h2 className="font-bold text-gray-900">최근 풀에 추가된 키워드 (최신 30개)</h2>
+              <span className="text-xs text-gray-500">엉뚱한 키워드가 들어갔는지 직접 확인</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 text-xs text-gray-500">
+                    <th className="text-left py-2 px-2">키워드</th>
+                    <th className="text-left py-2 px-2">시드 (origin)</th>
+                    <th className="text-right py-2 px-2">월 검색량</th>
+                    <th className="text-left py-2 px-2">상태</th>
+                    <th className="text-left py-2 px-2">시각</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentKeywords.map((k, i) => (
+                    <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-2 px-2 font-medium text-gray-900">{k.keyword}</td>
+                      <td className="py-2 px-2 text-xs text-gray-500">{k.seed || '-'}</td>
+                      <td className="py-2 px-2 text-right font-mono text-xs">{k.monthly_total.toLocaleString()}</td>
+                      <td className="py-2 px-2 text-xs">
+                        <span className={`px-1.5 py-0.5 rounded ${
+                          k.status === 'pending' ? 'bg-yellow-50 text-yellow-700' :
+                          k.status === 'registered' ? 'bg-green-50 text-green-700' :
+                          k.status === 'skipped_existing' ? 'bg-gray-50 text-gray-600' :
+                          'bg-red-50 text-red-700'
+                        }`}>
+                          {k.status === 'pending' ? '대기' :
+                           k.status === 'registered' ? '신규' :
+                           k.status === 'skipped_existing' ? '이미있음' : '실패'}
+                        </span>
+                      </td>
+                      <td className="py-2 px-2 text-xs text-gray-500 font-mono">{fmtTime(k.discovered_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {/* 실행 이력 — 최근 20건 */}
         {runs.length > 0 && (
           <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
@@ -271,8 +378,8 @@ export default function KeywordPoolPage() {
                       <td className="py-2 px-2"><StatusBadge status={r.status} /></td>
                       <td className="py-2 px-2 text-right text-xs font-mono">
                         {r.kind === 'collect'
-                          ? `+${r.added}`
-                          : `${r.registered}/${r.failed}`}
+                          ? `+${r.added}${r.skipped > 0 ? ` (reject ${r.skipped})` : ''}`
+                          : `신규 ${r.registered} · 이미있음 ${r.skipped} · 실패 ${r.failed}`}
                       </td>
                       <td className="py-2 px-2 text-right text-xs text-gray-500">
                         {r.duration_ms != null ? `${(r.duration_ms / 1000).toFixed(1)}s` : '-'}
@@ -337,11 +444,12 @@ export default function KeywordPoolPage() {
   )
 }
 
-function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
+function StatCard({ label, value, color, hint }: { label: string; value: number; color: string; hint?: string }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
       <div className="text-xs text-gray-500 mb-1">{label}</div>
       <div className={`text-2xl font-bold ${color}`}>{value.toLocaleString()}</div>
+      {hint && <div className="text-[10px] text-gray-400 mt-1">{hint}</div>}
     </div>
   )
 }
@@ -365,6 +473,7 @@ function StatusBadge({ status }: { status: string }) {
     failed: { label: '실패', cls: 'bg-red-50 text-red-700 border-red-200', icon: XCircle },
     no_seed: { label: '시드 없음', cls: 'bg-gray-50 text-gray-600 border-gray-200', icon: AlertCircle },
     no_pending: { label: '대상 없음', cls: 'bg-gray-50 text-gray-600 border-gray-200', icon: AlertCircle },
+    no_new: { label: '신규 0', cls: 'bg-gray-50 text-gray-600 border-gray-200', icon: AlertCircle },
     cap_reached: { label: '한도 도달', cls: 'bg-orange-50 text-orange-700 border-orange-200', icon: AlertCircle },
     no_account: { label: '계정 미연결', cls: 'bg-red-50 text-red-700 border-red-200', icon: XCircle },
   }
@@ -391,7 +500,7 @@ function RunSummary({ kind, run, live }: { kind: 'collect' | 'register'; run?: R
   const isOk = run.status === 'success' || run.status === 'partial'
   const main = kind === 'collect'
     ? `새 키워드 +${run.added}개`
-    : `등록 ${run.registered} / 실패 ${run.failed}`
+    : `신규 ${run.registered} / 이미있음 ${run.skipped} / 실패 ${run.failed}`
   return (
     <div className={`p-3 border rounded-lg ${isOk ? 'border-green-200 bg-green-50/50' : 'border-orange-200 bg-orange-50/40'}`}>
       <div className="flex items-center justify-between mb-1">
@@ -411,9 +520,10 @@ function RunSummary({ kind, run, live }: { kind: 'collect' | 'register'; run?: R
         {fmtTime(run.started_at)}
         {run.duration_ms != null && <> · {(run.duration_ms / 1000).toFixed(1)}초</>}
         {kind === 'collect' && run.seeds_count > 0 && <> · 시드 {run.seeds_count}개 처리</>}
+        {kind === 'collect' && run.skipped > 0 && <> · 시드와 무관해서 reject {run.skipped}개</>}
       </div>
       {run.error_message && (
-        <div className="text-[11px] text-red-700 mt-1 font-mono break-all">{run.error_message}</div>
+        <div className="text-[11px] text-orange-700 mt-1 font-mono break-all">{run.error_message}</div>
       )}
     </div>
   )

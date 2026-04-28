@@ -89,6 +89,7 @@ class KeywordPoolDB:
                     added INTEGER DEFAULT 0,
                     registered INTEGER DEFAULT 0,
                     failed INTEGER DEFAULT 0,
+                    skipped INTEGER DEFAULT 0,
                     seeds_count INTEGER DEFAULT 0,
                     pending_after INTEGER,
                     error_message TEXT,
@@ -100,6 +101,10 @@ class KeywordPoolDB:
                 CREATE INDEX IF NOT EXISTS idx_pool_runs_acct
                 ON naverad_pool_runs(account_customer_id, started_at DESC)
             """)
+            # 마이그레이션 — 기존 테이블에 skipped 컬럼 추가
+            existing_cols = {r[1] for r in cur.execute("PRAGMA table_info(naverad_pool_runs)").fetchall()}
+            if "skipped" not in existing_cols:
+                cur.execute("ALTER TABLE naverad_pool_runs ADD COLUMN skipped INTEGER DEFAULT 0")
 
     def record_run(
         self,
@@ -110,6 +115,7 @@ class KeywordPoolDB:
         added: int = 0,
         registered: int = 0,
         failed: int = 0,
+        skipped: int = 0,
         seeds_count: int = 0,
         pending_after: Optional[int] = None,
         error_message: Optional[str] = None,
@@ -121,12 +127,12 @@ class KeywordPoolDB:
             cur.execute(
                 """INSERT INTO naverad_pool_runs
                    (user_id, account_customer_id, kind, status,
-                    added, registered, failed, seeds_count, pending_after,
+                    added, registered, failed, skipped, seeds_count, pending_after,
                     error_message, duration_ms)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     user_id, account_customer_id, kind, status,
-                    added, registered, failed, seeds_count, pending_after,
+                    added, registered, failed, skipped, seeds_count, pending_after,
                     (error_message or "")[:500] if error_message else None,
                     duration_ms,
                 ),
@@ -139,6 +145,7 @@ class KeywordPoolDB:
             cur = conn.cursor()
             cur.execute(
                 """SELECT id, kind, status, added, registered, failed,
+                          COALESCE(skipped, 0) AS skipped,
                           seeds_count, pending_after, error_message,
                           duration_ms, started_at
                    FROM naverad_pool_runs
@@ -147,6 +154,53 @@ class KeywordPoolDB:
                 (account_customer_id, limit),
             )
             return [dict(r) for r in cur.fetchall()]
+
+    def seed_breakdown(self, account_customer_id: int) -> List[Dict]:
+        """시드별 발굴 키워드 카운트 — 사용자가 풀 구성을 볼 수 있게."""
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT
+                     COALESCE(seed, '(시드없음)') AS seed,
+                     COUNT(*) AS total,
+                     SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) AS pending,
+                     SUM(CASE WHEN status='registered' THEN 1 ELSE 0 END) AS registered,
+                     SUM(CASE WHEN status='skipped_existing' THEN 1 ELSE 0 END) AS skipped_existing,
+                     SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed
+                   FROM naverad_keyword_pool
+                   WHERE account_customer_id = ?
+                   GROUP BY COALESCE(seed, '(시드없음)')
+                   ORDER BY total DESC""",
+                (account_customer_id,),
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+    def recent_keywords(self, account_customer_id: int, limit: int = 30) -> List[Dict]:
+        """최근 풀에 추가된 키워드 샘플 (검수용)."""
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT keyword, seed, monthly_total, status, discovered_at
+                   FROM naverad_keyword_pool
+                   WHERE account_customer_id = ?
+                   ORDER BY id DESC LIMIT ?""",
+                (account_customer_id, limit),
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+    def list_user_seeds(self, account_customer_id: int) -> List[str]:
+        """사용자가 의도적으로 추가한 시드 목록 — substring 필터 기준.
+
+        시드 자체는 keyword == seed인 user_seed source로 INSERT됨.
+        """
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT DISTINCT keyword FROM naverad_keyword_pool
+                   WHERE account_customer_id = ? AND source = 'user_seed'""",
+                (account_customer_id,),
+            )
+            return [r["keyword"] for r in cur.fetchall() if r["keyword"]]
 
     def add_candidates(
         self,

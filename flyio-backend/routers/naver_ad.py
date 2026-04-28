@@ -2255,14 +2255,29 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
                         error_message="UI에서 초기 시드 추가 필요",
                         duration_ms=int((_time.monotonic()-t0)*1000))
         return
-    logger.warning(f"[pool/collect] user={uid} 시작 target={target} seeds={len(seeds)}")
+
+    # 사용자가 명시적으로 추가한 시드(user_seed source)만 의미적 화이트리스트로 사용.
+    # 발굴 키워드는 이 시드 중 하나와 substring 관계여야 풀에 들어감 → 엉뚱한 키워드 차단.
+    user_seeds = pool.list_user_seeds(customer_id)
+    whitelist = [s for s in user_seeds if s] or seeds  # user_seed 없으면 fallback
+    logger.warning(f"[pool/collect] user={uid} 시작 target={target} seeds={len(seeds)} whitelist={len(whitelist)}")
 
     client = NaverAdApiClient()
     client.customer_id = account["customer_id"]
     client.api_key = account["api_key"]
     client.secret_key = account["secret_key"]
 
+    def _matches_whitelist(kw: str) -> bool:
+        # 시드 ⊂ 키워드 OR 키워드 ⊂ 시드 (한국어 부분문자열). 길이 1짜리 시드는 너무 광범위해서 제외.
+        for s in whitelist:
+            if not s or len(s) < 2:
+                continue
+            if s in kw or kw in s:
+                return True
+        return False
+
     added = 0
+    rejected = 0
     api_errors: List[str] = []
     seeds_processed = 0
     for seed in seeds[:30]:
@@ -2287,6 +2302,9 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
             mt = pc + mob
             if mt < min_volume:
                 continue
+            if not _matches_whitelist(kw):
+                rejected += 1
+                continue
             candidates.append({
                 "keyword": kw, "monthly_total": mt,
                 "monthly_pc": pc,
@@ -2296,14 +2314,17 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
             })
         added += pool.add_candidates(uid, customer_id, candidates)
         await asyncio.sleep(0.4)
-    logger.warning(f"[pool/collect] user={uid} 새 키워드 {added}개 (시드 {seeds_processed}개 처리)")
+    logger.warning(f"[pool/collect] user={uid} 새 키워드 {added}개 (rejected {rejected}, 시드 {seeds_processed}개)")
     pending_after = (pool.stats(customer_id).get("by_status") or {}).get("pending", 0)
+    err_parts = list(api_errors)
+    if rejected > 0:
+        err_parts.append(f"화이트리스트 reject {rejected}개 (시드와 무관)")
     pool.record_run(
         uid, customer_id, "collect",
         "success" if not api_errors else ("partial" if added > 0 else "failed"),
-        added=added, seeds_count=seeds_processed,
+        added=added, skipped=rejected, seeds_count=seeds_processed,
         pending_after=pending_after,
-        error_message=" | ".join(api_errors)[:500] if api_errors else None,
+        error_message=" | ".join(err_parts)[:500] if err_parts else None,
         duration_ms=int((_time.monotonic()-t0)*1000),
     )
 
@@ -2342,6 +2363,10 @@ async def _run_pool_register(uid: int, batch: int = 1000, bid: int = 100):
     client.api_key = account["api_key"]
     client.secret_key = account["secret_key"]
 
+    # 호출 전 등록 set 캐시 — 호출 후 차집합으로 진짜 신규만 success 판정.
+    reg = get_registered_keywords_db()
+    existing_before = set(reg.get_existing_set(customer_id, keywords) or set())
+
     job_id = create_bulk_upload_job(
         user_id=uid,
         filename=f"pool_auto_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
@@ -2369,21 +2394,31 @@ async def _run_pool_register(uid: int, batch: int = 1000, bid: int = 100):
                         duration_ms=int((_time.monotonic()-t0)*1000))
         return
 
-    reg = get_registered_keywords_db()
-    existing = reg.get_existing_set(customer_id, keywords)
-    succeeded_ids = [p["id"] for p in pending if p["keyword"] in existing]
-    failed_ids = [p["id"] for p in pending if p["keyword"] not in existing]
+    existing_after = set(reg.get_existing_set(customer_id, keywords) or set())
+    new_in_naver = existing_after - existing_before  # 진짜 신규 등록
+
+    succeeded_ids = [p["id"] for p in pending if p["keyword"] in new_in_naver]
+    skipped_ids = [p["id"] for p in pending if p["keyword"] in existing_before]
+    failed_ids = [
+        p["id"] for p in pending
+        if p["keyword"] not in new_in_naver and p["keyword"] not in existing_before
+    ]
     pool.mark_status(succeeded_ids, "registered")
+    pool.mark_status(skipped_ids, "skipped_existing",
+                     error_message="이미 네이버 광고에 등록된 키워드 — orchestrator dedup")
     err_msg = str(result.get("error", "did not register"))[:300] if not result.get("success") else None
     pool.mark_status(failed_ids, "failed",
                      error_message=err_msg or "orchestrator did not register")
-    logger.warning(f"[pool/register] user={uid} reg={len(succeeded_ids)} fail={len(failed_ids)}")
+    logger.warning(
+        f"[pool/register] user={uid} 신규={len(succeeded_ids)} "
+        f"이미있음={len(skipped_ids)} fail={len(failed_ids)}"
+    )
     pending_after = (pool.stats(customer_id).get("by_status") or {}).get("pending", 0)
     pool.record_run(
         uid, customer_id, "register",
         "success" if len(succeeded_ids) > 0 and len(failed_ids) == 0
-            else ("partial" if len(succeeded_ids) > 0 else "failed"),
-        registered=len(succeeded_ids), failed=len(failed_ids),
+            else ("partial" if len(succeeded_ids) > 0 else ("failed" if len(failed_ids) > 0 else "no_new")),
+        registered=len(succeeded_ids), failed=len(failed_ids), skipped=len(skipped_ids),
         pending_after=pending_after,
         error_message=err_msg,
         duration_ms=int((_time.monotonic()-t0)*1000),
@@ -2475,6 +2510,16 @@ async def keyword_pool_stats(user_id: int = Depends(get_user_id_with_fallback)):
         except Exception as e:
             logger.error(f"keyword-pool/stats recent_runs 실패: {e}", exc_info=True)
             recent = []
+        try:
+            seed_break = pool.seed_breakdown(customer_id)
+        except Exception as e:
+            logger.error(f"keyword-pool/stats seed_breakdown 실패: {e}", exc_info=True)
+            seed_break = []
+        try:
+            recent_kw = pool.recent_keywords(customer_id, limit=30)
+        except Exception as e:
+            logger.error(f"keyword-pool/stats recent_keywords 실패: {e}", exc_info=True)
+            recent_kw = []
         return {
             "success": True,
             "customer_id": customer_id,
@@ -2482,6 +2527,8 @@ async def keyword_pool_stats(user_id: int = Depends(get_user_id_with_fallback)):
             "registered": reg_stats,
             "account_cap": 100_000,
             "recent_runs": recent,
+            "seed_breakdown": seed_break,
+            "recent_keywords": recent_kw,
             "now": datetime.now().isoformat(timespec="seconds"),
         }
     except HTTPException:
