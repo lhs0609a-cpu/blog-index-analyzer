@@ -7,7 +7,7 @@ name: Keyword pool worker (24h auto)
 
 on:
   schedule:
-    - cron: "*/15 * * * *"  # 매 15분
+    - cron: "*/5 * * * *"  # 매 5분 (가속 모드)
   workflow_dispatch:
     inputs:
       user_id:

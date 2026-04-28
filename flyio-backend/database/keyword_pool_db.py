@@ -256,12 +256,46 @@ class KeywordPoolDB:
             )
             return [r["keyword"] for r in cur.fetchall() if r["keyword"]]
 
+    def cleanup_offdomain(
+        self,
+        account_customer_id: int,
+        domain_tokens: List[str],
+    ) -> int:
+        """도메인 토큰 미포함 row 자동 삭제 (registered 제외 — 이미 네이버 등록은 보존)."""
+        if not domain_tokens:
+            return 0
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT id, keyword FROM naverad_keyword_pool
+                   WHERE account_customer_id = ?
+                     AND status != 'registered'
+                     AND source != 'user_seed'""",
+                (account_customer_id,),
+            )
+            rows = cur.fetchall()
+            offdomain_ids = [
+                r["id"] for r in rows
+                if not any(t in r["keyword"] for t in domain_tokens)
+            ]
+            if not offdomain_ids:
+                return 0
+            for i in range(0, len(offdomain_ids), 500):
+                chunk = offdomain_ids[i:i + 500]
+                placeholders = ",".join("?" * len(chunk))
+                cur.execute(
+                    f"DELETE FROM naverad_keyword_pool WHERE id IN ({placeholders})",
+                    chunk,
+                )
+            return len(offdomain_ids)
+
     def promote_seeds(
         self,
         account_customer_id: int,
         limit: int = 5,
         min_volume: int = 1000,
         max_total_seeds: int = 50,
+        domain_tokens: Optional[List[str]] = None,
     ) -> List[Dict]:
         """검색량 상위 + 등록 완료된 키워드 중 시드 아닌 것 N개 → 시드로 승격.
 
@@ -310,6 +344,9 @@ class KeywordPoolDB:
                     break
                 kw = row["keyword"]
                 if kw in existing_seeds:
+                    continue
+                # 도메인 토큰 검증 — ambiguous 키워드(은행 등)는 시드로 승격 안 함
+                if domain_tokens and not any(t in kw for t in domain_tokens):
                     continue
                 # 같은 의미장 중복 제외 — 기존 시드의 substring/superstring이면 가치 적음
                 if any(s in kw or kw in s for s in existing_seeds if s and len(s) >= 2):

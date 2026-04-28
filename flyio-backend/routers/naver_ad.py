@@ -2188,6 +2188,28 @@ from database.keyword_pool_db import get_keyword_pool_db
 from database.registered_keywords_db import get_registered_keywords_db
 
 
+# 도메인 의미 토큰 — 사업 영역(금융/대출/의료/소상공인/정부지원) 안전 가드.
+# 키워드가 시드 substring을 통과해도 이 중 1개 이상 포함해야 풀에 INSERT.
+# 예: 시드 '은행' → '은행대출/은행이자' 통과, '은행나무/은행잎차' reject.
+POOL_DOMAIN_TOKENS = (
+    # 금융/대출
+    "대출", "자금", "한도", "이자", "금리", "신용", "담보", "보증",
+    "마통", "통장", "주담대", "전세", "월세", "환급",
+    # 정부/지원금
+    "지원금", "정책자금", "정부지원", "청년", "신청",
+    # 소상공인/창업
+    "소상공인", "사업자", "자영업", "창업", "개원", "개업",
+    "운영", "프랜차이즈", "매장", "점포", "임대",
+    # 의료
+    "병원", "약국", "약사", "의사", "의료", "원장",
+    "한의원", "치과", "정형외과", "내과", "외과", "안과", "피부과", "이비인후과", "산부인과",
+)
+
+
+def _has_domain_token(kw: str) -> bool:
+    return any(t in kw for t in POOL_DOMAIN_TOKENS)
+
+
 def _parse_naver_count(v) -> int:
     """네이버 keywordstool 검색량 — 10 미만이면 '< 10' 문자열로 옴. 안전 변환."""
     if v is None:
@@ -2247,9 +2269,20 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
         return
     target = min(max_new, headroom)
 
-    # 시드 자가확장: 강도 ↑ — 라운드당 15개, min_volume 300, cap 100
+    # 도메인 미포함 키워드 자동 cleanup (registered 제외) — 매 라운드 시작 시
     try:
-        promoted = pool.promote_seeds(customer_id, limit=15, min_volume=300, max_total_seeds=100)
+        cleaned = pool.cleanup_offdomain(customer_id, list(POOL_DOMAIN_TOKENS))
+        if cleaned > 0:
+            logger.warning(f"[pool/cleanup] off-domain row 자동 삭제 {cleaned}개")
+    except Exception as e:
+        logger.warning(f"[pool/cleanup] 실패: {e}")
+
+    # 시드 자가확장: 가속 모드 — 라운드당 30, min_volume 100, cap 200, 도메인 토큰 검증
+    try:
+        promoted = pool.promote_seeds(
+            customer_id, limit=30, min_volume=100, max_total_seeds=200,
+            domain_tokens=list(POOL_DOMAIN_TOKENS),
+        )
         if promoted:
             logger.warning(
                 f"[pool/collect] user={uid} 시드 자동 승격 {len(promoted)}개: "
@@ -2259,7 +2292,7 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
         logger.warning(f"[pool/collect] promote_seeds 실패: {e}")
         promoted = []
 
-    seeds = pool.get_recent_seeds(customer_id, limit=60)
+    seeds = pool.get_recent_seeds(customer_id, limit=120)
     if not seeds:
         logger.warning(f"[pool/collect] user={uid} 시드 없음 — UI에서 초기 시드 제공 필요")
         pool.record_run(uid, customer_id, "collect", "no_seed",
@@ -2284,7 +2317,9 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
     client.secret_key = account["secret_key"]
 
     def _matches_whitelist(kw: str) -> bool:
-        # 시드 ⊂ 키워드 OR 키워드 ⊂ 시드 (한국어 부분문자열). 길이 1짜리 시드는 너무 광범위해서 제외.
+        # 통과 조건: 시드 substring 통과 + 도메인 토큰 ≥ 1개. 의미 보장.
+        if not _has_domain_token(kw):
+            return False
         for s in whitelist:
             if not s or len(s) < 2:
                 continue
@@ -2296,7 +2331,7 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
     rejected = 0
     api_errors: List[str] = []
     seeds_processed = 0
-    for seed in seeds[:60]:
+    for seed in seeds[:100]:
         if added >= target:
             break
         seeds_processed += 1
@@ -2345,7 +2380,7 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 30)
     )
 
 
-async def _run_pool_register(uid: int, batch: int = 1000, bid: int = 100):
+async def _run_pool_register(uid: int, batch: int = 3000, bid: int = 100):
     """등록 1회 — pending → orchestrator로 일괄."""
     from services.bulk_upload_orchestrator import BulkUploadOrchestrator, BulkJobConfig
     from services.naver_ad_service import NaverAdApiClient

@@ -167,9 +167,9 @@ export default function KeywordPoolPage() {
   const liveCollect = isFresh(lastCollect?.started_at)
   const liveRegister = isFresh(lastRegister?.started_at)
 
-  // 다음 cron 예상 시각 — 매 15분(:00, :15, :30, :45 UTC. KST도 동일분단위)
+  // 다음 cron 예상 시각 — 매 5분 (:00, :05, :10, ...)
   const nowDate = new Date()
-  const nextTickMin = Math.ceil((nowDate.getMinutes() + 1) / 15) * 15
+  const nextTickMin = Math.ceil((nowDate.getMinutes() + 1) / 5) * 5
   const nextTick = new Date(nowDate)
   if (nextTickMin >= 60) {
     nextTick.setHours(nextTick.getHours() + 1)
@@ -290,7 +290,7 @@ export default function KeywordPoolPage() {
             <div className="flex items-center gap-2 mb-3 flex-wrap">
               <Database className="w-5 h-5 text-[#0064FF]" />
               <h2 className="font-bold text-gray-900">시드별 발굴 키워드</h2>
-              <span className="text-xs text-gray-500">매 15분 cron이 검색량 상위·등록완료 키워드 15개를 자동 시드로 승격합니다 (cap 100). 부적절하면 휴지통으로 빼세요.</span>
+              <span className="text-xs text-gray-500">매 5분 cron이 검색량 상위·등록완료 키워드 30개를 자동 시드로 승격합니다 (cap 200, 도메인 검증). 부적절하면 휴지통.</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -483,11 +483,11 @@ export default function KeywordPoolPage() {
             <div>
               <strong>자동 운영 흐름</strong>
               <ul className="mt-1 text-xs space-y-0.5 list-disc pl-5">
-                <li>매 15분 — 풀에 새 키워드 자동 추가 (keywordstool 연관 검색)</li>
-                <li>매 15분 — pending 1,000개를 네이버에 자동 등록 (광고그룹 자동 생성)</li>
+                <li>매 5분 — 시드 자동 승격 30개 + 풀에 새 키워드 자동 추가 (도메인 토큰 검증)</li>
+                <li>매 5분 — pending 3,000개를 네이버에 자동 등록 (광고그룹 자동 생성)</li>
                 <li>중복 키워드는 절대 재등록 안 됨 (DB UNIQUE 보장)</li>
+                <li>도메인 무관 키워드는 자동 cleanup — 시드 substring 통과해도 도메인 토큰 없으면 reject</li>
                 <li>10만개 한도 도달 시 수집/등록 자동 정지</li>
-                <li>시드를 늘리면 다양성 ↑, 줄이면 특정 분야 집중 ↑</li>
               </ul>
             </div>
           </div>
