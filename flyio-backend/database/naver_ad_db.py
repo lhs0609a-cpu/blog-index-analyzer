@@ -1243,6 +1243,21 @@ def get_ad_account(user_id: int) -> Optional[dict]:
     return dict(row) if row else None
 
 
+def list_connected_ad_accounts() -> List[dict]:
+    """연결된 모든 광고 계정 — 키워드 풀 cron이 user_id 일괄 조회용."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT user_id, customer_id, name
+        FROM ad_accounts
+        WHERE is_active = TRUE AND is_connected = TRUE
+        ORDER BY user_id
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 def update_ad_account_status(user_id: int, customer_id: str, is_connected: bool, error: str = None):
     """광고 계정 연결 상태 업데이트"""
     conn = get_connection()

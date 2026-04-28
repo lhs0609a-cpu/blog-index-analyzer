@@ -2335,7 +2335,8 @@ async def keyword_pool_admin_run(
         try:
             from database.naver_ad_db import list_connected_ad_accounts
             target_users = [a["user_id"] for a in (list_connected_ad_accounts() or []) if a.get("user_id")]
-        except Exception:
+        except Exception as e:
+            logger.error(f"[pool/admin/run] list_connected_ad_accounts 실패: {type(e).__name__}: {e}", exc_info=True)
             target_users = []
 
     if not target_users:
