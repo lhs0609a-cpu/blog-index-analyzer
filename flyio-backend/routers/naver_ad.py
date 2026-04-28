@@ -2466,6 +2466,20 @@ async def _run_pool_register(uid: int, batch: int = 3000, bid: int = 100):
     reg = get_registered_keywords_db()
     existing_before = set(reg.get_existing_set(customer_id, keywords) or set())
 
+    # 캠페인 재사용 — 매 라운드 새 캠페인 만들면 캠페인 폭증. 기존 풀 캠페인 광고그룹 cap (50)
+    # 까지 같은 캠페인에 광고그룹 추가. 도달 시 새 캠페인 생성.
+    pool_state = pool.get_active_pool_campaign(customer_id)
+    AD_GROUPS_PER_POOL_CAMPAIGN = 50  # 50 × 1000 = 50,000 키워드/캠페인. 100k = 캠페인 2개.
+    reuse_id: Optional[str] = None
+    start_idx = 0
+    new_groups_in_round = (len(keywords) + 999) // 1000  # 1000개당 광고그룹 1개
+    if pool_state and pool_state.get("ad_groups_count", 0) + new_groups_in_round <= AD_GROUPS_PER_POOL_CAMPAIGN:
+        reuse_id = pool_state["campaign_id"]
+        start_idx = pool_state["ad_groups_count"]
+        logger.warning(
+            f"[pool/register] 캠페인 재사용 cid={reuse_id} groups={pool_state['ad_groups_count']}+{new_groups_in_round}"
+        )
+
     job_id = create_bulk_upload_job(
         user_id=uid,
         filename=f"pool_auto_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
@@ -2479,6 +2493,8 @@ async def _run_pool_register(uid: int, batch: int = 3000, bid: int = 100):
         job_id=job_id, user_id=uid,
         campaign_prefix="auto", keywords_per_group=1000,
         bid=bid, daily_budget=10000, campaign_tp="WEB_SITE",
+        reuse_campaign_id=reuse_id,
+        start_ad_group_index=start_idx,
     )
     orchestrator = BulkUploadOrchestrator(client)
     try:
@@ -2495,6 +2511,19 @@ async def _run_pool_register(uid: int, batch: int = 3000, bid: int = 100):
 
     existing_after = set(reg.get_existing_set(customer_id, keywords) or set())
     new_in_naver = existing_after - existing_before  # 진짜 신규 등록
+
+    # 풀 state 업데이트 — 캠페인 재사용 또는 새 캠페인 등록
+    try:
+        result_campaign_ids = result.get("campaign_ids") or []
+        ad_groups_in_round = (len(keywords) + 999) // 1000
+        if reuse_id:
+            # 같은 캠페인에 광고그룹 추가됨
+            pool.increment_pool_ad_groups(customer_id, ad_groups_in_round)
+        elif result_campaign_ids:
+            # 새 캠페인 → state 갱신
+            pool.set_active_pool_campaign(customer_id, result_campaign_ids[0], ad_groups_in_round)
+    except Exception as e:
+        logger.warning(f"[pool/register] state 갱신 실패: {e}")
 
     succeeded_ids = [p["id"] for p in pending if p["keyword"] in new_in_naver]
     skipped_ids = [p["id"] for p in pending if p["keyword"] in existing_before]

@@ -39,6 +39,8 @@ class BulkJobConfig:
     bid: int = 100
     daily_budget: int = 10000
     campaign_tp: str = "WEB_SITE"
+    reuse_campaign_id: Optional[str] = None  # 있으면 그 캠페인 재사용, 광고그룹만 새로 생성
+    start_ad_group_index: int = 0           # 광고그룹 이름 인덱스 시작점 (재사용 시 충돌 방지)
 
 
 class BulkUploadOrchestrator:
@@ -262,11 +264,34 @@ class BulkUploadOrchestrator:
                 current_step=f"캠페인 {num_campaigns}개 / 광고그룹 {num_ad_groups}개 생성 예정",
             )
 
-            # 3. 캠페인 생성 — 이름 중복 시 timestamp suffix로 자동 재시도
+            # 3. 캠페인 처리 — reuse 옵션 있으면 새로 안 만들고 그 ID 사용.
             import time as _time
-            run_suffix = str(int(_time.time()))[-6:]  # 6자리 epoch suffix (실행마다 다름)
+            run_suffix = str(int(_time.time()))[-6:]
             created_campaigns: List[str] = []
-            for c_idx in range(num_campaigns):
+
+            if config.reuse_campaign_id:
+                # 재사용 — 캠페인 생성 skip, 그 ID로 광고그룹만 추가
+                created_campaigns = [config.reuse_campaign_id]
+                logger.info(f"[Job {job_id}] 캠페인 재사용: {config.reuse_campaign_id}")
+                update_bulk_upload_job(
+                    job_id,
+                    campaigns_created=0,
+                    campaign_ids=json.dumps(created_campaigns),
+                    current_step=f"기존 캠페인 재사용 → 광고그룹 {num_ad_groups}개 추가",
+                )
+                # 광고그룹 생성 단계로 직행
+                pass
+            else:
+                pass  # 아래 기존 로직 그대로 실행
+
+            # reuse 모드면 캠페인 생성 루프 skip
+            if config.reuse_campaign_id:
+                # 광고그룹 생성 단계로 직행하기 위해 created_campaigns 그대로 두고 break-equivalent
+                pass
+            else:
+                pass  # 진입
+
+            for c_idx in range(num_campaigns if not config.reuse_campaign_id else 0):
                 base_name = f"{config.campaign_prefix}_{c_idx + 1:03d}"
                 campaign_name = base_name
                 campaign_id: Optional[str] = None
@@ -330,7 +355,12 @@ class BulkUploadOrchestrator:
             for g_idx, chunk in enumerate(ad_group_chunks):
                 c_idx = g_idx // MAX_AD_GROUPS_PER_CAMPAIGN
                 campaign_id = created_campaigns[c_idx]
-                ad_group_name = f"{config.campaign_prefix}_grp_{g_idx + 1:04d}"
+                # 광고그룹 이름 — reuse 시 인덱스 시작점 + epoch suffix로 중복 방지
+                base_grp_idx = g_idx + 1 + config.start_ad_group_index
+                if config.reuse_campaign_id:
+                    ad_group_name = f"{config.campaign_prefix}_grp_{base_grp_idx:04d}_{run_suffix}"
+                else:
+                    ad_group_name = f"{config.campaign_prefix}_grp_{base_grp_idx:04d}"
 
                 # 광고그룹 생성
                 try:
@@ -476,6 +506,8 @@ class BulkUploadOrchestrator:
                 "failed": failed,
                 "campaigns": len(created_campaigns),
                 "ad_groups": len(created_ad_groups),
+                "campaign_ids": created_campaigns,
+                "ad_group_ids": created_ad_groups,
             }
 
         except Exception as e:

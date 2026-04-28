@@ -105,6 +105,15 @@ class KeywordPoolDB:
             existing_cols = {r[1] for r in cur.execute("PRAGMA table_info(naverad_pool_runs)").fetchall()}
             if "skipped" not in existing_cols:
                 cur.execute("ALTER TABLE naverad_pool_runs ADD COLUMN skipped INTEGER DEFAULT 0")
+            # 풀 active 캠페인 상태 (캠페인 재사용 — 광고그룹 cap 도달 시 새 캠페인)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS naverad_pool_state (
+                    account_customer_id INTEGER PRIMARY KEY,
+                    campaign_id TEXT NOT NULL,
+                    ad_groups_count INTEGER DEFAULT 0,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
 
     def record_run(
         self,
@@ -255,6 +264,49 @@ class KeywordPoolDB:
                 (account_customer_id,),
             )
             return [r["keyword"] for r in cur.fetchall() if r["keyword"]]
+
+    def get_active_pool_campaign(self, account_customer_id: int) -> Optional[Dict]:
+        """현재 풀 active 캠페인 + 광고그룹 카운트."""
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT campaign_id, ad_groups_count
+                   FROM naverad_pool_state
+                   WHERE account_customer_id = ?""",
+                (account_customer_id,),
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+    def set_active_pool_campaign(
+        self,
+        account_customer_id: int,
+        campaign_id: str,
+        ad_groups_count: int,
+    ) -> None:
+        """현재 풀 active 캠페인 update or insert."""
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """INSERT INTO naverad_pool_state (account_customer_id, campaign_id, ad_groups_count, updated_at)
+                   VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                   ON CONFLICT(account_customer_id) DO UPDATE SET
+                     campaign_id = excluded.campaign_id,
+                     ad_groups_count = excluded.ad_groups_count,
+                     updated_at = CURRENT_TIMESTAMP""",
+                (account_customer_id, campaign_id, ad_groups_count),
+            )
+
+    def increment_pool_ad_groups(self, account_customer_id: int, delta: int) -> None:
+        """광고그룹 카운트 증가."""
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """UPDATE naverad_pool_state
+                   SET ad_groups_count = ad_groups_count + ?, updated_at = CURRENT_TIMESTAMP
+                   WHERE account_customer_id = ?""",
+                (delta, account_customer_id),
+            )
 
     def cleanup_childless_auto_seeds(
         self,
