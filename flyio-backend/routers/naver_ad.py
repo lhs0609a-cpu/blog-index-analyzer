@@ -2376,8 +2376,8 @@ async def _run_pool_collect(uid: int, max_new: int = 5000, min_volume: int = 1):
                 "comp_idx": item.get("compIdx"),
                 "seed": seed,
             })
-            # BFS 후보: 검색량 ≥ 1000 + 도메인 통과 + 길이 ≥ 2
-            if mt >= 1000 and len(kw) >= 2:
+            # BFS 후보: 검색량 ≥ 100 + 도메인 통과 + 길이 ≥ 2 (영역 천장 대응)
+            if mt >= 100 and len(kw) >= 2:
                 bfs_pool.append((kw, mt))
         added += pool.add_candidates(uid, customer_id, candidates)
         await asyncio.sleep(0.3)
