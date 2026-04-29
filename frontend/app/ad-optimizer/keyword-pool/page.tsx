@@ -88,12 +88,30 @@ interface PoolStatsResponse {
   message?: string
 }
 
+interface AdAccount {
+  customer_id: string
+  name?: string | null
+  is_connected: boolean
+  last_sync_at?: string | null
+}
+
+const SELECTED_CID_KEY = 'keyword-pool-selected-customer-id'
+
 export default function KeywordPoolPage() {
   const { isAuthenticated } = useAuthStore()
   const [stats, setStats] = useState<PoolStatsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [seedInput, setSeedInput] = useState('')
   const [adding, setAdding] = useState(false)
+
+  // hydration safe — Date.now()/new Date() 가 SSR 과 client 에서 다르면 React #422 발생.
+  // mounted=true 후에만 time-dependent UI 렌더.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
+  // 다중 광고주 — useEffect 보다 앞에 정의 (TDZ 회피)
+  const [accounts, setAccounts] = useState<AdAccount[]>([])
+  const [selectedCid, setSelectedCid] = useState<string>('')
 
   // 클릭 키워드 검수 state — useEffect dependency보다 앞에 정의 (TDZ 회피)
   const [clickedDays, setClickedDays] = useState(7)
@@ -102,13 +120,62 @@ export default function KeywordPoolPage() {
   const [clickedSelected, setClickedSelected] = useState<Set<string>>(new Set())
   const [clickedShown, setClickedShown] = useState(false)
 
+  // customer_id 쿼리 — selected 가 비어있으면 백엔드 default(가장 최근).
+  const cidQs = (extra: Record<string, string | number | undefined> = {}) => {
+    const params: Record<string, string> = {}
+    if (selectedCid) params.customer_id = selectedCid
+    for (const [k, v] of Object.entries(extra)) {
+      if (v !== undefined && v !== null && v !== '') params[k] = String(v)
+    }
+    const entries = Object.entries(params)
+    return entries.length ? '?' + entries.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&') : ''
+  }
+
+  const loadAccounts = async () => {
+    try {
+      const data = await adGet<{ success: boolean; accounts: AdAccount[] }>('/api/naver-ad/keyword-pool/accounts')
+      const list = data.accounts || []
+      setAccounts(list)
+      // localStorage 에 저장된 선택 복원, 없으면 첫 광고주
+      if (typeof window !== 'undefined') {
+        const saved = window.localStorage.getItem(SELECTED_CID_KEY) || ''
+        const valid = saved && list.some(a => a.customer_id === saved)
+        if (valid) {
+          setSelectedCid(saved)
+        } else if (list.length > 0) {
+          setSelectedCid(list[0].customer_id)
+          window.localStorage.setItem(SELECTED_CID_KEY, list[0].customer_id)
+        }
+      }
+    } catch (e: any) {
+      // accounts 조회 실패해도 default 동작 유지
+      console.warn('[keyword-pool] loadAccounts 실패', e)
+    }
+  }
+
+  const handleSelectAccount = (cid: string) => {
+    setSelectedCid(cid)
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(SELECTED_CID_KEY, cid)
+    }
+    // 즉시 새 광고주의 데이터로 갱신
+    setStats(null)
+    setClickedItems([])
+    setClickedShown(false)
+  }
+
   const load = async () => {
     setLoading(true)
     try {
-      const data = await adGet<PoolStatsResponse>('/api/naver-ad/keyword-pool/stats')
+      // seed_breakdown 가 시드 200+ 일 때 느림 — 60s timeout (default 30s 부족).
+      const data = await adGet<PoolStatsResponse>(
+        `/api/naver-ad/keyword-pool/stats${cidQs()}`,
+        { timeout: 60_000, showToast: false }
+      )
       setStats(data)
     } catch (e: any) {
-      toast.error(e?.response?.data?.detail || '로드 실패')
+      // 폴링 실패는 토스트 안 띄움 (10초마다 다시 시도). 첫 로드는 알림.
+      if (!stats) toast.error(e?.message || '로드 실패')
     } finally {
       setLoading(false)
     }
@@ -118,7 +185,9 @@ export default function KeywordPoolPage() {
     setClickedLoading(true)
     setClickedShown(true)
     try {
-      const res = await adGet<{ success: boolean; items: ClickedKeyword[] }>(`/api/naver-ad/keyword-pool/clicked-keywords?days=${clickedDays}`)
+      const res = await adGet<{ success: boolean; items: ClickedKeyword[] }>(
+        `/api/naver-ad/keyword-pool/clicked-keywords${cidQs({ days: clickedDays })}`
+      )
       setClickedItems(res.items || [])
       setClickedSelected(new Set())
     } catch (e: any) {
@@ -128,6 +197,14 @@ export default function KeywordPoolPage() {
     }
   }
 
+  // 광고주 목록 1회 로드
+  useEffect(() => {
+    if (!isAuthenticated) return
+    loadAccounts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated])
+
+  // selectedCid 변경 시 stats + clicked 재조회 + 폴링 시작
   useEffect(() => {
     if (!isAuthenticated) return
     load()
@@ -135,7 +212,7 @@ export default function KeywordPoolPage() {
     const t = setInterval(load, 10_000) // 10초마다 자동 갱신 (실시간 모니터링)
     return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated])
+  }, [isAuthenticated, selectedCid])
 
   // clickedDays 변경 시 자동 재조회
   useEffect(() => {
@@ -170,7 +247,7 @@ export default function KeywordPoolPage() {
     if (!confirm(`선택된 ${clickedSelected.size}개 키워드를 네이버에서 삭제(또는 PAUSE)할까요?`)) return
     try {
       const res = await adPost<{ success: boolean; deleted: number; paused: number; failed: number }>(
-        '/api/naver-ad/keyword-pool/clicked-keywords/bulk-delete',
+        `/api/naver-ad/keyword-pool/clicked-keywords/bulk-delete${cidQs()}`,
         { keyword_ids: Array.from(clickedSelected) }
       )
       toast.success(`삭제 ${res.deleted} / PAUSE ${res.paused} / 실패 ${res.failed}`)
@@ -184,7 +261,7 @@ export default function KeywordPoolPage() {
   const handleDeleteKeyword = async (keyword: string) => {
     if (!confirm(`키워드 "${keyword}"를 풀에서 삭제할까요?\n(이미 네이버 광고에 등록된 상태면 영향 없음. pending/이미있음 상태일 때만 풀에서 빠짐)`)) return
     try {
-      const res = await adDelete<{ success: boolean; deleted: number }>(`/api/naver-ad/keyword-pool/keywords/${encodeURIComponent(keyword)}`)
+      const res = await adDelete<{ success: boolean; deleted: number }>(`/api/naver-ad/keyword-pool/keywords/${encodeURIComponent(keyword)}${cidQs()}`)
       toast.success(`"${keyword}" 풀에서 삭제 (${res.deleted}건)`)
       load()
     } catch (e: any) {
@@ -195,7 +272,7 @@ export default function KeywordPoolPage() {
   const handleDeleteSeed = async (seed: string, total: number) => {
     if (!confirm(`시드 "${seed}"와 이 시드로 발굴된 키워드(총 ${total}개)를 풀에서 삭제할까요?\n(이미 네이버 광고에 등록된 키워드는 영향 없음)`)) return
     try {
-      const res = await adDelete<{ success: boolean; deleted: number }>(`/api/naver-ad/keyword-pool/seeds/${encodeURIComponent(seed)}`)
+      const res = await adDelete<{ success: boolean; deleted: number }>(`/api/naver-ad/keyword-pool/seeds/${encodeURIComponent(seed)}${cidQs()}`)
       toast.success(`"${seed}" + 자식 ${res.deleted}개 삭제`)
       load()
     } catch (e: any) {
@@ -215,7 +292,7 @@ export default function KeywordPoolPage() {
     setAdding(true)
     try {
       const res = await adPost<{ success: boolean; added: number; total_input: number }>(
-        '/api/naver-ad/keyword-pool/seeds',
+        `/api/naver-ad/keyword-pool/seeds${cidQs()}`,
         { seeds }
       )
       toast.success(`${res.added}개 시드 추가 (입력 ${res.total_input}개)`)
@@ -244,28 +321,34 @@ export default function KeywordPoolPage() {
   const lastRegister = runs.find((r) => r.kind === 'register')
   const lastError = runs.find((r) => r.status === 'failed' || (r.error_message && !['no_seed','no_pending','cap_reached','no_new','success','partial'].includes(r.status)))
 
-  // "지금 막 돌았는가" — 최근 90초 이내
-  const nowMs = Date.now()
+  // hydration safety — Date.now()/new Date() 는 SSR 과 client 가 달라서 React #422 유발.
+  // mounted 전엔 false/0 으로 고정해서 서버/클라이언트 1차 렌더 일치시킴.
+  const nowMs = mounted ? Date.now() : 0
   const isFresh = (iso?: string) => {
-    if (!iso) return false
+    if (!mounted || !iso) return false
     const t = new Date(iso.replace(' ', 'T') + 'Z').getTime()
     return nowMs - t < 90_000
   }
   const liveCollect = isFresh(lastCollect?.started_at)
   const liveRegister = isFresh(lastRegister?.started_at)
 
-  // 다음 cron 예상 시각 — 매 5분 (:00, :05, :10, ...)
-  const nowDate = new Date()
-  const nextTickMin = Math.ceil((nowDate.getMinutes() + 1) / 5) * 5
-  const nextTick = new Date(nowDate)
-  if (nextTickMin >= 60) {
-    nextTick.setHours(nextTick.getHours() + 1)
-    nextTick.setMinutes(0)
-  } else {
-    nextTick.setMinutes(nextTickMin)
+  // 다음 cron 예상 시각 — 매 5분 (:00, :05, :10, ...). mounted 후에만 계산.
+  let minsToNext = 0
+  let nextTickHHMM = ''
+  if (mounted) {
+    const nowDate = new Date()
+    const nextTickMin = Math.ceil((nowDate.getMinutes() + 1) / 5) * 5
+    const nextTick = new Date(nowDate)
+    if (nextTickMin >= 60) {
+      nextTick.setHours(nextTick.getHours() + 1)
+      nextTick.setMinutes(0)
+    } else {
+      nextTick.setMinutes(nextTickMin)
+    }
+    nextTick.setSeconds(0)
+    minsToNext = Math.max(0, Math.round((nextTick.getTime() - nowDate.getTime()) / 60000))
+    nextTickHHMM = `${String(nextTick.getHours()).padStart(2, '0')}:${String(nextTick.getMinutes()).padStart(2, '0')}`
   }
-  nextTick.setSeconds(0)
-  const minsToNext = Math.max(0, Math.round((nextTick.getTime() - nowDate.getTime()) / 60000))
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white pt-24 pb-12">
@@ -285,15 +368,40 @@ export default function KeywordPoolPage() {
               씨드 → 자동 수집 → 자동 등록. 계정당 10만개 한도 자동 가드.
             </p>
           </div>
-          <button
-            onClick={load}
-            disabled={loading}
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            새로고침
-          </button>
+          <div className="flex items-center gap-2">
+            {accounts.length > 0 && (
+              <select
+                value={selectedCid}
+                onChange={(e) => handleSelectAccount(e.target.value)}
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50 min-w-[180px]"
+                title="광고주 선택"
+              >
+                {accounts.map(a => (
+                  <option key={a.customer_id} value={a.customer_id}>
+                    {a.name ? `${a.name} (${a.customer_id})` : a.customer_id}
+                    {a.is_connected ? '' : ' · 연결끊김'}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              onClick={load}
+              disabled={loading}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              새로고침
+            </button>
+          </div>
         </div>
+
+        {accounts.length > 1 && (
+          <div className="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-900">
+            <span className="font-semibold">다중 광고주 모드</span> — 총 {accounts.length}개 광고주 등록됨.
+            드롭다운에서 광고주 전환 시 풀 데이터/시드/실행이력이 그 광고주 기준으로 분리됩니다.
+            cron(5분 주기) 은 모든 광고주를 각각 독립적으로 처리합니다.
+          </div>
+        )}
 
         {/* 한도 사용량 */}
         <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
@@ -344,7 +452,7 @@ export default function KeywordPoolPage() {
             </div>
             <div className="text-xs text-gray-500 inline-flex items-center gap-1">
               <Clock className="w-3.5 h-3.5" />
-              다음 실행 예정 ~ {minsToNext}분 후 ({nextTick.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })})
+              다음 실행 예정 ~ {minsToNext}분 후 {nextTickHHMM && `(${nextTickHHMM})`}
             </div>
           </div>
 
@@ -356,8 +464,8 @@ export default function KeywordPoolPage() {
 
           {lastRun && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <RunSummary kind="collect" run={lastCollect} live={liveCollect} />
-              <RunSummary kind="register" run={lastRegister} live={liveRegister} />
+              <RunSummary kind="collect" run={lastCollect} live={liveCollect} mounted={mounted} />
+              <RunSummary kind="register" run={lastRegister} live={liveRegister} mounted={mounted} />
             </div>
           )}
 
@@ -365,7 +473,7 @@ export default function KeywordPoolPage() {
             <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <div>
-                <strong>최근 에러 ({fmtTime(lastError.started_at)})</strong>
+                <strong>최근 에러 ({fmtTime(lastError.started_at, mounted)})</strong>
                 <div className="mt-1 font-mono text-[11px] break-all">{lastError.error_message || lastError.status}</div>
               </div>
             </div>
@@ -575,7 +683,7 @@ export default function KeywordPoolPage() {
                            k.status === 'skipped_existing' ? '이미있음' : '실패'}
                         </span>
                       </td>
-                      <td className="py-2 px-2 text-xs text-gray-500 font-mono">{fmtTime(k.discovered_at)}</td>
+                      <td className="py-2 px-2 text-xs text-gray-500 font-mono">{fmtTime(k.discovered_at, mounted)}</td>
                       <td className="py-2 px-2 text-right">
                         <button
                           onClick={() => handleDeleteKeyword(k.keyword)}
@@ -640,7 +748,7 @@ export default function KeywordPoolPage() {
                 <tbody>
                   {runs.map((r) => (
                     <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-2 px-2 text-xs text-gray-600 font-mono">{fmtTime(r.started_at)}</td>
+                      <td className="py-2 px-2 text-xs text-gray-600 font-mono">{fmtTime(r.started_at, mounted)}</td>
                       <td className="py-2 px-2">
                         <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
                           r.kind === 'collect' ? 'bg-blue-50 text-blue-700' :
@@ -734,8 +842,11 @@ function StatCard({ label, value, color, hint }: { label: string; value: number;
   )
 }
 
-function fmtTime(iso?: string): string {
+function fmtTime(iso?: string, mounted: boolean = true): string {
   if (!iso) return '-'
+  // hydration safety — Date.now() 가 SSR 과 client 다르면 React #422.
+  // mounted 전엔 원본 ISO 만 (서버/클라이언트 동일).
+  if (!mounted) return iso.slice(5, 16).replace('T', ' ')  // 'MM-DD HH:MM' 정도
   // SQLite는 'YYYY-MM-DD HH:MM:SS' (UTC)로 저장
   const d = new Date(iso.includes('T') ? iso : iso.replace(' ', 'T') + 'Z')
   if (isNaN(d.getTime())) return iso
@@ -767,7 +878,7 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-function RunSummary({ kind, run, live }: { kind: 'collect' | 'register'; run?: RunRow; live: boolean }) {
+function RunSummary({ kind, run, live, mounted = true }: { kind: 'collect' | 'register'; run?: RunRow; live: boolean; mounted?: boolean }) {
   const label = kind === 'collect' ? '수집 (keywordstool)' : '등록 (네이버 광고)'
   if (!run) {
     return (
@@ -797,7 +908,7 @@ function RunSummary({ kind, run, live }: { kind: 'collect' | 'register'; run?: R
       </div>
       <div className="text-base font-bold text-gray-900">{main}</div>
       <div className="text-[11px] text-gray-500 mt-1">
-        {fmtTime(run.started_at)}
+        {fmtTime(run.started_at, mounted)}
         {run.duration_ms != null && <> · {(run.duration_ms / 1000).toFixed(1)}초</>}
         {kind === 'collect' && run.seeds_count > 0 && <> · 시드 {run.seeds_count}개 처리</>}
         {kind === 'collect' && run.skipped > 0 && <> · 시드와 무관해서 reject {run.skipped}개</>}

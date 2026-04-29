@@ -2260,6 +2260,14 @@ def _build_domain_token_set(seeds: List[str]) -> set:
     return set(POOL_DOMAIN_TOKENS) | _derive_seed_tokens(seeds)
 
 
+def _resolve_account(user_id: int, customer_id: Optional[str] = None) -> Optional[Dict]:
+    """customer_id 명시 시 그 광고주, 없으면 가장 최근. B 시나리오 — 다중 광고주 라우팅."""
+    from database.naver_ad_db import get_ad_account_by_customer
+    if customer_id:
+        return get_ad_account_by_customer(user_id, str(customer_id))
+    return get_ad_account(user_id)
+
+
 def _parse_naver_count(v) -> int:
     """네이버 keywordstool 검색량 — 10 미만이면 '< 10' 문자열로 옴. 안전 변환."""
     if v is None:
@@ -2797,31 +2805,45 @@ async def _inspect_ad_groups(
     return n_mark
 
 
-async def _run_pool_workers_for_users(user_ids: List[int]):
+async def _run_pool_workers_for_accounts(pairs: List[Tuple[int, int]]):
+    """B 시나리오 — (user_id, customer_id) 페어별로 collect+register.
+    한 사용자 여러 광고주를 가진 경우 광고주마다 독립적으로 워커 실행."""
     pool = get_keyword_pool_db()
-    for uid in user_ids:
+    for uid, cid in pairs:
         try:
-            await _run_pool_collect(uid)
+            await _run_pool_collect(uid, customer_id=cid)
         except Exception as e:
-            logger.error(f"[pool/run] collect 실패 user={uid}: {e}", exc_info=True)
+            logger.error(f"[pool/run] collect 실패 user={uid} cid={cid}: {e}", exc_info=True)
             try:
-                acct = get_ad_account(uid)
-                cid = int(acct.get("customer_id")) if acct else None
                 pool.record_run(uid, cid, "collect", "failed",
                                 error_message=f"{type(e).__name__}: {str(e)[:300]}")
             except Exception:
                 pass
         try:
-            await _run_pool_register(uid)
+            await _run_pool_register(uid, customer_id=cid)
         except Exception as e:
-            logger.error(f"[pool/run] register 실패 user={uid}: {e}", exc_info=True)
+            logger.error(f"[pool/run] register 실패 user={uid} cid={cid}: {e}", exc_info=True)
             try:
-                acct = get_ad_account(uid)
-                cid = int(acct.get("customer_id")) if acct else None
                 pool.record_run(uid, cid, "register", "failed",
                                 error_message=f"{type(e).__name__}: {str(e)[:300]}")
             except Exception:
                 pass
+
+
+# 호환 wrapper — user_id 만 받는 옛 호출자 (외부 cron 등) 위해 유지.
+async def _run_pool_workers_for_users(user_ids: List[int]):
+    """Deprecated — 가장 최근 광고주만 처리. _run_pool_workers_for_accounts 사용 권장."""
+    from database.naver_ad_db import list_ad_accounts_for_user
+    pairs: List[Tuple[int, int]] = []
+    for uid in user_ids:
+        try:
+            accounts = list_ad_accounts_for_user(uid) or []
+            for a in accounts:
+                if a.get("is_connected"):
+                    pairs.append((uid, int(a["customer_id"])))
+        except Exception as e:
+            logger.error(f"[pool/run] list_ad_accounts_for_user 실패 user={uid}: {e}")
+    await _run_pool_workers_for_accounts(pairs)
 
 
 @router.post("/keyword-pool/admin/run")
@@ -2829,30 +2851,38 @@ async def keyword_pool_admin_run(
     background_tasks: BackgroundTasks,
     authorization: Optional[str] = Header(None),
     user_id: Optional[int] = Query(None),
+    customer_id: Optional[str] = Query(None),
 ):
-    """24h 자동 워커 — collect + register 통합 트리거 (Bearer 인증)."""
+    """자동 워커 — collect + register 통합 트리거 (Bearer 인증).
+    - user_id 만: 그 사용자의 모든 활성 광고주 (B 시나리오)
+    - user_id + customer_id: 그 광고주 단건만
+    - 둘 다 없음: 모든 사용자 × 모든 활성 광고주
+    """
     _verify_cron_token(authorization)
 
-    target_users: List[int] = []
-    if user_id:
-        target_users = [user_id]
-    else:
-        # 활성 광고 계정 사용자 — naver_ad_db 헬퍼 가정. 없으면 빈 리스트.
-        try:
-            from database.naver_ad_db import list_connected_ad_accounts
-            target_users = [a["user_id"] for a in (list_connected_ad_accounts() or []) if a.get("user_id")]
-        except Exception as e:
-            logger.error(f"[pool/admin/run] list_connected_ad_accounts 실패: {type(e).__name__}: {e}", exc_info=True)
-            target_users = []
+    pairs: List[Tuple[int, int]] = []
+    try:
+        from database.naver_ad_db import list_connected_ad_accounts, list_ad_accounts_for_user
+        if user_id and customer_id:
+            pairs = [(user_id, int(customer_id))]
+        elif user_id:
+            accounts = list_ad_accounts_for_user(user_id) or []
+            pairs = [(user_id, int(a["customer_id"])) for a in accounts if a.get("is_connected")]
+        else:
+            rows = list_connected_ad_accounts() or []
+            pairs = [(int(r["user_id"]), int(r["customer_id"])) for r in rows if r.get("user_id") and r.get("customer_id")]
+    except Exception as e:
+        logger.error(f"[pool/admin/run] 광고주 조회 실패: {type(e).__name__}: {e}", exc_info=True)
+        pairs = []
 
-    if not target_users:
+    if not pairs:
         return {"success": True, "queued": 0, "message": "활성 광고 계정 없음"}
 
-    background_tasks.add_task(_run_pool_workers_for_users, target_users)
+    background_tasks.add_task(_run_pool_workers_for_accounts, pairs)
     return {
         "success": True,
-        "queued": len(target_users),
-        "users": target_users,
+        "queued": len(pairs),
+        "pairs": [{"user_id": uid, "customer_id": cid} for uid, cid in pairs],
         "timestamp": datetime.now().isoformat(timespec="seconds"),
     }
 
@@ -2882,12 +2912,8 @@ async def keyword_pool_stats(
     customer_id: Optional[str] = None,
 ):
     """본인 풀/등록 상태 — customer_id 명시 시 그 광고주."""
-    from database.naver_ad_db import get_ad_account_by_customer
     try:
-        if customer_id:
-            account = get_ad_account_by_customer(user_id, customer_id)
-        else:
-            account = get_ad_account(user_id)
+        account = _resolve_account(user_id, customer_id)
         if not account:
             return {"success": False, "message": "광고 계정 미연결", "pool": {}, "registered": {}, "account_cap": 100_000}
         customer_id = int(account.get("customer_id"))
@@ -3051,6 +3077,7 @@ async def keyword_pool_admin_delete_keywords(
 @router.get("/keyword-pool/clicked-keywords")
 async def keyword_pool_clicked_keywords(
     days: int = 7,
+    customer_id: Optional[str] = None,
     user_id: int = Depends(get_user_id_with_fallback),
 ):
     """클릭 발생한 키워드 list — 사용자 검수용. 시드 매칭 여부 표시."""
@@ -3059,7 +3086,7 @@ async def keyword_pool_clicked_keywords(
     import sqlite3 as _sqlite3
 
     try:
-        account = get_ad_account(user_id)
+        account = _resolve_account(user_id, customer_id)
         if not account or not account.get("is_connected"):
             raise HTTPException(status_code=400, detail="광고 계정 미연결")
         customer_id = int(account.get("customer_id"))
@@ -3144,6 +3171,7 @@ class BulkDeleteKeywordsRequest(BaseModel):
 @router.post("/keyword-pool/clicked-keywords/bulk-delete")
 async def keyword_pool_bulk_delete_clicked(
     request: BulkDeleteKeywordsRequest,
+    customer_id: Optional[str] = None,
     user_id: int = Depends(get_user_id_with_fallback),
 ):
     """선택된 키워드 일괄 네이버 삭제 (실패 시 PAUSE) + 풀 mark + reg DB 제거."""
@@ -3151,7 +3179,7 @@ async def keyword_pool_bulk_delete_clicked(
     import sqlite3 as _sqlite3
 
     try:
-        account = get_ad_account(user_id)
+        account = _resolve_account(user_id, customer_id)
         if not account or not account.get("is_connected"):
             raise HTTPException(status_code=400, detail="광고 계정 미연결")
         customer_id = int(account.get("customer_id"))
@@ -3211,11 +3239,12 @@ async def keyword_pool_bulk_delete_clicked(
 @router.delete("/keyword-pool/keywords/{keyword}")
 async def keyword_pool_delete_keyword(
     keyword: str,
+    customer_id: Optional[str] = None,
     user_id: int = Depends(get_user_id_with_fallback),
 ):
     """단일 키워드를 풀에서 삭제 (이미 네이버 등록된 건 영향 없음)."""
     try:
-        account = get_ad_account(user_id)
+        account = _resolve_account(user_id, customer_id)
         if not account or not account.get("is_connected"):
             raise HTTPException(status_code=400, detail="광고 계정 미연결")
         customer_id = int(account.get("customer_id"))
@@ -3233,11 +3262,12 @@ async def keyword_pool_delete_keyword(
 @router.delete("/keyword-pool/seeds/{seed}")
 async def keyword_pool_delete_seed(
     seed: str,
+    customer_id: Optional[str] = None,
     user_id: int = Depends(get_user_id_with_fallback),
 ):
     """시드와 그 시드로 발굴된 자식 키워드를 풀에서 모두 삭제."""
     try:
-        account = get_ad_account(user_id)
+        account = _resolve_account(user_id, customer_id)
         if not account or not account.get("is_connected"):
             raise HTTPException(status_code=400, detail="광고 계정 미연결")
         customer_id = int(account.get("customer_id"))
@@ -3255,11 +3285,12 @@ async def keyword_pool_delete_seed(
 @router.post("/keyword-pool/seeds")
 async def keyword_pool_add_seeds(
     request: PoolSeedsRequest,
+    customer_id: Optional[str] = None,
     user_id: int = Depends(get_user_id_with_fallback),
 ):
     """초기 시드 추가 — 자동 수집의 첫 input."""
     try:
-        account = get_ad_account(user_id)
+        account = _resolve_account(user_id, customer_id)
         if not account or not account.get("is_connected"):
             raise HTTPException(status_code=400, detail="광고 계정 미연결")
         customer_id = int(account.get("customer_id"))
