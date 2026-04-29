@@ -410,31 +410,42 @@ class NaverAdApiClient:
         }
         return await self._request("POST", "/ncc/adextensions", payload)
 
-    async def update_keyword(self, keyword_id: str, data: dict) -> dict:
-        """키워드 수정 (입찰가 등)"""
-        return await self._request("PUT", f"/ncc/keywords/{keyword_id}", data)
+    async def update_keyword(self, keyword_id: str, data: dict, fields: str = "bidAmt") -> dict:
+        """키워드 수정 — fields 쿼리 파라미터 필수 (Naver SearchAd API).
+
+        유효 fields: bidAmt, useGroupBidAmt, userLock, links
+        여러 필드 동시 변경 시 콤마로 구분: 'bidAmt,useGroupBidAmt'
+        fields 빠지면 Naver 가 200 만 돌려주고 실제 변경은 무시(silent ignore).
+        """
+        return await self._request("PUT", f"/ncc/keywords/{keyword_id}?fields={fields}", data)
 
     async def update_keyword_bid(self, keyword_id: str, bid_amt: int) -> dict:
-        """키워드 입찰가 변경"""
-        return await self.update_keyword(keyword_id, {
-            "nccKeywordId": keyword_id,
-            "bidAmt": bid_amt,
-            "useGroupBidAmt": False
-        })
+        """키워드 입찰가 변경 — bidAmt + useGroupBidAmt=False 둘 다 set."""
+        return await self.update_keyword(
+            keyword_id,
+            {
+                "nccKeywordId": keyword_id,
+                "bidAmt": bid_amt,
+                "useGroupBidAmt": False,
+            },
+            fields="bidAmt,useGroupBidAmt",
+        )
 
     async def pause_keyword(self, keyword_id: str) -> dict:
         """키워드 일시정지"""
-        return await self.update_keyword(keyword_id, {
-            "nccKeywordId": keyword_id,
-            "userLock": True
-        })
+        return await self.update_keyword(
+            keyword_id,
+            {"nccKeywordId": keyword_id, "userLock": True},
+            fields="userLock",
+        )
 
     async def activate_keyword(self, keyword_id: str) -> dict:
         """키워드 활성화"""
-        return await self.update_keyword(keyword_id, {
-            "nccKeywordId": keyword_id,
-            "userLock": False
-        })
+        return await self.update_keyword(
+            keyword_id,
+            {"nccKeywordId": keyword_id, "userLock": False},
+            fields="userLock",
+        )
 
     async def delete_keyword(self, keyword_id: str) -> dict:
         """키워드 삭제"""

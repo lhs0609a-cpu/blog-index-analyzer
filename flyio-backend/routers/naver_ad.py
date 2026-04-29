@@ -3411,11 +3411,7 @@ async def keyword_pool_bid_bulk_update(
             nonlocal kw_success
             async with sem:
                 try:
-                    await client.update_keyword(kid, {
-                        "nccKeywordId": kid,
-                        "bidAmt": new_bid,
-                        "useGroupBidAmt": False,
-                    })
+                    await client.update_keyword_bid(kid, new_bid)
                     kw_success += 1
                 except Exception as e:
                     kw_failed.append({"keyword_id": kid, "error": f"{type(e).__name__}: {str(e)[:80]}"})
