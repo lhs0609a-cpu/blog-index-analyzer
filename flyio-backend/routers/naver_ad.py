@@ -3347,11 +3347,12 @@ async def keyword_pool_bid_bulk_update(
     customer_id: Optional[str] = None,
     user_id: int = Depends(get_user_id_with_fallback),
 ):
-    """광고주의 default 입찰가를 DB 에 저장 + 모든 광고그룹 default bid 일괄 변경.
+    """광고주의 default 입찰가를 DB 에 저장 + 광고그룹 default bid + **모든 키워드 bidAmt** 일괄 변경.
 
     - scope='pool': 풀 자동 등록 캠페인 (이름 'auto_*') 의 광고그룹만 변경
     - scope='all': 그 광고주의 모든 활성 캠페인 광고그룹 변경
-    - 키워드별 useGroupBidAmt=False 인 키워드는 영향 없음 (개별 override 보존)
+    - 키워드별 bidAmt 도 같이 업데이트 — 자동 등록은 useGroupBidAmt=False 라 그룹 default 만
+      바꿔서는 키워드별 표시가 안 바뀜. 광고관리자에 즉시 반영되도록 키워드 PUT 도 수행.
     """
     from services.naver_ad_service import NaverAdApiClient
     from database.naver_ad_db import update_ad_account_default_bid
@@ -3387,15 +3388,49 @@ async def keyword_pool_bid_bulk_update(
                 logger.warning(f"[bid/bulk] 광고그룹 list 실패 cid={c.get('nccCampaignId')}: {e}")
             await asyncio.sleep(0.15)
 
-        success = 0
-        failed: List[Dict] = []
+        # 광고그룹 default bid 변경
+        ag_success = 0
+        ag_failed: List[Dict] = []
         for cname, gid in ad_group_ids:
             try:
                 await client.update_ad_group_bid(gid, new_bid)
-                success += 1
+                ag_success += 1
             except Exception as e:
-                failed.append({"ad_group_id": gid, "campaign": cname, "error": f"{type(e).__name__}: {str(e)[:120]}"})
-            await asyncio.sleep(0.2)
+                ag_failed.append({"ad_group_id": gid, "campaign": cname, "error": f"{type(e).__name__}: {str(e)[:120]}"})
+            await asyncio.sleep(0.15)
+
+        # 키워드별 bidAmt 일괄 변경 — 광고그룹별로 keyword list 받아 PUT
+        # 자동등록 키워드는 useGroupBidAmt=False 라 그룹 default 만 바꿔서는 표시 안 바뀜.
+        # 동시성 제한 = 10 (Naver rate limit 회피)
+        kw_total = 0
+        kw_success = 0
+        kw_failed: List[Dict] = []
+        sem = asyncio.Semaphore(10)
+
+        async def _update_kw(kid: str):
+            nonlocal kw_success
+            async with sem:
+                try:
+                    await client.update_keyword(kid, {
+                        "nccKeywordId": kid,
+                        "bidAmt": new_bid,
+                        "useGroupBidAmt": False,
+                    })
+                    kw_success += 1
+                except Exception as e:
+                    kw_failed.append({"keyword_id": kid, "error": f"{type(e).__name__}: {str(e)[:80]}"})
+
+        for cname, gid in ad_group_ids:
+            try:
+                kws = await client.get_keywords(ad_group_id=gid) or []
+            except Exception as e:
+                logger.warning(f"[bid/bulk] keywords list 실패 ag={gid}: {e}")
+                continue
+            kw_ids = [k.get("nccKeywordId") for k in kws if k.get("nccKeywordId")]
+            kw_total += len(kw_ids)
+            if kw_ids:
+                await asyncio.gather(*[_update_kw(kid) for kid in kw_ids], return_exceptions=False)
+            await asyncio.sleep(0.1)
 
         return {
             "success": True,
@@ -3404,9 +3439,12 @@ async def keyword_pool_bid_bulk_update(
             "scope": request.scope,
             "campaigns_scanned": len(campaigns),
             "ad_groups_total": len(ad_group_ids),
-            "ad_groups_updated": success,
-            "ad_groups_failed": len(failed),
-            "failed_samples": failed[:10],
+            "ad_groups_updated": ag_success,
+            "ad_groups_failed": len(ag_failed),
+            "keywords_total": kw_total,
+            "keywords_updated": kw_success,
+            "keywords_failed": len(kw_failed),
+            "failed_samples": (ag_failed[:5] + kw_failed[:5])[:10],
         }
     except HTTPException:
         raise

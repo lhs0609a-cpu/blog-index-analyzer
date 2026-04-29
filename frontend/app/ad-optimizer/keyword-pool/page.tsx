@@ -183,7 +183,7 @@ export default function KeywordPoolPage() {
       return
     }
     const scopeLabel = scope === 'pool' ? '풀 자동 등록 캠페인 (auto_*)' : '이 광고주의 모든 캠페인'
-    if (!confirm(`${scopeLabel} 의 모든 광고그룹 default 입찰가를 ${bid.toLocaleString()}원 으로 일괄 변경할까요?\n\n(키워드별 개별 입찰가가 설정된 키워드는 영향 없음. 광고주 default_bid 도 저장 — 앞으로 자동 등록되는 키워드도 ${bid}원 사용)`)) return
+    if (!confirm(`${scopeLabel} 의 광고그룹 default + 모든 키워드 bidAmt 를 ${bid.toLocaleString()}원 으로 일괄 변경할까요?\n\n(키워드 수에 비례해 5~15분 소요. 광고주 default_bid 도 저장 — 앞으로 자동 등록되는 키워드도 ${bid}원 사용)`)) return
     setBidApplying(true)
     try {
       const res = await adPost<{
@@ -194,13 +194,16 @@ export default function KeywordPoolPage() {
         ad_groups_total: number
         ad_groups_updated: number
         ad_groups_failed: number
+        keywords_total: number
+        keywords_updated: number
+        keywords_failed: number
       }>(
         `/api/naver-ad/keyword-pool/bid/bulk-update${cidQs()}`,
         { bid, scope },
-        { timeout: 600_000 }  // 광고그룹 많으면 오래 걸림 — 10분 timeout
+        { timeout: 1_800_000 }  // 키워드 25k 까지 — 30분 timeout
       )
       toast.success(
-        `입찰가 ${res.new_bid.toLocaleString()}원 일괄 변경 — 캠페인 ${res.campaigns_scanned}개 / 광고그룹 ${res.ad_groups_updated}/${res.ad_groups_total} 성공`
+        `입찰가 ${res.new_bid.toLocaleString()}원 일괄 변경 — 광고그룹 ${res.ad_groups_updated}/${res.ad_groups_total} · 키워드 ${res.keywords_updated.toLocaleString()}/${res.keywords_total.toLocaleString()} 성공`
       )
       // 광고주 default_bid 도 갱신됐으니 accounts 재조회
       loadAccounts()
