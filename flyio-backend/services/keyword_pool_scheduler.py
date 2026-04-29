@@ -25,16 +25,27 @@ class KeywordPoolScheduler:
         if self._running:
             logger.warning("Keyword pool scheduler 이미 실행 중")
             return
+        # 3 분리: collect 5분, register 2분, inspect-full 10분.
+        # 과거: tick 한 번에 collect+register+inspect 다 돌려서 5분 초과 → max_instances=1
+        # 으로 다음 tick 스킵 → register 가 40분 동안 못 돌아가는 사고 발생.
         self.scheduler.add_job(
-            self._tick,
+            self._collect_only,
             IntervalTrigger(seconds=interval_seconds),
-            id="keyword_pool_tick",
-            name="키워드 풀 cron (collect+register)",
+            id="keyword_pool_collect",
+            name="키워드 풀 collect (5분 주기)",
             replace_existing=True,
             max_instances=1,
             coalesce=True,
         )
-        # 매 10분 전체 광고그룹 노출제한 일괄 검사 + 자동 삭제 (사용자 요청 — 한 번에 다 잡기)
+        self.scheduler.add_job(
+            self._register_only,
+            IntervalTrigger(seconds=120),
+            id="keyword_pool_register",
+            name="키워드 풀 register (2분 주기)",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
         self.scheduler.add_job(
             self._inspect_full,
             IntervalTrigger(seconds=600),
@@ -46,7 +57,9 @@ class KeywordPoolScheduler:
         )
         self.scheduler.start()
         self._running = True
-        logger.warning(f"[pool/scheduler] 시작 (interval={interval_seconds}s + inspect 1800s)")
+        logger.warning(
+            f"[pool/scheduler] 시작 — collect {interval_seconds}s / register 120s / inspect 600s"
+        )
 
     def stop(self):
         if self._running:
@@ -90,37 +103,40 @@ class KeywordPoolScheduler:
         except Exception as e:
             logger.error(f"[pool/inspect-full] 실패: {e}", exc_info=True)
 
-    async def _tick(self):
-        if self._lock.locked():
-            logger.warning("[pool/scheduler] 이전 tick 진행 중 — skip")
-            return
-        async with self._lock:
-            try:
-                from routers.naver_ad import _run_pool_collect, _run_pool_register
-                from database.naver_ad_db import list_connected_ad_accounts
-                accts = list_connected_ad_accounts() or []
-                if not accts:
-                    logger.info("[pool/scheduler] 활성 광고 계정 없음 — skip")
-                    return
-                pairs = [(int(a["user_id"]), int(a["customer_id"])) for a in accts if a.get("user_id") and a.get("customer_id")]
-                logger.warning(f"[pool/scheduler] tick start — accounts={len(pairs)}")
-                for uid, cid in pairs:
-                    try:
-                        await _run_pool_collect(uid, customer_id=cid)
-                    except Exception as e:
-                        logger.error(f"[pool/scheduler] collect 실패 user={uid} cid={cid}: {e}", exc_info=True)
-                    try:
-                        await _run_pool_register(uid, customer_id=cid)
-                    except Exception as e:
-                        logger.error(f"[pool/scheduler] register 실패 user={uid} cid={cid}: {e}", exc_info=True)
-                logger.warning(f"[pool/scheduler] tick done — accounts={len(pairs)}")
-                # 매 tick에 inspect-full 강제 호출 (pending 없어도 노출제한 검사)
+    async def _collect_only(self):
+        """collect 만 — 모든 활성 광고주 순차. register/inspect 는 별도 cron."""
+        try:
+            from routers.naver_ad import _run_pool_collect
+            from database.naver_ad_db import list_connected_ad_accounts
+            accts = list_connected_ad_accounts() or []
+            if not accts:
+                return
+            pairs = [(int(a["user_id"]), int(a["customer_id"])) for a in accts if a.get("user_id") and a.get("customer_id")]
+            logger.warning(f"[pool/scheduler] collect tick — accounts={len(pairs)}")
+            for uid, cid in pairs:
                 try:
-                    await self._inspect_full()
+                    await _run_pool_collect(uid, customer_id=cid)
                 except Exception as e:
-                    logger.warning(f"[pool/scheduler] inspect-full 호출 실패: {e}")
-            except Exception as e:
-                logger.error(f"[pool/scheduler] tick 실패: {type(e).__name__}: {e}", exc_info=True)
+                    logger.error(f"[pool/scheduler] collect 실패 user={uid} cid={cid}: {e}", exc_info=True)
+        except Exception as e:
+            logger.error(f"[pool/scheduler] collect tick 실패: {type(e).__name__}: {e}", exc_info=True)
+
+    async def _register_only(self):
+        """register 만 — 2분 주기로 pending 빠르게 처리. 다른 cron 과 독립."""
+        try:
+            from routers.naver_ad import _run_pool_register
+            from database.naver_ad_db import list_connected_ad_accounts
+            accts = list_connected_ad_accounts() or []
+            if not accts:
+                return
+            pairs = [(int(a["user_id"]), int(a["customer_id"])) for a in accts if a.get("user_id") and a.get("customer_id")]
+            for uid, cid in pairs:
+                try:
+                    await _run_pool_register(uid, customer_id=cid)
+                except Exception as e:
+                    logger.error(f"[pool/scheduler] register 실패 user={uid} cid={cid}: {e}", exc_info=True)
+        except Exception as e:
+            logger.error(f"[pool/scheduler] register tick 실패: {type(e).__name__}: {e}", exc_info=True)
 
 
 keyword_pool_scheduler = KeywordPoolScheduler()
