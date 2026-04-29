@@ -226,8 +226,12 @@ class NaverAdApiClient:
         """광고그룹 상세 조회"""
         return await self._request("GET", f"/ncc/adgroups/{ad_group_id}")
 
-    async def update_ad_group(self, ad_group_id: str, data: dict, fields: str = "bid") -> dict:
-        """광고그룹 수정 — fields 쿼리로 부분 수정 (예: 'bid' 만)."""
+    async def update_ad_group(self, ad_group_id: str, data: dict, fields: str = "bidAmt") -> dict:
+        """광고그룹 수정 — fields 쿼리로 부분 수정 (예: 'bidAmt' 만).
+
+        Naver SearchAd: fields 값은 JSON property 이름과 같아야 한다.
+        `bid`는 무효 — silent ignore 되어 입찰가가 안 바뀜. `bidAmt` 가 정답.
+        """
         return await self._request(
             "PUT",
             f"/ncc/adgroups/{ad_group_id}?fields={fields}",
@@ -239,7 +243,7 @@ class NaverAdApiClient:
         return await self.update_ad_group(
             ad_group_id,
             {"nccAdgroupId": ad_group_id, "bidAmt": max(70, int(bid_amt))},
-            fields="bid",
+            fields="bidAmt",
         )
 
     async def create_ad_group(self, campaign_id: str, name: str, bid_amt: int = 70,
