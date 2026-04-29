@@ -3496,11 +3496,12 @@ async def keyword_pool_bid_bulk_update(
         # 키워드별 bidAmt 일괄 변경 — 광고그룹별로 keyword list 받아 full-body PUT.
         # 부분 PUT(?fields=) 은 Naver 가 silent ignore 하는 케이스가 있어서, list 응답에서
         # 받은 전체 body 를 그대로 사용하고 bidAmt + useGroupBidAmt 만 수정해 PUT.
-        # 동시성 제한 = 10 (Naver rate limit 회피)
+        # 동시성 = 20 (49k 키워드 × 400ms ÷ 10 = 33분 → 30분 timeout 초과. 20 으로 16분.)
         kw_total = 0
         kw_success = 0
         kw_failed: List[Dict] = []
-        sem = asyncio.Semaphore(10)
+        sem = asyncio.Semaphore(20)
+        progress_logged_at = 0
 
         async def _update_kw_full(kw_obj: Dict):
             nonlocal kw_success
@@ -3520,7 +3521,8 @@ async def keyword_pool_bid_bulk_update(
                 except Exception as e:
                     kw_failed.append({"keyword_id": kid, "error": f"{type(e).__name__}: {str(e)[:120]}"})
 
-        for cname, gid in ad_group_ids:
+        logger.warning(f"[bid/bulk] 시작 — scope={request.scope} ad_groups={len(ad_group_ids)} new_bid={new_bid}원")
+        for idx, (cname, gid) in enumerate(ad_group_ids):
             try:
                 kws = await client.get_keywords(ad_group_id=gid) or []
             except Exception as e:
@@ -3529,7 +3531,18 @@ async def keyword_pool_bid_bulk_update(
             kw_total += len(kws)
             if kws:
                 await asyncio.gather(*[_update_kw_full(k) for k in kws], return_exceptions=False)
-            await asyncio.sleep(0.1)
+            # 1000 단위로 진행 로그 — 49k 가 16분 돌 때 시각적 확인용
+            if kw_success - progress_logged_at >= 1000:
+                progress_logged_at = kw_success
+                logger.warning(
+                    f"[bid/bulk] 진행 — 광고그룹 {idx+1}/{len(ad_group_ids)} · "
+                    f"키워드 {kw_success}/{kw_total} 성공"
+                )
+            await asyncio.sleep(0.05)
+        logger.warning(
+            f"[bid/bulk] 완료 — 광고그룹 {ag_success}/{len(ad_group_ids)} · "
+            f"키워드 {kw_success}/{kw_total} 성공 ({len(kw_failed)} 실패)"
+        )
 
         return {
             "success": True,

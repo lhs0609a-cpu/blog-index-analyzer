@@ -200,7 +200,7 @@ export default function KeywordPoolPage() {
       }>(
         `/api/naver-ad/keyword-pool/bid/bulk-update${cidQs()}`,
         { bid, scope },
-        { timeout: 1_800_000 }  // 키워드 25k 까지 — 30분 timeout
+        { timeout: 3_600_000 }  // 키워드 50k+ 까지 — 60분 timeout (sem=20 으로 ~16분 예상)
       )
       toast.success(
         `입찰가 ${res.new_bid.toLocaleString()}원 일괄 변경 — 광고그룹 ${res.ad_groups_updated}/${res.ad_groups_total} · 키워드 ${res.keywords_updated.toLocaleString()}/${res.keywords_total.toLocaleString()} 성공`
