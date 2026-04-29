@@ -2260,6 +2260,26 @@ def _build_domain_token_set(seeds: List[str]) -> set:
     return set(POOL_DOMAIN_TOKENS) | _derive_seed_tokens(seeds)
 
 
+def _build_seed_atoms(seeds: List[str]) -> set:
+    """시드 → 2/3-gram 원자 + 전체 시드 집합.
+
+    Gate 2(시드 매치) 용. 과거에는 full-seed substring (`s in kw or kw in s`)으로
+    체크했는데, 풀이 포화될수록 literal {seed}+suffix 후보 공간이 고갈되어
+    domain은 통과하지만 시드 substring 못 잡는 키워드가 100% reject → DEADLOCK.
+    원자 단위로 완화 — 예: 시드 "한방병원" 원자에 "한방"이 포함되어 "한방치료"도 통과.
+    Gate 1(도메인 토큰)이 여전히 적용되므로 광고주 영역과 무관한 단어는 차단된다.
+    """
+    atoms: set = set()
+    for s in seeds or []:
+        if not s or len(s) < 2:
+            continue
+        atoms.add(s)
+        for n in (2, 3):
+            for i in range(len(s) - n + 1):
+                atoms.add(s[i:i + n])
+    return atoms
+
+
 def _resolve_account(user_id: int, customer_id: Optional[str] = None) -> Optional[Dict]:
     """customer_id 명시 시 그 광고주, 없으면 가장 최근. B 시나리오 — 다중 광고주 라우팅."""
     from database.naver_ad_db import get_ad_account_by_customer
@@ -2385,13 +2405,14 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         return
 
     # 화이트리스트: user_seed + auto_promoted_seed 모두 포함.
-    # 발굴 키워드는 이 시드 중 하나와 substring 관계여야 풀에 들어감 → 엉뚱한 키워드 차단.
+    # 시드 원자(2/3-gram + 시드 자체) 중 하나라도 substring 으로 들어가야 풀에 INSERT.
     whitelist = pool.list_seed_whitelist(customer_id)
     if not whitelist:
         whitelist = seeds  # 폴백
+    seed_atoms = _build_seed_atoms(whitelist)
     logger.warning(
         f"[pool/collect] user={uid} 시작 target={target} seeds={len(seeds)} "
-        f"whitelist={len(whitelist)} promoted={len(promoted)}"
+        f"whitelist={len(whitelist)} seed_atoms={len(seed_atoms)} promoted={len(promoted)}"
     )
 
     client = NaverAdApiClient()
@@ -2400,16 +2421,14 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     client.secret_key = account["secret_key"]
 
     def _matches_whitelist(kw: str) -> str:
-        # 반환: "" = 통과, "domain" = 도메인 토큰 0개, "seed" = 시드 substring 매치 실패.
-        # 도메인 토큰셋은 하드코딩 + 시드 자동 도출 합집합 (closure 변수 domain_token_set).
+        # 반환: "" = 통과, "domain" = 도메인 토큰 0개, "seed" = 시드 원자 매치 실패.
+        # Gate 1: 도메인 토큰 (POOL_DOMAIN_TOKENS + 시드 도출 토큰)
+        # Gate 2: 시드 원자 (2/3-gram + 전체 시드) — full-seed substring 보다 완화
         if not any(t in kw for t in domain_token_set):
             return "domain"
-        for s in whitelist:
-            if not s or len(s) < 2:
-                continue
-            if s in kw or kw in s:
-                return ""
-        return "seed"
+        if not any(a in kw for a in seed_atoms):
+            return "seed"
+        return ""
 
     added = 0
     rejected = 0
