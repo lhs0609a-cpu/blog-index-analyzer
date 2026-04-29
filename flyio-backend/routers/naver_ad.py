@@ -2561,9 +2561,10 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         logger.warning(f"[pool/collect] deadlock 감지 실패: {e}")
 
 
-async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch: int = 3000, bid: int = 100):
+async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch: int = 3000, bid: Optional[int] = None):
     """등록 1회 — pending → orchestrator로 일괄.
-    customer_id 명시 시 그 광고주만 처리, 없으면 사용자의 가장 최근 광고주."""
+    customer_id 명시 시 그 광고주만 처리, 없으면 사용자의 가장 최근 광고주.
+    bid=None 이면 광고주 default_bid (없으면 100원) 사용 — 광고주마다 다른 값 가능."""
     from services.bulk_upload_orchestrator import BulkUploadOrchestrator, BulkJobConfig
     from services.naver_ad_service import NaverAdApiClient
     from database.naver_ad_db import get_ad_account_by_customer
@@ -2582,6 +2583,12 @@ async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch:
                         duration_ms=int((_time.monotonic()-t0)*1000))
         return
     customer_id = int(account.get("customer_id"))
+
+    # 입찰가 — 호출자 명시값 > 광고주 default_bid > 100원 (legacy fallback)
+    if bid is None:
+        bid = max(70, int(account.get("default_bid") or 100))
+    else:
+        bid = max(70, int(bid))
 
     pending = pool.claim_pending(customer_id, limit=batch, min_volume=1)
     if not pending:
@@ -2900,6 +2907,7 @@ async def keyword_pool_list_accounts(user_id: int = Depends(get_user_id_with_fal
                 "name": r.get("name"),
                 "is_connected": bool(r.get("is_connected")),
                 "last_sync_at": r.get("last_sync_at"),
+                "default_bid": int(r.get("default_bid") or 100),
             }
             for r in rows
         ],
@@ -3306,6 +3314,86 @@ async def keyword_pool_add_seeds(
     except Exception as e:
         import traceback
         logger.error(f"keyword-pool/seeds 실패: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
+
+
+class BidBulkUpdateRequest(BaseModel):
+    bid: int = Field(..., ge=70, le=100000, description="새 입찰가 (네이버 최소 70원)")
+    scope: str = Field("pool", description="'pool' = auto_ 프리픽스 캠페인만, 'all' = 전체 캠페인")
+
+
+@router.post("/keyword-pool/bid/bulk-update")
+async def keyword_pool_bid_bulk_update(
+    request: BidBulkUpdateRequest,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """광고주의 default 입찰가를 DB 에 저장 + 모든 광고그룹 default bid 일괄 변경.
+
+    - scope='pool': 풀 자동 등록 캠페인 (이름 'auto_*') 의 광고그룹만 변경
+    - scope='all': 그 광고주의 모든 활성 캠페인 광고그룹 변경
+    - 키워드별 useGroupBidAmt=False 인 키워드는 영향 없음 (개별 override 보존)
+    """
+    from services.naver_ad_service import NaverAdApiClient
+    from database.naver_ad_db import update_ad_account_default_bid
+    try:
+        account = _resolve_account(user_id, customer_id)
+        if not account or not account.get("is_connected"):
+            raise HTTPException(status_code=400, detail="광고 계정 미연결")
+        cid = int(account.get("customer_id"))
+        new_bid = max(70, int(request.bid))
+
+        # 1. DB 저장 — 앞으로 cron 이 이 값 사용
+        update_ad_account_default_bid(user_id, str(cid), new_bid)
+
+        # 2. 네이버 API 광고그룹 일괄 변경
+        client = NaverAdApiClient()
+        client.customer_id = account["customer_id"]
+        client.api_key = account["api_key"]
+        client.secret_key = account["secret_key"]
+
+        campaigns = await client.get_campaigns() or []
+        if request.scope == "pool":
+            campaigns = [c for c in campaigns if (c.get("name") or "").startswith("auto_")]
+
+        ad_group_ids: List[Tuple[str, str]] = []  # (campaign_name, ad_group_id)
+        for c in campaigns:
+            try:
+                groups = await client.get_ad_groups(campaign_id=c.get("nccCampaignId")) or []
+                for g in groups:
+                    gid = g.get("nccAdgroupId")
+                    if gid:
+                        ad_group_ids.append((c.get("name") or "", gid))
+            except Exception as e:
+                logger.warning(f"[bid/bulk] 광고그룹 list 실패 cid={c.get('nccCampaignId')}: {e}")
+            await asyncio.sleep(0.15)
+
+        success = 0
+        failed: List[Dict] = []
+        for cname, gid in ad_group_ids:
+            try:
+                await client.update_ad_group_bid(gid, new_bid)
+                success += 1
+            except Exception as e:
+                failed.append({"ad_group_id": gid, "campaign": cname, "error": f"{type(e).__name__}: {str(e)[:120]}"})
+            await asyncio.sleep(0.2)
+
+        return {
+            "success": True,
+            "customer_id": str(cid),
+            "new_bid": new_bid,
+            "scope": request.scope,
+            "campaigns_scanned": len(campaigns),
+            "ad_groups_total": len(ad_group_ids),
+            "ad_groups_updated": success,
+            "ad_groups_failed": len(failed),
+            "failed_samples": failed[:10],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        logger.error(f"keyword-pool/bid/bulk-update 실패: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
 
 

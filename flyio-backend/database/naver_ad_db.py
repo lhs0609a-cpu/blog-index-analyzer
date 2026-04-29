@@ -351,6 +351,9 @@ def init_naver_ad_tables():
     ]:
         _ensure_column("volume_filter_jobs", col, decl)
 
+    # ad_accounts: 광고주별 default 입찰가 — 풀 자동 등록 시 사용 + 일괄 변경 기준값.
+    _ensure_column("ad_accounts", "default_bid", "INTEGER DEFAULT 100")
+
     # 필터 통과 키워드 테이블 (검색량 있는 것만)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS volume_filter_results (
@@ -1316,6 +1319,20 @@ def delete_ad_account(user_id: int, customer_id: str):
 
     conn.commit()
     conn.close()
+
+
+def update_ad_account_default_bid(user_id: int, customer_id: str, bid: int) -> bool:
+    """광고주 default 입찰가 — 풀 자동 등록 default 값 + 일괄 변경 기준값."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE ad_accounts SET default_bid = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = ? AND customer_id = ?
+    """, (int(bid), user_id, str(customer_id)))
+    affected = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return affected > 0
 
 
 # ============ 효율 추적 ============

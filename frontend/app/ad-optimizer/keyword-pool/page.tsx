@@ -93,6 +93,7 @@ interface AdAccount {
   name?: string | null
   is_connected: boolean
   last_sync_at?: string | null
+  default_bid?: number
 }
 
 const SELECTED_CID_KEY = 'keyword-pool-selected-customer-id'
@@ -113,12 +114,16 @@ export default function KeywordPoolPage() {
   const [accounts, setAccounts] = useState<AdAccount[]>([])
   const [selectedCid, setSelectedCid] = useState<string>('')
 
+  // 입찰가 일괄 변경 state
+  const [bidInput, setBidInput] = useState<string>('70')
+  const [bidApplying, setBidApplying] = useState(false)
+
   // 클릭 키워드 검수 state — useEffect dependency보다 앞에 정의 (TDZ 회피)
   const [clickedDays, setClickedDays] = useState(7)
   const [clickedItems, setClickedItems] = useState<ClickedKeyword[]>([])
   const [clickedLoading, setClickedLoading] = useState(false)
   const [clickedSelected, setClickedSelected] = useState<Set<string>>(new Set())
-  const [clickedShown, setClickedShown] = useState(false)
+  const [clickedShown, setClickedShown] = useState(true)  // 항상 표시 — 사용자가 불필요 키워드 즉시 발견
 
   // customer_id 쿼리 — selected 가 비어있으면 백엔드 default(가장 최근).
   const cidQs = (extra: Record<string, string | number | undefined> = {}) => {
@@ -137,15 +142,20 @@ export default function KeywordPoolPage() {
       const list = data.accounts || []
       setAccounts(list)
       // localStorage 에 저장된 선택 복원, 없으면 첫 광고주
+      let pickedCid = ''
       if (typeof window !== 'undefined') {
         const saved = window.localStorage.getItem(SELECTED_CID_KEY) || ''
         const valid = saved && list.some(a => a.customer_id === saved)
         if (valid) {
-          setSelectedCid(saved)
+          pickedCid = saved
         } else if (list.length > 0) {
-          setSelectedCid(list[0].customer_id)
-          window.localStorage.setItem(SELECTED_CID_KEY, list[0].customer_id)
+          pickedCid = list[0].customer_id
+          window.localStorage.setItem(SELECTED_CID_KEY, pickedCid)
         }
+        if (pickedCid) setSelectedCid(pickedCid)
+        // bidInput 도 선택 광고주의 default_bid 로 동기화
+        const acct = list.find(a => a.customer_id === pickedCid)
+        if (acct?.default_bid != null) setBidInput(String(acct.default_bid))
       }
     } catch (e: any) {
       // accounts 조회 실패해도 default 동작 유지
@@ -161,7 +171,44 @@ export default function KeywordPoolPage() {
     // 즉시 새 광고주의 데이터로 갱신
     setStats(null)
     setClickedItems([])
-    setClickedShown(false)
+    // 새 광고주의 default_bid 입력란에 반영
+    const acct = accounts.find(a => a.customer_id === cid)
+    if (acct?.default_bid != null) setBidInput(String(acct.default_bid))
+  }
+
+  const handleBidBulkUpdate = async (scope: 'pool' | 'all') => {
+    const bid = parseInt(bidInput, 10)
+    if (!bid || bid < 70) {
+      toast.error('네이버 최소 입찰가 70원 이상 입력하세요')
+      return
+    }
+    const scopeLabel = scope === 'pool' ? '풀 자동 등록 캠페인 (auto_*)' : '이 광고주의 모든 캠페인'
+    if (!confirm(`${scopeLabel} 의 모든 광고그룹 default 입찰가를 ${bid.toLocaleString()}원 으로 일괄 변경할까요?\n\n(키워드별 개별 입찰가가 설정된 키워드는 영향 없음. 광고주 default_bid 도 저장 — 앞으로 자동 등록되는 키워드도 ${bid}원 사용)`)) return
+    setBidApplying(true)
+    try {
+      const res = await adPost<{
+        success: boolean
+        new_bid: number
+        scope: string
+        campaigns_scanned: number
+        ad_groups_total: number
+        ad_groups_updated: number
+        ad_groups_failed: number
+      }>(
+        `/api/naver-ad/keyword-pool/bid/bulk-update${cidQs()}`,
+        { bid, scope },
+        { timeout: 600_000 }  // 광고그룹 많으면 오래 걸림 — 10분 timeout
+      )
+      toast.success(
+        `입찰가 ${res.new_bid.toLocaleString()}원 일괄 변경 — 캠페인 ${res.campaigns_scanned}개 / 광고그룹 ${res.ad_groups_updated}/${res.ad_groups_total} 성공`
+      )
+      // 광고주 default_bid 도 갱신됐으니 accounts 재조회
+      loadAccounts()
+    } catch (e: any) {
+      toast.error(e?.message || '입찰가 변경 실패')
+    } finally {
+      setBidApplying(false)
+    }
   }
 
   const load = async () => {
@@ -183,15 +230,22 @@ export default function KeywordPoolPage() {
 
   const loadClickedKeywords = async () => {
     setClickedLoading(true)
-    setClickedShown(true)
     try {
       const res = await adGet<{ success: boolean; items: ClickedKeyword[] }>(
-        `/api/naver-ad/keyword-pool/clicked-keywords${cidQs({ days: clickedDays })}`
+        `/api/naver-ad/keyword-pool/clicked-keywords${cidQs({ days: clickedDays })}`,
+        { showToast: false, timeout: 30_000 }
       )
       setClickedItems(res.items || [])
-      setClickedSelected(new Set())
+      // 사용자가 선택한 키워드는 보존 — 새로 사라진 것만 set 에서 제거
+      setClickedSelected(prev => {
+        const valid = new Set(res.items?.map(i => i.keyword_id) || [])
+        const next = new Set<string>()
+        prev.forEach(id => { if (valid.has(id)) next.add(id) })
+        return next
+      })
     } catch (e: any) {
-      toast.error(e?.response?.data?.detail || '조회 실패')
+      // 백그라운드 폴링 실패는 토스트 안 띄움 (60초마다 재시도)
+      if (clickedItems.length === 0) toast.error(e?.message || '클릭 키워드 조회 실패')
     } finally {
       setClickedLoading(false)
     }
@@ -208,15 +262,20 @@ export default function KeywordPoolPage() {
   useEffect(() => {
     if (!isAuthenticated) return
     load()
-    loadClickedKeywords()  // 클릭 키워드도 자동 1회 로드
-    const t = setInterval(load, 10_000) // 10초마다 자동 갱신 (실시간 모니터링)
-    return () => clearInterval(t)
+    loadClickedKeywords()  // 클릭 키워드 자동 1회 로드
+    const tStats = setInterval(load, 10_000) // stats 10초 폴링
+    // 클릭 키워드는 60초마다 자동 갱신 — 사용자가 새로 발생한 클릭 즉시 검수 가능
+    const tClicked = setInterval(loadClickedKeywords, 60_000)
+    return () => {
+      clearInterval(tStats)
+      clearInterval(tClicked)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, selectedCid])
 
   // clickedDays 변경 시 자동 재조회
   useEffect(() => {
-    if (!isAuthenticated || !clickedShown) return
+    if (!isAuthenticated) return
     loadClickedKeywords()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clickedDays])
@@ -402,6 +461,50 @@ export default function KeywordPoolPage() {
             cron(5분 주기) 은 모든 광고주를 각각 독립적으로 처리합니다.
           </div>
         )}
+
+        {/* 입찰가 일괄 변경 */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-6">
+          <div className="flex items-center gap-2 mb-2">
+            <Zap className="w-5 h-5 text-amber-600" />
+            <h2 className="font-bold text-gray-900">입찰가 default 설정</h2>
+            <span className="text-xs text-gray-500">
+              현재: {(accounts.find(a => a.customer_id === selectedCid)?.default_bid ?? 100).toLocaleString()}원
+            </span>
+          </div>
+          <p className="text-xs text-gray-600 mb-3">
+            앞으로 풀 자동 등록 키워드의 default 입찰가 + 광고그룹 default bid 일괄 변경.
+            키워드별 개별 입찰가가 설정된 키워드는 영향 없음. 네이버 최소 70원.
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              type="number"
+              min={70}
+              step={10}
+              value={bidInput}
+              onChange={(e) => setBidInput(e.target.value)}
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg w-32"
+              placeholder="70"
+            />
+            <span className="text-sm text-gray-600">원</span>
+            <button
+              onClick={() => handleBidBulkUpdate('pool')}
+              disabled={bidApplying}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50"
+              title="풀 자동 등록 캠페인 (auto_*) 의 모든 광고그룹만 변경"
+            >
+              {bidApplying && <Loader2 className="w-4 h-4 animate-spin" />}
+              풀 캠페인 일괄 변경
+            </button>
+            <button
+              onClick={() => handleBidBulkUpdate('all')}
+              disabled={bidApplying}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm border border-amber-500 text-amber-700 rounded-lg hover:bg-amber-50 disabled:opacity-50"
+              title="이 광고주의 모든 캠페인 (수동 캠페인 포함) 변경"
+            >
+              전체 캠페인 일괄 변경
+            </button>
+          </div>
+        </div>
 
         {/* 한도 사용량 */}
         <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">

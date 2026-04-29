@@ -226,6 +226,22 @@ class NaverAdApiClient:
         """광고그룹 상세 조회"""
         return await self._request("GET", f"/ncc/adgroups/{ad_group_id}")
 
+    async def update_ad_group(self, ad_group_id: str, data: dict, fields: str = "bid") -> dict:
+        """광고그룹 수정 — fields 쿼리로 부분 수정 (예: 'bid' 만)."""
+        return await self._request(
+            "PUT",
+            f"/ncc/adgroups/{ad_group_id}?fields={fields}",
+            data,
+        )
+
+    async def update_ad_group_bid(self, ad_group_id: str, bid_amt: int) -> dict:
+        """광고그룹 default 입찰가 변경 — 키워드별 useGroupBidAmt=True 인 모든 키워드에 즉시 반영."""
+        return await self.update_ad_group(
+            ad_group_id,
+            {"nccAdgroupId": ad_group_id, "bidAmt": max(70, int(bid_amt))},
+            fields="bid",
+        )
+
     async def create_ad_group(self, campaign_id: str, name: str, bid_amt: int = 70,
                               business_channel_id: str = None,
                               pc_channel_id: str = None,
