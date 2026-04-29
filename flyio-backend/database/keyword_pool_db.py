@@ -164,6 +164,48 @@ class KeywordPoolDB:
             )
             return [dict(r) for r in cur.fetchall()]
 
+    def detect_collect_deadlock(
+        self,
+        account_customer_id: int,
+        n_recent: int = 5,
+        min_rejected: int = 500,
+    ) -> Dict:
+        """최근 N회 collect 가 모두 added=0 + rejected≥min_rejected 면 데드락 판정.
+
+        반환: {is_deadlock, consecutive_zero_runs, total_rejected, last_run_at}
+        """
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT id, added, COALESCE(skipped, 0) AS skipped, started_at
+                   FROM naverad_pool_runs
+                   WHERE account_customer_id = ? AND kind = 'collect'
+                   ORDER BY id DESC LIMIT ?""",
+                (account_customer_id, n_recent),
+            )
+            rows = cur.fetchall()
+            if len(rows) < n_recent:
+                return {
+                    "is_deadlock": False,
+                    "consecutive_zero_runs": 0,
+                    "total_rejected": 0,
+                    "last_run_at": None,
+                }
+            consecutive_zero = 0
+            total_rejected = 0
+            for r in rows:
+                if r["added"] == 0 and r["skipped"] >= min_rejected:
+                    consecutive_zero += 1
+                    total_rejected += r["skipped"]
+                else:
+                    break
+            return {
+                "is_deadlock": consecutive_zero >= n_recent,
+                "consecutive_zero_runs": consecutive_zero,
+                "total_rejected": total_rejected,
+                "last_run_at": rows[0]["started_at"] if rows else None,
+            }
+
     def seed_breakdown(self, account_customer_id: int) -> List[Dict]:
         """시드별 발굴 키워드 카운트 + 시드 origin source — 사용자가 풀 구성을 볼 수 있게."""
         with self._conn() as conn:

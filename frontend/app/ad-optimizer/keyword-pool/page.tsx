@@ -67,6 +67,13 @@ interface ClickedKeyword {
   matches_seed: boolean
 }
 
+interface CollectDeadlock {
+  is_deadlock: boolean
+  consecutive_zero_runs: number
+  total_rejected: number
+  last_run_at?: string | null
+}
+
 interface PoolStatsResponse {
   success: boolean
   customer_id?: number
@@ -76,6 +83,7 @@ interface PoolStatsResponse {
   recent_runs?: RunRow[]
   seed_breakdown?: SeedBreakdown[]
   recent_keywords?: RecentKeyword[]
+  collect_deadlock?: CollectDeadlock
   now?: string
   message?: string
 }
@@ -581,6 +589,30 @@ export default function KeywordPoolPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* 수집 데드락 알람 — 최근 5회 collect 가 모두 0건 + reject 많음 */}
+        {stats?.collect_deadlock?.is_deadlock && (
+          <div className="bg-red-50 border-2 border-red-300 rounded-2xl p-5 mb-6">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <span className="text-2xl">⚠️</span>
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-red-900 mb-1">
+                  수집 데드락 감지 — 최근 {stats.collect_deadlock.consecutive_zero_runs}회 연속 0건
+                </h3>
+                <p className="text-sm text-red-800 mb-2">
+                  네이버에서 후보 {stats.collect_deadlock.total_rejected.toLocaleString()}개를 받았지만 화이트리스트가 모두 거부했습니다.
+                  시드 또는 도메인 토큰 점검이 필요합니다.
+                </p>
+                <p className="text-xs text-red-700">
+                  최근 실행 이력의 메모 컬럼에서 <span className="font-mono bg-red-100 px-1 rounded">도메인미스 X / 시드미스 Y</span> 비율을 확인하세요.
+                  도메인미스가 많으면 시드 분야가 토큰셋 밖, 시드미스가 많으면 keywordstool 결과가 시드와 너무 멀리 떨어진 키워드.
+                </p>
+              </div>
             </div>
           </div>
         )}

@@ -2230,6 +2230,36 @@ def _has_domain_token(kw: str) -> bool:
     return any(t in kw for t in POOL_DOMAIN_TOKENS)
 
 
+def _derive_seed_tokens(seeds: List[str], min_freq: int = 2) -> set:
+    """시드 목록에서 도메인 토큰을 자동 추출 — 신규 분야 광고주 자동 적응.
+
+    - 2~3글자 n-gram 추출 후 ≥ min_freq 시드에서 등장한 것만 토큰화 (의미 보장)
+    - 길이 4+ 토큰은 단일 시드만으로도 채택 (긴 토큰은 우연 일치 거의 없음)
+    - POOL_DOMAIN_TOKENS 와 합쳐 최종 게이트 토큰셋 구성
+    """
+    counts: Dict[str, int] = {}
+    for s in seeds or []:
+        if not s or len(s) < 2:
+            continue
+        seen_in_seed = set()
+        for n in (2, 3):
+            for i in range(len(s) - n + 1):
+                t = s[i:i + n]
+                if t in seen_in_seed:
+                    continue
+                seen_in_seed.add(t)
+                counts[t] = counts.get(t, 0) + 1
+        # 시드 통째도 토큰 (길이 4+ 자주 단일 시드만으로도 의미 보장)
+        if len(s) >= 4:
+            counts[s] = counts.get(s, 0) + min_freq  # 단일 시드만으로도 통과
+    return {t for t, c in counts.items() if c >= min_freq}
+
+
+def _build_domain_token_set(seeds: List[str]) -> set:
+    """하드코딩 토큰 + 시드에서 도출된 토큰 합집합 (정적 baseline + 동적 적응)."""
+    return set(POOL_DOMAIN_TOKENS) | _derive_seed_tokens(seeds)
+
+
 def _parse_naver_count(v) -> int:
     """네이버 keywordstool 검색량 — 10 미만이면 '< 10' 문자열로 옴. 안전 변환."""
     if v is None:
@@ -2293,9 +2323,18 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         return
     target = min(max_new, headroom)
 
+    # 동적 도메인 토큰셋 — 하드코딩 + 시드 자동 도출. 새 분야 광고주 자동 적응.
+    initial_seeds = pool.list_seed_whitelist(customer_id)
+    domain_token_set = _build_domain_token_set(initial_seeds)
+    derived_count = len(domain_token_set) - len(POOL_DOMAIN_TOKENS)
+    logger.warning(
+        f"[pool/collect] user={uid} 도메인 토큰 {len(domain_token_set)}개 "
+        f"(하드코딩 {len(POOL_DOMAIN_TOKENS)} + 시드 도출 {max(derived_count, 0)})"
+    )
+
     # 도메인 미포함 키워드 자동 cleanup (registered 제외) — 매 라운드 시작 시
     try:
-        cleaned = pool.cleanup_offdomain(customer_id, list(POOL_DOMAIN_TOKENS))
+        cleaned = pool.cleanup_offdomain(customer_id, list(domain_token_set))
         if cleaned > 0:
             logger.warning(f"[pool/cleanup] off-domain row 자동 삭제 {cleaned}개")
     except Exception as e:
@@ -2313,12 +2352,16 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     try:
         promoted = pool.promote_seeds(
             customer_id, limit=50, min_volume=30, max_total_seeds=500,
-            domain_tokens=list(POOL_DOMAIN_TOKENS),
+            domain_tokens=list(domain_token_set),
         )
         if promoted:
             logger.warning(
                 f"[pool/collect] user={uid} 시드 자동 승격 {len(promoted)}개: "
                 + ", ".join(f"{p['keyword']}({p['monthly_total']})" for p in promoted)
+            )
+            # 승격 후 토큰셋 재계산 — 새 시드의 토큰 반영
+            domain_token_set = _build_domain_token_set(
+                pool.list_seed_whitelist(customer_id)
             )
     except Exception as e:
         logger.warning(f"[pool/collect] promote_seeds 실패: {e}")
@@ -2350,7 +2393,8 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
 
     def _matches_whitelist(kw: str) -> str:
         # 반환: "" = 통과, "domain" = 도메인 토큰 0개, "seed" = 시드 substring 매치 실패.
-        if not _has_domain_token(kw):
+        # 도메인 토큰셋은 하드코딩 + 시드 자동 도출 합집합 (closure 변수 domain_token_set).
+        if not any(t in kw for t in domain_token_set):
             return "domain"
         for s in whitelist:
             if not s or len(s) < 2:
@@ -2485,6 +2529,28 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         error_message=" | ".join(err_parts)[:500] if err_parts else None,
         duration_ms=int((_time.monotonic()-t0)*1000),
     )
+
+    # 데드락 감지 — 최근 5회 collect 가 전부 added=0 + reject ≥ 500 이면 alert.
+    # 사용자가 며칠 동안 0건인 걸 모르고 지나치는 사고 방지.
+    try:
+        deadlock = pool.detect_collect_deadlock(customer_id, n_recent=5, min_rejected=500)
+        if deadlock.get("is_deadlock"):
+            logger.error(
+                f"[pool/collect] DEADLOCK user={uid} customer={customer_id} "
+                f"— 최근 {deadlock['consecutive_zero_runs']}회 연속 0건 + "
+                f"누적 reject {deadlock['total_rejected']}. "
+                f"시드/도메인 토큰 점검 필요."
+            )
+            pool.record_run(
+                uid, customer_id, "collect", "alert",
+                error_message=(
+                    f"[DEADLOCK] {deadlock['consecutive_zero_runs']}회 연속 0건. "
+                    f"시드/도메인 점검 필요."
+                ),
+                duration_ms=0,
+            )
+    except Exception as e:
+        logger.warning(f"[pool/collect] deadlock 감지 실패: {e}")
 
 
 async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch: int = 3000, bid: int = 100):
@@ -2852,6 +2918,11 @@ async def keyword_pool_stats(
         except Exception as e:
             logger.error(f"keyword-pool/stats recent_keywords 실패: {e}", exc_info=True)
             recent_kw = []
+        try:
+            deadlock = pool.detect_collect_deadlock(customer_id, n_recent=5, min_rejected=500)
+        except Exception as e:
+            logger.error(f"keyword-pool/stats detect_collect_deadlock 실패: {e}", exc_info=True)
+            deadlock = {"is_deadlock": False, "consecutive_zero_runs": 0, "total_rejected": 0}
         return {
             "success": True,
             "customer_id": customer_id,
@@ -2861,6 +2932,7 @@ async def keyword_pool_stats(
             "recent_runs": recent,
             "seed_breakdown": seed_break,
             "recent_keywords": recent_kw,
+            "collect_deadlock": deadlock,
             "now": datetime.now().isoformat(timespec="seconds"),
         }
     except HTTPException:
