@@ -420,7 +420,10 @@ class NaverAdApiClient:
         return await self._request("PUT", f"/ncc/keywords/{keyword_id}?fields={fields}", data)
 
     async def update_keyword_bid(self, keyword_id: str, bid_amt: int) -> dict:
-        """키워드 입찰가 변경 — bidAmt + useGroupBidAmt=False 둘 다 set."""
+        """키워드 입찰가 변경 — fields=bidAmt 만. useGroupBidAmt 는 Naver 의 keyword PUT
+        에서 별도 fields 값이 아니라 bidAmt 그룹 안에 포함됨. body 에 같이 보내면 적용된다.
+        과거 fields=bidAmt,useGroupBidAmt 는 무효 fields 값으로 silent ignore 발생.
+        """
         return await self.update_keyword(
             keyword_id,
             {
@@ -428,7 +431,7 @@ class NaverAdApiClient:
                 "bidAmt": bid_amt,
                 "useGroupBidAmt": False,
             },
-            fields="bidAmt,useGroupBidAmt",
+            fields="bidAmt",
         )
 
     async def pause_keyword(self, keyword_id: str) -> dict:
