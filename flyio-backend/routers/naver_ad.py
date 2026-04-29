@@ -2405,15 +2405,45 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         return
 
     # 화이트리스트: user_seed + auto_promoted_seed 모두 포함.
-    # 시드 원자(2/3-gram + 시드 자체) 중 하나라도 substring 으로 들어가야 풀에 INSERT.
     whitelist = pool.list_seed_whitelist(customer_id)
     if not whitelist:
         whitelist = seeds  # 폴백
     seed_atoms = _build_seed_atoms(whitelist)
+
+    # 통합 게이트 — POOL_DOMAIN_TOKENS ∪ seed_atoms.
+    # 과거 2단 게이트는 시드가 하드코딩 도메인 밖으로 drift 하면 Gate 1 에서 99% reject.
+    # 시드 원자가 자동으로 도메인 토큰 역할도 하도록 합집합으로 통합 — 시드만 살아 있으면
+    # 항상 매치 가능. POOL_DOMAIN_TOKENS 는 시드 0개 광고주의 폴백 baseline 으로만 의미.
+    unified_tokens = set(domain_token_set) | seed_atoms
+
+    # Loose mode 자동 진입 — 최근 5회 collect 가 모두 reject ≥95% 면 게이트 더 완화.
+    # min_volume↓ + 시드별 raw 매치도 추가로 시도.
+    loose_mode = False
+    try:
+        recent = pool.recent_runs(customer_id, limit=5)
+        collects = [r for r in recent if r.get("kind") == "collect"]
+        if len(collects) >= 3:
+            high_reject = sum(
+                1 for r in collects
+                if (r.get("added") or 0) == 0 and (r.get("skipped") or 0) >= 500
+            )
+            if high_reject >= 3:
+                loose_mode = True
+    except Exception:
+        pass
+
     logger.warning(
         f"[pool/collect] user={uid} 시작 target={target} seeds={len(seeds)} "
-        f"whitelist={len(whitelist)} seed_atoms={len(seed_atoms)} promoted={len(promoted)}"
+        f"whitelist={len(whitelist)} unified_tokens={len(unified_tokens)} "
+        f"seed_atoms={len(seed_atoms)} promoted={len(promoted)} loose={loose_mode}"
     )
+
+    if loose_mode:
+        logger.warning(
+            f"[pool/collect] user={uid} LOOSE MODE — 최근 collect 3+ 회 연속 high-reject. "
+            f"min_volume {min_volume}→1, 게이트 완화."
+        )
+        min_volume = max(1, min_volume // 5)
 
     client = NaverAdApiClient()
     client.customer_id = account["customer_id"]
@@ -2421,14 +2451,14 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     client.secret_key = account["secret_key"]
 
     def _matches_whitelist(kw: str) -> str:
-        # 반환: "" = 통과, "domain" = 도메인 토큰 0개, "seed" = 시드 원자 매치 실패.
-        # Gate 1: 도메인 토큰 (POOL_DOMAIN_TOKENS + 시드 도출 토큰)
-        # Gate 2: 시드 원자 (2/3-gram + 전체 시드) — full-seed substring 보다 완화
-        if not any(t in kw for t in domain_token_set):
-            return "domain"
-        if not any(a in kw for a in seed_atoms):
-            return "seed"
-        return ""
+        # 단일 게이트 — unified_tokens 중 하나라도 매치하면 통과.
+        # 반환: "" = 통과, "domain" = 어떤 토큰도 안 맞음 (도메인+시드 atom 모두 실패).
+        # loose_mode 면 길이 ≥ 2 인 한국어/영문/숫자 키워드는 통과 (도메인 무관 fallback).
+        if any(t in kw for t in unified_tokens):
+            return ""
+        if loose_mode and len(kw) >= 2:
+            return ""
+        return "domain"
 
     added = 0
     rejected = 0
