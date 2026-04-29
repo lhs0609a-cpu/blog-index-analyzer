@@ -3450,6 +3450,90 @@ async def keyword_pool_bid_bulk_update(
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
 
 
+@router.post("/keyword-pool/bid/debug-one")
+async def keyword_pool_bid_debug_one(
+    customer_id: Optional[str] = None,
+    bid: int = 70,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """디버그 — 첫 번째 키워드 1개만 업데이트하고 Naver before/after + 응답 raw 그대로 돌려줌.
+
+    bulk-update 가 silent 하게 실패하는 원인 추적용. 로그/응답 body 다 보여줌.
+    """
+    from services.naver_ad_service import NaverAdApiClient
+    try:
+        account = _resolve_account(user_id, customer_id)
+        if not account or not account.get("is_connected"):
+            raise HTTPException(status_code=400, detail="광고 계정 미연결")
+        client = NaverAdApiClient()
+        client.customer_id = account["customer_id"]
+        client.api_key = account["api_key"]
+        client.secret_key = account["secret_key"]
+
+        # 첫 번째 auto_* 캠페인의 첫 광고그룹의 첫 키워드 찾기
+        campaigns = await client.get_campaigns() or []
+        auto_campaigns = [c for c in campaigns if (c.get("name") or "").startswith("auto_")]
+        if not auto_campaigns:
+            return {"success": False, "step": "no_auto_campaign"}
+        first_camp = auto_campaigns[0]
+        groups = await client.get_ad_groups(campaign_id=first_camp.get("nccCampaignId")) or []
+        if not groups:
+            return {"success": False, "step": "no_ad_group", "campaign": first_camp.get("name")}
+        gid = groups[0].get("nccAdgroupId")
+        kws = await client.get_keywords(ad_group_id=gid) or []
+        if not kws:
+            return {"success": False, "step": "no_keyword", "ad_group_id": gid}
+        first_kw = kws[0]
+        kid = first_kw.get("nccKeywordId")
+
+        # before
+        before = {
+            "nccKeywordId": kid,
+            "keyword": first_kw.get("keyword"),
+            "bidAmt": first_kw.get("bidAmt"),
+            "useGroupBidAmt": first_kw.get("useGroupBidAmt"),
+        }
+
+        # PUT — 응답 그대로
+        try:
+            put_response = await client.update_keyword_bid(kid, max(70, int(bid)))
+        except Exception as e:
+            import traceback
+            return {
+                "success": False,
+                "step": "put_failed",
+                "before": before,
+                "error": f"{type(e).__name__}: {str(e)[:500]}",
+                "trace": traceback.format_exc()[:1000],
+            }
+
+        # after — GET 다시
+        after_kw = await client.get_keyword(kid) if hasattr(client, 'get_keyword') else None
+        if after_kw is None:
+            kws_after = await client.get_keywords(ad_group_id=gid) or []
+            after_kw = next((k for k in kws_after if k.get("nccKeywordId") == kid), {})
+        after = {
+            "bidAmt": after_kw.get("bidAmt"),
+            "useGroupBidAmt": after_kw.get("useGroupBidAmt"),
+        }
+        return {
+            "success": True,
+            "campaign": first_camp.get("name"),
+            "ad_group_id": gid,
+            "keyword_id": kid,
+            "before": before,
+            "put_response": put_response,
+            "after": after,
+            "changed": before["bidAmt"] != after["bidAmt"],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        logger.error(f"keyword-pool/bid/debug-one 실패: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
+
+
 # ============ P4: 소재 템플릿 CRUD ============
 from database.ad_templates_db import get_ad_templates_db
 
