@@ -114,20 +114,22 @@ class NaverAdApiClient:
         }
 
     async def _request(self, method: str, endpoint: str, data: dict = None) -> dict:
-        """API 요청.
+        """API 요청 (자가치유 c: 5xx/429 exponential backoff retry 포함).
 
         근본 원인 추적 (2026-04-27 검증):
           403 invalid-signature.
         네이버 검색광고 API HMAC 서명은 'method + path' 만 사용. query string 제외.
         endpoint에 ?nccAdgroupId=... 같은 query를 직접 넣으면 서명 계산 시
         query까지 포함되어 mismatch. 서명에는 path만, URL에는 query 포함.
+
+        retry 정책: 5xx 또는 429 응답 시 1s → 2s → 4s 백오프 후 최대 3회 재시도.
+        4xx (400/401/403) 는 클라이언트 버그라 즉시 raise.
         """
         # 서명용 URI는 path만 (query string 제거)
         uri_for_sign = endpoint.split("?", 1)[0]
         url = f"{self.BASE_URL}{endpoint}"
-        headers = self._get_headers(method, uri_for_sign)
-        # 디버그: POST/PUT 호출 진입 추적
-        # data는 dict(create_campaign/create_ad_group) 또는 list(create_keywords) 둘 다 가능.
+
+        # 디버그: POST/PUT 호출 진입 추적 (한번만)
         if method in ("POST", "PUT"):
             if isinstance(data, dict):
                 logger.info(f"[NaverAd._request] {method} {endpoint} payload_keys={list(data.keys())}")
@@ -140,18 +142,47 @@ class NaverAdApiClient:
             else:
                 logger.info(f"[NaverAd._request] {method} {endpoint} data_type={type(data).__name__}")
 
-        try:
-            if method == "GET":
-                response = await self.client.get(url, headers=headers, params=data)
-            elif method == "POST":
-                response = await self.client.post(url, headers=headers, json=data)
-            elif method == "PUT":
-                response = await self.client.put(url, headers=headers, json=data)
-            elif method == "DELETE":
-                response = await self.client.delete(url, headers=headers)
-            else:
-                raise ValueError(f"Unsupported method: {method}")
+        last_exc: Optional[Exception] = None
+        for attempt in range(3):
+            # 시그니처는 매 시도 새로 — timestamp 갱신 필요 (Naver TTL 짧음).
+            headers = self._get_headers(method, uri_for_sign)
+            try:
+                if method == "GET":
+                    response = await self.client.get(url, headers=headers, params=data)
+                elif method == "POST":
+                    response = await self.client.post(url, headers=headers, json=data)
+                elif method == "PUT":
+                    response = await self.client.put(url, headers=headers, json=data)
+                elif method == "DELETE":
+                    response = await self.client.delete(url, headers=headers)
+                else:
+                    raise ValueError(f"Unsupported method: {method}")
 
+                # 5xx / 429 만 재시도. 4xx 는 즉시 raise (client bug).
+                if response.status_code in (429, 500, 502, 503, 504) and attempt < 2:
+                    backoff = 2 ** attempt  # 1, 2 초
+                    logger.warning(
+                        f"[NaverAd._request] {response.status_code} {method} {endpoint} "
+                        f"— attempt {attempt+1}/3, {backoff}s 후 재시도"
+                    )
+                    await asyncio.sleep(backoff)
+                    continue
+
+                break  # 성공 또는 4xx — 루프 탈출
+            except (httpx.TimeoutException, httpx.NetworkError, httpx.ConnectError) as e:
+                # 네트워크 일시 장애 — 재시도
+                last_exc = e
+                if attempt < 2:
+                    backoff = 2 ** attempt
+                    logger.warning(
+                        f"[NaverAd._request] {type(e).__name__} {method} {endpoint} "
+                        f"— attempt {attempt+1}/3, {backoff}s 후 재시도: {str(e)[:80]}"
+                    )
+                    await asyncio.sleep(backoff)
+                    continue
+                raise
+
+        try:
             if response.status_code >= 400:
                 # 400/422 등은 본문에 진짜 원인이 들어있음. 호출자/사용자가 볼 수 있도록 예외에 포함.
                 body_text = (response.text or "")[:1000]

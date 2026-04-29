@@ -2397,12 +2397,31 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
 
     seeds = pool.get_recent_seeds(customer_id, limit=120)
     if not seeds:
-        logger.warning(f"[pool/collect] user={uid} 시드 없음 — UI에서 초기 시드 제공 필요")
-        pool.record_run(uid, customer_id, "collect", "no_seed",
-                        pending_after=pool_pending,
-                        error_message="UI에서 초기 시드 추가 필요",
-                        duration_ms=int((_time.monotonic()-t0)*1000))
-        return
+        # 자가치유 (a): 등록 키워드 중 검색량 상위 10개를 user_seed 로 자동 reseed.
+        # 시드가 비면 collection 영구 정지 → 등록 키워드에서 핵심어 자동 추출.
+        try:
+            top_kw = pool.list_top_registered(customer_id, limit=10, min_volume=100)
+        except Exception as e:
+            logger.warning(f"[pool/collect] auto-reseed 후보 조회 실패: {e}")
+            top_kw = []
+        if top_kw:
+            items = [{"keyword": k, "seed": k, "source": "user_seed", "monthly_total": 0} for k in top_kw]
+            try:
+                pool.add_candidates(uid, customer_id, items)
+                logger.warning(
+                    f"[pool/collect] user={uid} 시드 자동 복구 {len(top_kw)}개: "
+                    + ", ".join(top_kw[:5]) + (" ..." if len(top_kw) > 5 else "")
+                )
+                seeds = top_kw
+            except Exception as e:
+                logger.warning(f"[pool/collect] auto-reseed insert 실패: {e}")
+        if not seeds:
+            logger.warning(f"[pool/collect] user={uid} 시드 없음 + 등록 키워드 없음 — UI에서 초기 시드 제공 필요")
+            pool.record_run(uid, customer_id, "collect", "no_seed",
+                            pending_after=pool_pending,
+                            error_message="UI에서 초기 시드 추가 필요",
+                            duration_ms=int((_time.monotonic()-t0)*1000))
+            return
 
     # 화이트리스트: user_seed + auto_promoted_seed 모두 포함.
     whitelist = pool.list_seed_whitelist(customer_id)
@@ -2469,6 +2488,41 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     api_errors: List[str] = []
     seeds_processed = 0
     bfs_calls = 0
+
+    # 자가치유 (b): 포화 감지 — 최근 5회 모두 added=0 + skipped<500 면 풀이 saturate.
+    # keywordstool 결과가 모두 중복이라 같은 시드로는 새 발굴 불가능. 시드 확장 주입.
+    saturated = False
+    try:
+        sat = pool.detect_saturation(customer_id, n_recent=5)
+        saturated = bool(sat.get("is_saturated"))
+    except Exception:
+        pass
+
+    if saturated:
+        logger.warning(
+            f"[pool/collect] user={uid} SATURATION — 시드 확장 주입 (지역+의도 suffix)"
+        )
+        # 한국 광고 검색 보편 확장어 — 시드와 결합해 새 hint 생성.
+        # 같은 시드 반복 호출이 같은 결과를 돌려주는 한계를 깸.
+        EXPANSION_AFFIXES = [
+            "강남", "서울", "부산", "대구", "인천", "경기",
+            "추천", "후기", "비교", "가격", "잘하는곳", "잘하는", "찾기",
+            "전문", "전문점", "무료", "상담", "신청",
+        ]
+        existing = set(seeds)
+        injected: List[str] = []
+        for s in seeds[:30]:
+            for aff in random.sample(EXPANSION_AFFIXES, 3):
+                for combo in (aff + s, s + aff):
+                    if combo not in existing and len(combo) <= 25:
+                        injected.append(combo)
+                        existing.add(combo)
+        if injected:
+            seeds = list(seeds) + injected[:60]
+            logger.warning(
+                f"[pool/collect] user={uid} 확장 시드 {len(injected[:60])}개 주입 (sample: "
+                + ", ".join(injected[:5]) + ")"
+            )
 
     # 시드 셔플 — 매 라운드 다른 60개 처리 (200 시드 다양성 확보).
     seed_pool = list(seeds)

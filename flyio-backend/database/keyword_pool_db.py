@@ -164,6 +164,60 @@ class KeywordPoolDB:
             )
             return [dict(r) for r in cur.fetchall()]
 
+    def detect_saturation(
+        self,
+        account_customer_id: int,
+        n_recent: int = 5,
+    ) -> Dict:
+        """포화 감지 — 최근 N회 collect 모두 added=0 + skipped<500.
+
+        deadlock(reject 많음)과 다른 상태 — 후보가 거의 안 들어오거나 모두 중복.
+        keywordstool 이 매번 같은 결과 → INSERT OR IGNORE 로 모두 skip → 새 발굴 정지.
+        """
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT id, added, COALESCE(skipped, 0) AS skipped, started_at
+                   FROM naverad_pool_runs
+                   WHERE account_customer_id = ? AND kind = 'collect'
+                   ORDER BY id DESC LIMIT ?""",
+                (account_customer_id, n_recent),
+            )
+            rows = cur.fetchall()
+            if len(rows) < n_recent:
+                return {"is_saturated": False, "consecutive_quiet_runs": 0}
+            consecutive_quiet = 0
+            for r in rows:
+                if r["added"] == 0 and r["skipped"] < 500:
+                    consecutive_quiet += 1
+                else:
+                    break
+            return {
+                "is_saturated": consecutive_quiet >= n_recent,
+                "consecutive_quiet_runs": consecutive_quiet,
+            }
+
+    def list_top_registered(
+        self,
+        account_customer_id: int,
+        limit: int = 10,
+        min_volume: int = 100,
+    ) -> List[str]:
+        """등록 키워드 중 검색량 상위 N개 — 시드 0개 자동 reseed 용."""
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT keyword FROM naverad_keyword_pool
+                   WHERE account_customer_id = ?
+                     AND status = 'registered'
+                     AND monthly_total >= ?
+                     AND length(keyword) >= 2
+                   ORDER BY monthly_total DESC
+                   LIMIT ?""",
+                (account_customer_id, min_volume, limit),
+            )
+            return [r["keyword"] for r in cur.fetchall() if r["keyword"]]
+
     def detect_collect_deadlock(
         self,
         account_customer_id: int,
