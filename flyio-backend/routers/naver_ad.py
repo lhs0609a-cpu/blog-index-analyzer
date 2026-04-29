@@ -3222,7 +3222,12 @@ async def keyword_pool_clicked_keywords(
 
         all_stats: List[dict] = []
         ids = list(keyword_map.keys())
+        # 첫 batch 가 404 면 stat_type 경로 자체가 깨진 거라 즉시 break — 25k id × 100 batch
+        # × 60s 폴링 = 분당 수백번 spam. 한 번 fail 시 같은 라운드 나머지는 skip.
+        first_batch_failed = False
         for i in range(0, len(ids), 100):
+            if first_batch_failed:
+                break
             batch = ids[i:i + 100]
             try:
                 stats = await client.get_stats(
@@ -3231,7 +3236,12 @@ async def keyword_pool_clicked_keywords(
                 )
                 all_stats.extend(stats or [])
             except Exception as e:
-                logger.warning(f"clicked-keywords stats batch 실패: {e}")
+                err_str = str(e)
+                if "404" in err_str:
+                    first_batch_failed = True
+                    logger.warning(f"clicked-keywords stats endpoint 404 — 이번 라운드 skip: {err_str[:120]}")
+                else:
+                    logger.warning(f"clicked-keywords stats batch 실패: {err_str[:200]}")
             await asyncio.sleep(0.3)
 
         pool = get_keyword_pool_db()
@@ -3483,22 +3493,32 @@ async def keyword_pool_bid_bulk_update(
                 ag_failed.append({"ad_group_id": gid, "campaign": cname, "error": f"{type(e).__name__}: {str(e)[:120]}"})
             await asyncio.sleep(0.15)
 
-        # 키워드별 bidAmt 일괄 변경 — 광고그룹별로 keyword list 받아 PUT
-        # 자동등록 키워드는 useGroupBidAmt=False 라 그룹 default 만 바꿔서는 표시 안 바뀜.
+        # 키워드별 bidAmt 일괄 변경 — 광고그룹별로 keyword list 받아 full-body PUT.
+        # 부분 PUT(?fields=) 은 Naver 가 silent ignore 하는 케이스가 있어서, list 응답에서
+        # 받은 전체 body 를 그대로 사용하고 bidAmt + useGroupBidAmt 만 수정해 PUT.
         # 동시성 제한 = 10 (Naver rate limit 회피)
         kw_total = 0
         kw_success = 0
         kw_failed: List[Dict] = []
         sem = asyncio.Semaphore(10)
 
-        async def _update_kw(kid: str):
+        async def _update_kw_full(kw_obj: Dict):
             nonlocal kw_success
+            kid = kw_obj.get("nccKeywordId")
+            if not kid:
+                return
+            # list 응답의 전체 body 를 그대로 → bidAmt 만 갱신.
+            # useGroupBidAmt=False 유지(개별 입찰가 명시적 override) + 새 bidAmt.
+            body = dict(kw_obj)
+            body["bidAmt"] = new_bid
+            body["useGroupBidAmt"] = False
             async with sem:
                 try:
-                    await client.update_keyword_bid(kid, new_bid)
+                    # fields 쿼리 없이 full-body PUT — 부분 갱신 silent ignore 회피.
+                    await client._request("PUT", f"/ncc/keywords/{kid}", body)
                     kw_success += 1
                 except Exception as e:
-                    kw_failed.append({"keyword_id": kid, "error": f"{type(e).__name__}: {str(e)[:80]}"})
+                    kw_failed.append({"keyword_id": kid, "error": f"{type(e).__name__}: {str(e)[:120]}"})
 
         for cname, gid in ad_group_ids:
             try:
@@ -3506,10 +3526,9 @@ async def keyword_pool_bid_bulk_update(
             except Exception as e:
                 logger.warning(f"[bid/bulk] keywords list 실패 ag={gid}: {e}")
                 continue
-            kw_ids = [k.get("nccKeywordId") for k in kws if k.get("nccKeywordId")]
-            kw_total += len(kw_ids)
-            if kw_ids:
-                await asyncio.gather(*[_update_kw(kid) for kid in kw_ids], return_exceptions=False)
+            kw_total += len(kws)
+            if kws:
+                await asyncio.gather(*[_update_kw_full(k) for k in kws], return_exceptions=False)
             await asyncio.sleep(0.1)
 
         return {
