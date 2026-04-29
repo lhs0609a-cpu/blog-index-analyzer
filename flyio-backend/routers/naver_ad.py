@@ -11,6 +11,7 @@ import logging
 import asyncio
 import io
 import json as _json_lib
+import random
 import re
 
 from services.naver_ad_service import (
@@ -2194,21 +2195,34 @@ from database.registered_keywords_db import get_registered_keywords_db
 POOL_DOMAIN_TOKENS = (
     # 금융/대출
     "대출", "자금", "한도", "이자", "금리", "신용", "담보", "보증",
-    "마통", "통장", "주담대", "전세", "월세", "환급",
+    "마통", "통장", "주담대", "전세", "월세", "환급", "예금", "적금", "은행",
     # 정부/지원금
-    "지원금", "정책자금", "정부지원", "청년", "신청",
+    "지원금", "정책자금", "정부지원", "청년", "신청", "장려금", "바우처",
     # 소상공인/창업/사업자 운영
-    "소상공인", "사업자", "자영업", "창업", "개원", "개업",
-    "운영", "프랜차이즈", "매장", "점포", "임대",
-    "매출", "수수료", "결제", "권리금", "매물",
-    "세무", "회계", "노무",
-    "할부", "리스", "수출", "무역",
+    "소상공인", "사업자", "자영업", "창업", "개원", "개업", "양도", "양수",
+    "운영", "프랜차이즈", "매장", "점포", "임대", "분양", "매매",
+    "매출", "수수료", "결제", "권리금", "매물", "임차", "임대차",
+    "세무", "회계", "노무", "법인", "장부", "기장",
+    "할부", "리스", "렌트", "렌탈", "수출", "무역", "경매",
     # 사업자 인접 금융상품
-    "보험", "카드", "펀드", "연금", "공제", "IRP", "퇴직",
-    "세금", "정산", "환산", "공제금", "예금", "적금", "통장",
-    # 의료
-    "병원", "약국", "약사", "의사", "의료", "원장",
-    "한의원", "치과", "정형외과", "내과", "외과", "안과", "피부과", "이비인후과", "산부인과",
+    "보험", "카드", "펀드", "연금", "공제", "IRP", "퇴직", "CMA", "MMF",
+    "세금", "정산", "환산", "공제금", "환급금", "절세",
+    # 의료 — 진료과/시설
+    "병원", "약국", "약사", "의사", "의료", "원장", "진료", "검진", "요양",
+    "한의원", "한방", "치과", "정형외과", "내과", "외과", "안과", "피부과",
+    "이비인후과", "산부인과", "성형외과", "비뇨기과", "흉부외과", "재활",
+    "임플란트", "교정", "보톡스", "필러", "시술", "수술",
+    # 뷰티/미용
+    "미용", "미용실", "헤어", "네일", "왁싱", "타투", "속눈썹", "두피", "성형",
+    # 외식업
+    "카페", "식당", "음식점", "분식", "치킨", "주점", "베이커리", "떡볶이",
+    "피자", "초밥", "곱창", "파스타", "한식", "일식", "야식", "설렁탕", "순두부",
+    "반찬", "마트", "가게", "식자재", "배달", "배민", "쿠팡이츠",
+    # 피트니스/교육/생활
+    "필라테스", "요가", "헬스장", "학원", "교육", "강의", "과외", "유치원", "어린이집",
+    "펜션", "모텔", "오피스텔", "아파트", "원룸", "상가", "공장", "창고", "주택", "사무실", "점포",
+    # 차량/장비
+    "할부", "리스", "렌트", "렌탈", "차량", "오토바이", "트랙터", "택시", "경운기",
 )
 
 
@@ -2334,23 +2348,32 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     client.api_key = account["api_key"]
     client.secret_key = account["secret_key"]
 
-    def _matches_whitelist(kw: str) -> bool:
-        # 통과 조건: 시드 substring 통과 + 도메인 토큰 ≥ 1개. 의미 보장.
+    def _matches_whitelist(kw: str) -> str:
+        # 반환: "" = 통과, "domain" = 도메인 토큰 0개, "seed" = 시드 substring 매치 실패.
         if not _has_domain_token(kw):
-            return False
+            return "domain"
         for s in whitelist:
             if not s or len(s) < 2:
                 continue
             if s in kw or kw in s:
-                return True
-        return False
+                return ""
+        return "seed"
 
     added = 0
     rejected = 0
+    reject_no_domain = 0
+    reject_no_seed_match = 0
+    sample_no_domain: List[str] = []
+    sample_no_seed: List[str] = []
     api_errors: List[str] = []
     seeds_processed = 0
     bfs_calls = 0
-    for seed in seeds[:60]:  # 시드 한 라운드 처리 한도 (BFS 추가로 호출 폭증 방지)
+
+    # 시드 셔플 — 매 라운드 다른 60개 처리 (200 시드 다양성 확보).
+    seed_pool = list(seeds)
+    random.shuffle(seed_pool)
+    seed_round = seed_pool[:60]
+    for seed in seed_round:  # 시드 한 라운드 처리 한도 (BFS 추가로 호출 폭증 방지)
         if added >= target:
             break
         seeds_processed += 1
@@ -2373,8 +2396,17 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
             mt = pc + mob
             if mt < min_volume:
                 continue
-            if not _matches_whitelist(kw):
+            reason = _matches_whitelist(kw)
+            if reason:
                 rejected += 1
+                if reason == "domain":
+                    reject_no_domain += 1
+                    if len(sample_no_domain) < 10:
+                        sample_no_domain.append(kw)
+                else:
+                    reject_no_seed_match += 1
+                    if len(sample_no_seed) < 10:
+                        sample_no_seed.append(kw)
                 continue
             candidates.append({
                 "keyword": kw, "monthly_total": mt,
@@ -2406,8 +2438,17 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                     mt2 = pc2 + mob2
                     if mt2 < min_volume:
                         continue
-                    if not _matches_whitelist(kw2):
+                    reason2 = _matches_whitelist(kw2)
+                    if reason2:
                         rejected += 1
+                        if reason2 == "domain":
+                            reject_no_domain += 1
+                            if len(sample_no_domain) < 10:
+                                sample_no_domain.append(kw2)
+                        else:
+                            reject_no_seed_match += 1
+                            if len(sample_no_seed) < 10:
+                                sample_no_seed.append(kw2)
                         continue
                     sub_candidates.append({
                         "keyword": kw2, "monthly_total": mt2,
@@ -2422,12 +2463,20 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                 logger.warning(f"[pool/collect/BFS] {bfs_kw} 실패: {e}")
     logger.warning(
         f"[pool/collect] user={uid} 새 키워드 {added}개 "
-        f"(rejected {rejected}, 시드 {seeds_processed}개, BFS {bfs_calls}회)"
+        f"(rejected {rejected} = 도메인미스 {reject_no_domain} / 시드미스 {reject_no_seed_match}, "
+        f"시드 {seeds_processed}개, BFS {bfs_calls}회)"
     )
+    if sample_no_domain:
+        logger.warning(f"[pool/collect] 도메인미스 샘플: {', '.join(sample_no_domain)}")
+    if sample_no_seed:
+        logger.warning(f"[pool/collect] 시드미스 샘플: {', '.join(sample_no_seed)}")
     pending_after = (pool.stats(customer_id).get("by_status") or {}).get("pending", 0)
     err_parts = list(api_errors)
     if rejected > 0:
-        err_parts.append(f"화이트리스트 reject {rejected}개 (시드와 무관)")
+        err_parts.append(
+            f"화이트리스트 reject {rejected}개 "
+            f"(도메인미스 {reject_no_domain} / 시드미스 {reject_no_seed_match})"
+        )
     pool.record_run(
         uid, customer_id, "collect",
         "success" if not api_errors else ("partial" if added > 0 else "failed"),
