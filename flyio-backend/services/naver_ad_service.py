@@ -593,32 +593,30 @@ class NaverAdApiClient:
                 "clkCnt", "impCnt", "salesAmt", "ctr", "cpc", "avgRnk", "ccnt"
             ]
 
-        # Naver SearchAd /stats 는 GET, naver 공식 python 샘플 형식 그대로:
-        #   ids:   Python list → httpx 가 ?ids=A&ids=B 로 직렬화 (statType 자동 판별)
-        #   fields: JSON 배열 문자열
-        #   timeRange: JSON 객체 문자열 (dot-notation 아님)
-        # statType 파라미터는 보내지 않음 — ID prefix (nkw-/cmp-/grp-/nad-) 로 자동 판별.
+        # Naver SearchAd /stats: GET endpoint, single-id 만 안정적 (multi-id 11001).
+        # 응답: {"data": [{...stats}], "compTm": ..., "cycleBaseTm": ...}.
+        # statType 미송신 — ID prefix (nkw-/cmp-/grp-/nad-) 로 자동 판별.
+        # 다중 호출은 호출자가 asyncio.gather + Semaphore 로 병렬 처리.
         # ref: github.com/naver/searchad-apidoc python-sample/examples/ad_management_sample.py
         import json as _json
-        _ = stat_type  # 시그니처 호환 — 실제 송신 X (자동 판별)
-        params = {
-            "ids": ids,
-            "fields": _json.dumps(fields),
-            "timeRange": _json.dumps({"since": start_date, "until": end_date}),
-        }
-        # 디버그: 실제 빌드된 query string 확인 (한 번만, 11001 진단용)
-        if not getattr(self, "_stats_debug_done", False):
+        _ = stat_type
+        merged: List[dict] = []
+        for kid in ids:
+            params = {
+                "ids": [kid],  # 단일 ID, list 형태로 (?ids=...)
+                "fields": _json.dumps(fields),
+                "timeRange": _json.dumps({"since": start_date, "until": end_date}),
+            }
             try:
-                import httpx as _httpx
-                _q = _httpx.QueryParams(params)
-                logger.warning(
-                    f"[NaverAd/stats DEBUG] URL = {self.BASE_URL}/stats?{_q} "
-                    f"(ids n={len(ids)}, sample={ids[:2]})"
-                )
-                self._stats_debug_done = True
-            except Exception:
-                pass
-        return await self._request("GET", "/stats", params)
+                resp = await self._request("GET", "/stats", params)
+                data = resp.get("data") if isinstance(resp, dict) else resp
+                if isinstance(data, list):
+                    merged.extend(data)
+                elif isinstance(data, dict):
+                    merged.append(data)
+            except Exception as e:
+                logger.warning(f"[NaverAd/stats] {kid} 실패: {str(e)[:120]}")
+        return merged
 
     async def close(self):
         """클라이언트 종료"""

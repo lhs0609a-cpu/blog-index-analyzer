@@ -3421,30 +3421,26 @@ async def keyword_pool_clicked_keywords(
         end_date = datetime.now().strftime("%Y-%m-%d")
         start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
 
-        all_stats: List[dict] = []
-        ids = list(keyword_map.keys())
-        # 첫 batch 가 404 면 stat_type 경로 자체가 깨진 거라 즉시 break — 25k id × 100 batch
-        # × 60s 폴링 = 분당 수백번 spam. 한 번 fail 시 같은 라운드 나머지는 skip.
-        first_batch_failed = False
-        # Naver /stats batch 한도: 작음 (정확한 한도 비공개). 100→10 으로 축소.
-        for i in range(0, len(ids), 10):
-            if first_batch_failed:
-                break
-            batch = ids[i:i + 10]
-            try:
-                stats = await client.get_stats(
-                    stat_type="KEYWORD", ids=batch,
-                    start_date=start_date, end_date=end_date,
-                )
-                all_stats.extend(stats or [])
-            except Exception as e:
-                err_str = str(e)
-                if "404" in err_str:
-                    first_batch_failed = True
-                    logger.warning(f"clicked-keywords stats endpoint 404 — 이번 라운드 skip: {err_str[:120]}")
-                else:
-                    logger.warning(f"clicked-keywords stats batch 실패: {err_str[:200]}")
-            await asyncio.sleep(0.3)
+        # Naver /stats 는 단일 ID 호출만 안정적 (multi-id 11001 잘못된 파라미터).
+        # 95k+ KW 모두 querying 은 비현실적 — 최근 등록 1500개만 sample.
+        # 대부분 KW 는 click=0 이라 sample 제한해도 active KW 잡힘 (registered DESC).
+        ids = list(keyword_map.keys())[:1500]
+        sem = asyncio.Semaphore(20)  # 동시 20 호출 — Naver rate limit 안전권
+
+        async def _fetch_one(kid: str) -> List[dict]:
+            async with sem:
+                try:
+                    stats = await client.get_stats(
+                        stat_type="KEYWORD", ids=[kid],
+                        start_date=start_date, end_date=end_date,
+                    )
+                    return stats or []
+                except Exception as e:
+                    logger.warning(f"clicked-keywords {kid} 실패: {str(e)[:120]}")
+                    return []
+
+        results = await asyncio.gather(*[_fetch_one(kid) for kid in ids])
+        all_stats: List[dict] = [s for batch in results for s in batch]
 
         pool = get_keyword_pool_db()
         user_seeds = [s for s in (pool.list_user_seeds(customer_id) or []) if s and len(s) >= 2]
