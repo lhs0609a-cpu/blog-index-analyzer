@@ -587,9 +587,10 @@ class NaverAdApiClient:
         클릭 데이터 0 으로 보이던 회귀의 원인.
         """
         if fields is None:
+            # Naver 공식 샘플과 동일 — convCnt/convAmt/viewCnt 등은 entity 별로
+            # 미지원이라 일부 type 에서 11001 잘못된 파라미터 유발 가능.
             fields = [
-                "impCnt", "clkCnt", "salesAmt", "convCnt", "convAmt",
-                "viewCnt", "avgRnk", "ctr", "cpc", "ccnt"
+                "clkCnt", "impCnt", "salesAmt", "ctr", "cpc", "avgRnk", "ccnt"
             ]
 
         # Naver SearchAd /stats 는 GET, naver 공식 python 샘플 형식 그대로:
