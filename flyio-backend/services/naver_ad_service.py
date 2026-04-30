@@ -595,13 +595,13 @@ class NaverAdApiClient:
         data = {
             "ids": ids,
             "fields": fields,
-            "statType": stat_type,  # KEYWORD/CAMPAIGN/AD/ADGROUP
             "timeRange": {
                 "since": start_date,
                 "until": end_date
             }
         }
-        return await self._request("POST", "/stats", data)
+        # statType 은 query string. body 에 넣으면 11001 잘못된 파라미터 형식.
+        return await self._request("POST", f"/stats?statType={stat_type}", data)
 
     async def close(self):
         """클라이언트 종료"""
