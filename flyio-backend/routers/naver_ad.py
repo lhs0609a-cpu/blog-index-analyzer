@@ -3293,8 +3293,42 @@ async def keyword_pool_admin_inspect_all(
     request: AdminInspectRequest,
     authorization: Optional[str] = Header(None),
 ):
-    """모든 풀 광고그룹 키워드 검토 상태 조회 → 노출제한 mark."""
+    """모든 풀 광고그룹 키워드 검토 상태 조회 → 노출제한 mark.
+
+    DEBUG mode (request.user_id < 0): user_id=-N 으로 호출 시 N (절대값) 의 키워드 1개로
+    /stats 호출 시도 + 빌드된 URL 반환 (디버깅 전용).
+    """
     _verify_cron_token(authorization)
+    # /stats endpoint 디버깅 — user_id=-1 같이 음수면 stats 호출 1회만 시도하고
+    # 빌드된 URL + Naver 응답 반환.
+    if request.user_id < 0:
+        from services.naver_ad_service import NaverAdApiClient
+        from datetime import datetime, timedelta
+        import sqlite3 as _sq
+        target_uid = abs(request.user_id)
+        account = get_ad_account(target_uid)
+        if not account or not account.get("is_connected"):
+            return {"debug": True, "error": "광고 계정 미연결"}
+        customer_id_dbg = int(account.get("customer_id"))
+        reg_dbg = get_registered_keywords_db()
+        with _sq.connect(reg_dbg.db_path) as conn:
+            row = conn.execute(
+                "SELECT ncc_keyword_id FROM registered_keywords WHERE account_customer_id=? AND ncc_keyword_id IS NOT NULL LIMIT 1",
+                (customer_id_dbg,),
+            ).fetchone()
+        if not row:
+            return {"debug": True, "error": "키워드 없음"}
+        client = NaverAdApiClient()
+        client.customer_id = account["customer_id"]
+        client.api_key = account["api_key"]
+        client.secret_key = account["secret_key"]
+        end_d = datetime.now().strftime("%Y-%m-%d")
+        start_d = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        try:
+            stats = await client.get_stats("KEYWORD", [row[0]], start_d, end_d)
+            return {"debug": True, "test_id": row[0], "result": stats}
+        except Exception as e:
+            return {"debug": True, "test_id": row[0], "error": f"{type(e).__name__}: {str(e)[:300]}"}
     try:
         from services.naver_ad_service import NaverAdApiClient
         account = get_ad_account(request.user_id)
