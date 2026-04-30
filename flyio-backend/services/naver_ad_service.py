@@ -592,15 +592,18 @@ class NaverAdApiClient:
                 "viewCnt", "avgRnk", "ctr", "cpc", "ccnt"
             ]
 
-        # Naver SearchAd /stats 는 GET — query string.
-        # ids/fields 는 JSON 배열 문자열, timeRange 는 flat dot-notation 키.
+        # Naver SearchAd /stats 는 GET, naver 공식 python 샘플 형식 그대로:
+        #   ids:   Python list → httpx 가 ?ids=A&ids=B 로 직렬화 (statType 자동 판별)
+        #   fields: JSON 배열 문자열
+        #   timeRange: JSON 객체 문자열 (dot-notation 아님)
+        # statType 파라미터는 보내지 않음 — ID prefix (nkw-/cmp-/grp-/nad-) 로 자동 판별.
+        # ref: github.com/naver/searchad-apidoc python-sample/examples/ad_management_sample.py
         import json as _json
+        _ = stat_type  # 시그니처 호환 — 실제 송신 X (자동 판별)
         params = {
-            "ids": _json.dumps(ids),
+            "ids": ids,
             "fields": _json.dumps(fields),
-            "statType": stat_type,
-            "timeRange.since": start_date,
-            "timeRange.until": end_date,
+            "timeRange": _json.dumps({"since": start_date, "until": end_date}),
         }
         return await self._request("GET", "/stats", params)
 
