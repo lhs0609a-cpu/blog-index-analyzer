@@ -8,7 +8,6 @@ import {
   Sparkles,
   Zap,
   Target,
-  Users,
   Menu,
   X,
   LogOut,
@@ -17,10 +16,7 @@ import {
   Home,
   LayoutDashboard,
   Eye,
-  GitBranch,
-  MessageCircle,
-  Radio,
-  Search
+  GitBranch
 } from 'lucide-react'
 import { useAuthStore } from '@/lib/stores/auth'
 import UsageIndicator from './UsageIndicator'
@@ -37,52 +33,12 @@ const navItems = [
     description: '40개 이상의 지표로 블로그 분석'
   },
   {
-    label: 'AI 도구',
-    href: '/tools',
-    icon: Sparkles,
-    badge: 'SEO 원고 외 7건',
-    badgeColor: 'bg-gray-100 text-gray-600',
-    description: '상위노출 최적화 AI 도구 모음'
-  },
-  {
-    label: '커뮤니티',
-    href: '/community',
-    icon: Users,
-    badge: 'NEW',
-    badgeColor: 'bg-green-500 text-white',
-    description: '실시간 활동 & 랭킹'
-  },
-  {
     label: '광고 최적화',
     href: '/ad-optimizer',
     icon: Target,
     badge: 'PREMIUM',
     badgeColor: 'bg-gradient-to-r from-amber-500 to-red-500 text-white',
     description: 'AI가 찾아주는 가성비 광고 타겟팅'
-  },
-  {
-    label: 'Threads',
-    href: '/threads',
-    icon: MessageCircle,
-    badge: 'BETA',
-    badgeColor: 'bg-purple-500 text-white',
-    description: 'AI 스레드 자동 마케팅'
-  },
-  {
-    label: 'X 자동화',
-    href: '/x',
-    icon: Radio,
-    badge: 'BETA',
-    badgeColor: 'bg-gray-800 text-white',
-    description: 'AI 트위터/X 자동 포스팅'
-  },
-  {
-    label: '인플루언서',
-    href: '/influencer-discovery',
-    icon: Search,
-    badge: 'NEW',
-    badgeColor: 'bg-pink-500 text-white',
-    description: '멀티플랫폼 인플루언서 발굴'
   },
   {
     label: '대시보드',
