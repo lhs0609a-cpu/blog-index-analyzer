@@ -580,7 +580,12 @@ class NaverAdApiClient:
         end_date: str,
         fields: List[str] = None
     ) -> List[dict]:
-        """성과 통계 조회"""
+        """성과 통계 조회.
+
+        Naver SearchAd 의 /stats 는 단일 endpoint — statType 을 body 에 넣는다.
+        과거 코드는 /stats/{type} 으로 호출해 404 (path:/api/stats/keyword 등) 발생,
+        클릭 데이터 0 으로 보이던 회귀의 원인.
+        """
         if fields is None:
             fields = [
                 "impCnt", "clkCnt", "salesAmt", "convCnt", "convAmt",
@@ -590,12 +595,13 @@ class NaverAdApiClient:
         data = {
             "ids": ids,
             "fields": fields,
+            "statType": stat_type,  # KEYWORD/CAMPAIGN/AD/ADGROUP
             "timeRange": {
                 "since": start_date,
                 "until": end_date
             }
         }
-        return await self._request("POST", f"/stats/{stat_type.lower()}", data)
+        return await self._request("POST", "/stats", data)
 
     async def close(self):
         """클라이언트 종료"""
