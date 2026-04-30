@@ -554,12 +554,14 @@ class KeywordPoolDB:
                 kw = row["keyword"]
                 if kw in existing_seeds:
                     continue
-                # domain_tokens 게이트는 의도적으로 미적용.
-                # Why: 후보는 status='registered' 즉 이미 collect→register를 통과한 KW.
-                # 좁은 토큰셋이 brand형 KW(예: "에듀윌부동산", "덕은힐스테이트")를 영구히
-                # 승격 차단해 시드가 4-5개에서 자가확장 못 하던 deadlock 의 직접 원인.
-                # 시그니처는 유지(외부 호출 호환). 파라미터는 미사용 표시.
-                _ = domain_tokens
+                # anchor 게이트 — domain_tokens 에 user_seed atom (length≥2) 을 넘겨받음.
+                # Why: 어떤 등록 KW (예: POOL "강의" 매치로 등록된 "블렌더강의") 가 promote
+                #      되면 그 atom (블렌더) 이 seed_atoms 에 합류 → 다음 라운드 모든
+                #      "블렌더X" KW 통과 → drift cascade. user_seed lineage 만 promote 허용.
+                # POOL bridge 로 등록된 niche KW (미용실/병원/사업자) 는 user_seed atom
+                # 미포함 시 promote 안 됨 → 그 niche 는 bridge 호출로 매 라운드 재발굴.
+                if domain_tokens and not any(t in kw for t in domain_tokens):
+                    continue
                 # 같은 의미장 중복 제외 — 기존 시드의 substring/superstring이면 가치 적음
                 if any(s in kw or kw in s for s in existing_seeds if s and len(s) >= 2):
                     # 기존 시드와 substring 관계지만 다른 표현 — 추가 시드로 가치는 있음.

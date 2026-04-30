@@ -2416,11 +2416,14 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     except Exception as e:
         logger.warning(f"[pool/cleanup-childless] 실패: {e}")
 
-    # 시드 자가확장: 강화 — 라운드당 50, min_volume 30, cap 500, 도메인 토큰 검증
+    # 시드 자가확장 — anchor (user_seed atom) 포함 KW 만 promote.
+    # POOL bridge 로 등록된 cross-niche KW (예: "블렌더강의") 가 promote → seed_atoms
+    # 합류 → 다음 라운드 그 niche cascade drift 발생을 차단. 그 niche 는 bridge 가
+    # 매 라운드 재호출하므로 promote 없어도 새 KW 발굴 계속됨.
     try:
         promoted = pool.promote_seeds(
             customer_id, limit=50, min_volume=30, max_total_seeds=500,
-            domain_tokens=list(domain_token_set),
+            domain_tokens=list(anchor_set),
         )
         if promoted:
             logger.warning(
@@ -2567,10 +2570,28 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                 + ", ".join(injected[:5]) + ")"
             )
 
+    # NICHE BRIDGE — POOL_DOMAIN_TOKENS 자체를 bridge seed 로 매 라운드 일부 주입.
+    # Why: user_seed lineage (보험/세무/IRP) 만 query 하면 그 인접 KW 만 발굴됨.
+    #      미용실/헬스장/병원/사업자/창업 등 다른 niche 의 keywordstool 호출이 없음 →
+    #      POOL 토큰 안에 이미 정의돼 있어도 "도달" 자체가 안 됨.
+    # 해법: POOL 토큰 중 길이≥2 인 것을 bridge seed 로 시드 라운드에 합류.
+    #      예: bridge "미용실" → keywordstool 이 "미용실창업자금/미용실세무/미용실임대" 반환
+    #      → 모두 finance/사업자 도메인 → unified gate 통과 → 등록 → promote_seeds 가
+    #      "미용실창업자금"을 새 seed 로 승격 → 다음 라운드 그 niche 더 깊이 발굴 → cascade.
+    # 사용자 의도 ("대출 필요한 모든 업종") 와 정확히 일치.
+    bridge_pool = [t for t in POOL_DOMAIN_TOKENS if len(t) >= 2]
+    random.shuffle(bridge_pool)
+    bridge_round = bridge_pool[:15]  # 라운드당 15개 random POOL bridge
+
     # 시드 셔플 — 매 라운드 다른 60개 처리 (200 시드 다양성 확보).
     seed_pool = list(seeds)
     random.shuffle(seed_pool)
-    seed_round = seed_pool[:60]
+    # 60 슬롯 = user_seed/auto_promoted (45) + POOL bridge (15)
+    seed_round = seed_pool[:45] + bridge_round
+    logger.warning(
+        f"[pool/collect] user={uid} 시드 라운드 — user/promoted={min(45, len(seed_pool))} "
+        f"+ POOL bridge={len(bridge_round)} (총 {len(seed_round)})"
+    )
     for seed in seed_round:  # 시드 한 라운드 처리 한도 (BFS 추가로 호출 폭증 방지)
         if added >= target:
             break
