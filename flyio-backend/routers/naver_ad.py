@@ -2377,10 +2377,11 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     # 모든 KW 가 차단되어 학습이 멈춤.
     anchor_set = _build_seed_atoms(user_seed_kw_only)
     if anchor_set:
-        registered_for_atoms = [
-            kw for kw in registered_raw
-            if any(a in kw for a in anchor_set)
-        ]
+        # PERF: 5000 KW × 6000+ atom Python loop = 30M ops 동기 블록.
+        # 정규식 multi-pattern 매칭 (~100배 빠름) 으로 전환.
+        import re as _re_a
+        _anchor_re = _re_a.compile("|".join(_re_a.escape(a) for a in anchor_set))
+        registered_for_atoms = [kw for kw in registered_raw if _anchor_re.search(kw)]
     else:
         # user_seed 0개인 신규 광고주 — anchor 비어있으면 학습 안 함 (drift 위험 큼).
         registered_for_atoms = []
@@ -2526,11 +2527,19 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     client.api_key = account["api_key"]
     client.secret_key = account["secret_key"]
 
+    # PERF: unified_tokens 가 14k+ 이면 per-kw `any(t in kw for t in tokens)` =
+    # 1.3B+ Python ops/round → async 이벤트 루프 30-60s 블록 → fly 헬스체크 실패.
+    # 정규식 컴파일로 C 구현 멀티패턴 매칭 (~100배 빠름) 으로 전환.
+    import re as _re
+    _whitelist_re = _re.compile(
+        "|".join(_re.escape(t) for t in unified_tokens)
+    ) if unified_tokens else None
+
     def _matches_whitelist(kw: str) -> str:
         # 단일 게이트 — unified_tokens 중 하나라도 매치하면 통과.
-        # 반환: "" = 통과, "domain" = 어떤 토큰도 안 맞음 (도메인+시드 atom 모두 실패).
+        # 반환: "" = 통과, "domain" = 어떤 토큰도 안 맞음.
         # loose_mode 면 길이 ≥ 2 인 한국어/영문/숫자 키워드는 통과 (도메인 무관 fallback).
-        if any(t in kw for t in unified_tokens):
+        if _whitelist_re and _whitelist_re.search(kw):
             return ""
         if loose_mode and len(kw) >= 2:
             return ""
