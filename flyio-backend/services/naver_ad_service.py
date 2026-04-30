@@ -592,16 +592,16 @@ class NaverAdApiClient:
                 "viewCnt", "avgRnk", "ctr", "cpc", "ccnt"
             ]
 
-        data = {
-            "ids": ids,
-            "fields": fields,
-            "timeRange": {
-                "since": start_date,
-                "until": end_date
-            }
+        # Naver SearchAd /stats 는 GET — body 형태가 아닌 query string.
+        # ids, fields 는 JSON 배열 문자열, timeRange 는 dot-notation 키.
+        import json as _json
+        params = {
+            "ids": _json.dumps(ids),
+            "fields": _json.dumps(fields),
+            "statType": stat_type,
+            "timeRange": _json.dumps({"since": start_date, "until": end_date}),
         }
-        # statType 은 query string. body 에 넣으면 11001 잘못된 파라미터 형식.
-        return await self._request("POST", f"/stats?statType={stat_type}", data)
+        return await self._request("GET", "/stats", params)
 
     async def close(self):
         """클라이언트 종료"""
