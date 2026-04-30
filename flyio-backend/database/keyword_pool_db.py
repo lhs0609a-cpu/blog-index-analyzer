@@ -697,7 +697,8 @@ class KeywordPoolDB:
                      AND COALESCE(source, '') <> 'user_seed'""",
                 (account_customer_id,),
             )
-            pending_registerable = int((cur.fetchone() or {}).get("n") or 0)
+            row = cur.fetchone()
+            pending_registerable = int(row["n"]) if row else 0
 
             cur.execute(
                 """SELECT
