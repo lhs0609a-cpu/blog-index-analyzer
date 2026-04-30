@@ -592,14 +592,15 @@ class NaverAdApiClient:
                 "viewCnt", "avgRnk", "ctr", "cpc", "ccnt"
             ]
 
-        # Naver SearchAd /stats 는 GET — body 형태가 아닌 query string.
-        # ids, fields 는 JSON 배열 문자열, timeRange 는 dot-notation 키.
+        # Naver SearchAd /stats 는 GET — query string.
+        # ids/fields 는 JSON 배열 문자열, timeRange 는 flat dot-notation 키.
         import json as _json
         params = {
             "ids": _json.dumps(ids),
             "fields": _json.dumps(fields),
             "statType": stat_type,
-            "timeRange": _json.dumps({"since": start_date, "until": end_date}),
+            "timeRange.since": start_date,
+            "timeRange.until": end_date,
         }
         return await self._request("GET", "/stats", params)
 
