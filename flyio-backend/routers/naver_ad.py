@@ -2846,15 +2846,37 @@ async def _inspect_ad_groups(
             status = (kw.get("status") or "").upper()
             stat_reason = (kw.get("statusReason") or "").upper()
             user_lock = kw.get("userLock", False)
-            # 광범위 검출 — substring 기반 (다양한 status 표기 포괄)
-            blocked_tokens = ("REJECT", "PROHIBIT", "BLOCK", "DENY", "EXPIRED", "DISAPPROVE", "REVIEW_FAIL", "INELIGIBLE")
-            is_rejected = (
-                any(t in review for t in blocked_tokens)
-                or any(t in inspect for t in blocked_tokens)
-                or any(t in stat_reason for t in blocked_tokens)
-                or status == "PAUSED"
-                or user_lock is True
+
+            # ============ 하드 가드 — 검수 완료 전 절대 건드리지 않는다 ============
+            # 신규 키워드는 Naver 검수 완료 전까지 review/inspect 가 WAIT/UNDER/PENDING 계열.
+            # 이 단계에서 어떤 판정도 하면 안 됨 (대량 삭제 사고 영구 차단).
+            # review 와 inspect 둘 중 하나라도 'pending' 으로 보이면 즉시 skip.
+            PENDING_TOKENS = (
+                "WAIT", "UNDER", "PENDING", "PROGRESS",
+                "IN_REVIEW", "AUTO_INSPECT", "INSPECT_REQ",
+                "PRE_REVIEW", "BEFORE_REVIEW",
             )
+            review_pending = any(t in review for t in PENDING_TOKENS)
+            inspect_pending = any(t in inspect for t in PENDING_TOKENS)
+            # review/inspect 모두 비어있으면 정보 없음 → 안전 측면 미완료 취급
+            no_info = (review == "" and inspect == "" and stat_reason == "")
+            if review_pending or inspect_pending or no_info:
+                continue
+            # =============================================================
+
+            # 검수 완료 가정 하에 영구 거부 신호만 잡는다.
+            # 일시 상태(PAUSED/userLock/EXPIRED_BUDGET 등)는 트리거 안 됨.
+            review_rejected = ("REJECT" in review) or ("DISAPPROVE" in review)
+            inspect_rejected = inspect in (
+                "PROHIBIT", "BUSINESS_PROHIBIT", "REVIEW_REJECTED",
+                "REJECTED", "DISAPPROVED", "FAIL", "FAILED",
+            )
+            # statusReason 은 영구 코드만 (PAUSED_BY_BUDGET / NOT_REVIEWED 등 일시 제외)
+            reason_rejected = any(
+                t in stat_reason
+                for t in ("REJECTED", "PROHIBITED", "BLOCKLISTED", "DISAPPROVED")
+            )
+            is_rejected = review_rejected or inspect_rejected or reason_rejected
             if is_rejected:
                 rejected_items.append({
                     "keyword": kw_text,
