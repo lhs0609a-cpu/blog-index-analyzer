@@ -2399,14 +2399,25 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
 
     # 도메인 미포함 키워드 자동 cleanup (registered 제외) — 매 라운드 시작 시
     # 게이트 = domain_token_set ∪ registered_atoms (collect 게이트와 동일)
-    try:
-        cleaned = pool.cleanup_offdomain(
-            customer_id, list(domain_token_set | registered_atoms)
+    # PERF: cleanup 은 sync DB 작업 — token 수 × pending row 수 substring check 가
+    #       async 이벤트 루프를 블록 (12k tokens × 50k rows → 헬스체크 timeout).
+    #       to_thread 로 worker thread 에서 실행해 이벤트 루프 보호 + token 수 가
+    #       임계 초과 시 skip (다음 라운드에서 좁아지면 재시도).
+    cleanup_tokens = domain_token_set | registered_atoms
+    if len(cleanup_tokens) <= 3000:
+        try:
+            cleaned = await asyncio.to_thread(
+                pool.cleanup_offdomain, customer_id, list(cleanup_tokens)
+            )
+            if cleaned > 0:
+                logger.warning(f"[pool/cleanup] off-domain row 자동 삭제 {cleaned}개")
+        except Exception as e:
+            logger.warning(f"[pool/cleanup] 실패: {e}")
+    else:
+        logger.warning(
+            f"[pool/cleanup] skip — 토큰 {len(cleanup_tokens)}개 > 3000 임계 "
+            f"(이벤트 루프 보호). registered_atoms 학습이 안정화되면 재진입."
         )
-        if cleaned > 0:
-            logger.warning(f"[pool/cleanup] off-domain row 자동 삭제 {cleaned}개")
-    except Exception as e:
-        logger.warning(f"[pool/cleanup] 실패: {e}")
 
     # 자동 승격 시드 중 자식 0 + 30분 경과 자력 삭제 (user_seed는 면제)
     try:
