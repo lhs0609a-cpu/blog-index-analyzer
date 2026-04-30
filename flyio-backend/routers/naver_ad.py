@@ -2280,6 +2280,56 @@ def _build_seed_atoms(seeds: List[str]) -> set:
     return atoms
 
 
+def _compute_relevance_score(
+    kw: str,
+    user_seeds: List[str],
+    pool_tokens: tuple = POOL_DOMAIN_TOKENS,
+) -> int:
+    """클릭 KW 의 user_seed/POOL 도메인 연관성 점수 (0-100).
+
+    - 100: kw 가 user_seed 전체를 substring 으로 포함 (예: "강남오피스텔매매" ← "오피스텔매매")
+    -  95: user_seed 가 kw 전체를 포함 (kw 가 더 짧음)
+    - 0-95: atom 매칭 가중 합산
+        · length≥3 user_seed atom 매칭: 20pt × N (max 80) — 강한 도메인 신호
+        · length=2 user_seed atom 매칭: 5pt × N (max 30) — 약한 신호 (브로드 매칭)
+        · POOL 토큰 매칭: 3pt × N (max 15) — niche 어시스트 (간접 관련)
+
+    예 점수 :
+      "강남오피스텔매매" → 100  (user_seed 포함)
+      "오피스텔분양"   → ~80  (3+ atom "오피스텔")
+      "포켓몬카드"     → ~8   (2-gram "카드" + POOL "카드" — 약함)
+      "도박중독"       → 0    (어떤 매칭도 없음)
+    """
+    if not kw:
+        return 0
+    # 1) user_seed 전체 매칭 — 가장 강한 신호
+    for s in user_seeds:
+        if not s or len(s) < 2:
+            continue
+        if s in kw:
+            return 100
+        if kw in s:
+            return 95
+    # 2) atom 분리
+    atoms_3plus: set = set()
+    atoms_2: set = set()
+    for s in user_seeds:
+        if not s or len(s) < 2:
+            continue
+        if len(s) >= 4:
+            atoms_3plus.add(s)
+        for n in (2, 3):
+            for i in range(len(s) - n + 1):
+                a = s[i:i + n]
+                (atoms_2 if len(a) == 2 else atoms_3plus).add(a)
+    # 3) 매칭 카운트 (집합 차이로 중복 제외)
+    n_3 = sum(1 for a in atoms_3plus if a in kw)
+    n_2 = sum(1 for a in atoms_2 if a in kw)
+    n_pool = sum(1 for t in pool_tokens if t in kw)
+    score = min(80, n_3 * 20) + min(30, n_2 * 5) + min(15, n_pool * 3)
+    return min(95, score)  # 95 cap — 100 은 full seed match 전용
+
+
 def _resolve_account(user_id: int, customer_id: Optional[str] = None) -> Optional[Dict]:
     """customer_id 명시 시 그 광고주, 없으면 가장 최근. B 시나리오 — 다중 광고주 라우팅."""
     from database.naver_ad_db import get_ad_account_by_customer
@@ -3364,12 +3414,6 @@ async def keyword_pool_clicked_keywords(
         pool = get_keyword_pool_db()
         user_seeds = [s for s in (pool.list_user_seeds(customer_id) or []) if s and len(s) >= 2]
 
-        def matches_seed(kw: str) -> bool:
-            for s in user_seeds:
-                if s in kw or kw in s:
-                    return True
-            return False
-
         items = []
         for stat in all_stats:
             keyword_id = stat.get("id")
@@ -3381,6 +3425,7 @@ async def keyword_pool_clicked_keywords(
             kw_text = keyword_map.get(keyword_id)
             if not kw_text:
                 continue
+            score = _compute_relevance_score(kw_text, user_seeds)
             items.append({
                 "keyword_id": keyword_id,
                 "keyword": kw_text,
@@ -3389,10 +3434,11 @@ async def keyword_pool_clicked_keywords(
                 "cost": int(stat.get("salesAmt", 0) or 0),
                 "ctr": float(stat.get("ctr", 0) or 0),
                 "cpc": int(stat.get("cpc", 0) or 0),
-                "matches_seed": matches_seed(kw_text),
+                "matches_seed": score >= 100,  # 호환성 유지 — full seed 매칭만 true
+                "relevance_score": score,
             })
-        # 의도성 X 먼저(False=0), 클릭 많은 순
-        items.sort(key=lambda x: (x["matches_seed"], -x["clicks"]))
+        # 점수 낮은 순 + 클릭 많은 순 — 가장 무관한 KW 먼저 (낭비 큰 것 우선 노출)
+        items.sort(key=lambda x: (x["relevance_score"], -x["clicks"]))
         return {"success": True, "days": days, "total": len(items), "items": items}
     except HTTPException:
         raise

@@ -65,6 +65,7 @@ interface ClickedKeyword {
   ctr: number
   cpc: number
   matches_seed: boolean
+  relevance_score?: number  // 0-100, 백엔드 _compute_relevance_score
 }
 
 interface CollectDeadlock {
@@ -125,6 +126,7 @@ export default function KeywordPoolPage() {
   const [clickedSelected, setClickedSelected] = useState<Set<string>>(new Set())
   const [clickedShown, setClickedShown] = useState(true)  // 항상 표시 — 사용자가 불필요 키워드 즉시 발견
   const [clickedFilterMismatch, setClickedFilterMismatch] = useState(true)  // 무관만 보기 default ON — 사업과 상관없는 KW 즉시 발견
+  const [scoreThreshold, setScoreThreshold] = useState(30)  // N점 이하 일괄 선택용
 
   // customer_id 쿼리 — selected 가 비어있으면 백엔드 default(가장 최근).
   const cidQs = (extra: Record<string, string | number | undefined> = {}) => {
@@ -299,6 +301,14 @@ export default function KeywordPoolPage() {
 
   const handleClickedSelectMismatch = () => {
     const ids = clickedItems.filter(i => !i.matches_seed).map(i => i.keyword_id)
+    setClickedSelected(new Set(ids))
+  }
+
+  // 점수 N 이하인 KW 모두 선택 — 사용자 임계값 일괄 정리.
+  const handleClickedSelectBelowScore = () => {
+    const ids = clickedItems
+      .filter(i => (i.relevance_score ?? 100) <= scoreThreshold)
+      .map(i => i.keyword_id)
     setClickedSelected(new Set(ids))
   }
 
@@ -685,9 +695,15 @@ export default function KeywordPoolPage() {
 
           {clickedItems.length > 0 && (() => {
             const mismatchCount = clickedItems.filter(i => !i.matches_seed).length
+            const belowThresholdCount = clickedItems.filter(i => (i.relevance_score ?? 100) <= scoreThreshold).length
             const visibleItems = clickedFilterMismatch
               ? clickedItems.filter(i => !i.matches_seed)
               : clickedItems
+            const scoreColor = (s: number) =>
+              s >= 80 ? 'text-green-700 bg-green-50' :
+              s >= 50 ? 'text-yellow-700 bg-yellow-50' :
+              s >= 20 ? 'text-orange-700 bg-orange-50' :
+              'text-red-700 bg-red-50'
             return (
             <>
               <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -728,6 +744,28 @@ export default function KeywordPoolPage() {
                   선택 {clickedSelected.size}개 일괄 삭제
                 </button>
               </div>
+              {/* 점수 임계값 일괄 선택 — 사용자가 N점 이하 KW 한 번에 정리 */}
+              <div className="flex items-center gap-2 mb-3 p-2 bg-gray-50 border border-gray-200 rounded flex-wrap">
+                <span className="text-xs text-gray-700 font-medium">연관성 점수</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={scoreThreshold}
+                  onChange={(e) => setScoreThreshold(Math.max(0, Math.min(100, parseInt(e.target.value) || 0)))}
+                  className="w-16 text-xs border border-gray-300 rounded px-2 py-0.5 text-right"
+                />
+                <span className="text-xs text-gray-700">점 이하</span>
+                <button
+                  onClick={handleClickedSelectBelowScore}
+                  className="text-xs px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 font-medium"
+                >
+                  {belowThresholdCount}개 모두 선택
+                </button>
+                <span className="text-xs text-gray-500 ml-2">
+                  0=완전 무관, 100=user_seed 직접 매칭. 30 이하 권장.
+                </span>
+              </div>
               {visibleItems.length === 0 ? (
                 <div className="text-sm text-gray-500 p-3 bg-green-50 border border-green-100 rounded">
                   사업과 무관한 클릭 키워드 없음 — 광고 노출이 제대로 타겟팅 중.
@@ -739,7 +777,7 @@ export default function KeywordPoolPage() {
                     <tr className="border-b border-gray-200 text-xs text-gray-500">
                       <th className="text-left py-2 px-2 w-8"></th>
                       <th className="text-left py-2 px-2">키워드</th>
-                      <th className="text-left py-2 px-2">시드 매칭</th>
+                      <th className="text-center py-2 px-2">연관성</th>
                       <th className="text-right py-2 px-2">노출</th>
                       <th className="text-right py-2 px-2">클릭</th>
                       <th className="text-right py-2 px-2">CTR</th>
@@ -747,10 +785,12 @@ export default function KeywordPoolPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {visibleItems.map((it) => (
+                    {visibleItems.map((it) => {
+                      const score = it.relevance_score ?? (it.matches_seed ? 100 : 0)
+                      return (
                       <tr
                         key={it.keyword_id}
-                        className={`border-b border-gray-100 hover:bg-gray-50 ${!it.matches_seed ? 'bg-orange-50/30' : ''}`}
+                        className={`border-b border-gray-100 hover:bg-gray-50 ${score <= scoreThreshold ? 'bg-red-50/40' : !it.matches_seed ? 'bg-orange-50/30' : ''}`}
                       >
                         <td className="py-2 px-2">
                           <input
@@ -760,19 +800,18 @@ export default function KeywordPoolPage() {
                           />
                         </td>
                         <td className="py-2 px-2 font-medium">{it.keyword}</td>
-                        <td className="py-2 px-2">
-                          {it.matches_seed ? (
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-green-50 text-green-700">매칭</span>
-                          ) : (
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-orange-50 text-orange-700">무관</span>
-                          )}
+                        <td className="py-2 px-2 text-center">
+                          <span className={`text-xs px-2 py-0.5 rounded font-mono font-medium ${scoreColor(score)}`}>
+                            {score}
+                          </span>
                         </td>
                         <td className="py-2 px-2 text-right font-mono text-xs">{it.impressions.toLocaleString()}</td>
                         <td className="py-2 px-2 text-right font-mono font-medium">{it.clicks.toLocaleString()}</td>
                         <td className="py-2 px-2 text-right font-mono text-xs">{(it.ctr * 100).toFixed(2)}%</td>
                         <td className="py-2 px-2 text-right font-mono text-xs">{it.cost.toLocaleString()}</td>
                       </tr>
-                    ))}
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
