@@ -2356,21 +2356,45 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     domain_token_set = _build_domain_token_set(initial_seeds)
     derived_count = len(domain_token_set) - len(POOL_DOMAIN_TOKENS)
 
-    # 등록 KW atom 도 미리 도출 — cleanup 게이트에 합쳐서 collect 게이트와 동일 기준으로 정리.
-    # cleanup 이 좁은 토큰셋이면 새 게이트로 발굴된 KW 가 다음 라운드에 silently 삭제됨.
+    # 등록 KW atom — cleanup/collect 게이트와 동일 기준.
+    # ANCHOR: user_seed atom (length≥3) 을 포함하는 등록 KW 만 학습.
+    # Why: 무필터 학습 시 POOL 토큰("교육"/"강의" 등)으로만 통과한 cross-domain KW 가
+    #      자기 atom 을 토큰셋에 주입 → 다음 라운드에 cascade drift.
+    #      예: 시드 "내일배움카드" → POOL "교육" 매치로 "블렌더교육" 등록 →
+    #          "블렌더" atom 학습 → "블렌더VFX/2D/모션" 모두 통과 → 도메인 점프.
+    # anchor 로 user_seed 라인 KW 만 atom 기여 → drift 전파 차단.
+    # 학습 atom 도 length≥3 — 2-letter (RM/AI/IT) 가 영문 KW 전체를 통과시키는 폴루션 방지.
     try:
-        registered_for_atoms = pool.list_top_registered(
+        registered_raw = pool.list_top_registered(
             customer_id, limit=5000, min_volume=30,
         )
     except Exception as e:
         logger.warning(f"[pool/collect] 등록 KW atom 조회 실패: {e}")
+        registered_raw = []
+    user_seed_kw_only = pool.list_user_seeds(customer_id)
+    # anchor: user_seed 의 모든 atom (length≥2) — 도메인 단어 (매매/보험/카드/세무) 가
+    # 2-gram 으로 들어와야 legit 등록 KW 가 anchor 통과 가능. 너무 좁히면 (≥3) 거의
+    # 모든 KW 가 차단되어 학습이 멈춤.
+    anchor_set = _build_seed_atoms(user_seed_kw_only)
+    if anchor_set:
+        registered_for_atoms = [
+            kw for kw in registered_raw
+            if any(a in kw for a in anchor_set)
+        ]
+    else:
+        # user_seed 0개인 신규 광고주 — anchor 비어있으면 학습 안 함 (drift 위험 큼).
         registered_for_atoms = []
-    registered_atoms = _build_seed_atoms(registered_for_atoms)
+    # 학습된 atom 만 length≥3 필터 — RM/AI/IT 같은 2-letter 영문 폴루션 차단.
+    # (anchor 매칭 시엔 ≥2 허용해서 legit KW 통과 보장, 학습 결과는 ≥3 만 토큰화)
+    registered_atoms_raw = _build_seed_atoms(registered_for_atoms)
+    registered_atoms = {a for a in registered_atoms_raw if len(a) >= 3}
 
     logger.warning(
         f"[pool/collect] user={uid} 도메인 토큰 {len(domain_token_set)}개 "
         f"(하드코딩 {len(POOL_DOMAIN_TOKENS)} + 시드 도출 {max(derived_count, 0)}) "
-        f"+ 등록 atom {len(registered_atoms)}개 ({len(registered_for_atoms)}개 KW 학습)"
+        f"+ 등록 atom {len(registered_atoms)}개 "
+        f"({len(registered_for_atoms)}/{len(registered_raw)} KW anchor 통과, "
+        f"anchor {len(anchor_set)}개)"
     )
 
     # 도메인 미포함 키워드 자동 cleanup (registered 제외) — 매 라운드 시작 시

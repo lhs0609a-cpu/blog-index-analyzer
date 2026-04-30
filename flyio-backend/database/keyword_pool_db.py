@@ -168,11 +168,14 @@ class KeywordPoolDB:
         self,
         account_customer_id: int,
         n_recent: int = 5,
+        max_added: int = 30,
     ) -> Dict:
-        """포화 감지 — 최근 N회 collect 모두 added=0 + skipped<500.
+        """포화 감지 — 최근 N회 collect 모두 added≤max_added + skipped<500.
 
         deadlock(reject 많음)과 다른 상태 — 후보가 거의 안 들어오거나 모두 중복.
-        keywordstool 이 매번 같은 결과 → INSERT OR IGNORE 로 모두 skip → 새 발굴 정지.
+        keywordstool 이 매번 같은 결과 → INSERT OR IGNORE 로 모두 skip → 발굴 정체.
+        max_added 임계: 0(완전 정체) 외에 diminishing returns (예: 8/27/63 ↘)도 감지 —
+        같은 시드를 계속 호출해도 새 후보가 max_added 미만이면 expansion 필요.
         """
         with self._conn() as conn:
             cur = conn.cursor()
@@ -188,7 +191,7 @@ class KeywordPoolDB:
                 return {"is_saturated": False, "consecutive_quiet_runs": 0}
             consecutive_quiet = 0
             for r in rows:
-                if r["added"] == 0 and r["skipped"] < 500:
+                if r["added"] <= max_added and r["skipped"] < 500:
                     consecutive_quiet += 1
                 else:
                     break
