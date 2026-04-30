@@ -2695,12 +2695,23 @@ async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch:
 
     pending = pool.claim_pending(customer_id, limit=batch, min_volume=1)
     if not pending:
-        pending_total = (pool.stats(customer_id).get("by_status") or {}).get("pending", 0)
-        logger.warning(f"[pool/register] user={uid} pending 없음 (전체 pending={pending_total})")
-        pool.record_run(uid, customer_id, "register", "no_pending",
-                        pending_after=pending_total,
-                        error_message=f"전체 pending={pending_total}" if pending_total else "pending 0",
-                        duration_ms=int((_time.monotonic()-t0)*1000))
+        s = pool.stats(customer_id)
+        pending_total = (s.get("by_status") or {}).get("pending", 0)
+        pending_registerable = int(s.get("pending_registerable") or 0)
+        seed_rows = max(0, pending_total - pending_registerable)
+        logger.warning(
+            f"[pool/register] user={uid} pending 없음 "
+            f"(등록가능={pending_registerable} / 시드={seed_rows} / 전체pending={pending_total})"
+        )
+        pool.record_run(
+            uid, customer_id, "register", "no_pending",
+            pending_after=pending_registerable,
+            error_message=(
+                f"등록가능 0 (시드 {seed_rows}, 전체pending {pending_total}) — "
+                f"새 키워드 수집 대기"
+            ) if pending_total else "pending 0",
+            duration_ms=int((_time.monotonic()-t0)*1000),
+        )
         return
     keywords = [p["keyword"] for p in pending]
     logger.warning(f"[pool/register] user={uid} 시작 batch={len(keywords)}")

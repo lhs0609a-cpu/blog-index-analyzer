@@ -620,6 +620,7 @@ class KeywordPoolDB:
         """등록 워커가 호출 — pending 키워드를 가져옴 (검색량 내림차순).
 
         진짜 lock은 안 걸지만, 호출 직후 register/skip으로 status 갱신해야 함.
+        시드 행 (source='user_seed', monthly_total=0) 은 register 대상 아니므로 제외.
         """
         with self._conn() as conn:
             cur = conn.cursor()
@@ -629,6 +630,7 @@ class KeywordPoolDB:
                    WHERE account_customer_id = ?
                      AND status = 'pending'
                      AND monthly_total >= ?
+                     AND COALESCE(source, '') <> 'user_seed'
                    ORDER BY monthly_total DESC
                    LIMIT ?""",
                 (account_customer_id, min_volume, limit),
@@ -686,6 +688,17 @@ class KeywordPoolDB:
             )
             by_status = {row["status"]: row["n"] for row in cur.fetchall()}
 
+            # register 가 실제로 가져갈 수 있는 pending — 시드 행 제외 + monthly_total>=1
+            cur.execute(
+                """SELECT COUNT(*) AS n FROM naverad_keyword_pool
+                   WHERE account_customer_id = ?
+                     AND status = 'pending'
+                     AND monthly_total >= 1
+                     AND COALESCE(source, '') <> 'user_seed'""",
+                (account_customer_id,),
+            )
+            pending_registerable = int((cur.fetchone() or {}).get("n") or 0)
+
             cur.execute(
                 """SELECT
                      COUNT(*) AS total,
@@ -698,6 +711,7 @@ class KeywordPoolDB:
             )
             meta = dict(cur.fetchone() or {})
             meta["by_status"] = by_status
+            meta["pending_registerable"] = pending_registerable
             return meta
 
     def get_recent_seeds(self, account_customer_id: int, limit: int = 50) -> List[str]:
