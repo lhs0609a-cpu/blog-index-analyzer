@@ -124,6 +124,7 @@ export default function KeywordPoolPage() {
   const [clickedLoading, setClickedLoading] = useState(false)
   const [clickedSelected, setClickedSelected] = useState<Set<string>>(new Set())
   const [clickedShown, setClickedShown] = useState(true)  // 항상 표시 — 사용자가 불필요 키워드 즉시 발견
+  const [clickedFilterMismatch, setClickedFilterMismatch] = useState(true)  // 무관만 보기 default ON — 사업과 상관없는 KW 즉시 발견
 
   // customer_id 쿼리 — selected 가 비어있으면 백엔드 default(가장 최근).
   const cidQs = (extra: Record<string, string | number | undefined> = {}) => {
@@ -527,12 +528,17 @@ export default function KeywordPoolPage() {
               style={{ width: `${usePct}%` }}
             />
           </div>
-          {usePct >= 90 && (
+          {usePct >= 98 ? (
             <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-800 flex items-center gap-2">
               <AlertCircle className="w-4 h-4" />
-              계정 한도 90% 초과 — 자동 수집 중단됨. 기존 키워드 정리 또는 다른 계정 사용 필요.
+              계정 한도 도달 임박 — 곧 자동 수집 정지. 노출제한/저성과 KW 정리하면 슬롯 회수.
             </div>
-          )}
+          ) : usePct >= 90 ? (
+            <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" />
+              계정 한도 90% 도달 — 100k 까지 자동으로 계속 채우는 중. 정상 작동.
+            </div>
+          ) : null}
         </div>
 
         {/* 풀 status */}
@@ -677,23 +683,41 @@ export default function KeywordPoolPage() {
             </div>
           )}
 
-          {clickedItems.length > 0 && (
+          {clickedItems.length > 0 && (() => {
+            const mismatchCount = clickedItems.filter(i => !i.matches_seed).length
+            const visibleItems = clickedFilterMismatch
+              ? clickedItems.filter(i => !i.matches_seed)
+              : clickedItems
+            return (
             <>
               <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <button
+                  onClick={() => setClickedFilterMismatch(v => !v)}
+                  className={`text-xs px-3 py-1 rounded inline-flex items-center gap-1.5 border transition ${
+                    clickedFilterMismatch
+                      ? 'bg-orange-600 text-white border-orange-600 hover:bg-orange-700'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                  title="사업 무관 (시드 매칭 X) 키워드만 보기"
+                >
+                  {clickedFilterMismatch ? '✓ 무관만 보기' : '무관만 보기'}
+                </button>
                 <span className="text-xs text-gray-600">
-                  총 {clickedItems.length}개 / 시드 무관 {clickedItems.filter(i => !i.matches_seed).length}개
+                  {clickedFilterMismatch
+                    ? `시드 무관 ${mismatchCount}개 표시 / 전체 ${clickedItems.length}개`
+                    : `전체 ${clickedItems.length}개 (무관 ${mismatchCount}개)`}
                 </span>
                 <button
                   onClick={handleClickedSelectMismatch}
                   className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded hover:bg-orange-200"
                 >
-                  시드 무관만 선택
+                  무관 전체 선택
                 </button>
                 <button
-                  onClick={() => handleClickedToggleAll(clickedSelected.size !== clickedItems.length)}
+                  onClick={() => handleClickedToggleAll(clickedSelected.size !== visibleItems.length)}
                   className="text-xs px-2 py-0.5 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
                 >
-                  {clickedSelected.size === clickedItems.length ? '전체 해제' : '전체 선택'}
+                  {clickedSelected.size === visibleItems.length ? '전체 해제' : '전체 선택'}
                 </button>
                 <button
                   onClick={handleClickedBulkDelete}
@@ -704,6 +728,11 @@ export default function KeywordPoolPage() {
                   선택 {clickedSelected.size}개 일괄 삭제
                 </button>
               </div>
+              {visibleItems.length === 0 ? (
+                <div className="text-sm text-gray-500 p-3 bg-green-50 border border-green-100 rounded">
+                  사업과 무관한 클릭 키워드 없음 — 광고 노출이 제대로 타겟팅 중.
+                </div>
+              ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -718,7 +747,7 @@ export default function KeywordPoolPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {clickedItems.map((it) => (
+                    {visibleItems.map((it) => (
                       <tr
                         key={it.keyword_id}
                         className={`border-b border-gray-100 hover:bg-gray-50 ${!it.matches_seed ? 'bg-orange-50/30' : ''}`}
@@ -747,8 +776,10 @@ export default function KeywordPoolPage() {
                   </tbody>
                 </table>
               </div>
+              )}
             </>
-          )}
+            )
+          })()}
         </div>
 
         {/* 최근 풀 키워드 샘플 — 어떤 키워드가 들어갔는지 직접 검수 */}
