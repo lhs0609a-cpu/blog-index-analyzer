@@ -2355,14 +2355,30 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     initial_seeds = pool.list_seed_whitelist(customer_id)
     domain_token_set = _build_domain_token_set(initial_seeds)
     derived_count = len(domain_token_set) - len(POOL_DOMAIN_TOKENS)
+
+    # 등록 KW atom 도 미리 도출 — cleanup 게이트에 합쳐서 collect 게이트와 동일 기준으로 정리.
+    # cleanup 이 좁은 토큰셋이면 새 게이트로 발굴된 KW 가 다음 라운드에 silently 삭제됨.
+    try:
+        registered_for_atoms = pool.list_top_registered(
+            customer_id, limit=5000, min_volume=30,
+        )
+    except Exception as e:
+        logger.warning(f"[pool/collect] 등록 KW atom 조회 실패: {e}")
+        registered_for_atoms = []
+    registered_atoms = _build_seed_atoms(registered_for_atoms)
+
     logger.warning(
         f"[pool/collect] user={uid} 도메인 토큰 {len(domain_token_set)}개 "
-        f"(하드코딩 {len(POOL_DOMAIN_TOKENS)} + 시드 도출 {max(derived_count, 0)})"
+        f"(하드코딩 {len(POOL_DOMAIN_TOKENS)} + 시드 도출 {max(derived_count, 0)}) "
+        f"+ 등록 atom {len(registered_atoms)}개 ({len(registered_for_atoms)}개 KW 학습)"
     )
 
     # 도메인 미포함 키워드 자동 cleanup (registered 제외) — 매 라운드 시작 시
+    # 게이트 = domain_token_set ∪ registered_atoms (collect 게이트와 동일)
     try:
-        cleaned = pool.cleanup_offdomain(customer_id, list(domain_token_set))
+        cleaned = pool.cleanup_offdomain(
+            customer_id, list(domain_token_set | registered_atoms)
+        )
         if cleaned > 0:
             logger.warning(f"[pool/cleanup] off-domain row 자동 삭제 {cleaned}개")
     except Exception as e:
@@ -2429,11 +2445,12 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         whitelist = seeds  # 폴백
     seed_atoms = _build_seed_atoms(whitelist)
 
-    # 통합 게이트 — POOL_DOMAIN_TOKENS ∪ seed_atoms.
+    # 통합 게이트 — POOL_DOMAIN_TOKENS ∪ seed_atoms ∪ registered_atoms.
+    # registered_atoms 는 cleanup 단계에서 이미 계산됨 — 재사용.
     # 과거 2단 게이트는 시드가 하드코딩 도메인 밖으로 drift 하면 Gate 1 에서 99% reject.
     # 시드 원자가 자동으로 도메인 토큰 역할도 하도록 합집합으로 통합 — 시드만 살아 있으면
     # 항상 매치 가능. POOL_DOMAIN_TOKENS 는 시드 0개 광고주의 폴백 baseline 으로만 의미.
-    unified_tokens = set(domain_token_set) | seed_atoms
+    unified_tokens = set(domain_token_set) | seed_atoms | registered_atoms
 
     # Loose mode 자동 진입 — 최근 5회 collect 가 모두 reject ≥95% 면 게이트 더 완화.
     # min_volume↓ + 시드별 raw 매치도 추가로 시도.
@@ -2454,7 +2471,9 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     logger.warning(
         f"[pool/collect] user={uid} 시작 target={target} seeds={len(seeds)} "
         f"whitelist={len(whitelist)} unified_tokens={len(unified_tokens)} "
-        f"seed_atoms={len(seed_atoms)} promoted={len(promoted)} loose={loose_mode}"
+        f"seed_atoms={len(seed_atoms)} reg_atoms={len(registered_atoms)} "
+        f"reg_learned_from={len(registered_for_atoms)} "
+        f"promoted={len(promoted)} loose={loose_mode}"
     )
 
     if loose_mode:

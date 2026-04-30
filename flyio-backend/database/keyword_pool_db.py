@@ -551,9 +551,12 @@ class KeywordPoolDB:
                 kw = row["keyword"]
                 if kw in existing_seeds:
                     continue
-                # 도메인 토큰 검증 — ambiguous 키워드(은행 등)는 시드로 승격 안 함
-                if domain_tokens and not any(t in kw for t in domain_tokens):
-                    continue
+                # domain_tokens 게이트는 의도적으로 미적용.
+                # Why: 후보는 status='registered' 즉 이미 collect→register를 통과한 KW.
+                # 좁은 토큰셋이 brand형 KW(예: "에듀윌부동산", "덕은힐스테이트")를 영구히
+                # 승격 차단해 시드가 4-5개에서 자가확장 못 하던 deadlock 의 직접 원인.
+                # 시그니처는 유지(외부 호출 호환). 파라미터는 미사용 표시.
+                _ = domain_tokens
                 # 같은 의미장 중복 제외 — 기존 시드의 substring/superstring이면 가치 적음
                 if any(s in kw or kw in s for s in existing_seeds if s and len(s) >= 2):
                     # 기존 시드와 substring 관계지만 다른 표현 — 추가 시드로 가치는 있음.
