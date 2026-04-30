@@ -606,6 +606,18 @@ class NaverAdApiClient:
             "fields": _json.dumps(fields),
             "timeRange": _json.dumps({"since": start_date, "until": end_date}),
         }
+        # 디버그: 실제 빌드된 query string 확인 (한 번만, 11001 진단용)
+        if not getattr(self, "_stats_debug_done", False):
+            try:
+                import httpx as _httpx
+                _q = _httpx.QueryParams(params)
+                logger.warning(
+                    f"[NaverAd/stats DEBUG] URL = {self.BASE_URL}/stats?{_q} "
+                    f"(ids n={len(ids)}, sample={ids[:2]})"
+                )
+                self._stats_debug_done = True
+            except Exception:
+                pass
         return await self._request("GET", "/stats", params)
 
     async def close(self):

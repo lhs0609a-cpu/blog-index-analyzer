@@ -3392,10 +3392,11 @@ async def keyword_pool_clicked_keywords(
         # 첫 batch 가 404 면 stat_type 경로 자체가 깨진 거라 즉시 break — 25k id × 100 batch
         # × 60s 폴링 = 분당 수백번 spam. 한 번 fail 시 같은 라운드 나머지는 skip.
         first_batch_failed = False
-        for i in range(0, len(ids), 100):
+        # Naver /stats batch 한도: 작음 (정확한 한도 비공개). 100→10 으로 축소.
+        for i in range(0, len(ids), 10):
             if first_batch_failed:
                 break
-            batch = ids[i:i + 100]
+            batch = ids[i:i + 10]
             try:
                 stats = await client.get_stats(
                     stat_type="KEYWORD", ids=batch,
