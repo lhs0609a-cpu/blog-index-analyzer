@@ -275,6 +275,62 @@ export async function checkBlogExists(blogId: string): Promise<boolean> {
 }
 
 /**
+ * 실제 네이버 인덱스 검증 (일반/준최/최적/최적+)
+ */
+export interface VerifyIndexPostResult {
+  title: string
+  url: string
+  search_keyword: string
+  indexed_blog_tab: boolean
+  indexed_view_tab: boolean
+  blog_tab_rank: number | null
+  view_tab_rank: number | null
+}
+
+export interface VerifyIndexSignal {
+  score: number       // 0~100
+  weight: number      // 0~1
+  details: Record<string, any>
+}
+
+export type VerifyIndexSignalKey =
+  | 'exact_index'
+  | 'integrated_search'
+  | 'indexing_latency'
+  | 'topic_consistency'
+  | 'content_quality'
+  | 'engagement'
+
+export interface VerifyIndexResponse {
+  ok: boolean
+  blog_id: string
+  level_category: '일반' | '준최' | '최적' | '최적+' | null
+  detailed_level: number | null
+  detailed_label: string | null
+  weighted_score: number | null
+  signal_scores: Partial<Record<VerifyIndexSignalKey, VerifyIndexSignal>>
+  post_results: VerifyIndexPostResult[]
+  checked_posts: number
+  confidence: 'high' | 'medium' | 'low'
+  method: string
+  disclaimer: string | null
+  cached: boolean
+  error: string | null
+}
+
+export async function verifyBlogIndex(
+  blogId: string,
+  options?: { sampleSize?: number; refresh?: boolean }
+): Promise<VerifyIndexResponse> {
+  const response = await apiClient.post<VerifyIndexResponse>(
+    `/api/blogs/verify-index${options?.refresh ? '?refresh=true' : ''}`,
+    { blog_id: blogId, sample_size: options?.sampleSize ?? 8 },
+    { timeout: 60000 }
+  )
+  return response.data
+}
+
+/**
  * Search blogs by keyword (returns all results at once)
  */
 export async function searchKeyword(keyword: string, limit: number = 100): Promise<any> {

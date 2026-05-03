@@ -7,7 +7,7 @@ import Confetti from 'react-confetti'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useWindowSize } from '@/lib/hooks/useWindowSize'
-import { analyzeBlog, saveBlogToList } from '@/lib/api/blog'
+import { analyzeBlog, saveBlogToList, verifyBlogIndex, type VerifyIndexResponse } from '@/lib/api/blog'
 import { registerBlog, startRankCheck, getTrackedBlogs } from '@/lib/api/rankTracker'
 import type { BlogIndexResult } from '@/lib/types/api'
 import toast from 'react-hot-toast'
@@ -46,21 +46,21 @@ function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywo
 
   // 레벨별 해석 데이터 (백분위는 실제 값 사용)
   const levelInterpretation = {
-    1: { tier: '시작', viewChance: '매우 낮음', competitiveKeywords: '월 검색량 100 미만' },
-    2: { tier: '스타터', viewChance: '매우 낮음', competitiveKeywords: '월 검색량 200 미만' },
-    3: { tier: '뉴비', viewChance: '매우 낮음', competitiveKeywords: '월 검색량 300 미만' },
-    4: { tier: '초보', viewChance: '낮음', competitiveKeywords: '월 검색량 500 미만' },
-    5: { tier: '입문', viewChance: '낮음', competitiveKeywords: '월 검색량 800 미만' },
-    6: { tier: '성장기', viewChance: '보통', competitiveKeywords: '월 검색량 1,500 미만' },
-    7: { tier: '아이언', viewChance: '보통', competitiveKeywords: '월 검색량 3,000 미만' },
-    8: { tier: '브론즈', viewChance: '높음', competitiveKeywords: '월 검색량 5,000 미만' },
-    9: { tier: '실버', viewChance: '높음', competitiveKeywords: '월 검색량 10,000 미만' },
-    10: { tier: '골드', viewChance: '높음', competitiveKeywords: '월 검색량 20,000 미만' },
-    11: { tier: '플래티넘', viewChance: '최상', competitiveKeywords: '월 검색량 50,000 미만' },
-    12: { tier: '다이아몬드', viewChance: '최상', competitiveKeywords: '월 검색량 100,000 미만' },
-    13: { tier: '챌린저', viewChance: '최상', competitiveKeywords: '고경쟁 키워드 가능' },
-    14: { tier: '그랜드마스터', viewChance: '최상', competitiveKeywords: '대부분 키워드 경쟁 가능' },
-    15: { tier: '마스터', viewChance: '최상', competitiveKeywords: '모든 키워드 상위 노출' },
+    1: { tier: '일반', viewChance: '매우 낮음', competitiveKeywords: '월 검색량 100 미만' },
+    2: { tier: '준최1', viewChance: '매우 낮음', competitiveKeywords: '월 검색량 200 미만' },
+    3: { tier: '준최2', viewChance: '매우 낮음', competitiveKeywords: '월 검색량 300 미만' },
+    4: { tier: '준최3', viewChance: '낮음', competitiveKeywords: '월 검색량 500 미만' },
+    5: { tier: '준최4', viewChance: '낮음', competitiveKeywords: '월 검색량 800 미만' },
+    6: { tier: '준최5', viewChance: '보통', competitiveKeywords: '월 검색량 1,500 미만' },
+    7: { tier: '준최6', viewChance: '보통', competitiveKeywords: '월 검색량 3,000 미만' },
+    8: { tier: '준최7', viewChance: '높음', competitiveKeywords: '월 검색량 5,000 미만' },
+    9: { tier: '최적1', viewChance: '높음', competitiveKeywords: '월 검색량 10,000 미만' },
+    10: { tier: '최적2', viewChance: '높음', competitiveKeywords: '월 검색량 20,000 미만' },
+    11: { tier: '최적3', viewChance: '최상', competitiveKeywords: '월 검색량 50,000 미만' },
+    12: { tier: '최적1+', viewChance: '최상', competitiveKeywords: '월 검색량 100,000 미만' },
+    13: { tier: '최적2+', viewChance: '최상', competitiveKeywords: '고경쟁 키워드 가능' },
+    14: { tier: '최적3+', viewChance: '최상', competitiveKeywords: '대부분 키워드 경쟁 가능' },
+    15: { tier: '최적4+', viewChance: '최상', competitiveKeywords: '모든 키워드 상위 노출' },
   }
 
   const interpretation = levelInterpretation[level as keyof typeof levelInterpretation] || levelInterpretation[1]
@@ -182,6 +182,168 @@ function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywo
           </div>
         </div>
       )}
+    </motion.div>
+  )
+}
+
+// 실제 네이버 인덱스 검증 카드 v2 — 6개 신호 통합
+const SIGNAL_LABELS: Record<string, { label: string; desc: string }> = {
+  exact_index: { label: '정확매칭 색인률', desc: '제목 "쌍따옴표" 검색 → 블로그탭 노출 (whereispost 방식)' },
+  integrated_search: { label: '통합검색 노출', desc: 'VIEW탭 노출률' },
+  indexing_latency: { label: '색인 지연', desc: '최근 글의 게시→색인 속도' },
+  topic_consistency: { label: '주제 일관성', desc: 'C-Rank Context — 한 주제 집중도' },
+  content_quality: { label: '콘텐츠 품질', desc: 'DIA 충실성 — 글 길이/내용' },
+  engagement: { label: '체인/참여', desc: 'C-Rank Chain — 이웃·방문 활성도' },
+}
+
+function SignalBar({ name, score, weight }: { name: string; score: number; weight: number }) {
+  const meta = SIGNAL_LABELS[name] ?? { label: name, desc: '' }
+  const color = score >= 80 ? 'bg-emerald-500' : score >= 60 ? 'bg-blue-500' : score >= 40 ? 'bg-amber-500' : 'bg-red-500'
+  return (
+    <div className="space-y-1">
+      <div className="flex items-baseline justify-between gap-3">
+        <div>
+          <span className="text-sm font-semibold text-gray-900">{meta.label}</span>
+          <span className="ml-2 text-xs text-gray-500">가중치 {Math.round(weight * 100)}%</span>
+        </div>
+        <span className="text-sm font-bold tabular-nums text-gray-900">{Math.round(score)}</span>
+      </div>
+      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div className={`h-full ${color} transition-all`} style={{ width: `${Math.max(2, score)}%` }} />
+      </div>
+      {meta.desc && <div className="text-[11px] text-gray-500">{meta.desc}</div>}
+    </div>
+  )
+}
+
+function IndexVerificationCard({ blogId }: { blogId: string }) {
+  const [loading, setLoading] = useState(false)
+  const [data, setData] = useState<VerifyIndexResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [showPosts, setShowPosts] = useState(false)
+
+  const runVerification = async (refresh = false) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await verifyBlogIndex(blogId, { refresh })
+      setData(res)
+      if (!res.ok && res.error) setError(res.error)
+    } catch (e: any) {
+      setError(e?.message || '검증 실패')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const categoryStyle: Record<string, { bg: string; text: string; ring: string }> = {
+    '최적+': { bg: 'bg-purple-100', text: 'text-purple-700', ring: 'ring-purple-200' },
+    '최적': { bg: 'bg-blue-100', text: 'text-blue-700', ring: 'ring-blue-200' },
+    '준최': { bg: 'bg-amber-100', text: 'text-amber-700', ring: 'ring-amber-200' },
+    '일반': { bg: 'bg-gray-100', text: 'text-gray-700', ring: 'ring-gray-200' },
+  }
+  const style = data?.level_category ? categoryStyle[data.level_category] : null
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-3xl p-8 bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200/50 shadow-xl mb-8"
+    >
+      <div className="flex items-start justify-between gap-4 mb-4">
+        <div>
+          <h3 className="text-2xl font-bold flex items-center gap-2">
+            <CheckCircle className="w-6 h-6 text-indigo-600" />
+            실측 인덱스 검증 (NSIDE 방법론 기반)
+          </h3>
+          <p className="text-sm text-gray-600 mt-1">
+            6개 공개 신호(정확매칭 색인 / VIEW 노출 / 색인 지연 / 주제 일관성 / 콘텐츠 / 체인)를 NSIDE·whereispost 표준에 가깝게 측정 — 약 8~20초 소요
+          </p>
+        </div>
+        <button
+          onClick={() => runVerification(!!data)}
+          disabled={loading}
+          className="shrink-0 px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+        >
+          {loading ? (<><Loader2 className="w-4 h-4 animate-spin" />검증 중...</>) : (data ? '다시 검증' : '검증 시작')}
+        </button>
+      </div>
+
+      {error && (
+        <div className="mt-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+          검증 실패: {error}
+        </div>
+      )}
+
+      {data?.ok && style && (
+        <>
+          <div className="mt-4 grid md:grid-cols-3 gap-4">
+            <div className={`rounded-2xl p-5 ${style.bg} ring-2 ${style.ring}`}>
+              <div className="text-xs text-gray-600 mb-1">실측 카테고리</div>
+              <div className={`text-3xl font-black ${style.text}`}>{data.level_category}</div>
+              {data.detailed_label && (
+                <div className={`text-sm font-bold mt-1 ${style.text}`}>세부: {data.detailed_label}</div>
+              )}
+              <div className="text-xs text-gray-500 mt-2">
+                신뢰도 {data.confidence === 'high' ? '높음' : data.confidence === 'medium' ? '보통' : '낮음'}
+                {data.cached && ' · 캐시'}
+              </div>
+            </div>
+            <div className="rounded-2xl p-5 bg-white border border-gray-200">
+              <div className="text-xs text-gray-600 mb-1">종합 점수</div>
+              <div className="text-3xl font-bold text-gray-900 tabular-nums">{Math.round(data.weighted_score ?? 0)}</div>
+              <div className="text-xs text-gray-500 mt-2">/ 100점</div>
+            </div>
+            <div className="rounded-2xl p-5 bg-white border border-gray-200">
+              <div className="text-xs text-gray-600 mb-1">검증 포스팅</div>
+              <div className="text-3xl font-bold text-gray-900 tabular-nums">{data.checked_posts}</div>
+              <div className="text-xs text-gray-500 mt-2">개 (RSS 최근 글)</div>
+            </div>
+          </div>
+
+          {/* 신호별 점수 바 */}
+          <div className="mt-6 grid md:grid-cols-2 gap-x-8 gap-y-4 bg-white/70 rounded-2xl p-5 border border-gray-200">
+            {Object.entries(data.signal_scores).map(([name, sig]) => (
+              <SignalBar key={name} name={name} score={sig.score} weight={sig.weight} />
+            ))}
+          </div>
+
+          {/* 포스팅별 펼침 */}
+          {data.post_results.length > 0 && (
+            <div className="mt-4">
+              <button
+                onClick={() => setShowPosts(s => !s)}
+                className="text-sm text-indigo-600 hover:text-indigo-700 font-semibold flex items-center gap-1"
+              >
+                <ChevronRight className={`w-4 h-4 transition-transform ${showPosts ? 'rotate-90' : ''}`} />
+                포스팅별 색인 결과 ({data.post_results.length}건)
+              </button>
+              {showPosts && (
+                <div className="mt-3 space-y-2 max-h-80 overflow-y-auto pr-2">
+                  {data.post_results.map((p, i) => (
+                    <div key={i} className="p-3 rounded-lg bg-white border border-gray-200 text-sm">
+                      <div className="font-medium text-gray-900 truncate">{p.title}</div>
+                      <div className="flex flex-wrap gap-3 mt-1 text-xs">
+                        <span className={p.indexed_blog_tab ? 'text-green-700' : 'text-red-700'}>
+                          블로그탭: {p.indexed_blog_tab ? `#${p.blog_tab_rank}` : '미노출'}
+                        </span>
+                        <span className={p.indexed_view_tab ? 'text-green-700' : 'text-red-700'}>
+                          VIEW: {p.indexed_view_tab ? `#${p.view_tab_rank}` : '미노출'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* 정직성 면책 */}
+      <div className="mt-6 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 leading-relaxed">
+        <strong>주의:</strong> {data?.disclaimer ?? '네이버는 블로그 지수 API를 외부에 공개하지 않습니다. 본 결과는 NSIDE·NVIEW·whereispost·리드뷰 등이 사용하는 공개 측정 신호(정확매칭 색인률, 30위/72시간 누락, C-Rank/DIA 프록시)를 통합한 비공식 추정치이며, 100% 정확하다고 보장할 수 없습니다 — 각 도구의 측정 알고리즘은 모두 다릅니다.'}
+      </div>
     </motion.div>
   )
 }
@@ -1671,13 +1833,10 @@ export default function AnalyzePage() {
                         <div className="text-6xl font-black gradient-text mb-4">
                           {(() => {
                             const level = result.index.level
-                            if (level <= 2) return 'Iron'
-                            if (level <= 4) return 'Bronze'
-                            if (level <= 6) return 'Silver'
-                            if (level <= 9) return 'Gold'
-                            if (level <= 11) return 'Platinum'
-                            if (level <= 13) return 'Diamond'
-                            return 'Challenger'
+                            if (level === 1) return '일반'
+                            if (level <= 8) return `준최${level - 1}`
+                            if (level <= 11) return `최적${level - 8}`
+                            return `최적${level - 11}+`
                           })()}
                         </div>
                         <div className="text-3xl font-bold text-gray-900 mb-2">
@@ -1689,10 +1848,10 @@ export default function AnalyzePage() {
                           {/* 레벨 구간 설명 - 대형 티어 카드 */}
                           <div className="grid grid-cols-4 gap-4 mb-10">
                             {[
-                              { range: '1', label: 'Lv.1', color: 'bg-gray-400', textColor: 'text-gray-700', bgActive: 'bg-gray-50' },
-                              { range: '2-8', label: 'Lv.2~8', color: 'bg-blue-500', textColor: 'text-blue-600', bgActive: 'bg-blue-50' },
-                              { range: '9-11', label: 'Lv.9~11', color: 'bg-[#0064FF]', textColor: 'text-[#0064FF]', bgActive: 'bg-blue-50' },
-                              { range: '12-15', label: 'Lv.12~15', color: 'bg-gradient-to-r from-[#0064FF] to-[#3182F6]', textColor: 'text-[#0064FF]', bgActive: 'bg-blue-50' },
+                              { range: '1', label: '일반', color: 'bg-gray-400', textColor: 'text-gray-700', bgActive: 'bg-gray-50' },
+                              { range: '2-8', label: '준최1~7', color: 'bg-blue-500', textColor: 'text-blue-600', bgActive: 'bg-blue-50' },
+                              { range: '9-11', label: '최적1~3', color: 'bg-[#0064FF]', textColor: 'text-[#0064FF]', bgActive: 'bg-blue-50' },
+                              { range: '12-15', label: '최적1+~4+', color: 'bg-gradient-to-r from-[#0064FF] to-[#3182F6]', textColor: 'text-[#0064FF]', bgActive: 'bg-blue-50' },
                             ].map((tier) => {
                               const currentLevel = result.index.level
                               const isActive = (tier.range === '1' && currentLevel === 1) ||
@@ -2010,6 +2169,9 @@ export default function AnalyzePage() {
                   result={result}
                   onKeywordSearch={() => router.push('/keyword-search')}
                 />
+
+                {/* 실제 네이버 인덱스 검증 (일반/준최/최적/최적+) */}
+                <IndexVerificationCard blogId={result.blog.blog_id} />
 
                 {/* P0-2: Killer Feature - 상위 노출 가능 키워드 예측 */}
                 <RankableKeywordPreview result={result} isFreeUser={isFreeUser} />

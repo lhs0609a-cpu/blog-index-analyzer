@@ -343,65 +343,55 @@ class BlogPercentileDB:
             conn.close()
 
     def get_level_from_percentile(self, percentile: float) -> Tuple[int, str]:
-        """백분위 기반 레벨 계산 (v3 - 실제 네이버 레벨 분포 반영)
+        """백분위 기반 레벨 계산 (v4 - 일반/준최/최적/최적+ 체계)
 
-        실제 네이버 블로그 레벨 분포:
-        - 네이버 Lv.1 (10%): 블랭크 Lv.1-2
-        - 네이버 Lv.2 (30%): 블랭크 Lv.3-4
-        - 네이버 Lv.3 (43%): 블랭크 Lv.5-7 (가장 많음)
-        - 네이버 Lv.4 (17%): 블랭크 Lv.8-15
-
-        키워드 검색 상위 노출 블로그 기준:
-        - 상위 노출 블로그는 대부분 네이버 Lv.3-4
-        - 따라서 블랭크 Lv.3-7이 가장 많이 분포
-
-        백분위 → 레벨 매핑 (v3):
-        상위 0.5% = Level 15 (마스터) - 최상위
-        상위 1.5% = Level 14 (그랜드마스터)
-        상위 3% = Level 13 (챌린저)
-        상위 5% = Level 12 (다이아몬드)
-        상위 8% = Level 11 (플래티넘)
-        상위 12% = Level 10 (골드)
-        상위 17% = Level 9 (실버) ← 네이버 Lv.4 시작
-        상위 25% = Level 8 (브론즈)
-        상위 35% = Level 7 (아이언)
-        상위 50% = Level 6 (성장기) ← 네이버 Lv.3 중심
-        상위 60% = Level 5 (입문)
-        상위 75% = Level 4 (초보) ← 네이버 Lv.2-3 경계
-        상위 90% = Level 3 (뉴비) ← 네이버 Lv.2
-        상위 97% = Level 2 (스타터) ← 네이버 Lv.1-2 경계
-        하위 3% = Level 1 (시작) ← 네이버 Lv.1
+        백분위 → 레벨 매핑:
+        상위 0.5% = Lv.15 (최적4+)
+        상위 1.5% = Lv.14 (최적3+)
+        상위 3%   = Lv.13 (최적2+)
+        상위 5%   = Lv.12 (최적1+)
+        상위 8%   = Lv.11 (최적3)
+        상위 12%  = Lv.10 (최적2)
+        상위 17%  = Lv.9  (최적1)   ← 네이버 Lv.4 시작
+        상위 25%  = Lv.8  (준최7)
+        상위 35%  = Lv.7  (준최6)
+        상위 50%  = Lv.6  (준최5)   ← 네이버 Lv.3 중심
+        상위 60%  = Lv.5  (준최4)
+        상위 75%  = Lv.4  (준최3)
+        상위 90%  = Lv.3  (준최2)
+        상위 97%  = Lv.2  (준최1)
+        하위 3%   = Lv.1  (일반)    ← 네이버 Lv.1 영역
         """
         if percentile >= 99.5:
-            return 15, "마스터"
+            return 15, "최적4+"
         elif percentile >= 98.5:
-            return 14, "그랜드마스터"
+            return 14, "최적3+"
         elif percentile >= 97.0:
-            return 13, "챌린저"
+            return 13, "최적2+"
         elif percentile >= 95.0:
-            return 12, "다이아몬드"
+            return 12, "최적1+"
         elif percentile >= 92.0:
-            return 11, "플래티넘"
+            return 11, "최적3"
         elif percentile >= 88.0:
-            return 10, "골드"
+            return 10, "최적2"
         elif percentile >= 83.0:
-            return 9, "실버"        # 네이버 Lv.4 영역 시작
+            return 9, "최적1"        # 네이버 Lv.4 영역 시작
         elif percentile >= 75.0:
-            return 8, "브론즈"
+            return 8, "준최7"
         elif percentile >= 65.0:
-            return 7, "아이언"
+            return 7, "준최6"
         elif percentile >= 50.0:
-            return 6, "성장기"      # 네이버 Lv.3 중심
+            return 6, "준최5"        # 네이버 Lv.3 중심
         elif percentile >= 40.0:
-            return 5, "입문"
+            return 5, "준최4"
         elif percentile >= 25.0:
-            return 4, "초보"        # 네이버 Lv.2-3 경계
+            return 4, "준최3"
         elif percentile >= 10.0:
-            return 3, "뉴비"        # 네이버 Lv.2 영역
+            return 3, "준최2"
         elif percentile >= 3.0:
-            return 2, "스타터"      # 네이버 Lv.1-2 경계
+            return 2, "준최1"
         else:
-            return 1, "시작"        # 네이버 Lv.1 영역
+            return 1, "일반"          # 네이버 Lv.1 영역
 
     def get_stats(self) -> Dict:
         """전체 통계 조회"""

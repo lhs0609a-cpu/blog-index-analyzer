@@ -18,21 +18,21 @@ export interface LevelGradeInfo {
  */
 export function getLevelGrade(level: number): LevelGradeInfo {
   const gradeMap: Record<number, Omit<LevelGradeInfo, 'level'>> = {
-    15: { grade: 'S', gradeColor: 'text-purple-600', gradeBg: 'bg-purple-100', tier: '레전드', percentile: '상위 0.1%', description: '최정상급 블로그' },
-    14: { grade: 'S', gradeColor: 'text-purple-600', gradeBg: 'bg-purple-100', tier: '레전드', percentile: '상위 0.5%', description: '최정상급 블로그' },
-    13: { grade: 'A+', gradeColor: 'text-red-600', gradeBg: 'bg-red-100', tier: '마스터', percentile: '상위 1%', description: '인플루언서급 블로그' },
-    12: { grade: 'A+', gradeColor: 'text-red-600', gradeBg: 'bg-red-100', tier: '마스터', percentile: '상위 2%', description: '인플루언서급 블로그' },
-    11: { grade: 'A', gradeColor: 'text-red-500', gradeBg: 'bg-red-50', tier: '전문가', percentile: '상위 3%', description: '고품질 블로그' },
-    10: { grade: 'A', gradeColor: 'text-red-500', gradeBg: 'bg-red-50', tier: '전문가', percentile: '상위 5%', description: '고품질 블로그' },
-    9: { grade: 'B+', gradeColor: 'text-orange-600', gradeBg: 'bg-orange-100', tier: '상급', percentile: '상위 8%', description: '우수한 블로그' },
-    8: { grade: 'B', gradeColor: 'text-orange-500', gradeBg: 'bg-orange-50', tier: '상급', percentile: '상위 15%', description: '우수한 블로그' },
-    7: { grade: 'B', gradeColor: 'text-orange-500', gradeBg: 'bg-orange-50', tier: '중상급', percentile: '상위 25%', description: '평균 이상 블로그' },
-    6: { grade: 'C+', gradeColor: 'text-yellow-600', gradeBg: 'bg-yellow-100', tier: '중급', percentile: '상위 35%', description: '평균 수준 블로그' },
-    5: { grade: 'C', gradeColor: 'text-yellow-500', gradeBg: 'bg-yellow-50', tier: '중급', percentile: '상위 45%', description: '평균 수준 블로그' },
-    4: { grade: 'D+', gradeColor: 'text-green-600', gradeBg: 'bg-green-100', tier: '성장기', percentile: '중위권', description: '성장 중인 블로그' },
-    3: { grade: 'D', gradeColor: 'text-green-500', gradeBg: 'bg-green-50', tier: '성장기', percentile: '하위 40%', description: '성장 중인 블로그' },
-    2: { grade: 'E', gradeColor: 'text-blue-500', gradeBg: 'bg-blue-50', tier: '입문', percentile: '하위 30%', description: '시작 단계 블로그' },
-    1: { grade: 'F', gradeColor: 'text-gray-500', gradeBg: 'bg-gray-100', tier: '입문', percentile: '하위 20%', description: '시작 단계 블로그' },
+    15: { grade: 'S', gradeColor: 'text-purple-600', gradeBg: 'bg-purple-100', tier: '최적4+', percentile: '상위 0.1%', description: '최정상급 블로그' },
+    14: { grade: 'S', gradeColor: 'text-purple-600', gradeBg: 'bg-purple-100', tier: '최적3+', percentile: '상위 0.5%', description: '최정상급 블로그' },
+    13: { grade: 'A+', gradeColor: 'text-red-600', gradeBg: 'bg-red-100', tier: '최적2+', percentile: '상위 1%', description: '인플루언서급 블로그' },
+    12: { grade: 'A+', gradeColor: 'text-red-600', gradeBg: 'bg-red-100', tier: '최적1+', percentile: '상위 2%', description: '인플루언서급 블로그' },
+    11: { grade: 'A', gradeColor: 'text-red-500', gradeBg: 'bg-red-50', tier: '최적3', percentile: '상위 3%', description: '고품질 블로그' },
+    10: { grade: 'A', gradeColor: 'text-red-500', gradeBg: 'bg-red-50', tier: '최적2', percentile: '상위 5%', description: '고품질 블로그' },
+    9: { grade: 'B+', gradeColor: 'text-orange-600', gradeBg: 'bg-orange-100', tier: '최적1', percentile: '상위 8%', description: '우수한 블로그' },
+    8: { grade: 'B', gradeColor: 'text-orange-500', gradeBg: 'bg-orange-50', tier: '준최7', percentile: '상위 15%', description: '우수한 블로그' },
+    7: { grade: 'B', gradeColor: 'text-orange-500', gradeBg: 'bg-orange-50', tier: '준최6', percentile: '상위 25%', description: '평균 이상 블로그' },
+    6: { grade: 'C+', gradeColor: 'text-yellow-600', gradeBg: 'bg-yellow-100', tier: '준최5', percentile: '상위 35%', description: '평균 수준 블로그' },
+    5: { grade: 'C', gradeColor: 'text-yellow-500', gradeBg: 'bg-yellow-50', tier: '준최4', percentile: '상위 45%', description: '평균 수준 블로그' },
+    4: { grade: 'D+', gradeColor: 'text-green-600', gradeBg: 'bg-green-100', tier: '준최3', percentile: '중위권', description: '성장 중인 블로그' },
+    3: { grade: 'D', gradeColor: 'text-green-500', gradeBg: 'bg-green-50', tier: '준최2', percentile: '하위 40%', description: '성장 중인 블로그' },
+    2: { grade: 'E', gradeColor: 'text-blue-500', gradeBg: 'bg-blue-50', tier: '준최1', percentile: '하위 30%', description: '시작 단계 블로그' },
+    1: { grade: 'F', gradeColor: 'text-gray-500', gradeBg: 'bg-gray-100', tier: '일반', percentile: '하위 20%', description: '시작 단계 블로그' },
   }
 
   const info = gradeMap[Math.min(15, Math.max(1, level))] || gradeMap[1]

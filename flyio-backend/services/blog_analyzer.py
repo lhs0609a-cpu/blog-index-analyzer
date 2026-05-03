@@ -11,48 +11,54 @@ logger = logging.getLogger(__name__)
 
 def get_blog_level_from_score(score: float) -> Tuple[int, str]:
     """
-    점수 기반 레벨 계산
+    점수 기반 레벨 계산 (일반/준최/최적/최적+ 체계)
 
-    네이버 블로그 점수 → 레벨 변환:
-    - 85+ 점: Lv.13-15 (파워블로거)
-    - 75-85 점: Lv.10-12 (인플루언서급)
-    - 65-75 점: Lv.7-9 (최적화 블로그)
-    - 55-65 점: Lv.4-6 (준최적화 블로그)
-    - 45-55 점: Lv.3-4 (일반 활성 블로그)
-    - 35-45 점: Lv.2-3 (입문 블로그)
-    - 25-35 점: Lv.1-2 (초보 블로그)
-    - 25 점 미만: Lv.1 (신규/방치 블로그)
+    - 95+ : Lv.15 최적4+
+    - 90+ : Lv.14 최적3+
+    - 85+ : Lv.13 최적2+
+    - 80+ : Lv.12 최적1+
+    - 75+ : Lv.11 최적3
+    - 72+ : Lv.10 최적2
+    - 68+ : Lv.9  최적1
+    - 65+ : Lv.8  준최7
+    - 60+ : Lv.7  준최6
+    - 55+ : Lv.6  준최5
+    - 50+ : Lv.5  준최4
+    - 45+ : Lv.4  준최3
+    - 35+ : Lv.3  준최2
+    - 25+ : Lv.2  준최1
+    - <25 : Lv.1  일반
     """
     if score >= 95:
-        return 15, "마스터"
+        return 15, "최적4+"
     elif score >= 90:
-        return 14, "그랜드마스터"
+        return 14, "최적3+"
     elif score >= 85:
-        return 13, "챌린저"
+        return 13, "최적2+"
     elif score >= 80:
-        return 12, "다이아몬드"
+        return 12, "최적1+"
     elif score >= 75:
-        return 11, "플래티넘"
+        return 11, "최적3"
     elif score >= 72:
-        return 10, "골드"
+        return 10, "최적2"
     elif score >= 68:
-        return 9, "실버"
+        return 9, "최적1"
     elif score >= 65:
-        return 8, "브론즈"
+        return 8, "준최7"
     elif score >= 60:
-        return 7, "아이언"
+        return 7, "준최6"
     elif score >= 55:
-        return 6, "성장기"
+        return 6, "준최5"
     elif score >= 50:
-        return 5, "입문"
+        return 5, "준최4"
     elif score >= 45:
-        return 4, "초보"
+        return 4, "준최3"
     elif score >= 35:
-        return 3, "뉴비"
+        return 3, "준최2"
     elif score >= 25:
-        return 2, "스타터"
+        return 2, "준최1"
     else:
-        return 1, "시작"
+        return 1, "일반"
 
 
 async def analyze_blog(blog_id: str, keyword: str = None) -> Optional[Dict]:

@@ -108,6 +108,30 @@ def set_search_results_cache(keyword: str, data: Dict):
     }
 
 
+# ===== 인덱스 검증 결과 캐시 =====
+# 실제 검색 호출이 포함되므로 24h TTL — 같은 블로그 반복 검증 방지
+VERIFY_INDEX_CACHE: Dict[str, Dict] = {}
+VERIFY_INDEX_CACHE_TTL = 86400  # 24시간
+
+
+def get_cached_verify_index(blog_id: str) -> Optional[Dict]:
+    cached = VERIFY_INDEX_CACHE.get(blog_id)
+    if cached and time.time() - cached["timestamp"] < VERIFY_INDEX_CACHE_TTL:
+        return cached["data"]
+    if cached:
+        del VERIFY_INDEX_CACHE[blog_id]
+    return None
+
+
+def set_verify_index_cache(blog_id: str, data: Dict):
+    if len(VERIFY_INDEX_CACHE) > 200:
+        sorted_keys = sorted(VERIFY_INDEX_CACHE.keys(),
+                             key=lambda k: VERIFY_INDEX_CACHE[k]["timestamp"])
+        for key in sorted_keys[:100]:
+            del VERIFY_INDEX_CACHE[key]
+    VERIFY_INDEX_CACHE[blog_id] = {"data": data, "timestamp": time.time()}
+
+
 # ===== 크롬 확장 프로그램 결과 저장소 (메모리 캐시) =====
 EXTENSION_RESULTS_CACHE: Dict[str, Dict] = {}
 EXTENSION_CACHE_TTL = 600  # 10분
@@ -586,6 +610,45 @@ class BlogAnalysisResponse(BaseModel):
     message: Optional[str] = None
     estimated_time_seconds: Optional[int] = None
     result: Optional[BlogIndexResultResponse] = None
+
+
+# ===== Index Verification Models =====
+class VerifyIndexRequest(BaseModel):
+    blog_id: str
+    sample_size: Optional[int] = 8
+
+
+class VerifyIndexPostResult(BaseModel):
+    title: str
+    url: str
+    search_keyword: str
+    indexed_blog_tab: bool
+    indexed_view_tab: bool
+    blog_tab_rank: Optional[int] = None
+    view_tab_rank: Optional[int] = None
+
+
+class VerifyIndexSignal(BaseModel):
+    score: float = 0  # 0~100
+    weight: float = 0  # 0~1 (정규화)
+    details: Dict[str, Any] = {}
+
+
+class VerifyIndexResponse(BaseModel):
+    ok: bool
+    blog_id: str
+    level_category: Optional[str] = None  # 일반 / 준최 / 최적 / 최적+
+    detailed_level: Optional[int] = None  # 1~15
+    detailed_label: Optional[str] = None  # "준최3" 등
+    weighted_score: Optional[float] = None  # 0~100
+    signal_scores: Dict[str, VerifyIndexSignal] = {}
+    post_results: List[VerifyIndexPostResult] = []
+    checked_posts: int = 0
+    confidence: str = "low"
+    method: str = "multi_signal_v2"
+    disclaimer: Optional[str] = None
+    cached: bool = False
+    error: Optional[str] = None
 
 
 def generate_signature(timestamp: str, method: str, uri: str, secret_key: str) -> str:
@@ -3139,17 +3202,15 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
             index["level"] = level
             index["grade"] = grade
 
-            # 레벨 카테고리 설정
-            if level >= 13:
-                index["level_category"] = "레전드"
-            elif level >= 10:
-                index["level_category"] = "엘리트"
-            elif level >= 7:
-                index["level_category"] = "우수"
-            elif level >= 4:
-                index["level_category"] = "성장"
+            # 레벨 카테고리 설정 (일반/준최/최적/최적+)
+            if level >= 12:
+                index["level_category"] = "최적+"
+            elif level >= 9:
+                index["level_category"] = "최적"
+            elif level >= 2:
+                index["level_category"] = "준최"
             else:
-                index["level_category"] = "입문"
+                index["level_category"] = "일반"
 
             logger.info(f"Blog {blog_id}: score={index['total_score']}, percentile={percentile:.1f}%, level={level} ({grade})")
 
@@ -3157,21 +3218,21 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
             logger.warning(f"Percentile calculation failed, using fallback: {percentile_error}")
             # 폴백: 고정 기준 레벨 (백분위 DB 실패 시)
             if total_score >= 70:
-                index["level"], index["grade"] = 15, "마스터"
+                index["level"], index["grade"] = 15, "최적4+"
             elif total_score >= 60:
-                index["level"], index["grade"] = 12, "다이아몬드"
+                index["level"], index["grade"] = 12, "최적1+"
             elif total_score >= 50:
-                index["level"], index["grade"] = 10, "골드"
+                index["level"], index["grade"] = 10, "최적2"
             elif total_score >= 40:
-                index["level"], index["grade"] = 8, "브론즈"
+                index["level"], index["grade"] = 8, "준최7"
             elif total_score >= 30:
-                index["level"], index["grade"] = 6, "성장기"
+                index["level"], index["grade"] = 6, "준최5"
             elif total_score >= 20:
-                index["level"], index["grade"] = 4, "초보"
+                index["level"], index["grade"] = 4, "준최3"
             else:
-                index["level"], index["grade"] = 2, "스타터"
+                index["level"], index["grade"] = 2, "준최1"
             index["percentile"] = min(index["total_score"], 99)
-            index["level_category"] = "마스터" if index["level"] >= 13 else "엘리트" if index["level"] >= 10 else "우수" if index["level"] >= 7 else "성장" if index["level"] >= 4 else "입문"
+            index["level_category"] = "최적+" if index["level"] >= 12 else "최적" if index["level"] >= 9 else "준최" if index["level"] >= 2 else "일반"
 
         # Store detailed breakdown with category info + A-2 raw signals
         index["score_breakdown"] = {
@@ -4799,3 +4860,65 @@ async def debug_searchad_status():
         status["error"] = "API 자격 증명이 설정되지 않았습니다"
 
     return status
+
+
+# ===== Real Index Verification Endpoint =====
+@router.post("/verify-index", response_model=VerifyIndexResponse)
+async def verify_blog_index_endpoint(
+    request: VerifyIndexRequest,
+    refresh: bool = Query(False, description="캐시 무시하고 재검증")
+):
+    """
+    실제 네이버 검색 노출을 검증해 일반/준최/최적/최적+ 카테고리 판정.
+
+    최근 포스팅 N개의 제목을 통합검색/블로그탭에 던져 노출 여부를 측정한다.
+    호출당 평균 5~15초 소요 (sample_size에 비례).
+    """
+    from services.blog_index_verifier import verify_blog_index_level
+
+    blog_id = request.blog_id.strip()
+    if not blog_id:
+        raise HTTPException(status_code=400, detail="blog_id is required")
+
+    if not refresh:
+        cached = get_cached_verify_index(blog_id)
+        if cached:
+            return VerifyIndexResponse(**{**cached, "cached": True})
+
+    # 가능하면 기존 분석 캐시에서 stats 가져와 Signal F (체인) 활성화
+    blog_stats = None
+    cached_analysis = get_cached_blog_analysis(blog_id)
+    if cached_analysis:
+        blog_stats = cached_analysis.get("stats")
+
+    try:
+        result = await verify_blog_index_level(
+            blog_id,
+            sample_size=request.sample_size or 8,
+            blog_stats=blog_stats,
+        )
+    except Exception as e:
+        logger.exception(f"verify_blog_index failed for {blog_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"verification_failed: {e}")
+
+    response_data = {
+        "ok": result.get("ok", False),
+        "blog_id": blog_id,
+        "level_category": result.get("level_category"),
+        "detailed_level": result.get("detailed_level"),
+        "detailed_label": result.get("detailed_label"),
+        "weighted_score": result.get("weighted_score"),
+        "signal_scores": result.get("signal_scores", {}),
+        "post_results": result.get("post_results", []),
+        "checked_posts": result.get("checked_posts", 0),
+        "confidence": result.get("confidence", "low"),
+        "method": result.get("method", "multi_signal_v2"),
+        "disclaimer": result.get("disclaimer"),
+        "cached": False,
+        "error": result.get("error"),
+    }
+
+    if response_data["ok"]:
+        set_verify_index_cache(blog_id, response_data)
+
+    return VerifyIndexResponse(**response_data)
