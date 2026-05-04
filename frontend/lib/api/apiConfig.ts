@@ -27,23 +27,20 @@ type ApiUrlListener = (url: string) => void;
 const listeners: Set<ApiUrlListener> = new Set();
 
 // ============ 전역 서버 상태 관리 ============
-let globalServerDown = false;
+// 점검 모달 비활성화 — 어떤 호출 경로에서도 isServerDown 이 true 로 바뀌지 않도록
+// notifyServerDown 을 no-op 처리. 구독 시그니처는 유지 (호출부 호환).
 type ServerStatusListener = (down: boolean) => void;
-const serverStatusListeners: Set<ServerStatusListener> = new Set();
 
-export function notifyServerDown(down: boolean) {
-  if (globalServerDown === down) return; // 상태 변경 없으면 무시
-  globalServerDown = down;
-  serverStatusListeners.forEach(listener => listener(down));
+export function notifyServerDown(_down: boolean) {
+  // intentionally no-op
 }
 
 export function isServerDown(): boolean {
-  return globalServerDown;
+  return false;
 }
 
-export function subscribeToServerStatus(listener: ServerStatusListener): () => void {
-  serverStatusListeners.add(listener);
-  return () => serverStatusListeners.delete(listener);
+export function subscribeToServerStatus(_listener: ServerStatusListener): () => void {
+  return () => {};
 }
 
 // ============ 에러 감지 포함 fetch 래퍼 ============
