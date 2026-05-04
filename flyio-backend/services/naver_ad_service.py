@@ -71,6 +71,15 @@ class NaverApiCircuitOpenError(Exception):
     pass
 
 
+# ============================================================
+# 글로벌 동시성 Semaphore — 모든 라우터의 네이버 stats/PUT 호출이 공유
+# ============================================================
+# 라우터마다 Sem(3) 새로 만들면 사용자가 페이지 새로고침 여러 번 시 sem 인스턴스
+# 여러 개 동시 존재 → 실제 동시 호출 = 3 × N. 모듈 레벨 단일 Semaphore 로 통합해
+# 워커 전체가 공유하는 진짜 hard cap.
+NAVER_API_GLOBAL_SEMAPHORE = asyncio.Semaphore(8)
+
+
 class BidStrategy(Enum):
     """입찰 전략"""
     MAXIMIZE_CLICKS = "maximize_clicks"      # 클릭수 최대화
@@ -223,17 +232,23 @@ class NaverAdApiClient:
                 else:
                     raise ValueError(f"Unsupported method: {method}")
 
-                # 5xx / 429 만 재시도. 4xx 는 즉시 raise (client bug).
-                if response.status_code in (429, 500, 502, 503, 504) and attempt < max_attempts - 1:
-                    backoff = 1  # 1초만 — 폭주 차단 우선
-                    logger.warning(
-                        f"[NaverAd._request] {response.status_code} {method} {endpoint} "
-                        f"— attempt {attempt+1}/{max_attempts}, {backoff}s 후 재시도"
-                    )
-                    await asyncio.sleep(backoff)
-                    continue
+                # 5xx / 429 — circuit breaker 에 실패 기록 후 재시도/raise
+                if response.status_code in (429, 500, 502, 503, 504):
+                    # 429 도 breaker 실패로 카운트 — 5회 누적 시 OPEN 으로 폭주 차단
+                    _naver_api_breaker.record_failure()
+                    if attempt < max_attempts - 1:
+                        # 429 는 rate limit 이라 backoff 더 길게 (5s), 5xx 는 1s
+                        backoff = 5 if response.status_code == 429 else 1
+                        logger.warning(
+                            f"[NaverAd._request] {response.status_code} {method} {endpoint} "
+                            f"— attempt {attempt+1}/{max_attempts}, {backoff}s 후 재시도"
+                        )
+                        await asyncio.sleep(backoff)
+                        continue
+                    # 마지막 시도 — break 해서 아래에서 4xx 본문 raise
+                    break
 
-                # 정상 응답 또는 4xx — breaker CLOSED 로 복구
+                # 정상 응답 또는 비429 4xx — breaker CLOSED 로 복구
                 _naver_api_breaker.record_success()
                 break  # 성공 또는 4xx — 루프 탈출
             except (httpx.TimeoutException, httpx.NetworkError, httpx.ConnectError) as e:
@@ -670,20 +685,28 @@ class NaverAdApiClient:
         _ = stat_type
         merged: List[dict] = []
         for kid in ids:
+            # circuit OPEN 이면 즉시 skip — 무의미한 호출 안 보냄
+            if _naver_api_breaker.is_open():
+                break
             params = {
                 "ids": [kid],  # 단일 ID, list 형태로 (?ids=...)
                 "fields": _json.dumps(fields),
                 "timeRange": _json.dumps({"since": start_date, "until": end_date}),
             }
-            try:
-                resp = await self._request("GET", "/stats", params)
-                data = resp.get("data") if isinstance(resp, dict) else resp
-                if isinstance(data, list):
-                    merged.extend(data)
-                elif isinstance(data, dict):
-                    merged.append(data)
-            except Exception as e:
-                logger.warning(f"[NaverAd/stats] {kid} 실패: {str(e)[:120]}")
+            # 글로벌 sem — 워커 전체에서 동시 호출 hard cap
+            async with NAVER_API_GLOBAL_SEMAPHORE:
+                try:
+                    resp = await self._request("GET", "/stats", params)
+                    data = resp.get("data") if isinstance(resp, dict) else resp
+                    if isinstance(data, list):
+                        merged.extend(data)
+                    elif isinstance(data, dict):
+                        merged.append(data)
+                except NaverApiCircuitOpenError:
+                    # circuit OPEN — 남은 ID 도 skip
+                    break
+                except Exception as e:
+                    logger.warning(f"[NaverAd/stats] {kid} 실패: {str(e)[:120]}")
         return merged
 
     async def close(self):
