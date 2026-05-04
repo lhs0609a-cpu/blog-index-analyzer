@@ -207,6 +207,11 @@ export async function adFetch<T = any>(
         break
       }
 
+      // 503 + circuit open 헤더는 재시도 무의미 — 즉시 실패 (백엔드가 일시 차단 중)
+      if (error instanceof ApiError && error.status === 503) {
+        break
+      }
+
       // 네트워크 에러 분류
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
         lastError = new ApiError('network', getErrorMessage('network'))

@@ -550,6 +550,18 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         headers=get_cors_headers(request)
     )
 
+# Naver API circuit breaker OPEN — 503 으로 즉시 회신해서 클라이언트가 빠르게 fallback
+from services.naver_ad_service import NaverApiCircuitOpenError
+
+@app.exception_handler(NaverApiCircuitOpenError)
+async def naver_api_circuit_open_handler(request: Request, exc: NaverApiCircuitOpenError):
+    logger.warning(f"NaverApiCircuitOpenError on {request.method} {request.url}: {str(exc)}")
+    return JSONResponse(
+        status_code=503,
+        content={"detail": str(exc), "circuit": "open"},
+        headers=get_cors_headers(request)
+    )
+
 # 일반 예외 핸들러 (CORS 헤더 포함)
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):

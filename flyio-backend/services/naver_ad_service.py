@@ -19,6 +19,58 @@ from config import settings
 logger = logging.getLogger(__name__)
 
 
+# ============================================================
+# Circuit Breaker — 네이버 API outbound 폭주 차단
+# ============================================================
+# 네이버 API 가 응답 안 할 때 (ConnectTimeout 연속 발생) 모든 stats/조회 호출이
+# 30초 × 3retry 만큼 워커를 점유 → 백엔드 hang. 이걸 막기 위한 글로벌 상태.
+#
+# 동작: 연속 N 회 ConnectTimeout 발생 시 → 30초간 _request 자체가
+# 즉시 OPEN 예외를 던짐 → 워커 점유 안 함. 30초 후 HALF_OPEN 으로 전환,
+# 한 번 성공하면 CLOSED 로 복구.
+class _NaverApiCircuitBreaker:
+    FAILURE_THRESHOLD = 5  # 연속 실패 N 회면 OPEN
+    OPEN_DURATION_S = 30   # OPEN 상태 유지 시간
+
+    def __init__(self) -> None:
+        self._consecutive_failures = 0
+        self._opened_at: Optional[float] = None  # OPEN 시작 epoch
+
+    def is_open(self) -> bool:
+        if self._opened_at is None:
+            return False
+        if time.time() - self._opened_at >= self.OPEN_DURATION_S:
+            # HALF_OPEN — 한 번 시도 허용
+            self._opened_at = None
+            self._consecutive_failures = 0
+            logger.info("[NaverApiCircuitBreaker] OPEN → HALF_OPEN — 한 번 시도 허용")
+            return False
+        return True
+
+    def record_failure(self) -> None:
+        self._consecutive_failures += 1
+        if self._consecutive_failures >= self.FAILURE_THRESHOLD and self._opened_at is None:
+            self._opened_at = time.time()
+            logger.warning(
+                f"[NaverApiCircuitBreaker] OPEN — {self._consecutive_failures}회 연속 실패 "
+                f"→ 향후 {self.OPEN_DURATION_S}초간 호출 차단"
+            )
+
+    def record_success(self) -> None:
+        if self._consecutive_failures > 0 or self._opened_at is not None:
+            logger.info("[NaverApiCircuitBreaker] CLOSED — 정상 응답으로 복구")
+        self._consecutive_failures = 0
+        self._opened_at = None
+
+
+_naver_api_breaker = _NaverApiCircuitBreaker()
+
+
+class NaverApiCircuitOpenError(Exception):
+    """Circuit breaker OPEN 상태 — 네이버 API 호출 일시 차단."""
+    pass
+
+
 class BidStrategy(Enum):
     """입찰 전략"""
     MAXIMIZE_CLICKS = "maximize_clicks"      # 클릭수 최대화
@@ -88,7 +140,10 @@ class NaverAdApiClient:
         self.customer_id = settings.NAVER_AD_CUSTOMER_ID
         self.api_key = settings.NAVER_AD_API_KEY
         self.secret_key = settings.NAVER_AD_SECRET_KEY
-        self.client = httpx.AsyncClient(timeout=30.0)
+        # connect=5s, read=15s — 폭주 시 워커 점유 줄임 (이전 30s)
+        self.client = httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=5.0, read=15.0, write=15.0, pool=5.0)
+        )
 
     def _generate_signature(self, timestamp: str, method: str, uri: str) -> str:
         """API 서명 생성"""
@@ -142,8 +197,18 @@ class NaverAdApiClient:
             else:
                 logger.info(f"[NaverAd._request] {method} {endpoint} data_type={type(data).__name__}")
 
+        # Circuit breaker — OPEN 이면 호출 자체 차단해서 워커 점유 안 함
+        if _naver_api_breaker.is_open():
+            raise NaverApiCircuitOpenError(
+                f"네이버 API 호출 일시 차단 (연속 timeout {_naver_api_breaker.FAILURE_THRESHOLD}회 이상). "
+                f"{_naver_api_breaker.OPEN_DURATION_S}초 후 자동 복구"
+            )
+
         last_exc: Optional[Exception] = None
-        for attempt in range(3):
+        # ConnectTimeout 폭주 시 워커 점유 최소화 — retry 2회 (총 attempts=2).
+        # 5xx/429 는 일시 장애로 간주하여 동일하게 retry.
+        max_attempts = 2
+        for attempt in range(max_attempts):
             # 시그니처는 매 시도 새로 — timestamp 갱신 필요 (Naver TTL 짧음).
             headers = self._get_headers(method, uri_for_sign)
             try:
@@ -159,24 +224,27 @@ class NaverAdApiClient:
                     raise ValueError(f"Unsupported method: {method}")
 
                 # 5xx / 429 만 재시도. 4xx 는 즉시 raise (client bug).
-                if response.status_code in (429, 500, 502, 503, 504) and attempt < 2:
-                    backoff = 2 ** attempt  # 1, 2 초
+                if response.status_code in (429, 500, 502, 503, 504) and attempt < max_attempts - 1:
+                    backoff = 1  # 1초만 — 폭주 차단 우선
                     logger.warning(
                         f"[NaverAd._request] {response.status_code} {method} {endpoint} "
-                        f"— attempt {attempt+1}/3, {backoff}s 후 재시도"
+                        f"— attempt {attempt+1}/{max_attempts}, {backoff}s 후 재시도"
                     )
                     await asyncio.sleep(backoff)
                     continue
 
+                # 정상 응답 또는 4xx — breaker CLOSED 로 복구
+                _naver_api_breaker.record_success()
                 break  # 성공 또는 4xx — 루프 탈출
             except (httpx.TimeoutException, httpx.NetworkError, httpx.ConnectError) as e:
-                # 네트워크 일시 장애 — 재시도
+                # 네트워크 일시 장애 — breaker 에 실패 기록
                 last_exc = e
-                if attempt < 2:
-                    backoff = 2 ** attempt
+                _naver_api_breaker.record_failure()
+                if attempt < max_attempts - 1:
+                    backoff = 1
                     logger.warning(
                         f"[NaverAd._request] {type(e).__name__} {method} {endpoint} "
-                        f"— attempt {attempt+1}/3, {backoff}s 후 재시도: {str(e)[:80]}"
+                        f"— attempt {attempt+1}/{max_attempts}, {backoff}s 후 재시도: {str(e)[:80]}"
                     )
                     await asyncio.sleep(backoff)
                     continue
