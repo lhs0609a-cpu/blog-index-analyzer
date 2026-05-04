@@ -57,10 +57,16 @@ class _NaverApiCircuitBreaker:
             )
 
     def record_success(self) -> None:
-        if self._consecutive_failures > 0 or self._opened_at is not None:
+        # OPEN 상태였다면 즉시 CLOSED 복구
+        if self._opened_at is not None:
             logger.info("[NaverApiCircuitBreaker] CLOSED — 정상 응답으로 복구")
-        self._consecutive_failures = 0
-        self._opened_at = None
+            self._consecutive_failures = 0
+            self._opened_at = None
+            return
+        # 아니면 카운터 1 감소 — 정상 호출 1개가 실패 카운트 다 reset 하는 것 방지.
+        # 429 폭주 시 정상 호출(connect/status 등) 이 섞여도 누적되어 OPEN 도달.
+        if self._consecutive_failures > 0:
+            self._consecutive_failures -= 1
 
 
 _naver_api_breaker = _NaverApiCircuitBreaker()
