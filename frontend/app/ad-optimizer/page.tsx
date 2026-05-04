@@ -838,17 +838,15 @@ export default function AdOptimizerPage() {
         {/* 계정 연동 탭 */}
         {activeTab === 'connect' && (
           <div className="space-y-6">
-            {adAccounts.length === 0 || showAddWizard ? (
+            {showAddWizard ? (
               <div className="space-y-3">
-                {showAddWizard && adAccounts.length > 0 && (
-                  <button
-                    onClick={() => setShowAddWizard(false)}
-                    className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                    계정 목록으로 돌아가기
-                  </button>
-                )}
+                <button
+                  onClick={() => setShowAddWizard(false)}
+                  className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  {adAccounts.length > 0 ? '계정 목록으로 돌아가기' : '취소'}
+                </button>
                 <AccountSetupWizard
                   userId={userId}
                   onComplete={async () => {
@@ -867,6 +865,20 @@ export default function AdOptimizerPage() {
                   <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-900">
                     <span className="font-semibold">다중 광고주 모드</span> — 총 {adAccounts.length}개 광고주가 연동되어 있습니다.
                     카드를 클릭하면 활성 광고주가 전환됩니다. 자동 최적화/대시보드/효율 추적은 활성 광고주 기준으로 표시됩니다.
+                  </div>
+                )}
+
+                {/* 빈 상태 — 등록된 광고주 0개 */}
+                {adAccounts.length === 0 && (
+                  <div className="rounded-2xl bg-white border-2 border-dashed border-gray-200 p-10 text-center">
+                    <div className="w-16 h-16 mx-auto bg-blue-50 rounded-2xl flex items-center justify-center mb-4">
+                      <Link2 className="w-8 h-8 text-blue-500" />
+                    </div>
+                    <h3 className="font-bold text-gray-900 mb-1">등록된 광고주 계정이 없습니다</h3>
+                    <p className="text-sm text-gray-500">
+                      네이버 광고 API 를 처음 연동하면 여기에 카드로 표시됩니다.
+                      <br />아래 <span className="font-medium text-gray-700">"+ 새 광고주 계정 추가"</span> 버튼을 누르세요.
+                    </p>
                   </div>
                 )}
 
