@@ -9,13 +9,13 @@ import {
   AlertTriangle, CheckCircle, XCircle,
   Zap, BarChart3, PieChart, Activity, ArrowUpRight, ArrowDownRight,
   Loader2, Save, Bell, History, Sparkles, Link2, Wallet, Flame,
-  Star, Check, X
+  Star, Check, X, ChevronLeft
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth'
-import { adGet, adPost } from '@/lib/api/adFetch'
+import { adGet, adPost, adDelete } from '@/lib/api/adFetch'
 import { useFeature } from '@/lib/features/useFeatureAccess'
 import Tutorial, { adOptimizerTutorialSteps } from '@/components/Tutorial'
 import ValueProposition from '@/components/ad-optimizer/ValueProposition'
@@ -100,7 +100,10 @@ interface AdAccount {
   is_connected: boolean
   last_sync_at?: string
   connection_error?: string
+  default_bid?: number
 }
+
+const ACTIVE_CID_KEY = 'blank.ad.activeCustomerId'
 
 interface EfficiencySummary {
   total_saved: number
@@ -122,14 +125,14 @@ export default function AdOptimizerPage() {
   const [isLoading, setIsLoading] = useState(false)
   const userId = user?.id
 
-  // 계정 연동 상태
+  // 계정 연동 상태 (다중 계정 지원)
+  // adAccounts: 사용자의 모든 광고주 리스트
+  // activeCustomerId: 현재 화면에서 선택된 활성 계정
+  // adAccount: 활성 계정의 단수 별칭 — 다른 탭들의 호환을 위해 유지
+  const [adAccounts, setAdAccounts] = useState<AdAccount[]>([])
+  const [activeCustomerId, setActiveCustomerId] = useState<string | null>(null)
   const [adAccount, setAdAccount] = useState<AdAccount | null>(null)
-  const [connectForm, setConnectForm] = useState({
-    customer_id: '',
-    api_key: '',
-    secret_key: '',
-    name: ''
-  })
+  const [showAddWizard, setShowAddWizard] = useState(false)
 
   // 효율 추적 상태
   const [efficiency, setEfficiency] = useState<EfficiencySummary | null>(null)
@@ -472,15 +475,30 @@ export default function AdOptimizerPage() {
     }
   }, [userId])
 
-  // 계정 연동 상태 로드
-  const loadAccountStatus = useCallback(async () => {
+  // 광고주 계정 리스트 로드 — /keyword-pool/accounts 가 사용자의 모든 활성 광고주 반환
+  // 활성 계정은 localStorage 우선 → 없으면 첫 번째 → 빈 배열이면 null
+  const loadAccounts = useCallback(async () => {
     try {
-      const data = await adGet('/api/naver-ad/account/status', { userId })
-      if (data?.data) {
-        setAdAccount(data.data)
+      const data = await adGet<{ success: boolean; accounts: AdAccount[] }>(
+        '/api/naver-ad/keyword-pool/accounts',
+        { userId }
+      )
+      const list = data?.accounts || []
+      setAdAccounts(list)
+
+      let nextCid: string | null = null
+      if (list.length > 0) {
+        const stored = typeof window !== 'undefined' ? window.localStorage.getItem(ACTIVE_CID_KEY) : null
+        const valid = stored && list.some(a => a.customer_id === stored)
+        nextCid = valid ? stored : list[0].customer_id
+        if (typeof window !== 'undefined' && nextCid) {
+          window.localStorage.setItem(ACTIVE_CID_KEY, nextCid)
+        }
       }
+      setActiveCustomerId(nextCid)
+      setAdAccount(nextCid ? list.find(a => a.customer_id === nextCid) || null : null)
     } catch (error) {
-      console.error('Account status load error:', error)
+      console.error('Accounts load error:', error)
     }
   }, [userId])
 
@@ -508,16 +526,35 @@ export default function AdOptimizerPage() {
     }
   }, [userId])
 
-  // 계정 연동 해제
-  const disconnectAccount = async () => {
-    if (!confirm('정말로 계정 연동을 해제하시겠습니까?')) return
+  // 활성 광고주 전환 — 카드 클릭 / 셀렉터 변경 시
+  const selectAccount = useCallback((cid: string) => {
+    setActiveCustomerId(cid)
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(ACTIVE_CID_KEY, cid)
+    }
+    const found = adAccounts.find(a => a.customer_id === cid) || null
+    setAdAccount(found)
+  }, [adAccounts])
+
+  // 계정 연동 해제 — 특정 customer_id 대상
+  const disconnectAccount = async (customerId: string) => {
+    if (!customerId) return
+    if (!confirm(`광고주 ${customerId} 의 연동을 해제하시겠습니까?\n\n해당 계정의 자동 최적화/풀 데이터는 더 이상 갱신되지 않습니다.`)) return
 
     try {
-      await adPost('/api/naver-ad/account/disconnect', undefined, { userId })
+      await adDelete(
+        `/api/naver-ad/account/disconnect?customer_id=${encodeURIComponent(customerId)}`,
+        { userId }
+      )
       toast.success('계정 연동이 해제되었습니다')
-      setAdAccount(null)
-      setConnectForm({ customer_id: '', api_key: '', secret_key: '', name: '' })
-      setActiveTab('connect')
+      // 활성 계정이었다면 LS 에서도 제거 (loadAccounts 가 새로 픽)
+      if (typeof window !== 'undefined') {
+        const stored = window.localStorage.getItem(ACTIVE_CID_KEY)
+        if (stored === customerId) {
+          window.localStorage.removeItem(ACTIVE_CID_KEY)
+        }
+      }
+      await loadAccounts()
     } catch (error) {
       // adFetch handles error toasts automatically
     }
@@ -525,10 +562,10 @@ export default function AdOptimizerPage() {
 
   // 초기 로드
   useEffect(() => {
-    loadAccountStatus()
+    loadAccounts()
     loadDashboard()
     loadSettings()
-  }, [loadAccountStatus, loadDashboard, loadSettings])
+  }, [loadAccounts, loadDashboard, loadSettings])
 
   // 탭 변경 시 데이터 로드
   useEffect(() => {
@@ -801,51 +838,121 @@ export default function AdOptimizerPage() {
         {/* 계정 연동 탭 */}
         {activeTab === 'connect' && (
           <div className="space-y-6">
-            {/* 연동 상태 */}
-            {adAccount?.is_connected ? (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl p-6 text-white"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center">
-                      <CheckCircle className="w-8 h-8" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-bold">계정 연동됨</h3>
-                      <p className="text-green-100">고객 ID: {adAccount.customer_id}</p>
-                      {adAccount.name && <p className="text-green-100 text-sm">{adAccount.name}</p>}
-                      {adAccount.last_sync_at && (
-                        <p className="text-green-200 text-xs mt-1">
-                          마지막 동기화: {new Date(adAccount.last_sync_at).toLocaleString('ko-KR')}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+            {adAccounts.length === 0 || showAddWizard ? (
+              <div className="space-y-3">
+                {showAddWizard && adAccounts.length > 0 && (
                   <button
-                    onClick={disconnectAccount}
-                    className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl text-sm font-medium transition-colors"
+                    onClick={() => setShowAddWizard(false)}
+                    className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"
                   >
-                    연동 해제
+                    <ChevronLeft className="w-4 h-4" />
+                    계정 목록으로 돌아가기
                   </button>
-                </div>
-              </motion.div>
+                )}
+                <AccountSetupWizard
+                  userId={userId}
+                  onComplete={async () => {
+                    await loadAccounts()
+                    setShowAddWizard(false)
+                    setActiveTab('dashboard')
+                    loadDashboard()
+                  }}
+                  onStartAutoOptimization={toggleAutoOptimization}
+                />
+              </div>
             ) : (
-              <AccountSetupWizard
-                userId={userId}
-                onComplete={(account) => {
-                  setAdAccount({
-                    customer_id: account.customer_id,
-                    name: account.name,
-                    is_connected: true
-                  })
-                  setActiveTab('dashboard')
-                  loadDashboard()
-                }}
-                onStartAutoOptimization={toggleAutoOptimization}
-              />
+              <>
+                {/* 다중 계정 안내 — 2개 이상일 때만 */}
+                {adAccounts.length > 1 && (
+                  <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-900">
+                    <span className="font-semibold">다중 광고주 모드</span> — 총 {adAccounts.length}개 광고주가 연동되어 있습니다.
+                    카드를 클릭하면 활성 광고주가 전환됩니다. 자동 최적화/대시보드/효율 추적은 활성 광고주 기준으로 표시됩니다.
+                  </div>
+                )}
+
+                {/* 광고주 카드 리스트 */}
+                <div className="grid gap-3">
+                  {adAccounts.map((acct) => {
+                    const isActive = acct.customer_id === activeCustomerId
+                    return (
+                      <motion.div
+                        key={acct.customer_id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        onClick={() => !isActive && selectAccount(acct.customer_id)}
+                        className={`rounded-2xl p-5 transition-all cursor-pointer ${
+                          isActive
+                            ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg shadow-green-500/20'
+                            : acct.is_connected
+                              ? 'bg-white border border-gray-200 hover:border-green-300 hover:shadow-md'
+                              : 'bg-white border border-red-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-4 min-w-0">
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${
+                              isActive ? 'bg-white/20' : acct.is_connected ? 'bg-green-100' : 'bg-red-100'
+                            }`}>
+                              {acct.is_connected ? (
+                                <CheckCircle className={`w-6 h-6 ${isActive ? 'text-white' : 'text-green-600'}`} />
+                              ) : (
+                                <AlertTriangle className="w-6 h-6 text-red-600" />
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className={`font-bold ${isActive ? 'text-white' : 'text-gray-900'}`}>
+                                  {acct.name || '이름 미설정'}
+                                </h3>
+                                {isActive && (
+                                  <span className="px-2 py-0.5 bg-white/25 text-white text-xs rounded-full font-medium">
+                                    활성
+                                  </span>
+                                )}
+                                {!acct.is_connected && (
+                                  <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded-full font-medium">
+                                    연결끊김
+                                  </span>
+                                )}
+                              </div>
+                              <p className={`text-sm ${isActive ? 'text-green-50' : 'text-gray-600'}`}>
+                                고객 ID: {acct.customer_id}
+                              </p>
+                              {acct.last_sync_at && (
+                                <p className={`text-xs mt-1 ${isActive ? 'text-green-100' : 'text-gray-500'}`}>
+                                  마지막 동기화: {new Date(acct.last_sync_at).toLocaleString('ko-KR')}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              disconnectAccount(acct.customer_id)
+                            }}
+                            className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-colors flex-shrink-0 ${
+                              isActive
+                                ? 'bg-white/20 hover:bg-white/30 text-white'
+                                : 'bg-gray-100 hover:bg-red-50 text-gray-700 hover:text-red-700'
+                            }`}
+                          >
+                            연동 해제
+                          </button>
+                        </div>
+                      </motion.div>
+                    )
+                  })}
+                </div>
+
+                {/* 새 계정 추가 버튼 */}
+                <button
+                  onClick={() => setShowAddWizard(true)}
+                  className="w-full py-4 rounded-2xl border-2 border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50 text-gray-600 hover:text-blue-700 font-medium transition-all flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-5 h-5" />
+                  새 광고주 계정 추가
+                </button>
+              </>
             )}
 
             {/* 연동 이점 */}

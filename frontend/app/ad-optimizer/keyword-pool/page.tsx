@@ -97,7 +97,9 @@ interface AdAccount {
   default_bid?: number
 }
 
-const SELECTED_CID_KEY = 'keyword-pool-selected-customer-id'
+// 활성 광고주 LS 키 — 메인 /ad-optimizer 페이지(ACTIVE_CID_KEY)와 동일.
+// 두 페이지가 같은 활성 계정을 공유해서 어느 한쪽에서 전환하면 다른 쪽도 따라감.
+const SELECTED_CID_KEY = 'blank.ad.activeCustomerId'
 
 export default function KeywordPoolPage() {
   const { isAuthenticated } = useAuthStore()
