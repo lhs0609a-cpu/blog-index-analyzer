@@ -3425,9 +3425,16 @@ async def keyword_pool_clicked_keywords(
         # 95k+ KW 모두 querying 은 비현실적 — 최근 등록 1500개만 sample.
         # 대부분 KW 는 click=0 이라 sample 제한해도 active KW 잡힘 (registered DESC).
         ids = list(keyword_map.keys())[:1500]
-        sem = asyncio.Semaphore(20)  # 동시 20 호출 — Naver rate limit 안전권
+        # 동시 호출 20 → 3 으로 축소. Naver outbound 가 timeout 폭주할 때
+        # circuit breaker (threshold=5) 가 빠르게 OPEN 되어 나머지 task 가 즉시 503 fail.
+        # 정상 시에도 Sem=3 이면 1500개 ÷ 3 ≈ 500 round × ~200ms = 100s 내 완료.
+        sem = asyncio.Semaphore(3)
+        from services.naver_ad_service import _naver_api_breaker, NaverApiCircuitOpenError
 
         async def _fetch_one(kid: str) -> List[dict]:
+            # circuit OPEN 상태면 task 진입 자체 skip — sem 점유 안 함
+            if _naver_api_breaker.is_open():
+                return []
             async with sem:
                 try:
                     stats = await client.get_stats(
@@ -3435,6 +3442,8 @@ async def keyword_pool_clicked_keywords(
                         start_date=start_date, end_date=end_date,
                     )
                     return stats or []
+                except NaverApiCircuitOpenError:
+                    return []
                 except Exception as e:
                     logger.warning(f"clicked-keywords {kid} 실패: {str(e)[:120]}")
                     return []
@@ -3690,17 +3699,22 @@ async def keyword_pool_bid_bulk_update(
         # 키워드별 bidAmt 일괄 변경 — 광고그룹별로 keyword list 받아 full-body PUT.
         # 부분 PUT(?fields=) 은 Naver 가 silent ignore 하는 케이스가 있어서, list 응답에서
         # 받은 전체 body 를 그대로 사용하고 bidAmt + useGroupBidAmt 만 수정해 PUT.
-        # 동시성 = 20 (49k 키워드 × 400ms ÷ 10 = 33분 → 30분 timeout 초과. 20 으로 16분.)
+        # 동시성 = 5 (이전 20). circuit breaker 와 협응해 outbound 폭주 차단.
         kw_total = 0
         kw_success = 0
         kw_failed: List[Dict] = []
-        sem = asyncio.Semaphore(20)
+        sem = asyncio.Semaphore(5)
         progress_logged_at = 0
+        from services.naver_ad_service import _naver_api_breaker, NaverApiCircuitOpenError
 
         async def _update_kw_full(kw_obj: Dict):
             nonlocal kw_success
             kid = kw_obj.get("nccKeywordId")
             if not kid:
+                return
+            # circuit OPEN 시 task 진입 자체 skip
+            if _naver_api_breaker.is_open():
+                kw_failed.append({"keyword_id": kid, "error": "circuit_open"})
                 return
             # list 응답의 전체 body 를 그대로 → bidAmt 만 갱신.
             # useGroupBidAmt=False 유지(개별 입찰가 명시적 override) + 새 bidAmt.
@@ -3712,6 +3726,8 @@ async def keyword_pool_bid_bulk_update(
                     # fields 쿼리 없이 full-body PUT — 부분 갱신 silent ignore 회피.
                     await client._request("PUT", f"/ncc/keywords/{kid}", body)
                     kw_success += 1
+                except NaverApiCircuitOpenError:
+                    kw_failed.append({"keyword_id": kid, "error": "circuit_open"})
                 except Exception as e:
                     kw_failed.append({"keyword_id": kid, "error": f"{type(e).__name__}: {str(e)[:120]}"})
 
