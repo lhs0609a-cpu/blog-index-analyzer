@@ -195,9 +195,14 @@ export default function KeywordPoolPage() {
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(SELECTED_CID_KEY, cid)
     }
-    // 즉시 새 광고주의 데이터로 갱신
+    // 즉시 새 광고주의 데이터로 갱신 — 모든 광고주별 state reset (다른 광고주의 keyword_id
+    // 가 잘못 유지되어 일괄 삭제 시 엉뚱한 광고주 KW 가 사라지는 사고 방지).
     setStats(null)
     setClickedItems([])
+    setClickedSelected(new Set())
+    setManualTargets([])
+    setManualSelected(new Set())
+    setManualMeta(null)
     // 새 광고주의 default_bid 입력란에 반영
     const acct = accounts.find(a => a.customer_id === cid)
     if (acct?.default_bid != null) setBidInput(String(acct.default_bid))

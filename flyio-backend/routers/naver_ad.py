@@ -2283,7 +2283,9 @@ def _build_seed_atoms(seeds: List[str]) -> set:
 def _compute_relevance_score(
     kw: str,
     user_seeds: List[str],
-    pool_tokens: tuple = POOL_DOMAIN_TOKENS,
+    pool_tokens: tuple = (),  # M1 fix: default 를 () 로 — POOL hardcoded 매칭이 user_seed
+                              # 광고주에서 무관 KW 점수 부풀려 threshold 회피하는 누수 차단.
+                              # 호출자가 의도적으로 POOL 매칭 원할 때만 명시 (cold_start 광고주 등).
 ) -> int:
     """클릭 KW 의 user_seed/POOL 도메인 연관성 점수 (0-100).
 
@@ -2434,10 +2436,12 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         logger.warning(f"[pool/collect] 등록 KW atom 조회 실패: {e}")
         registered_raw = []
     user_seed_kw_only = pool.list_user_seeds(customer_id)
-    # anchor: user_seed 의 모든 atom (length≥2) — 도메인 단어 (매매/보험/카드/세무) 가
-    # 2-gram 으로 들어와야 legit 등록 KW 가 anchor 통과 가능. 너무 좁히면 (≥3) 거의
-    # 모든 KW 가 차단되어 학습이 멈춤.
-    anchor_set = _build_seed_atoms(user_seed_kw_only)
+    # anchor: user_seed 의 length≥3 atom 만 — 짧은 2-gram atom (간/염/의/원 등) 이
+    # cross-domain 통과시키는 누수 차단. niche 의료 시드 ("A형 간염" → "간염" atom)
+    # 가 무관 KW (예: "간장/감자/은염생산") 의 2-gram 매칭으로 anchor 통과해
+    # registered_atom 학습 → cascade drift 발생 위험.
+    anchor_set_all = _build_seed_atoms(user_seed_kw_only)
+    anchor_set = {a for a in anchor_set_all if len(a) >= 3}
     if anchor_set:
         # PERF: 5000 KW × 6000+ atom Python loop = 30M ops 동기 블록.
         # 정규식 multi-pattern 매칭 (~100배 빠름) 으로 전환.
@@ -2510,15 +2514,24 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                 f"[pool/collect] user={uid} 시드 자동 승격 {len(promoted)}개: "
                 + ", ".join(f"{p['keyword']}({p['monthly_total']})" for p in promoted)
             )
-            # 승격 후 토큰셋 재계산 — 새 시드의 토큰 반영
-            domain_token_set = _build_domain_token_set(
-                pool.list_seed_whitelist(customer_id)
-            )
+            # 승격 후 토큰셋 재계산 — 새 시드의 토큰 반영. cold_start 정책 동일 유지
+            # (cold_start 면 POOL baseline 폴백, 아니면 user_seed 만으로 도출 — POOL 누수 차단).
+            if cold_start:
+                domain_token_set = _build_domain_token_set(
+                    pool.list_seed_whitelist(customer_id)
+                )
+            else:
+                fresh_user_seeds = pool.list_user_seeds(customer_id) or initial_user_seeds_only
+                domain_token_set = _derive_seed_tokens(fresh_user_seeds) | _build_seed_atoms(fresh_user_seeds)
     except Exception as e:
         logger.warning(f"[pool/collect] promote_seeds 실패: {e}")
         promoted = []
 
-    seeds = pool.get_recent_seeds(customer_id, limit=120)
+    # C1 fix: get_recent_seeds 는 source 필터 없이 모든 row 의 seed 를 반환 → legacy POOL
+    # bridge 시드 ("대출/렌탈/배달/미용" 등) 가 풀 row 자식으로 살아있는 한 매 라운드
+    # keywordstool 호출에 사용 → API quota 낭비 + 잔재 재활성화 risk. list_seed_whitelist
+    # 는 source IN ('user_seed', 'auto_promoted_seed') 만 반환해 legacy POOL bridge 차단.
+    seeds = pool.list_seed_whitelist(customer_id)
     if not seeds:
         # 자가치유 (a): 등록 키워드 중 검색량 상위 10개를 user_seed 로 자동 reseed.
         # 시드가 비면 collection 영구 정지 → 등록 키워드에서 핵심어 자동 추출.
