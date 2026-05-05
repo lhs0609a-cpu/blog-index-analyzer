@@ -2702,7 +2702,7 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     from services.naver_ad_service import _naver_api_breaker, NaverApiCircuitOpenError
     circuit_aborted = False
 
-    for seed in seed_round:  # 시드 한 라운드 처리 한도 (BFS 추가로 호출 폭증 방지)
+    for seed_raw in seed_round:  # 시드 한 라운드 처리 한도 (BFS 추가로 호출 폭증 방지)
         if added >= target:
             break
         # circuit OPEN 시 남은 시드 모두 즉시 fail — error_message 폭주 + log 노이즈 차단.
@@ -2713,6 +2713,12 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                 f"[pool/collect] user={uid} circuit OPEN — 남은 시드 {len(seed_round) - seeds_processed}개 abort"
             )
             break
+        # 시드 sanitize — 네이버 keywordstool 은 hint 에 공백 거부 (HTTPStatusError 400 code:11001).
+        # 사용자가 입력한 띄어쓰기 시드 ("C형 간염", "감각 과민" 등) 를 정규화해서 호출.
+        # 빈 문자열 / 길이 < 2 / 영문 only / 숫자 only 시드는 skip (네이버 비허용 패턴).
+        seed = (seed_raw or "").replace(" ", "").strip()
+        if not seed or len(seed) < 2:
+            continue
         seeds_processed += 1
         try:
             related = await client.get_related_keywords(seed, show_detail=True)
@@ -2724,8 +2730,18 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
             )
             break
         except Exception as e:
-            msg = f"{seed}: {type(e).__name__}: {str(e)[:80]}"
+            # ConnectTimeout / 11001 등 시드별 실패 — 다음 시드로 계속 (circuit breaker 가
+            # 누적 fail 잡아 OPEN 시키므로 여기선 individual 시드 fail 만 logging).
+            err_name = type(e).__name__
+            err_msg_full = str(e)[:200]
+            msg = f"{seed_raw}: {err_name}: {err_msg_full[:80]}"
             logger.warning(f"[pool/collect] API 실패 {msg}")
+            # 11001 (잘못된 파라미터) 패턴 감지 시 추가 진단 정보
+            if "11001" in err_msg_full or "400" in err_msg_full:
+                logger.warning(
+                    f"[pool/collect/11001] seed_raw={seed_raw!r} sanitized={seed!r} — "
+                    f"네이버 keywordstool 거부 (특수문자/숫자/길이 문제 의심)"
+                )
             api_errors.append(msg)
             continue
         items = related.get("keywordList", []) if isinstance(related, dict) else []
