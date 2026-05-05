@@ -3870,6 +3870,9 @@ async def keyword_pool_registered_cleanup_by_score(
         score_dist[bucket] = score_dist.get(bucket, 0) + 1
 
     if dry_run:
+        # 화면 표시용 — targets 전체 (max_delete 적용 전) 중 max 1000 개. keyword_id 포함해서
+        # frontend 에서 체크박스 선택 후 /clicked-keywords/bulk-delete 로 삭제 가능.
+        DISPLAY_LIMIT = 1000
         return {
             "success": True,
             "dry_run": True,
@@ -3880,7 +3883,11 @@ async def keyword_pool_registered_cleanup_by_score(
             "targets_below_threshold": len(targets),
             "will_delete_now": len(targets_capped),
             "max_delete": max_delete,
-            "samples": [{"keyword": kw, "score": s} for _, kw, s in targets_capped[:30]],
+            "displayed": min(len(targets), DISPLAY_LIMIT),
+            "targets": [
+                {"keyword_id": kid, "keyword": kw, "score": s}
+                for kid, kw, s in targets[:DISPLAY_LIMIT]
+            ],
         }
 
     if not targets_capped:

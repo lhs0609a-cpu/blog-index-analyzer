@@ -142,6 +142,15 @@ export default function KeywordPoolPage() {
   // 등록 KW 전체 점수 audit + 일괄 정리 (click 무관) — cascade drift 옛날 무관 KW 정리용
   const [manualCleanupRunning, setManualCleanupRunning] = useState(false)
   const [manualCleanupThreshold, setManualCleanupThreshold] = useState(30)
+  const [manualTargets, setManualTargets] = useState<{ keyword_id: string; keyword: string; score: number }[]>([])
+  const [manualSelected, setManualSelected] = useState<Set<string>>(new Set())
+  const [manualMeta, setManualMeta] = useState<{
+    total_registered: number
+    targets_below_threshold: number
+    displayed: number
+    score_distribution: Record<string, number>
+  } | null>(null)
+  const [manualDeleting, setManualDeleting] = useState(false)
 
   // customer_id 쿼리 — selected 가 비어있으면 백엔드 default(가장 최근).
   const cidQs = (extra: Record<string, string | number | undefined> = {}) => {
@@ -291,63 +300,78 @@ export default function KeywordPoolPage() {
     }
   }
 
-  const handleManualCleanupByScore = async () => {
+  // dry_run audit — 점수 ≤ threshold 등록 KW 전체 리스트를 표로 받아옴 (max 1000개 표시)
+  const handleManualAudit = async () => {
     const threshold = manualCleanupThreshold
     setManualCleanupRunning(true)
     try {
-      // 1단계: dry_run 으로 점수 분포 + 삭제 대상 미리보기
-      const preview = await adPost<{
+      const res = await adPost<{
         success: boolean
         total_registered: number
         score_distribution: Record<string, number>
         targets_below_threshold: number
-        will_delete_now: number
-        max_delete: number
-        samples: { keyword: string; score: number }[]
+        displayed: number
+        targets: { keyword_id: string; keyword: string; score: number }[]
       }>(
         `/api/naver-ad/keyword-pool/registered/cleanup-by-score${cidQs()}`,
-        { threshold, max_delete: 5000, dry_run: true }
+        { threshold, max_delete: 5000, dry_run: true },
+        { timeout: 60_000 }
       )
-      const distLines = Object.entries(preview.score_distribution || {})
-        .map(([b, n]) => `  ${b}~${Number(b) + 9}점: ${n}개`)
-        .join('\n')
-      const sampleLines = (preview.samples || []).slice(0, 10)
-        .map(s => `  ${s.keyword} (${s.score})`)
-        .join('\n')
-      const ok = confirm(
-        `등록 KW 점수 audit (user_seed 기준)\n\n` +
-        `전체 등록: ${preview.total_registered.toLocaleString()}개\n` +
-        `점수 ≤ ${threshold} 대상: ${preview.targets_below_threshold.toLocaleString()}개\n` +
-        `이번 실행 삭제 (max ${preview.max_delete.toLocaleString()} 캡): ${preview.will_delete_now.toLocaleString()}개\n\n` +
-        `점수 분포:\n${distLines || '  -'}\n\n` +
-        `삭제 대상 샘플:\n${sampleLines || '  -'}\n\n` +
-        `네이버에서 실제 DELETE 합니다 (실패 시 PAUSE). 진행할까요?`
-      )
-      if (!ok) {
-        toast('취소됨')
-        return
-      }
-      // 2단계: 실제 실행
-      const res = await adPost<{
-        success: boolean
-        queued_targets: number
-        below_threshold_total: number
-        estimated_minutes: number
-        message: string
-      }>(
-        `/api/naver-ad/keyword-pool/registered/cleanup-by-score${cidQs()}`,
-        { threshold, max_delete: 5000, dry_run: false },
-        { timeout: 30_000 }
-      )
+      setManualTargets(res.targets || [])
+      // default 전체 선택 — 사용자가 보고 빼고 싶은 것만 해제
+      setManualSelected(new Set((res.targets || []).map(t => t.keyword_id)))
+      setManualMeta({
+        total_registered: res.total_registered,
+        targets_below_threshold: res.targets_below_threshold,
+        displayed: res.displayed,
+        score_distribution: res.score_distribution || {},
+      })
       toast.success(
-        `백그라운드 시작 — ${res.queued_targets.toLocaleString()}개 삭제 진행 (예상 ${res.estimated_minutes}분)`
+        `점수 ≤ ${threshold} 등록 KW ${res.targets_below_threshold.toLocaleString()}개 발견 — ${res.displayed.toLocaleString()}개 표시`
       )
-      // stats 폴링이 inspect run 으로 진행 상황 표시
-      load()
     } catch (e: any) {
-      toast.error(e?.response?.data?.detail || e?.message || '점수 기반 정리 실패')
+      toast.error(e?.response?.data?.detail || e?.message || '점수 audit 실패')
     } finally {
       setManualCleanupRunning(false)
+    }
+  }
+
+  const handleManualToggle = (kid: string) => {
+    setManualSelected(prev => {
+      const n = new Set(prev)
+      if (n.has(kid)) n.delete(kid); else n.add(kid)
+      return n
+    })
+  }
+
+  const handleManualToggleAll = (checked: boolean) => {
+    if (checked) setManualSelected(new Set(manualTargets.map(t => t.keyword_id)))
+    else setManualSelected(new Set())
+  }
+
+  // 선택된 KW 일괄 삭제 — 기존 /clicked-keywords/bulk-delete 재사용 (click 검증 없음)
+  const handleManualBulkDelete = async () => {
+    if (manualSelected.size === 0) {
+      toast.error('선택된 키워드 없음')
+      return
+    }
+    if (!confirm(`선택된 ${manualSelected.size.toLocaleString()}개 등록 KW를 네이버에서 삭제(또는 PAUSE)할까요?`)) return
+    setManualDeleting(true)
+    try {
+      const res = await adPost<{ success: boolean; deleted: number; paused: number; failed: number }>(
+        `/api/naver-ad/keyword-pool/clicked-keywords/bulk-delete${cidQs()}`,
+        { keyword_ids: Array.from(manualSelected) },
+        { timeout: 600_000 }  // 1000개 × 0.18초 = 3분, 여유 10분
+      )
+      toast.success(`삭제 ${res.deleted} / PAUSE ${res.paused} / 실패 ${res.failed}`)
+      // 표에서 삭제된 것만 제거
+      setManualTargets(prev => prev.filter(t => !manualSelected.has(t.keyword_id)))
+      setManualSelected(new Set())
+      load()
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || e?.message || '일괄 삭제 실패')
+    } finally {
+      setManualDeleting(false)
     }
   }
 
@@ -850,7 +874,7 @@ export default function KeywordPoolPage() {
           </div>
 
           {/* 수동 일괄 정리 — click 무관, 등록 KW 전체 audit. cascade drift 옛날 무관 KW 정리. 항상 표시. */}
-          <div className="flex items-center gap-2 mb-3 p-2 bg-orange-50 border border-orange-200 rounded flex-wrap">
+          <div className="flex items-center gap-2 mb-2 p-2 bg-orange-50 border border-orange-200 rounded flex-wrap">
             <Trash2 className="w-4 h-4 text-orange-700" />
             <span className="text-xs font-medium text-orange-900">기존 등록 KW 일괄 정리 (click 무관)</span>
             <span className="text-xs text-gray-700">— 점수</span>
@@ -863,20 +887,95 @@ export default function KeywordPoolPage() {
               className="w-16 text-xs border border-gray-300 rounded px-2 py-0.5 text-right"
               disabled={manualCleanupRunning}
             />
-            <span className="text-xs text-gray-700">점 이하 등록 KW 모두 삭제</span>
+            <span className="text-xs text-gray-700">점 이하 등록 KW 조회 → 표에서 선택 삭제</span>
             <button
-              onClick={handleManualCleanupByScore}
+              onClick={handleManualAudit}
               disabled={manualCleanupRunning}
               className="ml-auto text-xs px-3 py-1 bg-orange-600 text-white rounded hover:bg-orange-700 disabled:bg-gray-300 inline-flex items-center gap-1"
             >
-              {manualCleanupRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-              점수 분포 확인 + 일괄 정리
+              {manualCleanupRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              {manualCleanupRunning ? '조회 중…' : '점수 ≤ N 등록 KW 조회'}
             </button>
             <div className="basis-full text-[11px] text-gray-600 mt-1">
-              cascade drift 로 잘못 등록된 옛날 무관 KW (예: 의료 광고주에 "대출이자/렌탈정수기") 일괄 정리.
-              click 발생 안 한 KW 도 포함. 1회 최대 5,000개 캡 (반복 실행 가능).
+              cascade drift 로 잘못 등록된 옛날 무관 KW (예: 의료 광고주에 "대출이자/렌탈정수기") 정리. click 발생 안 한 KW 도 포함.
+              조회 시 점수 ≤ N 인 등록 KW 전체 리스트가 표로 떠서 체크박스로 선택해 일괄 삭제 (max 1000개 표시 / 5000개 처리).
             </div>
           </div>
+
+          {/* 수동 audit 결과 표 — 등록 KW 점수 ≤ threshold 전체 리스트, 체크박스 선택 + 일괄 삭제 */}
+          {manualMeta && manualTargets.length === 0 && (
+            <div className="text-xs text-green-700 bg-green-50 border border-green-100 rounded p-3 mb-3">
+              점수 ≤ {manualCleanupThreshold} 등록 KW 0개 — 무관한 KW 없음 (전체 등록 {manualMeta.total_registered.toLocaleString()}개)
+            </div>
+          )}
+          {manualTargets.length > 0 && manualMeta && (
+            <div className="border border-orange-200 rounded p-3 mb-3 bg-orange-50/30">
+              <div className="flex items-center gap-2 mb-2 flex-wrap text-xs">
+                <span className="font-medium text-gray-800">
+                  점수 ≤ {manualCleanupThreshold} 대상 {manualMeta.targets_below_threshold.toLocaleString()}개
+                  {manualMeta.targets_below_threshold > manualMeta.displayed && (
+                    <span className="text-gray-500 ml-1">(상위 {manualMeta.displayed.toLocaleString()}개 표시 — 점수 낮은 순)</span>
+                  )}
+                </span>
+                <span className="text-gray-600">
+                  · 분포: {Object.entries(manualMeta.score_distribution).slice(0, 6).map(([b, n]) => `${b}~${Number(b)+9}: ${n}`).join(' / ')}
+                </span>
+                <button
+                  onClick={() => handleManualToggleAll(manualSelected.size !== manualTargets.length)}
+                  className="text-xs px-2 py-0.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                >
+                  {manualSelected.size === manualTargets.length ? '전체 해제' : '전체 선택'}
+                </button>
+                <button
+                  onClick={handleManualBulkDelete}
+                  disabled={manualSelected.size === 0 || manualDeleting}
+                  className="ml-auto text-xs px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-gray-300 inline-flex items-center gap-1"
+                >
+                  {manualDeleting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                  선택 {manualSelected.size.toLocaleString()}개 일괄 삭제
+                </button>
+              </div>
+              <div className="overflow-x-auto max-h-96 overflow-y-auto border border-gray-200 rounded bg-white">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-gray-50">
+                    <tr className="border-b border-gray-200 text-xs text-gray-500">
+                      <th className="text-left py-2 px-2 w-8">
+                        <input
+                          type="checkbox"
+                          checked={manualSelected.size === manualTargets.length && manualTargets.length > 0}
+                          onChange={(e) => handleManualToggleAll(e.target.checked)}
+                        />
+                      </th>
+                      <th className="text-left py-2 px-2">키워드</th>
+                      <th className="text-center py-2 px-2 w-20">연관성</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {manualTargets.map((t) => {
+                      const scoreColor = t.score >= 20 ? 'text-orange-700 bg-orange-50' : 'text-red-700 bg-red-50'
+                      return (
+                        <tr key={t.keyword_id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-1.5 px-2">
+                            <input
+                              type="checkbox"
+                              checked={manualSelected.has(t.keyword_id)}
+                              onChange={() => handleManualToggle(t.keyword_id)}
+                            />
+                          </td>
+                          <td className="py-1.5 px-2 font-medium">{t.keyword}</td>
+                          <td className="py-1.5 px-2 text-center">
+                            <span className={`text-xs px-2 py-0.5 rounded font-mono font-medium ${scoreColor}`}>
+                              {t.score}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {clickedShown && !clickedLoading && clickedItems.length === 0 && (
             <div className="text-sm text-gray-500 p-3 bg-gray-50 rounded">
