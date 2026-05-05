@@ -3971,6 +3971,8 @@ async def keyword_pool_registered_cleanup_by_score(
     from services.naver_ad_service import NaverAdApiClient
     from database.naver_ad_db import record_auto_cleanup_run
     import sqlite3 as _sqlite3
+    import time as _t
+    _t0 = _t.monotonic()
 
     threshold = max(0, min(95, int(request.threshold)))
     max_delete = max(0, min(5000, int(request.max_delete)))
@@ -4037,10 +4039,18 @@ async def keyword_pool_registered_cleanup_by_score(
             _dist[bucket] = _dist.get(bucket, 0) + 1
         return _scored, _dist
 
+    _t_db = _t.monotonic() - _t0
     scored, score_dist = await asyncio.to_thread(_score_all)
+    _t_score = _t.monotonic() - _t0 - _t_db
     targets = [(kid, kw, s) for kid, kw, s in scored if s <= threshold]
     targets.sort(key=lambda x: x[2])  # 무관한 것부터
     targets_capped = targets[:max_delete]
+    logger.warning(
+        f"[cleanup-by-score] uid={user_id} cid={cid} dry_run={dry_run} "
+        f"db_query={_t_db:.2f}s score={_t_score:.2f}s "
+        f"total={len(scored)} below={len(targets)} threshold={threshold} "
+        f"user_seeds={len(user_seeds)}"
+    )
 
     if dry_run:
         # 화면 표시용 — targets 전체 (max_delete 적용 전) 중 max 1000 개. keyword_id 포함해서

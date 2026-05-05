@@ -309,6 +309,7 @@ export default function KeywordPoolPage() {
   const handleManualAudit = async () => {
     const threshold = manualCleanupThreshold
     setManualCleanupRunning(true)
+    const startedAt = Date.now()
     try {
       const res = await adPost<{
         success: boolean
@@ -320,8 +321,11 @@ export default function KeywordPoolPage() {
       }>(
         `/api/naver-ad/keyword-pool/registered/cleanup-by-score${cidQs()}`,
         { threshold, max_delete: 5000, dry_run: true },
-        { timeout: 60_000 }
+        // retries=0 — 60초 안 응답 즉시 실패 (재시도 무의미, 사용자 다시 클릭 가능).
+        // timeout 90초 — backend dry_run + fly.io 콜드 스타트 여유.
+        { timeout: 90_000, retries: 0 }
       )
+      console.log(`[manual-audit] ${Date.now() - startedAt}ms total_registered=${res.total_registered} below=${res.targets_below_threshold}`)
       setManualTargets(res.targets || [])
       // default 전체 선택 — 사용자가 보고 빼고 싶은 것만 해제
       setManualSelected(new Set((res.targets || []).map(t => t.keyword_id)))
@@ -366,7 +370,8 @@ export default function KeywordPoolPage() {
       const res = await adPost<{ success: boolean; deleted: number; paused: number; failed: number }>(
         `/api/naver-ad/keyword-pool/clicked-keywords/bulk-delete${cidQs()}`,
         { keyword_ids: Array.from(manualSelected) },
-        { timeout: 600_000 }  // 1000개 × 0.18초 = 3분, 여유 10분
+        // 1000개 × 0.18초 ≈ 3분. 여유 5분, retries=0 (재시도 시 같은 KW 중복 삭제 방지).
+        { timeout: 300_000, retries: 0 }
       )
       toast.success(`삭제 ${res.deleted} / PAUSE ${res.paused} / 실패 ${res.failed}`)
       // 표에서 삭제된 것만 제거
