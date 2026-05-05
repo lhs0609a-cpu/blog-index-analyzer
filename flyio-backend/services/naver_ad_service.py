@@ -29,8 +29,10 @@ logger = logging.getLogger(__name__)
 # 즉시 OPEN 예외를 던짐 → 워커 점유 안 함. 30초 후 HALF_OPEN 으로 전환,
 # 한 번 성공하면 CLOSED 로 복구.
 class _NaverApiCircuitBreaker:
-    FAILURE_THRESHOLD = 5  # 연속 실패 N 회면 OPEN
-    OPEN_DURATION_S = 30   # OPEN 상태 유지 시간
+    # niche 시드 (의료 희귀병 등) keywordstool 응답이 빈약/timeout 빈발 → 5회면 너무 자주
+    # OPEN 진입. 임계값 완화 — 실제 outbound 폭주는 더 큰 fail count 일 때만 차단.
+    FAILURE_THRESHOLD = 10
+    OPEN_DURATION_S = 15  # OPEN 시간 단축 — 빠른 회복으로 다음 cron tick 손실 최소화
 
     def __init__(self) -> None:
         self._consecutive_failures = 0

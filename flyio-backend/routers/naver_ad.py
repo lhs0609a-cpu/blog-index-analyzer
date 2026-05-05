@@ -2697,12 +2697,32 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         f"[pool/collect] user={uid} 시드 라운드 — user/promoted={min(user_quota, len(seed_pool))} "
         f"+ POOL bridge={len(bridge_round)} (총 {len(seed_round)}) cold_start={cold_start}"
     )
+    # circuit breaker 인스턴스 — 시드 라운드 중 OPEN 감지 시 남은 시드 fail-fast 차단.
+    # naver_ad_service 모듈 레벨 singleton 공유.
+    from services.naver_ad_service import _naver_api_breaker, NaverApiCircuitOpenError
+    circuit_aborted = False
+
     for seed in seed_round:  # 시드 한 라운드 처리 한도 (BFS 추가로 호출 폭증 방지)
         if added >= target:
+            break
+        # circuit OPEN 시 남은 시드 모두 즉시 fail — error_message 폭주 + log 노이즈 차단.
+        # 30~60초 후 다음 cron tick 에서 다시 시도 (HALF_OPEN 으로 자동 복구).
+        if _naver_api_breaker.is_open():
+            circuit_aborted = True
+            logger.warning(
+                f"[pool/collect] user={uid} circuit OPEN — 남은 시드 {len(seed_round) - seeds_processed}개 abort"
+            )
             break
         seeds_processed += 1
         try:
             related = await client.get_related_keywords(seed, show_detail=True)
+        except NaverApiCircuitOpenError:
+            # circuit 이 시드 처리 중간에 열림 — 즉시 abort
+            circuit_aborted = True
+            logger.warning(
+                f"[pool/collect] user={uid} 시드 '{seed}' 처리 중 circuit OPEN — 남은 시드 abort"
+            )
+            break
         except Exception as e:
             msg = f"{seed}: {type(e).__name__}: {str(e)[:80]}"
             logger.warning(f"[pool/collect] API 실패 {msg}")
@@ -2796,6 +2816,11 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         logger.warning(f"[pool/collect] 시드미스 샘플: {', '.join(sample_no_seed)}")
     pending_after = (pool.stats(customer_id).get("by_status") or {}).get("pending", 0)
     err_parts = list(api_errors)
+    if circuit_aborted:
+        err_parts.append(
+            "네이버 API circuit breaker OPEN — niche 시드 keywordstool timeout 누적. "
+            "다음 cron tick (5분 후) 자동 재시도. broader 시드 추가 권장."
+        )
     if rejected > 0:
         err_parts.append(
             f"화이트리스트 reject {rejected}개 "
