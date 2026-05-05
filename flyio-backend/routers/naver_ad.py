@@ -3853,21 +3853,50 @@ async def keyword_pool_registered_cleanup_by_score(
             (cid,),
         ).fetchall()
 
-    # 점수 매김 — stats API 호출 없이 keyword text 만으로. POOL 토큰 매칭은 비활성
-    # (user_seed 광고주에서 POOL 토큰 +3pt 가 무관 KW 점수 부풀려서 threshold 회피 방지).
-    scored: List[Tuple[str, str, int]] = []  # (kid, kw, score)
-    for kw_text, kid in rows:
-        score = _compute_relevance_score(kw_text, user_seeds, pool_tokens=())
-        scored.append((kid, kw_text, score))
+    # 점수 매김 — atoms 1회 precompute (95k KW 호출 시 atoms 95k 번 재빌드 → GIL 폭주 방지).
+    # PERF: 95k × 30 atoms = 2.85M ops. asyncio.to_thread 로 워커 thread 분리해
+    # 이벤트 루프 보호 (fly.io health check timeout 차단).
+    def _score_all() -> Tuple[List[Tuple[str, str, int]], Dict[int, int]]:
+        atoms_3plus: set = set()
+        atoms_2: set = set()
+        for s in user_seeds:
+            if not s or len(s) < 2:
+                continue
+            if len(s) >= 4:
+                atoms_3plus.add(s)
+            for n in (2, 3):
+                for i in range(len(s) - n + 1):
+                    a = s[i:i + n]
+                    (atoms_2 if len(a) == 2 else atoms_3plus).add(a)
+        _scored: List[Tuple[str, str, int]] = []
+        _dist: Dict[int, int] = {}
+        for kw_text, kid in rows:
+            if not kw_text:
+                _scored.append((kid, kw_text or "", 0))
+                _dist[0] = _dist.get(0, 0) + 1
+                continue
+            sc = 0
+            full = False
+            for s in user_seeds:
+                if not s or len(s) < 2:
+                    continue
+                if s in kw_text:
+                    sc = 100; full = True; break
+                if kw_text in s:
+                    sc = 95; full = True; break
+            if not full:
+                n_3 = sum(1 for a in atoms_3plus if a in kw_text)
+                n_2 = sum(1 for a in atoms_2 if a in kw_text)
+                sc = min(95, min(80, n_3 * 20) + min(30, n_2 * 5))
+            _scored.append((kid, kw_text, sc))
+            bucket = (sc // 10) * 10
+            _dist[bucket] = _dist.get(bucket, 0) + 1
+        return _scored, _dist
+
+    scored, score_dist = await asyncio.to_thread(_score_all)
     targets = [(kid, kw, s) for kid, kw, s in scored if s <= threshold]
     targets.sort(key=lambda x: x[2])  # 무관한 것부터
     targets_capped = targets[:max_delete]
-
-    # 점수 분포 (10점 버킷)
-    score_dist: Dict[int, int] = {}
-    for _, _, s in scored:
-        bucket = (s // 10) * 10
-        score_dist[bucket] = score_dist.get(bucket, 0) + 1
 
     if dry_run:
         # 화면 표시용 — targets 전체 (max_delete 적용 전) 중 max 1000 개. keyword_id 포함해서
