@@ -805,9 +805,82 @@ export default function KeywordPoolPage() {
             </div>
           </div>
 
+          {/* 자동 cleanup — cron 이 매시 1회 점수 ≤ threshold 인 클릭 KW 자동 삭제. 항상 표시. */}
+          <div className={`flex items-center gap-2 mb-2 p-2 border rounded flex-wrap ${
+            autoCleanup.enabled ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'
+          }`}>
+            <button
+              onClick={() => saveAutoCleanup({ enabled: !autoCleanup.enabled })}
+              disabled={autoCleanupSaving}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition disabled:opacity-50 ${
+                autoCleanup.enabled ? 'bg-red-600' : 'bg-gray-300'
+              }`}
+              title="자동 삭제 ON/OFF"
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                  autoCleanup.enabled ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+            <span className="text-xs font-medium text-gray-800">
+              자동 삭제 {autoCleanup.enabled ? 'ON' : 'OFF'}
+            </span>
+            <span className="text-xs text-gray-500">— 점수</span>
+            <input
+              type="number"
+              min={0}
+              max={95}
+              value={autoCleanup.threshold}
+              onChange={(e) => setAutoCleanup(prev => ({ ...prev, threshold: Math.max(0, Math.min(95, parseInt(e.target.value) || 0)) }))}
+              onBlur={(e) => {
+                const t = Math.max(0, Math.min(95, parseInt(e.target.value) || 0))
+                if (t !== undefined) saveAutoCleanup({ threshold: t })
+              }}
+              className="w-16 text-xs border border-gray-300 rounded px-2 py-0.5 text-right"
+              disabled={autoCleanupSaving}
+            />
+            <span className="text-xs text-gray-700">점 이하 클릭 KW 매시 자동 삭제 (cron, click ≥ 1)</span>
+            {autoCleanupSaving && <Loader2 className="w-3 h-3 animate-spin text-gray-400" />}
+            <span className="text-xs text-gray-500 ml-auto">
+              {autoCleanup.last_run_at
+                ? `최근 실행 ${fmtTime(autoCleanup.last_run_at, mounted)} · ${autoCleanup.last_deleted}개 삭제`
+                : '아직 실행 안 됨'}
+            </span>
+          </div>
+
+          {/* 수동 일괄 정리 — click 무관, 등록 KW 전체 audit. cascade drift 옛날 무관 KW 정리. 항상 표시. */}
+          <div className="flex items-center gap-2 mb-3 p-2 bg-orange-50 border border-orange-200 rounded flex-wrap">
+            <Trash2 className="w-4 h-4 text-orange-700" />
+            <span className="text-xs font-medium text-orange-900">기존 등록 KW 일괄 정리 (click 무관)</span>
+            <span className="text-xs text-gray-700">— 점수</span>
+            <input
+              type="number"
+              min={0}
+              max={95}
+              value={manualCleanupThreshold}
+              onChange={(e) => setManualCleanupThreshold(Math.max(0, Math.min(95, parseInt(e.target.value) || 0)))}
+              className="w-16 text-xs border border-gray-300 rounded px-2 py-0.5 text-right"
+              disabled={manualCleanupRunning}
+            />
+            <span className="text-xs text-gray-700">점 이하 등록 KW 모두 삭제</span>
+            <button
+              onClick={handleManualCleanupByScore}
+              disabled={manualCleanupRunning}
+              className="ml-auto text-xs px-3 py-1 bg-orange-600 text-white rounded hover:bg-orange-700 disabled:bg-gray-300 inline-flex items-center gap-1"
+            >
+              {manualCleanupRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+              점수 분포 확인 + 일괄 정리
+            </button>
+            <div className="basis-full text-[11px] text-gray-600 mt-1">
+              cascade drift 로 잘못 등록된 옛날 무관 KW (예: 의료 광고주에 "대출이자/렌탈정수기") 일괄 정리.
+              click 발생 안 한 KW 도 포함. 1회 최대 5,000개 캡 (반복 실행 가능).
+            </div>
+          </div>
+
           {clickedShown && !clickedLoading && clickedItems.length === 0 && (
             <div className="text-sm text-gray-500 p-3 bg-gray-50 rounded">
-              최근 {clickedDays}일 내 클릭 발생 키워드 없음.
+              최근 {clickedDays}일 내 클릭 발생 키워드 없음. (위 자동/수동 정리 기능은 클릭 발생 무관하게 동작)
             </div>
           )}
 
@@ -885,78 +958,6 @@ export default function KeywordPoolPage() {
                 </span>
               </div>
 
-              {/* 자동 cleanup — cron 이 매시 1회 점수 ≤ threshold 인 클릭 KW 자동 삭제 */}
-              <div className={`flex items-center gap-2 mb-3 p-2 border rounded flex-wrap ${
-                autoCleanup.enabled ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'
-              }`}>
-                <button
-                  onClick={() => saveAutoCleanup({ enabled: !autoCleanup.enabled })}
-                  disabled={autoCleanupSaving}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition disabled:opacity-50 ${
-                    autoCleanup.enabled ? 'bg-red-600' : 'bg-gray-300'
-                  }`}
-                  title="자동 삭제 ON/OFF"
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-                      autoCleanup.enabled ? 'translate-x-4' : 'translate-x-0.5'
-                    }`}
-                  />
-                </button>
-                <span className="text-xs font-medium text-gray-800">
-                  자동 삭제 {autoCleanup.enabled ? 'ON' : 'OFF'}
-                </span>
-                <span className="text-xs text-gray-500">— 점수</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={95}
-                  value={autoCleanup.threshold}
-                  onChange={(e) => setAutoCleanup(prev => ({ ...prev, threshold: Math.max(0, Math.min(95, parseInt(e.target.value) || 0)) }))}
-                  onBlur={(e) => {
-                    const t = Math.max(0, Math.min(95, parseInt(e.target.value) || 0))
-                    if (t !== undefined) saveAutoCleanup({ threshold: t })
-                  }}
-                  className="w-16 text-xs border border-gray-300 rounded px-2 py-0.5 text-right"
-                  disabled={autoCleanupSaving}
-                />
-                <span className="text-xs text-gray-700">점 이하 KW 매시 자동 삭제</span>
-                {autoCleanupSaving && <Loader2 className="w-3 h-3 animate-spin text-gray-400" />}
-                <span className="text-xs text-gray-500 ml-auto">
-                  {autoCleanup.last_run_at
-                    ? `최근 실행 ${fmtTime(autoCleanup.last_run_at, mounted)} · ${autoCleanup.last_deleted}개 삭제`
-                    : '아직 실행 안 됨'}
-                </span>
-              </div>
-
-              {/* 수동 일괄 정리 — click 무관, 등록 KW 전체 audit. cascade drift 옛날 무관 KW 정리 */}
-              <div className="flex items-center gap-2 mb-3 p-2 bg-orange-50 border border-orange-200 rounded flex-wrap">
-                <Trash2 className="w-4 h-4 text-orange-700" />
-                <span className="text-xs font-medium text-orange-900">기존 등록 KW 일괄 정리 (click 무관)</span>
-                <span className="text-xs text-gray-700">— 점수</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={95}
-                  value={manualCleanupThreshold}
-                  onChange={(e) => setManualCleanupThreshold(Math.max(0, Math.min(95, parseInt(e.target.value) || 0)))}
-                  className="w-16 text-xs border border-gray-300 rounded px-2 py-0.5 text-right"
-                  disabled={manualCleanupRunning}
-                />
-                <span className="text-xs text-gray-700">점 이하 등록 KW 모두 삭제</span>
-                <button
-                  onClick={handleManualCleanupByScore}
-                  disabled={manualCleanupRunning}
-                  className="ml-auto text-xs px-3 py-1 bg-orange-600 text-white rounded hover:bg-orange-700 disabled:bg-gray-300 inline-flex items-center gap-1"
-                >
-                  {manualCleanupRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-                  점수 분포 확인 + 일괄 정리
-                </button>
-                <div className="basis-full text-[11px] text-gray-600 mt-1">
-                  cascade drift 로 잘못 등록된 옛날 무관 KW (예: 의료 광고주에 "대출이자/렌탈정수기") 일괄 정리.
-                  click 발생 안 한 KW 도 포함. 1회 최대 5,000개 캡 (반복 실행 가능).
-                </div>
-              </div>
               {visibleItems.length === 0 ? (
                 <div className="text-sm text-gray-500 p-3 bg-green-50 border border-green-100 rounded">
                   사업과 무관한 클릭 키워드 없음 — 광고 노출이 제대로 타겟팅 중.
