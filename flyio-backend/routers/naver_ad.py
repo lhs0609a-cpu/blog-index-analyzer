@@ -3028,16 +3028,44 @@ async def _inspect_ad_groups(
     reg = get_registered_keywords_db()
     rejected_items: List[Dict] = []
     rejected_naver_ids: List[Tuple[str, str]] = []  # (ncc_keyword_id, keyword)
+    debug_samples_logged = False  # 첫 광고그룹 첫 KW dict 한 번만 logging
+    total_kws_checked = 0
     for ag_id in ad_group_ids:
         try:
             kws = await client.get_keywords(ad_group_id=ag_id) or []
         except Exception as e:
             logger.warning(f"[pool/inspect] {ag_id} 조회 실패: {e}")
             continue
+        # 디버그 — 첫 광고그룹 첫 KW dict 의 keys + review/inspect/status/statusReason 값 logging.
+        # fly logs 에서 실제 네이버 응답 형태 확인용. 한 cron tick 당 1회만.
+        if not debug_samples_logged and kws:
+            sample = kws[0]
+            logger.warning(
+                f"[pool/inspect/DEBUG] ag={ag_id} sample_keys={list(sample.keys())[:20]} "
+                f"review={sample.get('reviewStatus')!r} inspect={sample.get('inspectStatus')!r} "
+                f"status={sample.get('status')!r} statusReason={sample.get('statusReason')!r}"
+            )
+            # 거부 후보 sample 5개 — review/inspect/statusReason 에 PENDING 외 값 가진 첫 5개
+            cand_samples = []
+            for k in kws[:50]:
+                rv = (k.get("reviewStatus") or "")
+                ip = (k.get("inspectStatus") or "")
+                rs = (k.get("statusReason") or "")
+                if rv or ip or rs:
+                    cand_samples.append(
+                        f"{k.get('keyword','')}={rv}/{ip}/{rs}"
+                    )
+                    if len(cand_samples) >= 5:
+                        break
+            if cand_samples:
+                logger.warning(f"[pool/inspect/DEBUG] non-empty samples: {' || '.join(cand_samples)}")
+            debug_samples_logged = True
+
         for kw in kws:
             kw_text = kw.get("keyword")
             if not kw_text:
                 continue
+            total_kws_checked += 1
             review = (kw.get("reviewStatus") or "").upper()
             inspect = (kw.get("inspectStatus") or "").upper()
             status = (kw.get("status") or "").upper()
@@ -3045,11 +3073,25 @@ async def _inspect_ad_groups(
             user_lock = kw.get("userLock", False)
 
             # statusReason 의 영구 거부 코드는 PENDING 가드보다 먼저 잡는다.
-            # 네이버는 검수 거부 KW 를 inspectStatus="PENDING" + statusReason="KEYWORD_DISAPPROVED"
-            # 조합으로 응답 — 기존엔 PENDING 가드에 막혀 영구 누락됐음 (소잠한의원 76건 사례).
-            REASON_REJECT_TOKENS = ("DISAPPROVED", "REJECTED", "PROHIBITED", "BLOCKLISTED")
+            # 네이버 거부 statusReason 토큰 (확인된 값들):
+            #   KEYWORD_DISAPPROVED, BUSINESS_PROHIBITED, REVIEW_NOT_PASSED, INSPECT_FAIL,
+            #   BAD_BUSINESS, BLOCKLISTED, PROHIBITED.
+            # NOT_PASSED / FAIL 추가 — 이전엔 누락되어 REVIEW_NOT_PASSED / INSPECT_FAIL KW 가
+            # PENDING 가드에 막혀 영구 미삭제 (사용자 보고 사례).
+            REASON_REJECT_TOKENS = (
+                "DISAPPROVED", "REJECTED", "PROHIBITED", "BLOCKLISTED",
+                "NOT_PASSED", "FAIL", "BAD_BUSINESS", "INELIGIBLE",
+            )
             reason_rejected = any(t in stat_reason for t in REASON_REJECT_TOKENS)
-            if reason_rejected:
+            # inspectStatus 자체에 거부 토큰 있어도 PENDING 가드보다 먼저 잡는다.
+            # 네이버는 inspectStatus="REVIEW_FAILED" + statusReason="" 케이스도 있음.
+            INSPECT_REJECT_TOKENS = (
+                "DISAPPROVED", "REJECTED", "PROHIBITED", "BLOCKLISTED",
+                "NOT_PASSED", "FAIL", "DENIED", "BAD_BUSINESS",
+            )
+            inspect_rejected_early = any(t in inspect for t in INSPECT_REJECT_TOKENS)
+            review_rejected_early = ("REJECT" in review) or ("DISAPPROVE" in review) or ("FAIL" in review) or ("NOT_PASSED" in review)
+            if reason_rejected or inspect_rejected_early or review_rejected_early:
                 rejected_items.append({
                     "keyword": kw_text,
                     "reason": f"review={review} inspect={inspect} status={status} reason={stat_reason} userLock={user_lock}",
@@ -3093,6 +3135,14 @@ async def _inspect_ad_groups(
                     rejected_naver_ids.append((kid, kw_text))
         await asyncio.sleep(0.15)
 
+    logger.warning(
+        f"[pool/inspect] user={uid} cid={customer_id} ag_groups={len(ad_group_ids)} "
+        f"kws_checked={total_kws_checked} rejected_found={len(rejected_items)}"
+    )
+    if rejected_items:
+        # 거부 KW 첫 5개 sample logging — 어떤 토큰이 매치됐는지 검증용
+        sample_reasons = [f"{it['keyword']}:{it['reason'][:80]}" for it in rejected_items[:5]]
+        logger.warning(f"[pool/inspect] rejected samples: {' | '.join(sample_reasons)}")
     n_mark = pool.mark_rejected_by_naver(customer_id, rejected_items)
 
     # 네이버에서 실제 DELETE — 실패 시 PUT pause로 fallback (광고 노출만 차단)
