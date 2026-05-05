@@ -335,8 +335,11 @@ def init_naver_ad_tables():
         if column not in cols:
             try:
                 cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
-            except Exception:
-                pass
+                logger.warning(f"[migration] ALTER TABLE {table} ADD COLUMN {column} {decl} — OK")
+            except Exception as e:
+                # silent fail 막기 — 마이그레이션 실패 시 production 에서 컬럼 미존재 → 후속
+                # SQL 모두 실패. 명시적 logging 으로 진단 가능.
+                logger.error(f"[migration] ALTER TABLE {table} ADD COLUMN {column} 실패: {e}")
 
     for col, decl in [
         ("test_size", "INTEGER DEFAULT 10000"),

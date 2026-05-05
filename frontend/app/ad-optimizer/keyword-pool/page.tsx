@@ -315,12 +315,15 @@ export default function KeywordPoolPage() {
     }
   }
 
-  const handleSaveRelevanceKeywords = () => {
+  const handleSaveRelevanceKeywords = async () => {
     const parsed = relevanceInput
       .split(/[\n,]/)
       .map(s => s.trim())
       .filter(s => s.length >= 2)
-    saveAutoCleanup({ relevance_keywords: parsed })
+    console.log('[relevance-save] sending', parsed)
+    await saveAutoCleanup({ relevance_keywords: parsed })
+    // PATCH 응답 신뢰 안 하고 즉시 GET 재검증 — DB 마이그레이션 / 응답 파싱 실패 가드.
+    setTimeout(() => loadAutoCleanup(), 300)
   }
 
   // dry_run audit — 점수 ≤ threshold 등록 KW 전체 리스트를 표로 받아옴 (max 1000개 표시)

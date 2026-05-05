@@ -3759,6 +3759,12 @@ async def keyword_pool_auto_cleanup_patch(
     if not account:
         raise HTTPException(status_code=400, detail="광고 계정 미연결")
     cid_str = str(account.get("customer_id"))
+    logger.warning(
+        f"[auto-cleanup/PATCH] uid={user_id} cid={cid_str} "
+        f"enabled={request.enabled} threshold={request.threshold} "
+        f"rel_kws_count={len(request.relevance_keywords) if request.relevance_keywords else 'None'} "
+        f"rel_kws_sample={(request.relevance_keywords or [])[:5]}"
+    )
     ok = update_ad_account_auto_cleanup(
         user_id, cid_str,
         enabled=request.enabled,
@@ -3768,6 +3774,11 @@ async def keyword_pool_auto_cleanup_patch(
     if not ok:
         raise HTTPException(status_code=400, detail="변경할 필드 없음 또는 광고주 미존재")
     s = get_ad_account_auto_cleanup(user_id, cid_str)
+    logger.warning(
+        f"[auto-cleanup/PATCH] uid={user_id} cid={cid_str} 저장 후 SELECT 결과 "
+        f"rel_kws_count={len(s.get('relevance_keywords') or [])} "
+        f"rel_kws_sample={(s.get('relevance_keywords') or [])[:5]}"
+    )
     return {"success": True, "customer_id": cid_str, **s}
 
 
