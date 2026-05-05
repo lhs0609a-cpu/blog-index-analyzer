@@ -3589,11 +3589,12 @@ async def keyword_pool_clicked_keywords(
         # circuit breaker (threshold=5) 가 빠르게 OPEN 되어 나머지 task 가 즉시 503 fail.
         # 정상 시에도 Sem=3 이면 1500개 ÷ 3 ≈ 500 round × ~200ms = 100s 내 완료.
         sem = asyncio.Semaphore(3)
-        from services.naver_ad_service import _naver_api_breaker, NaverApiCircuitOpenError
+        # /stats 전용 breaker — inspect/collect 와 격리.
+        from services.naver_ad_service import _stats_breaker, NaverApiCircuitOpenError
 
         async def _fetch_one(kid: str) -> List[dict]:
-            # circuit OPEN 상태면 task 진입 자체 skip — sem 점유 안 함
-            if _naver_api_breaker.is_open():
+            # stats circuit OPEN 상태면 task 진입 자체 skip — sem 점유 안 함
+            if _stats_breaker.is_open():
                 return []
             async with sem:
                 try:

@@ -34,7 +34,8 @@ class _NaverApiCircuitBreaker:
     FAILURE_THRESHOLD = 10
     OPEN_DURATION_S = 15  # OPEN 시간 단축 — 빠른 회복으로 다음 cron tick 손실 최소화
 
-    def __init__(self) -> None:
+    def __init__(self, name: str = "default") -> None:
+        self.name = name
         self._consecutive_failures = 0
         self._opened_at: Optional[float] = None  # OPEN 시작 epoch
 
@@ -45,7 +46,7 @@ class _NaverApiCircuitBreaker:
             # HALF_OPEN — 한 번 시도 허용
             self._opened_at = None
             self._consecutive_failures = 0
-            logger.info("[NaverApiCircuitBreaker] OPEN → HALF_OPEN — 한 번 시도 허용")
+            logger.info(f"[NaverApiCircuitBreaker:{self.name}] OPEN → HALF_OPEN — 한 번 시도 허용")
             return False
         return True
 
@@ -54,14 +55,14 @@ class _NaverApiCircuitBreaker:
         if self._consecutive_failures >= self.FAILURE_THRESHOLD and self._opened_at is None:
             self._opened_at = time.time()
             logger.warning(
-                f"[NaverApiCircuitBreaker] OPEN — {self._consecutive_failures}회 연속 실패 "
+                f"[NaverApiCircuitBreaker:{self.name}] OPEN — {self._consecutive_failures}회 연속 실패 "
                 f"→ 향후 {self.OPEN_DURATION_S}초간 호출 차단"
             )
 
     def record_success(self) -> None:
         # OPEN 상태였다면 즉시 CLOSED 복구
         if self._opened_at is not None:
-            logger.info("[NaverApiCircuitBreaker] CLOSED — 정상 응답으로 복구")
+            logger.info(f"[NaverApiCircuitBreaker:{self.name}] CLOSED — 정상 응답으로 복구")
             self._consecutive_failures = 0
             self._opened_at = None
             return
@@ -71,7 +72,24 @@ class _NaverApiCircuitBreaker:
             self._consecutive_failures -= 1
 
 
-_naver_api_breaker = _NaverApiCircuitBreaker()
+# 엔드포인트별 분리 — /stats 는 frontend 폴링으로 호출 빈도 압도적이라 자주 trip.
+# 단일 글로벌 breaker 면 /stats 폭주가 inspect (/ncc/keywords), collect (/keywordstool),
+# delete/pause (/ncc/keywords/{id}) 까지 영구 차단해 자동 cleanup 미동작.
+# 도메인 격리: stats 만 별도 trip, 나머지(default) 는 영향 없음.
+_stats_breaker = _NaverApiCircuitBreaker(name="stats")
+_default_breaker = _NaverApiCircuitBreaker(name="default")
+
+
+def _breaker_for(endpoint: str) -> _NaverApiCircuitBreaker:
+    """엔드포인트 → 책임 breaker. /stats 는 별도, 나머지는 default."""
+    path = (endpoint or "").split("?", 1)[0]
+    if path == "/stats" or path.startswith("/stats/"):
+        return _stats_breaker
+    return _default_breaker
+
+
+# Backward compat — 기존 모듈 외부에서 _naver_api_breaker 참조하면 default 사용.
+_naver_api_breaker = _default_breaker
 
 
 class NaverApiCircuitOpenError(Exception):
@@ -214,11 +232,13 @@ class NaverAdApiClient:
             else:
                 logger.info(f"[NaverAd._request] {method} {endpoint} data_type={type(data).__name__}")
 
-        # Circuit breaker — OPEN 이면 호출 자체 차단해서 워커 점유 안 함
-        if _naver_api_breaker.is_open():
+        # Circuit breaker — 엔드포인트별 (stats vs default) — OPEN 이면 호출 자체 차단.
+        # stats 폭주가 inspect/collect/delete 차단하지 않도록 도메인 격리.
+        breaker = _breaker_for(endpoint)
+        if breaker.is_open():
             raise NaverApiCircuitOpenError(
-                f"네이버 API 호출 일시 차단 (연속 timeout {_naver_api_breaker.FAILURE_THRESHOLD}회 이상). "
-                f"{_naver_api_breaker.OPEN_DURATION_S}초 후 자동 복구"
+                f"네이버 API 호출 일시 차단 ({breaker.name}: 연속 실패 {breaker.FAILURE_THRESHOLD}회 이상). "
+                f"{breaker.OPEN_DURATION_S}초 후 자동 복구"
             )
 
         last_exc: Optional[Exception] = None
@@ -243,7 +263,7 @@ class NaverAdApiClient:
                 # 5xx / 429 — circuit breaker 에 실패 기록 후 재시도/raise
                 if response.status_code in (429, 500, 502, 503, 504):
                     # 429 도 breaker 실패로 카운트 — 5회 누적 시 OPEN 으로 폭주 차단
-                    _naver_api_breaker.record_failure()
+                    breaker.record_failure()
                     if attempt < max_attempts - 1:
                         # 429 는 rate limit 이라 backoff 더 길게 (5s), 5xx 는 1s
                         backoff = 5 if response.status_code == 429 else 1
@@ -257,12 +277,12 @@ class NaverAdApiClient:
                     break
 
                 # 정상 응답 또는 비429 4xx — breaker CLOSED 로 복구
-                _naver_api_breaker.record_success()
+                breaker.record_success()
                 break  # 성공 또는 4xx — 루프 탈출
             except (httpx.TimeoutException, httpx.NetworkError, httpx.ConnectError) as e:
                 # 네트워크 일시 장애 — breaker 에 실패 기록
                 last_exc = e
-                _naver_api_breaker.record_failure()
+                breaker.record_failure()
                 if attempt < max_attempts - 1:
                     backoff = 1
                     logger.warning(
@@ -693,8 +713,9 @@ class NaverAdApiClient:
         _ = stat_type
         merged: List[dict] = []
         for kid in ids:
-            # circuit OPEN 이면 즉시 skip — 무의미한 호출 안 보냄
-            if _naver_api_breaker.is_open():
+            # circuit OPEN 이면 즉시 skip — 무의미한 호출 안 보냄.
+            # stats 전용 breaker — inspect/collect 와 격리되어 한 쪽만 OPEN 가능.
+            if _stats_breaker.is_open():
                 break
             params = {
                 "ids": [kid],  # 단일 ID, list 형태로 (?ids=...)
