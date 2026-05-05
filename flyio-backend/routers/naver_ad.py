@@ -3766,10 +3766,13 @@ async def keyword_pool_auto_cleanup_get(
 @router.patch("/keyword-pool/auto-cleanup/settings")
 async def keyword_pool_auto_cleanup_patch(
     request: AutoCleanupSettingsRequest,
+    background_tasks: BackgroundTasks,
     customer_id: Optional[str] = None,
     user_id: int = Depends(get_user_id_with_fallback),
 ):
-    """자동 cleanup ON/OFF 또는 threshold 변경 — 부분 업데이트."""
+    """자동 cleanup ON/OFF 또는 threshold 변경 — 부분 업데이트.
+    enabled=true 로 변경 시 background 즉시 1회 실행 — 다음 cron 정각까지 대기 안 함.
+    """
     from database.naver_ad_db import update_ad_account_auto_cleanup, get_ad_account_auto_cleanup
     account = _resolve_account(user_id, customer_id)
     if not account:
@@ -3795,7 +3798,31 @@ async def keyword_pool_auto_cleanup_patch(
         f"rel_kws_count={len(s.get('relevance_keywords') or [])} "
         f"rel_kws_sample={(s.get('relevance_keywords') or [])[:5]}"
     )
-    return {"success": True, "customer_id": cid_str, **s}
+    # enabled=true 로 변경 시 background 즉시 1회 실행 — 사용자가 다음 cron 정각 기다림
+    # 없이 즉시 작동 검증 가능. record_auto_cleanup_run stamp 도 즉시 업데이트.
+    if request.enabled is True and s.get("enabled"):
+        cid_int = int(cid_str)
+        thr = int(s.get("threshold") or 30)
+        async def _trigger_now():
+            try:
+                res = await _run_auto_cleanup_for_account(user_id, cid_int, thr)
+                logger.warning(
+                    f"[auto-cleanup/PATCH/trigger] uid={user_id} cid={cid_int} 즉시 실행 결과: {res}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"[auto-cleanup/PATCH/trigger] uid={user_id} cid={cid_int} 실행 실패: "
+                    f"{type(e).__name__}: {e}", exc_info=True
+                )
+                # 실패해도 last_run_at stamp 는 남겨야 사용자에게 시도 흔적 보임
+                try:
+                    from database.naver_ad_db import record_auto_cleanup_run
+                    record_auto_cleanup_run(user_id, str(cid_int), 0)
+                except Exception:
+                    pass
+        background_tasks.add_task(_trigger_now)
+        logger.warning(f"[auto-cleanup/PATCH] uid={user_id} cid={cid_str} 즉시 실행 큐잉 (background)")
+    return {"success": True, "customer_id": cid_str, **s, "triggered_now": bool(request.enabled is True and s.get("enabled"))}
 
 
 async def _run_auto_cleanup_for_account(
@@ -3813,6 +3840,11 @@ async def _run_auto_cleanup_for_account(
 
     account = get_ad_account_by_customer(user_id, str(customer_id))
     if not account or not account.get("is_connected"):
+        # 비연결 광고주도 stamp — UI 에 "실행됨 0개" 표시되어야 사용자가 동작 확인 가능
+        try:
+            record_auto_cleanup_run(user_id, str(customer_id), 0)
+        except Exception:
+            pass
         return {"customer_id": customer_id, "deleted": 0, "reason": "not_connected"}
 
     reg = get_registered_keywords_db()

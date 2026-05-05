@@ -6,7 +6,7 @@ name: Keyword pool — auto cleanup (relevance score)
 
 on:
   schedule:
-    - cron: "0 * * * *"  # 매시 정각
+    - cron: "*/15 * * * *"  # 매 15분 — 사용자 토글 ON 후 빠른 재실행 보장
   workflow_dispatch:
     inputs:
       user_id:
