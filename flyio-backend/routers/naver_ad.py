@@ -3729,6 +3729,7 @@ async def keyword_pool_bulk_delete_clicked(
 class AutoCleanupSettingsRequest(BaseModel):
     enabled: Optional[bool] = None
     threshold: Optional[int] = None  # 0~95
+    relevance_keywords: Optional[List[str]] = None  # 도메인 기준 키워드 list (예: ["피부질환","피부","아토피"])
 
 
 @router.get("/keyword-pool/auto-cleanup/settings")
@@ -3762,6 +3763,7 @@ async def keyword_pool_auto_cleanup_patch(
         user_id, cid_str,
         enabled=request.enabled,
         threshold=request.threshold,
+        relevance_keywords=request.relevance_keywords,
     )
     if not ok:
         raise HTTPException(status_code=400, detail="변경할 필드 없음 또는 광고주 미존재")
@@ -3824,7 +3826,14 @@ async def _run_auto_cleanup_for_account(
     results = await asyncio.gather(*[_fetch_one(kid) for kid in ids])
     all_stats = [s for batch in results for s in batch]
 
-    user_seeds = [s for s in (pool.list_user_seeds(customer_id) or []) if s and len(s) >= 2]
+    # cron 자동 cleanup 도 cleanup-by-score 와 동일 우선순위:
+    # ad_accounts.relevance_keywords (사용자 명시) → user_seed 폴백.
+    from database.naver_ad_db import get_ad_account_relevance_keywords
+    saved_basis = get_ad_account_relevance_keywords(user_id, str(customer_id))
+    if saved_basis:
+        user_seeds = saved_basis
+    else:
+        user_seeds = [s for s in (pool.list_user_seeds(customer_id) or []) if s and len(s) >= 2]
     targets: List[Tuple[str, str, int]] = []  # (kid, kw, score)
     for stat in all_stats:
         kid = stat.get("id")
@@ -3956,6 +3965,9 @@ class CleanupByScoreRequest(BaseModel):
     threshold: int = 30
     max_delete: int = 1000
     dry_run: bool = False
+    # 사용자가 호출 시 임시로 다른 기준 키워드 쓰고 싶을 때 (저장된 광고주 설정 무시).
+    # 비어있으면 ad_accounts.relevance_keywords → 비어있으면 user_seed 순으로 폴백.
+    relevance_keywords_override: Optional[List[str]] = None
 
 
 @router.post("/keyword-pool/registered/cleanup-by-score")
@@ -3985,12 +3997,32 @@ async def keyword_pool_registered_cleanup_by_score(
 
     pool = get_keyword_pool_db()
     reg = get_registered_keywords_db()
-    user_seeds = [s for s in (pool.list_user_seeds(cid) or []) if s and len(s) >= 2]
-    if not user_seeds:
+
+    # 점수 기준 키워드 우선순위: request.override → 광고주 저장값 → user_seed.
+    # 사용자 의도 ("내가 원하는 키워드 기준으로 연관성 잡아야지") 반영.
+    from database.naver_ad_db import get_ad_account_relevance_keywords
+    if request.relevance_keywords_override:
+        score_basis = [s.strip() for s in request.relevance_keywords_override
+                       if s and len(s.strip()) >= 2]
+        basis_source = "override"
+    else:
+        saved = get_ad_account_relevance_keywords(user_id, str(cid))
+        if saved:
+            score_basis = saved
+            basis_source = "saved"
+        else:
+            score_basis = [s for s in (pool.list_user_seeds(cid) or []) if s and len(s) >= 2]
+            basis_source = "user_seed_fallback"
+
+    if not score_basis:
         raise HTTPException(
             status_code=400,
-            detail="user_seed 가 없는 광고주는 점수 기반 정리 불가 — 시드 추가 후 재시도",
+            detail=(
+                "점수 기준 키워드 없음 — '연관성 기준 키워드' 입력 또는 user_seed 추가 후 재시도. "
+                "예: 피부질환,피부,피부과,아토피,여드름"
+            ),
         )
+    user_seeds = score_basis  # 이하 코드와 호환 (변수명 유지)
 
     with _sqlite3.connect(reg.db_path) as conn:
         rows = conn.execute(
@@ -4049,7 +4081,8 @@ async def keyword_pool_registered_cleanup_by_score(
         f"[cleanup-by-score] uid={user_id} cid={cid} dry_run={dry_run} "
         f"db_query={_t_db:.2f}s score={_t_score:.2f}s "
         f"total={len(scored)} below={len(targets)} threshold={threshold} "
-        f"user_seeds={len(user_seeds)}"
+        f"basis={basis_source} basis_count={len(user_seeds)} "
+        f"basis_sample={user_seeds[:5]}"
     )
 
     if dry_run:

@@ -136,8 +136,10 @@ export default function KeywordPoolPage() {
     threshold: number
     last_run_at: string | null
     last_deleted: number
-  }>({ enabled: false, threshold: 30, last_run_at: null, last_deleted: 0 })
+    relevance_keywords: string[]
+  }>({ enabled: false, threshold: 30, last_run_at: null, last_deleted: 0, relevance_keywords: [] })
   const [autoCleanupSaving, setAutoCleanupSaving] = useState(false)
+  const [relevanceInput, setRelevanceInput] = useState('')  // textarea raw 입력
 
   // 등록 KW 전체 점수 audit + 일괄 정리 (click 무관) — cascade drift 옛날 무관 KW 정리용
   const [manualCleanupRunning, setManualCleanupRunning] = useState(false)
@@ -265,35 +267,43 @@ export default function KeywordPoolPage() {
 
   const loadAutoCleanup = async () => {
     try {
-      const res = await adGet<{ success: boolean; enabled: boolean; threshold: number; last_run_at: string | null; last_deleted: number }>(
+      const res = await adGet<{ success: boolean; enabled: boolean; threshold: number; last_run_at: string | null; last_deleted: number; relevance_keywords?: string[] }>(
         `/api/naver-ad/keyword-pool/auto-cleanup/settings${cidQs()}`,
         { showToast: false, timeout: 10_000 }
       )
+      const kws = Array.isArray(res.relevance_keywords) ? res.relevance_keywords : []
       setAutoCleanup({
         enabled: !!res.enabled,
         threshold: Number(res.threshold ?? 30),
         last_run_at: res.last_run_at || null,
         last_deleted: Number(res.last_deleted || 0),
+        relevance_keywords: kws,
       })
+      setRelevanceInput(kws.join(', '))
     } catch (e) {
       // settings 로드 실패해도 동작 — default state 유지
     }
   }
 
-  const saveAutoCleanup = async (patch: { enabled?: boolean; threshold?: number }) => {
+  const saveAutoCleanup = async (patch: { enabled?: boolean; threshold?: number; relevance_keywords?: string[] }) => {
     setAutoCleanupSaving(true)
     try {
-      const res = await adPatch<{ success: boolean; enabled: boolean; threshold: number; last_run_at: string | null; last_deleted: number }>(
+      const res = await adPatch<{ success: boolean; enabled: boolean; threshold: number; last_run_at: string | null; last_deleted: number; relevance_keywords?: string[] }>(
         `/api/naver-ad/keyword-pool/auto-cleanup/settings${cidQs()}`,
         patch
       )
+      const kws = Array.isArray(res.relevance_keywords) ? res.relevance_keywords : []
       setAutoCleanup({
         enabled: !!res.enabled,
         threshold: Number(res.threshold ?? 30),
         last_run_at: res.last_run_at || null,
         last_deleted: Number(res.last_deleted || 0),
+        relevance_keywords: kws,
       })
-      if (patch.enabled !== undefined) {
+      if (patch.relevance_keywords !== undefined) {
+        setRelevanceInput(kws.join(', '))
+        toast.success(`연관성 기준 키워드 ${kws.length}개 저장`)
+      } else if (patch.enabled !== undefined) {
         toast.success(patch.enabled ? `자동 삭제 ON (점수≤${res.threshold})` : '자동 삭제 OFF')
       } else if (patch.threshold !== undefined) {
         toast.success(`임계값 ${res.threshold}점으로 저장`)
@@ -303,6 +313,14 @@ export default function KeywordPoolPage() {
     } finally {
       setAutoCleanupSaving(false)
     }
+  }
+
+  const handleSaveRelevanceKeywords = () => {
+    const parsed = relevanceInput
+      .split(/[\n,]/)
+      .map(s => s.trim())
+      .filter(s => s.length >= 2)
+    saveAutoCleanup({ relevance_keywords: parsed })
   }
 
   // dry_run audit — 점수 ≤ threshold 등록 KW 전체 리스트를 표로 받아옴 (max 1000개 표시)
@@ -836,6 +854,40 @@ export default function KeywordPoolPage() {
                 {clickedLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
                 조회
               </button>
+            </div>
+          </div>
+
+          {/* 연관성 기준 키워드 — 사용자가 직접 도메인 토큰 명시. 자동/수동 cleanup 모두 이 키워드로 점수 매김 */}
+          <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded">
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+              <Activity className="w-4 h-4 text-blue-700" />
+              <span className="text-xs font-medium text-blue-900">연관성 기준 키워드</span>
+              <span className="text-xs text-gray-600">— 점수 계산 도메인 (예: 피부 광고주면 "피부질환,피부,피부과,아토피,여드름,트러블")</span>
+              <span className="ml-auto text-[11px] text-gray-500">
+                현재 저장: {autoCleanup.relevance_keywords.length === 0 ? '비어있음 (user_seed 사용)' : `${autoCleanup.relevance_keywords.length}개`}
+              </span>
+            </div>
+            <div className="flex items-start gap-2">
+              <textarea
+                value={relevanceInput}
+                onChange={(e) => setRelevanceInput(e.target.value)}
+                rows={2}
+                placeholder="피부질환, 피부, 피부과, 아토피, 여드름, 트러블, 색소침착"
+                className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 font-mono resize-none"
+                disabled={autoCleanupSaving}
+              />
+              <button
+                onClick={handleSaveRelevanceKeywords}
+                disabled={autoCleanupSaving}
+                className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 inline-flex items-center gap-1"
+              >
+                {autoCleanupSaving && <Loader2 className="w-3 h-3 animate-spin" />}
+                저장
+              </button>
+            </div>
+            <div className="text-[11px] text-gray-600 mt-1">
+              콤마/줄바꿈 구분. 입력 후 "저장" → 자동 cleanup 매시 + 수동 "조회" 모두 이 키워드로 점수 매김.
+              비어있으면 user_seed 폴백. <strong>변경 후 표 다시 조회해야 점수 갱신.</strong>
             </div>
           </div>
 
