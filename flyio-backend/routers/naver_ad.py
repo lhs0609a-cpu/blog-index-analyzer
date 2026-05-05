@@ -3798,31 +3798,48 @@ async def keyword_pool_auto_cleanup_patch(
         f"rel_kws_count={len(s.get('relevance_keywords') or [])} "
         f"rel_kws_sample={(s.get('relevance_keywords') or [])[:5]}"
     )
-    # enabled=true 로 변경 시 background 즉시 1회 실행 — 사용자가 다음 cron 정각 기다림
-    # 없이 즉시 작동 검증 가능. record_auto_cleanup_run stamp 도 즉시 업데이트.
+    # enabled=true 로 변경 시 즉시 1회 실행 — 다음 cron 까지 대기 안 함.
+    # asyncio.create_task fire-and-forget — fly.io 의 BackgroundTasks 가 worker 점유로
+    # cancel 되는 케이스 회피. 시작 시 즉시 last_run_at stamp → 사용자가 "실행 중" 확인.
+    triggered = False
     if request.enabled is True and s.get("enabled"):
         cid_int = int(cid_str)
         thr = int(s.get("threshold") or 30)
+        # 1) 즉시 stamp — 사용자가 토글 ON 직후 "최근 실행: 방금 전" 즉시 확인 가능
+        try:
+            from database.naver_ad_db import record_auto_cleanup_run
+            record_auto_cleanup_run(user_id, cid_str, 0)
+            logger.warning(f"[auto-cleanup/PATCH] uid={user_id} cid={cid_str} 즉시 stamp (실행 시작 표시)")
+        except Exception as _e:
+            logger.warning(f"[auto-cleanup/PATCH] 즉시 stamp 실패: {_e}")
+
+        # 2) fire-and-forget task — uvicorn 워커가 살아있는 동안 실행
         async def _trigger_now():
             try:
+                logger.warning(f"[auto-cleanup/PATCH/trigger] uid={user_id} cid={cid_int} thr={thr} 시작")
                 res = await _run_auto_cleanup_for_account(user_id, cid_int, thr)
                 logger.warning(
-                    f"[auto-cleanup/PATCH/trigger] uid={user_id} cid={cid_int} 즉시 실행 결과: {res}"
+                    f"[auto-cleanup/PATCH/trigger] uid={user_id} cid={cid_int} 실행 결과: {res}"
                 )
             except Exception as e:
                 logger.error(
                     f"[auto-cleanup/PATCH/trigger] uid={user_id} cid={cid_int} 실행 실패: "
                     f"{type(e).__name__}: {e}", exc_info=True
                 )
-                # 실패해도 last_run_at stamp 는 남겨야 사용자에게 시도 흔적 보임
                 try:
                     from database.naver_ad_db import record_auto_cleanup_run
                     record_auto_cleanup_run(user_id, str(cid_int), 0)
                 except Exception:
                     pass
-        background_tasks.add_task(_trigger_now)
-        logger.warning(f"[auto-cleanup/PATCH] uid={user_id} cid={cid_str} 즉시 실행 큐잉 (background)")
-    return {"success": True, "customer_id": cid_str, **s, "triggered_now": bool(request.enabled is True and s.get("enabled"))}
+        try:
+            asyncio.create_task(_trigger_now())
+            triggered = True
+        except Exception as _e:
+            # event loop 외 호출 시 — BackgroundTasks 폴백
+            logger.warning(f"[auto-cleanup/PATCH] create_task 실패 → BackgroundTasks 폴백: {_e}")
+            background_tasks.add_task(_trigger_now)
+            triggered = True
+    return {"success": True, "customer_id": cid_str, **s, "triggered_now": triggered}
 
 
 async def _run_auto_cleanup_for_account(
@@ -3868,9 +3885,15 @@ async def _run_auto_cleanup_for_account(
     start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
 
     ids = list(keyword_map.keys())[:1500]
-    sem = asyncio.Semaphore(20)
+    # sem=20 → sem=3. Naver outbound 폭주 시 circuit breaker (threshold=10) OPEN 빠르게
+    # 진입 막음. 1500 ÷ 3 ≈ 500 round × ~200ms = 100s 내 완료 (정상 시).
+    sem = asyncio.Semaphore(3)
+    from services.naver_ad_service import _stats_breaker, NaverApiCircuitOpenError
 
     async def _fetch_one(kid: str) -> List[dict]:
+        # stats circuit OPEN 시 진입 즉시 skip — sem 점유 안 함
+        if _stats_breaker.is_open():
+            return []
         async with sem:
             try:
                 stats = await client.get_stats(
@@ -3878,12 +3901,18 @@ async def _run_auto_cleanup_for_account(
                     start_date=start_date, end_date=end_date,
                 )
                 return stats or []
+            except NaverApiCircuitOpenError:
+                return []
             except Exception as e:
                 logger.warning(f"[auto-cleanup] stats {kid} 실패: {str(e)[:120]}")
                 return []
 
     results = await asyncio.gather(*[_fetch_one(kid) for kid in ids])
     all_stats = [s for batch in results for s in batch]
+    logger.warning(
+        f"[auto-cleanup] uid={user_id} cid={customer_id} stats fetched ids={len(ids)} "
+        f"non_empty={len(all_stats)} circuit_open={_stats_breaker.is_open()}"
+    )
 
     # cron 자동 cleanup 도 cleanup-by-score 와 동일 우선순위:
     # ad_accounts.relevance_keywords (사용자 명시) → user_seed 폴백.
