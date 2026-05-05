@@ -2559,21 +2559,26 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     # 모두 user_seed lineage. cold_start 광고주는 domain_token_set 에 POOL baseline 포함.
     unified_tokens = set(domain_token_set) | seed_atoms | registered_atoms
 
-    # Loose mode 자동 진입 — 최근 5회 collect 가 모두 reject ≥95% 면 게이트 더 완화.
-    # min_volume↓ + 시드별 raw 매치도 추가로 시도.
+    # Loose mode 자동 진입 — cold_start 광고주만 사용. user_seed ≥ 1 면 절대 비활성.
+    # Why: niche user_seed (예: 의료 희귀병) 가 5회 연속 발굴 0 + reject 폭주하면 loose_mode 가
+    #      "길이 2+ 모든 KW 통과" 로 게이트를 무력화 → user_seed 무관 KW 무차별 INSERT →
+    #      registered_atoms 학습 → 영구적 cascade drift. 사용자 의도 ("내 시드 외 무관 KW reject")
+    #      정면 위반. user_seed 가 niche 라 발굴 못 해도 무관 도메인으로 점프해선 안 됨 —
+    #      이 경우 "발굴 0" 으로 두는 게 옳다 (사용자가 시드 추가하거나 niche 포기).
     loose_mode = False
-    try:
-        recent = pool.recent_runs(customer_id, limit=5)
-        collects = [r for r in recent if r.get("kind") == "collect"]
-        if len(collects) >= 3:
-            high_reject = sum(
-                1 for r in collects
-                if (r.get("added") or 0) == 0 and (r.get("skipped") or 0) >= 500
-            )
-            if high_reject >= 3:
-                loose_mode = True
-    except Exception:
-        pass
+    if cold_start:
+        try:
+            recent = pool.recent_runs(customer_id, limit=5)
+            collects = [r for r in recent if r.get("kind") == "collect"]
+            if len(collects) >= 3:
+                high_reject = sum(
+                    1 for r in collects
+                    if (r.get("added") or 0) == 0 and (r.get("skipped") or 0) >= 500
+                )
+                if high_reject >= 3:
+                    loose_mode = True
+        except Exception:
+            pass
 
     logger.warning(
         f"[pool/collect] user={uid} 시작 target={target} seeds={len(seeds)} "
