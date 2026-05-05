@@ -3005,18 +3005,10 @@ async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch:
         duration_ms=int((_time.monotonic()-t0)*1000),
     )
 
-    # 노출제한 검사 — 매 register tick에 전체 풀 광고그룹 일괄 검사 + 자동 삭제
-    try:
-        import sqlite3 as _sqlite3
-        with _sqlite3.connect(reg.db_path) as _conn:
-            all_ag_ids = [r[0] for r in _conn.execute(
-                "SELECT DISTINCT ad_group_id FROM registered_keywords WHERE account_customer_id=? AND ad_group_id IS NOT NULL",
-                (customer_id,),
-            ).fetchall()]
-        if all_ag_ids:
-            await _inspect_ad_groups(uid, customer_id, client, all_ag_ids, delete_from_naver=True)
-    except Exception as e:
-        logger.warning(f"[pool/register] inspect 실패: {e}")
+    # 노출제한 검사는 register 끝이 아닌 _run_pool_inspect_only 단독 실행으로 이전됨.
+    # Why: register 의 pending=0 / orchestrator 실패 early return 시 inspect 자체가 호출
+    # 안 됨 → 노출제한 자동 삭제 영구 미실행 누수. cron tick 마다 register 와 독립적으로
+    # _run_pool_inspect_only 호출되도록 _run_pool_workers_for_accounts 에서 보장.
 
 
 async def _inspect_ad_groups(
@@ -3052,6 +3044,21 @@ async def _inspect_ad_groups(
             stat_reason = (kw.get("statusReason") or "").upper()
             user_lock = kw.get("userLock", False)
 
+            # statusReason 의 영구 거부 코드는 PENDING 가드보다 먼저 잡는다.
+            # 네이버는 검수 거부 KW 를 inspectStatus="PENDING" + statusReason="KEYWORD_DISAPPROVED"
+            # 조합으로 응답 — 기존엔 PENDING 가드에 막혀 영구 누락됐음 (소잠한의원 76건 사례).
+            REASON_REJECT_TOKENS = ("DISAPPROVED", "REJECTED", "PROHIBITED", "BLOCKLISTED")
+            reason_rejected = any(t in stat_reason for t in REASON_REJECT_TOKENS)
+            if reason_rejected:
+                rejected_items.append({
+                    "keyword": kw_text,
+                    "reason": f"review={review} inspect={inspect} status={status} reason={stat_reason} userLock={user_lock}",
+                })
+                kid = kw.get("nccKeywordId")
+                if kid:
+                    rejected_naver_ids.append((kid, kw_text))
+                continue
+
             # ============ 하드 가드 — 검수 완료 전 절대 건드리지 않는다 ============
             # 신규 키워드는 Naver 검수 완료 전까지 review/inspect 가 WAIT/UNDER/PENDING 계열.
             # 이 단계에서 어떤 판정도 하면 안 됨 (대량 삭제 사고 영구 차단).
@@ -3076,13 +3083,7 @@ async def _inspect_ad_groups(
                 "PROHIBIT", "BUSINESS_PROHIBIT", "REVIEW_REJECTED",
                 "REJECTED", "DISAPPROVED", "FAIL", "FAILED",
             )
-            # statusReason 은 영구 코드만 (PAUSED_BY_BUDGET / NOT_REVIEWED 등 일시 제외)
-            reason_rejected = any(
-                t in stat_reason
-                for t in ("REJECTED", "PROHIBITED", "BLOCKLISTED", "DISAPPROVED")
-            )
-            is_rejected = review_rejected or inspect_rejected or reason_rejected
-            if is_rejected:
+            if review_rejected or inspect_rejected:
                 rejected_items.append({
                     "keyword": kw_text,
                     "reason": f"review={review} inspect={inspect} status={status} reason={stat_reason} userLock={user_lock}",
@@ -3142,9 +3143,47 @@ async def _inspect_ad_groups(
     return n_mark
 
 
+async def _run_pool_inspect_only(uid: int, customer_id: int) -> None:
+    """노출제한 검사 단독 실행 — register 의 pending=0 early return 으로 inspect 가
+    영구 미실행되는 누수 차단. 매 cron tick 마다 register 와 독립적으로 호출.
+    cascade drift 정리 후 / collect circuit OPEN 광고주에서도 노출제한 자동 삭제 보장.
+    """
+    from services.naver_ad_service import NaverAdApiClient, _naver_api_breaker
+    from database.naver_ad_db import get_ad_account_by_customer
+    import sqlite3 as _sqlite3
+    pool = get_keyword_pool_db()
+    reg = get_registered_keywords_db()
+
+    if _naver_api_breaker.is_open():
+        # circuit OPEN 인 동안은 inspect 도 skip — 다음 tick 에 재시도
+        pool.record_run(uid, customer_id, "inspect", "no_new",
+                        error_message="circuit OPEN — inspect skip, 다음 tick 재시도")
+        return
+
+    account = get_ad_account_by_customer(uid, str(customer_id))
+    if not account or not account.get("is_connected"):
+        return  # 비연결 광고주 — record 도 노이즈 방지로 안 함
+
+    with _sqlite3.connect(reg.db_path) as _conn:
+        ag_ids = [r[0] for r in _conn.execute(
+            "SELECT DISTINCT ad_group_id FROM registered_keywords "
+            "WHERE account_customer_id=? AND ad_group_id IS NOT NULL",
+            (customer_id,),
+        ).fetchall()]
+    if not ag_ids:
+        return  # 등록 KW 없음 — inspect 대상 없음 (record 노이즈 방지)
+
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+    await _inspect_ad_groups(uid, customer_id, client, ag_ids, delete_from_naver=True)
+
+
 async def _run_pool_workers_for_accounts(pairs: List[Tuple[int, int]]):
-    """B 시나리오 — (user_id, customer_id) 페어별로 collect+register.
-    한 사용자 여러 광고주를 가진 경우 광고주마다 독립적으로 워커 실행."""
+    """B 시나리오 — (user_id, customer_id) 페어별로 collect+register+inspect.
+    한 사용자 여러 광고주를 가진 경우 광고주마다 독립적으로 워커 실행.
+    inspect 는 register 와 분리 실행 — register 의 pending=0 early return 누수 차단."""
     pool = get_keyword_pool_db()
     for uid, cid in pairs:
         try:
@@ -3162,6 +3201,17 @@ async def _run_pool_workers_for_accounts(pairs: List[Tuple[int, int]]):
             logger.error(f"[pool/run] register 실패 user={uid} cid={cid}: {e}", exc_info=True)
             try:
                 pool.record_run(uid, cid, "register", "failed",
+                                error_message=f"{type(e).__name__}: {str(e)[:300]}")
+            except Exception:
+                pass
+        # inspect 단독 실행 — register 의 early return 경로 (pending=0 / orchestrator 실패)
+        # 와 무관하게 매 tick 마다 노출제한 검사 보장.
+        try:
+            await _run_pool_inspect_only(uid, cid)
+        except Exception as e:
+            logger.error(f"[pool/run] inspect 실패 user={uid} cid={cid}: {e}", exc_info=True)
+            try:
+                pool.record_run(uid, cid, "inspect", "failed",
                                 error_message=f"{type(e).__name__}: {str(e)[:300]}")
             except Exception:
                 pass
