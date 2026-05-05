@@ -139,6 +139,10 @@ export default function KeywordPoolPage() {
   }>({ enabled: false, threshold: 30, last_run_at: null, last_deleted: 0 })
   const [autoCleanupSaving, setAutoCleanupSaving] = useState(false)
 
+  // 등록 KW 전체 점수 audit + 일괄 정리 (click 무관) — cascade drift 옛날 무관 KW 정리용
+  const [manualCleanupRunning, setManualCleanupRunning] = useState(false)
+  const [manualCleanupThreshold, setManualCleanupThreshold] = useState(30)
+
   // customer_id 쿼리 — selected 가 비어있으면 백엔드 default(가장 최근).
   const cidQs = (extra: Record<string, string | number | undefined> = {}) => {
     const params: Record<string, string> = {}
@@ -284,6 +288,66 @@ export default function KeywordPoolPage() {
       toast.error(e?.response?.data?.detail || '자동 cleanup 설정 저장 실패')
     } finally {
       setAutoCleanupSaving(false)
+    }
+  }
+
+  const handleManualCleanupByScore = async () => {
+    const threshold = manualCleanupThreshold
+    setManualCleanupRunning(true)
+    try {
+      // 1단계: dry_run 으로 점수 분포 + 삭제 대상 미리보기
+      const preview = await adPost<{
+        success: boolean
+        total_registered: number
+        score_distribution: Record<string, number>
+        targets_below_threshold: number
+        will_delete_now: number
+        max_delete: number
+        samples: { keyword: string; score: number }[]
+      }>(
+        `/api/naver-ad/keyword-pool/registered/cleanup-by-score${cidQs()}`,
+        { threshold, max_delete: 5000, dry_run: true }
+      )
+      const distLines = Object.entries(preview.score_distribution || {})
+        .map(([b, n]) => `  ${b}~${Number(b) + 9}점: ${n}개`)
+        .join('\n')
+      const sampleLines = (preview.samples || []).slice(0, 10)
+        .map(s => `  ${s.keyword} (${s.score})`)
+        .join('\n')
+      const ok = confirm(
+        `등록 KW 점수 audit (user_seed 기준)\n\n` +
+        `전체 등록: ${preview.total_registered.toLocaleString()}개\n` +
+        `점수 ≤ ${threshold} 대상: ${preview.targets_below_threshold.toLocaleString()}개\n` +
+        `이번 실행 삭제 (max ${preview.max_delete.toLocaleString()} 캡): ${preview.will_delete_now.toLocaleString()}개\n\n` +
+        `점수 분포:\n${distLines || '  -'}\n\n` +
+        `삭제 대상 샘플:\n${sampleLines || '  -'}\n\n` +
+        `네이버에서 실제 DELETE 합니다 (실패 시 PAUSE). 진행할까요?`
+      )
+      if (!ok) {
+        toast('취소됨')
+        return
+      }
+      // 2단계: 실제 실행
+      const res = await adPost<{
+        success: boolean
+        queued_targets: number
+        below_threshold_total: number
+        estimated_minutes: number
+        message: string
+      }>(
+        `/api/naver-ad/keyword-pool/registered/cleanup-by-score${cidQs()}`,
+        { threshold, max_delete: 5000, dry_run: false },
+        { timeout: 30_000 }
+      )
+      toast.success(
+        `백그라운드 시작 — ${res.queued_targets.toLocaleString()}개 삭제 진행 (예상 ${res.estimated_minutes}분)`
+      )
+      // stats 폴링이 inspect run 으로 진행 상황 표시
+      load()
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || e?.message || '점수 기반 정리 실패')
+    } finally {
+      setManualCleanupRunning(false)
     }
   }
 
@@ -863,6 +927,35 @@ export default function KeywordPoolPage() {
                     ? `최근 실행 ${fmtTime(autoCleanup.last_run_at, mounted)} · ${autoCleanup.last_deleted}개 삭제`
                     : '아직 실행 안 됨'}
                 </span>
+              </div>
+
+              {/* 수동 일괄 정리 — click 무관, 등록 KW 전체 audit. cascade drift 옛날 무관 KW 정리 */}
+              <div className="flex items-center gap-2 mb-3 p-2 bg-orange-50 border border-orange-200 rounded flex-wrap">
+                <Trash2 className="w-4 h-4 text-orange-700" />
+                <span className="text-xs font-medium text-orange-900">기존 등록 KW 일괄 정리 (click 무관)</span>
+                <span className="text-xs text-gray-700">— 점수</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={95}
+                  value={manualCleanupThreshold}
+                  onChange={(e) => setManualCleanupThreshold(Math.max(0, Math.min(95, parseInt(e.target.value) || 0)))}
+                  className="w-16 text-xs border border-gray-300 rounded px-2 py-0.5 text-right"
+                  disabled={manualCleanupRunning}
+                />
+                <span className="text-xs text-gray-700">점 이하 등록 KW 모두 삭제</span>
+                <button
+                  onClick={handleManualCleanupByScore}
+                  disabled={manualCleanupRunning}
+                  className="ml-auto text-xs px-3 py-1 bg-orange-600 text-white rounded hover:bg-orange-700 disabled:bg-gray-300 inline-flex items-center gap-1"
+                >
+                  {manualCleanupRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                  점수 분포 확인 + 일괄 정리
+                </button>
+                <div className="basis-full text-[11px] text-gray-600 mt-1">
+                  cascade drift 로 잘못 등록된 옛날 무관 KW (예: 의료 광고주에 "대출이자/렌탈정수기") 일괄 정리.
+                  click 발생 안 한 KW 도 포함. 1회 최대 5,000개 캡 (반복 실행 가능).
+                </div>
               </div>
               {visibleItems.length === 0 ? (
                 <div className="text-sm text-gray-500 p-3 bg-green-50 border border-green-100 rounded">

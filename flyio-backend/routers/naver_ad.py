@@ -3802,6 +3802,158 @@ async def keyword_pool_cron_auto_cleanup(
     }
 
 
+# ============ 등록 KW 전체 점수 audit + 일괄 정리 ============
+# auto-cleanup cron 은 click ≥ 1 KW 만 처리 (Naver stats API 호출 비용 절약).
+# 이 API 는 click 무관 — registered_keywords 테이블 직접 조회 + keyword text 만으로
+# user_seed 점수 매김 (stats API 호출 없이 95k KW 1초 안에 점수화).
+# cascade drift 로 옛날에 등록된 무관 KW (click=0) 일괄 정리용.
+
+class CleanupByScoreRequest(BaseModel):
+    threshold: int = 30
+    max_delete: int = 1000
+    dry_run: bool = False
+
+
+@router.post("/keyword-pool/registered/cleanup-by-score")
+async def keyword_pool_registered_cleanup_by_score(
+    request: CleanupByScoreRequest,
+    background_tasks: BackgroundTasks,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """등록 KW 전체 audit — user_seed 점수 ≤ threshold 인 KW 일괄 DELETE (click 무관).
+    dry_run=true: 점수 분포 + 삭제 대상 미리보기. dry_run=false: 백그라운드 실행 (수십분 소요).
+    """
+    from services.naver_ad_service import NaverAdApiClient
+    from database.naver_ad_db import record_auto_cleanup_run
+    import sqlite3 as _sqlite3
+
+    threshold = max(0, min(95, int(request.threshold)))
+    max_delete = max(0, min(5000, int(request.max_delete)))
+    dry_run = bool(request.dry_run)
+
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+
+    pool = get_keyword_pool_db()
+    reg = get_registered_keywords_db()
+    user_seeds = [s for s in (pool.list_user_seeds(cid) or []) if s and len(s) >= 2]
+    if not user_seeds:
+        raise HTTPException(
+            status_code=400,
+            detail="user_seed 가 없는 광고주는 점수 기반 정리 불가 — 시드 추가 후 재시도",
+        )
+
+    with _sqlite3.connect(reg.db_path) as conn:
+        rows = conn.execute(
+            "SELECT keyword, ncc_keyword_id FROM registered_keywords "
+            "WHERE account_customer_id=? AND ncc_keyword_id IS NOT NULL",
+            (cid,),
+        ).fetchall()
+
+    # 점수 매김 — stats API 호출 없이 keyword text 만으로. POOL 토큰 매칭은 비활성
+    # (user_seed 광고주에서 POOL 토큰 +3pt 가 무관 KW 점수 부풀려서 threshold 회피 방지).
+    scored: List[Tuple[str, str, int]] = []  # (kid, kw, score)
+    for kw_text, kid in rows:
+        score = _compute_relevance_score(kw_text, user_seeds, pool_tokens=())
+        scored.append((kid, kw_text, score))
+    targets = [(kid, kw, s) for kid, kw, s in scored if s <= threshold]
+    targets.sort(key=lambda x: x[2])  # 무관한 것부터
+    targets_capped = targets[:max_delete]
+
+    # 점수 분포 (10점 버킷)
+    score_dist: Dict[int, int] = {}
+    for _, _, s in scored:
+        bucket = (s // 10) * 10
+        score_dist[bucket] = score_dist.get(bucket, 0) + 1
+
+    if dry_run:
+        return {
+            "success": True,
+            "dry_run": True,
+            "customer_id": cid,
+            "threshold": threshold,
+            "total_registered": len(scored),
+            "score_distribution": dict(sorted(score_dist.items())),
+            "targets_below_threshold": len(targets),
+            "will_delete_now": len(targets_capped),
+            "max_delete": max_delete,
+            "samples": [{"keyword": kw, "score": s} for _, kw, s in targets_capped[:30]],
+        }
+
+    if not targets_capped:
+        return {
+            "success": True, "dry_run": False,
+            "customer_id": cid, "threshold": threshold,
+            "queued_targets": 0, "message": f"임계값 {threshold} 이하 등록 KW 없음",
+        }
+
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    async def _run():
+        n_del, n_pause, n_fail = 0, 0, 0
+        affected: List[str] = []
+        for kid, kw_text, _s in targets_capped:
+            try:
+                await client.delete_keyword(kid)
+                with _sqlite3.connect(reg.db_path) as c:
+                    c.execute(
+                        "DELETE FROM registered_keywords "
+                        "WHERE account_customer_id=? AND ncc_keyword_id=?",
+                        (cid, kid),
+                    )
+                n_del += 1
+                affected.append(kw_text)
+            except Exception:
+                try:
+                    await client.pause_keyword(kid)
+                    n_pause += 1
+                    affected.append(kw_text)
+                except Exception:
+                    n_fail += 1
+            await asyncio.sleep(0.15)
+        if affected:
+            pool.mark_rejected_by_naver(
+                cid,
+                [{"keyword": kw, "reason": f"수동 점수 정리(≤{threshold})"} for kw in affected],
+            )
+        try:
+            pool.record_run(
+                user_id, cid, "inspect",
+                "success" if n_del > 0 else "no_new",
+                registered=0, failed=n_fail, skipped=n_del,
+                seeds_count=len(targets_capped),
+                error_message=(
+                    f"수동 점수 정리 (점수≤{threshold}) — "
+                    f"DELETE {n_del} / PAUSE {n_pause} / 실패 {n_fail}"
+                ),
+            )
+        except Exception:
+            pass
+        record_auto_cleanup_run(user_id, str(cid), n_del + n_pause)
+        logger.warning(
+            f"[manual-cleanup] uid={user_id} cid={cid} thr={threshold} "
+            f"→ del={n_del} pause={n_pause} fail={n_fail}"
+        )
+
+    background_tasks.add_task(_run)
+    return {
+        "success": True,
+        "dry_run": False,
+        "customer_id": cid,
+        "threshold": threshold,
+        "queued_targets": len(targets_capped),
+        "below_threshold_total": len(targets),
+        "estimated_minutes": round(len(targets_capped) * 0.18 / 60, 1),
+        "message": f"백그라운드 실행 시작 — {len(targets_capped)}개 KW 삭제 진행 (예상 {round(len(targets_capped) * 0.18 / 60, 1)}분)",
+    }
+
+
 @router.delete("/keyword-pool/keywords/{keyword}")
 async def keyword_pool_delete_keyword(
     keyword: str,
