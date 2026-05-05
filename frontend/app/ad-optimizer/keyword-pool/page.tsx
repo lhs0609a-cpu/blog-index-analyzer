@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, Loader2, Plus, RefreshCw, Database, Activity, AlertCircle, CheckCircle2, XCircle, Clock, Zap, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/lib/stores/auth'
-import { adGet, adPost, adDelete } from '@/lib/api'
+import { adGet, adPost, adDelete, adPatch } from '@/lib/api'
 
 interface PoolStats {
   total?: number
@@ -130,6 +130,15 @@ export default function KeywordPoolPage() {
   const [clickedFilterMismatch, setClickedFilterMismatch] = useState(true)  // 무관만 보기 default ON — 사업과 상관없는 KW 즉시 발견
   const [scoreThreshold, setScoreThreshold] = useState(30)  // N점 이하 일괄 선택용
 
+  // 자동 cleanup 설정 — cron 이 매시 1회 점수 ≤ threshold 인 클릭 KW 자동 삭제
+  const [autoCleanup, setAutoCleanup] = useState<{
+    enabled: boolean
+    threshold: number
+    last_run_at: string | null
+    last_deleted: number
+  }>({ enabled: false, threshold: 30, last_run_at: null, last_deleted: 0 })
+  const [autoCleanupSaving, setAutoCleanupSaving] = useState(false)
+
   // customer_id 쿼리 — selected 가 비어있으면 백엔드 default(가장 최근).
   const cidQs = (extra: Record<string, string | number | undefined> = {}) => {
     const params: Record<string, string> = {}
@@ -236,6 +245,48 @@ export default function KeywordPoolPage() {
     }
   }
 
+  const loadAutoCleanup = async () => {
+    try {
+      const res = await adGet<{ success: boolean; enabled: boolean; threshold: number; last_run_at: string | null; last_deleted: number }>(
+        `/api/naver-ad/keyword-pool/auto-cleanup/settings${cidQs()}`,
+        { showToast: false, timeout: 10_000 }
+      )
+      setAutoCleanup({
+        enabled: !!res.enabled,
+        threshold: Number(res.threshold ?? 30),
+        last_run_at: res.last_run_at || null,
+        last_deleted: Number(res.last_deleted || 0),
+      })
+    } catch (e) {
+      // settings 로드 실패해도 동작 — default state 유지
+    }
+  }
+
+  const saveAutoCleanup = async (patch: { enabled?: boolean; threshold?: number }) => {
+    setAutoCleanupSaving(true)
+    try {
+      const res = await adPatch<{ success: boolean; enabled: boolean; threshold: number; last_run_at: string | null; last_deleted: number }>(
+        `/api/naver-ad/keyword-pool/auto-cleanup/settings${cidQs()}`,
+        patch
+      )
+      setAutoCleanup({
+        enabled: !!res.enabled,
+        threshold: Number(res.threshold ?? 30),
+        last_run_at: res.last_run_at || null,
+        last_deleted: Number(res.last_deleted || 0),
+      })
+      if (patch.enabled !== undefined) {
+        toast.success(patch.enabled ? `자동 삭제 ON (점수≤${res.threshold})` : '자동 삭제 OFF')
+      } else if (patch.threshold !== undefined) {
+        toast.success(`임계값 ${res.threshold}점으로 저장`)
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || '자동 cleanup 설정 저장 실패')
+    } finally {
+      setAutoCleanupSaving(false)
+    }
+  }
+
   const loadClickedKeywords = async () => {
     setClickedLoading(true)
     try {
@@ -271,6 +322,7 @@ export default function KeywordPoolPage() {
     if (!isAuthenticated) return
     load()
     loadClickedKeywords()  // 클릭 키워드 자동 1회 로드
+    loadAutoCleanup()      // 자동 cleanup 설정 1회 로드
     const tStats = setInterval(load, 10_000) // stats 10초 폴링
     // 클릭 키워드는 60초마다 자동 갱신 — 사용자가 새로 발생한 클릭 즉시 검수 가능
     const tClicked = setInterval(loadClickedKeywords, 60_000)
@@ -747,7 +799,7 @@ export default function KeywordPoolPage() {
                 </button>
               </div>
               {/* 점수 임계값 일괄 선택 — 사용자가 N점 이하 KW 한 번에 정리 */}
-              <div className="flex items-center gap-2 mb-3 p-2 bg-gray-50 border border-gray-200 rounded flex-wrap">
+              <div className="flex items-center gap-2 mb-2 p-2 bg-gray-50 border border-gray-200 rounded flex-wrap">
                 <span className="text-xs text-gray-700 font-medium">연관성 점수</span>
                 <input
                   type="number"
@@ -766,6 +818,50 @@ export default function KeywordPoolPage() {
                 </button>
                 <span className="text-xs text-gray-500 ml-2">
                   0=완전 무관, 100=user_seed 직접 매칭. 30 이하 권장.
+                </span>
+              </div>
+
+              {/* 자동 cleanup — cron 이 매시 1회 점수 ≤ threshold 인 클릭 KW 자동 삭제 */}
+              <div className={`flex items-center gap-2 mb-3 p-2 border rounded flex-wrap ${
+                autoCleanup.enabled ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'
+              }`}>
+                <button
+                  onClick={() => saveAutoCleanup({ enabled: !autoCleanup.enabled })}
+                  disabled={autoCleanupSaving}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition disabled:opacity-50 ${
+                    autoCleanup.enabled ? 'bg-red-600' : 'bg-gray-300'
+                  }`}
+                  title="자동 삭제 ON/OFF"
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                      autoCleanup.enabled ? 'translate-x-4' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+                <span className="text-xs font-medium text-gray-800">
+                  자동 삭제 {autoCleanup.enabled ? 'ON' : 'OFF'}
+                </span>
+                <span className="text-xs text-gray-500">— 점수</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={95}
+                  value={autoCleanup.threshold}
+                  onChange={(e) => setAutoCleanup(prev => ({ ...prev, threshold: Math.max(0, Math.min(95, parseInt(e.target.value) || 0)) }))}
+                  onBlur={(e) => {
+                    const t = Math.max(0, Math.min(95, parseInt(e.target.value) || 0))
+                    if (t !== undefined) saveAutoCleanup({ threshold: t })
+                  }}
+                  className="w-16 text-xs border border-gray-300 rounded px-2 py-0.5 text-right"
+                  disabled={autoCleanupSaving}
+                />
+                <span className="text-xs text-gray-700">점 이하 KW 매시 자동 삭제</span>
+                {autoCleanupSaving && <Loader2 className="w-3 h-3 animate-spin text-gray-400" />}
+                <span className="text-xs text-gray-500 ml-auto">
+                  {autoCleanup.last_run_at
+                    ? `최근 실행 ${fmtTime(autoCleanup.last_run_at, mounted)} · ${autoCleanup.last_deleted}개 삭제`
+                    : '아직 실행 안 됨'}
                 </span>
               </div>
               {visibleItems.length === 0 ? (
