@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, Loader2, Plus, RefreshCw, Database, Activity, AlertCircle, CheckCircle2, XCircle, Clock, Zap, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/lib/stores/auth'
-import { adGet, adPost, adDelete } from '@/lib/api'
+import { adGet, adPost, adDelete, adPatch } from '@/lib/api'
 
 interface PoolStats {
   total?: number
@@ -133,6 +133,30 @@ export default function KeywordPoolPage() {
   const [clickedFilterMismatch, setClickedFilterMismatch] = useState(true)  // 무관만 보기 default ON — 사업과 상관없는 KW 즉시 발견
   const [scoreThreshold, setScoreThreshold] = useState(30)  // N점 이하 일괄 선택용
 
+  // 자동 cleanup 설정 — cron 이 매시 1회 점수 ≤ threshold 인 클릭 KW 자동 삭제
+  const [autoCleanup, setAutoCleanup] = useState<{
+    enabled: boolean
+    threshold: number
+    last_run_at: string | null
+    last_deleted: number
+    relevance_keywords: string[]
+  }>({ enabled: false, threshold: 30, last_run_at: null, last_deleted: 0, relevance_keywords: [] })
+  const [autoCleanupSaving, setAutoCleanupSaving] = useState(false)
+  const [relevanceInput, setRelevanceInput] = useState('')  // textarea raw 입력
+
+  // 등록 KW 전체 점수 audit + 일괄 정리 (click 무관) — cascade drift 옛날 무관 KW 정리용
+  const [manualCleanupRunning, setManualCleanupRunning] = useState(false)
+  const [manualCleanupThreshold, setManualCleanupThreshold] = useState(30)
+  const [manualTargets, setManualTargets] = useState<{ keyword_id: string; keyword: string; score: number }[]>([])
+  const [manualSelected, setManualSelected] = useState<Set<string>>(new Set())
+  const [manualMeta, setManualMeta] = useState<{
+    total_registered: number
+    targets_below_threshold: number
+    displayed: number
+    score_distribution: Record<string, number>
+  } | null>(null)
+  const [manualDeleting, setManualDeleting] = useState(false)
+
   // customer_id 쿼리 — selected 가 비어있으면 백엔드 default(가장 최근).
   const cidQs = (extra: Record<string, string | number | undefined> = {}) => {
     const params: Record<string, string> = {}
@@ -176,9 +200,14 @@ export default function KeywordPoolPage() {
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(SELECTED_CID_KEY, cid)
     }
-    // 즉시 새 광고주의 데이터로 갱신
+    // 즉시 새 광고주의 데이터로 갱신 — 모든 광고주별 state reset (다른 광고주의 keyword_id
+    // 가 잘못 유지되어 일괄 삭제 시 엉뚱한 광고주 KW 가 사라지는 사고 방지).
     setStats(null)
     setClickedItems([])
+    setClickedSelected(new Set())
+    setManualTargets([])
+    setManualSelected(new Set())
+    setManualMeta(null)
     // 새 광고주의 default_bid 입력란에 반영
     const acct = accounts.find(a => a.customer_id === cid)
     if (acct?.default_bid != null) setBidInput(String(acct.default_bid))
@@ -274,6 +303,147 @@ export default function KeywordPoolPage() {
     }
   }
 
+  const loadAutoCleanup = async () => {
+    try {
+      const res = await adGet<{ success: boolean; enabled: boolean; threshold: number; last_run_at: string | null; last_deleted: number; relevance_keywords?: string[] }>(
+        `/api/naver-ad/keyword-pool/auto-cleanup/settings${cidQs()}`,
+        { showToast: false, timeout: 10_000 }
+      )
+      const kws = Array.isArray(res.relevance_keywords) ? res.relevance_keywords : []
+      setAutoCleanup({
+        enabled: !!res.enabled,
+        threshold: Number(res.threshold ?? 30),
+        last_run_at: res.last_run_at || null,
+        last_deleted: Number(res.last_deleted || 0),
+        relevance_keywords: kws,
+      })
+      setRelevanceInput(kws.join(', '))
+    } catch (e) {
+      // settings 로드 실패해도 동작 — default state 유지
+    }
+  }
+
+  const saveAutoCleanup = async (patch: { enabled?: boolean; threshold?: number; relevance_keywords?: string[] }) => {
+    setAutoCleanupSaving(true)
+    try {
+      const res = await adPatch<{ success: boolean; enabled: boolean; threshold: number; last_run_at: string | null; last_deleted: number; relevance_keywords?: string[] }>(
+        `/api/naver-ad/keyword-pool/auto-cleanup/settings${cidQs()}`,
+        patch
+      )
+      const kws = Array.isArray(res.relevance_keywords) ? res.relevance_keywords : []
+      setAutoCleanup({
+        enabled: !!res.enabled,
+        threshold: Number(res.threshold ?? 30),
+        last_run_at: res.last_run_at || null,
+        last_deleted: Number(res.last_deleted || 0),
+        relevance_keywords: kws,
+      })
+      if (patch.relevance_keywords !== undefined) {
+        setRelevanceInput(kws.join(', '))
+        toast.success(`연관성 기준 키워드 ${kws.length}개 저장`)
+      } else if (patch.enabled !== undefined) {
+        toast.success(patch.enabled ? `자동 삭제 ON (점수≤${res.threshold})` : '자동 삭제 OFF')
+      } else if (patch.threshold !== undefined) {
+        toast.success(`임계값 ${res.threshold}점으로 저장`)
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || '자동 cleanup 설정 저장 실패')
+    } finally {
+      setAutoCleanupSaving(false)
+    }
+  }
+
+  const handleSaveRelevanceKeywords = async () => {
+    const parsed = relevanceInput
+      .split(/[\n,]/)
+      .map(s => s.trim())
+      .filter(s => s.length >= 2)
+    console.log('[relevance-save] sending', parsed)
+    await saveAutoCleanup({ relevance_keywords: parsed })
+    // PATCH 응답 신뢰 안 하고 즉시 GET 재검증 — DB 마이그레이션 / 응답 파싱 실패 가드.
+    setTimeout(() => loadAutoCleanup(), 300)
+  }
+
+  // dry_run audit — 점수 ≤ threshold 등록 KW 전체 리스트를 표로 받아옴 (max 1000개 표시)
+  const handleManualAudit = async () => {
+    const threshold = manualCleanupThreshold
+    setManualCleanupRunning(true)
+    const startedAt = Date.now()
+    try {
+      const res = await adPost<{
+        success: boolean
+        total_registered: number
+        score_distribution: Record<string, number>
+        targets_below_threshold: number
+        displayed: number
+        targets: { keyword_id: string; keyword: string; score: number }[]
+      }>(
+        `/api/naver-ad/keyword-pool/registered/cleanup-by-score${cidQs()}`,
+        { threshold, max_delete: 5000, dry_run: true },
+        // retries=0 — 60초 안 응답 즉시 실패 (재시도 무의미, 사용자 다시 클릭 가능).
+        // timeout 90초 — backend dry_run + fly.io 콜드 스타트 여유.
+        { timeout: 90_000, retries: 0 }
+      )
+      console.log(`[manual-audit] ${Date.now() - startedAt}ms total_registered=${res.total_registered} below=${res.targets_below_threshold}`)
+      setManualTargets(res.targets || [])
+      // default 전체 선택 — 사용자가 보고 빼고 싶은 것만 해제
+      setManualSelected(new Set((res.targets || []).map(t => t.keyword_id)))
+      setManualMeta({
+        total_registered: res.total_registered,
+        targets_below_threshold: res.targets_below_threshold,
+        displayed: res.displayed,
+        score_distribution: res.score_distribution || {},
+      })
+      toast.success(
+        `점수 ≤ ${threshold} 등록 KW ${res.targets_below_threshold.toLocaleString()}개 발견 — ${res.displayed.toLocaleString()}개 표시`
+      )
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || e?.message || '점수 audit 실패')
+    } finally {
+      setManualCleanupRunning(false)
+    }
+  }
+
+  const handleManualToggle = (kid: string) => {
+    setManualSelected(prev => {
+      const n = new Set(prev)
+      if (n.has(kid)) n.delete(kid); else n.add(kid)
+      return n
+    })
+  }
+
+  const handleManualToggleAll = (checked: boolean) => {
+    if (checked) setManualSelected(new Set(manualTargets.map(t => t.keyword_id)))
+    else setManualSelected(new Set())
+  }
+
+  // 선택된 KW 일괄 삭제 — 기존 /clicked-keywords/bulk-delete 재사용 (click 검증 없음)
+  const handleManualBulkDelete = async () => {
+    if (manualSelected.size === 0) {
+      toast.error('선택된 키워드 없음')
+      return
+    }
+    if (!confirm(`선택된 ${manualSelected.size.toLocaleString()}개 등록 KW를 네이버에서 삭제(또는 PAUSE)할까요?`)) return
+    setManualDeleting(true)
+    try {
+      const res = await adPost<{ success: boolean; deleted: number; paused: number; failed: number }>(
+        `/api/naver-ad/keyword-pool/clicked-keywords/bulk-delete${cidQs()}`,
+        { keyword_ids: Array.from(manualSelected) },
+        // 1000개 × 0.18초 ≈ 3분. 여유 5분, retries=0 (재시도 시 같은 KW 중복 삭제 방지).
+        { timeout: 300_000, retries: 0 }
+      )
+      toast.success(`삭제 ${res.deleted} / PAUSE ${res.paused} / 실패 ${res.failed}`)
+      // 표에서 삭제된 것만 제거
+      setManualTargets(prev => prev.filter(t => !manualSelected.has(t.keyword_id)))
+      setManualSelected(new Set())
+      load()
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || e?.message || '일괄 삭제 실패')
+    } finally {
+      setManualDeleting(false)
+    }
+  }
+
   const loadClickedKeywords = async () => {
     setClickedLoading(true)
     try {
@@ -309,6 +479,7 @@ export default function KeywordPoolPage() {
     if (!isAuthenticated) return
     load()
     loadClickedKeywords()  // 클릭 키워드 자동 1회 로드
+    loadAutoCleanup()      // 자동 cleanup 설정 1회 로드
     const tStats = setInterval(load, 10_000) // stats 10초 폴링
     // 클릭 키워드는 60초마다 자동 갱신 — 사용자가 새로 발생한 클릭 즉시 검수 가능
     const tClicked = setInterval(loadClickedKeywords, 60_000)
@@ -736,9 +907,191 @@ export default function KeywordPoolPage() {
             </div>
           </div>
 
+          {/* 연관성 기준 키워드 — 사용자가 직접 도메인 토큰 명시. 자동/수동 cleanup 모두 이 키워드로 점수 매김 */}
+          <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded">
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+              <Activity className="w-4 h-4 text-blue-700" />
+              <span className="text-xs font-medium text-blue-900">연관성 기준 키워드</span>
+              <span className="text-xs text-gray-600">— 점수 계산 도메인 (예: 피부 광고주면 "피부질환,피부,피부과,아토피,여드름,트러블")</span>
+              <span className="ml-auto text-[11px] text-gray-500">
+                현재 저장: {autoCleanup.relevance_keywords.length === 0 ? '비어있음 (user_seed 사용)' : `${autoCleanup.relevance_keywords.length}개`}
+              </span>
+            </div>
+            <div className="flex items-start gap-2">
+              <textarea
+                value={relevanceInput}
+                onChange={(e) => setRelevanceInput(e.target.value)}
+                rows={2}
+                placeholder="피부질환, 피부, 피부과, 아토피, 여드름, 트러블, 색소침착"
+                className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 font-mono resize-none"
+                disabled={autoCleanupSaving}
+              />
+              <button
+                onClick={handleSaveRelevanceKeywords}
+                disabled={autoCleanupSaving}
+                className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 inline-flex items-center gap-1"
+              >
+                {autoCleanupSaving && <Loader2 className="w-3 h-3 animate-spin" />}
+                저장
+              </button>
+            </div>
+            <div className="text-[11px] text-gray-600 mt-1">
+              콤마/줄바꿈 구분. 입력 후 "저장" → 자동 cleanup 매시 + 수동 "조회" 모두 이 키워드로 점수 매김.
+              비어있으면 user_seed 폴백. <strong>변경 후 표 다시 조회해야 점수 갱신.</strong>
+            </div>
+          </div>
+
+          {/* 자동 cleanup — cron 이 매시 1회 점수 ≤ threshold 인 클릭 KW 자동 삭제. 항상 표시. */}
+          <div className={`flex items-center gap-2 mb-2 p-2 border rounded flex-wrap ${
+            autoCleanup.enabled ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'
+          }`}>
+            <button
+              onClick={() => saveAutoCleanup({ enabled: !autoCleanup.enabled })}
+              disabled={autoCleanupSaving}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition disabled:opacity-50 ${
+                autoCleanup.enabled ? 'bg-red-600' : 'bg-gray-300'
+              }`}
+              title="자동 삭제 ON/OFF"
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                  autoCleanup.enabled ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+            <span className="text-xs font-medium text-gray-800">
+              자동 삭제 {autoCleanup.enabled ? 'ON' : 'OFF'}
+            </span>
+            <span className="text-xs text-gray-500">— 점수</span>
+            <input
+              type="number"
+              min={0}
+              max={95}
+              value={autoCleanup.threshold}
+              onChange={(e) => setAutoCleanup(prev => ({ ...prev, threshold: Math.max(0, Math.min(95, parseInt(e.target.value) || 0)) }))}
+              onBlur={(e) => {
+                const t = Math.max(0, Math.min(95, parseInt(e.target.value) || 0))
+                if (t !== undefined) saveAutoCleanup({ threshold: t })
+              }}
+              className="w-16 text-xs border border-gray-300 rounded px-2 py-0.5 text-right"
+              disabled={autoCleanupSaving}
+            />
+            <span className="text-xs text-gray-700">점 이하 클릭 KW 매시 자동 삭제 (cron, click ≥ 1)</span>
+            {autoCleanupSaving && <Loader2 className="w-3 h-3 animate-spin text-gray-400" />}
+            <span className="text-xs text-gray-500 ml-auto">
+              {autoCleanup.last_run_at
+                ? `최근 실행 ${fmtTime(autoCleanup.last_run_at, mounted)} · ${autoCleanup.last_deleted}개 삭제`
+                : '아직 실행 안 됨'}
+            </span>
+          </div>
+
+          {/* 수동 일괄 정리 — click 무관, 등록 KW 전체 audit. cascade drift 옛날 무관 KW 정리. 항상 표시. */}
+          <div className="flex items-center gap-2 mb-2 p-2 bg-orange-50 border border-orange-200 rounded flex-wrap">
+            <Trash2 className="w-4 h-4 text-orange-700" />
+            <span className="text-xs font-medium text-orange-900">기존 등록 KW 일괄 정리 (click 무관)</span>
+            <span className="text-xs text-gray-700">— 점수</span>
+            <input
+              type="number"
+              min={0}
+              max={95}
+              value={manualCleanupThreshold}
+              onChange={(e) => setManualCleanupThreshold(Math.max(0, Math.min(95, parseInt(e.target.value) || 0)))}
+              className="w-16 text-xs border border-gray-300 rounded px-2 py-0.5 text-right"
+              disabled={manualCleanupRunning}
+            />
+            <span className="text-xs text-gray-700">점 이하 등록 KW 조회 → 표에서 선택 삭제</span>
+            <button
+              onClick={handleManualAudit}
+              disabled={manualCleanupRunning}
+              className="ml-auto text-xs px-3 py-1 bg-orange-600 text-white rounded hover:bg-orange-700 disabled:bg-gray-300 inline-flex items-center gap-1"
+            >
+              {manualCleanupRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              {manualCleanupRunning ? '조회 중…' : '점수 ≤ N 등록 KW 조회'}
+            </button>
+            <div className="basis-full text-[11px] text-gray-600 mt-1">
+              cascade drift 로 잘못 등록된 옛날 무관 KW (예: 의료 광고주에 "대출이자/렌탈정수기") 정리. click 발생 안 한 KW 도 포함.
+              조회 시 점수 ≤ N 인 등록 KW 전체 리스트가 표로 떠서 체크박스로 선택해 일괄 삭제 (max 1000개 표시 / 5000개 처리).
+            </div>
+          </div>
+
+          {/* 수동 audit 결과 표 — 등록 KW 점수 ≤ threshold 전체 리스트, 체크박스 선택 + 일괄 삭제 */}
+          {manualMeta && manualTargets.length === 0 && (
+            <div className="text-xs text-green-700 bg-green-50 border border-green-100 rounded p-3 mb-3">
+              점수 ≤ {manualCleanupThreshold} 등록 KW 0개 — 무관한 KW 없음 (전체 등록 {manualMeta.total_registered.toLocaleString()}개)
+            </div>
+          )}
+          {manualTargets.length > 0 && manualMeta && (
+            <div className="border border-orange-200 rounded p-3 mb-3 bg-orange-50/30">
+              <div className="flex items-center gap-2 mb-2 flex-wrap text-xs">
+                <span className="font-medium text-gray-800">
+                  점수 ≤ {manualCleanupThreshold} 대상 {manualMeta.targets_below_threshold.toLocaleString()}개
+                  {manualMeta.targets_below_threshold > manualMeta.displayed && (
+                    <span className="text-gray-500 ml-1">(상위 {manualMeta.displayed.toLocaleString()}개 표시 — 점수 낮은 순)</span>
+                  )}
+                </span>
+                <span className="text-gray-600">
+                  · 분포: {Object.entries(manualMeta.score_distribution).slice(0, 6).map(([b, n]) => `${b}~${Number(b)+9}: ${n}`).join(' / ')}
+                </span>
+                <button
+                  onClick={() => handleManualToggleAll(manualSelected.size !== manualTargets.length)}
+                  className="text-xs px-2 py-0.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                >
+                  {manualSelected.size === manualTargets.length ? '전체 해제' : '전체 선택'}
+                </button>
+                <button
+                  onClick={handleManualBulkDelete}
+                  disabled={manualSelected.size === 0 || manualDeleting}
+                  className="ml-auto text-xs px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-gray-300 inline-flex items-center gap-1"
+                >
+                  {manualDeleting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                  선택 {manualSelected.size.toLocaleString()}개 일괄 삭제
+                </button>
+              </div>
+              <div className="overflow-x-auto max-h-96 overflow-y-auto border border-gray-200 rounded bg-white">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-gray-50">
+                    <tr className="border-b border-gray-200 text-xs text-gray-500">
+                      <th className="text-left py-2 px-2 w-8">
+                        <input
+                          type="checkbox"
+                          checked={manualSelected.size === manualTargets.length && manualTargets.length > 0}
+                          onChange={(e) => handleManualToggleAll(e.target.checked)}
+                        />
+                      </th>
+                      <th className="text-left py-2 px-2">키워드</th>
+                      <th className="text-center py-2 px-2 w-20">연관성</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {manualTargets.map((t) => {
+                      const scoreColor = t.score >= 20 ? 'text-orange-700 bg-orange-50' : 'text-red-700 bg-red-50'
+                      return (
+                        <tr key={t.keyword_id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-1.5 px-2">
+                            <input
+                              type="checkbox"
+                              checked={manualSelected.has(t.keyword_id)}
+                              onChange={() => handleManualToggle(t.keyword_id)}
+                            />
+                          </td>
+                          <td className="py-1.5 px-2 font-medium">{t.keyword}</td>
+                          <td className="py-1.5 px-2 text-center">
+                            <span className={`text-xs px-2 py-0.5 rounded font-mono font-medium ${scoreColor}`}>
+                              {t.score}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {clickedShown && !clickedLoading && clickedItems.length === 0 && (
             <div className="text-sm text-gray-500 p-3 bg-gray-50 rounded">
-              최근 {clickedDays}일 내 클릭 발생 키워드 없음.
+              최근 {clickedDays}일 내 클릭 발생 키워드 없음. (위 자동/수동 정리 기능은 클릭 발생 무관하게 동작)
             </div>
           )}
 
@@ -794,7 +1147,7 @@ export default function KeywordPoolPage() {
                 </button>
               </div>
               {/* 점수 임계값 일괄 선택 — 사용자가 N점 이하 KW 한 번에 정리 */}
-              <div className="flex items-center gap-2 mb-3 p-2 bg-gray-50 border border-gray-200 rounded flex-wrap">
+              <div className="flex items-center gap-2 mb-2 p-2 bg-gray-50 border border-gray-200 rounded flex-wrap">
                 <span className="text-xs text-gray-700 font-medium">연관성 점수</span>
                 <input
                   type="number"
@@ -815,6 +1168,7 @@ export default function KeywordPoolPage() {
                   0=완전 무관, 100=user_seed 직접 매칭. 30 이하 권장.
                 </span>
               </div>
+
               {visibleItems.length === 0 ? (
                 <div className="text-sm text-gray-500 p-3 bg-green-50 border border-green-100 rounded">
                   사업과 무관한 클릭 키워드 없음 — 광고 노출이 제대로 타겟팅 중.

@@ -335,8 +335,11 @@ def init_naver_ad_tables():
         if column not in cols:
             try:
                 cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
-            except Exception:
-                pass
+                logger.warning(f"[migration] ALTER TABLE {table} ADD COLUMN {column} {decl} — OK")
+            except Exception as e:
+                # silent fail 막기 — 마이그레이션 실패 시 production 에서 컬럼 미존재 → 후속
+                # SQL 모두 실패. 명시적 logging 으로 진단 가능.
+                logger.error(f"[migration] ALTER TABLE {table} ADD COLUMN {column} 실패: {e}")
 
     for col, decl in [
         ("test_size", "INTEGER DEFAULT 10000"),
@@ -353,6 +356,16 @@ def init_naver_ad_tables():
 
     # ad_accounts: 광고주별 default 입찰가 — 풀 자동 등록 시 사용 + 일괄 변경 기준값.
     _ensure_column("ad_accounts", "default_bid", "INTEGER DEFAULT 100")
+    # ad_accounts: 광고주별 연관성-점수 기반 자동 삭제 (cron tick 으로 매시 1회).
+    # auto_cleanup_enabled=1 인 광고주만 cron 이 처리. threshold=점수≤N 인 클릭 KW 자동 삭제.
+    _ensure_column("ad_accounts", "auto_cleanup_enabled", "INTEGER DEFAULT 0")
+    _ensure_column("ad_accounts", "auto_cleanup_threshold", "INTEGER DEFAULT 30")
+    _ensure_column("ad_accounts", "auto_cleanup_last_run_at", "TIMESTAMP")
+    _ensure_column("ad_accounts", "auto_cleanup_last_deleted", "INTEGER DEFAULT 0")
+    # 광고주별 "관련성 기준 키워드" — 사용자가 직접 명시한 도메인 토큰 (예: "피부질환,피부,
+    # 피부과,아토피,여드름,트러블"). 점수 계산 시 user_seed 대신 이 키워드들로 atoms 빌드 →
+    # 사용자가 의도한 도메인만 strict 매칭. 비어있으면 user_seed 폴백.
+    _ensure_column("ad_accounts", "relevance_keywords", "TEXT DEFAULT ''")
 
     # 필터 통과 키워드 테이블 (검색량 있는 것만)
     cursor.execute("""
@@ -1333,6 +1346,135 @@ def update_ad_account_default_bid(user_id: int, customer_id: str, bid: int) -> b
     conn.commit()
     conn.close()
     return affected > 0
+
+
+def _parse_relevance_keywords(raw: Optional[str]) -> List[str]:
+    """저장된 relevance_keywords TEXT (콤마 / 줄바꿈 구분) 를 list 로 파싱."""
+    if not raw:
+        return []
+    parts = []
+    for chunk in str(raw).replace("\n", ",").split(","):
+        s = chunk.strip()
+        if s and len(s) >= 2:
+            parts.append(s)
+    # 중복 제거 (순서 유지)
+    seen = set()
+    out = []
+    for p in parts:
+        if p not in seen:
+            seen.add(p)
+            out.append(p)
+    return out
+
+
+def get_ad_account_auto_cleanup(user_id: int, customer_id: str) -> Dict:
+    """광고주 자동 cleanup 설정 조회 (UI / cron 둘 다 사용)."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT auto_cleanup_enabled, auto_cleanup_threshold,
+               auto_cleanup_last_run_at, auto_cleanup_last_deleted,
+               relevance_keywords
+        FROM ad_accounts
+        WHERE user_id = ? AND customer_id = ? AND is_active = TRUE
+        LIMIT 1
+    """, (user_id, str(customer_id)))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return {
+            "enabled": False, "threshold": 30, "last_run_at": None, "last_deleted": 0,
+            "relevance_keywords": [],
+        }
+    d = dict(row)
+    return {
+        "enabled": bool(d.get("auto_cleanup_enabled") or 0),
+        "threshold": int(d.get("auto_cleanup_threshold") or 30),
+        "last_run_at": d.get("auto_cleanup_last_run_at"),
+        "last_deleted": int(d.get("auto_cleanup_last_deleted") or 0),
+        "relevance_keywords": _parse_relevance_keywords(d.get("relevance_keywords")),
+    }
+
+
+def update_ad_account_auto_cleanup(
+    user_id: int, customer_id: str,
+    enabled: Optional[bool] = None,
+    threshold: Optional[int] = None,
+    relevance_keywords: Optional[List[str]] = None,
+) -> bool:
+    """광고주 자동 cleanup 설정 update — 부분 업데이트 (None 인 필드 그대로)."""
+    sets, vals = [], []
+    if enabled is not None:
+        sets.append("auto_cleanup_enabled = ?")
+        vals.append(1 if enabled else 0)
+    if threshold is not None:
+        # 0~95 범위로 클램프 — _compute_relevance_score 가 95 cap (100은 full seed match 전용)
+        t = max(0, min(95, int(threshold)))
+        sets.append("auto_cleanup_threshold = ?")
+        vals.append(t)
+    if relevance_keywords is not None:
+        # list → 콤마 join 으로 저장. 빈 리스트는 빈 문자열 (user_seed 폴백 활성).
+        clean = [str(k).strip() for k in relevance_keywords if str(k).strip() and len(str(k).strip()) >= 2]
+        sets.append("relevance_keywords = ?")
+        vals.append(",".join(clean))
+    if not sets:
+        return False
+    sets.append("updated_at = CURRENT_TIMESTAMP")
+    sql = f"UPDATE ad_accounts SET {', '.join(sets)} WHERE user_id = ? AND customer_id = ?"
+    vals.extend([user_id, str(customer_id)])
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(sql, vals)
+    affected = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return affected > 0
+
+
+def get_ad_account_relevance_keywords(user_id: int, customer_id: str) -> List[str]:
+    """cron 에서 점수 계산 시 사용할 키워드 list. 비어있으면 list_user_seeds 폴백 (호출자가)."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT relevance_keywords FROM ad_accounts
+        WHERE user_id = ? AND customer_id = ? AND is_active = TRUE LIMIT 1
+    """, (user_id, str(customer_id)))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return []
+    return _parse_relevance_keywords(dict(row).get("relevance_keywords"))
+
+
+def record_auto_cleanup_run(user_id: int, customer_id: str, deleted: int) -> None:
+    """cron 자동 cleanup 실행 결과 stamp — UI 의 '마지막 실행' 표시용."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE ad_accounts
+           SET auto_cleanup_last_run_at = CURRENT_TIMESTAMP,
+               auto_cleanup_last_deleted = ?,
+               updated_at = CURRENT_TIMESTAMP
+         WHERE user_id = ? AND customer_id = ?
+    """, (int(deleted), user_id, str(customer_id)))
+    conn.commit()
+    conn.close()
+
+
+def list_auto_cleanup_enabled_accounts() -> List[Dict]:
+    """auto_cleanup ON 광고주 list — cron tick 진입점."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT user_id, customer_id, auto_cleanup_threshold
+        FROM ad_accounts
+        WHERE is_active = TRUE
+          AND is_connected = TRUE
+          AND auto_cleanup_enabled = 1
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 # ============ 효율 추적 ============

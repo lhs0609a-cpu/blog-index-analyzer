@@ -2283,7 +2283,9 @@ def _build_seed_atoms(seeds: List[str]) -> set:
 def _compute_relevance_score(
     kw: str,
     user_seeds: List[str],
-    pool_tokens: tuple = POOL_DOMAIN_TOKENS,
+    pool_tokens: tuple = (),  # M1 fix: default 를 () 로 — POOL hardcoded 매칭이 user_seed
+                              # 광고주에서 무관 KW 점수 부풀려 threshold 회피하는 누수 차단.
+                              # 호출자가 의도적으로 POOL 매칭 원할 때만 명시 (cold_start 광고주 등).
 ) -> int:
     """클릭 KW 의 user_seed/POOL 도메인 연관성 점수 (0-100).
 
@@ -2401,10 +2403,22 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         return
     target = min(max_new, headroom)
 
-    # 동적 도메인 토큰셋 — 하드코딩 + 시드 자동 도출. 새 분야 광고주 자동 적응.
+    # 동적 도메인 토큰셋 — 사용자 의도: "내가 시드로 넣은거에서만 확장, 피부랑 대출이 같냐".
+    # user_seed 1개 이상 광고주: POOL hardcoded baseline 배제 + auto_promoted_seed 도 게이트 atom 에서 배제
+    # (cascade drift 로 "대출이자" 같은 무관 KW 가 promoted 시드로 올라가면 그 atom 이
+    # 다음 라운드 게이트를 자력 통과시키는 누수 차단. user_seed 만이 진실의 원천).
+    # auto_promoted_seed 는 keywordstool 호출 시드 라운드에는 여전히 사용됨 — 발굴 다양성은 유지.
+    # 단 발굴된 KW 는 user_seed atom 매치 안 되면 reject.
     initial_seeds = pool.list_seed_whitelist(customer_id)
-    domain_token_set = _build_domain_token_set(initial_seeds)
-    derived_count = len(domain_token_set) - len(POOL_DOMAIN_TOKENS)
+    initial_user_seeds_only = pool.list_user_seeds(customer_id)
+    cold_start = not initial_user_seeds_only
+    if cold_start:
+        # 시드 0 광고주 — POOL baseline 으로 collect 진입 자체는 가능하게 (사용자가 시드 추가할 때까지)
+        domain_token_set = _build_domain_token_set(initial_seeds)
+    else:
+        # 일반 — user_seed atom 만. POOL hardcoded + auto_promoted_seed 둘 다 게이트 atom 에서 배제.
+        domain_token_set = _derive_seed_tokens(initial_user_seeds_only) | _build_seed_atoms(initial_user_seeds_only)
+    derived_count = len(domain_token_set) - (len(POOL_DOMAIN_TOKENS) if cold_start else 0)
 
     # 등록 KW atom — cleanup/collect 게이트와 동일 기준.
     # ANCHOR: user_seed atom (length≥3) 을 포함하는 등록 KW 만 학습.
@@ -2422,10 +2436,12 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         logger.warning(f"[pool/collect] 등록 KW atom 조회 실패: {e}")
         registered_raw = []
     user_seed_kw_only = pool.list_user_seeds(customer_id)
-    # anchor: user_seed 의 모든 atom (length≥2) — 도메인 단어 (매매/보험/카드/세무) 가
-    # 2-gram 으로 들어와야 legit 등록 KW 가 anchor 통과 가능. 너무 좁히면 (≥3) 거의
-    # 모든 KW 가 차단되어 학습이 멈춤.
-    anchor_set = _build_seed_atoms(user_seed_kw_only)
+    # anchor: user_seed 의 length≥3 atom 만 — 짧은 2-gram atom (간/염/의/원 등) 이
+    # cross-domain 통과시키는 누수 차단. niche 의료 시드 ("A형 간염" → "간염" atom)
+    # 가 무관 KW (예: "간장/감자/은염생산") 의 2-gram 매칭으로 anchor 통과해
+    # registered_atom 학습 → cascade drift 발생 위험.
+    anchor_set_all = _build_seed_atoms(user_seed_kw_only)
+    anchor_set = {a for a in anchor_set_all if len(a) >= 3}
     if anchor_set:
         # PERF: 5000 KW × 6000+ atom Python loop = 30M ops 동기 블록.
         # 정규식 multi-pattern 매칭 (~100배 빠름) 으로 전환.
@@ -2442,19 +2458,25 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
 
     logger.warning(
         f"[pool/collect] user={uid} 도메인 토큰 {len(domain_token_set)}개 "
-        f"(하드코딩 {len(POOL_DOMAIN_TOKENS)} + 시드 도출 {max(derived_count, 0)}) "
+        f"({'POOL baseline + ' if cold_start else 'POOL 배제 (시드 derive 만) '}"
+        f"시드 도출 {max(derived_count, 0)}) "
         f"+ 등록 atom {len(registered_atoms)}개 "
         f"({len(registered_for_atoms)}/{len(registered_raw)} KW anchor 통과, "
-        f"anchor {len(anchor_set)}개)"
+        f"anchor {len(anchor_set)}개) cold_start={cold_start}"
     )
 
     # 도메인 미포함 키워드 자동 cleanup (registered 제외) — 매 라운드 시작 시
-    # 게이트 = domain_token_set ∪ registered_atoms (collect 게이트와 동일)
+    # 게이트 = domain_token_set ∪ initial_seed_atoms ∪ registered_atoms (collect 게이트와 동일)
+    # initial_seed_atoms 추가: 사용자가 풀에 직접 넣은 시드의 atom 도 cleanup 통과 보장
+    # (predictably user_seed 가 변경된 직후 한 라운드만 이 단계에서 cleanup 게이트가 살아남)
     # PERF: cleanup 은 sync DB 작업 — token 수 × pending row 수 substring check 가
     #       async 이벤트 루프를 블록 (12k tokens × 50k rows → 헬스체크 timeout).
     #       to_thread 로 worker thread 에서 실행해 이벤트 루프 보호 + token 수 가
     #       임계 초과 시 skip (다음 라운드에서 좁아지면 재시도).
-    cleanup_tokens = domain_token_set | registered_atoms
+    # cleanup atom 도 user_seed 만 — auto_promoted_seed 가 cascade drift 로 무관 KW 였을
+    # 가능성 차단. 시드 atom 누락된 KW 는 어차피 domain_token_set 에서도 매치 안 됨.
+    initial_seed_atoms = _build_seed_atoms(initial_user_seeds_only) if not cold_start else _build_seed_atoms(initial_seeds)
+    cleanup_tokens = domain_token_set | initial_seed_atoms | registered_atoms
     if len(cleanup_tokens) <= 3000:
         try:
             cleaned = await asyncio.to_thread(
@@ -2492,15 +2514,24 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                 f"[pool/collect] user={uid} 시드 자동 승격 {len(promoted)}개: "
                 + ", ".join(f"{p['keyword']}({p['monthly_total']})" for p in promoted)
             )
-            # 승격 후 토큰셋 재계산 — 새 시드의 토큰 반영
-            domain_token_set = _build_domain_token_set(
-                pool.list_seed_whitelist(customer_id)
-            )
+            # 승격 후 토큰셋 재계산 — 새 시드의 토큰 반영. cold_start 정책 동일 유지
+            # (cold_start 면 POOL baseline 폴백, 아니면 user_seed 만으로 도출 — POOL 누수 차단).
+            if cold_start:
+                domain_token_set = _build_domain_token_set(
+                    pool.list_seed_whitelist(customer_id)
+                )
+            else:
+                fresh_user_seeds = pool.list_user_seeds(customer_id) or initial_user_seeds_only
+                domain_token_set = _derive_seed_tokens(fresh_user_seeds) | _build_seed_atoms(fresh_user_seeds)
     except Exception as e:
         logger.warning(f"[pool/collect] promote_seeds 실패: {e}")
         promoted = []
 
-    seeds = pool.get_recent_seeds(customer_id, limit=120)
+    # C1 fix: get_recent_seeds 는 source 필터 없이 모든 row 의 seed 를 반환 → legacy POOL
+    # bridge 시드 ("대출/렌탈/배달/미용" 등) 가 풀 row 자식으로 살아있는 한 매 라운드
+    # keywordstool 호출에 사용 → API quota 낭비 + 잔재 재활성화 risk. list_seed_whitelist
+    # 는 source IN ('user_seed', 'auto_promoted_seed') 만 반환해 legacy POOL bridge 차단.
+    seeds = pool.list_seed_whitelist(customer_id)
     if not seeds:
         # 자가치유 (a): 등록 키워드 중 검색량 상위 10개를 user_seed 로 자동 reseed.
         # 시드가 비면 collection 영구 정지 → 등록 키워드에서 핵심어 자동 추출.
@@ -2528,34 +2559,39 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                             duration_ms=int((_time.monotonic()-t0)*1000))
             return
 
-    # 화이트리스트: user_seed + auto_promoted_seed 모두 포함.
+    # 화이트리스트 (keywordstool 호출용): user_seed + auto_promoted_seed.
+    # 발굴 다양성은 유지하되, 게이트 atom 은 user_seed 만으로 좁힘 (cascade drift 차단).
     whitelist = pool.list_seed_whitelist(customer_id)
     if not whitelist:
         whitelist = seeds  # 폴백
-    seed_atoms = _build_seed_atoms(whitelist)
+    # 게이트 seed_atoms 는 user_seed 만 — promoted 가 발굴해온 KW 도 user_seed atom 매치 필수.
+    user_seed_now = pool.list_user_seeds(customer_id) or initial_user_seeds_only
+    seed_atoms = _build_seed_atoms(user_seed_now) if user_seed_now else _build_seed_atoms(whitelist)
 
-    # 통합 게이트 — POOL_DOMAIN_TOKENS ∪ seed_atoms ∪ registered_atoms.
-    # registered_atoms 는 cleanup 단계에서 이미 계산됨 — 재사용.
-    # 과거 2단 게이트는 시드가 하드코딩 도메인 밖으로 drift 하면 Gate 1 에서 99% reject.
-    # 시드 원자가 자동으로 도메인 토큰 역할도 하도록 합집합으로 통합 — 시드만 살아 있으면
-    # 항상 매치 가능. POOL_DOMAIN_TOKENS 는 시드 0개 광고주의 폴백 baseline 으로만 의미.
+    # 통합 게이트 — domain_token_set ∪ seed_atoms ∪ registered_atoms.
+    # 모두 user_seed lineage. cold_start 광고주는 domain_token_set 에 POOL baseline 포함.
     unified_tokens = set(domain_token_set) | seed_atoms | registered_atoms
 
-    # Loose mode 자동 진입 — 최근 5회 collect 가 모두 reject ≥95% 면 게이트 더 완화.
-    # min_volume↓ + 시드별 raw 매치도 추가로 시도.
+    # Loose mode 자동 진입 — cold_start 광고주만 사용. user_seed ≥ 1 면 절대 비활성.
+    # Why: niche user_seed (예: 의료 희귀병) 가 5회 연속 발굴 0 + reject 폭주하면 loose_mode 가
+    #      "길이 2+ 모든 KW 통과" 로 게이트를 무력화 → user_seed 무관 KW 무차별 INSERT →
+    #      registered_atoms 학습 → 영구적 cascade drift. 사용자 의도 ("내 시드 외 무관 KW reject")
+    #      정면 위반. user_seed 가 niche 라 발굴 못 해도 무관 도메인으로 점프해선 안 됨 —
+    #      이 경우 "발굴 0" 으로 두는 게 옳다 (사용자가 시드 추가하거나 niche 포기).
     loose_mode = False
-    try:
-        recent = pool.recent_runs(customer_id, limit=5)
-        collects = [r for r in recent if r.get("kind") == "collect"]
-        if len(collects) >= 3:
-            high_reject = sum(
-                1 for r in collects
-                if (r.get("added") or 0) == 0 and (r.get("skipped") or 0) >= 500
-            )
-            if high_reject >= 3:
-                loose_mode = True
-    except Exception:
-        pass
+    if cold_start:
+        try:
+            recent = pool.recent_runs(customer_id, limit=5)
+            collects = [r for r in recent if r.get("kind") == "collect"]
+            if len(collects) >= 3:
+                high_reject = sum(
+                    1 for r in collects
+                    if (r.get("added") or 0) == 0 and (r.get("skipped") or 0) >= 500
+                )
+                if high_reject >= 3:
+                    loose_mode = True
+        except Exception:
+            pass
 
     logger.warning(
         f"[pool/collect] user={uid} 시작 target={target} seeds={len(seeds)} "
@@ -2640,37 +2676,72 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                 + ", ".join(injected[:5]) + ")"
             )
 
-    # NICHE BRIDGE — POOL_DOMAIN_TOKENS 자체를 bridge seed 로 매 라운드 일부 주입.
-    # Why: user_seed lineage (보험/세무/IRP) 만 query 하면 그 인접 KW 만 발굴됨.
-    #      미용실/헬스장/병원/사업자/창업 등 다른 niche 의 keywordstool 호출이 없음 →
-    #      POOL 토큰 안에 이미 정의돼 있어도 "도달" 자체가 안 됨.
-    # 해법: POOL 토큰 중 길이≥2 인 것을 bridge seed 로 시드 라운드에 합류.
-    #      예: bridge "미용실" → keywordstool 이 "미용실창업자금/미용실세무/미용실임대" 반환
-    #      → 모두 finance/사업자 도메인 → unified gate 통과 → 등록 → promote_seeds 가
-    #      "미용실창업자금"을 새 seed 로 승격 → 다음 라운드 그 niche 더 깊이 발굴 → cascade.
-    # 사용자 의도 ("대출 필요한 모든 업종") 와 정확히 일치.
-    bridge_pool = [t for t in POOL_DOMAIN_TOKENS if len(t) >= 2]
-    random.shuffle(bridge_pool)
-    bridge_round = bridge_pool[:15]  # 라운드당 15개 random POOL bridge
+    # NICHE BRIDGE — cold start (user_seed 0) 일 때만 POOL bridge 사용.
+    # 사용자 의도 변경 ("내가 시드 넣은거에서만 추천, 무관한거 싹 삭제") 으로
+    # user_seed ≥ 1 광고주는 BRIDGE 비활성 — 시드 도메인 외 niche 자동 점프 차단.
+    # 의료 광고주(소잠한의원)에 "대출/렌탈/리스" 가 매 라운드 강제 시드로 들어가던 누수 차단.
+    if cold_start:
+        bridge_pool = [t for t in POOL_DOMAIN_TOKENS if len(t) >= 2]
+        random.shuffle(bridge_pool)
+        bridge_round = bridge_pool[:15]
+    else:
+        bridge_round = []
 
     # 시드 셔플 — 매 라운드 다른 60개 처리 (200 시드 다양성 확보).
     seed_pool = list(seeds)
     random.shuffle(seed_pool)
-    # 60 슬롯 = user_seed/auto_promoted (45) + POOL bridge (15)
-    seed_round = seed_pool[:45] + bridge_round
+    # 슬롯: cold_start 면 user(45) + bridge(15) = 60, 아니면 user 60.
+    user_quota = 45 if cold_start else 60
+    seed_round = seed_pool[:user_quota] + bridge_round
     logger.warning(
-        f"[pool/collect] user={uid} 시드 라운드 — user/promoted={min(45, len(seed_pool))} "
-        f"+ POOL bridge={len(bridge_round)} (총 {len(seed_round)})"
+        f"[pool/collect] user={uid} 시드 라운드 — user/promoted={min(user_quota, len(seed_pool))} "
+        f"+ POOL bridge={len(bridge_round)} (총 {len(seed_round)}) cold_start={cold_start}"
     )
-    for seed in seed_round:  # 시드 한 라운드 처리 한도 (BFS 추가로 호출 폭증 방지)
+    # circuit breaker 인스턴스 — 시드 라운드 중 OPEN 감지 시 남은 시드 fail-fast 차단.
+    # naver_ad_service 모듈 레벨 singleton 공유.
+    from services.naver_ad_service import _naver_api_breaker, NaverApiCircuitOpenError
+    circuit_aborted = False
+
+    for seed_raw in seed_round:  # 시드 한 라운드 처리 한도 (BFS 추가로 호출 폭증 방지)
         if added >= target:
             break
+        # circuit OPEN 시 남은 시드 모두 즉시 fail — error_message 폭주 + log 노이즈 차단.
+        # 30~60초 후 다음 cron tick 에서 다시 시도 (HALF_OPEN 으로 자동 복구).
+        if _naver_api_breaker.is_open():
+            circuit_aborted = True
+            logger.warning(
+                f"[pool/collect] user={uid} circuit OPEN — 남은 시드 {len(seed_round) - seeds_processed}개 abort"
+            )
+            break
+        # 시드 sanitize — 네이버 keywordstool 은 hint 에 공백 거부 (HTTPStatusError 400 code:11001).
+        # 사용자가 입력한 띄어쓰기 시드 ("C형 간염", "감각 과민" 등) 를 정규화해서 호출.
+        # 빈 문자열 / 길이 < 2 / 영문 only / 숫자 only 시드는 skip (네이버 비허용 패턴).
+        seed = (seed_raw or "").replace(" ", "").strip()
+        if not seed or len(seed) < 2:
+            continue
         seeds_processed += 1
         try:
             related = await client.get_related_keywords(seed, show_detail=True)
+        except NaverApiCircuitOpenError:
+            # circuit 이 시드 처리 중간에 열림 — 즉시 abort
+            circuit_aborted = True
+            logger.warning(
+                f"[pool/collect] user={uid} 시드 '{seed}' 처리 중 circuit OPEN — 남은 시드 abort"
+            )
+            break
         except Exception as e:
-            msg = f"{seed}: {type(e).__name__}: {str(e)[:80]}"
+            # ConnectTimeout / 11001 등 시드별 실패 — 다음 시드로 계속 (circuit breaker 가
+            # 누적 fail 잡아 OPEN 시키므로 여기선 individual 시드 fail 만 logging).
+            err_name = type(e).__name__
+            err_msg_full = str(e)[:200]
+            msg = f"{seed_raw}: {err_name}: {err_msg_full[:80]}"
             logger.warning(f"[pool/collect] API 실패 {msg}")
+            # 11001 (잘못된 파라미터) 패턴 감지 시 추가 진단 정보
+            if "11001" in err_msg_full or "400" in err_msg_full:
+                logger.warning(
+                    f"[pool/collect/11001] seed_raw={seed_raw!r} sanitized={seed!r} — "
+                    f"네이버 keywordstool 거부 (특수문자/숫자/길이 문제 의심)"
+                )
             api_errors.append(msg)
             continue
         items = related.get("keywordList", []) if isinstance(related, dict) else []
@@ -2761,6 +2832,11 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         logger.warning(f"[pool/collect] 시드미스 샘플: {', '.join(sample_no_seed)}")
     pending_after = (pool.stats(customer_id).get("by_status") or {}).get("pending", 0)
     err_parts = list(api_errors)
+    if circuit_aborted:
+        err_parts.append(
+            "네이버 API circuit breaker OPEN — niche 시드 keywordstool timeout 누적. "
+            "다음 cron tick (5분 후) 자동 재시도. broader 시드 추가 권장."
+        )
     if rejected > 0:
         err_parts.append(
             f"화이트리스트 reject {rejected}개 "
@@ -2945,18 +3021,10 @@ async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch:
         duration_ms=int((_time.monotonic()-t0)*1000),
     )
 
-    # 노출제한 검사 — 매 register tick에 전체 풀 광고그룹 일괄 검사 + 자동 삭제
-    try:
-        import sqlite3 as _sqlite3
-        with _sqlite3.connect(reg.db_path) as _conn:
-            all_ag_ids = [r[0] for r in _conn.execute(
-                "SELECT DISTINCT ad_group_id FROM registered_keywords WHERE account_customer_id=? AND ad_group_id IS NOT NULL",
-                (customer_id,),
-            ).fetchall()]
-        if all_ag_ids:
-            await _inspect_ad_groups(uid, customer_id, client, all_ag_ids, delete_from_naver=True)
-    except Exception as e:
-        logger.warning(f"[pool/register] inspect 실패: {e}")
+    # 노출제한 검사는 register 끝이 아닌 _run_pool_inspect_only 단독 실행으로 이전됨.
+    # Why: register 의 pending=0 / orchestrator 실패 early return 시 inspect 자체가 호출
+    # 안 됨 → 노출제한 자동 삭제 영구 미실행 누수. cron tick 마다 register 와 독립적으로
+    # _run_pool_inspect_only 호출되도록 _run_pool_workers_for_accounts 에서 보장.
 
 
 async def _inspect_ad_groups(
@@ -2976,21 +3044,78 @@ async def _inspect_ad_groups(
     reg = get_registered_keywords_db()
     rejected_items: List[Dict] = []
     rejected_naver_ids: List[Tuple[str, str]] = []  # (ncc_keyword_id, keyword)
+    debug_samples_logged = False  # 첫 광고그룹 첫 KW dict 한 번만 logging
+    total_kws_checked = 0
     for ag_id in ad_group_ids:
         try:
             kws = await client.get_keywords(ad_group_id=ag_id) or []
         except Exception as e:
             logger.warning(f"[pool/inspect] {ag_id} 조회 실패: {e}")
             continue
+        # 디버그 — 첫 광고그룹 첫 KW dict 의 keys + review/inspect/status/statusReason 값 logging.
+        # fly logs 에서 실제 네이버 응답 형태 확인용. 한 cron tick 당 1회만.
+        if not debug_samples_logged and kws:
+            sample = kws[0]
+            logger.warning(
+                f"[pool/inspect/DEBUG] ag={ag_id} sample_keys={list(sample.keys())[:20]} "
+                f"review={sample.get('reviewStatus')!r} inspect={sample.get('inspectStatus')!r} "
+                f"status={sample.get('status')!r} statusReason={sample.get('statusReason')!r}"
+            )
+            # 거부 후보 sample 5개 — review/inspect/statusReason 에 PENDING 외 값 가진 첫 5개
+            cand_samples = []
+            for k in kws[:50]:
+                rv = (k.get("reviewStatus") or "")
+                ip = (k.get("inspectStatus") or "")
+                rs = (k.get("statusReason") or "")
+                if rv or ip or rs:
+                    cand_samples.append(
+                        f"{k.get('keyword','')}={rv}/{ip}/{rs}"
+                    )
+                    if len(cand_samples) >= 5:
+                        break
+            if cand_samples:
+                logger.warning(f"[pool/inspect/DEBUG] non-empty samples: {' || '.join(cand_samples)}")
+            debug_samples_logged = True
+
         for kw in kws:
             kw_text = kw.get("keyword")
             if not kw_text:
                 continue
+            total_kws_checked += 1
             review = (kw.get("reviewStatus") or "").upper()
             inspect = (kw.get("inspectStatus") or "").upper()
             status = (kw.get("status") or "").upper()
             stat_reason = (kw.get("statusReason") or "").upper()
             user_lock = kw.get("userLock", False)
+
+            # statusReason 의 영구 거부 코드는 PENDING 가드보다 먼저 잡는다.
+            # 네이버 거부 statusReason 토큰 (확인된 값들):
+            #   KEYWORD_DISAPPROVED, BUSINESS_PROHIBITED, REVIEW_NOT_PASSED, INSPECT_FAIL,
+            #   BAD_BUSINESS, BLOCKLISTED, PROHIBITED.
+            # NOT_PASSED / FAIL 추가 — 이전엔 누락되어 REVIEW_NOT_PASSED / INSPECT_FAIL KW 가
+            # PENDING 가드에 막혀 영구 미삭제 (사용자 보고 사례).
+            REASON_REJECT_TOKENS = (
+                "DISAPPROVED", "REJECTED", "PROHIBITED", "BLOCKLISTED",
+                "NOT_PASSED", "FAIL", "BAD_BUSINESS", "INELIGIBLE",
+            )
+            reason_rejected = any(t in stat_reason for t in REASON_REJECT_TOKENS)
+            # inspectStatus 자체에 거부 토큰 있어도 PENDING 가드보다 먼저 잡는다.
+            # 네이버는 inspectStatus="REVIEW_FAILED" + statusReason="" 케이스도 있음.
+            INSPECT_REJECT_TOKENS = (
+                "DISAPPROVED", "REJECTED", "PROHIBITED", "BLOCKLISTED",
+                "NOT_PASSED", "FAIL", "DENIED", "BAD_BUSINESS",
+            )
+            inspect_rejected_early = any(t in inspect for t in INSPECT_REJECT_TOKENS)
+            review_rejected_early = ("REJECT" in review) or ("DISAPPROVE" in review) or ("FAIL" in review) or ("NOT_PASSED" in review)
+            if reason_rejected or inspect_rejected_early or review_rejected_early:
+                rejected_items.append({
+                    "keyword": kw_text,
+                    "reason": f"review={review} inspect={inspect} status={status} reason={stat_reason} userLock={user_lock}",
+                })
+                kid = kw.get("nccKeywordId")
+                if kid:
+                    rejected_naver_ids.append((kid, kw_text))
+                continue
 
             # ============ 하드 가드 — 검수 완료 전 절대 건드리지 않는다 ============
             # 신규 키워드는 Naver 검수 완료 전까지 review/inspect 가 WAIT/UNDER/PENDING 계열.
@@ -3016,13 +3141,7 @@ async def _inspect_ad_groups(
                 "PROHIBIT", "BUSINESS_PROHIBIT", "REVIEW_REJECTED",
                 "REJECTED", "DISAPPROVED", "FAIL", "FAILED",
             )
-            # statusReason 은 영구 코드만 (PAUSED_BY_BUDGET / NOT_REVIEWED 등 일시 제외)
-            reason_rejected = any(
-                t in stat_reason
-                for t in ("REJECTED", "PROHIBITED", "BLOCKLISTED", "DISAPPROVED")
-            )
-            is_rejected = review_rejected or inspect_rejected or reason_rejected
-            if is_rejected:
+            if review_rejected or inspect_rejected:
                 rejected_items.append({
                     "keyword": kw_text,
                     "reason": f"review={review} inspect={inspect} status={status} reason={stat_reason} userLock={user_lock}",
@@ -3032,6 +3151,14 @@ async def _inspect_ad_groups(
                     rejected_naver_ids.append((kid, kw_text))
         await asyncio.sleep(0.15)
 
+    logger.warning(
+        f"[pool/inspect] user={uid} cid={customer_id} ag_groups={len(ad_group_ids)} "
+        f"kws_checked={total_kws_checked} rejected_found={len(rejected_items)}"
+    )
+    if rejected_items:
+        # 거부 KW 첫 5개 sample logging — 어떤 토큰이 매치됐는지 검증용
+        sample_reasons = [f"{it['keyword']}:{it['reason'][:80]}" for it in rejected_items[:5]]
+        logger.warning(f"[pool/inspect] rejected samples: {' | '.join(sample_reasons)}")
     n_mark = pool.mark_rejected_by_naver(customer_id, rejected_items)
 
     # 네이버에서 실제 DELETE — 실패 시 PUT pause로 fallback (광고 노출만 차단)
@@ -3082,9 +3209,47 @@ async def _inspect_ad_groups(
     return n_mark
 
 
+async def _run_pool_inspect_only(uid: int, customer_id: int) -> None:
+    """노출제한 검사 단독 실행 — register 의 pending=0 early return 으로 inspect 가
+    영구 미실행되는 누수 차단. 매 cron tick 마다 register 와 독립적으로 호출.
+    cascade drift 정리 후 / collect circuit OPEN 광고주에서도 노출제한 자동 삭제 보장.
+    """
+    from services.naver_ad_service import NaverAdApiClient, _naver_api_breaker
+    from database.naver_ad_db import get_ad_account_by_customer
+    import sqlite3 as _sqlite3
+    pool = get_keyword_pool_db()
+    reg = get_registered_keywords_db()
+
+    if _naver_api_breaker.is_open():
+        # circuit OPEN 인 동안은 inspect 도 skip — 다음 tick 에 재시도
+        pool.record_run(uid, customer_id, "inspect", "no_new",
+                        error_message="circuit OPEN — inspect skip, 다음 tick 재시도")
+        return
+
+    account = get_ad_account_by_customer(uid, str(customer_id))
+    if not account or not account.get("is_connected"):
+        return  # 비연결 광고주 — record 도 노이즈 방지로 안 함
+
+    with _sqlite3.connect(reg.db_path) as _conn:
+        ag_ids = [r[0] for r in _conn.execute(
+            "SELECT DISTINCT ad_group_id FROM registered_keywords "
+            "WHERE account_customer_id=? AND ad_group_id IS NOT NULL",
+            (customer_id,),
+        ).fetchall()]
+    if not ag_ids:
+        return  # 등록 KW 없음 — inspect 대상 없음 (record 노이즈 방지)
+
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+    await _inspect_ad_groups(uid, customer_id, client, ag_ids, delete_from_naver=True)
+
+
 async def _run_pool_workers_for_accounts(pairs: List[Tuple[int, int]]):
-    """B 시나리오 — (user_id, customer_id) 페어별로 collect+register.
-    한 사용자 여러 광고주를 가진 경우 광고주마다 독립적으로 워커 실행."""
+    """B 시나리오 — (user_id, customer_id) 페어별로 collect+register+inspect.
+    한 사용자 여러 광고주를 가진 경우 광고주마다 독립적으로 워커 실행.
+    inspect 는 register 와 분리 실행 — register 의 pending=0 early return 누수 차단."""
     pool = get_keyword_pool_db()
     for uid, cid in pairs:
         try:
@@ -3102,6 +3267,17 @@ async def _run_pool_workers_for_accounts(pairs: List[Tuple[int, int]]):
             logger.error(f"[pool/run] register 실패 user={uid} cid={cid}: {e}", exc_info=True)
             try:
                 pool.record_run(uid, cid, "register", "failed",
+                                error_message=f"{type(e).__name__}: {str(e)[:300]}")
+            except Exception:
+                pass
+        # inspect 단독 실행 — register 의 early return 경로 (pending=0 / orchestrator 실패)
+        # 와 무관하게 매 tick 마다 노출제한 검사 보장.
+        try:
+            await _run_pool_inspect_only(uid, cid)
+        except Exception as e:
+            logger.error(f"[pool/run] inspect 실패 user={uid} cid={cid}: {e}", exc_info=True)
+            try:
+                pool.record_run(uid, cid, "inspect", "failed",
                                 error_message=f"{type(e).__name__}: {str(e)[:300]}")
             except Exception:
                 pass
@@ -3429,11 +3605,12 @@ async def keyword_pool_clicked_keywords(
         # circuit breaker (threshold=5) 가 빠르게 OPEN 되어 나머지 task 가 즉시 503 fail.
         # 정상 시에도 Sem=3 이면 1500개 ÷ 3 ≈ 500 round × ~200ms = 100s 내 완료.
         sem = asyncio.Semaphore(3)
-        from services.naver_ad_service import _naver_api_breaker, NaverApiCircuitOpenError
+        # /stats 전용 breaker — inspect/collect 와 격리.
+        from services.naver_ad_service import _stats_breaker, NaverApiCircuitOpenError
 
         async def _fetch_one(kid: str) -> List[dict]:
-            # circuit OPEN 상태면 task 진입 자체 skip — sem 점유 안 함
-            if _naver_api_breaker.is_open():
+            # stats circuit OPEN 상태면 task 진입 자체 skip — sem 점유 안 함
+            if _stats_breaker.is_open():
                 return []
             async with sem:
                 try:
@@ -3560,6 +3737,534 @@ async def keyword_pool_bulk_delete_clicked(
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
 
 
+# ============ 연관성-점수 기반 자동 cleanup ============
+# 사용자가 토글 ON + threshold(예: 30) 지정 → cron 이 매시 1회 클릭 발생 KW 중
+# 점수 ≤ threshold 인 것 자동 DELETE (실패 시 PAUSE). 검수 없이 점수만 본다.
+# 클릭 미발생 KW 는 건드리지 않음 — 노출 받기 전 KW 는 점수 낮아도 cost 0.
+
+class AutoCleanupSettingsRequest(BaseModel):
+    enabled: Optional[bool] = None
+    threshold: Optional[int] = None  # 0~95
+    relevance_keywords: Optional[List[str]] = None  # 도메인 기준 키워드 list (예: ["피부질환","피부","아토피"])
+
+
+@router.get("/keyword-pool/auto-cleanup/settings")
+async def keyword_pool_auto_cleanup_get(
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """광고주별 자동 cleanup 설정 + 마지막 실행 stamp."""
+    from database.naver_ad_db import get_ad_account_auto_cleanup
+    account = _resolve_account(user_id, customer_id)
+    if not account:
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid_str = str(account.get("customer_id"))
+    s = get_ad_account_auto_cleanup(user_id, cid_str)
+    return {"success": True, "customer_id": cid_str, **s}
+
+
+@router.patch("/keyword-pool/auto-cleanup/settings")
+async def keyword_pool_auto_cleanup_patch(
+    request: AutoCleanupSettingsRequest,
+    background_tasks: BackgroundTasks,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """자동 cleanup ON/OFF 또는 threshold 변경 — 부분 업데이트.
+    enabled=true 로 변경 시 background 즉시 1회 실행 — 다음 cron 정각까지 대기 안 함.
+    """
+    from database.naver_ad_db import update_ad_account_auto_cleanup, get_ad_account_auto_cleanup
+    account = _resolve_account(user_id, customer_id)
+    if not account:
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid_str = str(account.get("customer_id"))
+    logger.warning(
+        f"[auto-cleanup/PATCH] uid={user_id} cid={cid_str} "
+        f"enabled={request.enabled} threshold={request.threshold} "
+        f"rel_kws_count={len(request.relevance_keywords) if request.relevance_keywords else 'None'} "
+        f"rel_kws_sample={(request.relevance_keywords or [])[:5]}"
+    )
+    ok = update_ad_account_auto_cleanup(
+        user_id, cid_str,
+        enabled=request.enabled,
+        threshold=request.threshold,
+        relevance_keywords=request.relevance_keywords,
+    )
+    if not ok:
+        raise HTTPException(status_code=400, detail="변경할 필드 없음 또는 광고주 미존재")
+    s = get_ad_account_auto_cleanup(user_id, cid_str)
+    logger.warning(
+        f"[auto-cleanup/PATCH] uid={user_id} cid={cid_str} 저장 후 SELECT 결과 "
+        f"rel_kws_count={len(s.get('relevance_keywords') or [])} "
+        f"rel_kws_sample={(s.get('relevance_keywords') or [])[:5]}"
+    )
+    # enabled=true 로 변경 시 즉시 1회 실행 — 다음 cron 까지 대기 안 함.
+    # asyncio.create_task fire-and-forget — fly.io 의 BackgroundTasks 가 worker 점유로
+    # cancel 되는 케이스 회피. 시작 시 즉시 last_run_at stamp → 사용자가 "실행 중" 확인.
+    triggered = False
+    if request.enabled is True and s.get("enabled"):
+        cid_int = int(cid_str)
+        thr = int(s.get("threshold") or 30)
+        # 1) 즉시 stamp — 사용자가 토글 ON 직후 "최근 실행: 방금 전" 즉시 확인 가능
+        try:
+            from database.naver_ad_db import record_auto_cleanup_run
+            record_auto_cleanup_run(user_id, cid_str, 0)
+            logger.warning(f"[auto-cleanup/PATCH] uid={user_id} cid={cid_str} 즉시 stamp (실행 시작 표시)")
+        except Exception as _e:
+            logger.warning(f"[auto-cleanup/PATCH] 즉시 stamp 실패: {_e}")
+
+        # 2) fire-and-forget task — uvicorn 워커가 살아있는 동안 실행
+        async def _trigger_now():
+            try:
+                logger.warning(f"[auto-cleanup/PATCH/trigger] uid={user_id} cid={cid_int} thr={thr} 시작")
+                res = await _run_auto_cleanup_for_account(user_id, cid_int, thr)
+                logger.warning(
+                    f"[auto-cleanup/PATCH/trigger] uid={user_id} cid={cid_int} 실행 결과: {res}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"[auto-cleanup/PATCH/trigger] uid={user_id} cid={cid_int} 실행 실패: "
+                    f"{type(e).__name__}: {e}", exc_info=True
+                )
+                try:
+                    from database.naver_ad_db import record_auto_cleanup_run
+                    record_auto_cleanup_run(user_id, str(cid_int), 0)
+                except Exception:
+                    pass
+        try:
+            asyncio.create_task(_trigger_now())
+            triggered = True
+        except Exception as _e:
+            # event loop 외 호출 시 — BackgroundTasks 폴백
+            logger.warning(f"[auto-cleanup/PATCH] create_task 실패 → BackgroundTasks 폴백: {_e}")
+            background_tasks.add_task(_trigger_now)
+            triggered = True
+    return {"success": True, "customer_id": cid_str, **s, "triggered_now": triggered}
+
+
+async def _run_auto_cleanup_for_account(
+    user_id: int, customer_id: int, threshold: int,
+    days: int = 7, max_delete: int = 200,
+) -> Dict:
+    """한 광고주의 클릭 KW 중 점수 ≤ threshold 인 것 일괄 DELETE.
+    - days: 최근 N 일 클릭 통계 (default 7)
+    - max_delete: 한 tick 당 최대 삭제 수 (네이버 rate limit + 사고 방지)
+    """
+    from services.naver_ad_service import NaverAdApiClient
+    from database.naver_ad_db import get_ad_account_by_customer, record_auto_cleanup_run
+    from datetime import datetime, timedelta
+    import sqlite3 as _sqlite3
+
+    account = get_ad_account_by_customer(user_id, str(customer_id))
+    if not account or not account.get("is_connected"):
+        # 비연결 광고주도 stamp — UI 에 "실행됨 0개" 표시되어야 사용자가 동작 확인 가능
+        try:
+            record_auto_cleanup_run(user_id, str(customer_id), 0)
+        except Exception:
+            pass
+        return {"customer_id": customer_id, "deleted": 0, "reason": "not_connected"}
+
+    reg = get_registered_keywords_db()
+    pool = get_keyword_pool_db()
+    with _sqlite3.connect(reg.db_path) as conn:
+        rows = conn.execute(
+            "SELECT keyword, ncc_keyword_id FROM registered_keywords WHERE account_customer_id=? AND ncc_keyword_id IS NOT NULL",
+            (customer_id,),
+        ).fetchall()
+    if not rows:
+        record_auto_cleanup_run(user_id, str(customer_id), 0)
+        return {"customer_id": customer_id, "deleted": 0, "reason": "no_registered_keywords"}
+    keyword_map = {r[1]: r[0] for r in rows}
+
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    end_date = datetime.now().strftime("%Y-%m-%d")
+    start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+
+    ids = list(keyword_map.keys())[:1500]
+    # sem=20 → sem=3. Naver outbound 폭주 시 circuit breaker (threshold=10) OPEN 빠르게
+    # 진입 막음. 1500 ÷ 3 ≈ 500 round × ~200ms = 100s 내 완료 (정상 시).
+    sem = asyncio.Semaphore(3)
+    from services.naver_ad_service import _stats_breaker, NaverApiCircuitOpenError
+
+    async def _fetch_one(kid: str) -> List[dict]:
+        # stats circuit OPEN 시 진입 즉시 skip — sem 점유 안 함
+        if _stats_breaker.is_open():
+            return []
+        async with sem:
+            try:
+                stats = await client.get_stats(
+                    stat_type="KEYWORD", ids=[kid],
+                    start_date=start_date, end_date=end_date,
+                )
+                return stats or []
+            except NaverApiCircuitOpenError:
+                return []
+            except Exception as e:
+                logger.warning(f"[auto-cleanup] stats {kid} 실패: {str(e)[:120]}")
+                return []
+
+    results = await asyncio.gather(*[_fetch_one(kid) for kid in ids])
+    all_stats = [s for batch in results for s in batch]
+    logger.warning(
+        f"[auto-cleanup] uid={user_id} cid={customer_id} stats fetched ids={len(ids)} "
+        f"non_empty={len(all_stats)} circuit_open={_stats_breaker.is_open()}"
+    )
+
+    # cron 자동 cleanup 도 cleanup-by-score 와 동일 우선순위:
+    # ad_accounts.relevance_keywords (사용자 명시) → user_seed 폴백.
+    from database.naver_ad_db import get_ad_account_relevance_keywords
+    saved_basis = get_ad_account_relevance_keywords(user_id, str(customer_id))
+    if saved_basis:
+        user_seeds = saved_basis
+    else:
+        user_seeds = [s for s in (pool.list_user_seeds(customer_id) or []) if s and len(s) >= 2]
+    targets: List[Tuple[str, str, int]] = []  # (kid, kw, score)
+    for stat in all_stats:
+        kid = stat.get("id")
+        if not kid:
+            continue
+        clicks = int(stat.get("clkCnt", 0) or 0)
+        if clicks <= 0:
+            continue  # 클릭 미발생 KW 는 건드리지 않음
+        kw = keyword_map.get(kid)
+        if not kw:
+            continue
+        score = _compute_relevance_score(kw, user_seeds)
+        if score <= threshold:
+            targets.append((kid, kw, score))
+
+    # 가장 무관한 KW 부터 (낮은 점수 우선) — max_delete 캡 적용
+    targets.sort(key=lambda x: x[2])
+    targets = targets[:max_delete]
+
+    n_deleted = 0
+    n_paused = 0
+    n_failed = 0
+    affected: List[str] = []
+    for kid, kw_text, _score in targets:
+        try:
+            await client.delete_keyword(kid)
+            with _sqlite3.connect(reg.db_path) as conn:
+                conn.execute(
+                    "DELETE FROM registered_keywords WHERE account_customer_id=? AND ncc_keyword_id=?",
+                    (customer_id, kid),
+                )
+            n_deleted += 1
+            affected.append(kw_text)
+        except Exception:
+            try:
+                await client.pause_keyword(kid)
+                n_paused += 1
+                affected.append(kw_text)
+            except Exception:
+                n_failed += 1
+        await asyncio.sleep(0.15)
+
+    if affected:
+        pool.mark_rejected_by_naver(
+            customer_id,
+            [{"keyword": kw, "reason": f"자동 cleanup (점수≤{threshold})"} for kw in affected],
+        )
+    # 실행 이력 — 화면 '최근 실행 이력' 표에 노출
+    try:
+        pool.record_run(
+            user_id, customer_id, "inspect",
+            "success" if n_deleted > 0 else "no_new",
+            registered=0, failed=n_failed, skipped=n_deleted,
+            seeds_count=len(targets),
+            error_message=(
+                f"자동 cleanup (점수≤{threshold}) — DELETE {n_deleted} / PAUSE {n_paused} / 실패 {n_failed}"
+                if (n_deleted or n_paused or n_failed) else f"자동 cleanup (점수≤{threshold}) — 대상 0"
+            ),
+        )
+    except Exception:
+        pass
+
+    record_auto_cleanup_run(user_id, str(customer_id), n_deleted + n_paused)
+    return {
+        "customer_id": customer_id,
+        "threshold": threshold,
+        "candidates": len(targets),
+        "deleted": n_deleted,
+        "paused": n_paused,
+        "failed": n_failed,
+    }
+
+
+@router.post("/keyword-pool/cron/auto-cleanup")
+async def keyword_pool_cron_auto_cleanup(
+    background_tasks: BackgroundTasks,
+    authorization: Optional[str] = Header(None),
+    threshold_override: Optional[int] = Query(None),
+    user_id: Optional[int] = Query(None),
+    customer_id: Optional[str] = Query(None),
+):
+    """Bearer 토큰 cron — auto_cleanup_enabled=1 인 모든 광고주에 대해 점수≤threshold 자동 삭제.
+    - 단건 트리거: ?user_id=X&customer_id=Y (디버깅/수동 실행)
+    - threshold_override: cron 호출 시 광고주 설정 무시하고 강제 임계값 (디버깅)
+    """
+    _verify_cron_token(authorization)
+    from database.naver_ad_db import list_auto_cleanup_enabled_accounts, get_ad_account_auto_cleanup
+
+    targets: List[Tuple[int, int, int]] = []  # (uid, cid, threshold)
+    if user_id and customer_id:
+        s = get_ad_account_auto_cleanup(user_id, str(customer_id))
+        thr = threshold_override if threshold_override is not None else s["threshold"]
+        targets = [(user_id, int(customer_id), int(thr))]
+    else:
+        rows = list_auto_cleanup_enabled_accounts() or []
+        for r in rows:
+            uid = int(r.get("user_id"))
+            cid = int(r.get("customer_id"))
+            thr = threshold_override if threshold_override is not None else int(r.get("auto_cleanup_threshold") or 30)
+            targets.append((uid, cid, thr))
+
+    if not targets:
+        return {"success": True, "queued": 0, "message": "자동 cleanup ON 광고주 없음"}
+
+    async def _run_all():
+        for uid, cid, thr in targets:
+            try:
+                res = await _run_auto_cleanup_for_account(uid, cid, thr)
+                logger.info(f"[auto-cleanup] uid={uid} cid={cid} thr={thr} → {res}")
+            except Exception as e:
+                logger.error(f"[auto-cleanup] uid={uid} cid={cid} 실패: {type(e).__name__}: {e}", exc_info=True)
+
+    background_tasks.add_task(_run_all)
+    return {
+        "success": True,
+        "queued": len(targets),
+        "targets": [{"user_id": u, "customer_id": c, "threshold": t} for u, c, t in targets],
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
+# ============ 등록 KW 전체 점수 audit + 일괄 정리 ============
+# auto-cleanup cron 은 click ≥ 1 KW 만 처리 (Naver stats API 호출 비용 절약).
+# 이 API 는 click 무관 — registered_keywords 테이블 직접 조회 + keyword text 만으로
+# user_seed 점수 매김 (stats API 호출 없이 95k KW 1초 안에 점수화).
+# cascade drift 로 옛날에 등록된 무관 KW (click=0) 일괄 정리용.
+
+class CleanupByScoreRequest(BaseModel):
+    threshold: int = 30
+    max_delete: int = 1000
+    dry_run: bool = False
+    # 사용자가 호출 시 임시로 다른 기준 키워드 쓰고 싶을 때 (저장된 광고주 설정 무시).
+    # 비어있으면 ad_accounts.relevance_keywords → 비어있으면 user_seed 순으로 폴백.
+    relevance_keywords_override: Optional[List[str]] = None
+
+
+@router.post("/keyword-pool/registered/cleanup-by-score")
+async def keyword_pool_registered_cleanup_by_score(
+    request: CleanupByScoreRequest,
+    background_tasks: BackgroundTasks,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """등록 KW 전체 audit — user_seed 점수 ≤ threshold 인 KW 일괄 DELETE (click 무관).
+    dry_run=true: 점수 분포 + 삭제 대상 미리보기. dry_run=false: 백그라운드 실행 (수십분 소요).
+    """
+    from services.naver_ad_service import NaverAdApiClient
+    from database.naver_ad_db import record_auto_cleanup_run
+    import sqlite3 as _sqlite3
+    import time as _t
+    _t0 = _t.monotonic()
+
+    threshold = max(0, min(95, int(request.threshold)))
+    max_delete = max(0, min(5000, int(request.max_delete)))
+    dry_run = bool(request.dry_run)
+
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+
+    pool = get_keyword_pool_db()
+    reg = get_registered_keywords_db()
+
+    # 점수 기준 키워드 우선순위: request.override → 광고주 저장값 → user_seed.
+    # 사용자 의도 ("내가 원하는 키워드 기준으로 연관성 잡아야지") 반영.
+    from database.naver_ad_db import get_ad_account_relevance_keywords
+    if request.relevance_keywords_override:
+        score_basis = [s.strip() for s in request.relevance_keywords_override
+                       if s and len(s.strip()) >= 2]
+        basis_source = "override"
+    else:
+        saved = get_ad_account_relevance_keywords(user_id, str(cid))
+        if saved:
+            score_basis = saved
+            basis_source = "saved"
+        else:
+            score_basis = [s for s in (pool.list_user_seeds(cid) or []) if s and len(s) >= 2]
+            basis_source = "user_seed_fallback"
+
+    if not score_basis:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "점수 기준 키워드 없음 — '연관성 기준 키워드' 입력 또는 user_seed 추가 후 재시도. "
+                "예: 피부질환,피부,피부과,아토피,여드름"
+            ),
+        )
+    user_seeds = score_basis  # 이하 코드와 호환 (변수명 유지)
+
+    with _sqlite3.connect(reg.db_path) as conn:
+        rows = conn.execute(
+            "SELECT keyword, ncc_keyword_id FROM registered_keywords "
+            "WHERE account_customer_id=? AND ncc_keyword_id IS NOT NULL",
+            (cid,),
+        ).fetchall()
+
+    # 점수 매김 — atoms 1회 precompute (95k KW 호출 시 atoms 95k 번 재빌드 → GIL 폭주 방지).
+    # PERF: 95k × 30 atoms = 2.85M ops. asyncio.to_thread 로 워커 thread 분리해
+    # 이벤트 루프 보호 (fly.io health check timeout 차단).
+    def _score_all() -> Tuple[List[Tuple[str, str, int]], Dict[int, int]]:
+        atoms_3plus: set = set()
+        atoms_2: set = set()
+        for s in user_seeds:
+            if not s or len(s) < 2:
+                continue
+            if len(s) >= 4:
+                atoms_3plus.add(s)
+            for n in (2, 3):
+                for i in range(len(s) - n + 1):
+                    a = s[i:i + n]
+                    (atoms_2 if len(a) == 2 else atoms_3plus).add(a)
+        _scored: List[Tuple[str, str, int]] = []
+        _dist: Dict[int, int] = {}
+        for kw_text, kid in rows:
+            if not kw_text:
+                _scored.append((kid, kw_text or "", 0))
+                _dist[0] = _dist.get(0, 0) + 1
+                continue
+            sc = 0
+            full = False
+            for s in user_seeds:
+                if not s or len(s) < 2:
+                    continue
+                if s in kw_text:
+                    sc = 100; full = True; break
+                if kw_text in s:
+                    sc = 95; full = True; break
+            if not full:
+                n_3 = sum(1 for a in atoms_3plus if a in kw_text)
+                n_2 = sum(1 for a in atoms_2 if a in kw_text)
+                sc = min(95, min(80, n_3 * 20) + min(30, n_2 * 5))
+            _scored.append((kid, kw_text, sc))
+            bucket = (sc // 10) * 10
+            _dist[bucket] = _dist.get(bucket, 0) + 1
+        return _scored, _dist
+
+    _t_db = _t.monotonic() - _t0
+    scored, score_dist = await asyncio.to_thread(_score_all)
+    _t_score = _t.monotonic() - _t0 - _t_db
+    targets = [(kid, kw, s) for kid, kw, s in scored if s <= threshold]
+    targets.sort(key=lambda x: x[2])  # 무관한 것부터
+    targets_capped = targets[:max_delete]
+    logger.warning(
+        f"[cleanup-by-score] uid={user_id} cid={cid} dry_run={dry_run} "
+        f"db_query={_t_db:.2f}s score={_t_score:.2f}s "
+        f"total={len(scored)} below={len(targets)} threshold={threshold} "
+        f"basis={basis_source} basis_count={len(user_seeds)} "
+        f"basis_sample={user_seeds[:5]}"
+    )
+
+    if dry_run:
+        # 화면 표시용 — targets 전체 (max_delete 적용 전) 중 max 1000 개. keyword_id 포함해서
+        # frontend 에서 체크박스 선택 후 /clicked-keywords/bulk-delete 로 삭제 가능.
+        DISPLAY_LIMIT = 1000
+        return {
+            "success": True,
+            "dry_run": True,
+            "customer_id": cid,
+            "threshold": threshold,
+            "total_registered": len(scored),
+            "score_distribution": dict(sorted(score_dist.items())),
+            "targets_below_threshold": len(targets),
+            "will_delete_now": len(targets_capped),
+            "max_delete": max_delete,
+            "displayed": min(len(targets), DISPLAY_LIMIT),
+            "targets": [
+                {"keyword_id": kid, "keyword": kw, "score": s}
+                for kid, kw, s in targets[:DISPLAY_LIMIT]
+            ],
+        }
+
+    if not targets_capped:
+        return {
+            "success": True, "dry_run": False,
+            "customer_id": cid, "threshold": threshold,
+            "queued_targets": 0, "message": f"임계값 {threshold} 이하 등록 KW 없음",
+        }
+
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    async def _run():
+        n_del, n_pause, n_fail = 0, 0, 0
+        affected: List[str] = []
+        for kid, kw_text, _s in targets_capped:
+            try:
+                await client.delete_keyword(kid)
+                with _sqlite3.connect(reg.db_path) as c:
+                    c.execute(
+                        "DELETE FROM registered_keywords "
+                        "WHERE account_customer_id=? AND ncc_keyword_id=?",
+                        (cid, kid),
+                    )
+                n_del += 1
+                affected.append(kw_text)
+            except Exception:
+                try:
+                    await client.pause_keyword(kid)
+                    n_pause += 1
+                    affected.append(kw_text)
+                except Exception:
+                    n_fail += 1
+            await asyncio.sleep(0.15)
+        if affected:
+            pool.mark_rejected_by_naver(
+                cid,
+                [{"keyword": kw, "reason": f"수동 점수 정리(≤{threshold})"} for kw in affected],
+            )
+        try:
+            pool.record_run(
+                user_id, cid, "inspect",
+                "success" if n_del > 0 else "no_new",
+                registered=0, failed=n_fail, skipped=n_del,
+                seeds_count=len(targets_capped),
+                error_message=(
+                    f"수동 점수 정리 (점수≤{threshold}) — "
+                    f"DELETE {n_del} / PAUSE {n_pause} / 실패 {n_fail}"
+                ),
+            )
+        except Exception:
+            pass
+        record_auto_cleanup_run(user_id, str(cid), n_del + n_pause)
+        logger.warning(
+            f"[manual-cleanup] uid={user_id} cid={cid} thr={threshold} "
+            f"→ del={n_del} pause={n_pause} fail={n_fail}"
+        )
+
+    background_tasks.add_task(_run)
+    return {
+        "success": True,
+        "dry_run": False,
+        "customer_id": cid,
+        "threshold": threshold,
+        "queued_targets": len(targets_capped),
+        "below_threshold_total": len(targets),
+        "estimated_minutes": round(len(targets_capped) * 0.18 / 60, 1),
+        "message": f"백그라운드 실행 시작 — {len(targets_capped)}개 KW 삭제 진행 (예상 {round(len(targets_capped) * 0.18 / 60, 1)}분)",
+    }
+
+
 # ============ 네이버 ↔ DB 한도 sync ============
 # 사용자가 네이버 광고 콘솔에서 직접 캠페인/광고그룹 삭제 → 우리 DB row 는 stale.
 # 한도 사용량 표시가 잘못됨 (네이버 active != DB count). 이 endpoint 가 cross-check
@@ -3624,7 +4329,7 @@ async def keyword_pool_reconcile_naver(
     n_orphan_groups = 0
     try:
         live_ad_group_ids = set()
-        for live_cid in list(live_campaign_ids)[:100]:  # cap 100 — 더 큰 광고주는 별도 처리
+        for live_cid in list(live_campaign_ids)[:100]:  # cap 100
             try:
                 if hasattr(client, "get_ad_groups"):
                     ags = await client.get_ad_groups(campaign_id=live_cid)

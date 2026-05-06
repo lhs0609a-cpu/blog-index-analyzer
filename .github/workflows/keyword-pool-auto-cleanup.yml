@@ -1,0 +1,49 @@
+name: Keyword pool — auto cleanup (relevance score)
+
+# 매 1시간 — auto_cleanup_enabled=1 인 광고주에 대해
+# 점수 ≤ threshold 인 클릭 발생 KW 자동 DELETE (실패 시 PAUSE).
+# 클릭 미발생 KW 는 건드리지 않음 (cost 0 이라 우선순위 낮음).
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"  # 매 15분 — 사용자 토글 ON 후 빠른 재실행 보장
+  workflow_dispatch:
+    inputs:
+      user_id:
+        description: "특정 user_id (생략 시 모든 ON 광고주)"
+        required: false
+      customer_id:
+        description: "특정 customer_id (user_id 와 함께 사용)"
+        required: false
+      threshold_override:
+        description: "임계값 강제 적용 (디버깅 — 광고주 설정 무시)"
+        required: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Trigger auto cleanup
+        env:
+          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
+          BACKEND_URL: https://blog-index-analyzer.fly.dev
+          USER_ID: ${{ github.event.inputs.user_id || '' }}
+          CUSTOMER_ID: ${{ github.event.inputs.customer_id || '' }}
+          THRESHOLD: ${{ github.event.inputs.threshold_override || '' }}
+        run: |
+          if [ -z "$CRON_TOKEN" ]; then
+            echo "::error::CRON_TOKEN secret 미설정"; exit 1
+          fi
+          q=""
+          sep="?"
+          if [ -n "$USER_ID" ]; then q="${q}${sep}user_id=${USER_ID}"; sep="&"; fi
+          if [ -n "$CUSTOMER_ID" ]; then q="${q}${sep}customer_id=${CUSTOMER_ID}"; sep="&"; fi
+          if [ -n "$THRESHOLD" ]; then q="${q}${sep}threshold_override=${THRESHOLD}"; sep="&"; fi
+          status=$(curl -sS -o /tmp/body.json -w "%{http_code}" \
+            -X POST "${BACKEND_URL}/api/naver-ad/keyword-pool/cron/auto-cleanup${q}" \
+            -H "Authorization: Bearer ${CRON_TOKEN}" \
+            --max-time 60)
+          echo "status=$status"
+          cat /tmp/body.json
+          [ "$status" = "200" ] || { echo "::error::auto-cleanup 트리거 실패"; exit 1; }
