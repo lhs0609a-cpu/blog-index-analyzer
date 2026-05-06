@@ -55,10 +55,23 @@ class KeywordPoolScheduler:
             max_instances=1,
             coalesce=True,
         )
+        # AI 분류 cron — reject 풀 → user_seed 자동 promote.
+        # 10분마다 tick, 광고주별 deadlock 감지 시만 실제 분류 실행 (쿨다운 30분 별도 적용).
+        # GPT 호출 비용 cap = 광고주당 시간당 최대 2회.
+        self.scheduler.add_job(
+            self._ai_classify_tick,
+            IntervalTrigger(seconds=600),
+            id="keyword_pool_ai_classify",
+            name="키워드 풀 AI reject 분류 (10분 tick, 30분 쿨다운)",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
         self.scheduler.start()
         self._running = True
         logger.warning(
-            f"[pool/scheduler] 시작 — collect {interval_seconds}s / register 120s / inspect 600s"
+            f"[pool/scheduler] 시작 — collect {interval_seconds}s / register 120s / "
+            f"inspect 600s / ai_classify 600s (쿨다운 30m)"
         )
 
     def stop(self):
@@ -120,6 +133,56 @@ class KeywordPoolScheduler:
                     logger.error(f"[pool/scheduler] collect 실패 user={uid} cid={cid}: {e}", exc_info=True)
         except Exception as e:
             logger.error(f"[pool/scheduler] collect tick 실패: {type(e).__name__}: {e}", exc_info=True)
+
+    async def _ai_classify_tick(self):
+        """광고주별로 deadlock 감지 시 AI 분류 발동 — reject 풀 → user_seed promote.
+
+        트리거 조건 (둘 중 하나):
+          - detect_collect_deadlock: 최근 5 collect 모두 added=0 + reject≥500
+          - 미분류 reject 누적이 1000 초과 (분류 가치 큰 데이터 쌓임)
+
+        쿨다운 30분은 _run_pool_ai_classify 내부에서 처리 (force=False).
+        OPENAI_API_KEY 없으면 즉시 noop (로그만).
+        """
+        try:
+            from config import settings
+            if not settings.OPENAI_API_KEY:
+                logger.warning("[pool/ai-classify] OPENAI_API_KEY 미설정 — skip")
+                return
+            from routers.naver_ad import _run_pool_ai_classify
+            from database.naver_ad_db import list_connected_ad_accounts
+            from database.keyword_pool_db import get_keyword_pool_db
+            pool = get_keyword_pool_db()
+            accts = list_connected_ad_accounts() or []
+            if not accts:
+                return
+            pairs = [(int(a["user_id"]), int(a["customer_id"]))
+                     for a in accts if a.get("user_id") and a.get("customer_id")]
+            for uid, cid in pairs:
+                try:
+                    # 트리거 조건 — deadlock 또는 reject 1000+ 누적
+                    deadlock = pool.detect_collect_deadlock(cid, n_recent=5, min_rejected=500)
+                    rs = pool.reject_stats(cid)
+                    pending_rejects = int(rs.get("pending", 0))
+                    should_run = (
+                        bool(deadlock.get("is_deadlock"))
+                        or pending_rejects >= 1000
+                    )
+                    if not should_run:
+                        continue
+                    logger.warning(
+                        f"[pool/ai-classify] user={uid} cid={cid} 트리거 "
+                        f"(deadlock={deadlock.get('is_deadlock')}, "
+                        f"pending_rejects={pending_rejects})"
+                    )
+                    await _run_pool_ai_classify(uid, cid)
+                except Exception as e:
+                    logger.error(
+                        f"[pool/ai-classify] 광고주 처리 실패 user={uid} cid={cid}: {e}",
+                        exc_info=True,
+                    )
+        except Exception as e:
+            logger.error(f"[pool/ai-classify] tick 실패: {type(e).__name__}: {e}", exc_info=True)
 
     async def _register_only(self):
         """register 만 — 2분 주기로 pending 빠르게 처리. 다른 cron 과 독립."""

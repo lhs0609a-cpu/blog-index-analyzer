@@ -144,6 +144,17 @@ export default function KeywordPoolPage() {
   const [autoCleanupSaving, setAutoCleanupSaving] = useState(false)
   const [relevanceInput, setRelevanceInput] = useState('')  // textarea raw 입력
 
+  // AI reject 분류 — naver keywordstool 이 reject 한 인접 도메인 KW 를
+  // GPT-4o-mini 가 시드와 같은 도메인인지 분류 → user_seed 자동 promote.
+  // 시드 atom 게이트 자동 확장으로 reject 폭주 해결.
+  const [rejectStats, setRejectStats] = useState<{
+    pending: number
+    promoted: number
+    discarded: number
+    cooldown_remaining_min: number
+  }>({ pending: 0, promoted: 0, discarded: 0, cooldown_remaining_min: 0 })
+  const [aiClassifying, setAiClassifying] = useState(false)
+
   // 등록 KW 전체 점수 audit + 일괄 정리 (click 무관) — cascade drift 옛날 무관 KW 정리용
   const [manualCleanupRunning, setManualCleanupRunning] = useState(false)
   const [manualCleanupThreshold, setManualCleanupThreshold] = useState(30)
@@ -488,12 +499,16 @@ export default function KeywordPoolPage() {
     load()
     loadClickedKeywords()  // 클릭 키워드 자동 1회 로드
     loadAutoCleanup()      // 자동 cleanup 설정 1회 로드
+    loadRejectStats()      // AI reject 분류 카운터 1회 로드
     const tStats = setInterval(load, 10_000) // stats 10초 폴링
     // 클릭 키워드는 60초마다 자동 갱신 — 사용자가 새로 발생한 클릭 즉시 검수 가능
     const tClicked = setInterval(loadClickedKeywords, 60_000)
+    // reject stats 30초 폴링 — collect cron 이 누적시키는 reject 후보 카운터
+    const tRejects = setInterval(loadRejectStats, 30_000)
     return () => {
       clearInterval(tStats)
       clearInterval(tClicked)
+      clearInterval(tRejects)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, selectedCid])
@@ -569,6 +584,88 @@ export default function KeywordPoolPage() {
       load()
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || '삭제 실패')
+    }
+  }
+
+  const loadRejectStats = async () => {
+    if (!selectedCid && accounts.length === 0) return
+    try {
+      const res = await adGet<{
+        success: boolean
+        pending: number
+        promoted: number
+        discarded: number
+        cooldown_remaining_min: number
+      }>(`/api/naver-ad/keyword-pool/reject-stats${cidQs()}`)
+      setRejectStats({
+        pending: res.pending || 0,
+        promoted: res.promoted || 0,
+        discarded: res.discarded || 0,
+        cooldown_remaining_min: res.cooldown_remaining_min || 0,
+      })
+    } catch {
+      // 조용히 fail — 새 엔드포인트 배포 전이거나 광고주 미선택 시
+    }
+  }
+
+  const handleAiClassify = async (force = false) => {
+    if (aiClassifying) return
+    if (rejectStats.pending === 0) {
+      toast.error('분류할 reject 후보가 없습니다 (검색량 ≥ 100 도메인미스 reject 누적 필요)')
+      return
+    }
+    if (!force && rejectStats.cooldown_remaining_min > 0) {
+      if (!confirm(
+        `30분 쿨다운 잔여 ${rejectStats.cooldown_remaining_min}분.\n\n` +
+        `지금 강제로 실행할까요? (force=true)\n\n` +
+        `* GPT-4o-mini 호출 — 200개 후보당 약 5~8초, 비용 약 0.001$/회`
+      )) return
+    } else {
+      if (!confirm(
+        `미분류 reject ${rejectStats.pending.toLocaleString()}개 → GPT-4o-mini 가 시드 도메인 일치 여부 분류.\n\n` +
+        `통과한 KW 는 자동으로 user_seed 합류 → 다음 collect 부터 게이트 atom 확장.\n` +
+        `약 5~8초 소요.`
+      )) return
+    }
+    setAiClassifying(true)
+    try {
+      const res = await adPost<{
+        success: boolean
+        approved?: number
+        promoted?: number
+        discarded?: number
+        rationale?: string
+        reason?: string
+        wait_minutes?: number
+        message?: string
+      }>(
+        `/api/naver-ad/keyword-pool/ai-classify-rejects${cidQs({ force: force ? 'true' : undefined })}`,
+        {},
+        { timeout: 90_000 }
+      )
+      if (!res.success) {
+        const reasonMap: Record<string, string> = {
+          cooldown: `쿨다운 잔여 ${res.wait_minutes ?? 0}분`,
+          no_user_seed: 'user_seed 가 없습니다 — 먼저 초기 시드를 추가하세요',
+          no_rejects: '미분류 reject 후보가 없습니다',
+          ai_failed: `AI 분류 실패: ${res.message ?? ''}`,
+        }
+        toast.error(reasonMap[res.reason || ''] || res.message || 'AI 분류 실패')
+      } else {
+        toast.success(
+          `AI 분류 — 통과 ${res.approved ?? 0}개 (시드 합류 ${res.promoted ?? 0}) / 컷 ${res.discarded ?? 0}개`,
+          { duration: 6000 }
+        )
+        if (res.rationale) {
+          toast(res.rationale, { duration: 8000, icon: 'ℹ️' })
+        }
+      }
+      loadRejectStats()
+      load()
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || e?.message || 'AI 분류 호출 실패')
+    } finally {
+      setAiClassifying(false)
     }
   }
 
@@ -1398,6 +1495,61 @@ export default function KeywordPoolPage() {
           </button>
         </div>
 
+        {/* AI reject 분류 — 시드 도메인과 같은 reject KW 자동 promote */}
+        <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl border border-purple-200 p-6 mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Zap className="w-5 h-5 text-purple-600" />
+            <h2 className="font-bold text-gray-900">AI 시드 자동 확장 (GPT-4o-mini)</h2>
+          </div>
+          <p className="text-sm text-gray-700 mb-3">
+            네이버가 시드 BFS 로 추천했지만 우리 게이트가 reject 한 인접 KW —
+            AI 가 시드와 같은 도메인인지 분류해서 통과한 KW 만 <strong>user_seed 로 자동 합류</strong>.
+            다음 collect 부터 게이트 atom 이 넓어져 reject 폭주가 줄고 더 많은 KW 가 발굴됨.
+          </p>
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            <div className="bg-white rounded-lg border border-purple-100 p-3 text-center">
+              <div className="text-[10px] text-gray-500">미분류 reject</div>
+              <div className="text-xl font-bold text-purple-700">{rejectStats.pending.toLocaleString()}</div>
+              <div className="text-[10px] text-gray-400">검색량≥100 누적</div>
+            </div>
+            <div className="bg-white rounded-lg border border-green-100 p-3 text-center">
+              <div className="text-[10px] text-gray-500">시드 합류 (누적)</div>
+              <div className="text-xl font-bold text-green-700">{rejectStats.promoted.toLocaleString()}</div>
+              <div className="text-[10px] text-gray-400">AI 통과 → user_seed</div>
+            </div>
+            <div className="bg-white rounded-lg border border-gray-100 p-3 text-center">
+              <div className="text-[10px] text-gray-500">컷 (누적)</div>
+              <div className="text-xl font-bold text-gray-500">{rejectStats.discarded.toLocaleString()}</div>
+              <div className="text-[10px] text-gray-400">다른 도메인</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => handleAiClassify(false)}
+              disabled={aiClassifying || rejectStats.pending === 0}
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:bg-gray-300 inline-flex items-center gap-2"
+            >
+              {aiClassifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              AI 로 시드 자동 확장
+            </button>
+            {rejectStats.cooldown_remaining_min > 0 && (
+              <span className="text-xs text-gray-600">
+                쿨다운 잔여 {rejectStats.cooldown_remaining_min}분
+                <button
+                  onClick={() => handleAiClassify(true)}
+                  disabled={aiClassifying || rejectStats.pending === 0}
+                  className="ml-2 underline text-purple-600 hover:text-purple-800"
+                >
+                  강제 실행
+                </button>
+              </span>
+            )}
+            <span className="text-[11px] text-gray-500 ml-auto">
+              자동 cron — deadlock 감지 또는 미분류 reject ≥ 1000 시 10분마다 자동 발동
+            </span>
+          </div>
+        </div>
+
         {/* 안내 */}
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-900">
           <div className="flex items-start gap-2">
@@ -1407,6 +1559,7 @@ export default function KeywordPoolPage() {
               <ul className="mt-1 text-xs space-y-0.5 list-disc pl-5">
                 <li>매 5분 — 시드 자동 승격 30개 + 풀에 새 키워드 자동 추가 (도메인 토큰 검증)</li>
                 <li>매 5분 — pending 3,000개를 네이버에 자동 등록 (광고그룹 자동 생성)</li>
+                <li>매 10분 — reject 폭주 감지 시 GPT-4o-mini 가 인접 KW 분류 → 시드 자동 확장 (30분 쿨다운)</li>
                 <li>중복 키워드는 절대 재등록 안 됨 (DB UNIQUE 보장)</li>
                 <li>도메인 무관 키워드는 자동 cleanup — 시드 substring 통과해도 도메인 토큰 없으면 reject</li>
                 <li>10만개 한도 도달 시 수집/등록 자동 정지</li>

@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends, U
 from pydantic import BaseModel, Field
 from routers.auth_deps import get_user_id_with_fallback
 from routers.admin import require_admin
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any, Tuple, Set
 from datetime import datetime, timedelta
 import logging
 import asyncio
@@ -2637,6 +2637,10 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     reject_no_seed_match = 0
     sample_no_domain: List[str] = []
     sample_no_seed: List[str] = []
+    # AI 분류용 reject 누적 — 도메인미스만 (시드미스는 의미 없음 — atom 자체가 없는 KW).
+    # 검색량 ≥ 100 인 것만 저장 (분류 가치 있는 KW). batch 끝에서 일괄 INSERT.
+    reject_for_ai: List[Dict] = []
+    reject_for_ai_seen: Set[str] = set()
     api_errors: List[str] = []
     seeds_processed = 0
     bfs_calls = 0
@@ -2763,6 +2767,10 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                     reject_no_domain += 1
                     if len(sample_no_domain) < 10:
                         sample_no_domain.append(kw)
+                    # AI 분류 후보 누적 — 도메인미스 + 검색량 ≥ 100 + 라운드 내 dedup
+                    if mt >= 100 and kw not in reject_for_ai_seen:
+                        reject_for_ai_seen.add(kw)
+                        reject_for_ai.append({"keyword": kw, "monthly_total": mt})
                 else:
                     reject_no_seed_match += 1
                     if len(sample_no_seed) < 10:
@@ -2805,6 +2813,9 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                             reject_no_domain += 1
                             if len(sample_no_domain) < 10:
                                 sample_no_domain.append(kw2)
+                            if mt2 >= 100 and kw2 not in reject_for_ai_seen:
+                                reject_for_ai_seen.add(kw2)
+                                reject_for_ai.append({"keyword": kw2, "monthly_total": mt2})
                         else:
                             reject_no_seed_match += 1
                             if len(sample_no_seed) < 10:
@@ -2830,6 +2841,16 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         logger.warning(f"[pool/collect] 도메인미스 샘플: {', '.join(sample_no_domain)}")
     if sample_no_seed:
         logger.warning(f"[pool/collect] 시드미스 샘플: {', '.join(sample_no_seed)}")
+    # AI 분류용 reject 누적 batch INSERT — 라운드당 최대 1000개로 cap (DB 비대화 방지)
+    if reject_for_ai:
+        try:
+            saved = pool.add_rejects(customer_id, reject_for_ai[:1000])
+            if saved:
+                logger.warning(
+                    f"[pool/collect] AI 분류 후보 reject {saved}개 누적 (검색량≥100)"
+                )
+        except Exception as e:
+            logger.warning(f"[pool/collect] add_rejects 실패: {e}")
     pending_after = (pool.stats(customer_id).get("by_status") or {}).get("pending", 0)
     err_parts = list(api_errors)
     if circuit_aborted:
@@ -2872,6 +2893,139 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
             )
     except Exception as e:
         logger.warning(f"[pool/collect] deadlock 감지 실패: {e}")
+
+
+async def _run_pool_ai_classify(
+    uid: int,
+    customer_id: int,
+    *,
+    cooldown_minutes: int = 30,
+    candidates_limit: int = 200,
+    min_volume: int = 100,
+    force: bool = False,
+) -> Dict[str, Any]:
+    """AI 분류 1회 — reject 풀 → user_seed 자동 promote.
+
+    흐름:
+      1. 쿨다운 체크 (force=True 면 무시)
+      2. user_seed + 미분류 reject 가져옴
+      3. classify_rejects (GPT-4o-mini) 호출
+      4. approved → source='user_seed' 로 add_candidates → 시드 합류
+      5. reject 풀 status 갱신 + cooldown stamp
+      6. record_run
+
+    트리거 조건은 호출자(스케줄러/라우트) 가 결정. 이 함수는 단순 1회 실행.
+    """
+    from services.ai_seed_suggester import classify_rejects
+    from datetime import datetime, timedelta
+    import time as _time
+
+    pool = get_keyword_pool_db()
+    t0 = _time.monotonic()
+
+    # 쿨다운 — 매번 GPT 호출 비용/품질 안정 위해 광고주별 30분 간격 강제
+    if not force:
+        last = pool.get_classify_cooldown(customer_id)
+        if last:
+            try:
+                last_dt = datetime.fromisoformat(str(last).replace("T", " ").split(".")[0])
+                elapsed = datetime.utcnow() - last_dt
+                wait_min = cooldown_minutes - int(elapsed.total_seconds() / 60)
+                if elapsed < timedelta(minutes=cooldown_minutes):
+                    logger.warning(
+                        f"[pool/ai-classify] user={uid} cid={customer_id} 쿨다운 잔여 {wait_min}분 — skip"
+                    )
+                    return {
+                        "success": False, "reason": "cooldown",
+                        "wait_minutes": max(wait_min, 1),
+                    }
+            except Exception:
+                pass  # 파싱 실패 시 그냥 진행
+
+    user_seeds = pool.list_user_seeds(customer_id)
+    if not user_seeds:
+        logger.warning(f"[pool/ai-classify] user={uid} cid={customer_id} user_seed 없음 — skip")
+        return {"success": False, "reason": "no_user_seed"}
+
+    rejects = pool.list_unclassified_rejects(
+        customer_id, limit=candidates_limit, min_volume=min_volume
+    )
+    if not rejects:
+        logger.warning(
+            f"[pool/ai-classify] user={uid} cid={customer_id} 미분류 reject 없음 (검색량≥{min_volume}) — skip"
+        )
+        return {"success": False, "reason": "no_rejects"}
+
+    logger.warning(
+        f"[pool/ai-classify] user={uid} cid={customer_id} 시작 — "
+        f"seeds={len(user_seeds)} rejects={len(rejects)} (검색량≥{min_volume})"
+    )
+
+    result = await classify_rejects(user_seeds, rejects, seed_sample_size=50)
+    if not result.get("success"):
+        msg = result.get("message", "unknown")
+        logger.warning(f"[pool/ai-classify] user={uid} 분류 실패: {msg}")
+        pool.record_run(
+            uid, customer_id, "ai_classify", "failed",
+            error_message=msg[:300],
+            duration_ms=int((_time.monotonic() - t0) * 1000),
+        )
+        return {"success": False, "reason": "ai_failed", "message": msg}
+
+    approved = result.get("approved") or []
+    discarded = result.get("discarded") or []
+
+    # approved → user_seed 로 합류 (검색량 그대로 보존, 즉시 다음 collect 게이트 atom 합류)
+    promoted = 0
+    if approved:
+        mt_map = {r["keyword"]: r.get("monthly_total", 0) for r in rejects}
+        items = [
+            {
+                "keyword": k,
+                "seed": k,
+                "source": "user_seed",
+                "monthly_total": mt_map.get(k, 0),
+            }
+            for k in approved
+        ]
+        try:
+            promoted = pool.add_candidates(uid, customer_id, items)
+        except Exception as e:
+            logger.warning(f"[pool/ai-classify] promote 실패: {e}")
+
+    try:
+        if approved:
+            pool.mark_rejects_classified(customer_id, approved, "promoted")
+        if discarded:
+            pool.mark_rejects_classified(customer_id, discarded, "discarded")
+    except Exception as e:
+        logger.warning(f"[pool/ai-classify] mark 실패: {e}")
+
+    pool.stamp_classify_cooldown(customer_id)
+
+    duration_ms = int((_time.monotonic() - t0) * 1000)
+    logger.warning(
+        f"[pool/ai-classify] user={uid} cid={customer_id} 완료 — "
+        f"approved={len(approved)} promoted={promoted} discarded={len(discarded)} "
+        f"({duration_ms}ms) rationale={(result.get('rationale') or '')[:100]}"
+    )
+    pool.record_run(
+        uid, customer_id, "ai_classify",
+        "success" if approved else "no_match",
+        added=promoted, skipped=len(discarded),
+        seeds_count=len(user_seeds),
+        error_message=(result.get("rationale") or "")[:300] or None,
+        duration_ms=duration_ms,
+    )
+    return {
+        "success": True,
+        "approved": len(approved),
+        "promoted": promoted,
+        "discarded": len(discarded),
+        "rationale": result.get("rationale", ""),
+        "model": result.get("model"),
+        "duration_ms": duration_ms,
+    }
 
 
 async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch: int = 3000, bid: Optional[int] = None):
@@ -3297,6 +3451,68 @@ async def _run_pool_workers_for_users(user_ids: List[int]):
         except Exception as e:
             logger.error(f"[pool/run] list_ad_accounts_for_user 실패 user={uid}: {e}")
     await _run_pool_workers_for_accounts(pairs)
+
+
+@router.post("/keyword-pool/ai-classify-rejects")
+async def keyword_pool_ai_classify_rejects(
+    user_id: int = Depends(get_user_id_with_fallback),
+    customer_id: Optional[str] = Query(None),
+    force: bool = Query(False, description="True 면 30분 쿨다운 무시"),
+):
+    """AI reject 분류 1회 수동 발동 — reject 풀에서 시드 도메인 일치 KW 만 user_seed 로 promote.
+
+    - 시드 1+ 광고주만 동작 (cold_start 광고주는 skip)
+    - GPT-4o-mini 호출, 후보 200개당 약 5~8초
+    - 30분 쿨다운 (force=True 시 무시)
+    """
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="customer_id 필요")
+    try:
+        cid = int(customer_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="customer_id 정수 필요")
+
+    result = await _run_pool_ai_classify(user_id, cid, force=force)
+    return {
+        "success": result.get("success", False),
+        **result,
+    }
+
+
+@router.get("/keyword-pool/reject-stats")
+async def keyword_pool_reject_stats(
+    user_id: int = Depends(get_user_id_with_fallback),
+    customer_id: Optional[str] = Query(None),
+):
+    """reject 풀 상태 — UI 분류 버튼 옆 카운터 표시용."""
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="customer_id 필요")
+    try:
+        cid = int(customer_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="customer_id 정수 필요")
+
+    pool = get_keyword_pool_db()
+    stats = pool.reject_stats(cid) or {}
+    cooldown_iso = pool.get_classify_cooldown(cid)
+    cooldown_remaining_min = 0
+    if cooldown_iso:
+        try:
+            from datetime import datetime, timedelta
+            last_dt = datetime.fromisoformat(str(cooldown_iso).replace("T", " ").split(".")[0])
+            elapsed = datetime.utcnow() - last_dt
+            if elapsed < timedelta(minutes=30):
+                cooldown_remaining_min = max(1, 30 - int(elapsed.total_seconds() / 60))
+        except Exception:
+            pass
+    return {
+        "success": True,
+        "pending": int(stats.get("pending", 0)),
+        "promoted": int(stats.get("promoted", 0)),
+        "discarded": int(stats.get("discarded", 0)),
+        "cooldown_remaining_min": cooldown_remaining_min,
+        "last_run_at": cooldown_iso,
+    }
 
 
 @router.post("/keyword-pool/admin/run")

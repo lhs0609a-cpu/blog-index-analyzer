@@ -303,3 +303,149 @@ async def amplify_seeds(seeds: list, target_count: int) -> Dict[str, Any]:
     except Exception as e:
         logger.exception("AI amplify seeds failed")
         return {"success": False, "message": f"AI 제안 실패: {str(e)[:200]}"}
+
+
+CLASSIFY_SYSTEM_PROMPT = """당신은 네이버 키워드 도메인 분류기입니다.
+사용자가 운영하는 광고주의 시드 키워드 목록과, 네이버 keywordstool 이 인접 추천한 후보 키워드 목록이 주어집니다.
+후보 중 시드와 **같은 도메인** 인 것만 골라내세요.
+
+## 같은 도메인 = 통과 (approved)
+- 시드의 업종/주제/카테고리에 직접 속함
+- 시드의 동의어/상위어/하위어/시술명/상품명/관련 행동
+- 시드의 타겟 고객 / 지역 / 가격 / 후기 / 비교 등 longtail
+- 예) 시드: "소잠한의원, 한방다이어트, 보약" → 통과: "한방치료, 한약처방, 침치료, 한의원후기, 강남한의원"
+
+## 다른 도메인 = 컷 (discarded)
+- 업종 점프 (한의원 시드 → "치과", "성형외과", "산부인과")
+- 무관 카테고리 (한의원 시드 → "주식", "부동산", "여행")
+- 영업/마케팅 대행 (한의원 시드 → "한의원블로그마케팅", "병원SEO대행")
+- 일반명사 / 너무 광범위 (한의원 시드 → "건강", "효과", "방법")
+
+## 판단 기준
+- **모호하면 컷** (drift 방지가 더 중요)
+- 시드 업종이 niche 면 더 보수적으로
+- 단 시드와 명확히 같은 계열이면 통과 (적게 통과시키는 게 더 나은 실패 모드)
+
+반드시 아래 JSON 형식으로만 응답:
+{
+  "approved": ["통과키워드1", "통과키워드2", ...],
+  "discarded": ["컷키워드1", "컷키워드2", ...],
+  "rationale": "한줄 판단 근거"
+}
+
+approved + discarded 합집합 = 후보 전체. 누락 없이."""
+
+
+async def classify_rejects(
+    user_seeds: list,
+    reject_candidates: list,
+    *,
+    seed_sample_size: int = 50,
+) -> Dict[str, Any]:
+    """reject KW 중 시드 도메인과 같은 것만 분류.
+
+    Args:
+        user_seeds: 광고주의 user_seed 리스트 (전체)
+        reject_candidates: [{"keyword": str, "monthly_total": int}, ...]
+        seed_sample_size: GPT에 보낼 시드 샘플 크기 (토큰 절약)
+
+    Returns:
+        {"success": True, "approved": [...], "discarded": [...], "rationale": "..."}
+    """
+    if not settings.OPENAI_API_KEY:
+        return {"success": False, "message": "OpenAI API 키 미설정"}
+
+    seeds = [s.strip() for s in user_seeds if isinstance(s, str) and s.strip()]
+    cands = [
+        c for c in reject_candidates
+        if isinstance(c, dict) and (c.get("keyword") or "").strip()
+    ]
+    if not seeds:
+        return {"success": False, "message": "user_seed 가 비어있음"}
+    if not cands:
+        return {"success": False, "message": "분류할 reject 후보 없음"}
+
+    # 시드 샘플링 — 입력 토큰 절약. 검색량 정보가 없으니 길이 짧은 시드 우선 (atom 명확)
+    if len(seeds) > seed_sample_size:
+        # 길이 오름차순 → 핵심어 우선 (예: "한의원" > "강남역소잠한의원후기")
+        seeds_sorted = sorted(seeds, key=lambda s: len(s))
+        seed_sample = seeds_sorted[:seed_sample_size]
+    else:
+        seed_sample = list(seeds)
+
+    # 후보 cap — 한 번에 200개 초과면 GPT 응답 타임아웃 위험
+    cands = cands[:200]
+    cand_lines = [f"- {c['keyword']} ({c.get('monthly_total', 0):,})" for c in cands]
+    seed_lines = [f"- {s}" for s in seed_sample]
+
+    user_prompt = (
+        f"## 시드 키워드 (광고주가 운영하는 도메인, {len(seeds)}개 중 {len(seed_sample)}개 샘플)\n"
+        + "\n".join(seed_lines)
+        + f"\n\n## 분류할 후보 키워드 ({len(cands)}개, 괄호=월검색량)\n"
+        + "\n".join(cand_lines)
+        + "\n\n위 후보 중 시드와 같은 도메인인 것만 approved 에, 나머지는 discarded 에. "
+          "approved+discarded 합집합 = 후보 전체."
+    )
+
+    # 동적 max_tokens — 후보 수 × 평균 한글 토큰. 200개 ≈ 3000 토큰 + JSON 오버헤드.
+    dyn_max = max(2000, min(5000, len(cands) * 20))
+    try:
+        async with httpx.AsyncClient(timeout=55.0) as client:
+            resp = await client.post(
+                OPENAI_URL,
+                headers={
+                    "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": OPENAI_MODEL,
+                    "messages": [
+                        {"role": "system", "content": CLASSIFY_SYSTEM_PROMPT},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "max_tokens": dyn_max,
+                    "temperature": 0.2,
+                    "response_format": {"type": "json_object"},
+                },
+            )
+            if resp.status_code != 200:
+                logger.error(f"OpenAI classify error: {resp.status_code} - {resp.text}")
+                return {"success": False, "message": f"AI 서비스 오류 ({resp.status_code})"}
+
+            result = resp.json()
+            content = result["choices"][0]["message"]["content"].strip()
+            try:
+                parsed = json.loads(content)
+            except json.JSONDecodeError:
+                return {"success": False, "message": "AI 응답 파싱 실패"}
+
+            cand_set = {c["keyword"] for c in cands}
+            raw_approved = parsed.get("approved") or []
+            raw_discarded = parsed.get("discarded") or []
+            # GPT 가 후보 외 키워드 hallucination 한 경우 컷
+            approved = [
+                k.strip() for k in raw_approved
+                if isinstance(k, str) and k.strip() in cand_set
+            ]
+            discarded = [
+                k.strip() for k in raw_discarded
+                if isinstance(k, str) and k.strip() in cand_set
+            ]
+            # 분류 누락 KW (GPT가 둘 다 안 넣음) → 안전하게 discarded 로 (drift 방지)
+            classified = set(approved) | set(discarded)
+            missing = [c["keyword"] for c in cands if c["keyword"] not in classified]
+            if missing:
+                discarded.extend(missing)
+
+            return {
+                "success": True,
+                "approved": approved,
+                "discarded": discarded,
+                "rationale": parsed.get("rationale", ""),
+                "candidates_total": len(cands),
+                "seeds_sample": len(seed_sample),
+                "model": OPENAI_MODEL,
+            }
+    except Exception as e:
+        logger.exception("AI classify rejects failed")
+        return {"success": False, "message": f"AI 분류 실패: {str(e)[:200]}"}

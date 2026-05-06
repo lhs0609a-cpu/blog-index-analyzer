@@ -114,6 +114,32 @@ class KeywordPoolDB:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            # collect 단계에서 도메인미스로 reject 된 KW 누적 — AI 분류로 user_seed 후보 발굴.
+            # naver keywordstool 이 시드 BFS 로 추천 = 검색량 검증된 인접 도메인 KW.
+            # classified_status: pending(미분류) / promoted(시드로 승격) / discarded(다른 도메인)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS naverad_keyword_pool_rejects (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    account_customer_id INTEGER NOT NULL,
+                    keyword TEXT NOT NULL,
+                    monthly_total INTEGER DEFAULT 0,
+                    classified_status TEXT DEFAULT 'pending',
+                    rejected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    classified_at TIMESTAMP,
+                    UNIQUE(account_customer_id, keyword)
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_pool_rejects_status
+                ON naverad_keyword_pool_rejects(account_customer_id, classified_status, monthly_total DESC)
+            """)
+            # 광고주별 AI 분류 cron 쿨다운 추적
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS naverad_ai_classify_cooldown (
+                    account_customer_id INTEGER PRIMARY KEY,
+                    last_run_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
 
     def record_run(
         self,
@@ -684,6 +710,128 @@ class KeywordPoolDB:
                     )
                 affected += cur.rowcount
         return affected
+
+    def add_rejects(
+        self,
+        account_customer_id: int,
+        items: List[Dict],
+    ) -> int:
+        """collect 도메인미스 reject 누적 — items: [{keyword, monthly_total}, ...].
+        UNIQUE 충돌 시 monthly_total 만 갱신 (최신 검색량 반영).
+        이미 풀에 user_seed/registered 인 KW 는 저장 스킵 (의미 없음)."""
+        if not items:
+            return 0
+        with self._conn() as conn:
+            cur = conn.cursor()
+            n = 0
+            for it in items:
+                kw = (it.get("keyword") or "").strip()
+                if not kw:
+                    continue
+                mt = int(it.get("monthly_total") or 0)
+                # 이미 풀에 있는 KW 는 reject 풀에 또 넣지 않음 (status 무관 — 한번 풀 진입했으면 분류 대상 아님)
+                cur.execute(
+                    """SELECT 1 FROM naverad_keyword_pool
+                       WHERE account_customer_id = ? AND keyword = ? LIMIT 1""",
+                    (account_customer_id, kw),
+                )
+                if cur.fetchone():
+                    continue
+                cur.execute(
+                    """INSERT INTO naverad_keyword_pool_rejects
+                         (account_customer_id, keyword, monthly_total)
+                       VALUES (?, ?, ?)
+                       ON CONFLICT(account_customer_id, keyword) DO UPDATE SET
+                         monthly_total = MAX(monthly_total, excluded.monthly_total),
+                         rejected_at = CURRENT_TIMESTAMP""",
+                    (account_customer_id, kw, mt),
+                )
+                if cur.rowcount > 0:
+                    n += 1
+            return n
+
+    def list_unclassified_rejects(
+        self,
+        account_customer_id: int,
+        limit: int = 200,
+        min_volume: int = 1,
+    ) -> List[Dict]:
+        """미분류 reject KW 검색량 상위 N개 — AI 분류 입력용."""
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT keyword, monthly_total FROM naverad_keyword_pool_rejects
+                   WHERE account_customer_id = ?
+                     AND classified_status = 'pending'
+                     AND monthly_total >= ?
+                   ORDER BY monthly_total DESC
+                   LIMIT ?""",
+                (account_customer_id, min_volume, limit),
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+    def mark_rejects_classified(
+        self,
+        account_customer_id: int,
+        keywords: List[str],
+        status: str,
+    ) -> int:
+        """분류 결과 반영 — status: 'promoted' / 'discarded'."""
+        if not keywords or status not in ("promoted", "discarded"):
+            return 0
+        with self._conn() as conn:
+            cur = conn.cursor()
+            n = 0
+            CHUNK = 500
+            for i in range(0, len(keywords), CHUNK):
+                chunk = keywords[i:i + CHUNK]
+                placeholders = ",".join("?" * len(chunk))
+                cur.execute(
+                    f"""UPDATE naverad_keyword_pool_rejects
+                        SET classified_status = ?, classified_at = CURRENT_TIMESTAMP
+                        WHERE account_customer_id = ?
+                          AND keyword IN ({placeholders})""",
+                    [status, account_customer_id, *chunk],
+                )
+                n += cur.rowcount
+            return n
+
+    def reject_stats(self, account_customer_id: int) -> Dict:
+        """reject 풀 상태 — UI 표시용."""
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT classified_status, COUNT(*) AS n
+                   FROM naverad_keyword_pool_rejects
+                   WHERE account_customer_id = ?
+                   GROUP BY classified_status""",
+                (account_customer_id,),
+            )
+            return {r["classified_status"]: r["n"] for r in cur.fetchall()}
+
+    def get_classify_cooldown(self, account_customer_id: int) -> Optional[str]:
+        """마지막 AI 분류 실행 시각 (ISO timestamp 문자열) — 없으면 None."""
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT last_run_at FROM naverad_ai_classify_cooldown
+                   WHERE account_customer_id = ?""",
+                (account_customer_id,),
+            )
+            r = cur.fetchone()
+            return r["last_run_at"] if r else None
+
+    def stamp_classify_cooldown(self, account_customer_id: int) -> None:
+        """AI 분류 실행 시각 갱신."""
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """INSERT INTO naverad_ai_classify_cooldown (account_customer_id, last_run_at)
+                   VALUES (?, CURRENT_TIMESTAMP)
+                   ON CONFLICT(account_customer_id) DO UPDATE SET
+                     last_run_at = CURRENT_TIMESTAMP""",
+                (account_customer_id,),
+            )
 
     def stats(self, account_customer_id: int) -> Dict:
         with self._conn() as conn:
