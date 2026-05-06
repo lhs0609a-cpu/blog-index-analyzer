@@ -3560,6 +3560,118 @@ async def keyword_pool_bulk_delete_clicked(
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
 
 
+# ============ 네이버 ↔ DB 한도 sync ============
+# 사용자가 네이버 광고 콘솔에서 직접 캠페인/광고그룹 삭제 → 우리 DB row 는 stale.
+# 한도 사용량 표시가 잘못됨 (네이버 active != DB count). 이 endpoint 가 cross-check
+# 후 사라진 캠페인의 DB row 삭제.
+
+@router.post("/keyword-pool/admin/reconcile-naver")
+async def keyword_pool_reconcile_naver(
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """네이버 광고 콘솔에서 직접 삭제한 캠페인 — 우리 DB 정리. 한도 사용량 정확화."""
+    from services.naver_ad_service import NaverAdApiClient
+    import sqlite3 as _sqlite3
+    from asyncio import sleep as _sleep
+
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    # 1) 네이버 active 캠페인 list
+    try:
+        campaigns = await client.get_campaigns()
+        live_campaign_ids = set(
+            c.get("nccCampaignId") for c in (campaigns or [])
+            if c.get("nccCampaignId")
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"네이버 캠페인 조회 실패: {type(e).__name__}: {str(e)[:200]}",
+        )
+
+    reg = get_registered_keywords_db()
+    # 2) 우리 DB 의 distinct campaign_id
+    with _sqlite3.connect(reg.db_path) as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT campaign_id FROM registered_keywords "
+            "WHERE account_customer_id=? AND campaign_id IS NOT NULL",
+            (cid,),
+        ).fetchall()
+    db_campaign_ids = set(r[0] for r in rows if r[0])
+
+    # 3) DB 에 있지만 네이버에 없는 캠페인 → 그 캠페인의 모든 row 삭제
+    deleted_campaigns = db_campaign_ids - live_campaign_ids
+    n_rows_deleted = 0
+    with _sqlite3.connect(reg.db_path) as conn:
+        for cid_to_delete in deleted_campaigns:
+            cur = conn.execute(
+                "DELETE FROM registered_keywords WHERE account_customer_id=? AND campaign_id=?",
+                (cid, cid_to_delete),
+            )
+            n_rows_deleted += cur.rowcount or 0
+        conn.commit()
+
+    # 4) 광고그룹 단위 cross-check — campaign_id NULL 또는 광고그룹만 삭제된 케이스
+    n_orphan_groups = 0
+    try:
+        live_ad_group_ids = set()
+        for live_cid in list(live_campaign_ids)[:100]:  # cap 100 — 더 큰 광고주는 별도 처리
+            try:
+                if hasattr(client, "get_ad_groups"):
+                    ags = await client.get_ad_groups(campaign_id=live_cid)
+                    for ag in (ags or []):
+                        agid = ag.get("nccAdgroupId")
+                        if agid:
+                            live_ad_group_ids.add(agid)
+            except Exception:
+                pass
+            await _sleep(0.05)
+        if live_ad_group_ids:
+            with _sqlite3.connect(reg.db_path) as conn:
+                rows2 = conn.execute(
+                    "SELECT DISTINCT ad_group_id FROM registered_keywords "
+                    "WHERE account_customer_id=? AND ad_group_id IS NOT NULL",
+                    (cid,),
+                ).fetchall()
+                db_ad_group_ids = set(r[0] for r in rows2 if r[0])
+                orphan_ag = db_ad_group_ids - live_ad_group_ids
+                for agid in orphan_ag:
+                    cur = conn.execute(
+                        "DELETE FROM registered_keywords WHERE account_customer_id=? AND ad_group_id=?",
+                        (cid, agid),
+                    )
+                    n_orphan_groups += cur.rowcount or 0
+                conn.commit()
+    except Exception as e:
+        logger.warning(f"[reconcile] 광고그룹 cross-check 실패: {e}")
+
+    # 5) 한도 재계산
+    new_active = int((reg.stats(cid) or {}).get("active") or 0)
+    logger.warning(
+        f"[reconcile] uid={user_id} cid={cid} "
+        f"live_campaigns={len(live_campaign_ids)} db_campaigns={len(db_campaign_ids)} "
+        f"deleted_campaigns={len(deleted_campaigns)} kw_rows_deleted={n_rows_deleted} "
+        f"orphan_ag_kws_deleted={n_orphan_groups} new_active={new_active}"
+    )
+    return {
+        "success": True,
+        "live_campaigns": len(live_campaign_ids),
+        "db_campaigns": len(db_campaign_ids),
+        "deleted_campaigns": len(deleted_campaigns),
+        "deleted_kw_rows": n_rows_deleted + n_orphan_groups,
+        "new_active": new_active,
+    }
+
+
 @router.delete("/keyword-pool/keywords/{keyword}")
 async def keyword_pool_delete_keyword(
     keyword: str,

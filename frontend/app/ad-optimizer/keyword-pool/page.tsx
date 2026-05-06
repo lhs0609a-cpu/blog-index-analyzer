@@ -121,6 +121,9 @@ export default function KeywordPoolPage() {
   const [bidInput, setBidInput] = useState<string>('70')
   const [bidApplying, setBidApplying] = useState(false)
 
+  // 네이버 ↔ DB 한도 sync state — 사용자가 콘솔에서 직접 캠페인 삭제 시 stale row 정리
+  const [reconciling, setReconciling] = useState(false)
+
   // 클릭 키워드 검수 state — useEffect dependency보다 앞에 정의 (TDZ 회피)
   const [clickedDays, setClickedDays] = useState(7)
   const [clickedItems, setClickedItems] = useState<ClickedKeyword[]>([])
@@ -216,6 +219,41 @@ export default function KeywordPoolPage() {
       toast.error(e?.message || '입찰가 변경 실패')
     } finally {
       setBidApplying(false)
+    }
+  }
+
+  const handleReconcileNaver = async () => {
+    if (reconciling) return
+    if (!confirm(
+      '네이버 광고 콘솔과 우리 DB 를 sync 합니다.\n\n' +
+      '- 네이버에서 직접 삭제한 캠페인 → 우리 DB row 정리\n' +
+      '- 한도 사용량 (active KW count) 재계산\n\n' +
+      '캠페인 100개까지 광고그룹 cross-check 포함, 약 30~60초 소요.'
+    )) return
+    setReconciling(true)
+    try {
+      const res = await adPost<{
+        success: boolean
+        live_campaigns: number
+        db_campaigns: number
+        deleted_campaigns: number
+        deleted_kw_rows: number
+        new_active: number
+      }>(
+        `/api/naver-ad/keyword-pool/admin/reconcile-naver${cidQs()}`,
+        {},
+        { timeout: 120_000, retries: 0 }
+      )
+      toast.success(
+        `sync 완료 — 네이버 ${res.live_campaigns} 캠페인 / DB ${res.db_campaigns} → ` +
+        `삭제된 캠페인 ${res.deleted_campaigns}개, KW row ${res.deleted_kw_rows.toLocaleString()}개 정리. ` +
+        `한도 사용량: ${res.new_active.toLocaleString()}`
+      )
+      load()
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || e?.message || '네이버 sync 실패')
+    } finally {
+      setReconciling(false)
     }
   }
 
@@ -527,6 +565,15 @@ export default function KeywordPoolPage() {
           <div className="flex items-center gap-2 mb-3">
             <Database className="w-5 h-5 text-[#0064FF]" />
             <h2 className="font-bold text-gray-900">계정 한도 사용량</h2>
+            <button
+              onClick={handleReconcileNaver}
+              disabled={reconciling}
+              className="ml-auto inline-flex items-center gap-1 px-3 py-1 text-xs border border-blue-300 text-blue-700 rounded hover:bg-blue-50 disabled:bg-gray-100 disabled:text-gray-400"
+              title="네이버 광고 콘솔에서 직접 삭제한 캠페인을 우리 DB 와 sync — 한도 사용량 정확화"
+            >
+              {reconciling ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              네이버 sync (한도 재계산)
+            </button>
           </div>
           <div className="flex items-baseline justify-between mb-2">
             <span className="text-3xl font-bold text-gray-900">{used.toLocaleString()}</span>
