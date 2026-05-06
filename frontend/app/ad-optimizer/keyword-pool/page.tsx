@@ -257,9 +257,13 @@ export default function KeywordPoolPage() {
       '네이버 광고 콘솔과 우리 DB 를 sync 합니다.\n\n' +
       '- 네이버에서 직접 삭제한 캠페인 → 우리 DB row 정리\n' +
       '- 한도 사용량 (active KW count) 재계산\n\n' +
-      '캠페인 100개까지 광고그룹 cross-check 포함, 약 30~60초 소요.'
+      '광고그룹 cross-check 는 30초 cap (병렬). 전체 약 40~90초 소요.'
     )) return
     setReconciling(true)
+    const startedAt = Date.now()
+    const progressTimer = setTimeout(() => {
+      toast('처리 중... 광고그룹 cross-check 진행 (최대 30s 후 결과)', { duration: 8000 })
+    }, 10000)
     try {
       const res = await adPost<{
         success: boolean
@@ -271,8 +275,10 @@ export default function KeywordPoolPage() {
       }>(
         `/api/naver-ad/keyword-pool/admin/reconcile-naver${cidQs()}`,
         {},
-        { timeout: 120_000, retries: 0 }
+        { timeout: 180_000, retries: 0 }  // 90초+여유 — fly.io 콜드 스타트 가드
       )
+      clearTimeout(progressTimer)
+      console.log(`[reconcile-naver] ${Date.now() - startedAt}ms result`, res)
       toast.success(
         `sync 완료 — 네이버 ${res.live_campaigns} 캠페인 / DB ${res.db_campaigns} → ` +
         `삭제된 캠페인 ${res.deleted_campaigns}개, KW row ${res.deleted_kw_rows.toLocaleString()}개 정리. ` +
@@ -280,7 +286,9 @@ export default function KeywordPoolPage() {
       )
       load()
     } catch (e: any) {
-      toast.error(e?.response?.data?.detail || e?.message || '네이버 sync 실패')
+      clearTimeout(progressTimer)
+      console.error(`[reconcile-naver] ${Date.now() - startedAt}ms 실패`, e)
+      toast.error(e?.response?.data?.detail || e?.message || '네이버 sync 실패 — fly logs 확인 필요')
     } finally {
       setReconciling(false)
     }

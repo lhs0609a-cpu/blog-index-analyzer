@@ -4325,21 +4325,34 @@ async def keyword_pool_reconcile_naver(
             n_rows_deleted += cur.rowcount or 0
         conn.commit()
 
-    # 4) 광고그룹 단위 cross-check — campaign_id NULL 또는 광고그룹만 삭제된 케이스
+    # 4) 광고그룹 단위 cross-check — 병렬 + sem=8 + 타임아웃 보호.
+    # 이전: 100 캠페인 × sequential API 호출 = 60초+ 로 frontend timeout. 병렬화로
+    # 단축 (8개 동시 → ~10~15초). 추가로 전체 작업 30초 cap — 초과 시 캠페인 단위 sync 만으로 끝.
     n_orphan_groups = 0
     try:
-        live_ad_group_ids = set()
-        for live_cid in list(live_campaign_ids)[:100]:  # cap 100
-            try:
-                if hasattr(client, "get_ad_groups"):
-                    ags = await client.get_ad_groups(campaign_id=live_cid)
-                    for ag in (ags or []):
-                        agid = ag.get("nccAdgroupId")
-                        if agid:
-                            live_ad_group_ids.add(agid)
-            except Exception:
-                pass
-            await _sleep(0.05)
+        live_ad_group_ids: set = set()
+        sem_ag = asyncio.Semaphore(8)
+        async def _fetch_ag(live_cid: str) -> List[str]:
+            async with sem_ag:
+                try:
+                    if hasattr(client, "get_ad_groups"):
+                        ags = await client.get_ad_groups(campaign_id=live_cid)
+                        return [ag.get("nccAdgroupId") for ag in (ags or []) if ag.get("nccAdgroupId")]
+                except Exception:
+                    return []
+                return []
+        # 30초 안에 끝나는 만큼만 처리 — 더 긴 광고주는 캠페인 sync 로 이미 대부분 정리됨
+        try:
+            results = await asyncio.wait_for(
+                asyncio.gather(*[_fetch_ag(c) for c in list(live_campaign_ids)]),
+                timeout=30.0,
+            )
+            for batch in results:
+                live_ad_group_ids.update(batch)
+        except asyncio.TimeoutError:
+            logger.warning(f"[reconcile] 광고그룹 cross-check 30s 초과 — 캠페인 sync 만 적용")
+            live_ad_group_ids = set()  # 부분 결과로 잘못 삭제하지 않도록 비움
+
         if live_ad_group_ids:
             with _sqlite3.connect(reg.db_path) as conn:
                 rows2 = conn.execute(
