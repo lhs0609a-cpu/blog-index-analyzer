@@ -2184,9 +2184,33 @@ async def get_comprehensive_dashboard(user_id: int = Depends(get_user_id_with_fa
 # ============ Phase 3: 키워드 풀 자동 워커 endpoints ============
 import os as _os
 import hmac as _hmac
+import time as _ts_mod
 from fastapi import Header
 from database.keyword_pool_db import get_keyword_pool_db
 from database.registered_keywords_db import get_registered_keywords_db
+
+
+# Niche 시드 timeout backoff cache — (cid, seed) → epoch 마지막 timeout.
+# 매 시드 ConnectTimeout 발생 시 등록. 다음 collect 라운드에서 _NICHE_BACKOFF_S
+# 이내인 시드는 skip. niche 의료/희귀 시드 5개가 cascade timeout → circuit OPEN →
+# 전체 collect cycle abort 패턴 차단. 워커 재시작 시 reset (in-memory).
+_seed_timeout_cache: Dict[Tuple[int, str], float] = {}
+_NICHE_BACKOFF_S = 1800  # 30분 — 한 사이클 timeout 난 시드는 30분간 라운드 제외
+
+
+def _is_seed_in_backoff(cid: int, seed: str) -> bool:
+    last = _seed_timeout_cache.get((cid, seed))
+    if not last:
+        return False
+    if _ts_mod.time() - last < _NICHE_BACKOFF_S:
+        return True
+    # backoff 만료 — 캐시에서 제거 후 다음 라운드에 재시도
+    _seed_timeout_cache.pop((cid, seed), None)
+    return False
+
+
+def _mark_seed_timeout(cid: int, seed: str) -> None:
+    _seed_timeout_cache[(cid, seed)] = _ts_mod.time()
 
 
 # 도메인 의미 토큰 — 사업 영역(금융/대출/의료/소상공인/정부지원) 안전 가드.
@@ -2694,12 +2718,18 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     # 시드 셔플 — 매 라운드 다른 60개 처리 (200 시드 다양성 확보).
     seed_pool = list(seeds)
     random.shuffle(seed_pool)
+    # niche timeout backoff — 최근 30분 내 ConnectTimeout 난 시드는 라운드 제외.
+    # 의료 희귀병 시드(피부 전이암/혈관각화증 등) cascade timeout → circuit OPEN →
+    # 전체 collect 정지 패턴 차단. 같은 시드를 매 5분마다 재시도하지 않고 30분 backoff.
+    seeds_in_backoff = [s for s in seed_pool if _is_seed_in_backoff(customer_id, s)]
+    seeds_eligible = [s for s in seed_pool if not _is_seed_in_backoff(customer_id, s)]
     # 슬롯: cold_start 면 user(45) + bridge(15) = 60, 아니면 user 60.
     user_quota = 45 if cold_start else 60
-    seed_round = seed_pool[:user_quota] + bridge_round
+    seed_round = seeds_eligible[:user_quota] + bridge_round
     logger.warning(
-        f"[pool/collect] user={uid} 시드 라운드 — user/promoted={min(user_quota, len(seed_pool))} "
-        f"+ POOL bridge={len(bridge_round)} (총 {len(seed_round)}) cold_start={cold_start}"
+        f"[pool/collect] user={uid} 시드 라운드 — user/promoted={min(user_quota, len(seeds_eligible))} "
+        f"+ POOL bridge={len(bridge_round)} (총 {len(seed_round)}) cold_start={cold_start} "
+        f"backoff_skip={len(seeds_in_backoff)}"
     )
     # circuit breaker 인스턴스 — 시드 라운드 중 OPEN 감지 시 남은 시드 fail-fast 차단.
     # naver_ad_service 모듈 레벨 singleton 공유.
@@ -2740,6 +2770,10 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
             err_msg_full = str(e)[:200]
             msg = f"{seed_raw}: {err_name}: {err_msg_full[:80]}"
             logger.warning(f"[pool/collect] API 실패 {msg}")
+            # ConnectTimeout / TimeoutException → 30분 backoff 캐시 등록.
+            # 같은 niche 시드가 매 cron tick 마다 timeout 누적하는 cascade 차단.
+            if "Timeout" in err_name or "ConnectTimeout" in err_msg_full:
+                _mark_seed_timeout(customer_id, seed_raw)
             # 11001 (잘못된 파라미터) 패턴 감지 시 추가 진단 정보
             if "11001" in err_msg_full or "400" in err_msg_full:
                 logger.warning(
