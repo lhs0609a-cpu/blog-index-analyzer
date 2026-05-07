@@ -2428,22 +2428,31 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         return
     target = min(max_new, headroom)
 
-    # 동적 도메인 토큰셋 — 사용자 의도: "내가 시드로 넣은거에서만 확장, 피부랑 대출이 같냐".
-    # user_seed 1개 이상 광고주: POOL hardcoded baseline 배제 + auto_promoted_seed 도 게이트 atom 에서 배제
-    # (cascade drift 로 "대출이자" 같은 무관 KW 가 promoted 시드로 올라가면 그 atom 이
-    # 다음 라운드 게이트를 자력 통과시키는 누수 차단. user_seed 만이 진실의 원천).
-    # auto_promoted_seed 는 keywordstool 호출 시드 라운드에는 여전히 사용됨 — 발굴 다양성은 유지.
-    # 단 발굴된 KW 는 user_seed atom 매치 안 되면 reject.
+    # 동적 도메인 토큰셋 — 우선순위: saved relevance_keywords > user_seed > POOL baseline.
+    # 2026-05-08 추가: relevance_keywords 가 저장돼 있으면 그것만으로 도메인 게이트 빌드.
+    # Why: user_seed 풀이 한약재 (두릅/황기/천문동/용골/행인/지모/백합) 등으로 오염된 경우
+    #      그 atom 이 도메인 토큰에 합류해 식물·원예 KW (나무수국/꽃산딸나무/고사리종자)
+    #      가 cross-domain 통과. relevance_keywords 가 사용자 진짜 의도라면 그것만 사용해
+    #      collect 게이트를 좁게 유지 → 풀에 잡음 시드 있어도 drift 차단.
+    from database.naver_ad_db import get_ad_account_relevance_keywords as _get_rel
+    saved_relevance = _get_rel(uid, str(customer_id))
     initial_seeds = pool.list_seed_whitelist(customer_id)
     initial_user_seeds_only = pool.list_user_seeds(customer_id)
     cold_start = not initial_user_seeds_only
-    if cold_start:
-        # 시드 0 광고주 — POOL baseline 으로 collect 진입 자체는 가능하게 (사용자가 시드 추가할 때까지)
+
+    if saved_relevance and len(saved_relevance) >= 1:
+        # 사용자가 명시한 relevance_keywords 만으로 도메인 게이트 — 풀 오염 무시.
+        domain_token_set = _derive_seed_tokens(saved_relevance) | _build_seed_atoms(saved_relevance)
+        domain_basis = f"saved_relevance({len(saved_relevance)})"
+    elif cold_start:
+        # 시드 0 광고주 — POOL baseline (사용자 시드 추가까지 진입 가능).
         domain_token_set = _build_domain_token_set(initial_seeds)
+        domain_basis = f"cold_start_pool_baseline({len(POOL_DOMAIN_TOKENS)})"
     else:
-        # 일반 — user_seed atom 만. POOL hardcoded + auto_promoted_seed 둘 다 게이트 atom 에서 배제.
+        # 일반 — user_seed atom. POOL hardcoded + auto_promoted_seed 게이트 atom 에서 배제.
         domain_token_set = _derive_seed_tokens(initial_user_seeds_only) | _build_seed_atoms(initial_user_seeds_only)
-    derived_count = len(domain_token_set) - (len(POOL_DOMAIN_TOKENS) if cold_start else 0)
+        domain_basis = f"user_seed_pool({len(initial_user_seeds_only)})"
+    derived_count = len(domain_token_set) - (len(POOL_DOMAIN_TOKENS) if cold_start and not saved_relevance else 0)
 
     # 등록 KW atom — cleanup/collect 게이트와 동일 기준.
     # ANCHOR: user_seed atom (length≥3) 을 포함하는 등록 KW 만 학습.
@@ -2483,8 +2492,7 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
 
     logger.warning(
         f"[pool/collect] user={uid} 도메인 토큰 {len(domain_token_set)}개 "
-        f"({'POOL baseline + ' if cold_start else 'POOL 배제 (시드 derive 만) '}"
-        f"시드 도출 {max(derived_count, 0)}) "
+        f"basis={domain_basis} "
         f"+ 등록 atom {len(registered_atoms)}개 "
         f"({len(registered_for_atoms)}/{len(registered_raw)} KW anchor 통과, "
         f"anchor {len(anchor_set)}개) cold_start={cold_start}"
@@ -2539,9 +2547,11 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                 f"[pool/collect] user={uid} 시드 자동 승격 {len(promoted)}개: "
                 + ", ".join(f"{p['keyword']}({p['monthly_total']})" for p in promoted)
             )
-            # 승격 후 토큰셋 재계산 — 새 시드의 토큰 반영. cold_start 정책 동일 유지
-            # (cold_start 면 POOL baseline 폴백, 아니면 user_seed 만으로 도출 — POOL 누수 차단).
-            if cold_start:
+            # 승격 후 토큰셋 재계산 — saved_relevance 우선 (사용자 의도 고정).
+            if saved_relevance and len(saved_relevance) >= 1:
+                # saved_relevance 사용 중이면 promote 가 토큰셋을 흔들면 안 됨 — 그대로 유지.
+                pass
+            elif cold_start:
                 domain_token_set = _build_domain_token_set(
                     pool.list_seed_whitelist(customer_id)
                 )
