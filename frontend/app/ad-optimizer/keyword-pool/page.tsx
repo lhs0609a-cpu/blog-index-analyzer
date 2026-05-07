@@ -734,6 +734,44 @@ export default function KeywordPoolPage() {
     }
   }
 
+  // 비도메인 시드 일괄 정리 — 과거 POOL bridge 누수 잔재 제거
+  const [cleanupDomainInput, setCleanupDomainInput] = useState('')
+  const [cleanupRunning, setCleanupRunning] = useState(false)
+  const [cleanupPreview, setCleanupPreview] = useState<any>(null)
+
+  const runCleanupNonDomain = async (dryRun: boolean) => {
+    const domain_keywords = cleanupDomainInput
+      .split(/[\n,]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+    setCleanupRunning(true)
+    try {
+      const res = await adPost<any>(
+        `/api/naver-ad/keyword-pool/seeds/cleanup-non-domain${cidQs()}`,
+        {
+          domain_keywords: domain_keywords.length ? domain_keywords : null,
+          dry_run: dryRun,
+          max_delete: 5000,
+        },
+        { timeout: 60_000 }
+      )
+      if (dryRun) {
+        setCleanupPreview(res)
+        toast.success(
+          `미리보기 — 비도메인 시드 ${res.non_domain_seeds}개 / KW ${res.total_targets}개`
+        )
+      } else {
+        toast.success(res.message || '백그라운드 삭제 시작')
+        setCleanupPreview(null)
+        load()
+      }
+    } catch (e: any) {
+      toast.error(e?.detail || e?.message || '실패')
+    } finally {
+      setCleanupRunning(false)
+    }
+  }
+
   const cap = stats?.account_cap ?? 100_000
   const used = stats?.registered?.active ?? 0
   const pending = stats?.pool?.by_status?.pending ?? 0
@@ -1603,6 +1641,92 @@ export default function KeywordPoolPage() {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* 비도메인 시드 일괄 정리 — 과거 POOL bridge 누수 잔재 */}
+        <div className="bg-gradient-to-br from-rose-50 to-orange-50 rounded-2xl border border-rose-200 p-6 mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Trash2 className="w-5 h-5 text-rose-600" />
+            <h2 className="font-bold text-gray-900">비도메인 시드 일괄 정리</h2>
+          </div>
+          <p className="text-sm text-gray-700 mb-3">
+            도메인 키워드 atom 안 맞는 시드 lineage 의 등록 KW 를 모두 네이버에서 DELETE.
+            (예: 의료 광고주에 박힌 "렌탈/요가/피자/펜션" 잔재 제거.)
+            <br />
+            <strong>먼저 미리보기로 확인 → 확정 삭제.</strong> 비워두면 저장된 relevance_keywords 또는 user_seed 폴백.
+          </p>
+          <textarea
+            value={cleanupDomainInput}
+            onChange={(e) => setCleanupDomainInput(e.target.value)}
+            rows={3}
+            placeholder={'아토피 피부염, 습진, 건선, 두드러기, 피부염, 알레르기'}
+            className="w-full border border-rose-300 rounded-lg p-3 text-sm font-mono focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+            disabled={cleanupRunning}
+          />
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={() => runCleanupNonDomain(true)}
+              disabled={cleanupRunning}
+              className="px-4 py-2 bg-white border border-rose-400 text-rose-700 rounded-lg font-medium hover:bg-rose-50 disabled:bg-gray-100 inline-flex items-center gap-2"
+            >
+              {cleanupRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              미리보기 (dry-run)
+            </button>
+            {cleanupPreview && cleanupPreview.total_targets > 0 && (
+              <button
+                onClick={() => {
+                  if (confirm(`정말로 ${cleanupPreview.will_delete_now}개 KW 를 네이버에서 삭제할까요?\n(이번 실행 상한: 5000개. 더 많으면 다시 실행)`)) {
+                    runCleanupNonDomain(false)
+                  }
+                }}
+                disabled={cleanupRunning}
+                className="px-4 py-2 bg-rose-600 text-white rounded-lg font-medium hover:bg-rose-700 disabled:bg-gray-300 inline-flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                {cleanupPreview.will_delete_now}개 KW 삭제 확정
+              </button>
+            )}
+          </div>
+
+          {cleanupPreview && (
+            <div className="mt-4 bg-white rounded-lg border border-rose-200 p-3 text-xs">
+              <div className="grid grid-cols-3 gap-2 mb-3 pb-2 border-b border-gray-100">
+                <div>
+                  <div className="text-[10px] text-gray-500">도메인 시드 (유지)</div>
+                  <div className="text-lg font-bold text-green-700">{cleanupPreview.domain_seeds.toLocaleString()}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-gray-500">비도메인 시드 (삭제 대상)</div>
+                  <div className="text-lg font-bold text-rose-700">{cleanupPreview.non_domain_seeds.toLocaleString()}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-gray-500">총 삭제 KW</div>
+                  <div className="text-lg font-bold text-rose-700">{cleanupPreview.total_targets.toLocaleString()}</div>
+                </div>
+              </div>
+              <div className="text-gray-500 mb-2">
+                기준: <span className="font-mono">{cleanupPreview.basis_source}</span>
+                {' '}({cleanupPreview.domain_keywords_count}개) ·
+                예상 소요 ~{cleanupPreview.estimated_minutes}분
+              </div>
+              <div className="font-semibold text-gray-900 mb-1">비도메인 시드 Top 30 (KW 수 순):</div>
+              <div className="max-h-48 overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="text-gray-500 sticky top-0 bg-white">
+                    <tr><th className="text-left py-1">시드</th><th className="text-right py-1">등록 KW</th></tr>
+                  </thead>
+                  <tbody>
+                    {(cleanupPreview.non_domain_top || []).map((s: any, i: number) => (
+                      <tr key={i} className="border-t border-gray-100">
+                        <td className="py-1 font-mono">{s.seed || '(빈 시드)'}</td>
+                        <td className="py-1 text-right text-rose-700 font-semibold">{s.registered_count.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>

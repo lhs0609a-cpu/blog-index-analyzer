@@ -4509,6 +4509,216 @@ async def keyword_pool_registered_cleanup_by_score(
     }
 
 
+# ============ 비도메인 시드 일괄 정리 ============
+# 과거 POOL_DOMAIN_TOKENS bridge 누수로 의료 광고주(소잠한의원)에 "렌탈/임대/요가/피자
+# /펜션/점포/파우치" 같은 무관 시드들이 박혀있음. cold_start-only fix 이후 신규는 안
+# 들어오지만, 이미 등록된 KW (시드별 1500~2200개) 가 남아있어 광고비/도메인 평판 손실.
+# 시드 단위로 그 lineage 의 모든 KW 일괄 DELETE.
+
+class CleanupNonDomainSeedsRequest(BaseModel):
+    domain_keywords: Optional[List[str]] = Field(
+        None,
+        description="도메인 정의 — 이 키워드와 atom 매칭 안 되는 시드는 모두 비도메인. "
+                    "미입력 시 광고주 저장 relevance_keywords → user_seed 폴백.",
+    )
+    dry_run: bool = Field(True, description="True 면 삭제 대상 미리보기만, False 면 실제 삭제 시작.")
+    max_delete: int = Field(5000, ge=0, le=20000, description="이번 실행 KW 삭제 상한 (네이버 API rate)")
+
+
+@router.post("/keyword-pool/seeds/cleanup-non-domain")
+async def cleanup_non_domain_seeds(
+    request: CleanupNonDomainSeedsRequest,
+    background_tasks: BackgroundTasks,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """비도메인 시드 lineage 일괄 정리 — 과거 POOL bridge 누수 잔재 제거.
+
+    1. domain_keywords 로 도메인 토큰셋 빌드
+    2. naverad_keyword_pool 의 distinct seed (status=registered) 조회 + KW 수
+    3. 도메인 atom 안 맞는 seed = 비도메인 → 그 lineage 모든 KW DELETE 대상
+    4. dry_run=True: 시드/KW 카운트 미리보기. dry_run=False: 백그라운드 삭제.
+    """
+    from services.naver_ad_service import NaverAdApiClient
+    from database.naver_ad_db import get_ad_account_relevance_keywords, record_auto_cleanup_run
+    import sqlite3 as _sqlite3
+    import time as _t
+
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+
+    pool = get_keyword_pool_db()
+    reg = get_registered_keywords_db()
+
+    # 1) 도메인 키워드 결정
+    if request.domain_keywords:
+        domain_kws = [s.strip() for s in request.domain_keywords if s and len(s.strip()) >= 2]
+        basis_source = "input"
+    else:
+        saved = get_ad_account_relevance_keywords(user_id, str(cid))
+        if saved:
+            domain_kws = saved
+            basis_source = "saved_relevance"
+        else:
+            domain_kws = [s for s in (pool.list_user_seeds(cid) or []) if s and len(s) >= 2]
+            basis_source = "user_seed_fallback"
+    if not domain_kws:
+        raise HTTPException(
+            status_code=400,
+            detail="도메인 키워드 없음 — domain_keywords 입력 또는 광고주 relevance_keywords 저장 필요.",
+        )
+    domain_tokens = _build_domain_token_set(domain_kws) | _build_seed_atoms(domain_kws)
+
+    def _matches_domain(seed: str) -> bool:
+        if not seed or len(seed) < 2:
+            return False
+        s = seed.replace(" ", "")
+        return any(t in s for t in domain_tokens)
+
+    # 2) 시드별 등록 KW 수 집계 (status=registered)
+    with _sqlite3.connect(pool.db_path) as conn:
+        seed_rows = conn.execute(
+            """SELECT coalesce(seed,''), COUNT(*) AS n
+               FROM naverad_keyword_pool
+               WHERE account_customer_id=? AND status='registered'
+               GROUP BY coalesce(seed,'')
+               ORDER BY n DESC""",
+            (cid,),
+        ).fetchall()
+
+    domain_seeds: List[Tuple[str, int]] = []
+    non_domain_seeds: List[Tuple[str, int]] = []
+    for s, n in seed_rows:
+        if not s:
+            non_domain_seeds.append((s, n))
+            continue
+        (domain_seeds if _matches_domain(s) else non_domain_seeds).append((s, n))
+
+    # 3) 비도메인 시드의 KW + ncc_keyword_id 조회 (JOIN)
+    if not non_domain_seeds:
+        return {
+            "success": True, "dry_run": request.dry_run, "customer_id": cid,
+            "basis_source": basis_source, "domain_keywords_count": len(domain_kws),
+            "domain_seeds": len(domain_seeds), "non_domain_seeds": 0,
+            "total_targets": 0,
+            "message": "비도메인 시드 없음 — 모든 등록 시드가 도메인 매칭됨",
+        }
+
+    non_domain_seed_set = {s for s, _ in non_domain_seeds}
+    placeholders = ",".join("?" * len(non_domain_seed_set))
+    with _sqlite3.connect(pool.db_path) as conn:
+        conn.row_factory = _sqlite3.Row
+        kw_rows = conn.execute(
+            f"""SELECT p.keyword, p.seed, r.ncc_keyword_id
+                FROM naverad_keyword_pool p
+                LEFT JOIN registered_keywords r
+                  ON r.account_customer_id = p.account_customer_id
+                 AND r.keyword = p.keyword
+                WHERE p.account_customer_id = ?
+                  AND p.status = 'registered'
+                  AND coalesce(p.seed,'') IN ({placeholders})
+                  AND r.ncc_keyword_id IS NOT NULL""",
+            (cid, *non_domain_seed_set),
+        ).fetchall()
+    targets = [(r["ncc_keyword_id"], r["keyword"], r["seed"]) for r in kw_rows]
+    targets_capped = targets[:max(0, min(20000, int(request.max_delete)))]
+
+    if request.dry_run:
+        # Top 20 비도메인 시드 + 대상 KW sample
+        return {
+            "success": True, "dry_run": True, "customer_id": cid,
+            "basis_source": basis_source,
+            "domain_keywords_count": len(domain_kws),
+            "domain_keywords_sample": domain_kws[:10],
+            "domain_tokens_count": len(domain_tokens),
+            "domain_seeds": len(domain_seeds),
+            "non_domain_seeds": len(non_domain_seeds),
+            "non_domain_top": [
+                {"seed": s, "registered_count": n} for s, n in non_domain_seeds[:30]
+            ],
+            "total_targets": len(targets),
+            "will_delete_now": len(targets_capped),
+            "max_delete": request.max_delete,
+            "estimated_minutes": round(len(targets_capped) * 0.18 / 60, 1),
+            "samples": [
+                {"keyword": kw, "seed": sd}
+                for _, kw, sd in targets[:20]
+            ],
+        }
+
+    if not targets_capped:
+        return {
+            "success": True, "dry_run": False, "customer_id": cid,
+            "queued_targets": 0, "message": "삭제 대상 KW 없음",
+        }
+
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    async def _run():
+        n_del, n_pause, n_fail = 0, 0, 0
+        affected: List[str] = []
+        for kid, kw_text, _seed in targets_capped:
+            try:
+                await client.delete_keyword(kid)
+                with _sqlite3.connect(reg.db_path) as c:
+                    c.execute(
+                        "DELETE FROM registered_keywords "
+                        "WHERE account_customer_id=? AND ncc_keyword_id=?",
+                        (cid, kid),
+                    )
+                with _sqlite3.connect(pool.db_path) as c:
+                    c.execute(
+                        "UPDATE naverad_keyword_pool SET status='deleted' "
+                        "WHERE account_customer_id=? AND keyword=?",
+                        (cid, kw_text),
+                    )
+                n_del += 1
+                affected.append(kw_text)
+            except Exception:
+                try:
+                    await client.pause_keyword(kid)
+                    n_pause += 1
+                    affected.append(kw_text)
+                except Exception:
+                    n_fail += 1
+            await asyncio.sleep(0.15)
+        try:
+            pool.record_run(
+                user_id, cid, "inspect",
+                "success" if n_del > 0 else "no_new",
+                registered=0, failed=n_fail, skipped=n_del,
+                seeds_count=len(non_domain_seed_set),
+                error_message=(
+                    f"비도메인 시드 정리 ({len(non_domain_seed_set)} 시드) — "
+                    f"DELETE {n_del} / PAUSE {n_pause} / 실패 {n_fail}"
+                ),
+            )
+        except Exception:
+            pass
+        record_auto_cleanup_run(user_id, str(cid), n_del + n_pause)
+        logger.warning(
+            f"[cleanup-non-domain] uid={user_id} cid={cid} "
+            f"non_domain_seeds={len(non_domain_seed_set)} → del={n_del} pause={n_pause} fail={n_fail}"
+        )
+
+    background_tasks.add_task(_run)
+    return {
+        "success": True, "dry_run": False, "customer_id": cid,
+        "queued_targets": len(targets_capped),
+        "non_domain_seeds": len(non_domain_seed_set),
+        "estimated_minutes": round(len(targets_capped) * 0.18 / 60, 1),
+        "message": (
+            f"백그라운드 실행 시작 — 비도메인 시드 {len(non_domain_seed_set)}개의 "
+            f"KW {len(targets_capped)}개 삭제 진행 (예상 {round(len(targets_capped) * 0.18 / 60, 1)}분)"
+        ),
+    }
+
+
 # ============ 네이버 ↔ DB 한도 sync ============
 # 사용자가 네이버 광고 콘솔에서 직접 캠페인/광고그룹 삭제 → 우리 DB row 는 stale.
 # 한도 사용량 표시가 잘못됨 (네이버 active != DB count). 이 endpoint 가 cross-check
