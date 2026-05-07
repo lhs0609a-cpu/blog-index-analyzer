@@ -13,6 +13,7 @@ import io
 import json as _json_lib
 import random
 import re
+import httpx
 
 from services.naver_ad_service import (
     NaverAdOptimizer,
@@ -4704,6 +4705,206 @@ async def keyword_pool_add_seeds(
         import traceback
         logger.error(f"keyword-pool/seeds 실패: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
+
+
+class AiSeedExpandRequest(BaseModel):
+    base_seeds: List[str] = Field(..., min_items=1, description="원본 시드 — 사용자 도메인 의도. 풀이 오염되어도 이 입력만 사용.")
+    cycles: int = Field(1, ge=1, le=3, description="확장 사이클. 1=직접 확장, 2+=직전 결과를 다시 시드로.")
+    keywords_per_cycle: int = Field(80, ge=10, le=200, description="LLM 한 번에 생성 후보 수")
+    min_volume: int = Field(5, ge=0, le=10000, description="검증 통과 최소 월 검색량")
+
+
+@router.post("/keyword-pool/seeds/ai-expand")
+async def keyword_pool_ai_expand_seeds(
+    request: AiSeedExpandRequest,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """LLM 으로 사용자 시드 도메인 일관성 있게 확장 → keywordstool 검증 → user_seed INSERT.
+
+    풀이 한약재/식물 등으로 오염되어 collect 가 cross-domain drift 하는 사례를 우회.
+    base_seeds 만 도메인 기준으로 사용 — DB 풀의 잡음 시드는 무시.
+
+    1. base_seeds → GPT-4o-mini → keywords_per_cycle 개 후보
+    2. base_seeds 에서 derive 한 도메인 토큰으로 1차 필터 (LLM drift 차단)
+    3. keywordstool 5개씩 배치 → 검색량 ≥ min_volume 만 통과
+    4. user_seed 로 INSERT (source='ai_seed_expansion')
+    5. cycles 회 반복 (직전 결과를 다음 base 로)
+    """
+    import json as _json
+    from config import settings as _settings
+    if not getattr(_settings, "OPENAI_API_KEY", ""):
+        raise HTTPException(status_code=500, detail="OPENAI_API_KEY 미설정")
+
+    base_seeds = [s.strip() for s in request.base_seeds if s and s.strip()]
+    if not base_seeds:
+        raise HTTPException(status_code=400, detail="base_seeds 비어있음")
+
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    customer_id = int(account.get("customer_id"))
+
+    # base_seeds 만으로 도메인 토큰셋 빌드 (DB 풀의 한약재 오염 시드 무시)
+    domain_tokens = _build_domain_token_set(base_seeds) | _build_seed_atoms(base_seeds)
+
+    def _matches_user_domain(kw: str) -> bool:
+        k = (kw or "").replace(" ", "")
+        if len(k) < 2:
+            return False
+        return any(t in k for t in domain_tokens)
+
+    from services.naver_ad_service import NaverAdApiClient
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    pool = get_keyword_pool_db()
+    cycle_results: List[Dict] = []
+    current_seeds = list(base_seeds)
+
+    for cycle_idx in range(request.cycles):
+        # 1) LLM 호출 — 도메인 일관성 강제 프롬프트
+        prompt_seeds = ", ".join(current_seeds[:60])  # 토큰 절약
+        prompt = (
+            f"다음 한국어 키워드들과 동일 도메인의 검색 가능성 있는 한국어 키워드를 정확히 "
+            f"{request.keywords_per_cycle}개 생성해줘.\n\n"
+            f"입력 키워드:\n{prompt_seeds}\n\n"
+            f"규칙:\n"
+            f"- 입력 키워드와 동일한 분야/도메인 안에서만 확장 (예: 의료면 의료, 부동산이면 부동산)\n"
+            f"- 다른 도메인의 단어 절대 금지 (예: 의료 시드면 한약재/식물/대출/렌탈 등 절대 포함 금지)\n"
+            f"- 띄어쓰기 가능 (네이버 검색 사용자 자연스러운 형태)\n"
+            f"- 한 줄당 1개, 일련번호/설명 없이 키워드만\n"
+            f"- 결과는 JSON array (예: [\"키워드1\", \"키워드2\", ...])"
+        )
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as oai:
+                resp = await oai.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {_settings.OPENAI_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": "gpt-4o-mini",
+                        "messages": [
+                            {"role": "system", "content": "한국어 검색광고 키워드 전문가. 도메인 일관성을 절대 위반하지 마. JSON array 만 반환."},
+                            {"role": "user", "content": prompt},
+                        ],
+                        "temperature": 0.7,
+                        "max_tokens": 3000,
+                    },
+                )
+                resp.raise_for_status()
+                content = resp.json()["choices"][0]["message"]["content"]
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"LLM 호출 실패: {type(e).__name__}: {str(e)[:200]}")
+
+        # JSON 파싱 — code block 제거
+        import re as _re
+        cb = _re.search(r"```(?:json)?\s*(.*?)\s*```", content, _re.DOTALL)
+        if cb:
+            content = cb.group(1)
+        try:
+            generated = _json.loads(content.strip())
+            if isinstance(generated, dict):
+                generated = list(generated.values()) if generated else []
+            if not isinstance(generated, list):
+                raise ValueError("not a list")
+        except Exception as e:
+            logger.warning(f"[ai-expand] JSON 파싱 실패 cycle={cycle_idx}: {e} content[:200]={content[:200]!r}")
+            generated = []
+
+        # 후보 정규화
+        candidates: List[str] = []
+        seen = set()
+        for k in generated:
+            if not isinstance(k, str):
+                continue
+            kw = k.strip()
+            if not kw or len(kw) < 2 or kw in seen:
+                continue
+            seen.add(kw)
+            candidates.append(kw)
+
+        # 2) 도메인 1차 필터 (LLM drift 컷)
+        domain_pass = [k for k in candidates if _matches_user_domain(k)]
+        domain_fail = len(candidates) - len(domain_pass)
+
+        # 3) keywordstool 배치 검증 (5개씩) — 네이버 응답의 keywordList 에서
+        # 입력 hint 와 normalized 매칭. 매칭 안 되면 (= 검색량 데이터 없음) skip.
+        validated: List[Dict] = []
+        validated_seen: Set[str] = set()
+
+        def _norm(s: str) -> str:
+            return (s or "").replace(" ", "").upper()
+
+        for i in range(0, len(domain_pass), 5):
+            chunk = domain_pass[i:i + 5]
+            try:
+                vol_map = await client.get_keywords_volume_batch(chunk)
+            except Exception as e:
+                logger.warning(f"[ai-expand] volume batch 실패 {chunk}: {e}")
+                continue
+            # vol_map key 정규화 — Naver 응답 키는 공백 제거된 형태로 옴
+            norm_vol_map: Dict[str, Dict] = {_norm(k): v for k, v in vol_map.items()}
+            for kw in chunk:
+                vinfo = norm_vol_map.get(_norm(kw))
+                if not vinfo:
+                    continue
+                mt = int(vinfo.get("monthly_total") or 0)
+                if mt < request.min_volume:
+                    continue
+                if kw in validated_seen:
+                    continue
+                validated_seen.add(kw)
+                validated.append({
+                    "keyword": kw,
+                    "monthly_total": mt,
+                    "monthly_pc": int(vinfo.get("monthly_pc") or 0),
+                    "monthly_mobile": int(vinfo.get("monthly_mobile") or 0),
+                    "comp_idx": vinfo.get("comp_idx"),
+                    "seed": f"ai_cycle{cycle_idx+1}",
+                })
+            await asyncio.sleep(0.3)
+
+        # 4) user_seed 로 INSERT — 다음 cycle 의 시드로 활용
+        # add_candidates 는 source=user_seed 가 아니어도 INSERT 함. 시드 효과 위해
+        # source 를 명시적으로 'user_seed' 로 바꿔 INSERT (확장 시드도 collect 가 사용).
+        seed_items = [
+            {**v, "source": "user_seed", "monthly_total": v["monthly_total"]}
+            for v in validated
+        ]
+        added = pool.add_candidates(user_id, customer_id, seed_items)
+
+        cycle_results.append({
+            "cycle": cycle_idx + 1,
+            "llm_generated": len(candidates),
+            "domain_filter_pass": len(domain_pass),
+            "domain_filter_fail": domain_fail,
+            "volume_validated": len(validated),
+            "inserted_as_seed": added,
+            "samples": [v["keyword"] for v in validated[:8]],
+        })
+        logger.warning(
+            f"[ai-expand] user={user_id} cid={customer_id} cycle {cycle_idx+1}/{request.cycles}: "
+            f"LLM {len(candidates)} → domain {len(domain_pass)} → vol≥{request.min_volume} {len(validated)} → INSERT {added}"
+        )
+
+        # 다음 cycle 의 base 는 이번 통과 키워드들 (없으면 종료)
+        if not validated:
+            break
+        current_seeds = [v["keyword"] for v in validated][:80]
+
+    total_added = sum(r["inserted_as_seed"] for r in cycle_results)
+    return {
+        "success": True,
+        "total_added_seeds": total_added,
+        "cycles": cycle_results,
+        "base_seeds_count": len(base_seeds),
+        "domain_tokens_count": len(domain_tokens),
+    }
 
 
 class BidBulkUpdateRequest(BaseModel):
