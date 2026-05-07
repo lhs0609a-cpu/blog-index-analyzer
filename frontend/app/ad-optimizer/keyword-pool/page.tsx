@@ -500,11 +500,12 @@ export default function KeywordPoolPage() {
     loadClickedKeywords()  // 클릭 키워드 자동 1회 로드
     loadAutoCleanup()      // 자동 cleanup 설정 1회 로드
     loadRejectStats()      // AI reject 분류 카운터 1회 로드
-    const tStats = setInterval(load, 10_000) // stats 10초 폴링
-    // 클릭 키워드는 60초마다 자동 갱신 — 사용자가 새로 발생한 클릭 즉시 검수 가능
-    const tClicked = setInterval(loadClickedKeywords, 60_000)
-    // reject stats 30초 폴링 — collect cron 이 누적시키는 reject 후보 카운터
-    const tRejects = setInterval(loadRejectStats, 30_000)
+    // 폴링 — 백엔드 부담 줄이기 위해 간격 확대 (2026-05-07: OOM SIGKILL 사례 다수).
+    // 탭이 백그라운드면 polling 자체 skip.
+    const isVisible = () => typeof document !== 'undefined' && document.visibilityState === 'visible'
+    const tStats = setInterval(() => { if (isVisible()) load() }, 30_000)
+    const tClicked = setInterval(() => { if (isVisible()) loadClickedKeywords() }, 90_000)
+    const tRejects = setInterval(() => { if (isVisible()) loadRejectStats() }, 60_000)
     return () => {
       clearInterval(tStats)
       clearInterval(tClicked)
