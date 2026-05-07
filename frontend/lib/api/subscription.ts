@@ -101,9 +101,14 @@ export async function getPlanInfo(planType: PlanType): Promise<PlanInfo> {
 
 // ============ 구독 API ============
 
+// 사용량/구독 조회는 단순 PK 조회 — 백엔드가 hang 상태일 때 글로벌 120s를
+// 그대로 끌고 가지 않도록 짧은 타임아웃을 명시한다.
+const LIGHT_READ_TIMEOUT_MS = 15000
+
 export async function getMySubscription(userId: number | string): Promise<Subscription> {
   const response = await apiClient.get('/api/subscription/me', {
-    params: { user_id: userId }
+    params: { user_id: userId },
+    timeout: LIGHT_READ_TIMEOUT_MS,
   })
   return response.data
 }
@@ -133,7 +138,8 @@ export async function cancelSubscription(userId: number | string): Promise<{ suc
 
 export async function getUsage(userId: number | string): Promise<UsageInfo> {
   const response = await apiClient.get('/api/subscription/usage', {
-    params: { user_id: userId }
+    params: { user_id: userId },
+    timeout: LIGHT_READ_TIMEOUT_MS,
   })
   return response.data
 }
