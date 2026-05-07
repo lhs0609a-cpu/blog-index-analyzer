@@ -695,6 +695,45 @@ export default function KeywordPoolPage() {
     }
   }
 
+  // AI 도메인 시드 확장 — base_seeds 만 도메인 의도로 사용 (풀 오염 우회)
+  const [aiExpandInput, setAiExpandInput] = useState('')
+  const [aiExpandCycles, setAiExpandCycles] = useState(1)
+  const [aiExpandMinVol, setAiExpandMinVol] = useState(5)
+  const [aiExpandRunning, setAiExpandRunning] = useState(false)
+  const [aiExpandResult, setAiExpandResult] = useState<any>(null)
+
+  const handleAiExpandSeeds = async () => {
+    const base_seeds = aiExpandInput
+      .split(/[\n,]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+    if (!base_seeds.length) {
+      toast.error('원본 시드를 입력하세요 (도메인 의도)')
+      return
+    }
+    setAiExpandRunning(true)
+    setAiExpandResult(null)
+    try {
+      const res = await adPost<any>(
+        `/api/naver-ad/keyword-pool/seeds/ai-expand${cidQs()}`,
+        {
+          base_seeds,
+          cycles: aiExpandCycles,
+          keywords_per_cycle: 80,
+          min_volume: aiExpandMinVol,
+        },
+        { timeout: 180_000 }
+      )
+      setAiExpandResult(res)
+      toast.success(`총 ${res.total_added_seeds}개 시드 추가 (${res.cycles?.length}cycle)`)
+      load()
+    } catch (e: any) {
+      toast.error(e?.detail || e?.message || 'AI 확장 실패')
+    } finally {
+      setAiExpandRunning(false)
+    }
+  }
+
   const cap = stats?.account_cap ?? 100_000
   const used = stats?.registered?.active ?? 0
   const pending = stats?.pool?.by_status?.pending ?? 0
@@ -1494,6 +1533,78 @@ export default function KeywordPoolPage() {
             {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             시드 추가
           </button>
+        </div>
+
+        {/* AI 도메인 시드 확장 — base_seeds 만 도메인 의도로 사용 (풀 오염 우회) */}
+        <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-2xl border border-indigo-200 p-6 mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Zap className="w-5 h-5 text-indigo-600" />
+            <h2 className="font-bold text-gray-900">AI 도메인 시드 확장 (LLM)</h2>
+          </div>
+          <p className="text-sm text-gray-700 mb-3">
+            <strong>풀 시드가 오염</strong>됐어도 여기 입력한 키워드만 도메인 의도로 사용.
+            LLM이 동일 도메인 후보 80개 생성 → 1차 도메인 토큰 필터 → keywordstool 검색량 검증 →
+            통과한 것만 <strong>user_seed 로 INSERT</strong>. cycle 2+ 면 직전 통과를 다음 base 로 BFS 확장.
+          </p>
+          <textarea
+            value={aiExpandInput}
+            onChange={(e) => setAiExpandInput(e.target.value)}
+            rows={4}
+            placeholder={'아토피 피부염\n습진\n건선\n두드러기'}
+            className="w-full border border-indigo-300 rounded-lg p-3 text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+            disabled={aiExpandRunning}
+          />
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <label className="text-xs text-gray-700">
+              사이클 수 (1~3)
+              <input
+                type="number"
+                min={1}
+                max={3}
+                value={aiExpandCycles}
+                onChange={(e) => setAiExpandCycles(Math.max(1, Math.min(3, parseInt(e.target.value) || 1)))}
+                disabled={aiExpandRunning}
+                className="block w-full mt-1 border border-gray-300 rounded-lg p-2 text-sm"
+              />
+            </label>
+            <label className="text-xs text-gray-700">
+              최소 검색량
+              <input
+                type="number"
+                min={0}
+                value={aiExpandMinVol}
+                onChange={(e) => setAiExpandMinVol(Math.max(0, parseInt(e.target.value) || 0))}
+                disabled={aiExpandRunning}
+                className="block w-full mt-1 border border-gray-300 rounded-lg p-2 text-sm"
+              />
+            </label>
+          </div>
+          <button
+            onClick={handleAiExpandSeeds}
+            disabled={aiExpandRunning || !aiExpandInput.trim()}
+            className="mt-3 px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:shadow-lg disabled:bg-gray-300 inline-flex items-center gap-2"
+          >
+            {aiExpandRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+            {aiExpandRunning ? 'LLM 호출 + 검증 중…' : 'AI 확장 시작'}
+          </button>
+
+          {aiExpandResult && (
+            <div className="mt-4 bg-white rounded-lg border border-indigo-200 p-3 text-xs">
+              <div className="font-semibold text-gray-900 mb-2">
+                결과 — 총 {aiExpandResult.total_added_seeds}개 시드 추가
+              </div>
+              {(aiExpandResult.cycles || []).map((c: any) => (
+                <div key={c.cycle} className="mb-2 pb-2 border-b border-gray-100 last:border-b-0">
+                  <div className="text-gray-700">
+                    <span className="font-mono">cycle {c.cycle}</span>: LLM {c.llm_generated} → 도메인 {c.domain_filter_pass} (컷 {c.domain_filter_fail}) → 검색량≥{aiExpandMinVol} {c.volume_validated} → INSERT <strong>{c.inserted_as_seed}</strong>
+                  </div>
+                  {c.samples?.length > 0 && (
+                    <div className="text-gray-500 mt-1">샘플: {c.samples.join(', ')}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* AI reject 분류 — 시드 도메인과 같은 reject KW 자동 promote */}
