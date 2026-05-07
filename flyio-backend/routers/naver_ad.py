@@ -2736,55 +2736,21 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     from services.naver_ad_service import _naver_api_breaker, NaverApiCircuitOpenError
     circuit_aborted = False
 
-    for seed_raw in seed_round:  # 시드 한 라운드 처리 한도 (BFS 추가로 호출 폭증 방지)
-        if added >= target:
-            break
-        # circuit OPEN 시 남은 시드 모두 즉시 fail — error_message 폭주 + log 노이즈 차단.
-        # 30~60초 후 다음 cron tick 에서 다시 시도 (HALF_OPEN 으로 자동 복구).
-        if _naver_api_breaker.is_open():
-            circuit_aborted = True
-            logger.warning(
-                f"[pool/collect] user={uid} circuit OPEN — 남은 시드 {len(seed_round) - seeds_processed}개 abort"
-            )
-            break
-        # 시드 sanitize — 네이버 keywordstool 은 hint 에 공백 거부 (HTTPStatusError 400 code:11001).
-        # 사용자가 입력한 띄어쓰기 시드 ("C형 간염", "감각 과민" 등) 를 정규화해서 호출.
-        # 빈 문자열 / 길이 < 2 / 영문 only / 숫자 only 시드는 skip (네이버 비허용 패턴).
-        seed = (seed_raw or "").replace(" ", "").strip()
-        if not seed or len(seed) < 2:
-            continue
-        seeds_processed += 1
-        try:
-            related = await client.get_related_keywords(seed, show_detail=True)
-        except NaverApiCircuitOpenError:
-            # circuit 이 시드 처리 중간에 열림 — 즉시 abort
-            circuit_aborted = True
-            logger.warning(
-                f"[pool/collect] user={uid} 시드 '{seed}' 처리 중 circuit OPEN — 남은 시드 abort"
-            )
-            break
-        except Exception as e:
-            # ConnectTimeout / 11001 등 시드별 실패 — 다음 시드로 계속 (circuit breaker 가
-            # 누적 fail 잡아 OPEN 시키므로 여기선 individual 시드 fail 만 logging).
-            err_name = type(e).__name__
-            err_msg_full = str(e)[:200]
-            msg = f"{seed_raw}: {err_name}: {err_msg_full[:80]}"
-            logger.warning(f"[pool/collect] API 실패 {msg}")
-            # ConnectTimeout / TimeoutException → 30분 backoff 캐시 등록.
-            # 같은 niche 시드가 매 cron tick 마다 timeout 누적하는 cascade 차단.
-            if "Timeout" in err_name or "ConnectTimeout" in err_msg_full:
-                _mark_seed_timeout(customer_id, seed_raw)
-            # 11001 (잘못된 파라미터) 패턴 감지 시 추가 진단 정보
-            if "11001" in err_msg_full or "400" in err_msg_full:
-                logger.warning(
-                    f"[pool/collect/11001] seed_raw={seed_raw!r} sanitized={seed!r} — "
-                    f"네이버 keywordstool 거부 (특수문자/숫자/길이 문제 의심)"
-                )
-            api_errors.append(msg)
-            continue
-        items = related.get("keywordList", []) if isinstance(related, dict) else []
-        candidates = []
-        bfs_pool: List[tuple] = []  # (kw, volume)
+    # ==========================================================================
+    # BATCHED keywordstool 호출 — 시드 5개씩 묶어 1콜로 처리 (2026-05-07).
+    # 종전: 시드 60개 = 60콜 → ConnectTimeout 10회 누적 → circuit OPEN → 50시드 abort.
+    # 변경: 시드 60개 = 12콜 (배치당 5 hint) → API 호출 5배 감소 → timeout 폭주 차단.
+    # 네이버 /keywordstool 은 hintKeywords 콤마구분 5개까지 허용 (naver_ad_service.py:629).
+    # ==========================================================================
+    SEED_BATCH = 5
+
+    def _process_keyword_items(
+        items: List[Dict],
+        seed_label: str,
+        sub_candidates_out: List[Dict],
+        bfs_pool_out: List[tuple],
+    ) -> None:
+        """keywordList 처리 — primary/BFS 양쪽에서 동일 로직 공유."""
         for item in items:
             kw = (item.get("relKeyword") or "").strip()
             if not kw:
@@ -2796,12 +2762,13 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                 continue
             reason = _matches_whitelist(kw)
             if reason:
+                # rejected 카운트는 outer scope (nonlocal)
+                nonlocal rejected, reject_no_domain, reject_no_seed_match
                 rejected += 1
                 if reason == "domain":
                     reject_no_domain += 1
                     if len(sample_no_domain) < 10:
                         sample_no_domain.append(kw)
-                    # AI 분류 후보 누적 — 도메인미스 + 검색량 ≥ 100 + 라운드 내 dedup
                     if mt >= 100 and kw not in reject_for_ai_seen:
                         reject_for_ai_seen.add(kw)
                         reject_for_ai.append({"keyword": kw, "monthly_total": mt})
@@ -2810,58 +2777,84 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                     if len(sample_no_seed) < 10:
                         sample_no_seed.append(kw)
                 continue
-            candidates.append({
+            sub_candidates_out.append({
                 "keyword": kw, "monthly_total": mt,
-                "monthly_pc": pc,
-                "monthly_mobile": mob,
+                "monthly_pc": pc, "monthly_mobile": mob,
                 "comp_idx": item.get("compIdx"),
-                "seed": seed,
+                "seed": seed_label,
             })
-            # BFS 후보: 검색량 ≥ 100 + 도메인 통과 + 길이 ≥ 2 (영역 천장 대응)
             if mt >= 100 and len(kw) >= 2:
-                bfs_pool.append((kw, mt))
+                bfs_pool_out.append((kw, mt))
+
+    # 배치 단위로 청크
+    for batch_start in range(0, len(seed_round), SEED_BATCH):
+        if added >= target:
+            break
+        if _naver_api_breaker.is_open():
+            circuit_aborted = True
+            logger.warning(
+                f"[pool/collect] user={uid} circuit OPEN — 남은 시드 abort (처리 {seeds_processed}/{len(seed_round)})"
+            )
+            break
+
+        chunk_raw = seed_round[batch_start:batch_start + SEED_BATCH]
+        # 각 시드 sanitize — 빈/짧은 시드는 chunk 에서 제외
+        chunk_sanitized: List[Tuple[str, str]] = []  # [(seed_raw, seed_clean)]
+        for s_raw in chunk_raw:
+            s_clean = (s_raw or "").replace(" ", "").strip()
+            if not s_clean or len(s_clean) < 2:
+                continue
+            chunk_sanitized.append((s_raw, s_clean))
+        if not chunk_sanitized:
+            continue
+
+        seeds_processed += len(chunk_sanitized)
+        hints = [c[1] for c in chunk_sanitized]
+        hint_str = ",".join(hints)
+        seed_label = hint_str[:60]  # candidate row 의 seed 컬럼에 batch hint 기록
+
+        try:
+            related = await client.get_related_keywords(hint_str, show_detail=True)
+        except NaverApiCircuitOpenError:
+            circuit_aborted = True
+            logger.warning(
+                f"[pool/collect] user={uid} batch '{hint_str[:40]}' 처리 중 circuit OPEN — abort"
+            )
+            break
+        except Exception as e:
+            # 배치 전체 실패 — 5개 시드 모두 backoff 처리 (어느 시드가 원인인지 알 수 없음)
+            err_name = type(e).__name__
+            err_msg_full = str(e)[:200]
+            msg = f"batch[{hint_str[:40]}]: {err_name}: {err_msg_full[:80]}"
+            logger.warning(f"[pool/collect] BATCH API 실패 {msg}")
+            if "Timeout" in err_name or "ConnectTimeout" in err_msg_full:
+                for s_raw, _ in chunk_sanitized:
+                    _mark_seed_timeout(customer_id, s_raw)
+            if "11001" in err_msg_full or "400" in err_msg_full:
+                logger.warning(
+                    f"[pool/collect/11001] hints={hints!r} — 네이버 keywordstool 거부"
+                )
+            api_errors.append(msg)
+            continue
+
+        items = related.get("keywordList", []) if isinstance(related, dict) else []
+        candidates: List[Dict] = []
+        bfs_pool: List[tuple] = []
+        _process_keyword_items(items, seed_label, candidates, bfs_pool)
         added += pool.add_candidates(uid, customer_id, candidates)
         await asyncio.sleep(0.3)
 
-        # BFS 2nd-level — 시드당 검색량 상위 2개
+        # BFS 2nd-level — 배치당 검색량 상위 2개 (시드당 2개 → 배치당 2개로 축소: 5x 감소)
         bfs_pool.sort(key=lambda x: -x[1])
         for bfs_kw, _ in bfs_pool[:2]:
+            if _naver_api_breaker.is_open():
+                break
             try:
                 bfs_calls += 1
                 related2 = await client.get_related_keywords(bfs_kw, show_detail=True)
                 items2 = related2.get("keywordList", []) if isinstance(related2, dict) else []
-                sub_candidates = []
-                for item2 in items2:
-                    kw2 = (item2.get("relKeyword") or "").strip()
-                    if not kw2:
-                        continue
-                    pc2 = _parse_naver_count(item2.get("monthlyPcQcCnt"))
-                    mob2 = _parse_naver_count(item2.get("monthlyMobileQcCnt"))
-                    mt2 = pc2 + mob2
-                    if mt2 < min_volume:
-                        continue
-                    reason2 = _matches_whitelist(kw2)
-                    if reason2:
-                        rejected += 1
-                        if reason2 == "domain":
-                            reject_no_domain += 1
-                            if len(sample_no_domain) < 10:
-                                sample_no_domain.append(kw2)
-                            if mt2 >= 100 and kw2 not in reject_for_ai_seen:
-                                reject_for_ai_seen.add(kw2)
-                                reject_for_ai.append({"keyword": kw2, "monthly_total": mt2})
-                        else:
-                            reject_no_seed_match += 1
-                            if len(sample_no_seed) < 10:
-                                sample_no_seed.append(kw2)
-                        continue
-                    sub_candidates.append({
-                        "keyword": kw2, "monthly_total": mt2,
-                        "monthly_pc": pc2,
-                        "monthly_mobile": mob2,
-                        "comp_idx": item2.get("compIdx"),
-                        "seed": seed,
-                    })
+                sub_candidates: List[Dict] = []
+                _process_keyword_items(items2, seed_label, sub_candidates, [])
                 added += pool.add_candidates(uid, customer_id, sub_candidates)
                 await asyncio.sleep(0.3)
             except Exception as e:
