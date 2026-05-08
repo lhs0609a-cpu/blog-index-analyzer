@@ -67,11 +67,34 @@ class KeywordPoolScheduler:
             max_instances=1,
             coalesce=True,
         )
+        # Domain cleanup — 매시 1회 (3600s) 도메인 안 맞는 등록 KW 자동 DELETE (click 무관).
+        # GitHub Actions schedule cron 신뢰성 낮음 (관찰: 12+시간 멈춤 사례 빈번) → 백엔드 자체.
+        # auto_cleanup_enabled=1 광고주만 처리, max_delete=500/광고주.
+        self.scheduler.add_job(
+            self._domain_cleanup_tick,
+            IntervalTrigger(seconds=3600),
+            id="keyword_pool_domain_cleanup",
+            name="키워드 풀 도메인 자동 정리 (1시간 주기, click 무관)",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        # Click cleanup — 매 15분 (900s) 클릭 KW 점수 ≤ threshold 자동 DELETE.
+        # 종전 GitHub Actions 의 keyword-pool-auto-cleanup.yml 백엔드 내장 버전.
+        self.scheduler.add_job(
+            self._click_cleanup_tick,
+            IntervalTrigger(seconds=900),
+            id="keyword_pool_click_cleanup",
+            name="키워드 풀 click cleanup (15분 주기)",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
         self.scheduler.start()
         self._running = True
         logger.warning(
             f"[pool/scheduler] 시작 — collect {interval_seconds}s / register 120s / "
-            f"inspect 600s / ai_classify 600s (쿨다운 30m)"
+            f"inspect 600s / ai_classify 600s / domain_cleanup 3600s / click_cleanup 900s"
         )
 
     def stop(self):
@@ -200,6 +223,58 @@ class KeywordPoolScheduler:
                     logger.error(f"[pool/scheduler] register 실패 user={uid} cid={cid}: {e}", exc_info=True)
         except Exception as e:
             logger.error(f"[pool/scheduler] register tick 실패: {type(e).__name__}: {e}", exc_info=True)
+
+    async def _domain_cleanup_tick(self):
+        """매 1시간 — auto_cleanup_enabled=1 광고주의 도메인 안 맞는 등록 KW 자동 DELETE.
+        click 무관 — 100k 풀의 무관 잔재 점진 청소 (max_delete=500/광고주).
+        빈 자리는 collect/register 가 새 도메인 KW 로 채움 → 100k 자기치유.
+        """
+        try:
+            from routers.naver_ad import _run_domain_cleanup_for_account
+            from database.naver_ad_db import list_auto_cleanup_enabled_accounts
+            rows = list_auto_cleanup_enabled_accounts() or []
+            if not rows:
+                logger.info("[pool/domain-cleanup/tick] 자동 cleanup ON 광고주 없음 — skip")
+                return
+            for r in rows:
+                uid = int(r.get("user_id"))
+                cid = int(r.get("customer_id"))
+                thr = int(r.get("auto_cleanup_threshold") or 30)
+                try:
+                    res = await _run_domain_cleanup_for_account(uid, cid, thr, max_delete=500)
+                    logger.warning(f"[pool/domain-cleanup/tick] uid={uid} cid={cid} thr={thr} → {res}")
+                except Exception as e:
+                    logger.error(
+                        f"[pool/domain-cleanup/tick] uid={uid} cid={cid} 실패: "
+                        f"{type(e).__name__}: {e}", exc_info=True
+                    )
+        except Exception as e:
+            logger.error(f"[pool/domain-cleanup/tick] tick 실패: {type(e).__name__}: {e}", exc_info=True)
+
+    async def _click_cleanup_tick(self):
+        """매 15분 — auto_cleanup_enabled=1 광고주의 클릭 KW 중 점수 ≤ threshold 자동 DELETE.
+        기존 GitHub Actions keyword-pool-auto-cleanup.yml 의 백엔드 내장 버전.
+        """
+        try:
+            from routers.naver_ad import _run_auto_cleanup_for_account
+            from database.naver_ad_db import list_auto_cleanup_enabled_accounts
+            rows = list_auto_cleanup_enabled_accounts() or []
+            if not rows:
+                return
+            for r in rows:
+                uid = int(r.get("user_id"))
+                cid = int(r.get("customer_id"))
+                thr = int(r.get("auto_cleanup_threshold") or 30)
+                try:
+                    res = await _run_auto_cleanup_for_account(uid, cid, thr)
+                    logger.info(f"[pool/click-cleanup/tick] uid={uid} cid={cid} → {res}")
+                except Exception as e:
+                    logger.error(
+                        f"[pool/click-cleanup/tick] uid={uid} cid={cid} 실패: "
+                        f"{type(e).__name__}: {e}", exc_info=True
+                    )
+        except Exception as e:
+            logger.error(f"[pool/click-cleanup/tick] tick 실패: {type(e).__name__}: {e}", exc_info=True)
 
 
 keyword_pool_scheduler = KeywordPoolScheduler()
