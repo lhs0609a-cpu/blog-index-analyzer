@@ -3563,13 +3563,20 @@ async def _run_pool_ai_seed_topup(uid: int, customer_id: int) -> Dict[str, Any]:
         logger.warning(f"[pool/ai-topup] LLM 실패 uid={uid} cid={customer_id}: {e}")
         return {"skipped": "llm_failed", "error": str(e)[:200]}
 
-    # 2) 도메인 1차 필터
+    # 2) 도메인 1차 필터 + 도메인 토큰셋 보강
     domain_pass = [k for k in candidates if _matches_domain(k)]
     domain_fail = len(candidates) - len(domain_pass)
+    # LLM 후보 atom 을 도메인 토큰에 합류 — keywordstool 응답 검증 시 broader 매칭 보장.
+    # Why: LLM 이 "콜린성/박탈성/카포시" 같은 보강 도메인어 만들어도 그 atom 없으면
+    #      응답 KW 가 도메인 게이트 reject. atom 합류 → broader 통과.
+    if domain_pass:
+        domain_tokens = domain_tokens | _build_seed_atoms(domain_pass)
 
-    # 3) keywordstool 배치 — LLM 키워드를 hint 로 보내고 응답 keywordList 전체에서
-    # 도메인+검색량 통과 KW 를 user_seed 로 채택 (hint 자체는 검색량 0 이라 응답에서
-    # 빠질 수 있음. collect 와 동일한 패턴: hint → 연관 KW pool 추출).
+    # 3) keywordstool 배치 — hint 는 base (saved_relevance) 일반어 사용.
+    # Why: LLM 후보가 niche 의학 용어 (카포시육종/유암종증후군/포피염 등) 면 keywordstool
+    #      응답이 빈 list (Naver index 에 데이터 없음) → 검증 0. 일반어 hint 면 1000+ KW
+    #      반환 → 도메인+검색량 통과한 KW 풍부. LLM 의 역할은 도메인 토큰셋 확장 (위).
+    hint_source = list(base)  # saved_relevance 또는 user_seed Top60
     from services.naver_ad_service import NaverAdApiClient
     client = NaverAdApiClient()
     client.customer_id = account["customer_id"]
@@ -3579,8 +3586,15 @@ async def _run_pool_ai_seed_topup(uid: int, customer_id: int) -> Dict[str, Any]:
     validated: List[Dict] = []
     seen_validated: Set[str] = set()
     MIN_VOL = 5
-    for i in range(0, len(domain_pass), 5):
-        chunk = domain_pass[i:i + 5]
+    MAX_INSERT = 200  # 한 ai_topup 호출당 최대 user_seed INSERT 수
+    for i in range(0, len(hint_source), 5):
+        if len(validated) >= MAX_INSERT:
+            break
+        chunk = hint_source[i:i + 5]
+        # 빈 / 짧은 hint 제외 — Naver keywordstool 거부 패턴
+        chunk = [s.replace(" ", "").strip() for s in chunk if s and len(s.strip()) >= 2]
+        if not chunk:
+            continue
         hint_str = ",".join(chunk)
         try:
             related = await client.get_related_keywords(hint_str, show_detail=True)
