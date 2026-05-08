@@ -2734,8 +2734,9 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     # 전체 collect 정지 패턴 차단. 같은 시드를 매 5분마다 재시도하지 않고 30분 backoff.
     seeds_in_backoff = [s for s in seed_pool if _is_seed_in_backoff(customer_id, s)]
     seeds_eligible = [s for s in seed_pool if not _is_seed_in_backoff(customer_id, s)]
-    # 슬롯: cold_start 면 user(45) + bridge(15) = 60, 아니면 user 60.
-    user_quota = 45 if cold_start else 60
+    # 슬롯: cold_start 면 user(45) + bridge(15) = 60, 아니면 user 120.
+    # user_seed 충분한 광고주는 라운드당 시드 2배 → 시간당 신규 발굴량 ~2배.
+    user_quota = 45 if cold_start else 120
     seed_round = seeds_eligible[:user_quota] + bridge_round
     logger.warning(
         f"[pool/collect] user={uid} 시드 라운드 — user/promoted={min(user_quota, len(seeds_eligible))} "
@@ -2855,9 +2856,9 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         added += pool.add_candidates(uid, customer_id, candidates)
         await asyncio.sleep(0.3)
 
-        # BFS 2nd-level — 배치당 검색량 상위 2개 (시드당 2개 → 배치당 2개로 축소: 5x 감소)
+        # BFS 2nd-level — 배치당 검색량 상위 4개 (발굴 면적 2배, 비용 0 — keywordstool 무료).
         bfs_pool.sort(key=lambda x: -x[1])
-        for bfs_kw, _ in bfs_pool[:2]:
+        for bfs_kw, _ in bfs_pool[:4]:
             if _naver_api_breaker.is_open():
                 break
             try:
