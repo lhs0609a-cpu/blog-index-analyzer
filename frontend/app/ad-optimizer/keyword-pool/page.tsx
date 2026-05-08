@@ -870,7 +870,12 @@ export default function KeywordPoolPage() {
           </div>
         )}
 
-        {/* 입찰가 일괄 변경 */}
+        {/* 입찰가 일괄 변경 (고급) */}
+        <details className="mb-6 group">
+          <summary className="cursor-pointer select-none px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium text-gray-700 inline-flex items-center gap-2">
+            <span className="group-open:rotate-90 transition">▶</span> 입찰가 일괄 변경
+          </summary>
+          <div className="mt-3" />
         <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-6">
           <div className="flex items-center gap-2 mb-2">
             <Zap className="w-5 h-5 text-amber-600" />
@@ -913,6 +918,7 @@ export default function KeywordPoolPage() {
             </button>
           </div>
         </div>
+        </details>
 
         {/* 한도 사용량 */}
         <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
@@ -963,6 +969,95 @@ export default function KeywordPoolPage() {
           <StatCard label="실패" value={failed} color="text-red-600" />
         </div>
 
+        {/* CORE — 도메인 키워드 + 자동화 ON/OFF (페이지에서 가장 중요한 박스) */}
+        <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-50 rounded-2xl border-2 border-blue-300 p-6 mb-6 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <Activity className="w-6 h-6 text-blue-700" />
+            <h2 className="font-bold text-gray-900 text-lg">도메인 + 자동화 (필수 설정)</h2>
+            <span className="text-xs text-gray-600">— 1회 저장하면 100k 까지 자동 진행</span>
+          </div>
+
+          {/* 1) 도메인 키워드 (relevance_keywords) */}
+          <div className="mb-4 bg-white border border-blue-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <span className="text-sm font-semibold text-gray-900">1. 도메인 키워드</span>
+              <span className="text-xs text-gray-600">광고주가 다루는 분야 (콤마/줄바꿈 구분)</span>
+              <span className="ml-auto text-[11px] text-gray-500">
+                저장: {autoCleanup.relevance_keywords.length === 0 ? '비어있음' : `${autoCleanup.relevance_keywords.length}개`}
+              </span>
+            </div>
+            <div className="flex items-start gap-2">
+              <textarea
+                value={relevanceInput}
+                onChange={(e) => setRelevanceInput(e.target.value)}
+                rows={3}
+                placeholder="예: 아토피, 습진, 건선, 피부염, 알레르기, 면역, 한약, 한방치료, 만성피로 …"
+                className="flex-1 text-sm border border-gray-300 rounded px-2 py-1.5 font-mono resize-y"
+                disabled={autoCleanupSaving}
+              />
+              <button
+                onClick={handleSaveRelevanceKeywords}
+                disabled={autoCleanupSaving}
+                className="px-4 py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 disabled:bg-gray-300 inline-flex items-center gap-1 whitespace-nowrap"
+              >
+                {autoCleanupSaving && <Loader2 className="w-3 h-3 animate-spin" />}
+                저장
+              </button>
+            </div>
+          </div>
+
+          {/* 2) 자동 삭제 ON/OFF */}
+          <div className={`mb-3 p-3 border rounded-lg ${
+            autoCleanup.enabled ? 'bg-red-50 border-red-300' : 'bg-white border-gray-300'
+          }`}>
+            <div className="flex items-center gap-3 flex-wrap">
+              <button
+                onClick={() => saveAutoCleanup({ enabled: !autoCleanup.enabled })}
+                disabled={autoCleanupSaving}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition disabled:opacity-50 ${
+                  autoCleanup.enabled ? 'bg-red-600' : 'bg-gray-300'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                    autoCleanup.enabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+              <span className="text-sm font-semibold text-gray-900">
+                2. 자동 삭제 {autoCleanup.enabled ? 'ON' : 'OFF'}
+              </span>
+              <span className="text-xs text-gray-600">
+                매시 점수 ≤ {autoCleanup.threshold} 인 무관 KW 자동 DELETE (click 무관)
+              </span>
+              <input
+                type="number"
+                min={0}
+                max={95}
+                value={autoCleanup.threshold}
+                onChange={(e) => saveAutoCleanup({ threshold: parseInt(e.target.value) || 30 })}
+                disabled={autoCleanupSaving}
+                className="w-16 text-xs border border-gray-300 rounded px-2 py-1"
+                title="점수 임계값 (0~95)"
+              />
+              {autoCleanup.last_run_at && (
+                <span className="ml-auto text-[11px] text-gray-500">
+                  최근 실행: {new Date(autoCleanup.last_run_at).toLocaleString('ko-KR')} · 삭제 {autoCleanup.last_deleted}개
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="text-xs text-gray-700 bg-white/60 rounded p-2 leading-relaxed">
+            <strong>저장하면 자동 (24/7):</strong>
+            <span className="ml-2">매 5분 새 도메인 KW 발굴 (AI + Naver) → 매 2분 등록</span>
+            <span className="mx-1">·</span>
+            <span>매시 30분 무관 KW 자동 삭제</span>
+            <span className="mx-1">·</span>
+            <span>빈 자리에 다시 채움 → 100k 까지 무한 반복</span>
+          </div>
+        </div>
+
         {/* 라이브 상태 — 지금 도는지/멈췄는지 한눈에 */}
         <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -1005,8 +1100,13 @@ export default function KeywordPoolPage() {
           )}
         </div>
 
-        {/* 시드별 풀 분포 — 어떤 시드에서 몇 개 발굴됐는지 */}
+        {/* 시드별 풀 분포 — 어떤 시드에서 몇 개 발굴됐는지 (고급) */}
         {seedBreakdown.length > 0 && (
+        <details className="mb-6 group">
+          <summary className="cursor-pointer select-none px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium text-gray-700 inline-flex items-center gap-2">
+            <span className="group-open:rotate-90 transition">▶</span> 시드별 발굴 키워드 (표 + 자동 승격)
+          </summary>
+          <div className="mt-3" />
           <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
             <div className="flex items-center gap-2 mb-3 flex-wrap">
               <Database className="w-5 h-5 text-[#0064FF]" />
@@ -1060,9 +1160,15 @@ export default function KeywordPoolPage() {
               </table>
             </div>
           </div>
+        </details>
         )}
 
-        {/* 클릭 키워드 검수 — 일괄 삭제 */}
+        {/* 클릭 키워드 검수 (고급 — 핵심 설정은 위 "도메인 + 자동화" 박스에 있음) */}
+        <details className="mb-6 group">
+          <summary className="cursor-pointer select-none px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium text-gray-700 inline-flex items-center gap-2">
+            <span className="group-open:rotate-90 transition">▶</span> 클릭 발생 키워드 상세 검수 / 점수 ≤N 등록 KW 조회
+          </summary>
+          <div className="mt-3" />
         <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-2 mb-3 flex-wrap">
             <Activity className="w-5 h-5 text-[#0064FF]" />
@@ -1406,9 +1512,15 @@ export default function KeywordPoolPage() {
             )
           })()}
         </div>
+        </details>
 
-        {/* 최근 풀 키워드 샘플 — 어떤 키워드가 들어갔는지 직접 검수 */}
+        {/* 최근 풀 키워드 샘플 — 어떤 키워드가 들어갔는지 직접 검수 (고급) */}
         {recentKeywords.length > 0 && (
+        <details className="mb-6 group">
+          <summary className="cursor-pointer select-none px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium text-gray-700 inline-flex items-center gap-2">
+            <span className="group-open:rotate-90 transition">▶</span> 최근 풀에 추가된 키워드 샘플
+          </summary>
+          <div className="mt-3" />
           <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
             <div className="flex items-center gap-2 mb-3">
               <Activity className="w-5 h-5 text-[#0064FF]" />
@@ -1461,6 +1573,7 @@ export default function KeywordPoolPage() {
               </table>
             </div>
           </div>
+        </details>
         )}
 
         {/* 수집 데드락 알람 — 최근 5회 collect 가 모두 0건 + reject 많음 */}
@@ -1573,7 +1686,12 @@ export default function KeywordPoolPage() {
           </button>
         </div>
 
-        {/* AI 도메인 시드 확장 — base_seeds 만 도메인 의도로 사용 (풀 오염 우회) */}
+        {/* AI 도메인 시드 확장 — 1회성 수동 LLM (자동 ai_topup 으로 대체됨, 고급) */}
+        <details className="mb-6 group">
+          <summary className="cursor-pointer select-none px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium text-gray-700 inline-flex items-center gap-2">
+            <span className="group-open:rotate-90 transition">▶</span> AI 도메인 시드 확장 (1회성 수동 LLM)
+          </summary>
+          <div className="mt-3" />
         <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-2xl border border-indigo-200 p-6 mb-6">
           <div className="flex items-center gap-2 mb-3">
             <Zap className="w-5 h-5 text-indigo-600" />
@@ -1644,6 +1762,7 @@ export default function KeywordPoolPage() {
             </div>
           )}
         </div>
+        </details>
 
         {/* 비도메인 시드 일괄 정리 — 과거 POOL bridge 누수 잔재 */}
         <div className="bg-gradient-to-br from-rose-50 to-orange-50 rounded-2xl border border-rose-200 p-6 mb-6">
@@ -1731,7 +1850,12 @@ export default function KeywordPoolPage() {
           )}
         </div>
 
-        {/* AI reject 분류 — 시드 도메인과 같은 reject KW 자동 promote */}
+        {/* AI reject 분류 — reject KW 자동 promote (고급) */}
+        <details className="mb-6 group">
+          <summary className="cursor-pointer select-none px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium text-gray-700 inline-flex items-center gap-2">
+            <span className="group-open:rotate-90 transition">▶</span> AI reject 분류 (관리자 — reject KW 자동 시드 승격)
+          </summary>
+          <div className="mt-3" />
         <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl border border-purple-200 p-6 mb-6">
           <div className="flex items-center gap-2 mb-3">
             <Zap className="w-5 h-5 text-purple-600" />
@@ -1785,6 +1909,7 @@ export default function KeywordPoolPage() {
             </span>
           </div>
         </div>
+        </details>
 
         {/* 안내 */}
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-900">
