@@ -3567,41 +3567,47 @@ async def _run_pool_ai_seed_topup(uid: int, customer_id: int) -> Dict[str, Any]:
     domain_pass = [k for k in candidates if _matches_domain(k)]
     domain_fail = len(candidates) - len(domain_pass)
 
-    # 3) keywordstool 배치 검증
+    # 3) keywordstool 배치 — LLM 키워드를 hint 로 보내고 응답 keywordList 전체에서
+    # 도메인+검색량 통과 KW 를 user_seed 로 채택 (hint 자체는 검색량 0 이라 응답에서
+    # 빠질 수 있음. collect 와 동일한 패턴: hint → 연관 KW pool 추출).
     from services.naver_ad_service import NaverAdApiClient
     client = NaverAdApiClient()
     client.customer_id = account["customer_id"]
     client.api_key = account["api_key"]
     client.secret_key = account["secret_key"]
 
-    def _norm(s: str) -> str:
-        return (s or "").replace(" ", "").upper()
-
     validated: List[Dict] = []
     seen_validated: Set[str] = set()
     MIN_VOL = 5
     for i in range(0, len(domain_pass), 5):
         chunk = domain_pass[i:i + 5]
+        hint_str = ",".join(chunk)
         try:
-            vol_map = await client.get_keywords_volume_batch(chunk)
+            related = await client.get_related_keywords(hint_str, show_detail=True)
         except Exception as e:
-            logger.warning(f"[pool/ai-topup] volume batch 실패 {chunk}: {e}")
+            logger.warning(f"[pool/ai-topup] keywordstool 실패 {chunk}: {e}")
             continue
-        norm_vol = {_norm(k): v for k, v in vol_map.items()}
-        for kw in chunk:
-            v = norm_vol.get(_norm(kw))
-            if not v:
+        items = related.get("keywordList", []) if isinstance(related, dict) else []
+        for it in items:
+            kw = (it.get("relKeyword") or "").strip()
+            if not kw or kw in seen_validated:
                 continue
-            mt = int(v.get("monthly_total") or 0)
-            if mt < MIN_VOL or kw in seen_validated:
+            pc = _parse_naver_count(it.get("monthlyPcQcCnt"))
+            mob = _parse_naver_count(it.get("monthlyMobileQcCnt"))
+            mt = pc + mob
+            if mt < MIN_VOL:
+                continue
+            # 응답 KW 도 도메인 게이트 통과해야 함 (LLM 이 trigger 했어도 Naver 가 cross-
+            # domain 연관 키워드 끼워 반환할 수 있음).
+            if not _matches_domain(kw):
                 continue
             seen_validated.add(kw)
             validated.append({
                 "keyword": kw,
                 "monthly_total": mt,
-                "monthly_pc": int(v.get("monthly_pc") or 0),
-                "monthly_mobile": int(v.get("monthly_mobile") or 0),
-                "comp_idx": v.get("comp_idx"),
+                "monthly_pc": pc,
+                "monthly_mobile": mob,
+                "comp_idx": it.get("compIdx"),
                 "seed": "ai_topup",
                 "source": "user_seed",  # collect 가 다음 라운드에 자동 사용
             })
