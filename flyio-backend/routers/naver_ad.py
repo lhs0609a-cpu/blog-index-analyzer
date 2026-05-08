@@ -3438,11 +3438,203 @@ async def _run_pool_inspect_only(uid: int, customer_id: int) -> None:
     await _inspect_ad_groups(uid, customer_id, client, ag_ids, delete_from_naver=True)
 
 
+async def _run_pool_ai_seed_topup(uid: int, customer_id: int) -> Dict[str, Any]:
+    """collect 가 마른 우물 (added < N) 일 때 LLM 으로 새 시드 자동 주입.
+
+    - saved relevance_keywords (없으면 user_seed Top80) 를 base 로 GPT-4o-mini 호출
+    - 도메인 토큰셋 1차 필터 → keywordstool 5개 배치 검증 → user_seed 로 INSERT
+    - 24시간 내 6회 cap (OpenAI cost 보호) + cooldown 25분
+    - record_run(kind='ai_topup') 으로 frontend 표시
+    """
+    import json as _json
+    from config import settings as _settings
+    from database.naver_ad_db import (
+        get_ad_account_by_customer,
+        get_ad_account_relevance_keywords,
+    )
+    import time as _time
+    import sqlite3 as _sqlite3
+
+    pool = get_keyword_pool_db()
+    t0 = _time.monotonic()
+
+    # OpenAI 키 / 광고주 / 도메인 의도 확인
+    if not getattr(_settings, "OPENAI_API_KEY", ""):
+        logger.warning(f"[pool/ai-topup] uid={uid} cid={customer_id} OPENAI_API_KEY 미설정 — skip")
+        return {"skipped": "no_openai_key"}
+    account = get_ad_account_by_customer(uid, str(customer_id))
+    if not account or not account.get("is_connected"):
+        return {"skipped": "no_account"}
+    saved = get_ad_account_relevance_keywords(uid, str(customer_id)) or []
+    if len(saved) < 3:
+        # 폴백 — user_seed 풀 Top 60 (오염 가능하므로 saved_relevance 가 진짜 의도).
+        seeds_fb = pool.list_user_seeds(customer_id) or []
+        if len(seeds_fb) < 3:
+            return {"skipped": "insufficient_base_seeds"}
+        base = seeds_fb[:60]
+        basis = "user_seed_fallback"
+    else:
+        base = saved
+        basis = "saved_relevance"
+
+    # cooldown / daily cap — naverad_pool_runs 직접 조회 (전용 메서드 추가 회피).
+    AI_TOPUP_COOLDOWN_S = 25 * 60
+    AI_TOPUP_DAILY_CAP = 6
+    try:
+        with _sqlite3.connect(pool.db_path) as conn:
+            row = conn.execute(
+                """SELECT started_at, COUNT(*) FROM naverad_pool_runs
+                   WHERE account_customer_id=? AND kind='ai_topup'
+                     AND started_at > datetime('now','-24 hours')""",
+                (customer_id,),
+            ).fetchone()
+            recent_cnt = int(row[1] or 0) if row else 0
+            last_started = row[0] if row else None
+            if recent_cnt >= AI_TOPUP_DAILY_CAP:
+                logger.warning(f"[pool/ai-topup] uid={uid} cid={customer_id} 24h cap {AI_TOPUP_DAILY_CAP} 도달 — skip")
+                return {"skipped": "daily_cap", "recent_24h": recent_cnt}
+            if last_started:
+                last_row = conn.execute(
+                    """SELECT (julianday('now') - julianday(started_at)) * 86400 AS sec_ago
+                       FROM naverad_pool_runs
+                       WHERE account_customer_id=? AND kind='ai_topup'
+                       ORDER BY id DESC LIMIT 1""",
+                    (customer_id,),
+                ).fetchone()
+                sec_ago = float(last_row[0]) if last_row and last_row[0] else 999999
+                if sec_ago < AI_TOPUP_COOLDOWN_S:
+                    return {"skipped": "cooldown", "sec_ago": int(sec_ago)}
+    except Exception as e:
+        logger.warning(f"[pool/ai-topup] cooldown 조회 실패 (계속): {e}")
+
+    # 도메인 토큰셋 — base seeds 만 (풀 오염 무시)
+    domain_tokens = _build_domain_token_set(base) | _build_seed_atoms(base)
+    def _matches_domain(kw: str) -> bool:
+        k = (kw or "").replace(" ", "")
+        if len(k) < 2:
+            return False
+        return any(t in k for t in domain_tokens)
+
+    # 1) LLM 호출 — 80개 후보 생성
+    prompt_seeds = ", ".join(base[:60])
+    prompt = (
+        f"다음 한국어 키워드들과 동일 도메인의 검색 가능성 있는 한국어 키워드를 정확히 80개 생성해줘.\n\n"
+        f"입력 키워드:\n{prompt_seeds}\n\n"
+        f"규칙:\n- 입력 키워드와 동일 분야 안에서만 (예: 의료면 의료)\n"
+        f"- 다른 도메인 단어 절대 금지\n- 띄어쓰기 가능\n- 한 줄당 1개\n- JSON array"
+    )
+    candidates: List[str] = []
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as oai:
+            resp = await oai.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {_settings.OPENAI_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "gpt-4o-mini",
+                    "messages": [
+                        {"role": "system", "content": "한국어 검색광고 키워드 전문가. 도메인 일관성 절대 위반 금지. JSON array 만 반환."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 3000,
+                },
+            )
+            resp.raise_for_status()
+            content = resp.json()["choices"][0]["message"]["content"]
+        cb = re.search(r"```(?:json)?\s*(.*?)\s*```", content, re.DOTALL)
+        if cb:
+            content = cb.group(1)
+        gen = _json.loads(content.strip())
+        if isinstance(gen, list):
+            seen = set()
+            for k in gen:
+                if isinstance(k, str):
+                    kw = k.strip()
+                    if kw and len(kw) >= 2 and kw not in seen:
+                        seen.add(kw)
+                        candidates.append(kw)
+    except Exception as e:
+        pool.record_run(uid, customer_id, "ai_topup", "failed",
+                        error_message=f"LLM 실패: {type(e).__name__}: {str(e)[:200]}",
+                        duration_ms=int((_time.monotonic()-t0)*1000))
+        logger.warning(f"[pool/ai-topup] LLM 실패 uid={uid} cid={customer_id}: {e}")
+        return {"skipped": "llm_failed", "error": str(e)[:200]}
+
+    # 2) 도메인 1차 필터
+    domain_pass = [k for k in candidates if _matches_domain(k)]
+    domain_fail = len(candidates) - len(domain_pass)
+
+    # 3) keywordstool 배치 검증
+    from services.naver_ad_service import NaverAdApiClient
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    def _norm(s: str) -> str:
+        return (s or "").replace(" ", "").upper()
+
+    validated: List[Dict] = []
+    seen_validated: Set[str] = set()
+    MIN_VOL = 5
+    for i in range(0, len(domain_pass), 5):
+        chunk = domain_pass[i:i + 5]
+        try:
+            vol_map = await client.get_keywords_volume_batch(chunk)
+        except Exception as e:
+            logger.warning(f"[pool/ai-topup] volume batch 실패 {chunk}: {e}")
+            continue
+        norm_vol = {_norm(k): v for k, v in vol_map.items()}
+        for kw in chunk:
+            v = norm_vol.get(_norm(kw))
+            if not v:
+                continue
+            mt = int(v.get("monthly_total") or 0)
+            if mt < MIN_VOL or kw in seen_validated:
+                continue
+            seen_validated.add(kw)
+            validated.append({
+                "keyword": kw,
+                "monthly_total": mt,
+                "monthly_pc": int(v.get("monthly_pc") or 0),
+                "monthly_mobile": int(v.get("monthly_mobile") or 0),
+                "comp_idx": v.get("comp_idx"),
+                "seed": "ai_topup",
+                "source": "user_seed",  # collect 가 다음 라운드에 자동 사용
+            })
+        await asyncio.sleep(0.3)
+
+    # 4) user_seed 로 INSERT
+    seed_items = [{**v, "source": "user_seed"} for v in validated]
+    added = pool.add_candidates(uid, customer_id, seed_items)
+
+    duration_ms = int((_time.monotonic() - t0) * 1000)
+    pool.record_run(
+        uid, customer_id, "ai_topup",
+        "success" if added > 0 else "no_new",
+        added=added, seeds_count=len(base),
+        error_message=(
+            f"AI 시드 확장 ({basis}) — LLM {len(candidates)} → 도메인 {len(domain_pass)} "
+            f"(컷 {domain_fail}) → 검증≥{MIN_VOL} {len(validated)} → INSERT {added}"
+        ),
+        duration_ms=duration_ms,
+    )
+    logger.warning(
+        f"[pool/ai-topup] uid={uid} cid={customer_id} basis={basis} base={len(base)} "
+        f"LLM={len(candidates)} domain={len(domain_pass)} validated={len(validated)} added={added} ({duration_ms}ms)"
+    )
+    return {"added": added, "llm": len(candidates), "validated": len(validated), "duration_ms": duration_ms}
+
+
 async def _run_pool_workers_for_accounts(pairs: List[Tuple[int, int]]):
     """B 시나리오 — (user_id, customer_id) 페어별로 collect+register+inspect.
     한 사용자 여러 광고주를 가진 경우 광고주마다 독립적으로 워커 실행.
     inspect 는 register 와 분리 실행 — register 의 pending=0 early return 누수 차단."""
     pool = get_keyword_pool_db()
+    AI_TOPUP_TRIGGER_THRESHOLD = 10  # 직전 collect added < N 이면 AI 시드 확장 트리거
     for uid, cid in pairs:
         try:
             await _run_pool_collect(uid, customer_id=cid)
@@ -3453,6 +3645,21 @@ async def _run_pool_workers_for_accounts(pairs: List[Tuple[int, int]]):
                                 error_message=f"{type(e).__name__}: {str(e)[:300]}")
             except Exception:
                 pass
+
+        # AI 시드 자동 확장 — 직전 collect 가 마른 우물이면 LLM 으로 새 시드 주입.
+        # cooldown / daily cap 은 _run_pool_ai_seed_topup 내부에서 관리.
+        try:
+            recent = pool.recent_runs(cid, limit=3) or []
+            last_collect = next((r for r in recent if r.get("kind") == "collect"), None)
+            last_added = int(last_collect.get("added") or 0) if last_collect else 0
+            if last_added < AI_TOPUP_TRIGGER_THRESHOLD:
+                logger.warning(
+                    f"[pool/run] uid={uid} cid={cid} 마른 우물 (last collect added={last_added}) → AI top-up 트리거"
+                )
+                await _run_pool_ai_seed_topup(uid, cid)
+        except Exception as e:
+            logger.error(f"[pool/run] ai-topup 실패 user={uid} cid={cid}: {e}", exc_info=True)
+
         try:
             await _run_pool_register(uid, customer_id=cid)
         except Exception as e:
