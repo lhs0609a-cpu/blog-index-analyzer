@@ -796,6 +796,21 @@ class KeywordPoolDB:
                 n += cur.rowcount
             return n
 
+    def list_classified_reject_keywords(self, account_customer_id: int) -> List[str]:
+        """이미 분류된 (promoted/discarded) reject KW 전체 — collect inline 게이트 재호출 비용 cap.
+
+        매 collect tick 시작 시 메모리 set 으로 로드해 reject_for_ai 누적 대상에서 제외.
+        """
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT keyword FROM naverad_keyword_pool_rejects
+                   WHERE account_customer_id = ?
+                     AND classified_status IN ('promoted', 'discarded')""",
+                (account_customer_id,),
+            )
+            return [r["keyword"] for r in cur.fetchall() if r["keyword"]]
+
     def reject_stats(self, account_customer_id: int) -> Dict:
         """reject 풀 상태 — UI 표시용."""
         with self._conn() as conn:

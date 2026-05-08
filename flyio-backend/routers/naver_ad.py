@@ -2673,9 +2673,15 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     sample_no_domain: List[str] = []
     sample_no_seed: List[str] = []
     # AI 분류용 reject 누적 — 도메인미스만 (시드미스는 의미 없음 — atom 자체가 없는 KW).
-    # 검색량 ≥ 100 인 것만 저장 (분류 가치 있는 KW). batch 끝에서 일괄 INSERT.
+    # 검색량 ≥ 50 인 것만 저장 (분류 가치 있는 KW). batch 끝에서 일괄 INSERT.
+    # 이미 한 번 분류된 (promoted/discarded) KW 는 제외 — GPT 중복 호출 비용 cap.
     reject_for_ai: List[Dict] = []
     reject_for_ai_seen: Set[str] = set()
+    classified_reject_set: Set[str] = set()
+    try:
+        classified_reject_set = set(pool.list_classified_reject_keywords(customer_id))
+    except Exception as e:
+        logger.warning(f"[pool/collect] classified set 로드 실패: {e}")
     api_errors: List[str] = []
     seeds_processed = 0
     bfs_calls = 0
@@ -2781,7 +2787,11 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                     reject_no_domain += 1
                     if len(sample_no_domain) < 10:
                         sample_no_domain.append(kw)
-                    if mt >= 100 and kw not in reject_for_ai_seen:
+                    if (
+                        mt >= 50
+                        and kw not in reject_for_ai_seen
+                        and kw not in classified_reject_set
+                    ):
                         reject_for_ai_seen.add(kw)
                         reject_for_ai.append({"keyword": kw, "monthly_total": mt})
                 else:
@@ -2880,16 +2890,94 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         logger.warning(f"[pool/collect] 도메인미스 샘플: {', '.join(sample_no_domain)}")
     if sample_no_seed:
         logger.warning(f"[pool/collect] 시드미스 샘플: {', '.join(sample_no_seed)}")
-    # AI 분류용 reject 누적 batch INSERT — 라운드당 최대 1000개로 cap (DB 비대화 방지)
+    # AI 분류용 reject 누적 batch INSERT — 라운드당 최대 1000개로 cap (DB 비대화 방지).
+    # 백업 cron (_ai_classify_tick) 의 입력 풀 + UI 카운터 표시용.
     if reject_for_ai:
         try:
             saved = pool.add_rejects(customer_id, reject_for_ai[:1000])
             if saved:
                 logger.warning(
-                    f"[pool/collect] AI 분류 후보 reject {saved}개 누적 (검색량≥100)"
+                    f"[pool/collect] AI 분류 후보 reject {saved}개 누적 (검색량≥50)"
                 )
         except Exception as e:
             logger.warning(f"[pool/collect] add_rejects 실패: {e}")
+
+    # ============ Inline AI 자식 게이트 — 매 collect 직후 즉시 GPT 분류 ============
+    # reject 풀의 fresh 후보 (검색량 상위 200개) 를 GPT-4o-mini 가 시드 도메인 일치 분류.
+    # approved 는 시드가 아니라 자식 KW 로 직접 등록 풀에 추가 (source='ai_inline').
+    # 게이트 atom 우회 — 다음 register cron (2분 후) 즉시 광고그룹 등록.
+    # 비용: collect 1회당 ~$0.001 (시간당 ~$0.012, 월 ~$10). reject_for_ai 비면 skip.
+    inline_ai_added = 0
+    inline_ai_approved = 0
+    inline_ai_discarded = 0
+    try:
+        from config import settings as _settings
+        if reject_for_ai and _settings.OPENAI_API_KEY:
+            from services.ai_seed_suggester import classify_rejects as _classify_rejects
+            # 검색량 상위 200개 — 라운드당 GPT 호출 1회로 cap
+            top_rejects = sorted(
+                reject_for_ai, key=lambda r: -int(r.get("monthly_total") or 0)
+            )[:200]
+            ai_seeds_input = pool.list_user_seeds(customer_id) or whitelist
+            if ai_seeds_input and top_rejects:
+                ai_t0 = _time.monotonic()
+                ai_result = await _classify_rejects(
+                    ai_seeds_input, top_rejects, seed_sample_size=50,
+                )
+                ai_ms = int((_time.monotonic() - ai_t0) * 1000)
+                if ai_result.get("success"):
+                    approved = ai_result.get("approved") or []
+                    discarded = ai_result.get("discarded") or []
+                    inline_ai_approved = len(approved)
+                    inline_ai_discarded = len(discarded)
+                    if approved:
+                        mt_map = {
+                            r["keyword"]: int(r.get("monthly_total") or 0)
+                            for r in top_rejects
+                        }
+                        inline_items = [
+                            {
+                                "keyword": k,
+                                "monthly_total": mt_map.get(k, 0),
+                                "monthly_pc": 0,
+                                "monthly_mobile": 0,
+                                "comp_idx": None,
+                                "source": "ai_inline",
+                                "seed": "ai_classified",
+                            }
+                            for k in approved
+                        ]
+                        try:
+                            inline_ai_added = pool.add_candidates(
+                                uid, customer_id, inline_items
+                            )
+                            added += inline_ai_added  # 헤드룸 카운트 정확화
+                        except Exception as e:
+                            logger.warning(f"[pool/collect/ai-inline] add 실패: {e}")
+                        try:
+                            pool.mark_rejects_classified(customer_id, approved, "promoted")
+                        except Exception:
+                            pass
+                    if discarded:
+                        try:
+                            pool.mark_rejects_classified(customer_id, discarded, "discarded")
+                        except Exception:
+                            pass
+                    logger.warning(
+                        f"[pool/collect/ai-inline] user={uid} cid={customer_id} "
+                        f"분류 {len(top_rejects)}개 → 통과 {inline_ai_approved} (자식 추가 {inline_ai_added}) "
+                        f"/ 컷 {inline_ai_discarded} ({ai_ms}ms) "
+                        f"rationale={(ai_result.get('rationale') or '')[:80]}"
+                    )
+                else:
+                    logger.warning(
+                        f"[pool/collect/ai-inline] 분류 실패: {ai_result.get('message')}"
+                    )
+        elif reject_for_ai and not _settings.OPENAI_API_KEY:
+            logger.warning("[pool/collect/ai-inline] OPENAI_API_KEY 미설정 — skip")
+    except Exception as e:
+        logger.warning(f"[pool/collect/ai-inline] 예외: {type(e).__name__}: {e}", exc_info=True)
+    # ===========================================================================
     pending_after = (pool.stats(customer_id).get("by_status") or {}).get("pending", 0)
     err_parts = list(api_errors)
     if circuit_aborted:
@@ -2901,6 +2989,10 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         err_parts.append(
             f"화이트리스트 reject {rejected}개 "
             f"(도메인미스 {reject_no_domain} / 시드미스 {reject_no_seed_match})"
+        )
+    if inline_ai_added > 0 or inline_ai_approved > 0 or inline_ai_discarded > 0:
+        err_parts.append(
+            f"AI inline 자식 +{inline_ai_added} (통과 {inline_ai_approved} / 컷 {inline_ai_discarded})"
         )
     pool.record_run(
         uid, customer_id, "collect",
