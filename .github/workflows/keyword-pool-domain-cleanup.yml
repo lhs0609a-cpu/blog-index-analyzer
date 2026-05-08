@@ -1,0 +1,52 @@
+name: Keyword pool — domain cleanup (click 무관)
+
+# 매 1시간 — auto_cleanup_enabled=1 광고주의 등록 KW 중 relevance_keywords 점수
+# ≤ threshold 인 것 일괄 DELETE (click 발생 여부 무관). 100k 풀의 무관 잔재 점진 청소.
+# 빈 자리는 collect/register cron 이 새 도메인 KW 로 채움 → 사용자가 원하는
+# "100k = 100% 도메인 KW" 수렴 자동화.
+
+on:
+  schedule:
+    - cron: "30 * * * *"  # 매시 30분
+  workflow_dispatch:
+    inputs:
+      threshold:
+        description: "점수 임계값 (default 30)"
+        required: false
+      max_delete:
+        description: "광고주 1회당 최대 삭제 수 (default 500)"
+        required: false
+      user_id:
+        description: "특정 user_id (생략 시 모든 ON 광고주)"
+        required: false
+      customer_id:
+        description: "특정 customer_id (user_id 와 함께)"
+        required: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Trigger domain cleanup
+        env:
+          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
+          BACKEND_URL: https://blog-index-analyzer.fly.dev
+          THRESHOLD: ${{ github.event.inputs.threshold || '30' }}
+          MAX_DELETE: ${{ github.event.inputs.max_delete || '500' }}
+          USER_ID: ${{ github.event.inputs.user_id || '' }}
+          CUSTOMER_ID: ${{ github.event.inputs.customer_id || '' }}
+        run: |
+          if [ -z "$CRON_TOKEN" ]; then
+            echo "::error::CRON_TOKEN secret 미설정"; exit 1
+          fi
+          q="?threshold=${THRESHOLD}&max_delete=${MAX_DELETE}"
+          if [ -n "$USER_ID" ]; then q="${q}&user_id=${USER_ID}"; fi
+          if [ -n "$CUSTOMER_ID" ]; then q="${q}&customer_id=${CUSTOMER_ID}"; fi
+          status=$(curl -sS -o /tmp/body.json -w "%{http_code}" \
+            -X POST "${BACKEND_URL}/api/naver-ad/keyword-pool/cron/domain-cleanup${q}" \
+            -H "Authorization: Bearer ${CRON_TOKEN}" \
+            --max-time 60)
+          echo "status=$status"
+          cat /tmp/body.json
+          [ "$status" = "200" ] || { echo "::error::domain-cleanup 트리거 실패"; exit 1; }

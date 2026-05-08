@@ -4462,6 +4462,206 @@ async def _run_auto_cleanup_for_account(
     }
 
 
+async def _run_domain_cleanup_for_account(
+    user_id: int, customer_id: int, threshold: int = 30, max_delete: int = 500,
+) -> Dict:
+    """click 무관 — relevance_keywords 점수 ≤ threshold 인 등록 KW 일괄 DELETE.
+
+    cron 으로 매 시간 실행되어 100k 풀에서 도메인 안 맞는 무관 KW 를 점진 정리.
+    한 tick 당 max_delete (default 500) 제한 — Naver rate + 사고 방지.
+    빈 자리는 collect/register cron 이 새 도메인 KW 로 채움 → 100k 가 점진적으로 도메인 KW 100% 로 수렴.
+    """
+    from services.naver_ad_service import NaverAdApiClient
+    from database.naver_ad_db import (
+        get_ad_account_by_customer,
+        get_ad_account_relevance_keywords,
+        record_auto_cleanup_run,
+    )
+    import sqlite3 as _sqlite3
+    import time as _t
+
+    t0 = _t.monotonic()
+    account = get_ad_account_by_customer(user_id, str(customer_id))
+    if not account or not account.get("is_connected"):
+        try: record_auto_cleanup_run(user_id, str(customer_id), 0)
+        except Exception: pass
+        return {"customer_id": customer_id, "deleted": 0, "reason": "not_connected"}
+
+    # 점수 기준 키워드 — saved relevance > user_seed 폴백
+    saved = get_ad_account_relevance_keywords(user_id, str(customer_id))
+    pool = get_keyword_pool_db()
+    if saved and len(saved) >= 1:
+        score_basis = saved
+        basis = "saved_relevance"
+    else:
+        score_basis = [s for s in (pool.list_user_seeds(customer_id) or []) if s and len(s) >= 2]
+        basis = "user_seed"
+    if not score_basis:
+        return {"customer_id": customer_id, "deleted": 0, "reason": "no_score_basis"}
+
+    reg = get_registered_keywords_db()
+    with _sqlite3.connect(reg.db_path) as conn:
+        rows = conn.execute(
+            "SELECT keyword, ncc_keyword_id FROM registered_keywords "
+            "WHERE account_customer_id=? AND ncc_keyword_id IS NOT NULL",
+            (customer_id,),
+        ).fetchall()
+    if not rows:
+        try: record_auto_cleanup_run(user_id, str(customer_id), 0)
+        except Exception: pass
+        return {"customer_id": customer_id, "deleted": 0, "reason": "no_registered"}
+
+    # 점수 매김 — atoms precompute (95k KW × atoms 재빌드 차단)
+    def _score_all() -> List[Tuple[str, str, int]]:
+        atoms_3plus: set = set()
+        atoms_2: set = set()
+        for s in score_basis:
+            if not s or len(s) < 2:
+                continue
+            if len(s) >= 4:
+                atoms_3plus.add(s)
+            for n in (2, 3):
+                for i in range(len(s) - n + 1):
+                    a = s[i:i + n]
+                    (atoms_2 if len(a) == 2 else atoms_3plus).add(a)
+        out: List[Tuple[str, str, int]] = []
+        for kw_text, kid in rows:
+            if not kw_text:
+                out.append((kid, "", 0)); continue
+            sc = 0
+            full = False
+            for s in score_basis:
+                if not s or len(s) < 2:
+                    continue
+                if s in kw_text: sc = 100; full = True; break
+                if kw_text in s: sc = 95; full = True; break
+            if not full:
+                n_3 = sum(1 for a in atoms_3plus if a in kw_text)
+                n_2 = sum(1 for a in atoms_2 if a in kw_text)
+                sc = min(95, min(80, n_3 * 20) + min(30, n_2 * 5))
+            out.append((kid, kw_text, sc))
+        return out
+
+    scored = await asyncio.to_thread(_score_all)
+    targets = [(kid, kw, s) for kid, kw, s in scored if s <= threshold]
+    targets.sort(key=lambda x: x[2])  # 무관한 것부터
+    targets = targets[:max(0, min(max_delete, 5000))]
+    if not targets:
+        try: record_auto_cleanup_run(user_id, str(customer_id), 0)
+        except Exception: pass
+        return {"customer_id": customer_id, "deleted": 0, "reason": "no_below_threshold",
+                "total_registered": len(scored), "basis": basis}
+
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    n_del, n_pause, n_fail = 0, 0, 0
+    affected_kws: List[str] = []
+    for kid, kw_text, _s in targets:
+        try:
+            await client.delete_keyword(kid)
+            with _sqlite3.connect(reg.db_path) as c:
+                c.execute(
+                    "DELETE FROM registered_keywords "
+                    "WHERE account_customer_id=? AND ncc_keyword_id=?",
+                    (customer_id, kid),
+                )
+            with _sqlite3.connect(pool.db_path) as c:
+                c.execute(
+                    "UPDATE naverad_keyword_pool SET status='deleted' "
+                    "WHERE account_customer_id=? AND keyword=?",
+                    (customer_id, kw_text),
+                )
+            n_del += 1
+            if kw_text: affected_kws.append(kw_text)
+        except Exception:
+            try:
+                await client.pause_keyword(kid)
+                n_pause += 1
+                if kw_text: affected_kws.append(kw_text)
+            except Exception:
+                n_fail += 1
+        await asyncio.sleep(0.15)
+
+    try:
+        record_auto_cleanup_run(user_id, str(customer_id), n_del + n_pause)
+        pool.record_run(
+            user_id, customer_id, "inspect",
+            "success" if n_del > 0 else "no_new",
+            registered=0, failed=n_fail, skipped=n_del,
+            seeds_count=len(score_basis),
+            error_message=(
+                f"도메인 자동 정리 ({basis}, click 무관) — DELETE {n_del} / "
+                f"PAUSE {n_pause} / 실패 {n_fail} / 점수≤{threshold}"
+            ),
+            duration_ms=int((_t.monotonic() - t0) * 1000),
+        )
+    except Exception:
+        pass
+    logger.warning(
+        f"[domain-cleanup] uid={user_id} cid={customer_id} basis={basis} "
+        f"thr={threshold} → del={n_del} pause={n_pause} fail={n_fail}"
+    )
+    return {
+        "customer_id": customer_id, "deleted": n_del, "paused": n_pause,
+        "failed": n_fail, "basis": basis, "threshold": threshold,
+        "below_threshold_total": len(targets), "total_registered": len(scored),
+    }
+
+
+@router.post("/keyword-pool/cron/domain-cleanup")
+async def keyword_pool_cron_domain_cleanup(
+    background_tasks: BackgroundTasks,
+    authorization: Optional[str] = Header(None),
+    threshold: int = Query(30, ge=0, le=95),
+    max_delete: int = Query(500, ge=1, le=5000),
+    user_id: Optional[int] = Query(None),
+    customer_id: Optional[str] = Query(None),
+):
+    """Bearer cron — relevance_keywords 점수 ≤ threshold 등록 KW 자동 DELETE (click 무관).
+
+    매 1시간 실행되어 100k 풀의 무관 잔재를 점진 청소. 빈 자리는 collect/register cron 이
+    새 도메인 KW 로 채움 → 100k 가 100% 도메인 KW 로 수렴 (사용자 의도).
+    auto_cleanup_enabled=1 광고주만 처리.
+    """
+    _verify_cron_token(authorization)
+    from database.naver_ad_db import list_auto_cleanup_enabled_accounts, get_ad_account_auto_cleanup
+
+    targets: List[Tuple[int, int, int]] = []
+    if user_id and customer_id:
+        s = get_ad_account_auto_cleanup(user_id, str(customer_id))
+        thr = threshold if threshold else int(s.get("threshold") or 30)
+        targets = [(user_id, int(customer_id), int(thr))]
+    else:
+        rows = list_auto_cleanup_enabled_accounts() or []
+        for r in rows:
+            uid = int(r.get("user_id"))
+            cid = int(r.get("customer_id"))
+            thr = threshold if threshold else int(r.get("auto_cleanup_threshold") or 30)
+            targets.append((uid, cid, thr))
+
+    if not targets:
+        return {"success": True, "queued": 0, "message": "자동 cleanup ON 광고주 없음"}
+
+    async def _run_all():
+        for uid, cid, thr in targets:
+            try:
+                res = await _run_domain_cleanup_for_account(uid, cid, thr, max_delete=max_delete)
+                logger.info(f"[domain-cleanup/cron] uid={uid} cid={cid} thr={thr} → {res}")
+            except Exception as e:
+                logger.error(f"[domain-cleanup/cron] uid={uid} cid={cid} 실패: {type(e).__name__}: {e}", exc_info=True)
+
+    background_tasks.add_task(_run_all)
+    return {
+        "success": True, "queued": len(targets),
+        "max_delete_per_account": max_delete,
+        "threshold": threshold,
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
 @router.post("/keyword-pool/cron/auto-cleanup")
 async def keyword_pool_cron_auto_cleanup(
     background_tasks: BackgroundTasks,
