@@ -67,6 +67,19 @@ class KeywordPoolScheduler:
             max_instances=1,
             coalesce=True,
         )
+        # 자동완성 mining cron — keywordstool BFS 외 추가 발굴 채널.
+        # 10분마다 시드 200개 random sample → naver 자동완성 → 검색량 ≥ 50 → GPT 분류 →
+        # 통과 KW source='ai_autocomplete' 자식 풀 직접 추가. 시드 1500개 약 75분에 1 회전.
+        # 비용: 광고주당 cron 1회당 GPT $0.001 + keywordstool 250 호출 (무료).
+        self.scheduler.add_job(
+            self._autocomplete_mining_tick,
+            IntervalTrigger(seconds=600),
+            id="keyword_pool_autocomplete_mining",
+            name="키워드 풀 자동완성 mining (10분 주기, 시드 200개 rotate)",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
         # Domain cleanup — 매시 1회 (3600s) 도메인 안 맞는 등록 KW 자동 DELETE (click 무관).
         # GitHub Actions schedule cron 신뢰성 낮음 (관찰: 12+시간 멈춤 사례 빈번) → 백엔드 자체.
         # auto_cleanup_enabled=1 광고주만 처리, max_delete=500/광고주.
@@ -94,7 +107,8 @@ class KeywordPoolScheduler:
         self._running = True
         logger.warning(
             f"[pool/scheduler] 시작 — collect {interval_seconds}s / register 120s / "
-            f"inspect 600s / ai_classify 600s / domain_cleanup 3600s / click_cleanup 900s"
+            f"inspect 600s / ai_classify 600s / autocomplete 600s / "
+            f"domain_cleanup 3600s / click_cleanup 900s"
         )
 
     def stop(self):
@@ -156,6 +170,39 @@ class KeywordPoolScheduler:
                     logger.error(f"[pool/scheduler] collect 실패 user={uid} cid={cid}: {e}", exc_info=True)
         except Exception as e:
             logger.error(f"[pool/scheduler] collect tick 실패: {type(e).__name__}: {e}", exc_info=True)
+
+    async def _autocomplete_mining_tick(self):
+        """naver 자동완성 mining cron — 모든 활성 광고주 순회.
+
+        keywordstool BFS 외 추가 발굴 채널. 시드별 자동완성 ~10 KW 수집 →
+        검색량 검증 → GPT 분류 통과 KW 만 자식 풀 직접 추가.
+
+        OPENAI_API_KEY 없으면 즉시 noop. 광고주별 쿨다운 없음 (GPT 호출 1회/cron).
+        """
+        try:
+            from config import settings
+            if not settings.OPENAI_API_KEY:
+                return  # 조용히 skip — collect inline 게이트와 동일 정책
+            from routers.naver_ad import _run_pool_autocomplete_mining
+            from database.naver_ad_db import list_connected_ad_accounts
+            accts = list_connected_ad_accounts() or []
+            if not accts:
+                return
+            pairs = [(int(a["user_id"]), int(a["customer_id"]))
+                     for a in accts if a.get("user_id") and a.get("customer_id")]
+            for uid, cid in pairs:
+                try:
+                    await _run_pool_autocomplete_mining(uid, cid)
+                except Exception as e:
+                    logger.error(
+                        f"[pool/autocomplete] 광고주 처리 실패 user={uid} cid={cid}: {e}",
+                        exc_info=True,
+                    )
+        except Exception as e:
+            logger.error(
+                f"[pool/autocomplete] tick 실패: {type(e).__name__}: {e}",
+                exc_info=True,
+            )
 
     async def _ai_classify_tick(self):
         """광고주별로 deadlock 감지 시 AI 분류 발동 — reject 풀 → user_seed promote.

@@ -3159,6 +3159,244 @@ async def _run_pool_ai_classify(
     }
 
 
+async def _run_pool_autocomplete_mining(
+    uid: int,
+    customer_id: int,
+    *,
+    seed_sample_size: int = 200,
+    per_seed: int = 10,
+    min_volume: int = 50,
+    chunks_cap: int = 250,
+) -> Dict[str, Any]:
+    """naver 검색 자동완성으로 시드 인접 KW 발굴 → GPT 분류 → 자식 풀 직접 추가.
+
+    keywordstool BFS 와 별도 발굴 채널. 시드별 자동완성 ~10 KW = 1500~2000 후보.
+    검색량 검증 + GPT 도메인 분류 통과 KW 만 자식 풀 진입.
+
+    흐름:
+      1) user_seed N개 random sample → naver 자동완성 batch (concurrency 10)
+      2) 풀/reject 분류 KW dedup
+      3) keywordstool 검색량 batch (5개씩, 250 chunks cap)
+      4) 검색량 ≥ min_volume → GPT 분류 (검색량 상위 200개)
+      5) 통과 KW source='ai_autocomplete' 로 add_candidates → 자식 풀 즉시 진입
+      6) 분류 결과 reject 풀에 INSERT+mark → 다음 cron 재호출 차단
+    """
+    from services.naver_autocomplete import collect_autocomplete
+    from services.naver_ad_service import NaverAdApiClient
+    from services.ai_seed_suggester import classify_rejects
+    from database.naver_ad_db import get_ad_account_by_customer
+    from config import settings
+    import time as _time
+    import random
+
+    pool = get_keyword_pool_db()
+    t0 = _time.monotonic()
+
+    if not settings.OPENAI_API_KEY:
+        logger.warning(f"[pool/autocomplete] OPENAI_API_KEY 미설정 — skip")
+        return {"success": False, "reason": "no_api_key"}
+
+    account = get_ad_account_by_customer(uid, str(customer_id))
+    if not account or not account.get("is_connected"):
+        return {"success": False, "reason": "no_account"}
+
+    user_seeds = pool.list_user_seeds(customer_id)
+    if not user_seeds:
+        return {"success": False, "reason": "no_user_seed"}
+
+    if len(user_seeds) > seed_sample_size:
+        seed_sample = random.sample(user_seeds, seed_sample_size)
+    else:
+        seed_sample = list(user_seeds)
+
+    logger.warning(
+        f"[pool/autocomplete] user={uid} cid={customer_id} 시작 — "
+        f"시드 {len(seed_sample)}/{len(user_seeds)} 자동완성 mining"
+    )
+
+    # 1) 자동완성 batch 수집
+    ac_t0 = _time.monotonic()
+    try:
+        ac_result = await collect_autocomplete(
+            seed_sample, per_seed=per_seed, concurrency=10, timeout=5.0,
+        )
+    except Exception as e:
+        logger.error(f"[pool/autocomplete] 자동완성 호출 실패: {e}", exc_info=True)
+        pool.record_run(
+            uid, customer_id, "autocomplete", "failed",
+            seeds_count=len(seed_sample),
+            error_message=f"자동완성 호출 실패: {type(e).__name__}",
+            duration_ms=int((_time.monotonic() - t0) * 1000),
+        )
+        return {"success": False, "reason": "autocomplete_failed"}
+    ac_ms = int((_time.monotonic() - ac_t0) * 1000)
+
+    all_kws: Set[str] = set()
+    for kws in ac_result.values():
+        for k in kws:
+            all_kws.add(k)
+
+    if not all_kws:
+        pool.record_run(
+            uid, customer_id, "autocomplete", "no_new",
+            seeds_count=len(seed_sample),
+            error_message="자동완성 결과 0개",
+            duration_ms=int((_time.monotonic() - t0) * 1000),
+        )
+        return {"success": False, "reason": "no_autocomplete"}
+
+    logger.warning(
+        f"[pool/autocomplete] 자동완성 ({ac_ms}ms) — KW {len(all_kws)}개"
+    )
+
+    # 2) 분류 이력 dedup (풀 중복은 add_candidates 가 INSERT OR IGNORE 처리)
+    classified_set = set(pool.list_classified_reject_keywords(customer_id))
+    fresh_kws: List[str] = [kw for kw in all_kws if kw not in classified_set]
+
+    if not fresh_kws:
+        pool.record_run(
+            uid, customer_id, "autocomplete", "no_new",
+            seeds_count=len(seed_sample),
+            error_message=f"자동완성 {len(all_kws)}개 모두 dedup",
+            duration_ms=int((_time.monotonic() - t0) * 1000),
+        )
+        return {"success": False, "reason": "all_known"}
+
+    # 3) keywordstool 검색량 batch — 5개씩, 250 chunks (1250 KW) cap
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    vol_t0 = _time.monotonic()
+    vol_map: Dict[str, dict] = {}
+    CHUNK = 5
+    chunks = [fresh_kws[i:i + CHUNK] for i in range(0, len(fresh_kws), CHUNK)][:chunks_cap]
+    for chunk in chunks:
+        try:
+            r = await client.get_keywords_volume_batch(chunk)
+            vol_map.update(r)
+        except Exception as e:
+            logger.debug(f"[pool/autocomplete] volume batch 실패 {chunk[:1]}: {e}")
+        await asyncio.sleep(0.1)
+    vol_ms = int((_time.monotonic() - vol_t0) * 1000)
+
+    qualified: List[Dict] = []
+    for kw in fresh_kws:
+        v = vol_map.get(kw) or vol_map.get(kw.replace(" ", ""))
+        if not v:
+            continue
+        mt = int(v.get("monthly_total") or 0)
+        if mt < min_volume:
+            continue
+        qualified.append({
+            "keyword": kw,
+            "monthly_total": mt,
+            "monthly_pc": int(v.get("monthly_pc") or 0),
+            "monthly_mobile": int(v.get("monthly_mobile") or 0),
+            "comp_idx": v.get("comp_idx"),
+        })
+
+    logger.warning(
+        f"[pool/autocomplete] 검색량 ({vol_ms}ms) — "
+        f"{len(fresh_kws)} → 검색량≥{min_volume} {len(qualified)}"
+    )
+
+    if not qualified:
+        pool.record_run(
+            uid, customer_id, "autocomplete", "no_new",
+            seeds_count=len(seed_sample),
+            error_message=f"자동완성 {len(all_kws)} → 검색량 통과 0",
+            duration_ms=int((_time.monotonic() - t0) * 1000),
+        )
+        return {"success": False, "reason": "no_volume"}
+
+    # 4) GPT 분류 — 검색량 상위 200개
+    qualified.sort(key=lambda x: -x["monthly_total"])
+    classify_input = qualified[:200]
+    ai_t0 = _time.monotonic()
+    ai_result = await classify_rejects(user_seeds, classify_input, seed_sample_size=50)
+    ai_ms = int((_time.monotonic() - ai_t0) * 1000)
+
+    if not ai_result.get("success"):
+        msg = ai_result.get("message", "unknown")
+        pool.record_run(
+            uid, customer_id, "autocomplete", "failed",
+            seeds_count=len(seed_sample),
+            error_message=f"GPT 분류 실패: {msg[:200]}",
+            duration_ms=int((_time.monotonic() - t0) * 1000),
+        )
+        return {"success": False, "reason": "ai_failed", "message": msg}
+
+    approved = ai_result.get("approved") or []
+    discarded = ai_result.get("discarded") or []
+
+    # 5) 통과 KW → 자식 풀 직접 추가 (게이트 우회)
+    promoted = 0
+    if approved:
+        approved_set = set(approved)
+        items = [
+            {
+                "keyword": q["keyword"],
+                "monthly_total": q["monthly_total"],
+                "monthly_pc": q["monthly_pc"],
+                "monthly_mobile": q["monthly_mobile"],
+                "comp_idx": q.get("comp_idx"),
+                "source": "ai_autocomplete",
+                "seed": "ai_autocomplete",
+            }
+            for q in classify_input
+            if q["keyword"] in approved_set
+        ]
+        try:
+            promoted = pool.add_candidates(uid, customer_id, items)
+        except Exception as e:
+            logger.warning(f"[pool/autocomplete] add 실패: {e}")
+
+    # 6) 분류 결과를 reject 풀에 INSERT + mark → 다음 cron classified_set 에 잡힘
+    try:
+        all_classified_items = [
+            {"keyword": q["keyword"], "monthly_total": q["monthly_total"]}
+            for q in classify_input
+        ]
+        pool.add_rejects(customer_id, all_classified_items)
+        if approved:
+            pool.mark_rejects_classified(customer_id, approved, "promoted")
+        if discarded:
+            pool.mark_rejects_classified(customer_id, discarded, "discarded")
+    except Exception as e:
+        logger.debug(f"[pool/autocomplete] reject mark: {e}")
+
+    duration_ms = int((_time.monotonic() - t0) * 1000)
+    logger.warning(
+        f"[pool/autocomplete] user={uid} cid={customer_id} 완료 ({duration_ms}ms) — "
+        f"자동완성 {len(all_kws)} → 검증 {len(fresh_kws)} → "
+        f"검색량≥{min_volume} {len(qualified)} → 분류 {len(classify_input)} → "
+        f"통과 {len(approved)} (자식 +{promoted}) / 컷 {len(discarded)} "
+        f"(GPT {ai_ms}ms, rationale={(ai_result.get('rationale') or '')[:80]})"
+    )
+    pool.record_run(
+        uid, customer_id, "autocomplete",
+        "success" if promoted > 0 else "no_match",
+        added=promoted, skipped=len(discarded),
+        seeds_count=len(seed_sample),
+        error_message=(
+            f"자동완성 {len(all_kws)} → 검색량≥{min_volume} {len(qualified)} → "
+            f"GPT 통과 {len(approved)} (자식 +{promoted}) / 컷 {len(discarded)}"
+        )[:300],
+        duration_ms=duration_ms,
+    )
+    return {
+        "success": True,
+        "autocomplete_kws": len(all_kws),
+        "volume_qualified": len(qualified),
+        "approved": len(approved),
+        "promoted": promoted,
+        "discarded": len(discarded),
+        "duration_ms": duration_ms,
+    }
+
+
 async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch: int = 3000, bid: Optional[int] = None):
     """등록 1회 — pending → orchestrator로 일괄.
     customer_id 명시 시 그 광고주만 처리, 없으면 사용자의 가장 최근 광고주.
