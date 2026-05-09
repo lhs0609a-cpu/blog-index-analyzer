@@ -2673,15 +2673,22 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     sample_no_domain: List[str] = []
     sample_no_seed: List[str] = []
     # AI 분류용 reject 누적 — 도메인미스만 (시드미스는 의미 없음 — atom 자체가 없는 KW).
-    # 검색량 ≥ 50 인 것만 저장 (분류 가치 있는 KW). batch 끝에서 일괄 INSERT.
-    # 이미 한 번 분류된 (promoted/discarded) KW 는 제외 — GPT 중복 호출 비용 cap.
+    # 검색량 ≥ 10 인 것만 저장 (한의원 long-tail niche 대응). batch 끝에서 일괄 INSERT.
+    # 이미 한 번 분류된 (promoted/discarded) KW + 풀에 있는 KW 는 제외 —
+    # GPT 호출 비용 cap + "통과 N / 자식 +0" 사고 방지 (이미 풀에 있는 KW 가 GPT 통과해도
+    # add_candidates 가 INSERT OR IGNORE 로 무시해 자식 +0 발생).
     reject_for_ai: List[Dict] = []
     reject_for_ai_seen: Set[str] = set()
     classified_reject_set: Set[str] = set()
+    pool_kw_set: Set[str] = set()
     try:
         classified_reject_set = set(pool.list_classified_reject_keywords(customer_id))
     except Exception as e:
         logger.warning(f"[pool/collect] classified set 로드 실패: {e}")
+    try:
+        pool_kw_set = pool.list_pool_keyword_set(customer_id)
+    except Exception as e:
+        logger.warning(f"[pool/collect] pool_kw_set 로드 실패: {e}")
     api_errors: List[str] = []
     seeds_processed = 0
     bfs_calls = 0
@@ -2788,9 +2795,10 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                     if len(sample_no_domain) < 10:
                         sample_no_domain.append(kw)
                     if (
-                        mt >= 50
+                        mt >= 10
                         and kw not in reject_for_ai_seen
                         and kw not in classified_reject_set
+                        and kw not in pool_kw_set
                     ):
                         reject_for_ai_seen.add(kw)
                         reject_for_ai.append({"keyword": kw, "monthly_total": mt})

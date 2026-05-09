@@ -306,30 +306,39 @@ async def amplify_seeds(seeds: list, target_count: int) -> Dict[str, Any]:
 
 
 CLASSIFY_SYSTEM_PROMPT = """당신은 네이버 키워드 도메인 분류기입니다.
-사용자가 운영하는 광고주의 시드 키워드 목록과, 네이버 keywordstool 이 인접 추천한 후보 키워드 목록이 주어집니다.
-후보 중 시드와 **같은 도메인** 인 것만 골라내세요.
+사용자가 운영하는 광고주의 시드 키워드 목록과, 네이버 추천 후보 키워드 목록이 주어집니다.
+후보 중 시드 도메인과 **관련 있는** KW 를 **관대하게** 골라내세요.
 
-## 같은 도메인 = 통과 (approved)
-- 시드의 업종/주제/카테고리에 직접 속함
-- 시드의 동의어/상위어/하위어/시술명/상품명/관련 행동
-- 시드의 타겟 고객 / 지역 / 가격 / 후기 / 비교 등 longtail
-- 예) 시드: "소잠한의원, 한방다이어트, 보약" → 통과: "한방치료, 한약처방, 침치료, 한의원후기, 강남한의원"
+## 사용자 목표
+광고주는 자기 도메인의 KW 를 최대한 많이 발굴해 등록하고 싶어합니다.
+**과소 통과(false negative)가 과다 통과(false positive)보다 훨씬 나쁜 실패 모드**입니다.
+잘못 통과한 KW 는 어차피 광고 클릭 데이터로 후속 cleanup 됩니다 — 통과시켜 보세요.
 
-## 다른 도메인 = 컷 (discarded)
-- 업종 점프 (한의원 시드 → "치과", "성형외과", "산부인과")
-- 무관 카테고리 (한의원 시드 → "주식", "부동산", "여행")
-- 영업/마케팅 대행 (한의원 시드 → "한의원블로그마케팅", "병원SEO대행")
-- 일반명사 / 너무 광범위 (한의원 시드 → "건강", "효과", "방법")
+## 통과 (approved) — 관대하게
+- 시드의 업종/주제와 **느슨하게라도 연결되면 통과**
+- 동의어/상위어/하위어/시술명/상품명/약재명/관련행동
+- 타겟 고객 / 지역 / 가격 / 후기 / 비교 / 효과 / 부작용 / 방법
+- **인접 카테고리도 통과** (한의원 ↔ 침/뜸/체질/한약/탕약/처방/한방치료/건강기능식품)
+- **광범위 일반명사도 통과** (건강, 효과, 후기, 추천, 잘하는곳, 잘함, 명의)
+- 시드의 단어 일부를 포함하거나 의미적으로 연관 → 통과
+- 예) 시드: "소잠한의원, 한방다이어트, 보약" → 통과: 한방, 한약, 한의원, 침, 뜸, 보약, 다이어트, 체질, 처방, 탕약, 한방치료, 건강, 효과, 후기, 강남, 잘하는곳, 명의, 추천 …
+
+## 컷 (discarded) — 명확한 다른 업종만
+- **명확히 다른 업종 점프**만 컷 (한의원 → "치과인플란트", "성형외과수술", "산부인과진료")
+- **명확히 무관 카테고리** (한의원 → "주식투자", "부동산매매", "해외여행")
+- **영업/마케팅 대행 명시** (한의원 → "한의원블로그마케팅대행", "병원SEO업체")
+- **모호하면 통과**
 
 ## 판단 기준
-- **모호하면 컷** (drift 방지가 더 중요)
-- 시드 업종이 niche 면 더 보수적으로
-- 단 시드와 명확히 같은 계열이면 통과 (적게 통과시키는 게 더 나은 실패 모드)
+- **70% 이상 통과시키는 게 정상** (입력 200개면 140개 이상)
+- 모호하면 통과
+- 시드의 단어가 한 글자라도 들어있거나 의미상 연결되면 통과
+- 컷 사유는 "명확히 다른 업종" 또는 "광고 대행/SEO 업체" 정도만
 
 반드시 아래 JSON 형식으로만 응답:
 {
   "approved": ["통과키워드1", "통과키워드2", ...],
-  "discarded": ["컷키워드1", "컷키워드2", ...],
+  "discarded": ["컷키워드1", ...],
   "rationale": "한줄 판단 근거"
 }
 
@@ -365,11 +374,18 @@ async def classify_rejects(
     if not cands:
         return {"success": False, "message": "분류할 reject 후보 없음"}
 
-    # 시드 샘플링 — 입력 토큰 절약. 검색량 정보가 없으니 길이 짧은 시드 우선 (atom 명확)
+    # 시드 샘플링 — 도메인 대표성 ↑.
+    # 길이 짧은 30개 (atom 명확) + random 30개 (다양성). 짧은 것만 보내면 GPT 가
+    # niche 도메인으로 인식해 보수적 분류 → 통과율 폭락. 긴 시드도 섞어 도메인 폭 인식.
+    import random as _r
     if len(seeds) > seed_sample_size:
-        # 길이 오름차순 → 핵심어 우선 (예: "한의원" > "강남역소잠한의원후기")
         seeds_sorted = sorted(seeds, key=lambda s: len(s))
-        seed_sample = seeds_sorted[:seed_sample_size]
+        short_n = min(seed_sample_size // 2, len(seeds_sorted))
+        short_part = seeds_sorted[:short_n]
+        rest_pool = seeds_sorted[short_n:]
+        random_n = min(seed_sample_size - short_n, len(rest_pool))
+        random_part = _r.sample(rest_pool, random_n) if rest_pool else []
+        seed_sample = short_part + random_part
     else:
         seed_sample = list(seeds)
 
@@ -404,7 +420,7 @@ async def classify_rejects(
                         {"role": "user", "content": user_prompt},
                     ],
                     "max_tokens": dyn_max,
-                    "temperature": 0.2,
+                    "temperature": 0.4,
                     "response_format": {"type": "json_object"},
                 },
             )
@@ -431,11 +447,13 @@ async def classify_rejects(
                 k.strip() for k in raw_discarded
                 if isinstance(k, str) and k.strip() in cand_set
             ]
-            # 분류 누락 KW (GPT가 둘 다 안 넣음) → 안전하게 discarded 로 (drift 방지)
+            # 분류 누락 KW (GPT 가 둘 다 안 넣음) → 사용자 의도 (관대 통과) 에 맞춰
+            # approved 로 폴백. drift 위험 있지만 사용자가 "drift 위험 감수해도 빠르게"
+            # 명시. 후속 광고 클릭 데이터 cleanup 으로 무관 KW 자동 정리됨.
             classified = set(approved) | set(discarded)
             missing = [c["keyword"] for c in cands if c["keyword"] not in classified]
             if missing:
-                discarded.extend(missing)
+                approved.extend(missing)
 
             return {
                 "success": True,

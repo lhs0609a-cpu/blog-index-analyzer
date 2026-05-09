@@ -796,6 +796,22 @@ class KeywordPoolDB:
                 n += cur.rowcount
             return n
 
+    def list_pool_keyword_set(self, account_customer_id: int) -> Set[str]:
+        """풀의 모든 KW (status 무관) 를 set 으로 반환 — collect inline AI 자식 추가 dedup 용.
+
+        AI inline 분류 후 add_candidates 가 INSERT OR IGNORE 라 풀 중복은 0개로 들어감.
+        그 전 단계에서 이미 풀에 있는 KW 를 reject_for_ai 누적에서 제외해 GPT 호출 비용
+        cap + 자식 +0 사고 방지. 100k row × 평균 20 byte = 2MB 메모리, 충분히 안전.
+        """
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT keyword FROM naverad_keyword_pool
+                   WHERE account_customer_id = ?""",
+                (account_customer_id,),
+            )
+            return {r["keyword"] for r in cur.fetchall() if r["keyword"]}
+
     def list_classified_reject_keywords(self, account_customer_id: int) -> List[str]:
         """이미 분류된 (promoted/discarded) reject KW 전체 — collect inline 게이트 재호출 비용 cap.
 
