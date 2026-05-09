@@ -2672,13 +2672,19 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     reject_no_seed_match = 0
     sample_no_domain: List[str] = []
     sample_no_seed: List[str] = []
-    # AI 분류용 reject 누적 — 도메인미스만 (시드미스는 의미 없음 — atom 자체가 없는 KW).
-    # 검색량 ≥ 10 인 것만 저장 (한의원 long-tail niche 대응). batch 끝에서 일괄 INSERT.
-    # 이미 한 번 분류된 (promoted/discarded) KW + 풀에 있는 KW 는 제외 —
-    # GPT 호출 비용 cap + "통과 N / 자식 +0" 사고 방지 (이미 풀에 있는 KW 가 GPT 통과해도
-    # add_candidates 가 INSERT OR IGNORE 로 무시해 자식 +0 발생).
+    # 도메인미스 reject 처리 2-layer:
+    #   [Top tier mt≥100]  reject_for_ai     → GPT 분류 통과만 자식 합류 (보수)
+    #   [Mid tier mt 30~99] reject_direct    → GPT 우회 자식 풀 직접 추가 (drift 감수)
+    # 사용자 명시: "drift 위험 감수해도 빠르게 채우기".
+    # Drift 안전 장치 (이미 cron):
+    #   - 등록 후 검수 거부 KW = inspect cron 10분마다 자동 삭제
+    #   - 클릭 발생한 무관 KW = click cleanup cron 15분마다 점수 ≤ 30 자동 삭제
+    #   - 도메인 안 맞는 KW = domain cleanup cron 매시 자동 삭제
+    # 풀/분류 이력 KW 제외 — INSERT OR IGNORE 사고 방지.
     reject_for_ai: List[Dict] = []
     reject_for_ai_seen: Set[str] = set()
+    reject_direct: List[Dict] = []
+    reject_direct_seen: Set[str] = set()
     classified_reject_set: Set[str] = set()
     pool_kw_set: Set[str] = set()
     try:
@@ -2794,14 +2800,30 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                     reject_no_domain += 1
                     if len(sample_no_domain) < 10:
                         sample_no_domain.append(kw)
+                    # 풀/분류 이력 dedup (공통)
                     if (
-                        mt >= 10
-                        and kw not in reject_for_ai_seen
-                        and kw not in classified_reject_set
-                        and kw not in pool_kw_set
+                        kw in classified_reject_set
+                        or kw in pool_kw_set
                     ):
-                        reject_for_ai_seen.add(kw)
-                        reject_for_ai.append({"keyword": kw, "monthly_total": mt})
+                        pass  # 이미 처리된 KW
+                    elif mt >= 100:
+                        # Top tier — GPT 분류
+                        if kw not in reject_for_ai_seen:
+                            reject_for_ai_seen.add(kw)
+                            reject_for_ai.append({"keyword": kw, "monthly_total": mt})
+                    elif mt >= 30:
+                        # Mid tier — GPT 우회, 자식 풀 직접
+                        if kw not in reject_direct_seen:
+                            reject_direct_seen.add(kw)
+                            reject_direct.append({
+                                "keyword": kw,
+                                "monthly_total": mt,
+                                "monthly_pc": pc,
+                                "monthly_mobile": mob,
+                                "comp_idx": item.get("compIdx"),
+                                "source": "collect_reject_direct",
+                                "seed": "reject_direct",
+                            })
                 else:
                     reject_no_seed_match += 1
                     if len(sample_no_seed) < 10:
@@ -2905,10 +2927,29 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
             saved = pool.add_rejects(customer_id, reject_for_ai[:1000])
             if saved:
                 logger.warning(
-                    f"[pool/collect] AI 분류 후보 reject {saved}개 누적 (검색량≥50)"
+                    f"[pool/collect] AI 분류 후보 reject {saved}개 누적 (검색량≥100)"
                 )
         except Exception as e:
             logger.warning(f"[pool/collect] add_rejects 실패: {e}")
+
+    # ============ Mid-tier reject 직접 풀 합류 — GPT 우회 (검색량 30~99) ============
+    # 사용자 의도 (drift 감수, 빠르게) — GPT 분류 비용/병목 우회. 매 collect 수천개 자식 추가.
+    # 검수/클릭 cleanup cron 이 무관 KW 자동 정리 → drift 자동 회수.
+    direct_added = 0
+    if reject_direct:
+        try:
+            # 검색량 상위 3000개 cap (광고 한도 + DB 비대화 보호)
+            reject_direct.sort(key=lambda x: -int(x.get("monthly_total") or 0))
+            direct_added = pool.add_candidates(uid, customer_id, reject_direct[:3000])
+            added += direct_added
+            if direct_added > 0:
+                logger.warning(
+                    f"[pool/collect/reject-direct] user={uid} GPT 우회 자식 +{direct_added}개 "
+                    f"(reject 30~99 mt 후보 {len(reject_direct)} 중 상위 3000)"
+                )
+        except Exception as e:
+            logger.warning(f"[pool/collect/reject-direct] 실패: {e}")
+    # ===========================================================================
 
     # ============ Inline AI 자식 게이트 — 매 collect 직후 즉시 GPT 분류 ============
     # reject 풀의 fresh 후보 (검색량 상위 200개) 를 GPT-4o-mini 가 시드 도메인 일치 분류.
@@ -3002,6 +3043,8 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         err_parts.append(
             f"AI inline 자식 +{inline_ai_added} (통과 {inline_ai_approved} / 컷 {inline_ai_discarded})"
         )
+    if direct_added > 0:
+        err_parts.append(f"reject-direct 자식 +{direct_added} (mt 30~99, GPT 우회)")
     pool.record_run(
         uid, customer_id, "collect",
         "success" if not api_errors else ("partial" if added > 0 else "failed"),

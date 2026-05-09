@@ -9,6 +9,7 @@ fly machine always-on 활용해 자력으로 매 N초마다 워커 호출.
 """
 import asyncio
 import logging
+from datetime import datetime, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -55,9 +56,10 @@ class KeywordPoolScheduler:
             max_instances=1,
             coalesce=True,
         )
-        # AI 분류 cron — reject 풀 → user_seed 자동 promote (백업 layer).
-        # 5분 tick, 광고주별 deadlock 또는 미분류 reject≥1000 시 실제 분류.
-        # 쿨다운 30분 별도 적용. collect inline AI 가 못 잡은 reject 처리.
+        # next_run_time = 시작 직후 (deploy 시 즉시 첫 발동) — IntervalTrigger 만으로는
+        # 첫 발동까지 interval 만큼 대기. 자율 운영이라 deploy 직후 빨리 채워야 함.
+        # cron 별로 약간 시차 (호출 폭주 방지)
+        _now = datetime.now()
         self.scheduler.add_job(
             self._ai_classify_tick,
             IntervalTrigger(seconds=300),
@@ -66,11 +68,8 @@ class KeywordPoolScheduler:
             replace_existing=True,
             max_instances=1,
             coalesce=True,
+            next_run_time=_now + timedelta(seconds=30),
         )
-        # 자동완성 mining cron — keywordstool BFS 외 추가 발굴 채널 (Layer 2).
-        # 5분 tick, 시드 200개 random sample → naver 자동완성 → 검색량 ≥ 50 → GPT 분류 →
-        # 통과 KW source='ai_autocomplete' 자식 풀 직접 추가. 시드 1500개 약 38분에 1 회전.
-        # 비용: 광고주당 cron 1회당 GPT $0.001 + keywordstool 250 호출 (무료).
         self.scheduler.add_job(
             self._autocomplete_mining_tick,
             IntervalTrigger(seconds=300),
@@ -79,12 +78,8 @@ class KeywordPoolScheduler:
             replace_existing=True,
             max_instances=1,
             coalesce=True,
+            next_run_time=_now + timedelta(seconds=60),
         )
-        # Seed amplify cron — GPT 가 user_seed 패턴 펼침 → 검색량 검증 → user_seed 합류 (Layer 3).
-        # 30분 tick, 시드 100개 sample → amplify target 300 → 풀 dedup → keywordstool batch.
-        # 게이트 atom 다양성↑ → collect/autocomplete 발굴↑.
-        # 비용: 광고주당 cron 1회당 GPT $0.001 + keywordstool 60 호출 (무료).
-        # 시드 5000개 cap (코드 내) 도달 시 자동 skip.
         self.scheduler.add_job(
             self._seed_amplify_tick,
             IntervalTrigger(seconds=1800),
@@ -93,6 +88,7 @@ class KeywordPoolScheduler:
             replace_existing=True,
             max_instances=1,
             coalesce=True,
+            next_run_time=_now + timedelta(seconds=90),
         )
         # Domain cleanup — 매시 1회 (3600s) 도메인 안 맞는 등록 KW 자동 DELETE (click 무관).
         # GitHub Actions schedule cron 신뢰성 낮음 (관찰: 12+시간 멈춤 사례 빈번) → 백엔드 자체.
