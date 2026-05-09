@@ -29,6 +29,9 @@ class KeywordPoolScheduler:
         # 3 분리: collect 5분, register 2분, inspect-full 10분.
         # 과거: tick 한 번에 collect+register+inspect 다 돌려서 5분 초과 → max_instances=1
         # 으로 다음 tick 스킵 → register 가 40분 동안 못 돌아가는 사고 발생.
+        # 모든 cron 에 next_run_time 시차 적용 — deploy 직후 첫 발동 보장 +
+        # 동시 호출 폭주 방지. fly auto-deploy 후 cron interval 까지 대기 안 함.
+        _now = datetime.now()
         self.scheduler.add_job(
             self._collect_only,
             IntervalTrigger(seconds=interval_seconds),
@@ -37,6 +40,7 @@ class KeywordPoolScheduler:
             replace_existing=True,
             max_instances=1,
             coalesce=True,
+            next_run_time=_now + timedelta(seconds=10),
         )
         self.scheduler.add_job(
             self._register_only,
@@ -46,6 +50,7 @@ class KeywordPoolScheduler:
             replace_existing=True,
             max_instances=1,
             coalesce=True,
+            next_run_time=_now + timedelta(seconds=20),
         )
         self.scheduler.add_job(
             self._inspect_full,
@@ -55,11 +60,8 @@ class KeywordPoolScheduler:
             replace_existing=True,
             max_instances=1,
             coalesce=True,
+            next_run_time=_now + timedelta(seconds=120),
         )
-        # next_run_time = 시작 직후 (deploy 시 즉시 첫 발동) — IntervalTrigger 만으로는
-        # 첫 발동까지 interval 만큼 대기. 자율 운영이라 deploy 직후 빨리 채워야 함.
-        # cron 별로 약간 시차 (호출 폭주 방지)
-        _now = datetime.now()
         self.scheduler.add_job(
             self._ai_classify_tick,
             IntervalTrigger(seconds=300),
@@ -91,8 +93,8 @@ class KeywordPoolScheduler:
             next_run_time=_now + timedelta(seconds=90),
         )
         # Domain cleanup — 매시 1회 (3600s) 도메인 안 맞는 등록 KW 자동 DELETE (click 무관).
-        # GitHub Actions schedule cron 신뢰성 낮음 (관찰: 12+시간 멈춤 사례 빈번) → 백엔드 자체.
-        # auto_cleanup_enabled=1 광고주만 처리, max_delete=500/광고주.
+        # 사용자 보고: 마지막 7:31 이후 누락 가능성 — fly auto-deploy 시 다음 cron 까지
+        # 1시간 대기 사고. next_run_time 즉시 발동 으로 deploy 직후 한 번 보장.
         self.scheduler.add_job(
             self._domain_cleanup_tick,
             IntervalTrigger(seconds=3600),
@@ -101,9 +103,9 @@ class KeywordPoolScheduler:
             replace_existing=True,
             max_instances=1,
             coalesce=True,
+            next_run_time=_now + timedelta(seconds=180),
         )
         # Click cleanup — 매 15분 (900s) 클릭 KW 점수 ≤ threshold 자동 DELETE.
-        # 종전 GitHub Actions 의 keyword-pool-auto-cleanup.yml 백엔드 내장 버전.
         self.scheduler.add_job(
             self._click_cleanup_tick,
             IntervalTrigger(seconds=900),
@@ -112,6 +114,7 @@ class KeywordPoolScheduler:
             replace_existing=True,
             max_instances=1,
             coalesce=True,
+            next_run_time=_now + timedelta(seconds=150),
         )
         self.scheduler.start()
         self._running = True

@@ -4267,6 +4267,176 @@ async def _run_pool_workers_for_users(user_ids: List[int]):
     await _run_pool_workers_for_accounts(pairs)
 
 
+@router.get("/keyword-pool/diagnostics/scheduler-jobs")
+async def keyword_pool_scheduler_diagnostics():
+    """APScheduler 등록 cron + 다음 실행 시각 — cron 살아있는지 즉시 확인."""
+    try:
+        from services.keyword_pool_scheduler import keyword_pool_scheduler
+    except Exception as e:
+        return {"success": False, "error": f"scheduler import 실패: {e}"}
+    sched = keyword_pool_scheduler.scheduler
+    if not keyword_pool_scheduler._running:
+        return {"success": False, "running": False, "message": "scheduler not running"}
+    jobs_info = []
+    for job in sched.get_jobs():
+        jobs_info.append({
+            "id": job.id,
+            "name": job.name,
+            "next_run_time": str(job.next_run_time) if job.next_run_time else None,
+            "trigger": str(job.trigger),
+        })
+    return {
+        "success": True,
+        "running": True,
+        "jobs": jobs_info,
+        "now": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
+@router.get("/keyword-pool/diagnostics/cleanup-audit")
+async def keyword_pool_cleanup_audit(
+    user_id: int = Depends(get_user_id_with_fallback),
+    customer_id: Optional[str] = Query(None),
+    sample_ad_groups: int = Query(3, description="네이버 실측용 샘플 광고그룹 수 (1~10)"),
+):
+    """cleanup cron 동작 진단 + 네이버 광고 콘솔 실측 비교.
+
+    반환:
+      cron_summary: 종류별 (inspect/click_cleanup/domain_cleanup/auto-cleanup) 마지막 실행 시각, 결과
+      naver_audit: 광고그룹 N개 샘플의 키워드 status 조회 → 검수 거부됐는데
+                   여전히 콘솔에 살아있는 KW (= cleanup 누수) 카운트
+    """
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="customer_id 필요")
+    try:
+        cid = int(customer_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="customer_id 정수 필요")
+    sample_n = max(1, min(int(sample_ad_groups), 10))
+
+    pool = get_keyword_pool_db()
+    runs = pool.recent_runs(cid, limit=200)
+
+    # cron 종류별 마지막 + 최근 24개 합산
+    from collections import defaultdict
+    by_kind: Dict[str, List[Dict]] = defaultdict(list)
+    for r in runs:
+        kind = r.get("kind") or ""
+        by_kind[kind].append(r)
+
+    summary: Dict[str, Dict[str, Any]] = {}
+    for kind, rs in by_kind.items():
+        last = rs[0] if rs else {}
+        recent = rs[:24]
+        summary[kind] = {
+            "last_run_at": last.get("started_at"),
+            "last_status": last.get("status"),
+            "last_added": last.get("added"),
+            "last_skipped": last.get("skipped"),
+            "last_message": (last.get("error_message") or "")[:200],
+            "runs_count_recent": len(recent),
+            "total_added_recent": sum(int(r.get("added") or 0) for r in recent),
+            "total_skipped_recent": sum(int(r.get("skipped") or 0) for r in recent),
+        }
+
+    # 네이버 광고 콘솔 실측 — 광고그룹 N개 샘플의 키워드 검수 상태 조회
+    naver_audit: Dict[str, Any] = {
+        "sample_ad_groups": [],
+        "total_kws_checked": 0,
+        "stale_rejected_count": 0,
+        "stale_rejected_samples": [],
+    }
+    try:
+        from database.naver_ad_db import get_ad_account_by_customer
+        from database.registered_keywords_db import get_registered_keywords_db
+        from services.naver_ad_service import NaverAdApiClient
+        import sqlite3
+
+        account = get_ad_account_by_customer(user_id, str(cid))
+        if not account or not account.get("is_connected"):
+            naver_audit["error"] = "광고주 미연결"
+        else:
+            client = NaverAdApiClient()
+            client.customer_id = account["customer_id"]
+            client.api_key = account["api_key"]
+            client.secret_key = account["secret_key"]
+
+            reg = get_registered_keywords_db()
+            with sqlite3.connect(reg.db_path) as conn:
+                ag_ids = [r[0] for r in conn.execute(
+                    "SELECT DISTINCT ad_group_id FROM registered_keywords "
+                    "WHERE account_customer_id=? AND ad_group_id IS NOT NULL "
+                    "ORDER BY id DESC LIMIT ?",
+                    (cid, sample_n),
+                ).fetchall()]
+
+            REJECT_TOKENS = (
+                "DISAPPROVED", "REJECTED", "PROHIBITED", "BLOCKLISTED",
+                "NOT_PASSED", "FAIL", "BAD_BUSINESS", "INELIGIBLE", "DENIED",
+            )
+            for ag_id in ag_ids:
+                try:
+                    kws = await client.get_keywords(ad_group_id=ag_id) or []
+                except Exception as e:
+                    naver_audit["sample_ad_groups"].append({
+                        "ad_group_id": ag_id,
+                        "error": f"{type(e).__name__}: {str(e)[:120]}",
+                    })
+                    continue
+
+                stale: List[Dict] = []
+                for kw in kws:
+                    review = (kw.get("reviewStatus") or "").upper()
+                    inspect = (kw.get("inspectStatus") or "").upper()
+                    stat_reason = (kw.get("statusReason") or "").upper()
+                    is_rejected = (
+                        any(t in review for t in REJECT_TOKENS)
+                        or any(t in inspect for t in REJECT_TOKENS)
+                        or any(t in stat_reason for t in REJECT_TOKENS)
+                    )
+                    if is_rejected:
+                        stale.append({
+                            "keyword": kw.get("keyword"),
+                            "review": review,
+                            "inspect": inspect,
+                            "reason": stat_reason,
+                        })
+
+                naver_audit["sample_ad_groups"].append({
+                    "ad_group_id": ag_id,
+                    "total_kws": len(kws),
+                    "stale_rejected": len(stale),
+                })
+                naver_audit["total_kws_checked"] += len(kws)
+                naver_audit["stale_rejected_count"] += len(stale)
+                # 전체 sample 누적 (앞에서 5개만 노출)
+                if len(naver_audit["stale_rejected_samples"]) < 5:
+                    naver_audit["stale_rejected_samples"].extend(
+                        stale[: 5 - len(naver_audit["stale_rejected_samples"])]
+                    )
+    except Exception as e:
+        naver_audit["error"] = f"{type(e).__name__}: {str(e)[:200]}"
+
+    return {
+        "success": True,
+        "now": datetime.now().isoformat(timespec="seconds"),
+        "customer_id": cid,
+        "cron_summary": summary,
+        "naver_audit": naver_audit,
+        "interpretation": {
+            "stale_rejected_OK": (
+                "stale_rejected_count == 0 이면 inspect cron 이 검수 거부 KW 를 "
+                "잘 청소하는 중. > 0 이면 누수 — fly logs 확인 필요."
+            ),
+            "domain_cleanup_OK": (
+                "cron_summary['inspect'].last_run_at 가 30분 이내 + "
+                "cron_summary 의 click cleanup / 도메인 cleanup 마지막 시각 "
+                "각각 15분 / 1시간 이내면 정상."
+            ),
+        },
+    }
+
+
 @router.post("/keyword-pool/ai-classify-rejects")
 async def keyword_pool_ai_classify_rejects(
     user_id: int = Depends(get_user_id_with_fallback),
