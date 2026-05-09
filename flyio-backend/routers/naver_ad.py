@@ -3210,6 +3210,181 @@ async def _run_pool_ai_classify(
     }
 
 
+async def _run_pool_ai_cleanup_registered(
+    uid: int,
+    customer_id: int,
+    *,
+    dry_run: bool = True,
+    batch_size: int = 200,
+    max_kws: int = 1000,
+    incremental_minutes: Optional[int] = None,
+    sample_seeds: int = 50,
+) -> Dict[str, Any]:
+    """등록된 KW 를 GPT 가 user_seed 와 비교 분류 → 무관 KW 실제 네이버 DELETE.
+
+    기존 점수 기반 cleanup (`_run_domain_cleanup_for_account`) 의 atoms_2 인플레
+    문제 우회 — 시드 1500개일 때 한국어 2-gram 합집합이 한국어 음절 거의 다
+    포함해 무관 KW 도 30+ 점이라 ≤30 임계 통과 못함.
+
+    GPT 가 의미적으로 도메인 일치 여부 판정 → 점수 인플레 무관, 정확.
+
+    Args:
+        dry_run: True 면 GPT 분류만 + 결과 통계 반환 (실제 DELETE 안 함, 실측용).
+        batch_size: GPT 분류 batch 크기 (200 권장)
+        max_kws: 한 번에 audit 할 최대 KW 수 (1000 권장, GPT 5 batch)
+        incremental_minutes:
+            None = 최근 등록순 max_kws 개 audit
+            N = 최근 N분 등록 KW 만 (cron 인크리멘탈)
+    """
+    from services.ai_seed_suggester import classify_rejects
+    from services.naver_ad_service import NaverAdApiClient
+    from database.naver_ad_db import get_ad_account_by_customer
+    from config import settings
+    import time as _time
+    import sqlite3 as _sql
+
+    pool = get_keyword_pool_db()
+    reg = get_registered_keywords_db()
+    t0 = _time.monotonic()
+
+    if not settings.OPENAI_API_KEY:
+        return {"success": False, "reason": "no_api_key"}
+
+    account = get_ad_account_by_customer(uid, str(customer_id))
+    if not account or not account.get("is_connected"):
+        return {"success": False, "reason": "no_account"}
+
+    user_seeds = pool.list_user_seeds(customer_id)
+    if not user_seeds:
+        return {"success": False, "reason": "no_user_seed"}
+
+    # 1) 등록 KW 조회
+    with _sql.connect(reg.db_path) as conn:
+        if incremental_minutes:
+            rows = conn.execute(
+                "SELECT keyword, ncc_keyword_id FROM registered_keywords "
+                "WHERE account_customer_id=? AND ncc_keyword_id IS NOT NULL "
+                "AND datetime(registered_at) > datetime('now', ?) "
+                "ORDER BY registered_at DESC LIMIT ?",
+                (customer_id, f"-{int(incremental_minutes)} minutes", int(max_kws)),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT keyword, ncc_keyword_id FROM registered_keywords "
+                "WHERE account_customer_id=? AND ncc_keyword_id IS NOT NULL "
+                "ORDER BY id DESC LIMIT ?",
+                (customer_id, int(max_kws)),
+            ).fetchall()
+
+    if not rows:
+        pool.record_run(
+            uid, customer_id, "ai_cleanup", "no_new",
+            error_message="audit 대상 0",
+            duration_ms=int((_time.monotonic() - t0) * 1000),
+        )
+        return {"success": False, "reason": "no_registered"}
+
+    # 2) batch GPT 분류 — classify_rejects 재활용
+    candidates = [{"keyword": kw, "monthly_total": 0} for kw, _kid in rows]
+    kid_map: Dict[str, str] = {kw: kid for kw, kid in rows if kid}
+    all_approved: Set[str] = set()
+    all_discarded: Set[str] = set()
+    batch_count = 0
+    gpt_ms_total = 0
+
+    for i in range(0, len(candidates), batch_size):
+        batch = candidates[i:i + batch_size]
+        ai_t0 = _time.monotonic()
+        try:
+            ai = await classify_rejects(user_seeds, batch, seed_sample_size=sample_seeds)
+        except Exception as e:
+            logger.warning(f"[ai-cleanup] batch {i} 예외: {type(e).__name__}: {e}")
+            continue
+        gpt_ms_total += int((_time.monotonic() - ai_t0) * 1000)
+        if not ai.get("success"):
+            logger.warning(f"[ai-cleanup] batch {i} GPT 실패: {ai.get('message')}")
+            continue
+        all_approved.update(ai.get("approved") or [])
+        all_discarded.update(ai.get("discarded") or [])
+        batch_count += 1
+
+    discarded_list = sorted(all_discarded)
+    approved_list = sorted(all_approved)
+
+    result: Dict[str, Any] = {
+        "success": True,
+        "dry_run": dry_run,
+        "user_id": uid,
+        "customer_id": customer_id,
+        "incremental_minutes": incremental_minutes,
+        "total_audited": len(rows),
+        "batches": batch_count,
+        "approved_count": len(approved_list),
+        "discarded_count": len(discarded_list),
+        "approved_samples": approved_list[:10],
+        "discarded_samples": discarded_list[:20],
+        "deleted": 0,
+        "delete_failed": 0,
+        "gpt_ms_total": gpt_ms_total,
+    }
+
+    # 3) dry_run=False — 실제 네이버 API DELETE
+    if not dry_run and discarded_list:
+        client = NaverAdApiClient()
+        client.customer_id = account["customer_id"]
+        client.api_key = account["api_key"]
+        client.secret_key = account["secret_key"]
+
+        n_del, n_fail = 0, 0
+        # 실수 방지 — 한 번에 max 500 DELETE 까지만 (네이버 rate + 사고 방지)
+        for kw in discarded_list[:500]:
+            kid = kid_map.get(kw)
+            if not kid:
+                continue
+            try:
+                await client.delete_keyword(kid)
+                with _sql.connect(reg.db_path) as conn:
+                    conn.execute(
+                        "DELETE FROM registered_keywords "
+                        "WHERE account_customer_id=? AND ncc_keyword_id=?",
+                        (customer_id, kid),
+                    )
+                with _sql.connect(pool.db_path) as conn:
+                    conn.execute(
+                        "UPDATE naverad_keyword_pool SET status='deleted' "
+                        "WHERE account_customer_id=? AND keyword=?",
+                        (customer_id, kw),
+                    )
+                n_del += 1
+                await asyncio.sleep(0.12)
+            except Exception as e:
+                n_fail += 1
+                logger.warning(f"[ai-cleanup] DELETE 실패 {kw}({kid}): {e}")
+        result["deleted"] = n_del
+        result["delete_failed"] = n_fail
+
+    duration_ms = int((_time.monotonic() - t0) * 1000)
+    result["duration_ms"] = duration_ms
+
+    pool.record_run(
+        uid, customer_id, "ai_cleanup",
+        "success" if (dry_run or result["deleted"] > 0) else "no_match",
+        added=0, skipped=result["deleted"], seeds_count=len(rows),
+        error_message=(
+            f"AI cleanup {'dry-run' if dry_run else 'EXEC'} — "
+            f"audit {len(rows)} → 통과 {len(approved_list)} / 컷 {len(discarded_list)} → "
+            f"DELETE {result['deleted']} (fail {result['delete_failed']})"
+        )[:300],
+        duration_ms=duration_ms,
+    )
+    logger.warning(
+        f"[ai-cleanup] user={uid} cid={customer_id} {'dry-run' if dry_run else 'EXEC'} "
+        f"({duration_ms}ms) — audit {len(rows)} → 통과 {len(approved_list)} / "
+        f"컷 {len(discarded_list)} → DELETE {result['deleted']} fail {result['delete_failed']}"
+    )
+    return result
+
+
 async def _run_pool_seed_amplify(
     uid: int,
     customer_id: int,
@@ -4265,6 +4440,56 @@ async def _run_pool_workers_for_users(user_ids: List[int]):
         except Exception as e:
             logger.error(f"[pool/run] list_ad_accounts_for_user 실패 user={uid}: {e}")
     await _run_pool_workers_for_accounts(pairs)
+
+
+@router.post("/keyword-pool/ai-cleanup-registered")
+async def keyword_pool_ai_cleanup_registered(
+    user_id: int = Depends(get_user_id_with_fallback),
+    customer_id: Optional[str] = Query(None),
+    dry_run: bool = Query(True, description="True 면 GPT 분류만, False 면 실제 DELETE"),
+    batch_size: int = Query(200),
+    max_kws: int = Query(1000),
+    incremental_minutes: Optional[int] = Query(None),
+):
+    """등록 KW AI 의미 분류 cleanup — 점수 인플레 우회.
+
+    GPT-4o-mini 가 user_seed 와 등록 KW 를 도메인 비교 → 무관 KW 만 실제 네이버 DELETE.
+    """
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="customer_id 필요")
+    try:
+        cid = int(customer_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="customer_id 정수 필요")
+    return await _run_pool_ai_cleanup_registered(
+        user_id, cid,
+        dry_run=dry_run, batch_size=batch_size,
+        max_kws=max_kws, incremental_minutes=incremental_minutes,
+    )
+
+
+@router.get("/keyword-pool/diagnostics/ai-cleanup-preview-first")
+async def keyword_pool_ai_cleanup_preview_first(
+    max_kws: int = Query(200),
+):
+    """진단 dry-run — 인증 없음. 첫 활성 광고주의 등록 KW 를 GPT 분류 미리보기.
+
+    실제 DELETE 안 함. 시스템 내부 상태 진단용 (실측 보고).
+    """
+    from database.naver_ad_db import list_connected_ad_accounts
+    accts = list_connected_ad_accounts() or []
+    if not accts:
+        return {"success": False, "reason": "no_accounts"}
+    a = accts[0]
+    uid = int(a.get("user_id") or 0)
+    cid = int(a.get("customer_id") or 0)
+    if not uid or not cid:
+        return {"success": False, "reason": "invalid_account"}
+    res = await _run_pool_ai_cleanup_registered(
+        uid, cid, dry_run=True, max_kws=max_kws,
+    )
+    res["debug_meta"] = {"audited_uid": uid, "audited_cid": cid}
+    return res
 
 
 @router.get("/keyword-pool/diagnostics/scheduler-jobs")

@@ -92,6 +92,19 @@ class KeywordPoolScheduler:
             coalesce=True,
             next_run_time=_now + timedelta(seconds=90),
         )
+        # AI 의미 분류 cleanup cron — 점수 기반 cleanup 의 atoms_2 인플레 문제 우회.
+        # 30분마다 최근 30분 등록 KW 만 GPT-4o-mini 가 user_seed 와 비교 → 컷 KW DELETE.
+        # 비용: 광고주당 cron 1회 ~$0.005 (audit 500개 = batch 3) = 일당 ~$0.24/광고주.
+        self.scheduler.add_job(
+            self._ai_cleanup_tick,
+            IntervalTrigger(seconds=1800),
+            id="keyword_pool_ai_cleanup",
+            name="키워드 풀 AI 의미 분류 cleanup (30분 주기, 인크리멘탈)",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            next_run_time=_now + timedelta(seconds=240),
+        )
         # Domain cleanup — 매시 1회 (3600s) 도메인 안 맞는 등록 KW 자동 DELETE (click 무관).
         # 사용자 보고: 마지막 7:31 이후 누락 가능성 — fly auto-deploy 시 다음 cron 까지
         # 1시간 대기 사고. next_run_time 즉시 발동 으로 deploy 직후 한 번 보장.
@@ -119,9 +132,9 @@ class KeywordPoolScheduler:
         self.scheduler.start()
         self._running = True
         logger.warning(
-            f"[pool/scheduler] 시작 (5-layer 자율) — collect {interval_seconds}s / "
+            f"[pool/scheduler] 시작 (자율) — collect {interval_seconds}s / "
             f"register 120s / inspect 600s / ai_classify 300s / "
-            f"autocomplete 300s / seed_amplify 1800s / "
+            f"autocomplete 300s / seed_amplify 1800s / ai_cleanup 1800s / "
             f"domain_cleanup 3600s / click_cleanup 900s"
         )
 
@@ -184,6 +197,40 @@ class KeywordPoolScheduler:
                     logger.error(f"[pool/scheduler] collect 실패 user={uid} cid={cid}: {e}", exc_info=True)
         except Exception as e:
             logger.error(f"[pool/scheduler] collect tick 실패: {type(e).__name__}: {e}", exc_info=True)
+
+    async def _ai_cleanup_tick(self):
+        """AI 의미 분류 cleanup cron — 최근 30분 등록 KW 의 무관 KW 자동 DELETE.
+
+        점수 기반 cleanup (atoms_2 인플레로 무관 KW 가 30+ 점) 보완. GPT-4o-mini 가
+        user_seed 와 등록 KW 의미 비교 → 진짜 무관 KW 만 골라 실제 네이버 API DELETE.
+        OPENAI_API_KEY 없으면 noop.
+        """
+        try:
+            from config import settings
+            if not settings.OPENAI_API_KEY:
+                return
+            from routers.naver_ad import _run_pool_ai_cleanup_registered
+            from database.naver_ad_db import list_connected_ad_accounts
+            accts = list_connected_ad_accounts() or []
+            for a in accts:
+                uid = a.get("user_id")
+                cid = a.get("customer_id")
+                if not uid or not cid:
+                    continue
+                try:
+                    await _run_pool_ai_cleanup_registered(
+                        int(uid), int(cid),
+                        dry_run=False, incremental_minutes=30, max_kws=500,
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"[ai-cleanup] 광고주 처리 실패 user={uid} cid={cid}: {e}",
+                        exc_info=True,
+                    )
+        except Exception as e:
+            logger.error(
+                f"[ai-cleanup] tick 실패: {type(e).__name__}: {e}", exc_info=True,
+            )
 
     async def _seed_amplify_tick(self):
         """시드 amplify cron — GPT 가 user_seed 패턴 펼쳐 user_seed 합류.
