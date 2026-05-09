@@ -3167,6 +3167,173 @@ async def _run_pool_ai_classify(
     }
 
 
+async def _run_pool_seed_amplify(
+    uid: int,
+    customer_id: int,
+    *,
+    seed_sample_size: int = 100,
+    target_count: int = 300,
+    min_volume: int = 30,
+    chunks_cap: int = 200,
+) -> Dict[str, Any]:
+    """user_seed 자가 amplify — GPT 가 시드 패턴 분석해 새 시드 후보 생성 →
+    검색량 검증 → user_seed 합류. 게이트 atom 다양성↑ → collect/autocomplete 발굴↑.
+
+    keywordstool BFS / 자동완성과 다른 channel — LLM 의 학습 지식 기반
+    semantic 시드 펼침. niche 도메인에서도 cartesian product 으로 시드 ↑.
+
+    흐름:
+      1) user_seed 100개 sample → amplify_seeds (GPT 패턴 펼침, target=300)
+      2) 풀 dedup (이미 있는 KW 제외)
+      3) keywordstool 검색량 batch (5개씩)
+      4) ≥ min_volume 인 것만 source='user_seed', seed=keyword 로 add_candidates
+      5) → 다음 collect 부터 게이트 atom + BFS hint 로 사용
+    """
+    from services.ai_seed_suggester import amplify_seeds
+    from services.naver_ad_service import NaverAdApiClient
+    from database.naver_ad_db import get_ad_account_by_customer
+    from config import settings
+    import time as _time
+    import random
+
+    pool = get_keyword_pool_db()
+    t0 = _time.monotonic()
+
+    if not settings.OPENAI_API_KEY:
+        return {"success": False, "reason": "no_api_key"}
+
+    account = get_ad_account_by_customer(uid, str(customer_id))
+    if not account or not account.get("is_connected"):
+        return {"success": False, "reason": "no_account"}
+
+    user_seeds = pool.list_user_seeds(customer_id)
+    if not user_seeds:
+        return {"success": False, "reason": "no_user_seed"}
+
+    # 시드 cap 도달 시 amplify 의미 없음 — 500 시드 이상이면 skip (성능 보호)
+    if len(user_seeds) >= 5000:
+        return {"success": False, "reason": "seeds_capped", "current": len(user_seeds)}
+
+    seed_sample = (
+        random.sample(user_seeds, seed_sample_size)
+        if len(user_seeds) > seed_sample_size else list(user_seeds)
+    )
+
+    logger.warning(
+        f"[pool/amplify] user={uid} cid={customer_id} 시작 — "
+        f"시드 {len(seed_sample)}/{len(user_seeds)} → amplify target {target_count}"
+    )
+
+    # 1) GPT amplify
+    am_t0 = _time.monotonic()
+    am_result = await amplify_seeds(seed_sample, target_count=target_count)
+    am_ms = int((_time.monotonic() - am_t0) * 1000)
+
+    if not am_result.get("success"):
+        msg = am_result.get("message", "unknown")
+        pool.record_run(
+            uid, customer_id, "seed_amplify", "failed",
+            seeds_count=len(seed_sample),
+            error_message=f"amplify 실패: {msg[:200]}",
+            duration_ms=int((_time.monotonic() - t0) * 1000),
+        )
+        return {"success": False, "reason": "amplify_failed", "message": msg}
+
+    raw_seeds = am_result.get("seeds") or []
+    # 원본 시드 제외 (이미 user_seed 로 있음)
+    user_seed_set = set(user_seeds)
+    new_seeds = [s for s in raw_seeds if isinstance(s, str) and s.strip() and s not in user_seed_set]
+
+    # 2) 풀 dedup (이미 어떤 status 로든 풀에 있는 KW 제외)
+    pool_set = pool.list_pool_keyword_set(customer_id)
+    fresh_seeds = [s for s in new_seeds if s not in pool_set]
+
+    if not fresh_seeds:
+        pool.record_run(
+            uid, customer_id, "seed_amplify", "no_new",
+            seeds_count=len(seed_sample),
+            error_message=f"amplify {len(raw_seeds)} → fresh 0 (전부 dedup)",
+            duration_ms=int((_time.monotonic() - t0) * 1000),
+        )
+        return {"success": False, "reason": "all_known"}
+
+    logger.warning(
+        f"[pool/amplify] amplify ({am_ms}ms) — raw {len(raw_seeds)} → fresh {len(fresh_seeds)}"
+    )
+
+    # 3) keywordstool 검색량 batch
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    vol_t0 = _time.monotonic()
+    vol_map: Dict[str, dict] = {}
+    CHUNK = 5
+    chunks = [fresh_seeds[i:i + CHUNK] for i in range(0, len(fresh_seeds), CHUNK)][:chunks_cap]
+    for chunk in chunks:
+        try:
+            r = await client.get_keywords_volume_batch(chunk)
+            vol_map.update(r)
+        except Exception as e:
+            logger.debug(f"[pool/amplify] volume batch 실패: {e}")
+        await asyncio.sleep(0.1)
+    vol_ms = int((_time.monotonic() - vol_t0) * 1000)
+
+    # 4) ≥ min_volume 만 user_seed 합류
+    qualified_items = []
+    for s in fresh_seeds:
+        v = vol_map.get(s) or vol_map.get(s.replace(" ", ""))
+        if not v:
+            continue
+        mt = int(v.get("monthly_total") or 0)
+        if mt < min_volume:
+            continue
+        qualified_items.append({
+            "keyword": s,
+            "monthly_total": mt,
+            "monthly_pc": int(v.get("monthly_pc") or 0),
+            "monthly_mobile": int(v.get("monthly_mobile") or 0),
+            "comp_idx": v.get("comp_idx"),
+            "source": "user_seed",
+            "seed": s,  # 시드 자기 자신 = 시드 row
+        })
+
+    promoted = 0
+    if qualified_items:
+        try:
+            promoted = pool.add_candidates(uid, customer_id, qualified_items)
+        except Exception as e:
+            logger.warning(f"[pool/amplify] add 실패: {e}")
+
+    duration_ms = int((_time.monotonic() - t0) * 1000)
+    logger.warning(
+        f"[pool/amplify] user={uid} cid={customer_id} 완료 ({duration_ms}ms) — "
+        f"amplify {len(raw_seeds)} → fresh {len(fresh_seeds)} → "
+        f"검색량≥{min_volume} {len(qualified_items)} → user_seed +{promoted} "
+        f"(GPT {am_ms}ms, vol {vol_ms}ms, pattern={am_result.get('detected_pattern', '')[:60]})"
+    )
+    pool.record_run(
+        uid, customer_id, "seed_amplify",
+        "success" if promoted > 0 else "no_match",
+        added=promoted,
+        seeds_count=len(seed_sample),
+        error_message=(
+            f"amplify {len(raw_seeds)} → fresh {len(fresh_seeds)} → "
+            f"검색량≥{min_volume} {len(qualified_items)} → user_seed +{promoted}"
+        )[:300],
+        duration_ms=duration_ms,
+    )
+    return {
+        "success": True,
+        "amplify_total": len(raw_seeds),
+        "fresh": len(fresh_seeds),
+        "volume_qualified": len(qualified_items),
+        "promoted": promoted,
+        "duration_ms": duration_ms,
+    }
+
+
 async def _run_pool_autocomplete_mining(
     uid: int,
     customer_id: int,

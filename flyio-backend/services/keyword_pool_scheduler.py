@@ -55,27 +55,41 @@ class KeywordPoolScheduler:
             max_instances=1,
             coalesce=True,
         )
-        # AI 분류 cron — reject 풀 → user_seed 자동 promote.
-        # 10분마다 tick, 광고주별 deadlock 감지 시만 실제 분류 실행 (쿨다운 30분 별도 적용).
-        # GPT 호출 비용 cap = 광고주당 시간당 최대 2회.
+        # AI 분류 cron — reject 풀 → user_seed 자동 promote (백업 layer).
+        # 5분 tick, 광고주별 deadlock 또는 미분류 reject≥1000 시 실제 분류.
+        # 쿨다운 30분 별도 적용. collect inline AI 가 못 잡은 reject 처리.
         self.scheduler.add_job(
             self._ai_classify_tick,
-            IntervalTrigger(seconds=600),
+            IntervalTrigger(seconds=300),
             id="keyword_pool_ai_classify",
-            name="키워드 풀 AI reject 분류 (10분 tick, 30분 쿨다운)",
+            name="키워드 풀 AI reject 분류 (5분 tick, 30분 쿨다운)",
             replace_existing=True,
             max_instances=1,
             coalesce=True,
         )
-        # 자동완성 mining cron — keywordstool BFS 외 추가 발굴 채널.
-        # 10분마다 시드 200개 random sample → naver 자동완성 → 검색량 ≥ 50 → GPT 분류 →
-        # 통과 KW source='ai_autocomplete' 자식 풀 직접 추가. 시드 1500개 약 75분에 1 회전.
+        # 자동완성 mining cron — keywordstool BFS 외 추가 발굴 채널 (Layer 2).
+        # 5분 tick, 시드 200개 random sample → naver 자동완성 → 검색량 ≥ 50 → GPT 분류 →
+        # 통과 KW source='ai_autocomplete' 자식 풀 직접 추가. 시드 1500개 약 38분에 1 회전.
         # 비용: 광고주당 cron 1회당 GPT $0.001 + keywordstool 250 호출 (무료).
         self.scheduler.add_job(
             self._autocomplete_mining_tick,
-            IntervalTrigger(seconds=600),
+            IntervalTrigger(seconds=300),
             id="keyword_pool_autocomplete_mining",
-            name="키워드 풀 자동완성 mining (10분 주기, 시드 200개 rotate)",
+            name="키워드 풀 자동완성 mining (5분 주기, 시드 200개 rotate)",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        # Seed amplify cron — GPT 가 user_seed 패턴 펼침 → 검색량 검증 → user_seed 합류 (Layer 3).
+        # 30분 tick, 시드 100개 sample → amplify target 300 → 풀 dedup → keywordstool batch.
+        # 게이트 atom 다양성↑ → collect/autocomplete 발굴↑.
+        # 비용: 광고주당 cron 1회당 GPT $0.001 + keywordstool 60 호출 (무료).
+        # 시드 5000개 cap (코드 내) 도달 시 자동 skip.
+        self.scheduler.add_job(
+            self._seed_amplify_tick,
+            IntervalTrigger(seconds=1800),
+            id="keyword_pool_seed_amplify",
+            name="키워드 풀 시드 amplify (30분 주기, GPT 패턴 펼침)",
             replace_existing=True,
             max_instances=1,
             coalesce=True,
@@ -106,8 +120,9 @@ class KeywordPoolScheduler:
         self.scheduler.start()
         self._running = True
         logger.warning(
-            f"[pool/scheduler] 시작 — collect {interval_seconds}s / register 120s / "
-            f"inspect 600s / ai_classify 600s / autocomplete 600s / "
+            f"[pool/scheduler] 시작 (5-layer 자율) — collect {interval_seconds}s / "
+            f"register 120s / inspect 600s / ai_classify 300s / "
+            f"autocomplete 300s / seed_amplify 1800s / "
             f"domain_cleanup 3600s / click_cleanup 900s"
         )
 
@@ -170,6 +185,37 @@ class KeywordPoolScheduler:
                     logger.error(f"[pool/scheduler] collect 실패 user={uid} cid={cid}: {e}", exc_info=True)
         except Exception as e:
             logger.error(f"[pool/scheduler] collect tick 실패: {type(e).__name__}: {e}", exc_info=True)
+
+    async def _seed_amplify_tick(self):
+        """시드 amplify cron — GPT 가 user_seed 패턴 펼쳐 user_seed 합류.
+
+        Layer 3 — 게이트 atom 다양성 확보. niche 도메인 시드의 cartesian 펼침으로
+        다음 collect/autocomplete 의 BFS 시드 풀을 ↑.
+        OPENAI_API_KEY 없으면 noop.
+        """
+        try:
+            from config import settings
+            if not settings.OPENAI_API_KEY:
+                return
+            from routers.naver_ad import _run_pool_seed_amplify
+            from database.naver_ad_db import list_connected_ad_accounts
+            accts = list_connected_ad_accounts() or []
+            if not accts:
+                return
+            pairs = [(int(a["user_id"]), int(a["customer_id"]))
+                     for a in accts if a.get("user_id") and a.get("customer_id")]
+            for uid, cid in pairs:
+                try:
+                    await _run_pool_seed_amplify(uid, cid)
+                except Exception as e:
+                    logger.error(
+                        f"[pool/amplify] 광고주 처리 실패 user={uid} cid={cid}: {e}",
+                        exc_info=True,
+                    )
+        except Exception as e:
+            logger.error(
+                f"[pool/amplify] tick 실패: {type(e).__name__}: {e}", exc_info=True,
+            )
 
     async def _autocomplete_mining_tick(self):
         """naver 자동완성 mining cron — 모든 활성 광고주 순회.
