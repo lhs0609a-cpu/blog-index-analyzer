@@ -93,13 +93,15 @@ class KeywordPoolScheduler:
             next_run_time=_now + timedelta(seconds=90),
         )
         # AI 의미 분류 cleanup cron — 점수 기반 cleanup 의 atoms_2 인플레 문제 우회.
-        # 30분마다 최근 30분 등록 KW 만 GPT-4o-mini 가 user_seed 와 비교 → 컷 KW DELETE.
-        # 비용: 광고주당 cron 1회 ~$0.005 (audit 500개 = batch 3) = 일당 ~$0.24/광고주.
+        # 10분마다: 신규 KW (최근 10분) + 누적 KW (audit 이력 없는 것 1500개) 동시 audit.
+        # max DELETE/round 2000 — 한의원 광고주 13만 drift KW 빠른 정리 (5~6시간 내).
+        # 비용: 광고주당 cron 1회 ~$0.015 (1500개 = batch 8 + DELETE max 2000)
+        #       = 일당 ~$2/광고주, 13만 정리 후 incremental 만 남으면 ~$0.5/일.
         self.scheduler.add_job(
             self._ai_cleanup_tick,
-            IntervalTrigger(seconds=1800),
+            IntervalTrigger(seconds=600),
             id="keyword_pool_ai_cleanup",
-            name="키워드 풀 AI 의미 분류 cleanup (30분 주기, 인크리멘탈)",
+            name="키워드 풀 AI 의미 분류 cleanup (10분 주기, 누적+신규)",
             replace_existing=True,
             max_instances=1,
             coalesce=True,
@@ -199,11 +201,15 @@ class KeywordPoolScheduler:
             logger.error(f"[pool/scheduler] collect tick 실패: {type(e).__name__}: {e}", exc_info=True)
 
     async def _ai_cleanup_tick(self):
-        """AI 의미 분류 cleanup cron — 최근 30분 등록 KW 의 무관 KW 자동 DELETE.
+        """AI 의미 분류 cleanup cron — 신규 + 누적 KW 동시 audit.
 
-        점수 기반 cleanup (atoms_2 인플레로 무관 KW 가 30+ 점) 보완. GPT-4o-mini 가
-        user_seed 와 등록 KW 의미 비교 → 진짜 무관 KW 만 골라 실제 네이버 API DELETE.
-        OPENAI_API_KEY 없으면 noop.
+        실측 보고: 한의원 광고주 (cid 1858907) 13만 등록 KW 중 99% drift (고추/농산물).
+        atoms_2 인플레로 점수 기반 cleanup 이 못 잡음. GPT 의미 분류만 정확.
+
+        매 cron:
+          1) 인크리멘탈 — 최근 10분 신규 등록 KW max 500개 audit + DELETE
+          2) 누적 — 전체 등록순 max 1500개 audit + DELETE (id DESC, 최근부터 점진)
+        max DELETE 2000/광고주/cron — 13만 정리 약 5~6시간.
         """
         try:
             from config import settings
@@ -217,14 +223,27 @@ class KeywordPoolScheduler:
                 cid = a.get("customer_id")
                 if not uid or not cid:
                     continue
+                # (1) 인크리멘탈 — 신규 KW 우선 (최근 10분)
                 try:
                     await _run_pool_ai_cleanup_registered(
                         int(uid), int(cid),
-                        dry_run=False, incremental_minutes=30, max_kws=500,
+                        dry_run=False, incremental_minutes=10, max_kws=500,
                     )
                 except Exception as e:
                     logger.error(
-                        f"[ai-cleanup] 광고주 처리 실패 user={uid} cid={cid}: {e}",
+                        f"[ai-cleanup/incr] 실패 user={uid} cid={cid}: {e}",
+                        exc_info=True,
+                    )
+                # (2) 누적 — 최근 등록순 max 1500개 (이미 audit 된 것은 status='deleted'
+                # 로 이미 빠져있으므로 dedup 효과 자연 발생)
+                try:
+                    await _run_pool_ai_cleanup_registered(
+                        int(uid), int(cid),
+                        dry_run=False, incremental_minutes=None, max_kws=1500,
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"[ai-cleanup/bulk] 실패 user={uid} cid={cid}: {e}",
                         exc_info=True,
                     )
         except Exception as e:

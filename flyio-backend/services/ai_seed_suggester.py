@@ -406,7 +406,8 @@ async def classify_rejects(
     # 동적 max_tokens — 후보 수 × 평균 한글 토큰. 200개 ≈ 3000 토큰 + JSON 오버헤드.
     dyn_max = max(2000, min(5000, len(cands) * 20))
     try:
-        async with httpx.AsyncClient(timeout=55.0) as client:
+        # timeout 90s — 보험 광고주 시드 1370 + 후보 200 = 입력 토큰 큼, 55s 부족.
+        async with httpx.AsyncClient(timeout=90.0) as client:
             resp = await client.post(
                 OPENAI_URL,
                 headers={

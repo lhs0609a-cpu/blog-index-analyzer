@@ -3217,6 +3217,7 @@ async def _run_pool_ai_cleanup_registered(
     dry_run: bool = True,
     batch_size: int = 200,
     max_kws: int = 1000,
+    max_delete: int = 2000,
     incremental_minutes: Optional[int] = None,
     sample_seeds: int = 50,
 ) -> Dict[str, Any]:
@@ -3336,8 +3337,9 @@ async def _run_pool_ai_cleanup_registered(
         client.secret_key = account["secret_key"]
 
         n_del, n_fail = 0, 0
-        # 실수 방지 — 한 번에 max 500 DELETE 까지만 (네이버 rate + 사고 방지)
-        for kw in discarded_list[:500]:
+        # 한 round 의 DELETE 상한 — naver rate (0.12s/call) + 사고 방지.
+        # 2000 = 약 4분 소요. 한의원 광고주 13만 drift KW 정리 시 약 65 라운드 = 11시간.
+        for kw in discarded_list[:max(0, min(max_delete, 5000))]:
             kid = kid_map.get(kw)
             if not kid:
                 continue
