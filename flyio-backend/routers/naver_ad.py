@@ -4468,6 +4468,67 @@ async def keyword_pool_ai_cleanup_registered(
     )
 
 
+@router.get("/keyword-pool/diagnostics/accounts-list")
+async def keyword_pool_diagnostics_accounts_list():
+    """진단 — 모든 활성 광고주 + user_seed 샘플 (인증 없음).
+
+    한의원 광고주 customer_id 식별용. cid 자체는 민감 정보 아님 (네이버 광고
+    조회 가능). user_seed 샘플 5개로 도메인 식별 가능.
+    """
+    from database.naver_ad_db import list_connected_ad_accounts
+    pool = get_keyword_pool_db()
+    accts = list_connected_ad_accounts() or []
+    out = []
+    for a in accts:
+        cid = int(a.get("customer_id") or 0)
+        uid = int(a.get("user_id") or 0)
+        if not cid:
+            continue
+        try:
+            seeds = pool.list_user_seeds(cid)
+        except Exception:
+            seeds = []
+        try:
+            stats = pool.stats(cid) or {}
+            by_status = stats.get("by_status") or {}
+        except Exception:
+            by_status = {}
+        out.append({
+            "user_id": uid,
+            "customer_id": cid,
+            "user_seed_count": len(seeds),
+            "user_seed_samples": seeds[:8],
+            "pool_by_status": by_status,
+        })
+    return {"success": True, "count": len(out), "accounts": out}
+
+
+@router.get("/keyword-pool/diagnostics/ai-cleanup-preview")
+async def keyword_pool_diagnostics_ai_cleanup_preview(
+    customer_id: int = Query(..., description="audit 대상 광고주 customer_id"),
+    max_kws: int = Query(200),
+):
+    """진단 dry-run — customer_id 명시 (인증 없음). 등록 KW GPT 분류 미리보기.
+
+    /diagnostics/accounts-list 로 cid 확인 → 이 endpoint 로 광고주별 audit.
+    """
+    from database.naver_ad_db import list_connected_ad_accounts
+    accts = list_connected_ad_accounts() or []
+    matched = next(
+        (a for a in accts if int(a.get("customer_id") or 0) == int(customer_id)),
+        None,
+    )
+    if not matched:
+        return {"success": False, "reason": "customer_id_not_in_accounts"}
+    uid = int(matched.get("user_id") or 0)
+    cid = int(matched.get("customer_id") or 0)
+    res = await _run_pool_ai_cleanup_registered(
+        uid, cid, dry_run=True, max_kws=max_kws,
+    )
+    res["debug_meta"] = {"audited_uid": uid, "audited_cid": cid}
+    return res
+
+
 @router.get("/keyword-pool/diagnostics/ai-cleanup-preview-first")
 async def keyword_pool_ai_cleanup_preview_first(
     max_kws: int = Query(200),
