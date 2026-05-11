@@ -2998,12 +2998,13 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                 inline_ai_discarded = len(discarded)
 
                 # GPT 통과 0 fallback — niche 시드에서 GPT 가 모두 컷하면 풀이 영구히 비어 멈춤.
-                # 검색량 상위 500개를 풀 합류 (drift 감수). 노출제한 cron + 검수 거부로 자동 자정.
-                # cap 100 → 500: cid 1858907 등 GPT 100% 컷 광고주에서 시간당 +2000 → +10000.
+                # 검색량 상위 2,000개를 풀 합류 (drift 감수). 노출제한 cron + 검수 거부로 자동 자정.
+                # cap 500 → 2,000: 5h 10만 도달 — 라운드당 자식 +2,000 × 20회/h = +40,000/h capacity.
+                # 실제 top_rejects 가 작으면 (saturation) 자연 cap. burst 로 시드 풀 확장 시 효과 ↑.
                 ai_inline_fallback = False
                 if not approved and batch_ok > 0 and top_rejects:
                     ai_inline_fallback = True
-                    approved = [r["keyword"] for r in top_rejects[:500]]
+                    approved = [r["keyword"] for r in top_rejects[:2000]]
                     inline_ai_approved = len(approved)
                     logger.warning(
                         f"[pool/collect/ai-inline] user={uid} GPT 통과 0 — "
@@ -3731,8 +3732,9 @@ async def _run_pool_autocomplete_mining(
 
     if not qualified:
         # 검색량 통과 0 fallback — niche 시드 (cid 1858907 한의원: 8체질침/ADHD/A형 간염)
-        # 의 자동완성 KW 가 keywordstool 에서 mt=0 으로 나옴. fresh_kws 상위 200개를
+        # 의 자동완성 KW 가 keywordstool 에서 mt=0 으로 나옴. fresh_kws 상위 1,000개를
         # mt=0 으로 풀 직접 합류 (drift 감수). 등록은 가능, 노출 시 광고비 없음.
+        # cap 200 → 1,000: 5h 10만 도달 — autocomplete 5분 주기 × 12회/h × +1000 = +12k/h capacity.
         fallback_items = [
             {
                 "keyword": kw,
@@ -3743,7 +3745,7 @@ async def _run_pool_autocomplete_mining(
                 "source": "ai_autocomplete_zerovol",
                 "seed": "autocomplete_zerovol",
             }
-            for kw in fresh_kws[:200]
+            for kw in fresh_kws[:1000]
         ]
         try:
             promoted_z = pool.add_candidates(uid, customer_id, fallback_items)
