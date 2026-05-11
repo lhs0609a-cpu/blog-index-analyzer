@@ -3730,13 +3730,42 @@ async def _run_pool_autocomplete_mining(
     )
 
     if not qualified:
-        pool.record_run(
-            uid, customer_id, "autocomplete", "no_new",
-            seeds_count=len(seed_sample),
-            error_message=f"자동완성 {len(all_kws)} → 검색량 통과 0",
-            duration_ms=int((_time.monotonic() - t0) * 1000),
+        # 검색량 통과 0 fallback — niche 시드 (cid 1858907 한의원: 8체질침/ADHD/A형 간염)
+        # 의 자동완성 KW 가 keywordstool 에서 mt=0 으로 나옴. fresh_kws 상위 200개를
+        # mt=0 으로 풀 직접 합류 (drift 감수). 등록은 가능, 노출 시 광고비 없음.
+        fallback_items = [
+            {
+                "keyword": kw,
+                "monthly_total": 0,
+                "monthly_pc": 0,
+                "monthly_mobile": 0,
+                "comp_idx": None,
+                "source": "ai_autocomplete_zerovol",
+                "seed": "autocomplete_zerovol",
+            }
+            for kw in fresh_kws[:200]
+        ]
+        try:
+            promoted_z = pool.add_candidates(uid, customer_id, fallback_items)
+        except Exception as e:
+            logger.warning(f"[pool/autocomplete] zero-vol fallback add 실패: {e}")
+            promoted_z = 0
+        duration_ms = int((_time.monotonic() - t0) * 1000)
+        logger.warning(
+            f"[pool/autocomplete] user={uid} cid={customer_id} zero-vol fallback — "
+            f"자동완성 {len(all_kws)} → 검색량 통과 0 → fresh 상위 {len(fallback_items)} 합류 "
+            f"(자식 +{promoted_z}) ({duration_ms}ms)"
         )
-        return {"success": False, "reason": "no_volume"}
+        pool.record_run(
+            uid, customer_id, "autocomplete",
+            "success" if promoted_z > 0 else "no_new",
+            added=promoted_z, seeds_count=len(seed_sample),
+            error_message=(
+                f"자동완성 {len(all_kws)} → 검색량 0 → zero-vol fallback 자식 +{promoted_z}"
+            )[:300],
+            duration_ms=duration_ms,
+        )
+        return {"success": promoted_z > 0, "reason": "zero_vol_fallback", "promoted": promoted_z}
 
     # 4) GPT 분류 — 검색량 상위 1000개 (200 batch × 5 병렬, AI-first 빠른 채움)
     qualified.sort(key=lambda x: -x["monthly_total"])
