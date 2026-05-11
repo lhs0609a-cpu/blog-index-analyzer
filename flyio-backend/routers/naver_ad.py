@@ -5779,6 +5779,180 @@ async def keyword_pool_cron_domain_cleanup(
     }
 
 
+@router.post("/keyword-pool/cron/seed-amplify-burst")
+async def keyword_pool_cron_seed_amplify_burst(
+    background_tasks: BackgroundTasks,
+    authorization: Optional[str] = Header(None),
+    user_id: int = Query(...),
+    customer_id: int = Query(...),
+    n_calls: int = Query(10, ge=1, le=30),
+    target_per_call: int = Query(500, ge=100, le=500),
+):
+    """시드 amplify 폭발 — n_calls 번 GPT 호출 병렬 → user_seed 풀 대량 확장.
+
+    각 호출: user_seed 100개 random sample → amplify_seeds (target ~500) → fresh seed.
+    n_calls=10 → ~5,000 신규 시드 생성 시도, dedup + keywordstool 검증 → user_seed 합류.
+    mt=0 시드도 합류 (drift 감수, 시드 풀 확장 우선) — 다음 collect 라운드 atom 다양성 ↑.
+
+    사용 예 (Bearer cron):
+      POST /api/naver-ad/keyword-pool/cron/seed-amplify-burst?user_id=1&customer_id=1858907&n_calls=10
+      Authorization: Bearer <CRON_TOKEN>
+    """
+    _verify_cron_token(authorization)
+
+    async def _run():
+        from services.ai_seed_suggester import amplify_seeds as _amp
+        from services.naver_ad_service import NaverAdApiClient
+        from database.naver_ad_db import get_ad_account_by_customer
+        from config import settings
+        import time as _t
+        import random as _r
+
+        t0 = _t.monotonic()
+        if not settings.OPENAI_API_KEY:
+            logger.warning("[seed-amplify-burst] OPENAI_API_KEY 미설정 — abort")
+            return
+
+        account = get_ad_account_by_customer(user_id, str(customer_id))
+        if not account or not account.get("is_connected"):
+            logger.warning(f"[seed-amplify-burst] uid={user_id} cid={customer_id} 미연결 — abort")
+            return
+
+        pool = get_keyword_pool_db()
+        user_seeds = pool.list_user_seeds(customer_id) or []
+        if not user_seeds:
+            logger.warning(f"[seed-amplify-burst] cid={customer_id} user_seed 0 — abort")
+            return
+
+        SAMPLE = 100
+        _sem = asyncio.Semaphore(4)
+
+        async def _one_amp(idx: int) -> List[str]:
+            async with _sem:
+                sample = (
+                    _r.sample(user_seeds, SAMPLE)
+                    if len(user_seeds) > SAMPLE else list(user_seeds)
+                )
+                try:
+                    r = await _amp(sample, target_count=target_per_call)
+                except Exception as e:
+                    logger.warning(f"[seed-amplify-burst] call {idx} 예외: {e}")
+                    return []
+                if not r.get("success"):
+                    logger.warning(f"[seed-amplify-burst] call {idx} 실패: {r.get('message')}")
+                    return []
+                return [s for s in (r.get("seeds") or []) if isinstance(s, str) and s.strip()]
+
+        am_t0 = _t.monotonic()
+        results = await asyncio.gather(*[_one_amp(i) for i in range(n_calls)])
+        am_ms = int((_t.monotonic() - am_t0) * 1000)
+
+        # 누적 fresh seeds — 원본 + 풀 dedup
+        user_seed_set = set(user_seeds)
+        pool_set = pool.list_pool_keyword_set(customer_id)
+        seen: Set[str] = set()
+        fresh_seeds: List[str] = []
+        for batch in results:
+            for s in batch:
+                k = s.strip()
+                if not k or k in seen or k in user_seed_set or k in pool_set:
+                    continue
+                seen.add(k)
+                fresh_seeds.append(k)
+
+        logger.warning(
+            f"[seed-amplify-burst] cid={customer_id} amplify {n_calls}회 ({am_ms}ms) "
+            f"→ 누적 raw {sum(len(b) for b in results)} → fresh {len(fresh_seeds)}"
+        )
+
+        if not fresh_seeds:
+            return
+
+        # keywordstool 검증 — chunks 50 cap, sleep 0.3 (429 회피)
+        client = NaverAdApiClient()
+        client.customer_id = account["customer_id"]
+        client.api_key = account["api_key"]
+        client.secret_key = account["secret_key"]
+
+        vol_t0 = _t.monotonic()
+        vol_map: Dict[str, dict] = {}
+        CHUNK = 5
+        CHUNKS_CAP = 200  # 1,000 seed 검증 (burst 모드)
+        chunks = [fresh_seeds[i:i + CHUNK] for i in range(0, len(fresh_seeds), CHUNK)][:CHUNKS_CAP]
+        for chunk in chunks:
+            try:
+                r = await client.get_keywords_volume_batch(chunk)
+                vol_map.update(r)
+            except Exception as e:
+                logger.debug(f"[seed-amplify-burst] volume batch 실패: {e}")
+            await asyncio.sleep(0.3)
+        vol_ms = int((_t.monotonic() - vol_t0) * 1000)
+
+        # mt≥1 → user_seed 합류 (검색량 있음)
+        # mt=0 zero-vol fallback → user_seed 합류 (drift 감수, 시드 풀 확장 우선)
+        items_with_vol: List[Dict] = []
+        items_zerovol: List[Dict] = []
+        for s in fresh_seeds:
+            v = vol_map.get(s) or vol_map.get(s.replace(" ", ""))
+            if v:
+                mt = int(v.get("monthly_total") or 0)
+                if mt >= 1:
+                    items_with_vol.append({
+                        "keyword": s, "monthly_total": mt,
+                        "monthly_pc": int(v.get("monthly_pc") or 0),
+                        "monthly_mobile": int(v.get("monthly_mobile") or 0),
+                        "comp_idx": v.get("comp_idx"),
+                        "source": "user_seed", "seed": s,
+                    })
+                    continue
+            items_zerovol.append({
+                "keyword": s, "monthly_total": 0,
+                "monthly_pc": 0, "monthly_mobile": 0, "comp_idx": None,
+                "source": "user_seed", "seed": s,
+            })
+
+        # 합류 cap — 한 burst 에 user_seed 최대 5000 추가
+        BURST_CAP = 5000
+        merged = items_with_vol + items_zerovol[:max(0, BURST_CAP - len(items_with_vol))]
+        promoted = 0
+        if merged:
+            try:
+                promoted = pool.add_candidates(user_id, customer_id, merged)
+            except Exception as e:
+                logger.warning(f"[seed-amplify-burst] add 실패: {e}")
+
+        duration_ms = int((_t.monotonic() - t0) * 1000)
+        logger.warning(
+            f"[seed-amplify-burst] cid={customer_id} 완료 ({duration_ms}ms) — "
+            f"amplify {n_calls}회 raw {sum(len(b) for b in results)} → "
+            f"fresh {len(fresh_seeds)} → mt≥1 {len(items_with_vol)} + "
+            f"zerovol {len(items_zerovol)} → user_seed +{promoted} "
+            f"(GPT {am_ms}ms, vol {vol_ms}ms)"
+        )
+        pool.record_run(
+            user_id, customer_id, "seed_amplify_burst",
+            "success" if promoted > 0 else "no_match",
+            added=promoted, seeds_count=len(user_seeds),
+            error_message=(
+                f"burst {n_calls}회 → fresh {len(fresh_seeds)} → "
+                f"mt≥1 {len(items_with_vol)} + zerovol {len(items_zerovol)} → +{promoted}"
+            )[:300],
+            duration_ms=duration_ms,
+        )
+
+    background_tasks.add_task(_run)
+    return {
+        "success": True,
+        "queued": True,
+        "user_id": user_id,
+        "customer_id": customer_id,
+        "n_calls": n_calls,
+        "target_per_call": target_per_call,
+        "estimated_duration_seconds": n_calls * 5 + 60,  # GPT 5s × n_calls + keywordstool
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
 @router.post("/keyword-pool/cron/auto-cleanup")
 async def keyword_pool_cron_auto_cleanup(
     background_tasks: BackgroundTasks,
