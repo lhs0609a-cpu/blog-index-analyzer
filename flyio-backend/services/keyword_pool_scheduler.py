@@ -44,9 +44,9 @@ class KeywordPoolScheduler:
         )
         self.scheduler.add_job(
             self._register_only,
-            IntervalTrigger(seconds=120),
+            IntervalTrigger(seconds=90),
             id="keyword_pool_register",
-            name="키워드 풀 register (2분 주기)",
+            name="키워드 풀 register (90초 주기, 빠른 채움)",
             replace_existing=True,
             max_instances=1,
             coalesce=True,
@@ -84,29 +84,32 @@ class KeywordPoolScheduler:
         )
         self.scheduler.add_job(
             self._seed_amplify_tick,
-            IntervalTrigger(seconds=1800),
+            IntervalTrigger(seconds=600),
             id="keyword_pool_seed_amplify",
-            name="키워드 풀 시드 amplify (30분 주기, GPT 패턴 펼침)",
+            name="키워드 풀 시드 amplify (10분 주기, GPT 패턴 펼침)",
             replace_existing=True,
             max_instances=1,
             coalesce=True,
             next_run_time=_now + timedelta(seconds=90),
         )
-        # AI 의미 분류 cleanup cron — 점수 기반 cleanup 의 atoms_2 인플레 문제 우회.
-        # 10분마다: 신규 KW (최근 10분) + 누적 KW (audit 이력 없는 것 1500개) 동시 audit.
-        # max DELETE/round 2000 — 한의원 광고주 13만 drift KW 빠른 정리 (5~6시간 내).
-        # 비용: 광고주당 cron 1회 ~$0.015 (1500개 = batch 8 + DELETE max 2000)
-        #       = 일당 ~$2/광고주, 13만 정리 후 incremental 만 남으면 ~$0.5/일.
-        self.scheduler.add_job(
-            self._ai_cleanup_tick,
-            IntervalTrigger(seconds=600),
-            id="keyword_pool_ai_cleanup",
-            name="키워드 풀 AI 의미 분류 cleanup (10분 주기, 누적+신규)",
-            replace_existing=True,
-            max_instances=1,
-            coalesce=True,
-            next_run_time=_now + timedelta(seconds=240),
-        )
+        # AI 의미 분류 cleanup cron — 등록 KW 대량 DELETE 사고로 비활성.
+        # 한 광고주 ~4만 KW 가 GPT 컷 판정으로 다 사라짐 (시드 ↔ 등록 KW 의미 거리 평가
+        # 가 과민). 추가 단계의 inline AI 게이트 (`ai_inline`, collect 시 GPT 가
+        # 자식 KW 분류 → approved 만 풀 합류) 가 이미 도메인 일치 필터링하므로,
+        # 등록 후 사후 DELETE 는 중복이며 위험.
+        # 켜고 싶으면 env KEYWORD_POOL_AI_CLEANUP_ENABLED=1 로 활성화 (그래도 신중히).
+        import os as _os
+        if _os.environ.get("KEYWORD_POOL_AI_CLEANUP_ENABLED") == "1":
+            self.scheduler.add_job(
+                self._ai_cleanup_tick,
+                IntervalTrigger(seconds=600),
+                id="keyword_pool_ai_cleanup",
+                name="키워드 풀 AI 의미 분류 cleanup (10분 주기, 누적+신규)",
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+                next_run_time=_now + timedelta(seconds=240),
+            )
         # Domain cleanup — 매시 1회 (3600s) 도메인 안 맞는 등록 KW 자동 DELETE (click 무관).
         # 사용자 보고: 마지막 7:31 이후 누락 가능성 — fly auto-deploy 시 다음 cron 까지
         # 1시간 대기 사고. next_run_time 즉시 발동 으로 deploy 직후 한 번 보장.
@@ -133,10 +136,15 @@ class KeywordPoolScheduler:
         )
         self.scheduler.start()
         self._running = True
+        _ai_cleanup_status = (
+            "ai_cleanup 600s"
+            if _os.environ.get("KEYWORD_POOL_AI_CLEANUP_ENABLED") == "1"
+            else "ai_cleanup OFF"
+        )
         logger.warning(
-            f"[pool/scheduler] 시작 (자율) — collect {interval_seconds}s / "
-            f"register 120s / inspect 600s / ai_classify 300s / "
-            f"autocomplete 300s / seed_amplify 1800s / ai_cleanup 1800s / "
+            f"[pool/scheduler] 시작 (AI-first 빠른 채움) — collect {interval_seconds}s / "
+            f"register 90s / inspect 600s / ai_classify 300s / "
+            f"autocomplete 300s / seed_amplify 600s / {_ai_cleanup_status} / "
             f"domain_cleanup 3600s / click_cleanup 900s"
         )
 
@@ -271,7 +279,8 @@ class KeywordPoolScheduler:
                      for a in accts if a.get("user_id") and a.get("customer_id")]
             for uid, cid in pairs:
                 try:
-                    await _run_pool_seed_amplify(uid, cid)
+                    # target 800 — AI-first 빠른 채움. 시드 펼침 → keywordstool 발굴 다양성 ↑.
+                    await _run_pool_seed_amplify(uid, cid, target_count=800)
                 except Exception as e:
                     logger.error(
                         f"[pool/amplify] 광고주 처리 실패 user={uid} cid={cid}: {e}",
