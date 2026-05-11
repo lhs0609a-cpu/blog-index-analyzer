@@ -2850,7 +2850,10 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         seeds_processed += len(chunk_sanitized)
         hints = [c[1] for c in chunk_sanitized]
         hint_str = ",".join(hints)
-        seed_label = hint_str[:60]  # candidate row 의 seed 컬럼에 batch hint 기록
+        # seed 컬럼 attribution — batch hint 전체를 콤마구분으로 저장하면 UI 시드별 표가
+        # "척수성근위축증,마자인,…" 같이 묶여 보이고 그 row 의 자식 카운트가 0 으로 잡힘.
+        # batch 의 첫 시드를 대표 라벨로. 5 시드 중 1로 attribution 부풀려지지만 UI 명확.
+        seed_label = chunk_sanitized[0][0]
 
         try:
             related = await client.get_related_keywords(hint_str, show_detail=True)
