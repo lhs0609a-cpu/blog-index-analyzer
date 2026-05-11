@@ -186,8 +186,8 @@ async def lifespan(app: FastAPI):
     # 키워드 풀 스케줄러 — 백엔드 자체 cron (GitHub Actions schedule 신뢰성 낮음)
     try:
         from services.keyword_pool_scheduler import keyword_pool_scheduler
-        keyword_pool_scheduler.start(interval_seconds=300)  # 매 5분
-        logger.info("✅ Keyword pool scheduler started (every 5 min)")
+        keyword_pool_scheduler.start(interval_seconds=180)  # 매 3분 (AI-first 빠른 채움)
+        logger.info("✅ Keyword pool scheduler started (every 3 min, AI-first fast fill)")
     except Exception as e:
         logger.warning(f"⚠️ Keyword pool scheduler failed to start: {e}")
 

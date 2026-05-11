@@ -2940,18 +2940,18 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         from config import settings as _settings
         if reject_for_ai and _settings.OPENAI_API_KEY:
             from services.ai_seed_suggester import classify_rejects as _classify_rejects
-            # AI-first 빠른 채움 — 라운드당 GPT 분류 처리량 5배 (200 → 1000).
-            # classify_rejects 내부 cap 200 / 호출 → 200 batch × 5 = 1000 audit.
-            # asyncio.gather + Semaphore(3) 병렬화 — GPT round-trip 4~5초 × 5 sequential =
-            # 20초 → 병렬 ~8초. collect cron 5분 안에 충분히 끝남.
+            # AI-first 빠른 채움 — 라운드당 GPT 분류 처리량 10배 (200 → 2000).
+            # classify_rejects 내부 cap 200 / 호출 → 200 batch × 10 = 2000 audit.
+            # asyncio.gather + Semaphore(4) 병렬화 — GPT round-trip 4~5초 × 10 sequential =
+            # 50초 → 병렬 ~12초. collect cron 5분 안에 충분히 끝남.
             top_rejects = sorted(
                 reject_for_ai, key=lambda r: -int(r.get("monthly_total") or 0)
-            )[:1000]
+            )[:2000]
             ai_seeds_input = pool.list_user_seeds(customer_id) or whitelist
             if ai_seeds_input and top_rejects:
                 ai_t0 = _time.monotonic()
                 BATCH = 200
-                _sem = asyncio.Semaphore(3)
+                _sem = asyncio.Semaphore(4)
 
                 async def _classify_batch(batch_items: List[Dict]) -> Dict[str, Any]:
                     async with _sem:
@@ -2997,6 +2997,18 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                 inline_ai_approved = len(approved)
                 inline_ai_discarded = len(discarded)
 
+                # GPT 통과 0 fallback — niche 시드에서 GPT 가 모두 컷하면 풀이 영구히 비어 멈춤.
+                # 검색량 상위 100개를 풀 합류 (drift 감수). 노출제한 cron + 검수 거부로 자동 자정.
+                ai_inline_fallback = False
+                if not approved and batch_ok > 0 and top_rejects:
+                    ai_inline_fallback = True
+                    approved = [r["keyword"] for r in top_rejects[:100]]
+                    inline_ai_approved = len(approved)
+                    logger.warning(
+                        f"[pool/collect/ai-inline] user={uid} GPT 통과 0 — "
+                        f"검색량 상위 {len(approved)}개 fallback 합류 (drift 감수)"
+                    )
+
                 if approved:
                     mt_map = {
                         r["keyword"]: int(r.get("monthly_total") or 0)
@@ -3032,7 +3044,8 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                         pass
                 logger.warning(
                     f"[pool/collect/ai-inline] user={uid} cid={customer_id} "
-                    f"분류 {len(top_rejects)}개 (batch {batch_ok}OK/{batch_fail}fail) → "
+                    f"분류 {len(top_rejects)}개 "
+                    f"(batch {batch_ok}OK/{batch_fail}fail{', fallback' if ai_inline_fallback else ''}) → "
                     f"통과 {inline_ai_approved} (자식 추가 {inline_ai_added}) / "
                     f"컷 {inline_ai_discarded} ({ai_ms}ms) "
                     f"rationale={last_rationale[:80]}"
@@ -3408,7 +3421,7 @@ async def _run_pool_seed_amplify(
     *,
     seed_sample_size: int = 100,
     target_count: int = 300,
-    min_volume: int = 30,
+    min_volume: int = 1,
     chunks_cap: int = 200,
 ) -> Dict[str, Any]:
     """user_seed 자가 amplify — GPT 가 시드 패턴 분석해 새 시드 후보 생성 →
@@ -3575,7 +3588,7 @@ async def _run_pool_autocomplete_mining(
     *,
     seed_sample_size: int = 200,
     per_seed: int = 10,
-    min_volume: int = 50,
+    min_volume: int = 1,
     chunks_cap: int = 250,
 ) -> Dict[str, Any]:
     """naver 검색 자동완성으로 시드 인접 KW 발굴 → GPT 분류 → 자식 풀 직접 추가.
@@ -3721,25 +3734,57 @@ async def _run_pool_autocomplete_mining(
         )
         return {"success": False, "reason": "no_volume"}
 
-    # 4) GPT 분류 — 검색량 상위 200개
+    # 4) GPT 분류 — 검색량 상위 1000개 (200 batch × 5 병렬, AI-first 빠른 채움)
     qualified.sort(key=lambda x: -x["monthly_total"])
-    classify_input = qualified[:200]
+    classify_input = qualified[:1000]
     ai_t0 = _time.monotonic()
-    ai_result = await classify_rejects(user_seeds, classify_input, seed_sample_size=50)
+    BATCH = 200
+    _sem = asyncio.Semaphore(3)
+
+    async def _classify_one(batch: List[Dict]) -> Dict[str, Any]:
+        async with _sem:
+            return await classify_rejects(user_seeds, batch, seed_sample_size=50)
+
+    batches = [classify_input[i:i + BATCH] for i in range(0, len(classify_input), BATCH)]
+    batch_results = await asyncio.gather(
+        *[_classify_one(b) for b in batches], return_exceptions=True,
+    )
     ai_ms = int((_time.monotonic() - ai_t0) * 1000)
 
-    if not ai_result.get("success"):
-        msg = ai_result.get("message", "unknown")
+    approved: List[str] = []
+    discarded: List[str] = []
+    batch_ok = 0
+    batch_fail = 0
+    for r in batch_results:
+        if isinstance(r, Exception) or not (isinstance(r, dict) and r.get("success")):
+            batch_fail += 1
+            continue
+        batch_ok += 1
+        approved.extend(r.get("approved") or [])
+        discarded.extend(r.get("discarded") or [])
+    approved = list(dict.fromkeys(approved))
+    discarded = list(dict.fromkeys(discarded))
+
+    if batch_ok == 0:
+        msg = "all batches failed"
         pool.record_run(
             uid, customer_id, "autocomplete", "failed",
             seeds_count=len(seed_sample),
-            error_message=f"GPT 분류 실패: {msg[:200]}",
+            error_message=f"GPT 분류 실패: {msg}",
             duration_ms=int((_time.monotonic() - t0) * 1000),
         )
         return {"success": False, "reason": "ai_failed", "message": msg}
 
-    approved = ai_result.get("approved") or []
-    discarded = ai_result.get("discarded") or []
+    # GPT 통과 0 fallback — 검색량 상위 30개를 풀 직접 합류 (drift 감수).
+    # niche 시드 (의료/희귀) 에서 GPT 가 모두 컷 판정해도 풀이 마르지 않게 보장.
+    # 무관 KW 가 풀에 들어가도 네이버 검수 → 노출제한 → inspect cron 자동 삭제로 자정.
+    ai_fallback = False
+    if not approved and classify_input:
+        ai_fallback = True
+        approved = [q["keyword"] for q in classify_input[:30]]
+        logger.warning(
+            f"[pool/autocomplete] user={uid} GPT 통과 0 — 검색량 상위 30개 fallback 합류"
+        )
 
     # 5) 통과 KW → 자식 풀 직접 추가 (게이트 우회)
     promoted = 0
@@ -3781,9 +3826,10 @@ async def _run_pool_autocomplete_mining(
     logger.warning(
         f"[pool/autocomplete] user={uid} cid={customer_id} 완료 ({duration_ms}ms) — "
         f"자동완성 {len(all_kws)} → 검증 {len(fresh_kws)} → "
-        f"검색량≥{min_volume} {len(qualified)} → 분류 {len(classify_input)} → "
+        f"검색량≥{min_volume} {len(qualified)} → 분류 {len(classify_input)} "
+        f"(batch {batch_ok}OK/{batch_fail}fail{', fallback' if ai_fallback else ''}) → "
         f"통과 {len(approved)} (자식 +{promoted}) / 컷 {len(discarded)} "
-        f"(GPT {ai_ms}ms, rationale={(ai_result.get('rationale') or '')[:80]})"
+        f"(GPT {ai_ms}ms)"
     )
     pool.record_run(
         uid, customer_id, "autocomplete",
@@ -3792,7 +3838,8 @@ async def _run_pool_autocomplete_mining(
         seeds_count=len(seed_sample),
         error_message=(
             f"자동완성 {len(all_kws)} → 검색량≥{min_volume} {len(qualified)} → "
-            f"GPT 통과 {len(approved)} (자식 +{promoted}) / 컷 {len(discarded)}"
+            f"GPT 통과 {len(approved)}{' (fallback)' if ai_fallback else ''} "
+            f"(자식 +{promoted}) / 컷 {len(discarded)}"
         )[:300],
         duration_ms=duration_ms,
     )
