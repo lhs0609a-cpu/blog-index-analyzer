@@ -2998,11 +2998,12 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                 inline_ai_discarded = len(discarded)
 
                 # GPT 통과 0 fallback — niche 시드에서 GPT 가 모두 컷하면 풀이 영구히 비어 멈춤.
-                # 검색량 상위 100개를 풀 합류 (drift 감수). 노출제한 cron + 검수 거부로 자동 자정.
+                # 검색량 상위 500개를 풀 합류 (drift 감수). 노출제한 cron + 검수 거부로 자동 자정.
+                # cap 100 → 500: cid 1858907 등 GPT 100% 컷 광고주에서 시간당 +2000 → +10000.
                 ai_inline_fallback = False
                 if not approved and batch_ok > 0 and top_rejects:
                     ai_inline_fallback = True
-                    approved = [r["keyword"] for r in top_rejects[:100]]
+                    approved = [r["keyword"] for r in top_rejects[:500]]
                     inline_ai_approved = len(approved)
                     logger.warning(
                         f"[pool/collect/ai-inline] user={uid} GPT 통과 0 — "
@@ -3589,7 +3590,7 @@ async def _run_pool_autocomplete_mining(
     seed_sample_size: int = 200,
     per_seed: int = 10,
     min_volume: int = 1,
-    chunks_cap: int = 250,
+    chunks_cap: int = 50,
 ) -> Dict[str, Any]:
     """naver 검색 자동완성으로 시드 인접 KW 발굴 → GPT 분류 → 자식 풀 직접 추가.
 
@@ -3694,6 +3695,9 @@ async def _run_pool_autocomplete_mining(
     vol_t0 = _time.monotonic()
     vol_map: Dict[str, dict] = {}
     CHUNK = 5
+    # chunks_cap 50 × CHUNK 5 = 최대 250 KW 검증. sleep 0.3 — keywordstool 429 rate 회피.
+    # 실측 (cid 1858907): chunks 250 × sleep 0.1 = 90~230초 + 429 retry → 4분 소요 + 결과 0.
+    # chunks 50 × sleep 0.3 = 15초, 429 회피 + 정상 결과.
     chunks = [fresh_kws[i:i + CHUNK] for i in range(0, len(fresh_kws), CHUNK)][:chunks_cap]
     for chunk in chunks:
         try:
@@ -3701,7 +3705,7 @@ async def _run_pool_autocomplete_mining(
             vol_map.update(r)
         except Exception as e:
             logger.debug(f"[pool/autocomplete] volume batch 실패 {chunk[:1]}: {e}")
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.3)
     vol_ms = int((_time.monotonic() - vol_t0) * 1000)
 
     qualified: List[Dict] = []
@@ -3775,15 +3779,16 @@ async def _run_pool_autocomplete_mining(
         )
         return {"success": False, "reason": "ai_failed", "message": msg}
 
-    # GPT 통과 0 fallback — 검색량 상위 30개를 풀 직접 합류 (drift 감수).
+    # GPT 통과 0 fallback — 검색량 상위 200개를 풀 직접 합류 (drift 감수).
     # niche 시드 (의료/희귀) 에서 GPT 가 모두 컷 판정해도 풀이 마르지 않게 보장.
     # 무관 KW 가 풀에 들어가도 네이버 검수 → 노출제한 → inspect cron 자동 삭제로 자정.
+    # cap 30 → 200: 시간당 autocomplete 12회 × +200 = +2400 풀 합류.
     ai_fallback = False
     if not approved and classify_input:
         ai_fallback = True
-        approved = [q["keyword"] for q in classify_input[:30]]
+        approved = [q["keyword"] for q in classify_input[:200]]
         logger.warning(
-            f"[pool/autocomplete] user={uid} GPT 통과 0 — 검색량 상위 30개 fallback 합류"
+            f"[pool/autocomplete] user={uid} GPT 통과 0 — 검색량 상위 200개 fallback 합류"
         )
 
     # 5) 통과 KW → 자식 풀 직접 추가 (게이트 우회)

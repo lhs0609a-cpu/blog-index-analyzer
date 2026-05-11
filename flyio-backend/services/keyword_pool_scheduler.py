@@ -110,19 +110,21 @@ class KeywordPoolScheduler:
                 coalesce=True,
                 next_run_time=_now + timedelta(seconds=240),
             )
-        # Domain cleanup — 매시 1회 (3600s) 도메인 안 맞는 등록 KW 자동 DELETE (click 무관).
-        # 사용자 보고: 마지막 7:31 이후 누락 가능성 — fly auto-deploy 시 다음 cron 까지
-        # 1시간 대기 사고. next_run_time 즉시 발동 으로 deploy 직후 한 번 보장.
-        self.scheduler.add_job(
-            self._domain_cleanup_tick,
-            IntervalTrigger(seconds=3600),
-            id="keyword_pool_domain_cleanup",
-            name="키워드 풀 도메인 자동 정리 (1시간 주기, click 무관)",
-            replace_existing=True,
-            max_instances=1,
-            coalesce=True,
-            next_run_time=_now + timedelta(seconds=180),
-        )
+        # Domain cleanup — 점수 atoms_2 인플레로 진짜 도메인 KW 도 ≤30 점이 됨 → 잘못 DELETE.
+        # 실측 (cid 1858907 한의원): basis=saved_relevance thr=30 → del=144 / round.
+        # 채우는 속도 < 죽는 속도 → 5시간 10만 목표 불가능. AI cleanup 과 동일 사고 패턴.
+        # 켜고 싶으면 env KEYWORD_POOL_DOMAIN_CLEANUP_ENABLED=1 로 활성화.
+        if _os.environ.get("KEYWORD_POOL_DOMAIN_CLEANUP_ENABLED") == "1":
+            self.scheduler.add_job(
+                self._domain_cleanup_tick,
+                IntervalTrigger(seconds=3600),
+                id="keyword_pool_domain_cleanup",
+                name="키워드 풀 도메인 자동 정리 (1시간 주기, click 무관)",
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+                next_run_time=_now + timedelta(seconds=180),
+            )
         # Click cleanup — 매 15분 (900s) 클릭 KW 점수 ≤ threshold 자동 DELETE.
         self.scheduler.add_job(
             self._click_cleanup_tick,
@@ -141,11 +143,16 @@ class KeywordPoolScheduler:
             if _os.environ.get("KEYWORD_POOL_AI_CLEANUP_ENABLED") == "1"
             else "ai_cleanup OFF"
         )
+        _domain_cleanup_status = (
+            "domain_cleanup 3600s"
+            if _os.environ.get("KEYWORD_POOL_DOMAIN_CLEANUP_ENABLED") == "1"
+            else "domain_cleanup OFF"
+        )
         logger.warning(
             f"[pool/scheduler] 시작 (AI-first 빠른 채움) — collect {interval_seconds}s / "
             f"register 90s / inspect 600s / ai_classify 300s / "
             f"autocomplete 300s / seed_amplify 600s / {_ai_cleanup_status} / "
-            f"domain_cleanup 3600s / click_cleanup 900s"
+            f"{_domain_cleanup_status} / click_cleanup 900s"
         )
 
     def stop(self):
