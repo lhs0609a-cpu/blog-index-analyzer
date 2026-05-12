@@ -247,6 +247,36 @@ class KeywordPoolDB:
             )
             return [r["keyword"] for r in cur.fetchall() if r["keyword"]]
 
+    def list_registered_random_seeds(
+        self,
+        account_customer_id: int,
+        limit: int = 60,
+        min_volume: int = 10,
+    ) -> List[str]:
+        """등록 KW 무작위 샘플 — keywordstool 시드로 재활용 (saturation 돌파).
+
+        user_seed 2~5k 만으로 keywordstool 응답이 곧 saturate → +0~+10/배치 정체.
+        registered 90k+ 자체를 매 라운드 60개씩 다른 sample 로 시드 투입 → fresh
+        keywordstool 응답 → 새 mt≥1 자식 발굴. unified_tokens 게이트에 registered_atoms
+        가 이미 포함돼 있어 자식 통과 보장.
+
+        min_volume 10: 너무 저빈도 KW 는 자식 발굴 빈약 (대부분 자식 mt=0).
+        ORDER BY RANDOM(): 90k / 60 / 24 round/h ≈ 62h 1주기. cron 1회 cost <50ms.
+        """
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT keyword FROM naverad_keyword_pool
+                   WHERE account_customer_id = ?
+                     AND status = 'registered'
+                     AND monthly_total >= ?
+                     AND length(keyword) >= 2
+                   ORDER BY RANDOM()
+                   LIMIT ?""",
+                (account_customer_id, min_volume, limit),
+            )
+            return [r["keyword"] for r in cur.fetchall() if r["keyword"]]
+
     def detect_collect_deadlock(
         self,
         account_customer_id: int,
@@ -492,15 +522,20 @@ class KeywordPoolDB:
             return len(keywords)
 
     def cleanup_zerovol_user_seeds(self, account_customer_id: int) -> Dict[str, int]:
-        """mt=0 user_seed 행 일괄 삭제 — 등록 락 제거.
+        """mt=0 pending 행 일괄 삭제 — 등록 락 제거 (source 무관, 확장 2026-05-12).
 
-        seed_amplify_burst (구버전) 가 mt=0 시드도 user_seed 로 INSERT 했던 잔재.
-        이 행들은 claim_pending 의 mt≥1 필터에 영구 걸려 등록 안 됨.
-        삭제 후 자리 비우면 keywordstool 이 같은 KW 를 mt>0 으로 재발견 시
-        풀 합류 가능.
+        대상 source 잔재:
+          - 구버전 seed_amplify_burst: mt=0 시드 → source='user_seed'
+          - autocomplete zero-vol fallback: source='ai_autocomplete_zerovol'
+          - 자체 reseed (auto): source='user_seed' (자기-시드 row)
+        공통: claim_pending min_volume=1 필터에 영구 차단되어 register 워커가 처리 못 함 →
+        pending 풀에 dead row 누적 → "등록가능 0" 으로 cron 정지. 정책: mt=0 등록 금지
+        (사용자 명시 — "검색량 있는 KW 의 연관 KW 끝까지 발굴"), 따라서 mt=0 pending 은
+        DELETE 가 정답. 동일 KW 가 keywordstool 에서 mt>0 으로 재발견되면 add_candidates
+        UPSERT 가 정상 합류.
 
         registered/failed/skipped row 는 절대 건드리지 않음 (이미 처리됨).
-        Returns: {deleted, before_pending, after_pending}.
+        Returns: {deleted, before_pending, after_pending, by_source(샘플)}.
         """
         with self._conn() as conn:
             cur = conn.cursor()
@@ -510,12 +545,23 @@ class KeywordPoolDB:
                 (account_customer_id,),
             )
             before = int(cur.fetchone()["n"])
+            # by_source 진단 — 삭제 전 mt=0 pending 의 source 분포
+            cur.execute(
+                """SELECT COALESCE(source, '') AS src, COUNT(*) AS n
+                   FROM naverad_keyword_pool
+                   WHERE account_customer_id = ?
+                     AND status = 'pending'
+                     AND COALESCE(monthly_total, 0) < 1
+                   GROUP BY src
+                   ORDER BY n DESC""",
+                (account_customer_id,),
+            )
+            by_source = {r["src"]: int(r["n"]) for r in cur.fetchall()}
             cur.execute(
                 """DELETE FROM naverad_keyword_pool
                    WHERE account_customer_id = ?
                      AND status = 'pending'
-                     AND COALESCE(monthly_total, 0) < 1
-                     AND COALESCE(source, '') = 'user_seed'""",
+                     AND COALESCE(monthly_total, 0) < 1""",
                 (account_customer_id,),
             )
             deleted = cur.rowcount
@@ -529,6 +575,7 @@ class KeywordPoolDB:
                 "deleted": int(deleted),
                 "before_pending": before,
                 "after_pending": after,
+                "by_source": by_source,
             }
 
     def cleanup_offdomain(

@@ -2753,14 +2753,27 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     # 전체 collect 정지 패턴 차단. 같은 시드를 매 5분마다 재시도하지 않고 30분 backoff.
     seeds_in_backoff = [s for s in seed_pool if _is_seed_in_backoff(customer_id, s)]
     seeds_eligible = [s for s in seed_pool if not _is_seed_in_backoff(customer_id, s)]
-    # 슬롯: cold_start 면 user(45) + bridge(15) = 60, 아니면 user 120.
+    # 슬롯: cold_start 면 user(45) + bridge(15) = 60, 아니면 user 120 + registered 120.
     # user_seed 충분한 광고주는 라운드당 시드 2배 → 시간당 신규 발굴량 ~2배.
     user_quota = 45 if cold_start else 120
-    seed_round = seeds_eligible[:user_quota] + bridge_round
+    # REGISTERED-AS-SEED — saturation 돌파용 (사용자 명시 의도: 검색량 있는 등록 KW 의
+    # 연관 KW 끝까지 발굴). user_seed 2~5k 만으로는 keywordstool 응답 saturate →
+    # +0~+10/배치 정체. 90k+ 등록 KW 자체를 매 라운드 다른 120개씩 시드 투입.
+    # unified_tokens 에 registered_atoms 가 이미 포함 → 자식 게이트 통과 보장.
+    registered_round: List[str] = []
+    if not cold_start:
+        try:
+            registered_round = pool.list_registered_random_seeds(
+                customer_id, limit=120, min_volume=10,
+            )
+        except Exception as e:
+            logger.warning(f"[pool/collect] registered-as-seed 로드 실패: {e}")
+            registered_round = []
+    seed_round = seeds_eligible[:user_quota] + registered_round + bridge_round
     logger.warning(
         f"[pool/collect] user={uid} 시드 라운드 — user/promoted={min(user_quota, len(seeds_eligible))} "
-        f"+ POOL bridge={len(bridge_round)} (총 {len(seed_round)}) cold_start={cold_start} "
-        f"backoff_skip={len(seeds_in_backoff)}"
+        f"+ registered={len(registered_round)} + POOL bridge={len(bridge_round)} "
+        f"(총 {len(seed_round)}) cold_start={cold_start} backoff_skip={len(seeds_in_backoff)}"
     )
     # circuit breaker 인스턴스 — 시드 라운드 중 OPEN 감지 시 남은 시드 fail-fast 차단.
     # naver_ad_service 모듈 레벨 singleton 공유.
@@ -3734,43 +3747,27 @@ async def _run_pool_autocomplete_mining(
     )
 
     if not qualified:
-        # 검색량 통과 0 fallback — niche 시드 (cid 1858907 한의원: 8체질침/ADHD/A형 간염)
-        # 의 자동완성 KW 가 keywordstool 에서 mt=0 으로 나옴. fresh_kws 상위 1,000개를
-        # mt=0 으로 풀 직접 합류 (drift 감수). 등록은 가능, 노출 시 광고비 없음.
-        # cap 200 → 1,000: 5h 10만 도달 — autocomplete 5분 주기 × 12회/h × +1000 = +12k/h capacity.
-        fallback_items = [
-            {
-                "keyword": kw,
-                "monthly_total": 0,
-                "monthly_pc": 0,
-                "monthly_mobile": 0,
-                "comp_idx": None,
-                "source": "ai_autocomplete_zerovol",
-                "seed": "autocomplete_zerovol",
-            }
-            for kw in fresh_kws[:1000]
-        ]
-        try:
-            promoted_z = pool.add_candidates(uid, customer_id, fallback_items)
-        except Exception as e:
-            logger.warning(f"[pool/autocomplete] zero-vol fallback add 실패: {e}")
-            promoted_z = 0
+        # mt=0 zerovol fallback 제거 (2026-05-12) — 사용자 명시 거부:
+        # "검색량 있는 키워드로 연관된 키워드 싹다 잡아야". mt=0 KW 는 광고비/노출 0 이라
+        # 등록 가치 없음. 또한 claim_pending min_volume=1 필터에 영구 걸려 register 워커가
+        # 처리 못 함 → pending 풀에 dead row 누적 → register cron 이 "등록가능 0" 으로 정지.
+        # niche 시드라 keywordstool mt=0 만 나오면 그 시드는 자식 발굴 못 함 — 시드 자체
+        # 부적합. 이 라운드는 no_new 로 끝내고 registered-as-seed (collect 측) 가 발굴 담당.
         duration_ms = int((_time.monotonic() - t0) * 1000)
         logger.warning(
-            f"[pool/autocomplete] user={uid} cid={customer_id} zero-vol fallback — "
-            f"자동완성 {len(all_kws)} → 검색량 통과 0 → fresh 상위 {len(fallback_items)} 합류 "
-            f"(자식 +{promoted_z}) ({duration_ms}ms)"
+            f"[pool/autocomplete] user={uid} cid={customer_id} zero-vol skip — "
+            f"자동완성 {len(all_kws)} → 검색량≥{min_volume} 통과 0 → mt=0 fallback 차단 "
+            f"({duration_ms}ms)"
         )
         pool.record_run(
-            uid, customer_id, "autocomplete",
-            "success" if promoted_z > 0 else "no_new",
-            added=promoted_z, seeds_count=len(seed_sample),
+            uid, customer_id, "autocomplete", "no_new",
+            added=0, seeds_count=len(seed_sample),
             error_message=(
-                f"자동완성 {len(all_kws)} → 검색량 0 → zero-vol fallback 자식 +{promoted_z}"
+                f"자동완성 {len(all_kws)} → 검색량 통과 0 → mt=0 fallback 차단 (정책)"
             )[:300],
             duration_ms=duration_ms,
         )
-        return {"success": promoted_z > 0, "reason": "zero_vol_fallback", "promoted": promoted_z}
+        return {"success": False, "reason": "zero_vol_skipped", "promoted": 0}
 
     # 4) GPT 분류 — 검색량 상위 1000개 (200 batch × 5 병렬, AI-first 빠른 채움)
     qualified.sort(key=lambda x: -x["monthly_total"])
@@ -5988,9 +5985,12 @@ async def keyword_pool_cron_cleanup_zerovol_seeds(
         try:
             r = pool.cleanup_zerovol_user_seeds(cid)
             results.append({"user_id": uid, "customer_id": cid, **r})
+            by_src = r.get("by_source") or {}
+            src_summary = ", ".join(f"{k or '<null>'}={v}" for k, v in list(by_src.items())[:6])
             logger.warning(
                 f"[cleanup-zerovol-seeds] uid={uid} cid={cid} → "
-                f"삭제 {r['deleted']} (pending {r['before_pending']}→{r['after_pending']})"
+                f"삭제 {r['deleted']} (pending {r['before_pending']}→{r['after_pending']}) "
+                f"source 분포: {src_summary}"
             )
         except Exception as e:
             logger.error(
