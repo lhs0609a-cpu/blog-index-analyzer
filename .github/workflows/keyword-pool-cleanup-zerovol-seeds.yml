@@ -1,0 +1,44 @@
+name: Keyword pool — cleanup zerovol user_seed (one-shot)
+
+# 일회성 정리 — mt=0 user_seed 잔재 일괄 DELETE.
+# 구버전 seed_amplify_burst 가 검색량 0 시드를 source='user_seed' 로 INSERT 한 결과
+# claim_pending 의 mt≥1 필터에 영구 차단된 11k+ pending row 제거.
+# 삭제 후 동일 KW 가 keywordstool 에서 mt>0 으로 재발견되면 add_candidates UPSERT 가
+# 정상 합류시켜 등록 워커가 다시 움직임.
+
+on:
+  workflow_dispatch:
+    inputs:
+      user_id:
+        description: "특정 user_id (생략 시 모든 ON 광고주)"
+        required: false
+      customer_id:
+        description: "특정 customer_id (user_id 와 함께)"
+        required: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger cleanup-zerovol-seeds
+        env:
+          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
+          BACKEND_URL: https://blog-index-analyzer.fly.dev
+          USER_ID: ${{ github.event.inputs.user_id || '' }}
+          CUSTOMER_ID: ${{ github.event.inputs.customer_id || '' }}
+        run: |
+          if [ -z "$CRON_TOKEN" ]; then
+            echo "::error::CRON_TOKEN secret 미설정"; exit 1
+          fi
+          q=""
+          sep="?"
+          if [ -n "$USER_ID" ]; then q="${q}${sep}user_id=${USER_ID}"; sep="&"; fi
+          if [ -n "$CUSTOMER_ID" ]; then q="${q}${sep}customer_id=${CUSTOMER_ID}"; sep="&"; fi
+          status=$(curl -sS -o /tmp/body.json -w "%{http_code}" \
+            -X POST "${BACKEND_URL}/api/naver-ad/keyword-pool/cron/cleanup-zerovol-seeds${q}" \
+            -H "Authorization: Bearer ${CRON_TOKEN}" \
+            --max-time 120)
+          echo "status=$status"
+          cat /tmp/body.json
+          [ "$status" = "200" ] || { echo "::error::cleanup-zerovol-seeds 트리거 실패"; exit 1; }
