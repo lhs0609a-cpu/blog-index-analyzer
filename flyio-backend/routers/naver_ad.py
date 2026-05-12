@@ -2393,11 +2393,307 @@ def _verify_cron_token(authorization: Optional[str]) -> None:
         raise HTTPException(status_code=403, detail="잘못된 cron 토큰")
 
 
+async def _cap_triggered_self_heal(
+    uid: int,
+    customer_id: int,
+    account: Dict,
+    threshold: int,
+    saved_relevance: List[str],
+    max_delete: int = 200,
+) -> int:
+    """한도 도달 자가치유 — saved_relevance 기반 점수 ≤ threshold KW 자동 정리.
+
+    호출 조건 (호출자가 보장): active+pending ≥ 100k 이고 auto_cleanup_enabled=1.
+    saved_relevance 가 비어 있거나 < 3 이면 즉시 0 반환 (user_seed 폴백 X — drift 위험).
+    한 tick 당 max_delete 보수적 (네이버 API rate + 다중 광고주 처리 시간 보호).
+    반환: 삭제+pause 성공한 KW 수.
+    """
+    from services.naver_ad_service import NaverAdApiClient
+    from database.naver_ad_db import record_auto_cleanup_run
+    import sqlite3 as _sqlite3
+
+    if not saved_relevance or len([s for s in saved_relevance if s and len(s) >= 2]) < 3:
+        logger.warning(
+            f"[pool/self-heal] uid={uid} cid={customer_id} skip — "
+            f"saved_relevance 부족({len(saved_relevance)}). 도메인 KW 저장 필요."
+        )
+        return 0
+
+    reg = get_registered_keywords_db()
+    pool = get_keyword_pool_db()
+
+    with _sqlite3.connect(reg.db_path) as conn:
+        rows = conn.execute(
+            "SELECT keyword, ncc_keyword_id FROM registered_keywords "
+            "WHERE account_customer_id=? AND ncc_keyword_id IS NOT NULL",
+            (customer_id,),
+        ).fetchall()
+    if not rows:
+        return 0
+
+    def _score_all() -> List[Tuple[str, str, int]]:
+        atoms_3plus: set = set()
+        atoms_2: set = set()
+        for s in saved_relevance:
+            if not s or len(s) < 2:
+                continue
+            if len(s) >= 4:
+                atoms_3plus.add(s)
+            for n in (2, 3):
+                for i in range(len(s) - n + 1):
+                    a = s[i:i + n]
+                    (atoms_2 if len(a) == 2 else atoms_3plus).add(a)
+        out: List[Tuple[str, str, int]] = []
+        for kw_text, kid in rows:
+            if not kw_text:
+                out.append((kid, "", 0))
+                continue
+            sc = 0
+            full = False
+            for s in saved_relevance:
+                if not s or len(s) < 2:
+                    continue
+                if s in kw_text:
+                    sc = 100; full = True; break
+                if kw_text in s:
+                    sc = 95; full = True; break
+            if not full:
+                n_3 = sum(1 for a in atoms_3plus if a in kw_text)
+                n_2 = sum(1 for a in atoms_2 if a in kw_text)
+                sc = min(95, min(80, n_3 * 20) + min(30, n_2 * 5))
+            out.append((kid, kw_text, sc))
+        return out
+
+    scored = await asyncio.to_thread(_score_all)
+    targets = [(kid, kw, s) for kid, kw, s in scored if s <= threshold]
+    targets.sort(key=lambda x: x[2])
+    targets_capped = targets[:max_delete]
+    if not targets_capped:
+        logger.warning(
+            f"[pool/self-heal] uid={uid} cid={customer_id} 대상 0 — "
+            f"thr={threshold} basis={len(saved_relevance)} total={len(scored)}. "
+            f"threshold 상향 검토 필요."
+        )
+        return 0
+
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    import httpx as _httpx
+
+    def _is_already_gone(exc: Exception) -> bool:
+        # naver 404 / code 1018 — 키워드가 이미 naver 측엔 없는 stale ncc_keyword_id.
+        # DB row 만 정리하면 슬롯 회수 (cap 회복 가능).
+        if isinstance(exc, _httpx.HTTPStatusError):
+            try:
+                return exc.response.status_code == 404
+            except Exception:
+                return False
+        return False
+
+    def _drop_db_row(kid_: str) -> None:
+        with _sqlite3.connect(reg.db_path) as c:
+            c.execute(
+                "DELETE FROM registered_keywords "
+                "WHERE account_customer_id=? AND ncc_keyword_id=?",
+                (customer_id, kid_),
+            )
+
+    n_del, n_pause, n_fail, n_stale = 0, 0, 0, 0
+    affected: List[str] = []
+    for kid, kw_text, _s in targets_capped:
+        try:
+            await client.delete_keyword(kid)
+            _drop_db_row(kid)
+            n_del += 1
+            affected.append(kw_text)
+        except Exception as e1:
+            if _is_already_gone(e1):
+                _drop_db_row(kid)
+                n_stale += 1
+                affected.append(kw_text)
+            else:
+                try:
+                    await client.pause_keyword(kid)
+                    n_pause += 1
+                    affected.append(kw_text)
+                except Exception as e2:
+                    if _is_already_gone(e2):
+                        _drop_db_row(kid)
+                        n_stale += 1
+                        affected.append(kw_text)
+                    else:
+                        n_fail += 1
+        await asyncio.sleep(0.15)
+
+    if affected:
+        try:
+            pool.mark_rejected_by_naver(
+                customer_id,
+                [{"keyword": kw, "reason": f"cap_self_heal(≤{threshold})"} for kw in affected],
+            )
+        except Exception:
+            pass
+    try:
+        record_auto_cleanup_run(uid, str(customer_id), n_del + n_pause + n_stale)
+    except Exception:
+        pass
+
+    logger.warning(
+        f"[pool/self-heal] uid={uid} cid={customer_id} thr={threshold} "
+        f"basis={len(saved_relevance)} below={len(targets)} → "
+        f"del={n_del} pause={n_pause} stale={n_stale} fail={n_fail}"
+    )
+    return n_del + n_pause + n_stale
+
+
+async def _cap_triggered_rolling_heal(
+    uid: int,
+    customer_id: int,
+    account: Dict,
+    *,
+    max_delete: int = 200,
+    mt_ceiling: int = 50,
+    settle_hours: int = 24,
+) -> int:
+    """한도 도달 롤링 자가치유 — saved_relevance 없이도 동작하는 mt 최하위 eject.
+
+    saved_relevance 가 없거나 부족해서 `_cap_triggered_self_heal` 가 0 을 반환한
+    경우 폴백. **registered_as_seed 무한 발굴 사이클** 의 핵심 — 100k cap 에 도달해도
+    collect 가 영구 정지하지 않게 매 tick 마다 하위 mt 슬라이스를 갈아내고 자리를
+    비워준다. 갈아낸 자리에는 다음 collect tick 의 registered-as-seed BFS 가
+    발굴한 신규 mt≥1 KW 가 들어가 평균 mt 가 점진적으로 상승.
+
+    안전장치:
+      - mt < mt_ceiling (기본 50) 만 대상 — mt≥50 quality KW 는 보호
+      - registered_at > settle_hours 전 (기본 24h) — 갓 등록된 KW 는 정착 시간 보장
+      - ncc_keyword_id IS NOT NULL — Naver 에 등록되지 않은 행은 건드리지 않음
+      - removed_at IS NULL — 이미 제거된 행 스킵
+      - ORDER BY mt ASC — 가장 가치 낮은 것부터
+
+    트레이드오프: 운영 중인 mt 1~49 KW 도 eject 대상이 됨. 광고 클릭이 0 이면
+    어차피 비용 미발생 — 데이터 기반 큐레이션. 사용자가 우려하면 mt_ceiling 낮추거나
+    clicks 추적 후 0-click 필터 추가.
+    """
+    from services.naver_ad_service import NaverAdApiClient
+    from database.naver_ad_db import record_auto_cleanup_run
+    import sqlite3 as _sqlite3
+
+    pool = get_keyword_pool_db()
+    reg = get_registered_keywords_db()
+
+    # JOIN — 같은 blog_analyzer.db 내. naverad_keyword_pool 에서 mt 최하위 + 24h 정착 +
+    # registered_keywords 의 ncc_keyword_id 확보된 KW 만.
+    with _sqlite3.connect(pool.db_path) as conn:
+        conn.row_factory = _sqlite3.Row
+        rows = conn.execute(
+            f"""SELECT rk.keyword AS keyword,
+                       rk.ncc_keyword_id AS ncc_keyword_id,
+                       COALESCE(p.monthly_total, 0) AS monthly_total
+                FROM registered_keywords rk
+                INNER JOIN naverad_keyword_pool p
+                  ON p.account_customer_id = rk.account_customer_id
+                 AND p.keyword = rk.keyword
+                WHERE rk.account_customer_id = ?
+                  AND rk.ncc_keyword_id IS NOT NULL
+                  AND rk.removed_at IS NULL
+                  AND p.status = 'registered'
+                  AND COALESCE(p.monthly_total, 0) < ?
+                  AND p.registered_at IS NOT NULL
+                  AND datetime(p.registered_at) < datetime('now', '-{int(settle_hours)} hours')
+                ORDER BY COALESCE(p.monthly_total, 0) ASC,
+                         p.registered_at ASC
+                LIMIT ?""",
+            (customer_id, mt_ceiling, max_delete),
+        ).fetchall()
+
+    if not rows:
+        logger.warning(
+            f"[pool/rolling-heal] uid={uid} cid={customer_id} 대상 0 — "
+            f"mt<{mt_ceiling} & settle≥{settle_hours}h 조건 충족 행 없음"
+        )
+        return 0
+
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    import httpx as _httpx
+
+    def _is_already_gone(exc: Exception) -> bool:
+        if isinstance(exc, _httpx.HTTPStatusError):
+            try:
+                return exc.response.status_code == 404
+            except Exception:
+                return False
+        return False
+
+    def _drop_db_row(kid_: str) -> None:
+        with _sqlite3.connect(reg.db_path) as c:
+            c.execute(
+                "DELETE FROM registered_keywords "
+                "WHERE account_customer_id=? AND ncc_keyword_id=?",
+                (customer_id, kid_),
+            )
+
+    n_del, n_pause, n_fail, n_stale = 0, 0, 0, 0
+    affected: List[str] = []
+    for r in rows:
+        kid = r["ncc_keyword_id"]
+        kw_text = r["keyword"]
+        try:
+            await client.delete_keyword(kid)
+            _drop_db_row(kid)
+            n_del += 1
+            affected.append(kw_text)
+        except Exception as e1:
+            if _is_already_gone(e1):
+                _drop_db_row(kid)
+                n_stale += 1
+                affected.append(kw_text)
+            else:
+                try:
+                    await client.pause_keyword(kid)
+                    n_pause += 1
+                    affected.append(kw_text)
+                except Exception as e2:
+                    if _is_already_gone(e2):
+                        _drop_db_row(kid)
+                        n_stale += 1
+                        affected.append(kw_text)
+                    else:
+                        n_fail += 1
+        await asyncio.sleep(0.15)
+
+    if affected:
+        try:
+            pool.mark_rejected_by_naver(
+                customer_id,
+                [{"keyword": kw, "reason": f"rolling_heal(mt<{mt_ceiling})"} for kw in affected],
+            )
+        except Exception:
+            pass
+    try:
+        record_auto_cleanup_run(uid, str(customer_id), n_del + n_pause + n_stale)
+    except Exception:
+        pass
+
+    logger.warning(
+        f"[pool/rolling-heal] uid={uid} cid={customer_id} "
+        f"mt<{mt_ceiling} candidates={len(rows)} → "
+        f"del={n_del} pause={n_pause} stale={n_stale} fail={n_fail}"
+    )
+    return n_del + n_pause + n_stale
+
+
 async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new: int = 5000, min_volume: int = 1):
     """수집 1회 — keywordstool로 새 키워드 발굴해 풀에 추가.
     customer_id 명시 시 그 광고주만 처리, 없으면 사용자의 가장 최근 광고주."""
     from services.naver_ad_service import NaverAdApiClient
-    from database.naver_ad_db import get_ad_account_by_customer
+    from database.naver_ad_db import get_ad_account_by_customer, get_ad_account_auto_cleanup
     import time as _time
 
     pool = get_keyword_pool_db()
@@ -2420,6 +2716,46 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     active_reg = int((reg.stats(customer_id) or {}).get("active") or 0)
     headroom = 100_000 - active_reg - pool_pending
     if headroom <= 0:
+        # 자가치유 — auto_cleanup ON + saved_relevance 있으면 무관 KW 정리 → 슬롯 회수.
+        # 이번 tick 은 cleanup 만 (5분 뒤 다음 tick 에서 collect 진행).
+        cleaned_total = 0
+        cleanup_label_parts: List[str] = []
+        cfg = get_ad_account_auto_cleanup(uid, str(customer_id)) or {}
+        if cfg.get("enabled"):
+            cleaned = await _cap_triggered_self_heal(
+                uid, customer_id, account,
+                threshold=int(cfg.get("threshold") or 30),
+                saved_relevance=list(cfg.get("relevance_keywords") or []),
+                max_delete=200,
+            )
+            cleaned_total += cleaned
+            if cleaned > 0:
+                cleanup_label_parts.append(f"self_heal={cleaned}")
+
+        # 폴백 — saved_relevance 가 없거나 self-heal 이 0 이면 mt 최하위 롤링 eject.
+        # registered-as-seed 무한 발굴 사이클이 cap 에서 멈추지 않도록 보장.
+        if cleaned_total == 0:
+            rolled = await _cap_triggered_rolling_heal(
+                uid, customer_id, account,
+                max_delete=200,
+                mt_ceiling=50,
+                settle_hours=24,
+            )
+            cleaned_total += rolled
+            if rolled > 0:
+                cleanup_label_parts.append(f"rolling={rolled}")
+
+        if cleaned_total > 0:
+            pool.record_run(
+                uid, customer_id, "collect", "self_heal_cleanup",
+                pending_after=pool_pending,
+                error_message=(
+                    f"cap_cleanup {' '.join(cleanup_label_parts)} "
+                    f"(다음 tick 에서 collect 진행)"
+                )[:300],
+                duration_ms=int((_time.monotonic()-t0)*1000),
+            )
+            return
         logger.warning(f"[pool/collect] user={uid} 한도 도달 — skip (active={active_reg}, pending={pool_pending})")
         pool.record_run(uid, customer_id, "collect", "cap_reached",
                         pending_after=pool_pending,
@@ -2575,6 +2911,16 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         except Exception as e:
             logger.warning(f"[pool/collect] auto-reseed 후보 조회 실패: {e}")
             top_kw = []
+        # 도메인 게이트 — saved_relevance 있으면 score>30 만 reseed. 등록 풀이 drift 로
+        # 오염된 계정 (소잠한의원 차 KW 사고) 에서 top-mt 가 차 KW 라면 그게 user_seed 로
+        # 재주입되는 catastrophic loop 차단.
+        if top_kw and saved_relevance and len([s for s in saved_relevance if s and len(s) >= 2]) >= 3:
+            before = len(top_kw)
+            top_kw = [k for k in top_kw if _compute_relevance_score(k, saved_relevance) > 30]
+            if before != len(top_kw):
+                logger.warning(
+                    f"[pool/collect] auto-reseed 도메인 게이트 — {before} → {len(top_kw)}"
+                )
         if top_kw:
             items = [{"keyword": k, "seed": k, "source": "user_seed", "monthly_total": 0} for k in top_kw]
             try:
@@ -2973,6 +3319,7 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                     async with _sem:
                         return await _classify_rejects(
                             ai_seeds_input, batch_items, seed_sample_size=50,
+                            saved_relevance=saved_relevance,
                         )
 
                 batches = [
@@ -3184,12 +3531,20 @@ async def _run_pool_ai_classify(
         )
         return {"success": False, "reason": "no_rejects"}
 
+    # strict 모드 — saved_relevance 있으면 classify 가 보수적으로 전환됨 (drift 차단)
+    from database.naver_ad_db import get_ad_account_relevance_keywords as _get_rel
+    saved_relevance_local = _get_rel(uid, str(customer_id)) or []
+
     logger.warning(
         f"[pool/ai-classify] user={uid} cid={customer_id} 시작 — "
-        f"seeds={len(user_seeds)} rejects={len(rejects)} (검색량≥{min_volume})"
+        f"seeds={len(user_seeds)} rejects={len(rejects)} (검색량≥{min_volume}) "
+        f"relevance={len(saved_relevance_local)} {'STRICT' if len(saved_relevance_local) >= 3 else 'lenient'}"
     )
 
-    result = await classify_rejects(user_seeds, rejects, seed_sample_size=50)
+    result = await classify_rejects(
+        user_seeds, rejects, seed_sample_size=50,
+        saved_relevance=saved_relevance_local,
+    )
     if not result.get("success"):
         msg = result.get("message", "unknown")
         logger.warning(f"[pool/ai-classify] user={uid} 분류 실패: {msg}")
@@ -3331,7 +3686,9 @@ async def _run_pool_ai_cleanup_registered(
         )
         return {"success": False, "reason": "no_registered"}
 
-    # 2) batch GPT 분류 — classify_rejects 재활용
+    # 2) batch GPT 분류 — classify_rejects 재활용. saved_relevance → strict 모드 (drift 정리용).
+    from database.naver_ad_db import get_ad_account_relevance_keywords as _get_rel
+    saved_relevance_local = _get_rel(uid, str(customer_id)) or []
     candidates = [{"keyword": kw, "monthly_total": 0} for kw, _kid in rows]
     kid_map: Dict[str, str] = {kw: kid for kw, kid in rows if kid}
     all_approved: Set[str] = set()
@@ -3343,7 +3700,10 @@ async def _run_pool_ai_cleanup_registered(
         batch = candidates[i:i + batch_size]
         ai_t0 = _time.monotonic()
         try:
-            ai = await classify_rejects(user_seeds, batch, seed_sample_size=sample_seeds)
+            ai = await classify_rejects(
+                user_seeds, batch, seed_sample_size=sample_seeds,
+                saved_relevance=saved_relevance_local,
+            )
         except Exception as e:
             logger.warning(f"[ai-cleanup] batch {i} 예외: {type(e).__name__}: {e}")
             continue
@@ -3523,8 +3883,34 @@ async def _run_pool_seed_amplify(
         )
         return {"success": False, "reason": "all_known"}
 
+    # 2-b) 도메인 게이트 — saved_relevance 있는 계정만. drift 증폭기 차단.
+    # 한의원 계정에 차 KW (2024쏘나타) 가 amplify cartesian 으로 폭발해 user_seed 합류 →
+    # 다음 collect 라운드 anchor → 자식 KW 도메인 게이트 무력화 → 100k drift 사고.
+    # saved_relevance 비어있으면 (cold start) skip — 시드 0 광고주 진입 봉쇄 방지.
+    from database.naver_ad_db import get_ad_account_relevance_keywords as _get_rel
+    saved_relevance = _get_rel(uid, str(customer_id)) or []
+    domain_filtered_count = 0
+    if saved_relevance and len([s for s in saved_relevance if s and len(s) >= 2]) >= 3:
+        before = len(fresh_seeds)
+        kept = [s for s in fresh_seeds if _compute_relevance_score(s, saved_relevance) >= 30]
+        domain_filtered_count = before - len(kept)
+        fresh_seeds = kept
+        if not fresh_seeds:
+            pool.record_run(
+                uid, customer_id, "seed_amplify", "no_new",
+                seeds_count=len(seed_sample),
+                error_message=(
+                    f"amplify {len(raw_seeds)} → fresh {before} → 도메인필터 0 "
+                    f"(relevance={len(saved_relevance)} 와 매칭 0)"
+                )[:300],
+                duration_ms=int((_time.monotonic() - t0) * 1000),
+            )
+            return {"success": False, "reason": "domain_filter_all_out"}
+
     logger.warning(
-        f"[pool/amplify] amplify ({am_ms}ms) — raw {len(raw_seeds)} → fresh {len(fresh_seeds)}"
+        f"[pool/amplify] amplify ({am_ms}ms) — raw {len(raw_seeds)} → "
+        f"fresh {len(fresh_seeds)}"
+        + (f" (도메인필터 컷 {domain_filtered_count})" if domain_filtered_count else "")
     )
 
     # 3) keywordstool 검색량 batch
@@ -3776,9 +4162,16 @@ async def _run_pool_autocomplete_mining(
     BATCH = 200
     _sem = asyncio.Semaphore(3)
 
+    # saved_relevance → strict 모드 (autocomplete 도 drift 차단 게이트)
+    from database.naver_ad_db import get_ad_account_relevance_keywords as _get_rel
+    autocomplete_relevance = _get_rel(uid, str(customer_id)) or []
+
     async def _classify_one(batch: List[Dict]) -> Dict[str, Any]:
         async with _sem:
-            return await classify_rejects(user_seeds, batch, seed_sample_size=50)
+            return await classify_rejects(
+                user_seeds, batch, seed_sample_size=50,
+                saved_relevance=autocomplete_relevance,
+            )
 
     batches = [classify_input[i:i + BATCH] for i in range(0, len(classify_input), BATCH)]
     batch_results = await asyncio.gather(
@@ -4601,6 +4994,141 @@ async def keyword_pool_diagnostics_accounts_list():
             "pool_by_status": by_status,
         })
     return {"success": True, "count": len(out), "accounts": out}
+
+
+@router.get("/keyword-pool/diagnostics/recent-registered")
+async def keyword_pool_diagnostics_recent_registered(
+    customer_id: int = Query(..., description="광고주 customer_id"),
+    limit: int = Query(100, ge=1, le=500),
+    order: str = Query("recent", regex="^(recent|mt_asc|mt_desc)$"),
+):
+    """진단 — 등록 KW 최근/하위/상위 N개 리스트 (인증 없음).
+
+    도메인 적합성 audit 용. naverad_keyword_pool 의 status='registered' 행만.
+    seed attribution + monthly_total 포함 → 어떤 시드로부터 발굴됐는지 추적 가능.
+
+    order:
+      - recent: registered_at DESC (디폴트, 최근 등록 순)
+      - mt_asc: monthly_total ASC (rolling_heal 대상 후보 확인)
+      - mt_desc: monthly_total DESC (상위 KW 분포 확인)
+    """
+    import sqlite3 as _sqlite3
+    pool = get_keyword_pool_db()
+
+    order_sql = {
+        "recent": "COALESCE(registered_at, discovered_at) DESC, id DESC",
+        "mt_asc": "COALESCE(monthly_total, 0) ASC, registered_at ASC",
+        "mt_desc": "COALESCE(monthly_total, 0) DESC, registered_at DESC",
+    }[order]
+
+    with _sqlite3.connect(pool.db_path) as conn:
+        conn.row_factory = _sqlite3.Row
+        rows = conn.execute(
+            f"""SELECT keyword, seed, monthly_total, monthly_pc, monthly_mobile,
+                       source, registered_at, discovered_at
+                FROM naverad_keyword_pool
+                WHERE account_customer_id = ?
+                  AND status = 'registered'
+                ORDER BY {order_sql}
+                LIMIT ?""",
+            (customer_id, limit),
+        ).fetchall()
+
+    items = [dict(r) for r in rows]
+    # mt 분포 요약 (도메인 적합성 빠른 확인용)
+    bucket = {"mt_0": 0, "mt_1_9": 0, "mt_10_99": 0, "mt_100_999": 0, "mt_1000_plus": 0}
+    for r in items:
+        mt = int(r.get("monthly_total") or 0)
+        if mt <= 0: bucket["mt_0"] += 1
+        elif mt < 10: bucket["mt_1_9"] += 1
+        elif mt < 100: bucket["mt_10_99"] += 1
+        elif mt < 1000: bucket["mt_100_999"] += 1
+        else: bucket["mt_1000_plus"] += 1
+
+    return {
+        "success": True,
+        "customer_id": customer_id,
+        "order": order,
+        "count": len(items),
+        "mt_distribution": bucket,
+        "items": items,
+    }
+
+
+@router.get("/keyword-pool/diagnostics/seed-audit")
+async def keyword_pool_diagnostics_seed_audit(
+    customer_id: int = Query(..., description="광고주 customer_id"),
+    relevance_keywords: Optional[str] = Query(
+        None,
+        description="콤마구분 도메인 KW. 비우면 saved relevance_keywords 사용",
+    ),
+    score_threshold: int = Query(30, ge=0, le=95),
+):
+    """진단 — user_seed 풀의 도메인 점수 분포 (인증 없음).
+
+    drift 근본 원인 추적: 오염된 user_seed (예: "2024쏘나타") 가 amplify cartesian
+    폭발 → drift 100k. 이 endpoint 로 어떤 시드들이 score ≤ threshold 인지 식별 →
+    purge-drift endpoint 로 일괄 정리.
+
+    반환:
+      score_distribution: {0: N, 10: N, ..., 100: N} 점수 구간별 시드 수
+      contaminated_samples: score ≤ threshold 시드 30개 샘플 (정리 대상)
+      clean_samples: score > threshold 시드 30개 샘플 (보존 대상)
+    """
+    from database.naver_ad_db import list_connected_ad_accounts, get_ad_account_relevance_keywords
+    accts = list_connected_ad_accounts() or []
+    matched = next((a for a in accts if int(a.get("customer_id") or 0) == int(customer_id)), None)
+    if not matched:
+        raise HTTPException(status_code=404, detail=f"customer_id {customer_id} 미연결")
+    uid = int(matched.get("user_id") or 0)
+
+    if relevance_keywords:
+        score_basis = [s.strip() for s in relevance_keywords.replace("\n", ",").split(",") if s.strip() and len(s.strip()) >= 2]
+        basis_source = "query"
+    else:
+        saved = get_ad_account_relevance_keywords(uid, str(customer_id)) or []
+        if not saved:
+            return {
+                "success": False,
+                "reason": "no_relevance",
+                "message": "saved relevance_keywords 비어있음. ?relevance_keywords=... 명시 또는 화면에서 도메인 KW 저장 필요.",
+            }
+        score_basis = saved
+        basis_source = "saved"
+
+    pool = get_keyword_pool_db()
+    user_seeds = pool.list_user_seeds(customer_id) or []
+
+    # 점수 매김
+    dist: Dict[int, int] = {}
+    contaminated: List[Tuple[str, int]] = []
+    clean: List[Tuple[str, int]] = []
+    for s in user_seeds:
+        sc = _compute_relevance_score(s, score_basis)
+        bucket = (sc // 10) * 10
+        dist[bucket] = dist.get(bucket, 0) + 1
+        if sc <= score_threshold:
+            contaminated.append((s, sc))
+        else:
+            clean.append((s, sc))
+
+    contaminated.sort(key=lambda x: x[1])  # 점수 낮은 것부터 (확실히 drift)
+    clean.sort(key=lambda x: -x[1])  # 점수 높은 것부터 (확실히 도메인)
+
+    return {
+        "success": True,
+        "customer_id": customer_id,
+        "basis_source": basis_source,
+        "basis_count": len(score_basis),
+        "basis_sample": score_basis[:8],
+        "user_seed_total": len(user_seeds),
+        "score_threshold": score_threshold,
+        "contaminated_count": len(contaminated),
+        "clean_count": len(clean),
+        "score_distribution": dict(sorted(dist.items())),
+        "contaminated_samples": [{"seed": s, "score": sc} for s, sc in contaminated[:30]],
+        "clean_samples": [{"seed": s, "score": sc} for s, sc in clean[:30]],
+    }
 
 
 @router.get("/keyword-pool/diagnostics/ai-cleanup-preview")
@@ -5862,9 +6390,20 @@ async def keyword_pool_cron_seed_amplify_burst(
                 seen.add(k)
                 fresh_seeds.append(k)
 
+        # 도메인 게이트 — saved_relevance 있는 계정만. amplify burst cartesian 폭발이
+        # drift 증폭기 사고의 주범. cold start (relevance 없음) 만 통과시킴.
+        from database.naver_ad_db import get_ad_account_relevance_keywords as _get_rel
+        saved_relevance = _get_rel(user_id, str(customer_id)) or []
+        burst_domain_filtered = 0
+        if saved_relevance and len([s for s in saved_relevance if s and len(s) >= 2]) >= 3:
+            before = len(fresh_seeds)
+            fresh_seeds = [s for s in fresh_seeds if _compute_relevance_score(s, saved_relevance) >= 30]
+            burst_domain_filtered = before - len(fresh_seeds)
+
         logger.warning(
             f"[seed-amplify-burst] cid={customer_id} amplify {n_calls}회 ({am_ms}ms) "
             f"→ 누적 raw {sum(len(b) for b in results)} → fresh {len(fresh_seeds)}"
+            + (f" (도메인필터 컷 {burst_domain_filtered})" if burst_domain_filtered else "")
         )
 
         if not fresh_seeds:
@@ -6085,7 +6624,9 @@ async def keyword_pool_registered_cleanup_by_score(
     _t0 = _t.monotonic()
 
     threshold = max(0, min(95, int(request.threshold)))
-    max_delete = max(0, min(5000, int(request.max_delete)))
+    # 2026-05-12: cap 5000 → 50000 상향. 한의원/한방 광고주 차 KW drift 50k+ 누적 사고에서
+    # 5000 cap 이면 10+ 회 수동 호출 필요. 50000 = 한 번 호출로 ~150분 백그라운드 정리.
+    max_delete = max(0, min(50000, int(request.max_delete)))
     dry_run = bool(request.dry_run)
 
     account = _resolve_account(user_id, customer_id)
@@ -6272,6 +6813,276 @@ async def keyword_pool_registered_cleanup_by_score(
         "below_threshold_total": len(targets),
         "estimated_minutes": round(len(targets_capped) * 0.18 / 60, 1),
         "message": f"백그라운드 실행 시작 — {len(targets_capped)}개 KW 삭제 진행 (예상 {round(len(targets_capped) * 0.18 / 60, 1)}분)",
+    }
+
+
+# ============ 긴급 drift 일괄 정리 — registered + user_seed + pending 한 번에 ============
+# cleanup-by-score 는 registered 만. 100k drift 사고 시 user_seed 도 오염돼 있어 그것도
+# 같이 갈아야 다음 amplify 가 또 차 KW 안 만듦. 이 endpoint 는 3가지 정리를 한 번에:
+#  1) registered (registered_keywords + naverad_keyword_pool status='registered') 점수≤thr Naver DELETE
+#  2) user_seed (source='user_seed' AND status NOT IN registered/failed) 점수≤thr DB DELETE
+#  3) pending (status='pending') 점수≤thr DB DELETE (등록 전 차단)
+
+@router.post("/keyword-pool/admin/purge-drift")
+async def keyword_pool_admin_purge_drift(
+    background_tasks: BackgroundTasks,
+    customer_id: int = Query(..., description="대상 광고주 customer_id"),
+    threshold: int = Query(30, ge=0, le=95),
+    max_delete_registered: int = Query(50000, ge=0, le=100000),
+    dry_run: bool = Query(False),
+    relevance_keywords: Optional[str] = Query(
+        None,
+        description="콤마구분 도메인 KW (예: 아토피,습진,건선,한의원,한방). 비우면 ad_accounts.relevance_keywords 사용",
+    ),
+):
+    """긴급 drift 정리 — registered + user_seed + pending 한 번에 (인증 없음, customer_id 명시).
+
+    cleanup-by-score 는 registered 만 정리 → user_seed 가 오염된 채로 남으면 다음 amplify 가
+    또 drift 키워드 생성 → 정리 의미 없음. 이 endpoint 는 3 stage 동시 처리:
+
+    Stage 1 (즉시): user_seed + pending DB cleanup (네이버 호출 없음, 1초)
+    Stage 2 (background): registered Naver DELETE (KW × 0.18s × 부하)
+
+    relevance_keywords 우선순위: query param > ad_accounts.relevance_keywords > user_seed.
+    user_seed 폴백은 위험 (이미 오염) — query param 또는 saved 권장.
+    """
+    from services.naver_ad_service import NaverAdApiClient
+    from database.naver_ad_db import (
+        list_connected_ad_accounts,
+        get_ad_account_relevance_keywords,
+        record_auto_cleanup_run,
+    )
+    import sqlite3 as _sqlite3
+    import time as _t
+
+    t0 = _t.monotonic()
+    accts = list_connected_ad_accounts() or []
+    matched = next((a for a in accts if int(a.get("customer_id") or 0) == int(customer_id)), None)
+    if not matched:
+        raise HTTPException(status_code=404, detail=f"customer_id {customer_id} 미연결")
+    uid = int(matched.get("user_id") or 0)
+
+    # 도메인 기준 빌드
+    if relevance_keywords:
+        score_basis = [s.strip() for s in relevance_keywords.replace("\n", ",").split(",") if s.strip() and len(s.strip()) >= 2]
+        basis_source = "query"
+    else:
+        saved = get_ad_account_relevance_keywords(uid, str(customer_id)) or []
+        if saved:
+            score_basis = saved
+            basis_source = "saved"
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="relevance_keywords 없음 (query 또는 saved). 예: ?relevance_keywords=아토피,습진,한의원,한방",
+            )
+    if len(score_basis) < 3:
+        raise HTTPException(status_code=400, detail=f"기준 KW 부족 ({len(score_basis)}/3). 최소 3개 권장.")
+
+    pool = get_keyword_pool_db()
+    reg = get_registered_keywords_db()
+
+    # ===== Stage 1: user_seed + pending DB cleanup (즉시) =====
+    user_seed_deleted = 0
+    pending_deleted = 0
+    sample_user_seed: List[str] = []
+    sample_pending: List[str] = []
+
+    with _sqlite3.connect(pool.db_path) as conn:
+        conn.row_factory = _sqlite3.Row
+
+        # user_seed 정리
+        user_seed_rows = conn.execute(
+            """SELECT keyword FROM naverad_keyword_pool
+               WHERE account_customer_id=? AND source='user_seed'
+                 AND status NOT IN ('registered', 'failed')""",
+            (customer_id,),
+        ).fetchall()
+        user_seed_to_delete: List[str] = []
+        for r in user_seed_rows:
+            kw = r["keyword"]
+            sc = _compute_relevance_score(kw, score_basis)
+            if sc <= threshold:
+                user_seed_to_delete.append(kw)
+
+        # pending 정리
+        pending_rows = conn.execute(
+            """SELECT keyword FROM naverad_keyword_pool
+               WHERE account_customer_id=? AND status='pending'""",
+            (customer_id,),
+        ).fetchall()
+        pending_to_delete: List[str] = []
+        for r in pending_rows:
+            kw = r["keyword"]
+            sc = _compute_relevance_score(kw, score_basis)
+            if sc <= threshold:
+                pending_to_delete.append(kw)
+
+        sample_user_seed = user_seed_to_delete[:10]
+        sample_pending = pending_to_delete[:10]
+
+        if not dry_run:
+            # user_seed: source='user_seed' AND status NOT registered/failed → DELETE
+            CHUNK = 500
+            for i in range(0, len(user_seed_to_delete), CHUNK):
+                chunk = user_seed_to_delete[i:i + CHUNK]
+                placeholders = ",".join("?" * len(chunk))
+                cur = conn.execute(
+                    f"""DELETE FROM naverad_keyword_pool
+                        WHERE account_customer_id=? AND source='user_seed'
+                          AND status NOT IN ('registered', 'failed')
+                          AND keyword IN ({placeholders})""",
+                    (customer_id, *chunk),
+                )
+                user_seed_deleted += cur.rowcount
+
+            # pending: status='pending' → DELETE
+            for i in range(0, len(pending_to_delete), CHUNK):
+                chunk = pending_to_delete[i:i + CHUNK]
+                placeholders = ",".join("?" * len(chunk))
+                cur = conn.execute(
+                    f"""DELETE FROM naverad_keyword_pool
+                        WHERE account_customer_id=? AND status='pending'
+                          AND keyword IN ({placeholders})""",
+                    (customer_id, *chunk),
+                )
+                pending_deleted += cur.rowcount
+
+    # ===== Stage 2: registered Naver DELETE (background) =====
+    with _sqlite3.connect(reg.db_path) as conn:
+        conn.row_factory = _sqlite3.Row
+        reg_rows = conn.execute(
+            "SELECT keyword, ncc_keyword_id FROM registered_keywords "
+            "WHERE account_customer_id=? AND ncc_keyword_id IS NOT NULL AND removed_at IS NULL",
+            (customer_id,),
+        ).fetchall()
+
+    def _score_reg() -> List[Tuple[str, str, int]]:
+        atoms_3plus: set = set()
+        atoms_2: set = set()
+        for s in score_basis:
+            if not s or len(s) < 2:
+                continue
+            if len(s) >= 4:
+                atoms_3plus.add(s)
+            for n in (2, 3):
+                for i in range(len(s) - n + 1):
+                    a = s[i:i + n]
+                    (atoms_2 if len(a) == 2 else atoms_3plus).add(a)
+        out: List[Tuple[str, str, int]] = []
+        for r in reg_rows:
+            kw_text = r["keyword"]
+            kid = r["ncc_keyword_id"]
+            if not kw_text:
+                out.append((kid, "", 0))
+                continue
+            sc = 0
+            full = False
+            for s in score_basis:
+                if not s or len(s) < 2:
+                    continue
+                if s in kw_text:
+                    sc = 100; full = True; break
+                if kw_text in s:
+                    sc = 95; full = True; break
+            if not full:
+                n_3 = sum(1 for a in atoms_3plus if a in kw_text)
+                n_2 = sum(1 for a in atoms_2 if a in kw_text)
+                sc = min(95, min(80, n_3 * 20) + min(30, n_2 * 5))
+            out.append((kid, kw_text, sc))
+        return out
+
+    reg_scored = await asyncio.to_thread(_score_reg)
+    reg_targets = [(kid, kw, s) for kid, kw, s in reg_scored if s <= threshold]
+    reg_targets.sort(key=lambda x: x[2])
+    reg_capped = reg_targets[:max_delete_registered]
+
+    if dry_run:
+        return {
+            "success": True,
+            "dry_run": True,
+            "customer_id": customer_id,
+            "threshold": threshold,
+            "basis_source": basis_source,
+            "basis_count": len(score_basis),
+            "basis_sample": score_basis[:8],
+            "user_seed_total": len(user_seed_rows),
+            "user_seed_to_delete": len(user_seed_to_delete),
+            "user_seed_samples": sample_user_seed,
+            "pending_total": len(pending_rows),
+            "pending_to_delete": len(pending_to_delete),
+            "pending_samples": sample_pending,
+            "registered_total": len(reg_scored),
+            "registered_below_threshold": len(reg_targets),
+            "registered_will_delete_now": len(reg_capped),
+            "registered_samples": [{"keyword": kw, "score": s} for _kid, kw, s in reg_capped[:10]],
+            "estimated_minutes": round(len(reg_capped) * 0.18 / 60, 1),
+        }
+
+    # Stage 2 background — registered Naver DELETE
+    account = matched
+    client = NaverAdApiClient()
+    client.customer_id = account.get("customer_id")
+    client.api_key = account.get("api_key")
+    client.secret_key = account.get("secret_key")
+
+    async def _run_reg_purge():
+        n_del, n_pause, n_fail = 0, 0, 0
+        affected: List[str] = []
+        for kid, kw_text, _s in reg_capped:
+            try:
+                await client.delete_keyword(kid)
+                with _sqlite3.connect(reg.db_path) as c:
+                    c.execute(
+                        "DELETE FROM registered_keywords "
+                        "WHERE account_customer_id=? AND ncc_keyword_id=?",
+                        (customer_id, kid),
+                    )
+                n_del += 1
+                affected.append(kw_text)
+            except Exception:
+                try:
+                    await client.pause_keyword(kid)
+                    n_pause += 1
+                    affected.append(kw_text)
+                except Exception:
+                    n_fail += 1
+            await asyncio.sleep(0.15)
+        if affected:
+            pool.mark_rejected_by_naver(
+                customer_id,
+                [{"keyword": kw, "reason": f"purge-drift(score≤{threshold})"} for kw in affected],
+            )
+        try:
+            record_auto_cleanup_run(uid, str(customer_id), n_del + n_pause)
+        except Exception:
+            pass
+        logger.warning(
+            f"[purge-drift] uid={uid} cid={customer_id} thr={threshold} "
+            f"basis={basis_source}({len(score_basis)}) → "
+            f"user_seed_del={user_seed_deleted} pending_del={pending_deleted} "
+            f"reg_del={n_del} reg_pause={n_pause} reg_fail={n_fail}"
+        )
+
+    background_tasks.add_task(_run_reg_purge)
+    return {
+        "success": True,
+        "dry_run": False,
+        "customer_id": customer_id,
+        "threshold": threshold,
+        "basis_source": basis_source,
+        "basis_count": len(score_basis),
+        "user_seed_deleted": user_seed_deleted,
+        "pending_deleted": pending_deleted,
+        "registered_queued": len(reg_capped),
+        "registered_below_threshold_total": len(reg_targets),
+        "estimated_minutes": round(len(reg_capped) * 0.18 / 60, 1),
+        "message": (
+            f"즉시 정리: user_seed -{user_seed_deleted}, pending -{pending_deleted}. "
+            f"백그라운드 정리: registered {len(reg_capped)}개 Naver DELETE 진행 "
+            f"(예상 {round(len(reg_capped) * 0.18 / 60, 1)}분)."
+        ),
+        "stage1_duration_ms": int((_t.monotonic() - t0) * 1000),
     }
 
 
