@@ -491,6 +491,46 @@ class KeywordPoolDB:
                 )
             return len(keywords)
 
+    def cleanup_zerovol_user_seeds(self, account_customer_id: int) -> Dict[str, int]:
+        """mt=0 user_seed 행 일괄 삭제 — 등록 락 제거.
+
+        seed_amplify_burst (구버전) 가 mt=0 시드도 user_seed 로 INSERT 했던 잔재.
+        이 행들은 claim_pending 의 mt≥1 필터에 영구 걸려 등록 안 됨.
+        삭제 후 자리 비우면 keywordstool 이 같은 KW 를 mt>0 으로 재발견 시
+        풀 합류 가능.
+
+        registered/failed/skipped row 는 절대 건드리지 않음 (이미 처리됨).
+        Returns: {deleted, before_pending, after_pending}.
+        """
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT COUNT(*) AS n FROM naverad_keyword_pool
+                   WHERE account_customer_id = ? AND status = 'pending'""",
+                (account_customer_id,),
+            )
+            before = int(cur.fetchone()["n"])
+            cur.execute(
+                """DELETE FROM naverad_keyword_pool
+                   WHERE account_customer_id = ?
+                     AND status = 'pending'
+                     AND COALESCE(monthly_total, 0) < 1
+                     AND COALESCE(source, '') = 'user_seed'""",
+                (account_customer_id,),
+            )
+            deleted = cur.rowcount
+            cur.execute(
+                """SELECT COUNT(*) AS n FROM naverad_keyword_pool
+                   WHERE account_customer_id = ? AND status = 'pending'""",
+                (account_customer_id,),
+            )
+            after = int(cur.fetchone()["n"])
+            return {
+                "deleted": int(deleted),
+                "before_pending": before,
+                "after_pending": after,
+            }
+
     def cleanup_offdomain(
         self,
         account_customer_id: int,
@@ -611,38 +651,119 @@ class KeywordPoolDB:
         account_customer_id: int,
         items: List[Dict],
     ) -> int:
-        """수집 워커가 호출 — pending 상태로 INSERT (중복은 무시)."""
+        """수집 워커가 호출 — pending 상태로 INSERT + mt 업그레이드.
+
+        흐름 (batch):
+          1) 입력 KW 의 기존 row 조회 (status, mt 확인)
+          2) 신규 KW → INSERT
+          3) status='pending' AND 기존 mt < 새 mt → UPDATE (mt/source/seed 갱신)
+          4) status='registered'/'failed' 행은 보존 (이미 처리됨)
+
+        과거: INSERT OR IGNORE → mt=0 user_seed 가 먼저 들어가면 keywordstool 이
+              mt=1000 으로 발견해도 영구 차단 → 11k+ pending 등록 락.
+        Returns: 진짜 신규 INSERT 수 (UPDATE 는 stats() 에서 별도 진단).
+        """
         if not items:
             return 0
+        # 입력 dedup — 동일 batch 내 중복 KW 는 마지막 값 우선 (mt 큰 쪽 채택)
+        by_kw: Dict[str, Dict] = {}
+        for it in items:
+            kw = (it.get("keyword") or "").strip()
+            if not kw:
+                continue
+            prev = by_kw.get(kw)
+            if prev is None:
+                by_kw[kw] = it
+            else:
+                # mt 큰 쪽 우선
+                if int(it.get("monthly_total") or 0) > int(prev.get("monthly_total") or 0):
+                    by_kw[kw] = it
+        if not by_kw:
+            return 0
+
+        kws = list(by_kw.keys())
         added = 0
+        upgraded = 0
         with self._conn() as conn:
             cur = conn.cursor()
-            for item in items:
-                kw = (item.get("keyword") or "").strip()
-                if not kw:
-                    continue
+            # 1) 기존 row 일괄 조회 — 1500 chunk (sqlite parameter cap 999 안전 마진)
+            existing: Dict[str, Dict] = {}
+            CHUNK = 500
+            for i in range(0, len(kws), CHUNK):
+                ck = kws[i:i + CHUNK]
+                placeholders = ",".join("?" * len(ck))
+                cur.execute(
+                    f"""SELECT keyword, status, monthly_total
+                        FROM naverad_keyword_pool
+                        WHERE account_customer_id = ? AND keyword IN ({placeholders})""",
+                    [account_customer_id, *ck],
+                )
+                for r in cur.fetchall():
+                    existing[r["keyword"]] = {
+                        "status": r["status"], "mt": int(r["monthly_total"] or 0)
+                    }
+
+            # 2) 분류: 신규 INSERT / pending 업그레이드 / 보존 (registered·등 이미 처리)
+            for kw in kws:
+                it = by_kw[kw]
+                mt = int(it.get("monthly_total") or 0)
+                src = it.get("source") or "keywordstool"
+                seed = it.get("seed")
+                row_existing = existing.get(kw)
                 try:
-                    cur.execute(
-                        """INSERT OR IGNORE INTO naverad_keyword_pool
-                           (user_id, account_customer_id, keyword, monthly_total,
-                            monthly_pc, monthly_mobile, comp_idx, source, seed, status)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')""",
-                        (
-                            user_id,
-                            account_customer_id,
-                            kw,
-                            int(item.get("monthly_total") or 0),
-                            int(item.get("monthly_pc") or 0),
-                            int(item.get("monthly_mobile") or 0),
-                            item.get("comp_idx"),
-                            item.get("source") or "keywordstool",
-                            item.get("seed"),
-                        ),
-                    )
-                    if cur.rowcount > 0:
-                        added += 1
+                    if row_existing is None:
+                        # 신규 INSERT
+                        cur.execute(
+                            """INSERT INTO naverad_keyword_pool
+                               (user_id, account_customer_id, keyword, monthly_total,
+                                monthly_pc, monthly_mobile, comp_idx, source, seed, status)
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')""",
+                            (
+                                user_id,
+                                account_customer_id,
+                                kw,
+                                mt,
+                                int(it.get("monthly_pc") or 0),
+                                int(it.get("monthly_mobile") or 0),
+                                it.get("comp_idx"),
+                                src,
+                                seed,
+                            ),
+                        )
+                        if cur.rowcount > 0:
+                            added += 1
+                    elif row_existing["status"] == "pending" and mt > row_existing["mt"]:
+                        # mt 업그레이드 (pending row 만)
+                        cur.execute(
+                            """UPDATE naverad_keyword_pool
+                               SET monthly_total = ?,
+                                   monthly_pc = ?,
+                                   monthly_mobile = ?,
+                                   comp_idx = COALESCE(?, comp_idx),
+                                   source = COALESCE(?, source),
+                                   seed = COALESCE(?, seed)
+                               WHERE account_customer_id = ? AND keyword = ?""",
+                            (
+                                mt,
+                                int(it.get("monthly_pc") or 0),
+                                int(it.get("monthly_mobile") or 0),
+                                it.get("comp_idx"),
+                                src,
+                                seed,
+                                account_customer_id,
+                                kw,
+                            ),
+                        )
+                        if cur.rowcount > 0:
+                            upgraded += 1
                 except sqlite3.Error as e:
                     logger.warning(f"add_candidates row 실패 {kw}: {e}")
+
+        if upgraded:
+            logger.warning(
+                f"[add_candidates] cid={account_customer_id} +{added} 신규 / "
+                f"{upgraded} mt 업그레이드 (입력 {len(items)} 중 dedup {len(items) - len(kws)})"
+            )
         return added
 
     def claim_pending(
@@ -654,7 +775,9 @@ class KeywordPoolDB:
         """등록 워커가 호출 — pending 키워드를 가져옴 (검색량 내림차순).
 
         진짜 lock은 안 걸지만, 호출 직후 register/skip으로 status 갱신해야 함.
-        시드 행 (source='user_seed', monthly_total=0) 은 register 대상 아니므로 제외.
+        register 대상 = monthly_total ≥ min_volume 인 모든 pending row.
+        과거: source='user_seed' 전체 제외 → mt≥1 amplified 시드 (예: "여드름치료") 도
+             영구 제외 → 11k+ pending 등록 락. mt=0 시드는 min_volume≥1 필터로 자연 제외.
         """
         with self._conn() as conn:
             cur = conn.cursor()
@@ -664,7 +787,6 @@ class KeywordPoolDB:
                    WHERE account_customer_id = ?
                      AND status = 'pending'
                      AND monthly_total >= ?
-                     AND COALESCE(source, '') <> 'user_seed'
                    ORDER BY monthly_total DESC
                    LIMIT ?""",
                 (account_customer_id, min_volume, limit),
@@ -875,13 +997,13 @@ class KeywordPoolDB:
             )
             by_status = {row["status"]: row["n"] for row in cur.fetchall()}
 
-            # register 가 실제로 가져갈 수 있는 pending — 시드 행 제외 + monthly_total>=1
+            # register 가 실제로 가져갈 수 있는 pending = monthly_total ≥ 1 row 전체.
+            # claim_pending 필터와 일관 — source 무관 (mt=0 자기-시드 row 만 자연 제외).
             cur.execute(
                 """SELECT COUNT(*) AS n FROM naverad_keyword_pool
                    WHERE account_customer_id = ?
                      AND status = 'pending'
-                     AND monthly_total >= 1
-                     AND COALESCE(source, '') <> 'user_seed'""",
+                     AND monthly_total >= 1""",
                 (account_customer_id,),
             )
             row = cur.fetchone()

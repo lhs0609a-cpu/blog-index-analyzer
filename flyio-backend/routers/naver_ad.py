@@ -5893,32 +5893,29 @@ async def keyword_pool_cron_seed_amplify_burst(
             await asyncio.sleep(0.3)
         vol_ms = int((_t.monotonic() - vol_t0) * 1000)
 
-        # mt≥1 → user_seed 합류 (검색량 있음)
-        # mt=0 zero-vol fallback → user_seed 합류 (drift 감수, 시드 풀 확장 우선)
+        # mt≥1 만 user_seed 합류 — mt=0 zerovol 시드는 등록 락 사고로 제거 (2026-05-12).
+        # 과거: mt=0 도 user_seed 로 INSERT → claim_pending 필터 + INSERT OR IGNORE
+        # 합세로 11k+ 등록 불가 행이 풀 점거 → 등록 throughput 영구 정지.
         items_with_vol: List[Dict] = []
-        items_zerovol: List[Dict] = []
+        zerovol_count = 0
         for s in fresh_seeds:
             v = vol_map.get(s) or vol_map.get(s.replace(" ", ""))
-            if v:
-                mt = int(v.get("monthly_total") or 0)
-                if mt >= 1:
-                    items_with_vol.append({
-                        "keyword": s, "monthly_total": mt,
-                        "monthly_pc": int(v.get("monthly_pc") or 0),
-                        "monthly_mobile": int(v.get("monthly_mobile") or 0),
-                        "comp_idx": v.get("comp_idx"),
-                        "source": "user_seed", "seed": s,
-                    })
-                    continue
-            items_zerovol.append({
-                "keyword": s, "monthly_total": 0,
-                "monthly_pc": 0, "monthly_mobile": 0, "comp_idx": None,
-                "source": "user_seed", "seed": s,
-            })
+            mt = int((v or {}).get("monthly_total") or 0)
+            if v and mt >= 1:
+                items_with_vol.append({
+                    "keyword": s, "monthly_total": mt,
+                    "monthly_pc": int(v.get("monthly_pc") or 0),
+                    "monthly_mobile": int(v.get("monthly_mobile") or 0),
+                    "comp_idx": v.get("comp_idx"),
+                    "source": "user_seed", "seed": s,
+                })
+            else:
+                zerovol_count += 1
 
         # 합류 cap — 한 burst 에 user_seed 최대 5000 추가
         BURST_CAP = 5000
-        merged = items_with_vol + items_zerovol[:max(0, BURST_CAP - len(items_with_vol))]
+        merged = items_with_vol[:BURST_CAP]
+        items_zerovol: List[Dict] = []  # 호환성 (로그 변수)
         promoted = 0
         if merged:
             try:
@@ -5930,9 +5927,8 @@ async def keyword_pool_cron_seed_amplify_burst(
         logger.warning(
             f"[seed-amplify-burst] cid={customer_id} 완료 ({duration_ms}ms) — "
             f"amplify {n_calls}회 raw {sum(len(b) for b in results)} → "
-            f"fresh {len(fresh_seeds)} → mt≥1 {len(items_with_vol)} + "
-            f"zerovol {len(items_zerovol)} → user_seed +{promoted} "
-            f"(GPT {am_ms}ms, vol {vol_ms}ms)"
+            f"fresh {len(fresh_seeds)} → mt≥1 {len(items_with_vol)} (zerovol 컷 {zerovol_count}) "
+            f"→ user_seed +{promoted} (GPT {am_ms}ms, vol {vol_ms}ms)"
         )
         pool.record_run(
             user_id, customer_id, "seed_amplify_burst",
@@ -5940,7 +5936,7 @@ async def keyword_pool_cron_seed_amplify_burst(
             added=promoted, seeds_count=len(user_seeds),
             error_message=(
                 f"burst {n_calls}회 → fresh {len(fresh_seeds)} → "
-                f"mt≥1 {len(items_with_vol)} + zerovol {len(items_zerovol)} → +{promoted}"
+                f"mt≥1 {len(items_with_vol)} (zerovol 컷 {zerovol_count}) → +{promoted}"
             )[:300],
             duration_ms=duration_ms,
         )
@@ -5954,6 +5950,57 @@ async def keyword_pool_cron_seed_amplify_burst(
         "n_calls": n_calls,
         "target_per_call": target_per_call,
         "estimated_duration_seconds": n_calls * 5 + 60,  # GPT 5s × n_calls + keywordstool
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
+@router.post("/keyword-pool/cron/cleanup-zerovol-seeds")
+async def keyword_pool_cron_cleanup_zerovol_seeds(
+    authorization: Optional[str] = Header(None),
+    user_id: Optional[int] = Query(None),
+    customer_id: Optional[int] = Query(None),
+):
+    """mt=0 user_seed 잔재 일괄 정리 — 11k+ 등록 락 해제용 (2026-05-12).
+
+    구버전 seed_amplify_burst 가 mt=0 시드를 user_seed 로 INSERT → claim_pending
+    의 mt≥1 필터에 걸려 영구 등록 불가. 삭제 후 같은 KW 가 keywordstool 에서
+    mt>0 으로 재발견되면 add_candidates UPSERT 가 정상 합류시킴.
+
+    단건: ?user_id=X&customer_id=Y / 전체: 파라미터 없이 호출.
+    """
+    _verify_cron_token(authorization)
+    from database.naver_ad_db import list_connected_ad_accounts
+
+    pool = get_keyword_pool_db()
+    targets: List[Tuple[int, int]] = []
+    if user_id and customer_id:
+        targets = [(int(user_id), int(customer_id))]
+    else:
+        accts = list_connected_ad_accounts() or []
+        for a in accts:
+            uid = a.get("user_id")
+            cid = a.get("customer_id")
+            if uid and cid:
+                targets.append((int(uid), int(cid)))
+
+    results = []
+    for uid, cid in targets:
+        try:
+            r = pool.cleanup_zerovol_user_seeds(cid)
+            results.append({"user_id": uid, "customer_id": cid, **r})
+            logger.warning(
+                f"[cleanup-zerovol-seeds] uid={uid} cid={cid} → "
+                f"삭제 {r['deleted']} (pending {r['before_pending']}→{r['after_pending']})"
+            )
+        except Exception as e:
+            logger.error(
+                f"[cleanup-zerovol-seeds] uid={uid} cid={cid} 실패: {e}", exc_info=True,
+            )
+            results.append({"user_id": uid, "customer_id": cid, "error": str(e)[:200]})
+
+    return {
+        "success": True,
+        "results": results,
         "timestamp": datetime.now().isoformat(timespec="seconds"),
     }
 
