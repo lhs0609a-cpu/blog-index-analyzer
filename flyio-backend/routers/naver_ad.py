@@ -2715,9 +2715,13 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     pool_pending = (pool.stats(customer_id).get("by_status") or {}).get("pending", 0)
     active_reg = int((reg.stats(customer_id) or {}).get("active") or 0)
     headroom = 100_000 - active_reg - pool_pending
-    if headroom <= 0:
-        # 자가치유 — auto_cleanup ON + saved_relevance 있으면 무관 KW 정리 → 슬롯 회수.
-        # 이번 tick 은 cleanup 만 (5분 뒤 다음 tick 에서 collect 진행).
+    # saturation 가드 — ≥95% (headroom ≤ 5000) 부터 self_heal 발동.
+    # 기존: 100% 도달 (headroom ≤ 0) 시에만 cleanup → 99,800 같은 99%+ 정체 구간에서
+    # 클릭 미발생 무관 KW 가 영구 잔류 → 물갈이 미발생.
+    # 변경: 95% 도달 시 미리 발동 → 점진적 물갈이 + autocomplete saturation guard
+    # (95%+ skip) 와 자연 연동: cleanup 으로 95% 미만 → autocomplete 재진입 → 다시 95%
+    # → cleanup → 무한 사이클. 100% 도달 시엔 기존처럼 cleanup-only early return.
+    if headroom <= 5_000:
         cleaned_total = 0
         cleanup_label_parts: List[str] = []
         cfg = get_ad_account_auto_cleanup(uid, str(customer_id)) or {}
@@ -2745,23 +2749,35 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
             if rolled > 0:
                 cleanup_label_parts.append(f"rolling={rolled}")
 
-        if cleaned_total > 0:
-            pool.record_run(
-                uid, customer_id, "collect", "self_heal_cleanup",
-                pending_after=pool_pending,
-                error_message=(
-                    f"cap_cleanup {' '.join(cleanup_label_parts)} "
-                    f"(다음 tick 에서 collect 진행)"
-                )[:300],
-                duration_ms=int((_time.monotonic()-t0)*1000),
-            )
+        # 100% 도달 시는 기존처럼 early return (cleanup-only, 다음 tick collect).
+        # 95~99% 구간은 cleanup 후 계속 진행해 같은 tick 에서 새 KW collect → 물갈이 속도 ↑.
+        if headroom <= 0:
+            if cleaned_total > 0:
+                pool.record_run(
+                    uid, customer_id, "collect", "self_heal_cleanup",
+                    pending_after=pool_pending,
+                    error_message=(
+                        f"cap_cleanup {' '.join(cleanup_label_parts)} "
+                        f"(다음 tick 에서 collect 진행)"
+                    )[:300],
+                    duration_ms=int((_time.monotonic()-t0)*1000),
+                )
+                return
+            logger.warning(f"[pool/collect] user={uid} 한도 도달 — skip (active={active_reg}, pending={pool_pending})")
+            pool.record_run(uid, customer_id, "collect", "cap_reached",
+                            pending_after=pool_pending,
+                            error_message=f"active={active_reg}+pending={pool_pending}≥100000",
+                            duration_ms=int((_time.monotonic()-t0)*1000))
             return
-        logger.warning(f"[pool/collect] user={uid} 한도 도달 — skip (active={active_reg}, pending={pool_pending})")
-        pool.record_run(uid, customer_id, "collect", "cap_reached",
-                        pending_after=pool_pending,
-                        error_message=f"active={active_reg}+pending={pool_pending}≥100000",
-                        duration_ms=int((_time.monotonic()-t0)*1000))
-        return
+        # 95~99% — cleanup 결과 로그 남기고 그대로 collect 진행. headroom 재계산.
+        if cleaned_total > 0:
+            logger.warning(
+                f"[pool/collect] user={uid} saturation pre-cleanup "
+                f"({100_000 - headroom}/100k) — {' '.join(cleanup_label_parts)} → collect 계속"
+            )
+            # cleanup 으로 회수된 슬롯 반영 (active_reg 가 줄었지만 stats 재조회는 부담 →
+            # cleaned_total 만큼 headroom 가산).
+            headroom = min(100_000, headroom + cleaned_total)
     target = min(max_new, headroom)
 
     # 동적 도메인 토큰셋 — 우선순위: saved relevance_keywords > user_seed > POOL baseline.
