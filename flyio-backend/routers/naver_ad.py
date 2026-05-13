@@ -4031,6 +4031,31 @@ async def _run_pool_autocomplete_mining(
     if not user_seeds:
         return {"success": False, "reason": "no_user_seed"}
 
+    # saturation 가드 — 풀 사용량 ≥ 95% 일 때 skip.
+    # niche 도메인(예: 한의원 cid 1858907) 에서 99k+ 도달 시 시드 거의 모든
+    # 자식이 mt=0 long-tail 만 토함 → mt=0 fallback 차단 정책으로 신규 0 → 매 tick
+    # GPT/keywordstool API 비용·시간 낭비. cleanup tick(15분) 또는 self_heal 이
+    # 슬롯 회수해 95% 미만으로 떨어지면 다음 cron 자동 재진입.
+    reg_db = get_registered_keywords_db()
+    pool_pending = (pool.stats(customer_id).get("by_status") or {}).get("pending", 0)
+    active_reg = int((reg_db.stats(customer_id) or {}).get("active") or 0)
+    used = active_reg + pool_pending
+    if used >= 95_000:
+        pool.record_run(
+            uid, customer_id, "autocomplete", "no_new",
+            seeds_count=0,
+            error_message=(
+                f"saturation guard — used {used}/100k ≥95% → autocomplete skip "
+                f"(cleanup 후 재진입)"
+            )[:300],
+            duration_ms=int((_time.monotonic() - t0) * 1000),
+        )
+        logger.warning(
+            f"[pool/autocomplete] user={uid} cid={customer_id} saturation guard "
+            f"({used}/100k ≥95%) — skip"
+        )
+        return {"success": False, "reason": "saturation_guard", "used": used}
+
     if len(user_seeds) > seed_sample_size:
         seed_sample = random.sample(user_seeds, seed_sample_size)
     else:
@@ -4038,7 +4063,8 @@ async def _run_pool_autocomplete_mining(
 
     logger.warning(
         f"[pool/autocomplete] user={uid} cid={customer_id} 시작 — "
-        f"시드 {len(seed_sample)}/{len(user_seeds)} 자동완성 mining"
+        f"시드 {len(seed_sample)}/{len(user_seeds)} 자동완성 mining "
+        f"(used {used}/100k)"
     )
 
     # 1) 자동완성 batch 수집
@@ -6099,6 +6125,23 @@ async def _run_auto_cleanup_for_account(
         pass
 
     record_auto_cleanup_run(user_id, str(customer_id), n_deleted + n_paused)
+
+    # 임계 auto-promote — cleanup 직후 풀의 점수 분포 검사 → 90%+ 가 thr+10 이상이면
+    # threshold 를 +10 상향. 점진 수렴: 30 → 40 → 50 → ... → 80 cap.
+    # cleanup 으로 풀이 점수 ≥ thr 만 남으면 다음 단계로 자동 진입 → 사용자 개입 없이
+    # "모든 KW 가 점수 N 이상" 목표에 수렴.
+    try:
+        promoted_to = await _maybe_promote_auto_cleanup_threshold(
+            user_id, customer_id, threshold,
+        )
+        if promoted_to:
+            logger.warning(
+                f"[auto-cleanup/promote] uid={user_id} cid={customer_id} "
+                f"threshold {threshold} → {promoted_to} (풀 90%+ ≥{threshold+10})"
+            )
+    except Exception as e:
+        logger.warning(f"[auto-cleanup/promote] 실패 uid={user_id} cid={customer_id}: {e}")
+
     return {
         "customer_id": customer_id,
         "threshold": threshold,
@@ -6107,6 +6150,92 @@ async def _run_auto_cleanup_for_account(
         "paused": n_paused,
         "failed": n_failed,
     }
+
+
+async def _maybe_promote_auto_cleanup_threshold(
+    user_id: int, customer_id: int, current_threshold: int,
+    *, sample_size: int = 1500, promote_step: int = 10,
+    promote_ratio: float = 0.90, max_threshold: int = 80,
+) -> Optional[int]:
+    """풀의 점수 분포 검사 후 threshold 자동 상향.
+
+    조건 (모두 충족 시 +promote_step):
+      - current_threshold < max_threshold (80 이상이면 더 안 올림)
+      - 등록 KW 수 ≥ 5000 (샘플 신뢰성)
+      - 샘플 1500 random 중 ≥ promote_ratio(90%) 가 점수 ≥ current_threshold + promote_step
+
+    why: cleanup 으로 점수≤thr KW 빠지면 풀 점수 분포가 thr 이상으로 수렴.
+    분포의 90%가 thr+10 까지 도달했다면 다음 단계로 진입할 수 있다는 신호.
+    cap=80 — 너무 엄격해지면 빈 슬롯 못 채움 위험.
+    """
+    from database.naver_ad_db import (
+        get_ad_account_relevance_keywords, update_ad_account_auto_cleanup,
+    )
+    import sqlite3 as _sqlite3
+    import random as _random
+
+    if current_threshold >= max_threshold:
+        return None
+
+    next_threshold = current_threshold + promote_step
+    if next_threshold > max_threshold:
+        next_threshold = max_threshold
+
+    reg = get_registered_keywords_db()
+    pool = get_keyword_pool_db()
+
+    with _sqlite3.connect(reg.db_path) as conn:
+        rows = conn.execute(
+            "SELECT keyword FROM registered_keywords "
+            "WHERE account_customer_id=? AND ncc_keyword_id IS NOT NULL "
+            "AND removed_at IS NULL",
+            (customer_id,),
+        ).fetchall()
+    keywords = [r[0] for r in rows if r and r[0]]
+    if len(keywords) < 5000:
+        return None  # 풀 너무 작음 — 샘플 신뢰성 부족
+
+    # 점수 기준 — saved_relevance > user_seed 폴백
+    saved = get_ad_account_relevance_keywords(user_id, str(customer_id))
+    if saved and len([s for s in saved if s and len(s) >= 2]) >= 3:
+        score_basis = saved
+    else:
+        score_basis = [
+            s for s in (pool.list_user_seeds(customer_id) or []) if s and len(s) >= 2
+        ]
+    if not score_basis:
+        return None  # 점수 계산 불가
+
+    sample = (
+        _random.sample(keywords, sample_size) if len(keywords) > sample_size
+        else keywords
+    )
+    pass_count = 0
+    for kw in sample:
+        if _compute_relevance_score(kw, score_basis) >= next_threshold:
+            pass_count += 1
+    ratio = pass_count / len(sample)
+    if ratio < promote_ratio:
+        return None
+
+    ok = update_ad_account_auto_cleanup(
+        user_id, str(customer_id), threshold=next_threshold,
+    )
+    if not ok:
+        return None
+    # 진행 이력 — 화면 '최근 실행 이력' 표에 노출
+    try:
+        pool.record_run(
+            user_id, customer_id, "inspect", "success",
+            error_message=(
+                f"threshold auto-promote {current_threshold} → {next_threshold} "
+                f"(샘플 {len(sample)} 중 {pass_count} ≥{next_threshold}, "
+                f"ratio {ratio:.1%})"
+            )[:300],
+        )
+    except Exception:
+        pass
+    return next_threshold
 
 
 async def _run_domain_cleanup_for_account(
