@@ -175,11 +175,13 @@ class NaverAdApiClient:
         self.customer_id = settings.NAVER_AD_CUSTOMER_ID
         self.api_key = settings.NAVER_AD_API_KEY
         self.secret_key = settings.NAVER_AD_SECRET_KEY
-        # connect=5s, read=15s — 폭주 시 워커 점유 줄임 (이전 30s)
+        # connect=3s, read=8s — Naver ConnectTimeout/ReadTimeout 폭주 시 빠르게 fail.
+        # 이전 15s read 는 (15s read × 2 retry + 1s sleep) = 31s/req 로 event loop 점유 폭증.
+        # 8s 로 단축 → 17s/req → cron tick 시간 절반 → HTTP 응답 막힘 시간 축소.
         # max_connections=5: NaverAd ConnectTimeout 폭주 시 동시 in-flight 제한 → OOM 방지
         # Why: 1GB VM 에서 동시 50+ ConnectTimeout 누적 → SIGKILL 137 사례 다수 (2026-05-07)
         self.client = httpx.AsyncClient(
-            timeout=httpx.Timeout(connect=5.0, read=15.0, write=15.0, pool=5.0),
+            timeout=httpx.Timeout(connect=3.0, read=8.0, write=8.0, pool=3.0),
             limits=httpx.Limits(max_connections=5, max_keepalive_connections=2),
         )
 
