@@ -2716,11 +2716,10 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     active_reg = int((reg.stats(customer_id) or {}).get("active") or 0)
     headroom = 100_000 - active_reg - pool_pending
     # saturation 가드 — ≥95% (headroom ≤ 5000) 부터 self_heal 발동.
-    # 기존: 100% 도달 (headroom ≤ 0) 시에만 cleanup → 99,800 같은 99%+ 정체 구간에서
-    # 클릭 미발생 무관 KW 가 영구 잔류 → 물갈이 미발생.
-    # 변경: 95% 도달 시 미리 발동 → 점진적 물갈이 + autocomplete saturation guard
-    # (95%+ skip) 와 자연 연동: cleanup 으로 95% 미만 → autocomplete 재진입 → 다시 95%
-    # → cleanup → 무한 사이클. 100% 도달 시엔 기존처럼 cleanup-only early return.
+    # cleanup 으로 슬롯 회수되면 같은 tick 에서 곧바로 collect 이어 진행 (early return X) →
+    # 다음 5분 tick 대기 제거. 100% 도달 + cleanup 0 인 dead state 만 cap_reached 로 skip.
+    # autocomplete saturation guard (≥98%) 와 사이클: cleanup 으로 98% 미만 →
+    # autocomplete 발굴 재개 → 다시 98% → cleanup → 평형.
     if headroom <= 5_000:
         cleaned_total = 0
         cleanup_label_parts: List[str] = []
@@ -2730,7 +2729,7 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                 uid, customer_id, account,
                 threshold=int(cfg.get("threshold") or 30),
                 saved_relevance=list(cfg.get("relevance_keywords") or []),
-                max_delete=200,
+                max_delete=1000,
             )
             cleaned_total += cleaned
             if cleaned > 0:
@@ -2741,7 +2740,7 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         if cleaned_total == 0:
             rolled = await _cap_triggered_rolling_heal(
                 uid, customer_id, account,
-                max_delete=200,
+                max_delete=1000,
                 mt_ceiling=50,
                 settle_hours=24,
             )
@@ -2749,28 +2748,22 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
             if rolled > 0:
                 cleanup_label_parts.append(f"rolling={rolled}")
 
-        # 100% 도달 시는 기존처럼 early return (cleanup-only, 다음 tick collect).
-        # 95~99% 구간은 cleanup 후 계속 진행해 같은 tick 에서 새 KW collect → 물갈이 속도 ↑.
-        if headroom <= 0:
-            if cleaned_total > 0:
+        # cleanup 결과 별도 record_run — UI visibility 유지. early return 폐기:
+        # 100% 도달이어도 cleanup 으로 회수된 슬롯 있으면 같은 tick 에서 즉시 collect 이어서
+        # 진행 → 물갈이 속도 ↑ (다음 5분 tick 대기 제거).
+        if cleaned_total > 0:
+            try:
                 pool.record_run(
                     uid, customer_id, "collect", "self_heal_cleanup",
                     pending_after=pool_pending,
                     error_message=(
-                        f"cap_cleanup {' '.join(cleanup_label_parts)} "
-                        f"(다음 tick 에서 collect 진행)"
+                        f"cap_cleanup {' '.join(cleanup_label_parts)} → "
+                        f"같은 tick 에서 collect {cleaned_total} 슬롯 회수"
                     )[:300],
                     duration_ms=int((_time.monotonic()-t0)*1000),
                 )
-                return
-            logger.warning(f"[pool/collect] user={uid} 한도 도달 — skip (active={active_reg}, pending={pool_pending})")
-            pool.record_run(uid, customer_id, "collect", "cap_reached",
-                            pending_after=pool_pending,
-                            error_message=f"active={active_reg}+pending={pool_pending}≥100000",
-                            duration_ms=int((_time.monotonic()-t0)*1000))
-            return
-        # 95~99% — cleanup 결과 로그 남기고 그대로 collect 진행. headroom 재계산.
-        if cleaned_total > 0:
+            except Exception:
+                pass
             logger.warning(
                 f"[pool/collect] user={uid} saturation pre-cleanup "
                 f"({100_000 - headroom}/100k) — {' '.join(cleanup_label_parts)} → collect 계속"
@@ -2778,6 +2771,14 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
             # cleanup 으로 회수된 슬롯 반영 (active_reg 가 줄었지만 stats 재조회는 부담 →
             # cleaned_total 만큼 headroom 가산).
             headroom = min(100_000, headroom + cleaned_total)
+        elif headroom <= 0:
+            # 100% 도달 + cleanup 0 → 진행 불가. 다음 tick 대기.
+            logger.warning(f"[pool/collect] user={uid} 한도 도달 — skip (active={active_reg}, pending={pool_pending})")
+            pool.record_run(uid, customer_id, "collect", "cap_reached",
+                            pending_after=pool_pending,
+                            error_message=f"active={active_reg}+pending={pool_pending}≥100000",
+                            duration_ms=int((_time.monotonic()-t0)*1000))
+            return
     target = min(max_new, headroom)
 
     # 동적 도메인 토큰셋 — 우선순위: saved relevance_keywords > user_seed > POOL baseline.
@@ -4047,28 +4048,27 @@ async def _run_pool_autocomplete_mining(
     if not user_seeds:
         return {"success": False, "reason": "no_user_seed"}
 
-    # saturation 가드 — 풀 사용량 ≥ 95% 일 때 skip.
-    # niche 도메인(예: 한의원 cid 1858907) 에서 99k+ 도달 시 시드 거의 모든
-    # 자식이 mt=0 long-tail 만 토함 → mt=0 fallback 차단 정책으로 신규 0 → 매 tick
-    # GPT/keywordstool API 비용·시간 낭비. cleanup tick(15분) 또는 self_heal 이
-    # 슬롯 회수해 95% 미만으로 떨어지면 다음 cron 자동 재진입.
+    # saturation 가드 — 풀 사용량 ≥ 98% 일 때 skip.
+    # domain_cleanup(30분 주기) + cap_self_heal 가 무관 KW 빼면 풀이 98% 미만에서 평형 →
+    # autocomplete 가 95~98% 구간에서도 새 KW 발굴 지속 → 물갈이 사이클 자연 가동.
+    # 98% 도달 시엔 skip — niche 도메인은 mt=0 long-tail 만 토하므로 API 비용 낭비.
     reg_db = get_registered_keywords_db()
     pool_pending = (pool.stats(customer_id).get("by_status") or {}).get("pending", 0)
     active_reg = int((reg_db.stats(customer_id) or {}).get("active") or 0)
     used = active_reg + pool_pending
-    if used >= 95_000:
+    if used >= 98_000:
         pool.record_run(
             uid, customer_id, "autocomplete", "no_new",
             seeds_count=0,
             error_message=(
-                f"saturation guard — used {used}/100k ≥95% → autocomplete skip "
+                f"saturation guard — used {used}/100k ≥98% → autocomplete skip "
                 f"(cleanup 후 재진입)"
             )[:300],
             duration_ms=int((_time.monotonic() - t0) * 1000),
         )
         logger.warning(
             f"[pool/autocomplete] user={uid} cid={customer_id} saturation guard "
-            f"({used}/100k ≥95%) — skip"
+            f"({used}/100k ≥98%) — skip"
         )
         return {"success": False, "reason": "saturation_guard", "used": used}
 

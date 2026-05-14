@@ -110,16 +110,15 @@ class KeywordPoolScheduler:
                 coalesce=True,
                 next_run_time=_now + timedelta(seconds=240),
             )
-        # Domain cleanup — 점수 atoms_2 인플레로 진짜 도메인 KW 도 ≤30 점이 됨 → 잘못 DELETE.
-        # 실측 (cid 1858907 한의원): basis=saved_relevance thr=30 → del=144 / round.
-        # 채우는 속도 < 죽는 속도 → 5시간 10만 목표 불가능. AI cleanup 과 동일 사고 패턴.
-        # 켜고 싶으면 env KEYWORD_POOL_DOMAIN_CLEANUP_ENABLED=1 로 활성화.
-        if _os.environ.get("KEYWORD_POOL_DOMAIN_CLEANUP_ENABLED") == "1":
+        # Domain cleanup — 30분 주기 click 무관 KW 도메인 정리 (물갈이 핵심).
+        # saved_relevance 가 풍부할 때 (≥수백개) 만 발동되며 scoring 은 self_heal 과 동일.
+        # 끄려면 env KEYWORD_POOL_DOMAIN_CLEANUP_DISABLED=1.
+        if _os.environ.get("KEYWORD_POOL_DOMAIN_CLEANUP_DISABLED") != "1":
             self.scheduler.add_job(
                 self._domain_cleanup_tick,
-                IntervalTrigger(seconds=3600),
+                IntervalTrigger(seconds=1800),
                 id="keyword_pool_domain_cleanup",
-                name="키워드 풀 도메인 자동 정리 (1시간 주기, click 무관)",
+                name="키워드 풀 도메인 자동 정리 (30분 주기, click 무관)",
                 replace_existing=True,
                 max_instances=1,
                 coalesce=True,
@@ -144,9 +143,9 @@ class KeywordPoolScheduler:
             else "ai_cleanup OFF"
         )
         _domain_cleanup_status = (
-            "domain_cleanup 3600s"
-            if _os.environ.get("KEYWORD_POOL_DOMAIN_CLEANUP_ENABLED") == "1"
-            else "domain_cleanup OFF"
+            "domain_cleanup OFF"
+            if _os.environ.get("KEYWORD_POOL_DOMAIN_CLEANUP_DISABLED") == "1"
+            else "domain_cleanup 1800s"
         )
         logger.warning(
             f"[pool/scheduler] 시작 (AI-first 빠른 채움) — collect {interval_seconds}s / "
