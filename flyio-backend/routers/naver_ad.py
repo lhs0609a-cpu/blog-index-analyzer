@@ -2729,7 +2729,7 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                 uid, customer_id, account,
                 threshold=int(cfg.get("threshold") or 30),
                 saved_relevance=list(cfg.get("relevance_keywords") or []),
-                max_delete=1000,
+                max_delete=500,
             )
             cleaned_total += cleaned
             if cleaned > 0:
@@ -2740,7 +2740,7 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         if cleaned_total == 0:
             rolled = await _cap_triggered_rolling_heal(
                 uid, customer_id, account,
-                max_delete=1000,
+                max_delete=500,
                 mt_ceiling=50,
                 settle_hours=24,
             )
@@ -4455,8 +4455,25 @@ async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch:
     pool.mark_status(skipped_ids, "skipped_existing",
                      error_message="이미 네이버 광고에 등록된 키워드 — orchestrator dedup")
     err_msg = str(result.get("error", "did not register"))[:300] if not result.get("success") else None
-    pool.mark_status(failed_ids, "failed",
-                     error_message=err_msg or "orchestrator did not register")
+
+    # Pre-flight 실패 (channel lookup, no business channel, account cap 등) — 키워드
+    # 자체엔 문제 없음. failed 영구 마킹 시 다음 tick 재시도 불가 → 117k 누적 실패
+    # 사고. transient 식별 시 pending 유지하여 다음 tick 자동 재시도.
+    _transient_markers = ("channel lookup", "no business channel", "account keyword cap")
+    is_transient_preflight = (
+        not result.get("success")
+        and err_msg
+        and any(m in err_msg for m in _transient_markers)
+    )
+    if is_transient_preflight and failed_ids:
+        logger.warning(
+            f"[pool/register] user={uid} pre-flight 실패 ({err_msg[:80]}) — "
+            f"{len(failed_ids)}개 pending 유지 (다음 tick 재시도)"
+        )
+        # mark_status skip — pending 그대로 둠. 다음 register tick 이 다시 claim.
+    else:
+        pool.mark_status(failed_ids, "failed",
+                         error_message=err_msg or "orchestrator did not register")
     logger.warning(
         f"[pool/register] user={uid} 신규={len(succeeded_ids)} "
         f"이미있음={len(skipped_ids)} fail={len(failed_ids)}"
