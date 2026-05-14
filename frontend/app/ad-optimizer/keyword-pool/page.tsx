@@ -323,22 +323,35 @@ export default function KeywordPoolPage() {
   }
 
   const loadAutoCleanup = async () => {
-    try {
-      const res = await adGet<{ success: boolean; enabled: boolean; threshold: number; last_run_at: string | null; last_deleted: number; relevance_keywords?: string[] }>(
-        `/api/naver-ad/keyword-pool/auto-cleanup/settings${cidQs()}`,
-        { showToast: false, timeout: 10_000 }
-      )
-      const kws = Array.isArray(res.relevance_keywords) ? res.relevance_keywords : []
-      setAutoCleanup({
-        enabled: !!res.enabled,
-        threshold: Number(res.threshold ?? 30),
-        last_run_at: res.last_run_at || null,
-        last_deleted: Number(res.last_deleted || 0),
-        relevance_keywords: kws,
-      })
-      setRelevanceInput(kws.join(', '))
-    } catch (e) {
-      // settings 로드 실패해도 동작 — default state 유지
+    // 백엔드 cron tick 동안 응답 지연 (cleanup self_heal 168~272s blocking).
+    // timeout 45s + retry 3회 (총 ~2.3분 대기) — 그동안 cron tick 끝남.
+    // 실패해도 default(OFF/비어있음) 가 아니라 이전 state 유지해 UI flicker 차단.
+    const MAX_RETRIES = 3
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        const res = await adGet<{ success: boolean; enabled: boolean; threshold: number; last_run_at: string | null; last_deleted: number; relevance_keywords?: string[] }>(
+          `/api/naver-ad/keyword-pool/auto-cleanup/settings${cidQs()}`,
+          { showToast: false, timeout: 45_000 }
+        )
+        const kws = Array.isArray(res.relevance_keywords) ? res.relevance_keywords : []
+        setAutoCleanup({
+          enabled: !!res.enabled,
+          threshold: Number(res.threshold ?? 30),
+          last_run_at: res.last_run_at || null,
+          last_deleted: Number(res.last_deleted || 0),
+          relevance_keywords: kws,
+        })
+        setRelevanceInput(kws.join(', '))
+        return  // 성공 시 retry 루프 탈출
+      } catch (e) {
+        if (attempt === MAX_RETRIES - 1) {
+          // 최종 실패 시 default 로 덮어쓰지 않음 — 이전 state 유지.
+          console.warn('[loadAutoCleanup] 모든 retry 실패. 이전 state 유지', e)
+        } else {
+          // 다음 retry 전 짧은 backoff
+          await new Promise(r => setTimeout(r, 2000))
+        }
+      }
     }
   }
 
