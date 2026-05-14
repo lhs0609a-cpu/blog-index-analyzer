@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Mail, Lock, Loader2, Sparkles, ArrowLeft, Eye, EyeOff } from 'lucide-react'
+import { Loader2, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { login } from '@/lib/api/auth'
 import { useAuthStore } from '@/lib/stores/auth'
 import toast from 'react-hot-toast'
+import Emoji3D from '@/components/Emoji3D'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -103,7 +104,7 @@ export default function LoginPage() {
           whileTap={{ scale: 0.95 }}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/70 border border-gray-200/50 backdrop-blur-xl hover:bg-white/90 transition-all text-sm font-medium shadow-lg shadow-gray-200/50"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <Emoji3D name="house" size={20} />
           홈으로
         </motion.button>
       </Link>
@@ -119,9 +120,9 @@ export default function LoginPage() {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: "spring", delay: 0.1 }}
-            className="inline-flex p-4 rounded-2xl bg-[#0064FF] mb-6 shadow-lg shadow-blue-100/50"
+            className="inline-flex mb-6"
           >
-            <Sparkles className="w-8 h-8 text-white" />
+            <Emoji3D name="sparkles" size={72} />
           </motion.div>
           <h1 className="text-4xl font-black mb-3">
             <span className="text-[#0064FF]">로그인</span>
@@ -149,7 +150,7 @@ export default function LoginPage() {
                   이메일
                 </label>
                 <div className="relative group">
-                  <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-[#0064FF] transition-colors" />
+                  <Emoji3D name="envelope" size={22} className="absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="email"
                     value={email}
@@ -169,7 +170,7 @@ export default function LoginPage() {
                   비밀번호
                 </label>
                 <div className="relative group">
-                  <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-[#0064FF] transition-colors" />
+                  <Emoji3D name="locked" size={22} className="absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type={showPassword ? "text" : "password"}
                     value={password}
