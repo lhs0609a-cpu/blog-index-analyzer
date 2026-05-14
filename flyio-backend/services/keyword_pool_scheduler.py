@@ -186,12 +186,23 @@ class KeywordPoolScheduler:
                     ).fetchall()]
                 if not ag_ids:
                     continue
+                # 광고그룹 샘플 cap — 296개 그룹 × ~92 KW × naver API 0.5s = 150s+ event loop
+                # 점유로 HTTP 응답 막힘 (10분 cron 인데 1 CPU 1 worker). 매 tick 랜덤 50개만
+                # 검사 → ~25s. 6 tick (1시간) 안에 확률적으로 거의 모든 그룹 1회 cover.
+                import random as _random
+                SAMPLE_CAP = 50
+                if len(ag_ids) > SAMPLE_CAP:
+                    sampled = _random.sample(ag_ids, SAMPLE_CAP)
+                else:
+                    sampled = ag_ids
                 client = NaverAdApiClient()
                 client.customer_id = account["customer_id"]
                 client.api_key = account["api_key"]
                 client.secret_key = account["secret_key"]
-                logger.warning(f"[pool/inspect-full] user={uid} 시작 ({len(ag_ids)} 그룹)")
-                await _inspect_ad_groups(uid, customer_id, client, ag_ids, delete_from_naver=True)
+                logger.warning(
+                    f"[pool/inspect-full] user={uid} 시작 ({len(sampled)}/{len(ag_ids)} 그룹 샘플)"
+                )
+                await _inspect_ad_groups(uid, customer_id, client, sampled, delete_from_naver=True)
                 logger.warning(f"[pool/inspect-full] user={uid} 완료")
         except Exception as e:
             logger.error(f"[pool/inspect-full] 실패: {e}", exc_info=True)
