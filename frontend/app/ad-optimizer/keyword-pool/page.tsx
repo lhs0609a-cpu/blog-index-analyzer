@@ -75,6 +75,21 @@ interface CollectDeadlock {
   last_run_at?: string | null
 }
 
+interface SchedulerJob {
+  id: string
+  name: string
+  next_run_time: string | null
+  trigger: string
+}
+
+interface SchedulerHealth {
+  success: boolean
+  running: boolean
+  message?: string
+  jobs?: SchedulerJob[]
+  now?: string
+}
+
 interface PoolStatsResponse {
   success: boolean
   customer_id?: number
@@ -133,7 +148,7 @@ export default function KeywordPoolPage() {
   const [clickedFilterMismatch, setClickedFilterMismatch] = useState(true)  // 무관만 보기 default ON — 사업과 상관없는 KW 즉시 발견
   const [scoreThreshold, setScoreThreshold] = useState(30)  // N점 이하 일괄 선택용
 
-  // 자동 cleanup 설정 — cron 이 매시 1회 점수 ≤ threshold 인 클릭 KW 자동 삭제
+  // 자동 cleanup 설정 — cron 이 매 15분 점수 ≤ threshold 인 클릭 KW 자동 삭제
   const [autoCleanup, setAutoCleanup] = useState<{
     enabled: boolean
     threshold: number
@@ -143,6 +158,10 @@ export default function KeywordPoolPage() {
   }>({ enabled: false, threshold: 30, last_run_at: null, last_deleted: 0, relevance_keywords: [] })
   const [autoCleanupSaving, setAutoCleanupSaving] = useState(false)
   const [relevanceInput, setRelevanceInput] = useState('')  // textarea raw 입력
+
+  // 백엔드 APScheduler 상태 — 가짜 client-side "다음 실행 예정" 대신 진짜 next_run_time.
+  // recent_runs 가 비어있는데 스케줄러까지 죽었으면 사용자가 즉시 알 수 있어야 함.
+  const [schedulerHealth, setSchedulerHealth] = useState<SchedulerHealth | null>(null)
 
   // AI reject 분류 — naver keywordstool 이 reject 한 인접 도메인 KW 를
   // GPT-4o-mini 가 시드와 같은 도메인인지 분류 → user_seed 자동 promote.
@@ -319,6 +338,20 @@ export default function KeywordPoolPage() {
       if (!stats) toast.error(e?.message || '로드 실패')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadSchedulerHealth = async () => {
+    // 광고주별 데이터 아님 — 전역 cron 상태. cidQs 불필요.
+    try {
+      const res = await adGet<SchedulerHealth>(
+        '/api/naver-ad/keyword-pool/diagnostics/scheduler-jobs',
+        { timeout: 10_000, showToast: false }
+      )
+      setSchedulerHealth(res)
+    } catch (e) {
+      // 실패 시 null 유지 — UI 는 fallback (client-side 가짜 다음 실행 예정) 으로 동작.
+      console.warn('[scheduler-health] 조회 실패', e)
     }
   }
 
@@ -513,16 +546,19 @@ export default function KeywordPoolPage() {
     loadClickedKeywords()  // 클릭 키워드 자동 1회 로드
     loadAutoCleanup()      // 자동 cleanup 설정 1회 로드
     loadRejectStats()      // AI reject 분류 카운터 1회 로드
+    loadSchedulerHealth()  // APScheduler 상태 1회 로드 (광고주 무관)
     // 폴링 — 백엔드 부담 줄이기 위해 간격 확대 (2026-05-07: OOM SIGKILL 사례 다수).
     // 탭이 백그라운드면 polling 자체 skip.
     const isVisible = () => typeof document !== 'undefined' && document.visibilityState === 'visible'
     const tStats = setInterval(() => { if (isVisible()) load() }, 30_000)
     const tClicked = setInterval(() => { if (isVisible()) loadClickedKeywords() }, 90_000)
     const tRejects = setInterval(() => { if (isVisible()) loadRejectStats() }, 60_000)
+    const tSched = setInterval(() => { if (isVisible()) loadSchedulerHealth() }, 60_000)
     return () => {
       clearInterval(tStats)
       clearInterval(tClicked)
       clearInterval(tRejects)
+      clearInterval(tSched)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, selectedCid])
@@ -812,23 +848,56 @@ export default function KeywordPoolPage() {
   const liveCollect = isFresh(lastCollect?.started_at)
   const liveRegister = isFresh(lastRegister?.started_at)
 
-  // 다음 cron 예상 시각 — 매 5분 (:00, :05, :10, ...). mounted 후에만 계산.
+  // 다음 cron 시각 — APScheduler 의 실제 next_run_time 우선, 없으면 client-side fallback.
+  // 화면이 "10:15 후 5분" 처럼 떠도 백엔드가 죽어 있으면 거짓말이라 진짜 상태로 교체.
+  const collectJob = schedulerHealth?.jobs?.find((j) => j.id === 'keyword_pool_collect')
+  const registerJob = schedulerHealth?.jobs?.find((j) => j.id === 'keyword_pool_register')
+
+  // APScheduler 의 str(datetime) 은 "2026-05-15 10:15:00.123456+09:00" 형태 — JS Date 가 파싱 가능.
+  const parseSchedTime = (s?: string | null): Date | null => {
+    if (!s) return null
+    const d = new Date(s)
+    return isNaN(d.getTime()) ? null : d
+  }
+  const nextCollectAt = parseSchedTime(collectJob?.next_run_time)
+  const nextRegisterAt = parseSchedTime(registerJob?.next_run_time)
+
   let minsToNext = 0
   let nextTickHHMM = ''
+  const schedulerKnownDown = mounted && schedulerHealth !== null && schedulerHealth.running === false
   if (mounted) {
-    const nowDate = new Date()
-    const nextTickMin = Math.ceil((nowDate.getMinutes() + 1) / 5) * 5
-    const nextTick = new Date(nowDate)
-    if (nextTickMin >= 60) {
-      nextTick.setHours(nextTick.getHours() + 1)
-      nextTick.setMinutes(0)
+    // 우선순위: 실제 register next_run (가장 빨리 도는 90s) > collect next_run > client fallback
+    const realNext = nextRegisterAt && nextCollectAt
+      ? (nextRegisterAt.getTime() < nextCollectAt.getTime() ? nextRegisterAt : nextCollectAt)
+      : (nextRegisterAt || nextCollectAt)
+    if (realNext) {
+      minsToNext = Math.max(0, Math.round((realNext.getTime() - Date.now()) / 60000))
+      nextTickHHMM = `${String(realNext.getHours()).padStart(2, '0')}:${String(realNext.getMinutes()).padStart(2, '0')}`
     } else {
-      nextTick.setMinutes(nextTickMin)
+      const nowDate = new Date()
+      const nextTickMin = Math.ceil((nowDate.getMinutes() + 1) / 5) * 5
+      const nextTick = new Date(nowDate)
+      if (nextTickMin >= 60) {
+        nextTick.setHours(nextTick.getHours() + 1)
+        nextTick.setMinutes(0)
+      } else {
+        nextTick.setMinutes(nextTickMin)
+      }
+      nextTick.setSeconds(0)
+      minsToNext = Math.max(0, Math.round((nextTick.getTime() - nowDate.getTime()) / 60000))
+      nextTickHHMM = `${String(nextTick.getHours()).padStart(2, '0')}:${String(nextTick.getMinutes()).padStart(2, '0')}`
     }
-    nextTick.setSeconds(0)
-    minsToNext = Math.max(0, Math.round((nextTick.getTime() - nowDate.getTime()) / 60000))
-    nextTickHHMM = `${String(nextTick.getHours()).padStart(2, '0')}:${String(nextTick.getMinutes()).padStart(2, '0')}`
   }
+
+  // 시드는 있는데 collect 이력이 한참 없는 상태 — 스케줄러 hang/stall 의심.
+  // (a) recent_runs 비어있고 시드 ≥1 → 첫 실행 대기 중인지 / 영구 stall 인지 사용자에게 명시
+  // (b) 마지막 collect 가 60분 이상 전 → 5분 cron 인데 정체. fly machine restart 권장.
+  const hasSeeds = seedBreakdown.length > 0
+  const lastCollectAgeMin = lastCollect && mounted
+    ? Math.round((Date.now() - new Date(lastCollect.started_at.replace(' ', 'T') + 'Z').getTime()) / 60000)
+    : null
+  const collectStalled = lastCollectAgeMin !== null && lastCollectAgeMin > 60
+  const neverRanWithSeeds = mounted && hasSeeds && !lastCollect
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white pt-24 pb-12">
@@ -1041,7 +1110,7 @@ export default function KeywordPoolPage() {
                 2. 자동 삭제 {autoCleanup.enabled ? 'ON' : 'OFF'}
               </span>
               <span className="text-xs text-gray-600">
-                매시 점수 ≤ {autoCleanup.threshold} 인 무관 KW 자동 DELETE (click 무관)
+                매 15분 점수 ≤ {autoCleanup.threshold} 인 무관 KW 자동 DELETE (click 무관)
               </span>
               <input
                 type="number"
@@ -1065,7 +1134,7 @@ export default function KeywordPoolPage() {
             <strong>저장하면 자동 (24/7):</strong>
             <span className="ml-2">매 5분 새 도메인 KW 발굴 (AI + Naver) → 매 2분 등록</span>
             <span className="mx-1">·</span>
-            <span>매시 30분 무관 KW 자동 삭제</span>
+            <span>매 15분 무관 KW 자동 삭제</span>
             <span className="mx-1">·</span>
             <span>빈 자리에 다시 채움 → 100k 까지 무한 반복</span>
           </div>
@@ -1083,15 +1152,79 @@ export default function KeywordPoolPage() {
               </div>
               <h2 className="font-bold text-gray-900">자동화 라이브 상태</h2>
             </div>
-            <div className="text-xs text-gray-500 inline-flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" />
-              다음 실행 예정 ~ {minsToNext}분 후 {nextTickHHMM && `(${nextTickHHMM})`}
+            <div className="text-xs inline-flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-gray-500" />
+              {schedulerKnownDown ? (
+                <span className="text-red-700 font-semibold">백엔드 스케줄러 정지됨</span>
+              ) : (
+                <>
+                  <span className="text-gray-500">
+                    다음 실행 ~ {minsToNext}분 후 {nextTickHHMM && `(${nextTickHHMM})`}
+                  </span>
+                  {schedulerHealth?.running && (
+                    <span className="text-[10px] text-green-700 bg-green-50 px-1.5 py-0.5 rounded">● 스케줄러 실행 중</span>
+                  )}
+                </>
+              )}
             </div>
           </div>
 
-          {!lastRun && (
+          {/* 스케줄러 자체가 죽었을 때 — 1순위 경고 (fly machine 재시작 필요) */}
+          {schedulerKnownDown && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800 mb-3">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <div>
+                  <strong>백엔드 APScheduler 가 실행 중이 아닙니다.</strong>
+                  <div className="mt-1 text-xs">
+                    fly machine 콜드 스타트 후 스케줄러가 재시작되지 않은 상태입니다.
+                    관리자에게 <code className="bg-red-100 px-1 rounded">flyctl machine restart</code> 요청이 필요합니다.
+                  </div>
+                  {schedulerHealth?.message && (
+                    <div className="mt-1 font-mono text-[11px] break-all">{schedulerHealth.message}</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 스케줄러는 살아있는데 collect 가 60분+ 정체 — fly machine 메모리/네트워크 의심 */}
+          {!schedulerKnownDown && collectStalled && lastCollectAgeMin !== null && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900 mb-3">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <div>
+                  <strong>collect cron 이 {lastCollectAgeMin}분째 정체</strong>
+                  <div className="mt-1 text-xs">
+                    5분 주기 cron 인데 마지막 실행이 한참 전입니다. fly machine 재시작 또는
+                    스케줄러 thread hang 가능성 — 로그 확인 필요.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 시드는 있는데 collect 첫 실행이 안 됐을 때 — 정상 대기 vs stall 구분 */}
+          {!schedulerKnownDown && !collectStalled && neverRanWithSeeds && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900 mb-3">
+              <div className="flex items-start gap-2">
+                <Clock className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <div>
+                  <strong>첫 collect 실행 대기 중</strong>
+                  <div className="mt-1 text-xs">
+                    시드 {seedBreakdown.length}개 등록됨. 다음 cron tick
+                    {nextTickHHMM && ` (${nextTickHHMM}, ~${minsToNext}분 후)`}
+                    에 자동 발굴이 시작됩니다.
+                    {schedulerHealth?.running && ' 스케줄러는 정상 실행 중입니다.'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!lastRun && !neverRanWithSeeds && !schedulerKnownDown && (
             <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600">
-              아직 실행 이력이 없습니다. 매 15분 cron tick에 자동 실행됩니다 — 시드를 추가하면 첫 실행에서 키워드를 발굴합니다.
+              아직 실행 이력이 없습니다. 매 5분 cron tick에 자동 실행됩니다 — 시드를 추가하면 첫 실행에서 키워드를 발굴합니다.
             </div>
           )}
 
@@ -1243,7 +1376,7 @@ export default function KeywordPoolPage() {
             </div>
           </div>
 
-          {/* 자동 cleanup — cron 이 매시 1회 점수 ≤ threshold 인 클릭 KW 자동 삭제. 항상 표시. */}
+          {/* 자동 cleanup — cron 이 매 15분 점수 ≤ threshold 인 클릭 KW 자동 삭제. 항상 표시. */}
           <div className={`flex items-center gap-2 mb-2 p-2 border rounded flex-wrap ${
             autoCleanup.enabled ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'
           }`}>
@@ -1278,7 +1411,7 @@ export default function KeywordPoolPage() {
               className="w-16 text-xs border border-gray-300 rounded px-2 py-0.5 text-right"
               disabled={autoCleanupSaving}
             />
-            <span className="text-xs text-gray-700">점 이하 클릭 KW 매시 자동 삭제 (cron, click ≥ 1)</span>
+            <span className="text-xs text-gray-700">점 이하 클릭 KW 매 15분 자동 삭제 (cron, click ≥ 1)</span>
             {autoCleanupSaving && <Loader2 className="w-3 h-3 animate-spin text-gray-400" />}
             <span className="text-xs text-gray-500 ml-auto">
               {autoCleanup.last_run_at

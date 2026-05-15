@@ -438,25 +438,50 @@ class KeywordPoolScheduler:
     async def _click_cleanup_tick(self):
         """매 15분 — auto_cleanup_enabled=1 광고주의 클릭 KW 중 점수 ≤ threshold 자동 DELETE.
         기존 GitHub Actions keyword-pool-auto-cleanup.yml 의 백엔드 내장 버전.
+
+        과거 사고: per-account `_run_auto_cleanup_for_account` 가 네이버 stats API 응답
+        지연으로 timeout 없이 무한 대기 → max_instances=1 + coalesce=True 라서 그 tick
+        한 번에 다음 모든 ticks 영구 skip (사용자 관점에선 "하루 1번만 실행" 처럼 보임).
+        per-account 600s, 전체 tick 700s 가드로 다음 tick 살아남게 보장.
         """
+        PER_ACCOUNT_TIMEOUT = 600   # 10분 — 한 광고주 stats fetch 한계
+        TICK_TIMEOUT = 700          # 11.7분 — 다음 15분 tick 전에 무조건 양보
         try:
             from routers.naver_ad import _run_auto_cleanup_for_account
             from database.naver_ad_db import list_auto_cleanup_enabled_accounts
             rows = list_auto_cleanup_enabled_accounts() or []
             if not rows:
                 return
-            for r in rows:
-                uid = int(r.get("user_id"))
-                cid = int(r.get("customer_id"))
-                thr = int(r.get("auto_cleanup_threshold") or 30)
-                try:
-                    res = await _run_auto_cleanup_for_account(uid, cid, thr)
-                    logger.info(f"[pool/click-cleanup/tick] uid={uid} cid={cid} → {res}")
-                except Exception as e:
-                    logger.error(
-                        f"[pool/click-cleanup/tick] uid={uid} cid={cid} 실패: "
-                        f"{type(e).__name__}: {e}", exc_info=True
-                    )
+
+            async def _run_all():
+                for r in rows:
+                    uid = int(r.get("user_id"))
+                    cid = int(r.get("customer_id"))
+                    thr = int(r.get("auto_cleanup_threshold") or 30)
+                    try:
+                        res = await asyncio.wait_for(
+                            _run_auto_cleanup_for_account(uid, cid, thr),
+                            timeout=PER_ACCOUNT_TIMEOUT,
+                        )
+                        logger.info(f"[pool/click-cleanup/tick] uid={uid} cid={cid} → {res}")
+                    except asyncio.TimeoutError:
+                        logger.error(
+                            f"[pool/click-cleanup/tick] uid={uid} cid={cid} TIMEOUT "
+                            f"({PER_ACCOUNT_TIMEOUT}s) — Naver stats API hang 의심. skip 후 다음 광고주 진행"
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"[pool/click-cleanup/tick] uid={uid} cid={cid} 실패: "
+                            f"{type(e).__name__}: {e}", exc_info=True
+                        )
+
+            try:
+                await asyncio.wait_for(_run_all(), timeout=TICK_TIMEOUT)
+            except asyncio.TimeoutError:
+                logger.error(
+                    f"[pool/click-cleanup/tick] 전체 tick TIMEOUT ({TICK_TIMEOUT}s) — "
+                    f"다음 15분 tick 으로 양보. accounts={len(rows)}"
+                )
         except Exception as e:
             logger.error(f"[pool/click-cleanup/tick] tick 실패: {type(e).__name__}: {e}", exc_info=True)
 
