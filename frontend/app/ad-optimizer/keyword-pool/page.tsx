@@ -238,6 +238,11 @@ export default function KeywordPoolPage() {
     setManualTargets([])
     setManualSelected(new Set())
     setManualMeta(null)
+    // autoCleanup / relevanceInput 도 리셋 — loadAutoCleanup 이 retry 3회 + 45s timeout 으로
+    // 최대 ~135s 걸려서, 그 동안 textarea 가 이전 광고주의 도메인 키워드 (예: 피부염) 를
+    // 보여줘 사용자에게 "메디론(의사대출) 인데 피부염 도메인이 떠 있다" 혼란 발생.
+    setAutoCleanup({ enabled: false, threshold: 30, last_run_at: null, last_deleted: 0, relevance_keywords: [] })
+    setRelevanceInput('')
     // 새 광고주의 default_bid 입력란에 반영
     const acct = accounts.find(a => a.customer_id === cid)
     if (acct?.default_bid != null) setBidInput(String(acct.default_bid))
