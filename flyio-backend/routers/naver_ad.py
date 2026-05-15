@@ -6064,23 +6064,34 @@ async def _run_auto_cleanup_for_account(
     end_date = datetime.now().strftime("%Y-%m-%d")
     start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
 
-    ids = list(keyword_map.keys())[:1500]
-    # sem=20 → sem=3. Naver outbound 폭주 시 circuit breaker (threshold=10) OPEN 빠르게
-    # 진입 막음. 1500 ÷ 3 ≈ 500 round × ~200ms = 100s 내 완료 (정상 시).
-    sem = asyncio.Semaphore(3)
+    # 1500 → 600. Naver stats API 응답 지연 (개당 1~5s) 으로 sem=3 직렬화 시 600s 도
+    # 못 끝남 사례 다수 (cid=4362992 등). per-call timeout 으로 hang 차단 + sem=5 병렬도 ↑.
+    # 600 ÷ 5 = 120 round × max 5s = 600s worst, 정상 시 120 × 200ms = 24s.
+    ids = list(keyword_map.keys())[:600]
+    sem = asyncio.Semaphore(5)
     from services.naver_ad_service import _stats_breaker, NaverApiCircuitOpenError
 
+    PER_CALL_TIMEOUT = 5.0  # 한 stats 요청 5s 안 응답 → skip (KW 1개 잃음, hang 차단)
+    n_stats_timeout = 0
+
     async def _fetch_one(kid: str) -> List[dict]:
+        nonlocal n_stats_timeout
         # stats circuit OPEN 시 진입 즉시 skip — sem 점유 안 함
         if _stats_breaker.is_open():
             return []
         async with sem:
             try:
-                stats = await client.get_stats(
-                    stat_type="KEYWORD", ids=[kid],
-                    start_date=start_date, end_date=end_date,
+                stats = await asyncio.wait_for(
+                    client.get_stats(
+                        stat_type="KEYWORD", ids=[kid],
+                        start_date=start_date, end_date=end_date,
+                    ),
+                    timeout=PER_CALL_TIMEOUT,
                 )
                 return stats or []
+            except asyncio.TimeoutError:
+                n_stats_timeout += 1
+                return []
             except NaverApiCircuitOpenError:
                 return []
             except Exception as e:
@@ -6089,6 +6100,11 @@ async def _run_auto_cleanup_for_account(
 
     results = await asyncio.gather(*[_fetch_one(kid) for kid in ids])
     all_stats = [s for batch in results for s in batch]
+    if n_stats_timeout > 0:
+        logger.warning(
+            f"[auto-cleanup] uid={user_id} cid={customer_id} stats per-call timeout "
+            f"{n_stats_timeout}/{len(ids)} (5s 초과 — Naver API 응답 지연)"
+        )
     logger.warning(
         f"[auto-cleanup] uid={user_id} cid={customer_id} stats fetched ids={len(ids)} "
         f"non_empty={len(all_stats)} circuit_open={_stats_breaker.is_open()}"
