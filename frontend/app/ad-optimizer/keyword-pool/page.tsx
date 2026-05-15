@@ -1124,7 +1124,8 @@ export default function KeywordPoolPage() {
               />
               {autoCleanup.last_run_at && (
                 <span className="ml-auto text-[11px] text-gray-500">
-                  최근 실행: {new Date(autoCleanup.last_run_at).toLocaleString('ko-KR')} · 삭제 {autoCleanup.last_deleted}개
+                  {/* SQLite CURRENT_TIMESTAMP 는 UTC naive — "T"+"Z" 안 붙이면 JS 가 local KST 로 잘못 해석해 9시간 일찍 표시됨 */}
+                  최근 실행: {new Date(autoCleanup.last_run_at.replace(' ', 'T') + 'Z').toLocaleString('ko-KR')} · 삭제 {autoCleanup.last_deleted}개
                 </span>
               )}
             </div>
