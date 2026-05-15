@@ -6124,7 +6124,9 @@ async def _run_auto_cleanup_for_account(
     n_deleted = 0
     n_paused = 0
     n_failed = 0
+    n_stale_purged = 0  # 네이버 404 = 이미 사라진 KW → DB stale row 만 정리
     affected: List[str] = []
+    import httpx as _httpx
     for kid, kw_text, _score in targets:
         try:
             await client.delete_keyword(kid)
@@ -6135,6 +6137,25 @@ async def _run_auto_cleanup_for_account(
                 )
             n_deleted += 1
             affected.append(kw_text)
+        except _httpx.HTTPStatusError as e:
+            # 404 "No permission to access the resource" = 네이버 콘솔에서 이미 사라진 KW.
+            # 옛 코드는 fail 카운트해서 DB row 영구 보존 → 한도 stale, register 가 cap 거부됨.
+            # 이제 DB row 도 같이 제거 → 실제 한도 회수.
+            if getattr(e, "response", None) is not None and e.response.status_code == 404:
+                with _sqlite3.connect(reg.db_path) as conn:
+                    conn.execute(
+                        "DELETE FROM registered_keywords WHERE account_customer_id=? AND ncc_keyword_id=?",
+                        (customer_id, kid),
+                    )
+                n_stale_purged += 1
+                affected.append(kw_text)
+            else:
+                try:
+                    await client.pause_keyword(kid)
+                    n_paused += 1
+                    affected.append(kw_text)
+                except Exception:
+                    n_failed += 1
         except Exception:
             try:
                 await client.pause_keyword(kid)
@@ -6150,21 +6171,22 @@ async def _run_auto_cleanup_for_account(
             [{"keyword": kw, "reason": f"자동 cleanup (점수≤{threshold})"} for kw in affected],
         )
     # 실행 이력 — 화면 '최근 실행 이력' 표에 노출
+    total_purged = n_deleted + n_stale_purged
     try:
         pool.record_run(
             user_id, customer_id, "inspect",
-            "success" if n_deleted > 0 else "no_new",
-            registered=0, failed=n_failed, skipped=n_deleted,
+            "success" if total_purged > 0 else "no_new",
+            registered=0, failed=n_failed, skipped=total_purged,
             seeds_count=len(targets),
             error_message=(
-                f"자동 cleanup (점수≤{threshold}) — DELETE {n_deleted} / PAUSE {n_paused} / 실패 {n_failed}"
-                if (n_deleted or n_paused or n_failed) else f"자동 cleanup (점수≤{threshold}) — 대상 0"
+                f"자동 cleanup (점수≤{threshold}) — DELETE {n_deleted} / 404 stale {n_stale_purged} / PAUSE {n_paused} / 실패 {n_failed}"
+                if (total_purged or n_paused or n_failed) else f"자동 cleanup (점수≤{threshold}) — 대상 0"
             ),
         )
     except Exception:
         pass
 
-    record_auto_cleanup_run(user_id, str(customer_id), n_deleted + n_paused)
+    record_auto_cleanup_run(user_id, str(customer_id), total_purged + n_paused)
 
     # 임계 auto-promote — cleanup 직후 풀의 점수 분포 검사 → 90%+ 가 thr+10 이상이면
     # threshold 를 +10 상향. 점진 수렴: 30 → 40 → 50 → ... → 80 cap.
@@ -6187,6 +6209,7 @@ async def _run_auto_cleanup_for_account(
         "threshold": threshold,
         "candidates": len(targets),
         "deleted": n_deleted,
+        "stale_purged": n_stale_purged,
         "paused": n_paused,
         "failed": n_failed,
     }
@@ -6377,24 +6400,41 @@ async def _run_domain_cleanup_for_account(
     client.secret_key = account["secret_key"]
 
     n_del, n_pause, n_fail = 0, 0, 0
+    n_stale = 0  # 네이버 404 = 이미 사라진 KW. 옛 코드는 fail 처리 → DB stale 누적, 한도 영구 막힘.
     affected_kws: List[str] = []
-    for kid, kw_text, _s in targets:
-        try:
-            await client.delete_keyword(kid)
-            with _sqlite3.connect(reg.db_path) as c:
-                c.execute(
-                    "DELETE FROM registered_keywords "
-                    "WHERE account_customer_id=? AND ncc_keyword_id=?",
-                    (customer_id, kid),
-                )
+    import httpx as _httpx
+    def _purge_db(kid_: str, kw_: str):
+        with _sqlite3.connect(reg.db_path) as c:
+            c.execute(
+                "DELETE FROM registered_keywords "
+                "WHERE account_customer_id=? AND ncc_keyword_id=?",
+                (customer_id, kid_),
+            )
+        if kw_:
             with _sqlite3.connect(pool.db_path) as c:
                 c.execute(
                     "UPDATE naverad_keyword_pool SET status='deleted' "
                     "WHERE account_customer_id=? AND keyword=?",
-                    (customer_id, kw_text),
+                    (customer_id, kw_),
                 )
+    for kid, kw_text, _s in targets:
+        try:
+            await client.delete_keyword(kid)
+            _purge_db(kid, kw_text)
             n_del += 1
             if kw_text: affected_kws.append(kw_text)
+        except _httpx.HTTPStatusError as e:
+            if getattr(e, "response", None) is not None and e.response.status_code == 404:
+                _purge_db(kid, kw_text)
+                n_stale += 1
+                if kw_text: affected_kws.append(kw_text)
+            else:
+                try:
+                    await client.pause_keyword(kid)
+                    n_pause += 1
+                    if kw_text: affected_kws.append(kw_text)
+                except Exception:
+                    n_fail += 1
         except Exception:
             try:
                 await client.pause_keyword(kid)
@@ -6404,16 +6444,17 @@ async def _run_domain_cleanup_for_account(
                 n_fail += 1
         await asyncio.sleep(0.15)
 
+    total_purged = n_del + n_stale
     try:
-        record_auto_cleanup_run(user_id, str(customer_id), n_del + n_pause)
+        record_auto_cleanup_run(user_id, str(customer_id), total_purged + n_pause)
         pool.record_run(
             user_id, customer_id, "inspect",
-            "success" if n_del > 0 else "no_new",
-            registered=0, failed=n_fail, skipped=n_del,
+            "success" if total_purged > 0 else "no_new",
+            registered=0, failed=n_fail, skipped=total_purged,
             seeds_count=len(score_basis),
             error_message=(
                 f"도메인 자동 정리 ({basis}, click 무관) — DELETE {n_del} / "
-                f"PAUSE {n_pause} / 실패 {n_fail} / 점수≤{threshold}"
+                f"404 stale {n_stale} / PAUSE {n_pause} / 실패 {n_fail} / 점수≤{threshold}"
             ),
             duration_ms=int((_t.monotonic() - t0) * 1000),
         )
@@ -6421,11 +6462,11 @@ async def _run_domain_cleanup_for_account(
         pass
     logger.warning(
         f"[domain-cleanup] uid={user_id} cid={customer_id} basis={basis} "
-        f"thr={threshold} → del={n_del} pause={n_pause} fail={n_fail}"
+        f"thr={threshold} → del={n_del} stale={n_stale} pause={n_pause} fail={n_fail}"
     )
     return {
-        "customer_id": customer_id, "deleted": n_del, "paused": n_pause,
-        "failed": n_fail, "basis": basis, "threshold": threshold,
+        "customer_id": customer_id, "deleted": n_del, "stale_purged": n_stale,
+        "paused": n_pause, "failed": n_fail, "basis": basis, "threshold": threshold,
         "below_threshold_total": len(targets), "total_registered": len(scored),
     }
 
