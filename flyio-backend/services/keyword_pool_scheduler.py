@@ -409,10 +409,15 @@ class KeywordPoolScheduler:
             logger.error(f"[pool/scheduler] register tick 실패: {type(e).__name__}: {e}", exc_info=True)
 
     async def _domain_cleanup_tick(self):
-        """매 1시간 — auto_cleanup_enabled=1 광고주의 도메인 안 맞는 등록 KW 자동 DELETE.
+        """매 30분 — auto_cleanup_enabled=1 광고주의 도메인 안 맞는 등록 KW 자동 DELETE.
         click 무관 — 100k 풀의 무관 잔재 점진 청소 (max_delete=500/광고주).
         빈 자리는 collect/register 가 새 도메인 KW 로 채움 → 100k 자기치유.
+
+        click_cleanup_tick 과 동일 사고 (Naver API hang → 다음 tick 영구 skip) 가드:
+        per-account 1200s, 전체 1500s timeout.
         """
+        PER_ACCOUNT_TIMEOUT = 1200  # 20분 — 광고주 95k+ 등록 KW 점수 매김 + DELETE 500개
+        TICK_TIMEOUT = 1500         # 25분 — 다음 30분 tick 전 양보
         try:
             from routers.naver_ad import _run_domain_cleanup_for_account
             from database.naver_ad_db import list_auto_cleanup_enabled_accounts
@@ -420,18 +425,36 @@ class KeywordPoolScheduler:
             if not rows:
                 logger.info("[pool/domain-cleanup/tick] 자동 cleanup ON 광고주 없음 — skip")
                 return
-            for r in rows:
-                uid = int(r.get("user_id"))
-                cid = int(r.get("customer_id"))
-                thr = int(r.get("auto_cleanup_threshold") or 30)
-                try:
-                    res = await _run_domain_cleanup_for_account(uid, cid, thr, max_delete=500)
-                    logger.warning(f"[pool/domain-cleanup/tick] uid={uid} cid={cid} thr={thr} → {res}")
-                except Exception as e:
-                    logger.error(
-                        f"[pool/domain-cleanup/tick] uid={uid} cid={cid} 실패: "
-                        f"{type(e).__name__}: {e}", exc_info=True
-                    )
+
+            async def _run_all():
+                for r in rows:
+                    uid = int(r.get("user_id"))
+                    cid = int(r.get("customer_id"))
+                    thr = int(r.get("auto_cleanup_threshold") or 30)
+                    try:
+                        res = await asyncio.wait_for(
+                            _run_domain_cleanup_for_account(uid, cid, thr, max_delete=500),
+                            timeout=PER_ACCOUNT_TIMEOUT,
+                        )
+                        logger.warning(f"[pool/domain-cleanup/tick] uid={uid} cid={cid} thr={thr} → {res}")
+                    except asyncio.TimeoutError:
+                        logger.error(
+                            f"[pool/domain-cleanup/tick] uid={uid} cid={cid} TIMEOUT "
+                            f"({PER_ACCOUNT_TIMEOUT}s) — skip 후 다음 광고주 진행"
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"[pool/domain-cleanup/tick] uid={uid} cid={cid} 실패: "
+                            f"{type(e).__name__}: {e}", exc_info=True
+                        )
+
+            try:
+                await asyncio.wait_for(_run_all(), timeout=TICK_TIMEOUT)
+            except asyncio.TimeoutError:
+                logger.error(
+                    f"[pool/domain-cleanup/tick] 전체 tick TIMEOUT ({TICK_TIMEOUT}s) — "
+                    f"다음 30분 tick 으로 양보. accounts={len(rows)}"
+                )
         except Exception as e:
             logger.error(f"[pool/domain-cleanup/tick] tick 실패: {type(e).__name__}: {e}", exc_info=True)
 

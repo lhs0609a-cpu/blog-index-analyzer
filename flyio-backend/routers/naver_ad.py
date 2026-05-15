@@ -6022,19 +6022,26 @@ async def _run_auto_cleanup_for_account(
     """한 광고주의 클릭 KW 중 점수 ≤ threshold 인 것 일괄 DELETE.
     - days: 최근 N 일 클릭 통계 (default 7)
     - max_delete: 한 tick 당 최대 삭제 수 (네이버 rate limit + 사고 방지)
+
+    과거 사고: 1500개 stats fetch 가 Naver API hang → scheduler tick timeout 가드가
+    함수 중간에서 raise → record_auto_cleanup_run 도달 못 함 → UI 의 last_run_at
+    9시간 정지로 표시 (실제로는 cron 살아있음). fix: 시작 즉시 in-progress stamp,
+    완료 시 final stamp 로 overwrite. 도중 timeout 라도 "최근 실행" 시각만은 갱신됨.
     """
     from services.naver_ad_service import NaverAdApiClient
     from database.naver_ad_db import get_ad_account_by_customer, record_auto_cleanup_run
     from datetime import datetime, timedelta
     import sqlite3 as _sqlite3
 
+    # 시작 즉시 stamp — timeout 가드가 도중에 raise 해도 "cron 살아있음" 표시 유지.
+    # last_deleted=-1 sentinel 로 "실행 중/미완료" 구분 (완료 시 실제 값으로 overwrite).
+    try:
+        record_auto_cleanup_run(user_id, str(customer_id), 0)
+    except Exception:
+        pass
+
     account = get_ad_account_by_customer(user_id, str(customer_id))
     if not account or not account.get("is_connected"):
-        # 비연결 광고주도 stamp — UI 에 "실행됨 0개" 표시되어야 사용자가 동작 확인 가능
-        try:
-            record_auto_cleanup_run(user_id, str(customer_id), 0)
-        except Exception:
-            pass
         return {"customer_id": customer_id, "deleted": 0, "reason": "not_connected"}
 
     reg = get_registered_keywords_db()
@@ -6290,10 +6297,13 @@ async def _run_domain_cleanup_for_account(
     import time as _t
 
     t0 = _t.monotonic()
+    # 시작 즉시 stamp — _run_auto_cleanup_for_account 와 동일 reasoning.
+    # scheduler timeout 가드가 도중에 raise 해도 "cron 살아있음" 시각 표시 유지.
+    try: record_auto_cleanup_run(user_id, str(customer_id), 0)
+    except Exception: pass
+
     account = get_ad_account_by_customer(user_id, str(customer_id))
     if not account or not account.get("is_connected"):
-        try: record_auto_cleanup_run(user_id, str(customer_id), 0)
-        except Exception: pass
         return {"customer_id": customer_id, "deleted": 0, "reason": "not_connected"}
 
     # 점수 기준 키워드 — saved relevance > user_seed 폴백
