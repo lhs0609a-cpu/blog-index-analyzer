@@ -42,11 +42,15 @@ class KeywordPoolScheduler:
             coalesce=True,
             next_run_time=_now + timedelta(seconds=10),
         )
+        # register 90→180s. 풀 100% 가득 (account keyword cap) 상태에서 register 가
+        # 매 90초마다 1000개 pending 을 모두 cap 거부로 폐기 — fly CPU 낭비 + 사용자
+        # API 진동 timeout 사고. cleanup 이 슬롯 회수하는 데 분 단위 걸리므로 180s
+        # 충분. 진짜 slot 회수 시점은 register 가 자체 감지 못 하니 cron 으로 폴.
         self.scheduler.add_job(
             self._register_only,
-            IntervalTrigger(seconds=90),
+            IntervalTrigger(seconds=180),
             id="keyword_pool_register",
-            name="키워드 풀 register (90초 주기, 빠른 채움)",
+            name="키워드 풀 register (3분 주기)",
             replace_existing=True,
             max_instances=1,
             coalesce=True,
@@ -151,7 +155,7 @@ class KeywordPoolScheduler:
         )
         logger.warning(
             f"[pool/scheduler] 시작 (AI-first 빠른 채움) — collect {interval_seconds}s / "
-            f"register 90s / inspect 600s / ai_classify 300s / "
+            f"register 180s / inspect 600s / ai_classify 300s / "
             f"autocomplete 300s / seed_amplify 600s / {_ai_cleanup_status} / "
             f"{_domain_cleanup_status} / click_cleanup 900s"
         )
