@@ -6266,19 +6266,21 @@ async def _run_auto_cleanup_for_account(
 
 async def _maybe_promote_auto_cleanup_threshold(
     user_id: int, customer_id: int, current_threshold: int,
-    *, sample_size: int = 1500, promote_step: int = 10,
-    promote_ratio: float = 0.90, max_threshold: int = 80,
+    *, sample_size: int = 1500, promote_step: int = 5,
+    promote_ratio: float = 0.75, max_threshold: int = 75,
 ) -> Optional[int]:
     """풀의 점수 분포 검사 후 threshold 자동 상향.
 
     조건 (모두 충족 시 +promote_step):
-      - current_threshold < max_threshold (80 이상이면 더 안 올림)
+      - current_threshold < max_threshold (75 이상이면 더 안 올림)
       - 등록 KW 수 ≥ 5000 (샘플 신뢰성)
-      - 샘플 1500 random 중 ≥ promote_ratio(90%) 가 점수 ≥ current_threshold + promote_step
+      - 샘플 1500 random 중 ≥ promote_ratio(75%) 가 점수 ≥ current_threshold + promote_step
 
     why: cleanup 으로 점수≤thr KW 빠지면 풀 점수 분포가 thr 이상으로 수렴.
-    분포의 90%가 thr+10 까지 도달했다면 다음 단계로 진입할 수 있다는 신호.
-    cap=80 — 너무 엄격해지면 빈 슬롯 못 채움 위험.
+    분포의 75%가 thr+5 까지 도달했다면 다음 단계로 진입할 수 있다는 신호.
+    구버전 (ratio 0.90, step 10) 은 promote 너무 보수적이라 풀 점수 31~39 분포에서
+    영원히 promote 안 됨 → cleanup 대상 0 영구 정체 사고. 75% / +5 로 점진 적응.
+    cap=75 — 너무 엄격해지면 빈 슬롯 못 채움 위험.
     """
     from database.naver_ad_db import (
         get_ad_account_relevance_keywords, update_ad_account_auto_cleanup,
