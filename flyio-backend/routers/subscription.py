@@ -167,8 +167,13 @@ async def get_plan_info(plan_type: str):
 # ============ 구독 관리 API ============
 
 @router.get("/me")
-async def get_my_subscription(user_id: int = Query(..., description="사용자 ID")):
-    """내 구독 정보 조회"""
+def get_my_subscription(user_id: int = Query(..., description="사용자 ID")):
+    """내 구독 정보 조회.
+
+    sync def — FastAPI 가 자동으로 threadpool 에 dispatch.
+    cron 이 event loop 점유 중이어도 threadpool worker 가 sqlite 읽고 즉시 응답.
+    (async def 였을 때 /usage 45s timeout 폭주 사고 차단)
+    """
     # 관리자 체크 - business 플랜으로 반환
     try:
         user_db_inst = get_user_db()
@@ -254,8 +259,11 @@ async def cancel_plan(user_id: int = Query(..., description="사용자 ID")):
 # ============ 사용량 API ============
 
 @router.get("/usage")
-async def get_usage(user_id: int = Query(..., description="사용자 ID")):
-    """오늘 사용량 조회"""
+def get_usage(user_id: int = Query(..., description="사용자 ID")):
+    """오늘 사용량 조회.
+
+    sync def — threadpool dispatch. event loop 무관하게 즉시 응답.
+    """
     subscription = get_user_subscription(user_id)
 
     # 고아 구독 검증
@@ -287,11 +295,11 @@ async def get_usage(user_id: int = Query(..., description="사용자 ID")):
 
 
 @router.get("/usage/check")
-async def check_limit(
+def check_limit(
     user_id: int = Query(..., description="사용자 ID"),
     usage_type: str = Query(..., description="사용 유형 (keyword_search, blog_analysis)")
 ):
-    """사용량 제한 확인"""
+    """사용량 제한 확인 — sync def → threadpool."""
     if usage_type not in ["keyword_search", "blog_analysis"]:
         raise HTTPException(status_code=400, detail="유효하지 않은 사용 유형입니다")
 

@@ -69,6 +69,12 @@ from database.naver_ad_db import (
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# cleanup-by-score 의 BackgroundTask 동시 실행 제한 — 광고주별 1개만.
+# 사용자가 긴급삭제 버튼을 연타하거나 두 탭에서 동시에 누르면 50k DELETE 작업이
+# 여러 개 쌓여서 event loop CPU + Naver API rate limit 폭주. customer_id 단위로
+# 진행 중 표식 두고 두 번째 요청은 즉시 409 반환.
+_BULK_CLEANUP_RUNNING: set[int] = set()
+
 # 테이블 초기화
 try:
     init_naver_ad_tables()
@@ -7031,51 +7037,66 @@ async def keyword_pool_registered_cleanup_by_score(
     client.api_key = account["api_key"]
     client.secret_key = account["secret_key"]
 
+    # 동시 실행 방어 — 같은 광고주에서 이미 bulk cleanup 진행 중이면 409.
+    # 연타/멀티탭에서 50k 작업이 N배 쌓이면 event loop CPU + Naver rate limit 사고.
+    if cid in _BULK_CLEANUP_RUNNING:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"이 광고주 (cid={cid}) 의 일괄 삭제 작업이 이미 진행 중입니다. "
+                f"완료까지 기다려주세요 (예상 {round(len(targets_capped) * 0.18 / 60, 1)}분)."
+            ),
+        )
+
     async def _run():
-        n_del, n_pause, n_fail = 0, 0, 0
-        affected: List[str] = []
-        for kid, kw_text, _s in targets_capped:
-            try:
-                await client.delete_keyword(kid)
-                with _sqlite3.connect(reg.db_path) as c:
-                    c.execute(
-                        "DELETE FROM registered_keywords "
-                        "WHERE account_customer_id=? AND ncc_keyword_id=?",
-                        (cid, kid),
-                    )
-                n_del += 1
-                affected.append(kw_text)
-            except Exception:
+        _BULK_CLEANUP_RUNNING.add(cid)
+        try:
+            n_del, n_pause, n_fail = 0, 0, 0
+            affected: List[str] = []
+            for kid, kw_text, _s in targets_capped:
                 try:
-                    await client.pause_keyword(kid)
-                    n_pause += 1
+                    await client.delete_keyword(kid)
+                    with _sqlite3.connect(reg.db_path) as c:
+                        c.execute(
+                            "DELETE FROM registered_keywords "
+                            "WHERE account_customer_id=? AND ncc_keyword_id=?",
+                            (cid, kid),
+                        )
+                    n_del += 1
                     affected.append(kw_text)
                 except Exception:
-                    n_fail += 1
-            await asyncio.sleep(0.15)
-        if affected:
-            pool.mark_rejected_by_naver(
-                cid,
-                [{"keyword": kw, "reason": f"수동 점수 정리(≤{threshold})"} for kw in affected],
+                    try:
+                        await client.pause_keyword(kid)
+                        n_pause += 1
+                        affected.append(kw_text)
+                    except Exception:
+                        n_fail += 1
+                await asyncio.sleep(0.15)
+            if affected:
+                pool.mark_rejected_by_naver(
+                    cid,
+                    [{"keyword": kw, "reason": f"수동 점수 정리(≤{threshold})"} for kw in affected],
+                )
+            try:
+                pool.record_run(
+                    user_id, cid, "inspect",
+                    "success" if n_del > 0 else "no_new",
+                    registered=0, failed=n_fail, skipped=n_del,
+                    seeds_count=len(targets_capped),
+                    error_message=(
+                        f"수동 점수 정리 (점수≤{threshold}) — "
+                        f"DELETE {n_del} / PAUSE {n_pause} / 실패 {n_fail}"
+                    ),
+                )
+            except Exception:
+                pass
+            record_auto_cleanup_run(user_id, str(cid), n_del + n_pause)
+            logger.warning(
+                f"[manual-cleanup] uid={user_id} cid={cid} thr={threshold} "
+                f"→ del={n_del} pause={n_pause} fail={n_fail}"
             )
-        try:
-            pool.record_run(
-                user_id, cid, "inspect",
-                "success" if n_del > 0 else "no_new",
-                registered=0, failed=n_fail, skipped=n_del,
-                seeds_count=len(targets_capped),
-                error_message=(
-                    f"수동 점수 정리 (점수≤{threshold}) — "
-                    f"DELETE {n_del} / PAUSE {n_pause} / 실패 {n_fail}"
-                ),
-            )
-        except Exception:
-            pass
-        record_auto_cleanup_run(user_id, str(cid), n_del + n_pause)
-        logger.warning(
-            f"[manual-cleanup] uid={user_id} cid={cid} thr={threshold} "
-            f"→ del={n_del} pause={n_pause} fail={n_fail}"
-        )
+        finally:
+            _BULK_CLEANUP_RUNNING.discard(cid)
 
     background_tasks.add_task(_run)
     return {

@@ -20,28 +20,57 @@ export default function UsageIndicator({ compact = false, showUpgrade = true }: 
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    if (isAuthenticated && user?.id) {
-      loadUsage()
+    if (!isAuthenticated || !user?.id) return
+
+    // 캐시 즉시 hydrate — backend slow 일 때 UI 가 빈 상태로 머무는 사고 차단
+    const cacheKey = `usage_cache_v1_${user.id}`
+    try {
+      const raw = localStorage.getItem(cacheKey)
+      if (raw) {
+        const cached = JSON.parse(raw)
+        if (cached?.usage) setUsage(cached.usage)
+        if (cached?.subscription) setSubscription(cached.subscription)
+        if (cached?.usage || cached?.subscription) setIsLoading(false)
+      }
+    } catch {}
+
+    let cancelled = false
+
+    const loadUsage = async () => {
+      if (!user?.id || cancelled) return
+      // allSettled — usage 만 살아도 부분 표시. 한쪽 실패가 다른 쪽 망치지 않도록.
+      const [usageRes, subRes] = await Promise.allSettled([
+        getUsage(user.id),
+        getMySubscription(user.id),
+      ])
+      if (cancelled) return
+      let fresh: { usage?: any; subscription?: any } = {}
+      if (usageRes.status === 'fulfilled') {
+        setUsage(usageRes.value)
+        fresh.usage = usageRes.value
+      }
+      if (subRes.status === 'fulfilled') {
+        setSubscription(subRes.value)
+        fresh.subscription = subRes.value
+      }
+      if (fresh.usage || fresh.subscription) {
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify(fresh))
+        } catch {}
+      }
+      if (usageRes.status === 'rejected' && subRes.status === 'rejected') {
+        // 둘 다 실패 — 30s 뒤 한 번 더. (백엔드 cron tick 통과 대기)
+        if (!cancelled) setTimeout(loadUsage, 30000)
+      }
+      setIsLoading(false)
+    }
+
+    loadUsage()
+    return () => {
+      cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user])
-
-  const loadUsage = async () => {
-    if (!user?.id) return
-
-    try {
-      const [usageData, subData] = await Promise.all([
-        getUsage(user.id),
-        getMySubscription(user.id)
-      ])
-      setUsage(usageData)
-      setSubscription(subData)
-    } catch (error) {
-      console.error('Failed to load usage:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   // 로그인하지 않은 경우 표시하지 않음
   if (!isAuthenticated || isLoading) {

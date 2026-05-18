@@ -17,6 +17,9 @@ primary_region = "nrt"
   processes = ["app"]
 
 [[vm]]
-  memory = "2048mb"
+  # cpus 1 → 2: FastAPI sync def (threadpool) 와 async event loop (cron) 가 별도 코어.
+  # 단일 머신 유지 — fly volume 은 1머신만 마운트 가능 (SQLite 다중-프로세스 쓰기 회피).
+  # memory 2G → 3G: cron heavy task (substring check 12k tokens × 50k rows) 여유.
+  memory = "3072mb"
   cpu_kind = "shared"
-  cpus = 1
+  cpus = 2

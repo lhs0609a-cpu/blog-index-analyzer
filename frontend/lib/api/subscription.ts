@@ -102,16 +102,36 @@ export async function getPlanInfo(planType: PlanType): Promise<PlanInfo> {
 // ============ 구독 API ============
 
 // 사용량/구독 조회는 단순 PK 조회지만 backend 가 cron tick (naver API timeout
-// 폭주 시 30s+ blocking) 동안 응답 못 함. 너무 짧으면 매 cron tick 마다 timeout.
-// 45s 면 대부분 cron tick window 통과 (~30s) 후 응답 받음.
-const LIGHT_READ_TIMEOUT_MS = 45000
+// 폭주 시 30s+ blocking) 동안 응답 못 함. scheduler 분리 후에도 worst-case 보호.
+const LIGHT_READ_TIMEOUT_MS = 60000
+
+// 일시적 timeout/네트워크 에러는 1회 재시도. 영구 4xx 는 즉시 throw.
+async function lightRead<T>(path: string, params: Record<string, unknown>): Promise<T> {
+  const attempt = async () => {
+    const response = await apiClient.get(path, {
+      params,
+      timeout: LIGHT_READ_TIMEOUT_MS,
+    })
+    return response.data as T
+  }
+  try {
+    return await attempt()
+  } catch (e: any) {
+    const code = e?.code
+    const status = e?.response?.status
+    // 4xx (auth/validation) 는 retry 무의미
+    if (status && status >= 400 && status < 500) throw e
+    // timeout / network / 5xx 만 1회 재시도 (250ms 백오프)
+    if (code === 'ECONNABORTED' || code === 'ERR_NETWORK' || !status || status >= 500) {
+      await new Promise(r => setTimeout(r, 250))
+      return await attempt()
+    }
+    throw e
+  }
+}
 
 export async function getMySubscription(userId: number | string): Promise<Subscription> {
-  const response = await apiClient.get('/api/subscription/me', {
-    params: { user_id: userId },
-    timeout: LIGHT_READ_TIMEOUT_MS,
-  })
-  return response.data
+  return lightRead<Subscription>('/api/subscription/me', { user_id: userId })
 }
 
 export async function upgradeSubscription(
@@ -138,11 +158,7 @@ export async function cancelSubscription(userId: number | string): Promise<{ suc
 // ============ 사용량 API ============
 
 export async function getUsage(userId: number | string): Promise<UsageInfo> {
-  const response = await apiClient.get('/api/subscription/usage', {
-    params: { user_id: userId },
-    timeout: LIGHT_READ_TIMEOUT_MS,
-  })
-  return response.data
+  return lightRead<UsageInfo>('/api/subscription/usage', { user_id: userId })
 }
 
 export async function checkUsageLimit(

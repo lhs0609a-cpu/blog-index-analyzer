@@ -24,6 +24,25 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Process group gate — scheduler/cron 분리.
+# fly.io 가 process group 이름을 FLY_PROCESS_GROUP env 로 주입한다 (app | worker).
+# 로컬/단일 머신은 ROLE 미설정 → "all" 폴백 (기존 동작 유지, backwards compatible).
+#
+# - app:    사용자 HTTP 만 처리. cron/heavy scheduler 미기동 → /usage 등 즉시 응답.
+# - worker: cron/heavy scheduler 만 기동. uvicorn 은 살아있으나 트래픽 안 받음
+#           (fly services 는 app group 바인딩).
+# - all:    둘 다 (단일 머신 모드, 로컬 dev).
+# ─────────────────────────────────────────────────────────────────────────────
+PROCESS_GROUP = os.getenv("FLY_PROCESS_GROUP") or os.getenv("ROLE", "all")
+RUN_SCHEDULERS = PROCESS_GROUP in ("worker", "all")
+RUN_API_ONLY = PROCESS_GROUP == "app"
+logger_init = logging.getLogger(__name__)
+logger_init.warning(
+    f"[lifespan] PROCESS_GROUP={PROCESS_GROUP} RUN_SCHEDULERS={RUN_SCHEDULERS}"
+)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """애플리케이션 라이프사이클 관리"""
@@ -31,6 +50,7 @@ async def lifespan(app: FastAPI):
     logger.info(f"🚀 {settings.APP_NAME} starting up...")
     logger.info(f"Environment: {settings.APP_ENV}")
     logger.info(f"Debug mode: {settings.DEBUG}")
+    logger.warning(f"🎭 Process group: {PROCESS_GROUP} (schedulers={RUN_SCHEDULERS})")
 
     # 데이터베이스 연결 초기화
     try:
@@ -160,12 +180,15 @@ async def lifespan(app: FastAPI):
         logger.warning(f"⚠️ Keyword analysis tables initialization failed: {e}")
 
     # 자동 백업 스케줄러 시작 (2시간마다 - 리소스 절약)
-    try:
-        from services.backup_service import backup_scheduler
-        backup_scheduler.start()
-        logger.info("✅ Backup scheduler started (every 2 hours)")
-    except Exception as e:
-        logger.warning(f"⚠️ Backup scheduler failed to start: {e}")
+    if RUN_SCHEDULERS:
+        try:
+            from services.backup_service import backup_scheduler
+            backup_scheduler.start()
+            logger.info("✅ Backup scheduler started (every 2 hours)")
+        except Exception as e:
+            logger.warning(f"⚠️ Backup scheduler failed to start: {e}")
+    else:
+        logger.info("⏭️  Backup scheduler skipped (app process — worker only)")
 
     # 자동 학습 스케줄러 시작 (비활성화 - 메모리 절약, 필요시 API로 수동 활성화)
     try:
@@ -176,20 +199,22 @@ async def lifespan(app: FastAPI):
         logger.warning(f"⚠️ Auto learning scheduler failed to start: {e}")
 
     # 광고 자동 최적화 스케줄러 시작
-    try:
-        from services.ad_auto_optimizer import ad_auto_optimizer
-        ad_auto_optimizer.start(interval_seconds=900)  # 15분마다 실행 (메모리 절약)
-        logger.info("✅ Ad auto optimizer started (every 15 min)")
-    except Exception as e:
-        logger.warning(f"⚠️ Ad auto optimizer failed to start: {e}")
+    if RUN_SCHEDULERS:
+        try:
+            from services.ad_auto_optimizer import ad_auto_optimizer
+            ad_auto_optimizer.start(interval_seconds=900)  # 15분마다 실행 (메모리 절약)
+            logger.info("✅ Ad auto optimizer started (every 15 min)")
+        except Exception as e:
+            logger.warning(f"⚠️ Ad auto optimizer failed to start: {e}")
 
     # 키워드 풀 스케줄러 — 백엔드 자체 cron (GitHub Actions schedule 신뢰성 낮음)
-    try:
-        from services.keyword_pool_scheduler import keyword_pool_scheduler
-        keyword_pool_scheduler.start(interval_seconds=300)  # 매 5분 (1 CPU fly 부하 분산)
-        logger.info("✅ Keyword pool scheduler started (every 5 min, balanced load)")
-    except Exception as e:
-        logger.warning(f"⚠️ Keyword pool scheduler failed to start: {e}")
+    if RUN_SCHEDULERS:
+        try:
+            from services.keyword_pool_scheduler import keyword_pool_scheduler
+            keyword_pool_scheduler.start(interval_seconds=300)  # 매 5분 (1 CPU fly 부하 분산)
+            logger.info("✅ Keyword pool scheduler started (every 5 min, balanced load)")
+        except Exception as e:
+            logger.warning(f"⚠️ Keyword pool scheduler failed to start: {e}")
 
     # Threads DB 초기화
     try:
@@ -200,12 +225,13 @@ async def lifespan(app: FastAPI):
         logger.warning(f"⚠️ Threads tables initialization failed: {e}")
 
     # Threads 자동 게시 스케줄러 시작
-    try:
-        from services.threads_auto_poster import threads_auto_poster
-        threads_auto_poster.start(interval_seconds=900)  # 15분마다 실행 (메모리 절약)
-        logger.info("✅ Threads auto poster started (every 15 min)")
-    except Exception as e:
-        logger.warning(f"⚠️ Threads auto poster failed to start: {e}")
+    if RUN_SCHEDULERS:
+        try:
+            from services.threads_auto_poster import threads_auto_poster
+            threads_auto_poster.start(interval_seconds=900)  # 15분마다 실행 (메모리 절약)
+            logger.info("✅ Threads auto poster started (every 15 min)")
+        except Exception as e:
+            logger.warning(f"⚠️ Threads auto poster failed to start: {e}")
 
     # X (Twitter) DB 초기화
     try:
@@ -216,12 +242,13 @@ async def lifespan(app: FastAPI):
         logger.warning(f"⚠️ X tables initialization failed: {e}")
 
     # X 자동 게시 스케줄러 시작
-    try:
-        from services.x_auto_poster import start_auto_poster
-        start_auto_poster()
-        logger.info("✅ X auto poster started (every 5 min)")
-    except Exception as e:
-        logger.warning(f"⚠️ X auto poster failed to start: {e}")
+    if RUN_SCHEDULERS:
+        try:
+            from services.x_auto_poster import start_auto_poster
+            start_auto_poster()
+            logger.info("✅ X auto poster started (every 5 min)")
+        except Exception as e:
+            logger.warning(f"⚠️ X auto poster failed to start: {e}")
 
     # Ad Optimization DB 초기화
     try:
@@ -240,13 +267,14 @@ async def lifespan(app: FastAPI):
         logger.warning(f"⚠️ Community tables initialization failed: {e}")
 
     # 커뮤니티 콘텐츠 자동 생성 스케줄러 시작
-    try:
-        from services.content_scheduler import get_scheduler
-        content_scheduler = get_scheduler()
-        content_scheduler.start()
-        logger.info("✅ Community content scheduler started")
-    except Exception as e:
-        logger.warning(f"⚠️ Community content scheduler failed to start: {e}")
+    if RUN_SCHEDULERS:
+        try:
+            from services.content_scheduler import get_scheduler
+            content_scheduler = get_scheduler()
+            content_scheduler.start()
+            logger.info("✅ Community content scheduler started")
+        except Exception as e:
+            logger.warning(f"⚠️ Community content scheduler failed to start: {e}")
 
     # A/B Test DB 초기화
     try:
@@ -290,16 +318,17 @@ async def lifespan(app: FastAPI):
             logger.warning(f"⚠️ Sentry initialization failed (optional): {e}")
 
     # 커뮤니티 자동 글 생성 시작 (시간당 12개 = 5분마다 1개)
-    try:
-        import asyncio
-        from routers.admin import auto_generate_content_task
-        import routers.admin as admin_module
+    if RUN_SCHEDULERS:
+        try:
+            import asyncio
+            from routers.admin import auto_generate_content_task
+            import routers.admin as admin_module
 
-        admin_module._auto_gen_running = True
-        asyncio.create_task(auto_generate_content_task(posts_per_hour=12, include_comments=True))
-        logger.info("✅ Community auto-generation started (12 posts/hour)")
-    except Exception as e:
-        logger.warning(f"⚠️ Community auto-generation failed: {e}")
+            admin_module._auto_gen_running = True
+            asyncio.create_task(auto_generate_content_task(posts_per_hour=12, include_comments=True))
+            logger.info("✅ Community auto-generation started (12 posts/hour)")
+        except Exception as e:
+            logger.warning(f"⚠️ Community auto-generation failed: {e}")
 
     # 퍼널 디자이너 DB 초기화
     try:
@@ -318,25 +347,30 @@ async def lifespan(app: FastAPI):
         logger.warning(f"⚠️ Influencer DB init failed: {e}")
 
     # 인플루언서 자동 수집 스케줄러 시작
-    try:
-        from services.influencer_auto_collector import get_auto_collector
-        auto_collector = get_auto_collector()
-        auto_collector.start()
-        logger.info("✅ Influencer auto collector started (daily 03:10 KST)")
-    except Exception as e:
-        logger.warning(f"⚠️ Influencer auto collector failed to start: {e}")
+    if RUN_SCHEDULERS:
+        try:
+            from services.influencer_auto_collector import get_auto_collector
+            auto_collector = get_auto_collector()
+            auto_collector.start()
+            logger.info("✅ Influencer auto collector started (daily 03:10 KST)")
+        except Exception as e:
+            logger.warning(f"⚠️ Influencer auto collector failed to start: {e}")
 
     # 평판 모니터링 DB 초기화 + 백그라운드 스케줄러
     try:
         from database.reputation_db import init_reputation_tables
         init_reputation_tables()
         logger.info("✅ Reputation DB initialized")
-
-        from routers.reputation import reputation_monitor_loop
-        asyncio.create_task(reputation_monitor_loop())
-        logger.info("✅ Reputation monitor started (every 5 min)")
     except Exception as e:
-        logger.warning(f"⚠️ Reputation monitor failed to start: {e}")
+        logger.warning(f"⚠️ Reputation DB init failed: {e}")
+
+    if RUN_SCHEDULERS:
+        try:
+            from routers.reputation import reputation_monitor_loop
+            asyncio.create_task(reputation_monitor_loop())
+            logger.info("✅ Reputation monitor started (every 5 min)")
+        except Exception as e:
+            logger.warning(f"⚠️ Reputation monitor failed to start: {e}")
 
     yield
 
