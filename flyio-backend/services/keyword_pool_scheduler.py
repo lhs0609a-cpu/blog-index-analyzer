@@ -398,19 +398,37 @@ class KeywordPoolScheduler:
             logger.error(f"[pool/ai-classify] tick 실패: {type(e).__name__}: {e}", exc_info=True)
 
     async def _register_only(self):
-        """register 만 — 2분 주기로 pending 빠르게 처리. 다른 cron 과 독립."""
+        """register 만 — 3분 주기로 pending 빠르게 처리. 다른 cron 과 독립.
+
+        Cap-backoff: 풀 한도 ≥99% 인 광고주는 skip. 매 tick 1000개 pending 시도해도
+        모두 'account keyword cap' 거부 → fly httpx connection pool (max=5) 점유 +
+        PoolTimeout 사고. cleanup 이 슬롯 회수할 때까지 register 무의미 시도 차단.
+        """
         try:
             from routers.naver_ad import _run_pool_register
             from database.naver_ad_db import list_connected_ad_accounts
+            from database.registered_keywords_db import get_registered_keywords_db
             accts = list_connected_ad_accounts() or []
             if not accts:
                 return
+            reg = get_registered_keywords_db()
             pairs = [(int(a["user_id"]), int(a["customer_id"])) for a in accts if a.get("user_id") and a.get("customer_id")]
+            n_skipped = 0
             for uid, cid in pairs:
                 try:
+                    # Cap-backoff: 한도 ≥99% 면 skip (cleanup 슬롯 회수까지 무의미 시도 차단)
+                    try:
+                        rs = reg.stats(cid) or {}
+                        if int(rs.get("active") or 0) >= 99000:
+                            n_skipped += 1
+                            continue
+                    except Exception:
+                        pass
                     await _run_pool_register(uid, customer_id=cid)
                 except Exception as e:
                     logger.error(f"[pool/scheduler] register 실패 user={uid} cid={cid}: {e}", exc_info=True)
+            if n_skipped > 0:
+                logger.info(f"[pool/scheduler] register tick — {n_skipped}/{len(pairs)} cap-backoff skip")
         except Exception as e:
             logger.error(f"[pool/scheduler] register tick 실패: {type(e).__name__}: {e}", exc_info=True)
 
