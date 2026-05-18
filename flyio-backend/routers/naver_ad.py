@@ -6056,22 +6056,23 @@ async def _run_auto_cleanup_for_account(
     - days: 최근 N 일 클릭 통계 (default 7)
     - max_delete: 한 tick 당 최대 삭제 수 (네이버 rate limit + 사고 방지)
 
-    과거 사고: 1500개 stats fetch 가 Naver API hang → scheduler tick timeout 가드가
-    함수 중간에서 raise → record_auto_cleanup_run 도달 못 함 → UI 의 last_run_at
-    9시간 정지로 표시 (실제로는 cron 살아있음). fix: 시작 즉시 in-progress stamp,
-    완료 시 final stamp 로 overwrite. 도중 timeout 라도 "최근 실행" 시각만은 갱신됨.
+    설계 (시작 stamp 제거):
+    - 옛 코드는 시작 즉시 record_auto_cleanup_run(0) 으로 stamp 해서 hang 가드용
+      "cron 살아있음" 표시 유지. 그러나 Naver stats circuit OPEN 시 click_cleanup
+      이 0 처리 → last_deleted=0 stamp 가 domain_cleanup 의 실제 del=498 stamp 를
+      overwrite → 사용자 화면 영구 "삭제 0" 으로 보이는 사고.
+    - 새 정책: 처리 대상 0 이거나 circuit OPEN 이면 stamp 안 함. domain_cleanup 의
+      실제 결과 stamp 만 보존. timeout 가드는 scheduler 단에서 처리.
     """
-    from services.naver_ad_service import NaverAdApiClient
+    from services.naver_ad_service import NaverAdApiClient, _stats_breaker
     from database.naver_ad_db import get_ad_account_by_customer, record_auto_cleanup_run
     from datetime import datetime, timedelta
     import sqlite3 as _sqlite3
 
-    # 시작 즉시 stamp — timeout 가드가 도중에 raise 해도 "cron 살아있음" 표시 유지.
-    # last_deleted=-1 sentinel 로 "실행 중/미완료" 구분 (완료 시 실제 값으로 overwrite).
-    try:
-        record_auto_cleanup_run(user_id, str(customer_id), 0)
-    except Exception:
-        pass
+    # Naver stats circuit OPEN 이면 click_cleanup 은 어차피 효과 0 — fly CPU 낭비 차단.
+    # domain_cleanup (별도 cron) 이 circuit 무관하게 score 기반 정리하므로 누락 없음.
+    if _stats_breaker.is_open():
+        return {"customer_id": customer_id, "deleted": 0, "reason": "naver_stats_circuit_open"}
 
     account = get_ad_account_by_customer(user_id, str(customer_id))
     if not account or not account.get("is_connected"):
@@ -6235,7 +6236,10 @@ async def _run_auto_cleanup_for_account(
     except Exception:
         pass
 
-    record_auto_cleanup_run(user_id, str(customer_id), total_purged + n_paused)
+    # 실제 정리한 게 있을 때만 stamp — 0 이면 domain_cleanup 의 이전 stamp 보존.
+    # 사용자 화면 "최근 실행 N개" 가 의미있는 결과만 반영되도록.
+    if total_purged + n_paused > 0:
+        record_auto_cleanup_run(user_id, str(customer_id), total_purged + n_paused)
 
     # 임계 auto-promote — cleanup 직후 풀의 점수 분포 검사 → 90%+ 가 thr+10 이상이면
     # threshold 를 +10 상향. 점진 수렴: 30 → 40 → 50 → ... → 80 cap.
@@ -6371,11 +6375,8 @@ async def _run_domain_cleanup_for_account(
     import time as _t
 
     t0 = _t.monotonic()
-    # 시작 즉시 stamp — _run_auto_cleanup_for_account 와 동일 reasoning.
-    # scheduler timeout 가드가 도중에 raise 해도 "cron 살아있음" 시각 표시 유지.
-    try: record_auto_cleanup_run(user_id, str(customer_id), 0)
-    except Exception: pass
-
+    # start stamp 제거 — 0 stamp 가 다른 cleanup 의 실제 결과 stamp 를 overwrite
+    # 하는 사고 차단. 의미있는 결과만 stamp (n_del + n_stale > 0 일 때).
     account = get_ad_account_by_customer(user_id, str(customer_id))
     if not account or not account.get("is_connected"):
         return {"customer_id": customer_id, "deleted": 0, "reason": "not_connected"}
@@ -6497,7 +6498,9 @@ async def _run_domain_cleanup_for_account(
 
     total_purged = n_del + n_stale
     try:
-        record_auto_cleanup_run(user_id, str(customer_id), total_purged + n_pause)
+        # 의미있는 결과만 stamp — 0 stamp 가 이전 cleanup 결과 overwrite 방지.
+        if total_purged + n_pause > 0:
+            record_auto_cleanup_run(user_id, str(customer_id), total_purged + n_pause)
         pool.record_run(
             user_id, customer_id, "inspect",
             "success" if total_purged > 0 else "no_new",
