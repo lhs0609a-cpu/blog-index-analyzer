@@ -440,7 +440,7 @@ class KeywordPoolScheduler:
                     thr = int(r.get("auto_cleanup_threshold") or 30)
                     try:
                         res = await asyncio.wait_for(
-                            _run_domain_cleanup_for_account(uid, cid, thr, max_delete=500),
+                            _run_domain_cleanup_for_account(uid, cid, thr, max_delete=750),
                             timeout=PER_ACCOUNT_TIMEOUT,
                         )
                         logger.warning(f"[pool/domain-cleanup/tick] uid={uid} cid={cid} thr={thr} → {res}")

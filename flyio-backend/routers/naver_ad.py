@@ -6357,7 +6357,7 @@ async def _maybe_promote_auto_cleanup_threshold(
 
 
 async def _run_domain_cleanup_for_account(
-    user_id: int, customer_id: int, threshold: int = 30, max_delete: int = 500,
+    user_id: int, customer_id: int, threshold: int = 30, max_delete: int = 750,
 ) -> Dict:
     """click 무관 — relevance_keywords 점수 ≤ threshold 인 등록 KW 일괄 DELETE.
 
