@@ -479,6 +479,47 @@ export default function KeywordPoolPage() {
     setTimeout(() => loadAutoCleanup(), 300)
   }
 
+  // 🚨 긴급 일괄 삭제 — 네이버 광고주 가이드 (저품질 처분 회피) 용.
+  // dry_run 단계 건너뛰고 점수 ≤ threshold 모든 등록 KW 즉시 background DELETE.
+  const [emergencyRunning, setEmergencyRunning] = useState(false)
+  const handleEmergencyBulkDelete = async () => {
+    const thrStr = window.prompt(
+      '⚠️ 긴급 일괄 삭제\n\n점수 ≤ N 인 모든 등록 KW 를 네이버에서 즉시 DELETE 합니다 (최대 50,000개).\n\n임계값 (1~95):',
+      '30'
+    )
+    if (!thrStr) return
+    const threshold = parseInt(thrStr, 10)
+    if (!threshold || threshold < 1 || threshold > 95) {
+      toast.error('1~95 범위의 숫자를 입력하세요')
+      return
+    }
+    if (!confirm(
+      `점수 ≤ ${threshold} 인 등록 KW 를 최대 50,000개 즉시 삭제합니다.\n` +
+      `네이버 광고주 가이드 (저품질 처분 회피) 용 긴급 모드.\n\n` +
+      `되돌릴 수 없습니다. 진행하시겠습니까?`
+    )) return
+    setEmergencyRunning(true)
+    try {
+      const res = await adPost<{ success: boolean; message?: string; total_targets?: number; estimated_minutes?: number }>(
+        `/api/naver-ad/keyword-pool/registered/cleanup-by-score${cidQs()}`,
+        { threshold, max_delete: 50000, dry_run: false },
+        // dry_run=false 는 background_tasks 로 즉시 응답, 실제 DELETE 는 백그라운드 ~2시간
+        { timeout: 120_000, retries: 0 }
+      )
+      toast.success(
+        res.message ||
+        `백그라운드 시작 — 대상 ${res.total_targets?.toLocaleString() || '많음'}개, ${res.estimated_minutes ?? '약 30~120'}분 소요. 화면 자동 갱신됨.`,
+        { duration: 8000 }
+      )
+      // 30초 후 새로고침, 1분마다 stats 갱신 자동 (기존 폴링)
+      setTimeout(() => load(), 30_000)
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || e?.message || '긴급 삭제 시작 실패')
+    } finally {
+      setEmergencyRunning(false)
+    }
+  }
+
   // dry_run audit — 점수 ≤ threshold 등록 KW 전체 리스트를 표로 받아옴 (max 1000개 표시)
   const handleManualAudit = async () => {
     const threshold = manualCleanupThreshold
@@ -1143,10 +1184,19 @@ export default function KeywordPoolPage() {
 
         {/* CORE — 도메인 키워드 + 자동화 ON/OFF (페이지에서 가장 중요한 박스) */}
         <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-50 rounded-2xl border-2 border-blue-300 p-6 mb-6 shadow-sm">
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
             <Activity className="w-6 h-6 text-blue-700" />
             <h2 className="font-bold text-gray-900 text-lg">도메인 + 자동화 (필수 설정)</h2>
             <span className="text-xs text-gray-600">— 1회 저장하면 100k 까지 자동 진행</span>
+            <button
+              onClick={handleEmergencyBulkDelete}
+              disabled={emergencyRunning}
+              className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 disabled:bg-gray-300 shadow-sm"
+              title="네이버 광고주 가이드 (저품질 처분 회피) — 점수 ≤ N 등록 KW 최대 50,000개 즉시 백그라운드 삭제"
+            >
+              {emergencyRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <AlertCircle className="w-3.5 h-3.5" />}
+              🚨 긴급 일괄 삭제 (네이버 가이드)
+            </button>
           </div>
 
           {/* 1) 도메인 키워드 (relevance_keywords) — chip 보기 + textarea 수정 분리 */}
