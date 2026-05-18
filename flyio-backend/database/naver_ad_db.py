@@ -359,7 +359,7 @@ def init_naver_ad_tables():
     # ad_accounts: 광고주별 연관성-점수 기반 자동 삭제 (cron tick 으로 매시 1회).
     # auto_cleanup_enabled=1 인 광고주만 cron 이 처리. threshold=점수≤N 인 클릭 KW 자동 삭제.
     _ensure_column("ad_accounts", "auto_cleanup_enabled", "INTEGER DEFAULT 0")
-    _ensure_column("ad_accounts", "auto_cleanup_threshold", "INTEGER DEFAULT 30")
+    _ensure_column("ad_accounts", "auto_cleanup_threshold", "INTEGER DEFAULT 50")
     _ensure_column("ad_accounts", "auto_cleanup_last_run_at", "TIMESTAMP")
     _ensure_column("ad_accounts", "auto_cleanup_last_deleted", "INTEGER DEFAULT 0")
     # 광고주별 "관련성 기준 키워드" — 사용자가 직접 명시한 도메인 토큰 (예: "피부질환,피부,
@@ -1383,13 +1383,13 @@ def get_ad_account_auto_cleanup(user_id: int, customer_id: str) -> Dict:
     conn.close()
     if not row:
         return {
-            "enabled": False, "threshold": 30, "last_run_at": None, "last_deleted": 0,
+            "enabled": False, "threshold": 50, "last_run_at": None, "last_deleted": 0,
             "relevance_keywords": [],
         }
     d = dict(row)
     return {
         "enabled": bool(d.get("auto_cleanup_enabled") or 0),
-        "threshold": int(d.get("auto_cleanup_threshold") or 30),
+        "threshold": int(d.get("auto_cleanup_threshold") or 50),
         "last_run_at": d.get("auto_cleanup_last_run_at"),
         "last_deleted": int(d.get("auto_cleanup_last_deleted") or 0),
         "relevance_keywords": _parse_relevance_keywords(d.get("relevance_keywords")),

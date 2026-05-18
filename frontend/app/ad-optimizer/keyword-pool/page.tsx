@@ -159,7 +159,7 @@ export default function KeywordPoolPage() {
     last_run_at: string | null
     last_deleted: number
     relevance_keywords: string[]
-  }>({ enabled: false, threshold: 30, last_run_at: null, last_deleted: 0, relevance_keywords: [] })
+  }>({ enabled: false, threshold: 50, last_run_at: null, last_deleted: 0, relevance_keywords: [] })
   const [autoCleanupSaving, setAutoCleanupSaving] = useState(false)
   const [relevanceInput, setRelevanceInput] = useState('')  // textarea raw 입력
 
@@ -204,7 +204,7 @@ export default function KeywordPoolPage() {
 
   // 등록 KW 전체 점수 audit + 일괄 정리 (click 무관) — cascade drift 옛날 무관 KW 정리용
   const [manualCleanupRunning, setManualCleanupRunning] = useState(false)
-  const [manualCleanupThreshold, setManualCleanupThreshold] = useState(30)
+  const [manualCleanupThreshold, setManualCleanupThreshold] = useState(50)
   const [manualTargets, setManualTargets] = useState<{ keyword_id: string; keyword: string; score: number }[]>([])
   const [manualSelected, setManualSelected] = useState<Set<string>>(new Set())
   const [manualMeta, setManualMeta] = useState<{
@@ -286,7 +286,7 @@ export default function KeywordPoolPage() {
     // autoCleanup / relevanceInput 도 리셋 — loadAutoCleanup 이 retry 3회 + 45s timeout 으로
     // 최대 ~135s 걸려서, 그 동안 textarea 가 이전 광고주의 도메인 키워드 (예: 피부염) 를
     // 보여줘 사용자에게 "메디론(의사대출) 인데 피부염 도메인이 떠 있다" 혼란 발생.
-    setAutoCleanup({ enabled: false, threshold: 30, last_run_at: null, last_deleted: 0, relevance_keywords: [] })
+    setAutoCleanup({ enabled: false, threshold: 50, last_run_at: null, last_deleted: 0, relevance_keywords: [] })
     setRelevanceInput('')
     // 새 광고주의 default_bid 입력란에 반영
     const acct = accounts.find(a => a.customer_id === cid)
@@ -484,8 +484,8 @@ export default function KeywordPoolPage() {
   const [emergencyRunning, setEmergencyRunning] = useState(false)
   const handleEmergencyBulkDelete = async () => {
     const thrStr = window.prompt(
-      '⚠️ 긴급 일괄 삭제\n\n점수 ≤ N 인 모든 등록 KW 를 네이버에서 즉시 DELETE 합니다 (최대 50,000개).\n\n임계값 (1~95):',
-      '30'
+      '⚠️ 긴급 일괄 삭제\n\n점수 ≤ N 인 모든 등록 KW 를 네이버에서 즉시 DELETE 합니다 (최대 50,000개).\n\n임계값 (1~95, 기본 50):',
+      '50'
     )
     if (!thrStr) return
     const threshold = parseInt(thrStr, 10)
@@ -1299,7 +1299,7 @@ export default function KeywordPoolPage() {
                 min={0}
                 max={95}
                 value={autoCleanup.threshold}
-                onChange={(e) => saveAutoCleanup({ threshold: parseInt(e.target.value) || 30 })}
+                onChange={(e) => saveAutoCleanup({ threshold: parseInt(e.target.value) || 50 })}
                 disabled={autoCleanupSaving}
                 className="w-16 text-xs border border-gray-300 rounded px-2 py-1"
                 title="점수 임계값 (0~95)"
