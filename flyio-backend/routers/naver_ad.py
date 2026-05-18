@@ -5291,8 +5291,8 @@ async def keyword_pool_ai_cleanup_preview_first(
 
 
 @router.get("/keyword-pool/diagnostics/scheduler-jobs")
-async def keyword_pool_scheduler_diagnostics():
-    """APScheduler 등록 cron + 다음 실행 시각 — cron 살아있는지 즉시 확인."""
+def keyword_pool_scheduler_diagnostics():
+    """APScheduler 등록 cron + 다음 실행 시각 — cron 살아있는지 즉시 확인. sync def."""
     try:
         from services.keyword_pool_scheduler import keyword_pool_scheduler
     except Exception as e:
@@ -5487,11 +5487,11 @@ async def keyword_pool_ai_classify_rejects(
 
 
 @router.get("/keyword-pool/reject-stats")
-async def keyword_pool_reject_stats(
+def keyword_pool_reject_stats(
     user_id: int = Depends(get_user_id_with_fallback),
     customer_id: Optional[str] = Query(None),
 ):
-    """reject 풀 상태 — UI 분류 버튼 옆 카운터 표시용."""
+    """reject 풀 상태 — UI 분류 버튼 옆 카운터 표시용. sync def → threadpool."""
     if not customer_id:
         raise HTTPException(status_code=400, detail="customer_id 필요")
     try:
@@ -5597,8 +5597,13 @@ async def keyword_pool_admin_run(
 
 
 @router.get("/keyword-pool/accounts")
-async def keyword_pool_list_accounts(user_id: int = Depends(get_user_id_with_fallback)):
-    """사용자의 모든 활성 광고주 list (B 시나리오 — 다중 광고주)."""
+def keyword_pool_list_accounts(user_id: int = Depends(get_user_id_with_fallback)):
+    """사용자의 모든 활성 광고주 list (B 시나리오 — 다중 광고주).
+
+    sync def — 단순 sqlite read. async def 일 때 cron tick 이 event loop 점유 중이면
+    30s timeout 발생 (frontend `광고주 목록 조회 실패` 사고). threadpool dispatch 로
+    event loop 무관하게 응답.
+    """
     from database.naver_ad_db import list_ad_accounts_for_user
     rows = list_ad_accounts_for_user(user_id) or []
     return {
@@ -5617,11 +5622,15 @@ async def keyword_pool_list_accounts(user_id: int = Depends(get_user_id_with_fal
 
 
 @router.get("/keyword-pool/stats")
-async def keyword_pool_stats(
+def keyword_pool_stats(
     user_id: int = Depends(get_user_id_with_fallback),
     customer_id: Optional[str] = None,
 ):
-    """본인 풀/등록 상태 — customer_id 명시 시 그 광고주."""
+    """본인 풀/등록 상태 — customer_id 명시 시 그 광고주.
+
+    sync def — 모든 호출이 sqlite read (pool.stats/recent_runs/seed_breakdown 등).
+    threadpool dispatch 로 cron 점유 event loop 와 격리.
+    """
     try:
         account = _resolve_account(user_id, customer_id)
         if not account:
@@ -6005,11 +6014,11 @@ class AutoCleanupSettingsRequest(BaseModel):
 
 
 @router.get("/keyword-pool/auto-cleanup/settings")
-async def keyword_pool_auto_cleanup_get(
+def keyword_pool_auto_cleanup_get(
     customer_id: Optional[str] = None,
     user_id: int = Depends(get_user_id_with_fallback),
 ):
-    """광고주별 자동 cleanup 설정 + 마지막 실행 stamp."""
+    """광고주별 자동 cleanup 설정 + 마지막 실행 stamp. sync def → threadpool."""
     from database.naver_ad_db import get_ad_account_auto_cleanup
     account = _resolve_account(user_id, customer_id)
     if not account:

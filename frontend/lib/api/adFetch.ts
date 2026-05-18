@@ -129,7 +129,10 @@ export async function adFetch<T = any>(
     retries = 2,
     retryDelay = 1000,
     showToast = true,
-    timeout = 30000,
+    // 30s → 60s: 백엔드 cron tick 이 event loop 점유 중일 때 단순 sqlite read 도
+    // 큐 대기로 30s 넘기는 사고 (광고주 목록 조회 실패 등). hot-path 엔드포인트는
+    // sync def + threadpool 로 별도 해결했고, 이 timeout 은 worst-case 보호.
+    timeout = 60000,
     userId,
     ...fetchOptions
   } = options
