@@ -3384,21 +3384,36 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                 inline_ai_discarded = len(discarded)
 
                 # GPT 통과 < 50 일 때 fallback — niche 시드에서 GPT 가 거의 다 컷하면
-                # 풀이 영구 안 채워지는 사고 차단. 검색량 상위로 보충해서 최대 2,000개 합류.
-                # 옛 조건 (`not approved`) 은 0 통과만 fallback → GPT 가 1개 통과해도 보충 안 됨.
-                # 50 미만이면 보충: approved 50 + extras = 사실상 발굴 끊김 차단.
-                # 실제 top_rejects 가 작으면 (saturation) 자연 cap. drift 는 노출제한 cron 자정.
+                # 풀이 영구 안 채워지는 사고 차단. 검색량 상위 + 점수 ≥ threshold 만 합류.
+                # 옛 fallback 은 검색량만 봐서 drift 발생 → cleanup 무한 회전. 이제 점수 컷
+                # 적용해서 풀 점수 분포가 사용자 threshold 이상으로 직접 수렴.
                 ai_inline_fallback = False
                 if len(approved) < 50 and batch_ok > 0 and top_rejects:
+                    from database.naver_ad_db import get_ad_account_auto_cleanup as _get_thr_inline
+                    from database.naver_ad_db import get_ad_account_relevance_keywords as _get_rel_inline
+                    _thr_cfg_inline = _get_thr_inline(uid, str(customer_id)) or {}
+                    _inline_thr = int(_thr_cfg_inline.get("threshold") or 50)
+                    _rel_basis = _get_rel_inline(uid, str(customer_id)) or []
+                    if not _rel_basis:
+                        _rel_basis = [s for s in (pool.list_user_seeds(customer_id) or []) if s and len(s) >= 2]
                     ai_inline_fallback = True
                     existing = set(approved)
-                    extras = [r["keyword"] for r in top_rejects if r["keyword"] not in existing]
+                    # 검색량 상위 중 점수 ≥ threshold 만 보충 — drift 차단
+                    extras: List[str] = []
+                    for r in top_rejects:
+                        kw_ = r["keyword"]
+                        if kw_ in existing:
+                            continue
+                        if _rel_basis and _compute_relevance_score(kw_, _rel_basis) < _inline_thr:
+                            continue
+                        extras.append(kw_)
                     boost = 2000 - len(approved)
                     approved = list(approved) + extras[:max(0, boost)]
                     inline_ai_approved = len(approved)
                     logger.warning(
                         f"[pool/collect/ai-inline] user={uid} GPT 통과 적음 — "
-                        f"검색량 상위 +{len(extras[:boost])}개 fallback 보충 → 총 {len(approved)} (drift 감수)"
+                        f"검색량 상위 + 점수≥{_inline_thr} 만 +{len(extras[:boost])}개 fallback "
+                        f"보충 → 총 {len(approved)}"
                     )
 
                 if approved:
@@ -3914,12 +3929,17 @@ async def _run_pool_seed_amplify(
     # 한의원 계정에 차 KW (2024쏘나타) 가 amplify cartesian 으로 폭발해 user_seed 합류 →
     # 다음 collect 라운드 anchor → 자식 KW 도메인 게이트 무력화 → 100k drift 사고.
     # saved_relevance 비어있으면 (cold start) skip — 시드 0 광고주 진입 봉쇄 방지.
+    # 컷 점수 — 사용자 auto_cleanup_threshold (광고주별 30~75) 와 동기화. 옛 hardcoded 30
+    # 으로는 풀에 31~49 점수 KW drift → 다음 cleanup tick 에서 정리 → 무한 회전.
     from database.naver_ad_db import get_ad_account_relevance_keywords as _get_rel
+    from database.naver_ad_db import get_ad_account_auto_cleanup as _get_thr
     saved_relevance = _get_rel(uid, str(customer_id)) or []
+    _thr_cfg = _get_thr(uid, str(customer_id)) or {}
+    _domain_gate_thr = int(_thr_cfg.get("threshold") or 50)
     domain_filtered_count = 0
     if saved_relevance and len([s for s in saved_relevance if s and len(s) >= 2]) >= 3:
         before = len(fresh_seeds)
-        kept = [s for s in fresh_seeds if _compute_relevance_score(s, saved_relevance) >= 30]
+        kept = [s for s in fresh_seeds if _compute_relevance_score(s, saved_relevance) >= _domain_gate_thr]
         domain_filtered_count = before - len(kept)
         fresh_seeds = kept
         if not fresh_seeds:
@@ -4262,18 +4282,34 @@ async def _run_pool_autocomplete_mining(
     # niche 시드 (의료/희귀) 에서 GPT 가 모두 컷 판정해도 풀이 마르지 않게 보장.
     # 무관 KW 가 풀에 들어가도 네이버 검수 → 노출제한 → inspect cron 자동 삭제로 자정.
     # cap 30 → 200: 시간당 autocomplete 12회 × +200 = +2400 풀 합류.
+    # 도메인 점수 컷 — 사용자 auto_cleanup_threshold (default 50) 이상만 통과.
+    # autocomplete GPT 가 도메인 분류했어도 점수 ≥ thr 보장 안 됨 → 직접 컷.
+    from database.naver_ad_db import get_ad_account_auto_cleanup as _get_thr_ac
+    from database.naver_ad_db import get_ad_account_relevance_keywords as _get_rel_ac
+    _thr_cfg_ac = _get_thr_ac(uid, str(customer_id)) or {}
+    _ac_thr = int(_thr_cfg_ac.get("threshold") or 50)
+    _ac_rel = _get_rel_ac(uid, str(customer_id)) or []
+    if not _ac_rel:
+        _ac_rel = [s for s in (pool.list_user_seeds(customer_id) or []) if s and len(s) >= 2]
+
     ai_fallback = False
     if not approved and classify_input:
         ai_fallback = True
-        approved = [q["keyword"] for q in classify_input[:200]]
+        # 검색량 상위 fallback 도 점수 ≥ thr 만 통과
+        approved = [
+            q["keyword"] for q in classify_input[:500]
+            if not _ac_rel or _compute_relevance_score(q["keyword"], _ac_rel) >= _ac_thr
+        ][:200]
         logger.warning(
-            f"[pool/autocomplete] user={uid} GPT 통과 0 — 검색량 상위 200개 fallback 합류"
+            f"[pool/autocomplete] user={uid} GPT 통과 0 — 검색량 상위 + 점수≥{_ac_thr} "
+            f"만 fallback {len(approved)}개 합류"
         )
 
-    # 5) 통과 KW → 자식 풀 직접 추가 (게이트 우회)
+    # 5) 통과 KW → 자식 풀 직접 추가 (점수 컷 후)
     promoted = 0
     if approved:
         approved_set = set(approved)
+        # GPT 통과 + 점수 컷 — drift 차단
         items = [
             {
                 "keyword": q["keyword"],
@@ -4286,6 +4322,7 @@ async def _run_pool_autocomplete_mining(
             }
             for q in classify_input
             if q["keyword"] in approved_set
+            and (not _ac_rel or _compute_relevance_score(q["keyword"], _ac_rel) >= _ac_thr)
         ]
         try:
             promoted = pool.add_candidates(uid, customer_id, items)
