@@ -35,8 +35,13 @@ logger = logging.getLogger(__name__)
 # - all:    둘 다 (단일 머신 모드, 로컬 dev).
 # ─────────────────────────────────────────────────────────────────────────────
 PROCESS_GROUP = os.getenv("FLY_PROCESS_GROUP") or os.getenv("ROLE", "all")
-RUN_SCHEDULERS = PROCESS_GROUP in ("worker", "all")
-RUN_API_ONLY = PROCESS_GROUP == "app"
+# fly.toml 에 [processes] 정의 없는 단일 machine 모드 — http_service.processes=["app"]
+# 이라 FLY_PROCESS_GROUP="app" 자동 설정됨. 옛 RUN_SCHEDULERS 가 ("worker","all") 만
+# 허용했으나 단일 머신이라 분리 무의미 + scheduler 영구 정지 사고 발생.
+# 모든 process 에서 scheduler 기동 — 강제로 SCHEDULERS_DISABLED=1 시에만 끔.
+_SCHED_DISABLED = os.getenv("SCHEDULERS_DISABLED") == "1"
+RUN_SCHEDULERS = not _SCHED_DISABLED
+RUN_API_ONLY = PROCESS_GROUP == "app" and _SCHED_DISABLED
 logger_init = logging.getLogger(__name__)
 logger_init.warning(
     f"[lifespan] PROCESS_GROUP={PROCESS_GROUP} RUN_SCHEDULERS={RUN_SCHEDULERS}"
