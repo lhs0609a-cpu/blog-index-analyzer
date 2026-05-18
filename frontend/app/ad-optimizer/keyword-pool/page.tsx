@@ -1149,15 +1149,47 @@ export default function KeywordPoolPage() {
             <span className="text-xs text-gray-600">— 1회 저장하면 100k 까지 자동 진행</span>
           </div>
 
-          {/* 1) 도메인 키워드 (relevance_keywords) */}
+          {/* 1) 도메인 키워드 (relevance_keywords) — chip 보기 + textarea 수정 분리 */}
           <div className="mb-4 bg-white border border-blue-200 rounded-lg p-3">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span className="text-sm font-semibold text-gray-900">1. 도메인 키워드</span>
-              <span className="text-xs text-gray-600">광고주가 다루는 분야 (콤마/줄바꿈 구분)</span>
+              <span className="text-xs text-gray-600">광고주가 다루는 분야 — 자동 삭제 점수 기준이 됨</span>
               <span className="ml-auto text-[11px] text-gray-500">
                 저장: {autoCleanup.relevance_keywords.length === 0 ? '비어있음' : `${autoCleanup.relevance_keywords.length}개`}
               </span>
             </div>
+
+            {/* 저장된 키워드 chip 리스트 — 광고주별 항상 표시. 각 chip 의 ✕ 로 개별 삭제 */}
+            {autoCleanup.relevance_keywords.length > 0 && (
+              <div className="mb-3 p-2 bg-blue-50/50 border border-blue-100 rounded">
+                <div className="text-[11px] text-gray-600 mb-1.5">현재 저장됨 (✕ 클릭으로 개별 삭제):</div>
+                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                  {autoCleanup.relevance_keywords.map((kw) => (
+                    <span
+                      key={kw}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 bg-white border border-blue-200 rounded-full text-xs text-blue-800"
+                    >
+                      {kw}
+                      <button
+                        onClick={() => {
+                          const next = autoCleanup.relevance_keywords.filter((x) => x !== kw)
+                          // chip 즉시 삭제 + PATCH 전송 + textarea sync
+                          setRelevanceInput(next.join(', '))
+                          saveAutoCleanup({ relevance_keywords: next })
+                        }}
+                        disabled={autoCleanupSaving}
+                        className="text-blue-400 hover:text-red-600 disabled:opacity-30 leading-none"
+                        title={`"${kw}" 삭제`}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="text-[11px] text-gray-500 mb-1">수정/추가 (콤마 또는 줄바꿈 구분 — 저장하면 위 chip 전체가 덮어쓰여짐):</div>
             <div className="flex items-start gap-2">
               <textarea
                 value={relevanceInput}
@@ -1167,14 +1199,24 @@ export default function KeywordPoolPage() {
                 className="flex-1 text-sm border border-gray-300 rounded px-2 py-1.5 font-mono resize-y"
                 disabled={autoCleanupSaving}
               />
-              <button
-                onClick={handleSaveRelevanceKeywords}
-                disabled={autoCleanupSaving}
-                className="px-4 py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 disabled:bg-gray-300 inline-flex items-center gap-1 whitespace-nowrap"
-              >
-                {autoCleanupSaving && <Loader2 className="w-3 h-3 animate-spin" />}
-                저장
-              </button>
+              <div className="flex flex-col gap-1">
+                <button
+                  onClick={handleSaveRelevanceKeywords}
+                  disabled={autoCleanupSaving}
+                  className="px-4 py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 disabled:bg-gray-300 inline-flex items-center gap-1 whitespace-nowrap"
+                >
+                  {autoCleanupSaving && <Loader2 className="w-3 h-3 animate-spin" />}
+                  저장
+                </button>
+                <button
+                  onClick={() => setRelevanceInput(autoCleanup.relevance_keywords.join(', '))}
+                  disabled={autoCleanupSaving || autoCleanup.relevance_keywords.length === 0}
+                  className="px-2 py-1 text-[11px] border border-gray-300 text-gray-600 rounded hover:bg-gray-50 disabled:opacity-30"
+                  title="저장된 chip 리스트를 textarea 에 다시 불러옴"
+                >
+                  ↺ 불러오기
+                </button>
+              </div>
             </div>
           </div>
 
