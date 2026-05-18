@@ -104,9 +104,11 @@ class Settings(BaseSettings):
             return ["*"]
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
 
-    # Rate Limiting
-    RATE_LIMIT_PER_MINUTE: int = 60
-    RATE_LIMIT_PER_HOUR: int = 1000
+    # Rate Limiting — 페이지 1회 로드에 5~10 endpoint 호출 + 30s/60s 폴링 다수.
+    # 60/min 은 정상 사용자도 5분 내 429 (광고주 목록 조회 실패) 사고 다수.
+    # 300/min + 10000/hr 로 완화 (실측 한 사용자 평균 ~100 req/min 가능).
+    RATE_LIMIT_PER_MINUTE: int = 300
+    RATE_LIMIT_PER_HOUR: int = 10000
 
     # Crawler Settings
     CRAWLER_USER_AGENTS: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
