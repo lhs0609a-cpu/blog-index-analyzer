@@ -244,7 +244,11 @@ async def amplify_seeds(seeds: list, target_count: int) -> Dict[str, Any]:
 
     # 동적 max_tokens: 한글 씨앗 1개 ≈ 8~15 토큰 + JSON 오버헤드. 여유 있게 1.5배.
     # 500 씨앗이면 약 4500 토큰. 8000 박으면 GPT가 더 오래 생각해서 Fly proxy 60s 초과.
-    dyn_max = max(1500, min(6000, int(target * 12)))
+    # cap 6000 → 3500 으로 축소 — GPT 응답 시간 ~30s 에서 ~50s 로 변동성 큰 거 차단,
+    # ReadTimeout 다발 사고 (사용자 amplify 0~1 사고) 줄이고 fly proxy 60s 안에 안정적
+    # 응답. target 800 일 때도 dyn_max 3500 이면 ~250 씨앗 발굴 가능 (실제 발굴 수가
+    # 적은 것보다 안정적 1회 발굴이 효과 ↑).
+    dyn_max = max(1500, min(3500, int(target * 12)))
     # 재시도 — OpenAI 5xx / 429 / Timeout 일시 장애에 죽지 않도록. 3 시도, 1s→3s backoff.
     # 사용자 화면 "amplify 실패: AI 제안 실패:" 가 한 번의 502 로 burst 전체를 죽이던 패턴 차단.
     import asyncio as _asyncio

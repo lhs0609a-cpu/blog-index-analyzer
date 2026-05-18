@@ -3377,18 +3377,22 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                 inline_ai_approved = len(approved)
                 inline_ai_discarded = len(discarded)
 
-                # GPT 통과 0 fallback — niche 시드에서 GPT 가 모두 컷하면 풀이 영구히 비어 멈춤.
-                # 검색량 상위 2,000개를 풀 합류 (drift 감수). 노출제한 cron + 검수 거부로 자동 자정.
-                # cap 500 → 2,000: 5h 10만 도달 — 라운드당 자식 +2,000 × 20회/h = +40,000/h capacity.
-                # 실제 top_rejects 가 작으면 (saturation) 자연 cap. burst 로 시드 풀 확장 시 효과 ↑.
+                # GPT 통과 < 50 일 때 fallback — niche 시드에서 GPT 가 거의 다 컷하면
+                # 풀이 영구 안 채워지는 사고 차단. 검색량 상위로 보충해서 최대 2,000개 합류.
+                # 옛 조건 (`not approved`) 은 0 통과만 fallback → GPT 가 1개 통과해도 보충 안 됨.
+                # 50 미만이면 보충: approved 50 + extras = 사실상 발굴 끊김 차단.
+                # 실제 top_rejects 가 작으면 (saturation) 자연 cap. drift 는 노출제한 cron 자정.
                 ai_inline_fallback = False
-                if not approved and batch_ok > 0 and top_rejects:
+                if len(approved) < 50 and batch_ok > 0 and top_rejects:
                     ai_inline_fallback = True
-                    approved = [r["keyword"] for r in top_rejects[:2000]]
+                    existing = set(approved)
+                    extras = [r["keyword"] for r in top_rejects if r["keyword"] not in existing]
+                    boost = 2000 - len(approved)
+                    approved = list(approved) + extras[:max(0, boost)]
                     inline_ai_approved = len(approved)
                     logger.warning(
-                        f"[pool/collect/ai-inline] user={uid} GPT 통과 0 — "
-                        f"검색량 상위 {len(approved)}개 fallback 합류 (drift 감수)"
+                        f"[pool/collect/ai-inline] user={uid} GPT 통과 적음 — "
+                        f"검색량 상위 +{len(extras[:boost])}개 fallback 보충 → 총 {len(approved)} (drift 감수)"
                     )
 
                 if approved:
@@ -4056,19 +4060,22 @@ async def _run_pool_autocomplete_mining(
     pool_pending = (pool.stats(customer_id).get("by_status") or {}).get("pending", 0)
     active_reg = int((reg_db.stats(customer_id) or {}).get("active") or 0)
     used = active_reg + pool_pending
-    if used >= 98_000:
+    # 98% → 99.5% 로 완화. 옛 가드는 cleanup ≈ register 평형 시 영구 skip 사고 발생.
+    # autocomplete 는 발굴 자체에 비용 작음 (Naver autocomplete API 만 호출, GPT 불사용).
+    # 발굴된 후보가 풀에 들어갈 슬롯 없으면 pool.add_keywords 가 알아서 skip 처리.
+    if used >= 99_500:
         pool.record_run(
             uid, customer_id, "autocomplete", "no_new",
             seeds_count=0,
             error_message=(
-                f"saturation guard — used {used}/100k ≥98% → autocomplete skip "
+                f"saturation guard — used {used}/100k ≥99.5% → autocomplete skip "
                 f"(cleanup 후 재진입)"
             )[:300],
             duration_ms=int((_time.monotonic() - t0) * 1000),
         )
         logger.warning(
             f"[pool/autocomplete] user={uid} cid={customer_id} saturation guard "
-            f"({used}/100k ≥98%) — skip"
+            f"({used}/100k ≥99.5%) — skip"
         )
         return {"success": False, "reason": "saturation_guard", "used": used}
 
