@@ -131,6 +131,10 @@ export default function KeywordPoolPage() {
   // 다중 광고주 — useEffect 보다 앞에 정의 (TDZ 회피)
   const [accounts, setAccounts] = useState<AdAccount[]>([])
   const [selectedCid, setSelectedCid] = useState<string>('')
+  // accounts 로드 상태 — silent fail 시 사용자에게 surface (toast 한번 + 배너 영구).
+  // null=로딩중, 'empty'=정상응답인데 광고주 0개, 'fetch_failed'=네트워크/auth 실패
+  const [accountsState, setAccountsState] = useState<null | 'ready' | 'empty' | 'fetch_failed'>(null)
+  const [accountsErrorMsg, setAccountsErrorMsg] = useState<string>('')
 
   // 입찰가 일괄 변경 state
   const [bidInput, setBidInput] = useState<string>('70')
@@ -158,6 +162,30 @@ export default function KeywordPoolPage() {
   }>({ enabled: false, threshold: 30, last_run_at: null, last_deleted: 0, relevance_keywords: [] })
   const [autoCleanupSaving, setAutoCleanupSaving] = useState(false)
   const [relevanceInput, setRelevanceInput] = useState('')  // textarea raw 입력
+
+  // "지금 실행" 수동 트리거 — cron 5분 주기 안 기다리고 즉시 collect+register 시작
+  const [triggerRunning, setTriggerRunning] = useState(false)
+  const handleTriggerNow = async () => {
+    setTriggerRunning(true)
+    try {
+      const res = await adPost<{ success: boolean; queued: number; message?: string }>(
+        `/api/naver-ad/keyword-pool/trigger-now${cidQs()}`,
+        {},
+        { timeout: 20_000 }
+      )
+      if (res.success && res.queued > 0) {
+        toast.success(res.message || '즉시 발굴 시작 — 1~3분 후 화면 갱신')
+        // 30초 후 새로고침 (collect 가 첫 결과 내는 데 보통 30~120초)
+        setTimeout(() => load(), 30_000)
+      } else {
+        toast.error(res.message || '활성 광고 계정 없음')
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || e?.message || '트리거 실패')
+    } finally {
+      setTriggerRunning(false)
+    }
+  }
 
   // 백엔드 APScheduler 상태 — 가짜 client-side "다음 실행 예정" 대신 진짜 next_run_time.
   // recent_runs 가 비어있는데 스케줄러까지 죽었으면 사용자가 즉시 알 수 있어야 함.
@@ -200,7 +228,10 @@ export default function KeywordPoolPage() {
 
   const loadAccounts = async () => {
     try {
-      const data = await adGet<{ success: boolean; accounts: AdAccount[] }>('/api/naver-ad/keyword-pool/accounts')
+      const data = await adGet<{ success: boolean; accounts: AdAccount[] }>(
+        '/api/naver-ad/keyword-pool/accounts',
+        { showToast: false }  // 직접 toast.error 로 메시지 통제 — adFetch 의 generic 메시지 대신
+      )
       const list = data.accounts || []
       setAccounts(list)
       // localStorage 에 저장된 선택 복원, 없으면 첫 광고주
@@ -219,9 +250,23 @@ export default function KeywordPoolPage() {
         const acct = list.find(a => a.customer_id === pickedCid)
         if (acct?.default_bid != null) setBidInput(String(acct.default_bid))
       }
+      // 정상 응답인데 광고주 0개 → empty 배너 표시 (silent fail 의 가장 흔한 케이스).
+      // 이전 fetch_failed 였다가 retry 성공해 비어있는 케이스도 여기로 떨어짐.
+      const nextState = list.length === 0 ? 'empty' : 'ready'
+      setAccountsState(nextState)
+      setAccountsErrorMsg('')
+      // 최초 1회만 toast — 이후 selectedCid 폴링 useEffect 가 같은 상태로 반복 fire 해도
+      // 토스트 spam 방지 위해 accountsState 가 바뀐 경우에만 띄움 (이전 null/empty/fetch_failed → empty)
+      if (nextState === 'empty') {
+        toast.error('연결된 광고주가 없습니다 — /ad-optimizer 에서 네이버 광고 계정을 먼저 연결하세요')
+      }
     } catch (e: any) {
-      // accounts 조회 실패해도 default 동작 유지
+      // 진단 가능하게 surface — 콘솔 warn + UI 배너 + toast
+      const msg = e?.detail || e?.message || '알 수 없는 오류'
       console.warn('[keyword-pool] loadAccounts 실패', e)
+      setAccountsState('fetch_failed')
+      setAccountsErrorMsg(msg)
+      toast.error(`광고주 목록 조회 실패 — ${msg}`)
     }
   }
 
@@ -949,6 +994,46 @@ export default function KeywordPoolPage() {
           </div>
         </div>
 
+        {/* 광고주 0개 / 조회 실패 — 드롭다운이 사라져 사용자가 "왜 안 보이지?" 혼란하던 silent fail.
+            이전엔 loadAccounts catch 가 console.warn 만 찍어서 진단 불가했음. */}
+        {accountsState === 'empty' && (
+          <div className="mb-4 p-4 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-900">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold mb-1">연결된 광고주가 없습니다</p>
+                <p className="text-amber-800">
+                  네이버 광고 계정이 연결돼야 키워드 풀이 동작합니다.{' '}
+                  <Link href="/ad-optimizer" className="underline font-medium hover:text-amber-700">
+                    /ad-optimizer
+                  </Link>{' '}
+                  에서 계정 연결을 먼저 진행하세요. (또는 다른 user_id 로 로그인되어 있는지 확인 —
+                  현재 로그인 계정에 ad_accounts row 가 없을 수 있음)
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+        {accountsState === 'fetch_failed' && (
+          <div className="mb-4 p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-900">
+            <div className="flex items-start gap-2">
+              <XCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-semibold mb-1">광고주 목록 조회 실패</p>
+                <p className="text-red-800 mb-2">
+                  {accountsErrorMsg || '서버 응답 없음'}
+                </p>
+                <button
+                  onClick={loadAccounts}
+                  className="inline-flex items-center gap-1 px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                >
+                  <RefreshCw className="w-3 h-3" /> 다시 시도
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {accounts.length > 1 && (
           <div className="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-900">
             <span className="font-semibold">다중 광고주 모드</span> — 총 {accounts.length}개 광고주 등록됨.
@@ -1158,20 +1243,31 @@ export default function KeywordPoolPage() {
               </div>
               <h2 className="font-bold text-gray-900">자동화 라이브 상태</h2>
             </div>
-            <div className="text-xs inline-flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-gray-500" />
-              {schedulerKnownDown ? (
-                <span className="text-red-700 font-semibold">백엔드 스케줄러 정지됨</span>
-              ) : (
-                <>
-                  <span className="text-gray-500">
-                    다음 실행 ~ {minsToNext}분 후 {nextTickHHMM && `(${nextTickHHMM})`}
-                  </span>
-                  {schedulerHealth?.running && (
-                    <span className="text-[10px] text-green-700 bg-green-50 px-1.5 py-0.5 rounded">● 스케줄러 실행 중</span>
-                  )}
-                </>
-              )}
+            <div className="inline-flex items-center gap-2 flex-wrap">
+              <button
+                onClick={handleTriggerNow}
+                disabled={triggerRunning || schedulerKnownDown}
+                className="text-xs px-3 py-1.5 bg-[#0064FF] text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 inline-flex items-center gap-1"
+                title="cron 다음 tick 안 기다리고 collect+register 즉시 실행"
+              >
+                {triggerRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                지금 실행
+              </button>
+              <span className="text-xs inline-flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-gray-500" />
+                {schedulerKnownDown ? (
+                  <span className="text-red-700 font-semibold">백엔드 스케줄러 정지됨</span>
+                ) : (
+                  <>
+                    <span className="text-gray-500">
+                      다음 실행 ~ {minsToNext}분 후 {nextTickHHMM && `(${nextTickHHMM})`}
+                    </span>
+                    {schedulerHealth?.running && (
+                      <span className="text-[10px] text-green-700 bg-green-50 px-1.5 py-0.5 rounded">● 스케줄러 실행 중</span>
+                    )}
+                  </>
+                )}
+              </span>
             </div>
           </div>
 

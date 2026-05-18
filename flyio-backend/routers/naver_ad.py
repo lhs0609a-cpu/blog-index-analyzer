@@ -5472,6 +5472,39 @@ async def keyword_pool_reject_stats(
     }
 
 
+@router.post("/keyword-pool/trigger-now")
+async def keyword_pool_trigger_now(
+    background_tasks: BackgroundTasks,
+    user_id: int = Depends(get_user_id_with_fallback),
+    customer_id: Optional[str] = Query(None),
+):
+    """사용자 트리거 — cron 다음 tick 안 기다리고 본인 광고주의 collect+register 즉시 실행.
+    시드 저장 직후 / 새 광고주 초기 발굴 등에서 "5분 후" 대기 없이 즉시 시작.
+    Bearer 인증 불필요 (본인 광고주만 처리).
+    """
+    from database.naver_ad_db import list_ad_accounts_for_user
+    pairs: List[Tuple[int, int]] = []
+    if customer_id:
+        try:
+            pairs = [(user_id, int(customer_id))]
+        except ValueError:
+            raise HTTPException(status_code=400, detail="customer_id 정수 필요")
+    else:
+        accounts = list_ad_accounts_for_user(user_id) or []
+        pairs = [(user_id, int(a["customer_id"])) for a in accounts if a.get("is_connected")]
+
+    if not pairs:
+        return {"success": True, "queued": 0, "message": "활성 광고 계정 없음"}
+
+    background_tasks.add_task(_run_pool_workers_for_accounts, pairs)
+    return {
+        "success": True,
+        "queued": len(pairs),
+        "message": f"{len(pairs)}개 광고주 즉시 발굴 시작 — 1~3분 후 화면 갱신",
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
 @router.post("/keyword-pool/admin/run")
 async def keyword_pool_admin_run(
     background_tasks: BackgroundTasks,
