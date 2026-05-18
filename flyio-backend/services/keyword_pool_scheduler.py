@@ -110,17 +110,17 @@ class KeywordPoolScheduler:
                 coalesce=True,
                 next_run_time=_now + timedelta(seconds=240),
             )
-        # Domain cleanup — 15분 주기 click 무관 KW 도메인 정리 (물갈이 핵심).
-        # 30분→15분: click_cleanup 이 non_empty=0 (클릭 KW 없는 광고주) 광고주에서
-        # 효과 0 이라 도메인 정리에 전적 의존. 15분 × 500개 = 시간당 2000개 회수.
+        # Domain cleanup — 20분 주기 click 무관 KW 도메인 정리 (물갈이 핵심).
+        # 30분 → 15분 시도했으나 fly 1 CPU 과부하 (cron 적체 + Naver ConnectTimeout 다수
+        # + /usage 등 사용자 API 45s timeout). 20분으로 절충 — 시간당 1500개 회수.
         # saved_relevance 가 풍부할 때 (≥수백개) 만 발동되며 scoring 은 self_heal 과 동일.
         # 끄려면 env KEYWORD_POOL_DOMAIN_CLEANUP_DISABLED=1.
         if _os.environ.get("KEYWORD_POOL_DOMAIN_CLEANUP_DISABLED") != "1":
             self.scheduler.add_job(
                 self._domain_cleanup_tick,
-                IntervalTrigger(seconds=900),
+                IntervalTrigger(seconds=1200),
                 id="keyword_pool_domain_cleanup",
-                name="키워드 풀 도메인 자동 정리 (15분 주기, click 무관)",
+                name="키워드 풀 도메인 자동 정리 (20분 주기, click 무관)",
                 replace_existing=True,
                 max_instances=1,
                 coalesce=True,
@@ -147,7 +147,7 @@ class KeywordPoolScheduler:
         _domain_cleanup_status = (
             "domain_cleanup OFF"
             if _os.environ.get("KEYWORD_POOL_DOMAIN_CLEANUP_DISABLED") == "1"
-            else "domain_cleanup 900s"
+            else "domain_cleanup 1200s"
         )
         logger.warning(
             f"[pool/scheduler] 시작 (AI-first 빠른 채움) — collect {interval_seconds}s / "
@@ -418,10 +418,9 @@ class KeywordPoolScheduler:
         click_cleanup_tick 과 동일 사고 (Naver API hang → 다음 tick 영구 skip) 가드:
         per-account 1200s, 전체 1500s timeout.
         """
-        # interval 30분→15분 단축에 맞춰 timeout 도 축소.
-        # 15분 (900s) 안에 끝나야 다음 tick max_instances=1 안 막힘.
-        PER_ACCOUNT_TIMEOUT = 600   # 10분 — 광고주 한 명 처리 한계
-        TICK_TIMEOUT = 780          # 13분 — 다음 15분 tick 전 양보
+        # interval 20분 (1200s) — 다음 tick 전에 끝나야 max_instances=1 안 막힘.
+        PER_ACCOUNT_TIMEOUT = 800   # 13분 — 광고주 한 명 처리 한계
+        TICK_TIMEOUT = 1050         # 17.5분 — 다음 20분 tick 전 양보
         try:
             from routers.naver_ad import _run_domain_cleanup_for_account
             from database.naver_ad_db import list_auto_cleanup_enabled_accounts
