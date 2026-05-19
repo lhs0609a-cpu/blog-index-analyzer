@@ -142,6 +142,7 @@ export default function KeywordPoolPage() {
 
   // 네이버 ↔ DB 한도 sync state — 사용자가 콘솔에서 직접 캠페인 삭제 시 stale row 정리
   const [reconciling, setReconciling] = useState(false)
+  const [rebuilding, setRebuilding] = useState(false)
 
   // 클릭 키워드 검수 state — useEffect dependency보다 앞에 정의 (TDZ 회피)
   const [clickedDays, setClickedDays] = useState(7)
@@ -371,6 +372,48 @@ export default function KeywordPoolPage() {
       toast.error(e?.response?.data?.detail || e?.message || '네이버 sync 실패 — fly logs 확인 필요')
     } finally {
       setReconciling(false)
+    }
+  }
+
+  const handleRebuildFromNaver = async () => {
+    if (rebuilding) return
+    if (!confirm(
+      '네이버에서 실제 등록된 KW 를 전부 pull 해서 우리 DB 를 재구성합니다.\n\n' +
+      '- 캠페인 → 광고그룹 → KW 순으로 전체 sync\n' +
+      '- UPSERT — 기존 row 의 removed_at 도 클리어 (네이버에 있으면 live)\n' +
+      '- 99k 계정 기준 약 1~3분 소요\n\n' +
+      'reconcile 버그로 한도가 0 으로 표시되는 사고의 복구용. 여러 번 실행해도 안전.'
+    )) return
+    setRebuilding(true)
+    const startedAt = Date.now()
+    const progressTimer = setTimeout(() => {
+      toast('처리 중... 네이버 KW pull 진행 (대용량 계정은 최대 3분)', { duration: 10000 })
+    }, 15000)
+    try {
+      const res = await adPost<{
+        success: boolean
+        campaigns: number
+        ad_groups: number
+        pulled: number
+        new_active: number
+      }>(
+        `/api/naver-ad/keyword-pool/admin/rebuild-from-naver${cidQs()}`,
+        {},
+        { timeout: 300_000, retries: 0 }  // 5분 timeout — 100k+ 계정 대비
+      )
+      clearTimeout(progressTimer)
+      console.log(`[rebuild-from-naver] ${Date.now() - startedAt}ms result`, res)
+      toast.success(
+        `재구성 완료 — 네이버 ${res.campaigns} 캠페인 / ${res.ad_groups} 광고그룹 / ` +
+        `KW ${res.pulled.toLocaleString()}개 pull. 한도 사용량: ${res.new_active.toLocaleString()}`
+      )
+      load()
+    } catch (e: any) {
+      clearTimeout(progressTimer)
+      console.error(`[rebuild-from-naver] ${Date.now() - startedAt}ms 실패`, e)
+      toast.error(e?.response?.data?.detail || e?.message || '네이버 재구성 실패 — fly logs 확인 필요')
+    } finally {
+      setRebuilding(false)
     }
   }
 
@@ -1139,9 +1182,18 @@ export default function KeywordPoolPage() {
             <Database className="w-5 h-5 text-[#0064FF]" />
             <h2 className="font-bold text-gray-900">계정 한도 사용량</h2>
             <button
+              onClick={handleRebuildFromNaver}
+              disabled={rebuilding || reconciling}
+              className="ml-auto inline-flex items-center gap-1 px-3 py-1 text-xs border border-emerald-400 text-emerald-700 rounded hover:bg-emerald-50 disabled:bg-gray-100 disabled:text-gray-400"
+              title="네이버에서 실제 등록된 KW 전체 pull → DB 재구성. 한도 0 표시 사고 복구용."
+            >
+              {rebuilding ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              DB 재구성 (네이버 pull)
+            </button>
+            <button
               onClick={handleReconcileNaver}
-              disabled={reconciling}
-              className="ml-auto inline-flex items-center gap-1 px-3 py-1 text-xs border border-blue-300 text-blue-700 rounded hover:bg-blue-50 disabled:bg-gray-100 disabled:text-gray-400"
+              disabled={reconciling || rebuilding}
+              className="inline-flex items-center gap-1 px-3 py-1 text-xs border border-blue-300 text-blue-700 rounded hover:bg-blue-50 disabled:bg-gray-100 disabled:text-gray-400"
               title="네이버 광고 콘솔에서 직접 삭제한 캠페인을 우리 DB 와 sync — 한도 사용량 정확화"
             >
               {reconciling ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}

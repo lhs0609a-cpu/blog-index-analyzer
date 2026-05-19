@@ -7775,6 +7775,128 @@ async def keyword_pool_reconcile_naver(
     }
 
 
+@router.post("/keyword-pool/admin/rebuild-from-naver")
+async def keyword_pool_rebuild_from_naver(
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """네이버에 실제 등록된 KW 를 전부 pull → registered_keywords 테이블 재구성.
+
+    복구용. reconcile 버그 (2026-05-19) 로 DB row 전멸 사고 후 한도 사용량 0 표시
+    되는 계정을 실제 네이버 상태로 동기화. UPSERT 라서 여러 번 실행해도 안전.
+    """
+    import sqlite3 as _sqlite3
+    from services.naver_ad_service import NaverAdApiClient
+
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    # 1) campaigns
+    try:
+        campaigns = await client.get_campaigns()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"네이버 캠페인 조회 실패: {type(e).__name__}: {str(e)[:200]}")
+    live_campaigns = [c for c in (campaigns or []) if c.get("nccCampaignId")]
+    if not live_campaigns:
+        raise HTTPException(status_code=503, detail="네이버 캠페인 list 가 비었음 — API 일시 장애 가능성")
+
+    # 2) ad_groups (병렬 sem=8)
+    sem = asyncio.Semaphore(8)
+
+    async def _fetch_groups(camp_id: str):
+        async with sem:
+            try:
+                ags = await client.get_ad_groups(campaign_id=camp_id) or []
+                return camp_id, [ag.get("nccAdgroupId") for ag in ags if ag.get("nccAdgroupId")]
+            except Exception as e:
+                logger.warning(f"[rebuild] get_ad_groups({camp_id}) 실패: {e}")
+                return camp_id, []
+
+    ag_results = await asyncio.gather(*[_fetch_groups(c["nccCampaignId"]) for c in live_campaigns])
+    ag_to_camp: Dict[str, str] = {}
+    for camp_id, ag_ids in ag_results:
+        for ag_id in ag_ids:
+            ag_to_camp[ag_id] = camp_id
+
+    if not ag_to_camp:
+        raise HTTPException(status_code=503, detail=f"네이버 광고그룹 0개 — 캠페인 {len(live_campaigns)}개 있는데 그룹 못 가져옴")
+
+    # 3) keywords per ad_group (병렬 sem=8)
+    async def _fetch_kws(ag_id: str):
+        async with sem:
+            try:
+                return ag_id, (await client.get_keywords(ad_group_id=ag_id) or [])
+            except Exception as e:
+                logger.warning(f"[rebuild] get_keywords({ag_id}) 실패: {e}")
+                return ag_id, []
+
+    kw_results = await asyncio.gather(*[_fetch_kws(ag_id) for ag_id in ag_to_camp.keys()])
+
+    rows: List[Dict] = []
+    for ag_id, kws in kw_results:
+        camp_id = ag_to_camp.get(ag_id)
+        for kw in kws:
+            text = (kw.get("keyword") or "").strip()
+            if not text:
+                continue
+            rows.append({
+                "keyword": text,
+                "ad_group_id": ag_id,
+                "campaign_id": camp_id,
+                "bid_amt": kw.get("bidAmt"),
+                "ncc_keyword_id": kw.get("nccKeywordId"),
+            })
+
+    if not rows:
+        raise HTTPException(
+            status_code=503,
+            detail=f"네이버에서 KW 0개 발견 — 캠페인 {len(live_campaigns)}개 / 그룹 {len(ag_to_camp)}개 있는데 KW 없음. 진짜 빈 상태이거나 API 부분 장애.",
+        )
+
+    # 4) UPSERT — 기존 row 의 removed_at 도 클리어 (네이버에 실제 있으면 live).
+    reg = get_registered_keywords_db()
+    with reg._conn() as conn:
+        cur = conn.cursor()
+        for r in rows:
+            try:
+                cur.execute(
+                    """INSERT INTO registered_keywords
+                       (user_id, account_customer_id, keyword, ad_group_id,
+                        campaign_id, bid_amt, ncc_keyword_id)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(account_customer_id, keyword) DO UPDATE SET
+                         removed_at = NULL,
+                         ad_group_id = excluded.ad_group_id,
+                         campaign_id = excluded.campaign_id,
+                         bid_amt = excluded.bid_amt,
+                         ncc_keyword_id = excluded.ncc_keyword_id""",
+                    (user_id, cid, r["keyword"], r["ad_group_id"], r["campaign_id"],
+                     r["bid_amt"], r["ncc_keyword_id"]),
+                )
+            except _sqlite3.Error as e:
+                logger.warning(f"[rebuild] upsert 실패 {r['keyword']}: {e}")
+
+    new_active = int((reg.stats(cid) or {}).get("active") or 0)
+    logger.warning(
+        f"[rebuild] uid={user_id} cid={cid} campaigns={len(live_campaigns)} "
+        f"ad_groups={len(ag_to_camp)} pulled={len(rows)} new_active={new_active}"
+    )
+    return {
+        "success": True,
+        "campaigns": len(live_campaigns),
+        "ad_groups": len(ag_to_camp),
+        "pulled": len(rows),
+        "new_active": new_active,
+    }
+
+
 @router.delete("/keyword-pool/keywords/{keyword}")
 async def keyword_pool_delete_keyword(
     keyword: str,
