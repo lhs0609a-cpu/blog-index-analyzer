@@ -7685,6 +7685,19 @@ async def keyword_pool_reconcile_naver(
         ).fetchall()
     db_campaign_ids = set(r[0] for r in rows if r[0])
 
+    # SAFETY: 네이버 API 가 빈 응답 (rate limit / 일시 장애) 일 때 DB 통째 wipe 차단.
+    # 과거 사고: 50k 일괄 삭제 트래픽 중 reconcile 클릭 → live=[] → db_campaigns 전체가
+    # "사라진 캠페인" 으로 분류 → registered_keywords 테이블 전멸 → 한도 0 표시 사고.
+    if not live_campaign_ids and db_campaign_ids:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "네이버 캠페인 list 가 비었음 — API 일시 장애 가능성. "
+                f"DB 에는 {len(db_campaign_ids)}개 캠페인 등록됨. "
+                "이 상태에서 sync 진행 시 DB 통째 삭제 위험. 잠시 후 재시도."
+            ),
+        )
+
     # 3) DB 에 있지만 네이버에 없는 캠페인 → 그 캠페인의 모든 row 삭제
     deleted_campaigns = db_campaign_ids - live_campaign_ids
     n_rows_deleted = 0
