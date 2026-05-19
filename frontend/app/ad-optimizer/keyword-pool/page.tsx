@@ -417,17 +417,29 @@ export default function KeywordPoolPage() {
     }
   }
 
-  const load = async () => {
-    setLoading(true)
+  const load = async (opts?: { lite?: boolean }) => {
+    const lite = !!opts?.lite
+    if (!stats) setLoading(true)  // 첫 로드만 spinner — 폴링은 silent
     try {
-      // seed_breakdown 가 시드 200+ 일 때 느림 — 60s timeout (default 30s 부족).
+      // lite=true → 첫 페인트용 fast path (~500ms). seed_breakdown 등 무거운 쿼리 skip.
+      // 그 후 idle callback 에서 full 호출로 덮어씀.
+      const qs = cidQs()
+      const sep = qs ? '&' : '?'
+      const url = lite
+        ? `/api/naver-ad/keyword-pool/stats${qs}${sep}lite=true`
+        : `/api/naver-ad/keyword-pool/stats${qs}`
       const data = await adGet<PoolStatsResponse>(
-        `/api/naver-ad/keyword-pool/stats${cidQs()}`,
-        { timeout: 60_000, showToast: false }
+        url,
+        { timeout: lite ? 15_000 : 60_000, showToast: false }
       )
-      setStats(data)
+      setStats(prev => {
+        // lite 응답이 full 응답을 덮어쓰는 race condition 차단 — lite=true 면 기존 seed_breakdown 보존.
+        if (lite && prev && (prev.seed_breakdown?.length || 0) > 0) {
+          return { ...data, seed_breakdown: prev.seed_breakdown, recent_keywords: prev.recent_keywords, collect_deadlock: prev.collect_deadlock }
+        }
+        return data
+      })
     } catch (e: any) {
-      // 폴링 실패는 토스트 안 띄움 (10초마다 다시 시도). 첫 로드는 알림.
       if (!stats) toast.error(e?.message || '로드 실패')
     } finally {
       setLoading(false)
@@ -676,23 +688,26 @@ export default function KeywordPoolPage() {
   // selectedCid 변경 시 stats + clicked 재조회 + 폴링 시작
   useEffect(() => {
     if (!isAuthenticated) return
-    load()
-    loadClickedKeywords()  // 클릭 키워드 자동 1회 로드
-    loadAutoCleanup()      // 자동 cleanup 설정 1회 로드
-    loadRejectStats()      // AI reject 분류 카운터 1회 로드
-    loadSchedulerHealth()  // APScheduler 상태 1회 로드 (광고주 무관)
-    // 폴링 — 백엔드 부담 줄이기 위해 간격 확대 (2026-05-07: OOM SIGKILL 사례 다수).
-    // 탭이 백그라운드면 polling 자체 skip.
+    // 1) 첫 페인트 — lite=true 로 ~500ms 안에 핵심 데이터 표시.
+    load({ lite: true })
+    // 2) full stats — idle 후 (1.5s) 백그라운드 로드 → seed_breakdown 등 무거운 쿼리.
+    const tFull = setTimeout(() => load(), 1500)
+    // 3) 보조 로드 — UI 첫 페인트 가린 뒤 점진적 로드. 사용자 체감 속도 ↑.
+    const tCleanup = setTimeout(() => loadAutoCleanup(), 800)
+    const tRejects = setTimeout(() => loadRejectStats(), 1200)
+    const tSched = setTimeout(() => loadSchedulerHealth(), 1600)
+    const tClicked = setTimeout(() => loadClickedKeywords(), 2500)  // 가장 비싼 호출 (네이버 1500 KW) 마지막
+
+    // 폴링 — 백엔드 부담 줄이기. 탭 백그라운드면 skip.
     const isVisible = () => typeof document !== 'undefined' && document.visibilityState === 'visible'
-    const tStats = setInterval(() => { if (isVisible()) load() }, 30_000)
-    const tClicked = setInterval(() => { if (isVisible()) loadClickedKeywords() }, 90_000)
-    const tRejects = setInterval(() => { if (isVisible()) loadRejectStats() }, 60_000)
-    const tSched = setInterval(() => { if (isVisible()) loadSchedulerHealth() }, 60_000)
+    const ivStats = setInterval(() => { if (isVisible()) load({ lite: true }) }, 30_000)  // lite polling
+    const ivFull = setInterval(() => { if (isVisible()) load() }, 120_000)  // full 은 2분
+    const ivClicked = setInterval(() => { if (isVisible()) loadClickedKeywords() }, 180_000)  // 90s → 180s
+    const ivRejects = setInterval(() => { if (isVisible()) loadRejectStats() }, 90_000)
+    const ivSched = setInterval(() => { if (isVisible()) loadSchedulerHealth() }, 120_000)
     return () => {
-      clearInterval(tStats)
-      clearInterval(tClicked)
-      clearInterval(tRejects)
-      clearInterval(tSched)
+      clearTimeout(tFull); clearTimeout(tCleanup); clearTimeout(tRejects); clearTimeout(tSched); clearTimeout(tClicked)
+      clearInterval(ivStats); clearInterval(ivFull); clearInterval(ivClicked); clearInterval(ivRejects); clearInterval(ivSched)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, selectedCid])

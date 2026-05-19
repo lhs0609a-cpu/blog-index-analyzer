@@ -5627,11 +5627,17 @@ def keyword_pool_list_accounts(user_id: int = Depends(get_user_id_with_fallback)
 def keyword_pool_stats(
     user_id: int = Depends(get_user_id_with_fallback),
     customer_id: Optional[str] = None,
+    lite: bool = False,
 ):
     """본인 풀/등록 상태 — customer_id 명시 시 그 광고주.
 
     sync def — 모든 호출이 sqlite read (pool.stats/recent_runs/seed_breakdown 등).
     threadpool dispatch 로 cron 점유 event loop 와 격리.
+
+    lite=true: 첫 페인트용 — pool.stats, reg.stats, recent_runs[:5] 만. seed_breakdown
+    (시드 200+ 일 때 300ms+) / recent_keywords / deadlock 는 응답에서 제외 → 응답 시간
+    1초 미만 보장. 풀 페이지가 useEffect 첫 호출에서 lite=true 쓰고, 그 다음 idle
+    callback 에서 full 호출.
     """
     try:
         account = _resolve_account(user_id, customer_id)
@@ -5651,10 +5657,27 @@ def keyword_pool_stats(
             logger.error(f"keyword-pool/stats reg.stats 실패: {e}", exc_info=True)
             reg_stats = {"error": f"{type(e).__name__}: {str(e)[:200]}"}
         try:
-            recent = pool.recent_runs(customer_id, limit=20)
+            recent = pool.recent_runs(customer_id, limit=5 if lite else 20)
         except Exception as e:
             logger.error(f"keyword-pool/stats recent_runs 실패: {e}", exc_info=True)
             recent = []
+
+        # lite 모드 — 무거운 쿼리 3종 skip. 응답 1초 미만 보장.
+        if lite:
+            return {
+                "success": True,
+                "customer_id": customer_id,
+                "pool": pool_stats,
+                "registered": reg_stats,
+                "account_cap": 100_000,
+                "recent_runs": recent,
+                "seed_breakdown": [],
+                "recent_keywords": [],
+                "collect_deadlock": {"is_deadlock": False, "consecutive_zero_runs": 0, "total_rejected": 0},
+                "lite": True,
+                "now": datetime.now().isoformat(timespec="seconds"),
+            }
+
         try:
             seed_break = pool.seed_breakdown(customer_id)
         except Exception as e:

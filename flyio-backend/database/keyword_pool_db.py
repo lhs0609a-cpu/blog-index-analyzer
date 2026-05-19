@@ -82,6 +82,16 @@ class KeywordPoolDB:
                 CREATE INDEX IF NOT EXISTS idx_pool_user
                 ON naverad_keyword_pool(user_id, status)
             """)
+            # seed_breakdown 의 GROUP BY seed 가속 — 100k+ row 풀에서 full scan 막음.
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_pool_seed
+                ON naverad_keyword_pool(account_customer_id, seed)
+            """)
+            # recent_keywords 의 ORDER BY id DESC — account 별 latest 30 fast path.
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_pool_recent
+                ON naverad_keyword_pool(account_customer_id, id DESC)
+            """)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS naverad_pool_runs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
