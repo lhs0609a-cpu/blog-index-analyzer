@@ -2815,6 +2815,16 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         domain_basis = f"user_seed_pool({len(initial_user_seeds_only)})"
     derived_count = len(domain_token_set) - (len(POOL_DOMAIN_TOKENS) if cold_start and not saved_relevance else 0)
 
+    # collect ADD score gate — atom 화이트리스트 + 점수 ≥ threshold 양쪽 충족 요구.
+    # atom-only 게이트는 우연한 2-gram 매칭 (예: "탈" → "테이블렌탈") 으로 점수 30짜리도
+    # 통과 → 15분 cleanup 이 다시 삭제 → API/네이버 호출 낭비. ADD/DELETE 양쪽 모두
+    # 같은 threshold 사용해 전체 사이클 일관성 유지.
+    # saved_relevance < 3 (도메인 시그널 부족) 인 경우 게이트 비활성화 (cold_start 광고주 보호).
+    from database.naver_ad_db import get_ad_account_auto_cleanup as _get_collect_thr_cfg
+    _collect_thr_cfg = _get_collect_thr_cfg(uid, str(customer_id)) or {}
+    _collect_score_thr = int(_collect_thr_cfg.get("threshold") or 50)
+    _collect_score_seeds = list(saved_relevance) if saved_relevance and len([s for s in saved_relevance if s and len(s) >= 2]) >= 3 else []
+
     # 등록 KW atom — cleanup/collect 게이트와 동일 기준.
     # ANCHOR: user_seed atom (length≥3) 을 포함하는 등록 KW 만 학습.
     # Why: 무필터 학습 시 POOL 토큰("교육"/"강의" 등)으로만 통과한 cross-domain KW 가
@@ -3200,6 +3210,20 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
                     if len(sample_no_seed) < 10:
                         sample_no_seed.append(kw)
                 continue
+
+            # 점수 게이트 — atom 화이트리스트 통과해도 _compute_relevance_score < threshold
+            # 이면 풀 합류 차단. ADD/DELETE 양쪽 모두 같은 threshold (옵션 B 경계 보존).
+            # saved_relevance 시드가 < 3 이면 게이트 비활성 (cold_start 광고주 보호).
+            # nonlocal 은 line 3181 에서 이미 함수 스코프로 선언됨 — 여기서 재선언 X.
+            if _collect_score_seeds:
+                _sc = _compute_relevance_score(kw, _collect_score_seeds)
+                if _sc < _collect_score_thr:
+                    rejected += 1
+                    reject_no_seed_match += 1  # 점수 미달 — 시드미스 카테고리로 기록
+                    if len(sample_no_seed) < 10:
+                        sample_no_seed.append(kw)
+                    continue
+
             sub_candidates_out.append({
                 "keyword": kw, "monthly_total": mt,
                 "monthly_pc": pc, "monthly_mobile": mob,
