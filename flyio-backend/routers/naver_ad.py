@@ -2471,7 +2471,9 @@ async def _cap_triggered_self_heal(
         return out
 
     scored = await asyncio.to_thread(_score_all)
-    targets = [(kid, kw, s) for kid, kw, s in scored if s <= threshold]
+    # Option B (boundary 보존): score == threshold KW 는 ADD gate (>=) 와 DELETE gate (<)
+    # 사이의 stable point. 정확히 50점 KW 가 thrash 사이클 (add→delete→add) 도는 사고 방지.
+    targets = [(kid, kw, s) for kid, kw, s in scored if s < threshold]
     targets.sort(key=lambda x: x[2])
     targets_capped = targets[:max_delete]
     if not targets_capped:
@@ -5216,7 +5218,7 @@ async def keyword_pool_diagnostics_seed_audit(
         sc = _compute_relevance_score(s, score_basis)
         bucket = (sc // 10) * 10
         dist[bucket] = dist.get(bucket, 0) + 1
-        if sc <= score_threshold:
+        if sc < score_threshold:  # Option B: boundary 보존 — score == threshold 는 clean
             contaminated.append((s, sc))
         else:
             clean.append((s, sc))
@@ -6223,7 +6225,7 @@ async def _run_auto_cleanup_for_account(
         if not kw:
             continue
         score = _compute_relevance_score(kw, user_seeds)
-        if score <= threshold:
+        if score < threshold:  # Option B: boundary 보존
             targets.append((kid, kw, score))
 
     # 가장 무관한 KW 부터 (낮은 점수 우선) — max_delete 캡 적용
@@ -6496,7 +6498,7 @@ async def _run_domain_cleanup_for_account(
         return out
 
     scored = await asyncio.to_thread(_score_all)
-    targets = [(kid, kw, s) for kid, kw, s in scored if s <= threshold]
+    targets = [(kid, kw, s) for kid, kw, s in scored if s < threshold]  # Option B: boundary 보존
     targets.sort(key=lambda x: x[2])  # 무관한 것부터
     targets = targets[:max(0, min(max_delete, 5000))]
     if not targets:
@@ -7039,7 +7041,7 @@ async def keyword_pool_registered_cleanup_by_score(
     _t_db = _t.monotonic() - _t0
     scored, score_dist = await asyncio.to_thread(_score_all)
     _t_score = _t.monotonic() - _t0 - _t_db
-    targets = [(kid, kw, s) for kid, kw, s in scored if s <= threshold]
+    targets = [(kid, kw, s) for kid, kw, s in scored if s < threshold]  # Option B: boundary 보존
     targets.sort(key=lambda x: x[2])  # 무관한 것부터
     targets_capped = targets[:max_delete]
     logger.warning(
@@ -7243,7 +7245,7 @@ async def keyword_pool_admin_purge_drift(
         for r in user_seed_rows:
             kw = r["keyword"]
             sc = _compute_relevance_score(kw, score_basis)
-            if sc <= threshold:
+            if sc < threshold:  # Option B: boundary 보존
                 user_seed_to_delete.append(kw)
 
         # pending 정리
@@ -7256,7 +7258,7 @@ async def keyword_pool_admin_purge_drift(
         for r in pending_rows:
             kw = r["keyword"]
             sc = _compute_relevance_score(kw, score_basis)
-            if sc <= threshold:
+            if sc < threshold:  # Option B: boundary 보존
                 pending_to_delete.append(kw)
 
         sample_user_seed = user_seed_to_delete[:10]
@@ -7334,7 +7336,7 @@ async def keyword_pool_admin_purge_drift(
         return out
 
     reg_scored = await asyncio.to_thread(_score_reg)
-    reg_targets = [(kid, kw, s) for kid, kw, s in reg_scored if s <= threshold]
+    reg_targets = [(kid, kw, s) for kid, kw, s in reg_scored if s < threshold]  # Option B: boundary 보존
     reg_targets.sort(key=lambda x: x[2])
     reg_capped = reg_targets[:max_delete_registered]
 
