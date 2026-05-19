@@ -23,9 +23,16 @@ DB_PATH = Path(DATA_DIR) / "naver_ad.db"
 
 
 def get_connection() -> sqlite3.Connection:
-    """데이터베이스 연결"""
-    conn = sqlite3.connect(str(DB_PATH))
+    """데이터베이스 연결.
+
+    WAL + busy_timeout — 50k 일괄 삭제 + cron 5종이 동시 write 중일 때
+    /accounts /stats hot read 가 SQLITE_BUSY 로 5s 안에 죽던 사고 차단.
+    """
+    conn = sqlite3.connect(str(DB_PATH), timeout=30.0)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=30000")
+    conn.execute("PRAGMA synchronous=NORMAL")
     return conn
 
 
