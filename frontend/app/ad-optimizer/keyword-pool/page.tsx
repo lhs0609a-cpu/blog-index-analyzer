@@ -2142,8 +2142,9 @@ export default function KeywordPoolPage() {
           </div>
           <p className="text-xs text-gray-500 mt-2">
             <span className="font-semibold text-orange-600">연관키워드 대량 등록</span>: 위 시드의
-            네이버 연관키워드를 검색량 필터만 통과시켜 AI 게이트 없이 pending 에 대량 추가합니다
-            (시드 신뢰). 자동 등록 cron 이 네이버에 등록 — 결과는 아래 실행 이력의 seed_explode.
+            네이버 연관키워드 중 <b>검색량 ≥ 위 값</b> 이고 <b>연관성 점수 ≥ 50</b> 인 것만 pending 에
+            대량 추가합니다 (LLM 게이트는 우회, 점수 기준은 자동삭제 크론과 동일 → 등록 후 안 지워짐).
+            자동 등록 cron 이 네이버에 등록 — 결과는 아래 실행 이력의 seed_explode.
           </p>
         </div>
 

@@ -5813,22 +5813,32 @@ class SeedExplodeRequest(BaseModel):
     seeds: List[str]
     min_volume: int = 100  # 월 총 검색량 최소치 — 등록 가치 있는 것만
     max_per_seed: int = 1000  # 시드당 최대 연관키워드 수
+    min_score: int = 50  # 연관성 점수 최소치 — 자동삭제 크론(점수<50 삭제)과 일관
     customer_id: Optional[str] = None
 
 
 async def _run_seed_explode(
     user_id: int, customer_id: int, account: Dict,
-    seeds: List[str], min_volume: int, per_seed_cap: int,
+    seeds: List[str], min_volume: int, per_seed_cap: int, min_score: int = 50,
 ) -> None:
-    """연관키워드 폭발 — 시드별 keywordstool 연관키워드 수집 → 검색량 필터 → pending 직접 삽입.
+    """연관키워드 폭발 — 시드별 keywordstool 연관키워드 수집 → 검색량 + 연관성 점수 필터 →
+    pending 직접 삽입.
 
-    AI classify / whitelist 게이트를 안 거친다 (사용자가 명시한 시드 = 신뢰). register cron
-    이 pending 을 네이버에 등록. 자동 발굴 파이프라인의 drift 방지 게이트와 별개 경로.
+    AI classify(LLM) 게이트는 안 거치되, 연관성 점수(_compute_relevance_score) ≥ min_score
+    필터는 적용 — 자동삭제 크론이 점수<50 등록 KW 를 지우므로, 그 기준 이상만 등록해
+    churn(등록→삭제) 을 막고 도메인 정밀도 유지. 점수 기준(saved_relevance→user_seed)은
+    자동삭제 크론과 동일.
     """
     import time as _time
     from services.naver_ad_service import NaverAdApiClient
+    from database.naver_ad_db import get_ad_account_relevance_keywords
     pool = get_keyword_pool_db()
     t0 = _time.monotonic()
+
+    # 연관성 점수 기준 — 자동삭제 크론과 동일: saved relevance_keywords → user_seed 폴백.
+    score_basis = get_ad_account_relevance_keywords(user_id, str(customer_id))
+    if not score_basis:
+        score_basis = [s for s in (pool.list_user_seeds(customer_id) or []) if s and len(s) >= 2]
 
     client = NaverAdApiClient()
     client.customer_id = account["customer_id"]
@@ -5851,6 +5861,8 @@ async def _run_seed_explode(
     seen: Set[str] = set()
     items: List[Dict] = []
     total_related = 0
+    n_vol_pass = 0   # 검색량 통과 수
+    n_score_cut = 0  # 검색량 통과했으나 점수 미달로 컷
     for seed in seeds:
         try:
             resp = await client.get_related_keywords(seed, show_detail=True)
@@ -5870,7 +5882,13 @@ async def _run_seed_explode(
             mt = pc + mo
             if mt < min_volume:
                 continue
+            n_vol_pass += 1
+            # 연관성 점수 필터 — 자동삭제 크론(점수<min_score 삭제)과 일관. 점수 기준은
+            # saved_relevance(없으면 user_seed). seen 은 점수 미달이어도 마킹해 재계산 방지.
             seen.add(kw)
+            if score_basis and _compute_relevance_score(kw, score_basis) < min_score:
+                n_score_cut += 1
+                continue
             items.append({
                 "keyword": kw, "seed": seed, "source": "seed_explode",
                 "monthly_total": mt, "monthly_pc": pc, "monthly_mobile": mo,
@@ -5885,14 +5903,16 @@ async def _run_seed_explode(
     dur_ms = int((_time.monotonic() - t0) * 1000)
     logger.warning(
         f"[pool/explode] user={user_id} cid={customer_id} 시드 {len(seeds)} → "
-        f"연관 {total_related} → 검색량≥{min_volume} {len(items)} → pending +{added} ({dur_ms}ms)"
+        f"연관 {total_related} → 검색량≥{min_volume} {n_vol_pass} → 점수≥{min_score} {len(items)} "
+        f"(점수컷 {n_score_cut}) → pending +{added} ({dur_ms}ms)"
     )
     try:
         pool.record_run(
             user_id, customer_id, "seed_explode", "success" if added else "no_new",
             added=added, seeds_count=len(seeds),
             error_message=(
-                f"연관 {total_related} → 검색량≥{min_volume} {len(items)} → pending +{added}"
+                f"연관 {total_related} → 검색량≥{min_volume} {n_vol_pass} → "
+                f"점수≥{min_score} {len(items)} → pending +{added}"
             )[:300],
             duration_ms=dur_ms,
         )
@@ -5919,6 +5939,7 @@ async def keyword_pool_seed_explode(
     seeds = seeds[:50]  # 1회 최대 50 시드 (시드당 최대 1000 연관 = 최대 5만 후보)
     min_volume = max(0, min(100_000, request.min_volume))
     per_seed_cap = max(1, min(1000, request.max_per_seed))
+    min_score = max(0, min(100, request.min_score))
 
     account = _resolve_account(user_id, request.customer_id)
     if not account or not account.get("is_connected"):
@@ -5926,7 +5947,7 @@ async def keyword_pool_seed_explode(
     customer_id = int(account.get("customer_id"))
 
     background_tasks.add_task(
-        _run_seed_explode, user_id, customer_id, account, seeds, min_volume, per_seed_cap,
+        _run_seed_explode, user_id, customer_id, account, seeds, min_volume, per_seed_cap, min_score,
     )
     return {
         "success": True,
@@ -5934,9 +5955,10 @@ async def keyword_pool_seed_explode(
         "customer_id": customer_id,
         "seeds_used": len(seeds),
         "min_volume": min_volume,
+        "min_score": min_score,
         "message": (
             f"연관키워드 폭발 시작 — 시드 {len(seeds)}개의 연관키워드를 수집해 "
-            f"검색량≥{min_volume} 인 것을 pending 에 대량 추가합니다. "
+            f"검색량≥{min_volume} + 연관성 점수≥{min_score} 인 것을 pending 에 추가합니다. "
             f"진행/결과는 '최근 실행 이력'의 seed_explode 항목에서 확인하세요."
         ),
     }
