@@ -5346,6 +5346,20 @@ def keyword_pool_scheduler_diagnostics():
         return {"success": False, "error": f"scheduler import 실패: {e}"}
     sched = keyword_pool_scheduler.scheduler
     if not keyword_pool_scheduler._running:
+        # 2-프로세스 분리 — 스케줄러는 worker 프로세스(:8001)에만 산다. API 프로세스는
+        # _running=False 이므로 worker 의 동일 엔드포인트로 프록시해 실제 상태를 보여준다.
+        try:
+            import httpx as _httpx
+            r = _httpx.get(
+                "http://127.0.0.1:8001/api/naver-ad/keyword-pool/diagnostics/scheduler-jobs",
+                timeout=3.0,
+            )
+            if r.status_code == 200:
+                data = r.json()
+                data["via"] = "worker"
+                return data
+        except Exception:
+            pass
         return {"success": False, "running": False, "message": "scheduler not running"}
     jobs_info = []
     for job in sched.get_jobs():
