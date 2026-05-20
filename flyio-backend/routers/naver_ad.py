@@ -2697,6 +2697,15 @@ async def _cap_triggered_rolling_heal(
     return n_del + n_pause + n_stale
 
 
+# 등록-KW atom 계산 캐시 — collect tick 마다 5000 KW × 수천 atom 정규식 스캔(주석상
+# "30M ops 동기 블록")이 단일 프로세스 event loop 를 수초 점유 → 그동안 /health 같은
+# 초경량 요청도 10~27초 멈춤 (페이지 로딩 답답함의 주범). 등록 KW 는 천천히 변하므로
+# customer 별로 결과를 캐시하고 TTL 안에는 재계산을 건너뛴다. 미스 시엔 to_thread 로
+# 오프로드해 계산 중에도 event loop 가 API 요청을 계속 처리하게 한다.
+_REG_ATOM_CACHE: Dict[int, Dict[str, Any]] = {}
+_REG_ATOM_TTL_S = 900  # 15분 — atom 학습은 soft 휴리스틱이라 이 정도 staleness 무해
+
+
 async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new: int = 5000, min_volume: int = 1):
     """수집 1회 — keywordstool로 새 키워드 발굴해 풀에 추가.
     customer_id 명시 시 그 광고주만 처리, 없으면 사용자의 가장 최근 광고주."""
@@ -2833,40 +2842,52 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     #          "블렌더" atom 학습 → "블렌더VFX/2D/모션" 모두 통과 → 도메인 점프.
     # anchor 로 user_seed 라인 KW 만 atom 기여 → drift 전파 차단.
     # 학습 atom 도 length≥3 — 2-letter (RM/AI/IT) 가 영문 KW 전체를 통과시키는 폴루션 방지.
-    try:
-        registered_raw = pool.list_top_registered(
-            customer_id, limit=5000, min_volume=30,
-        )
-    except Exception as e:
-        logger.warning(f"[pool/collect] 등록 KW atom 조회 실패: {e}")
-        registered_raw = []
-    user_seed_kw_only = pool.list_user_seeds(customer_id)
+    # 등록-KW atom (anchor_set + registered_atoms) — 캐시 우선, 미스 시 to_thread 오프로드.
     # anchor: user_seed 의 length≥3 atom 만 — 짧은 2-gram atom (간/염/의/원 등) 이
     # cross-domain 통과시키는 누수 차단. niche 의료 시드 ("A형 간염" → "간염" atom)
     # 가 무관 KW (예: "간장/감자/은염생산") 의 2-gram 매칭으로 anchor 통과해
     # registered_atom 학습 → cascade drift 발생 위험.
-    anchor_set_all = _build_seed_atoms(user_seed_kw_only)
-    anchor_set = {a for a in anchor_set_all if len(a) >= 3}
-    if anchor_set:
-        # PERF: 5000 KW × 6000+ atom Python loop = 30M ops 동기 블록.
-        # 정규식 multi-pattern 매칭 (~100배 빠름) 으로 전환.
-        import re as _re_a
-        _anchor_re = _re_a.compile("|".join(_re_a.escape(a) for a in anchor_set))
-        registered_for_atoms = [kw for kw in registered_raw if _anchor_re.search(kw)]
+    _cache_hit = _REG_ATOM_CACHE.get(customer_id)
+    if _cache_hit and (_time.monotonic() - _cache_hit["ts"]) < _REG_ATOM_TTL_S:
+        anchor_set = _cache_hit["anchor_set"]
+        registered_atoms = _cache_hit["registered_atoms"]
+        _reg_raw_n = _cache_hit["reg_raw_n"]
+        _reg_learned_n = _cache_hit["reg_learned_n"]
     else:
-        # user_seed 0개인 신규 광고주 — anchor 비어있으면 학습 안 함 (drift 위험 큼).
-        registered_for_atoms = []
-    # 학습된 atom 만 length≥3 필터 — RM/AI/IT 같은 2-letter 영문 폴루션 차단.
-    # (anchor 매칭 시엔 ≥2 허용해서 legit KW 통과 보장, 학습 결과는 ≥3 만 토큰화)
-    registered_atoms_raw = _build_seed_atoms(registered_for_atoms)
-    registered_atoms = {a for a in registered_atoms_raw if len(a) >= 3}
+        def _compute_reg_atoms():
+            try:
+                reg_raw = pool.list_top_registered(customer_id, limit=5000, min_volume=30)
+            except Exception as e:
+                logger.warning(f"[pool/collect] 등록 KW atom 조회 실패: {e}")
+                reg_raw = []
+            a_set = {a for a in _build_seed_atoms(pool.list_user_seeds(customer_id)) if len(a) >= 3}
+            if a_set:
+                # PERF: 5000 KW × 6000+ atom Python loop = 30M ops. 정규식 multi-pattern (~100배 빠름).
+                import re as _re_a
+                _anchor_re = _re_a.compile("|".join(_re_a.escape(a) for a in a_set))
+                reg_for = [kw for kw in reg_raw if _anchor_re.search(kw)]
+            else:
+                # user_seed 0개인 신규 광고주 — anchor 비어있으면 학습 안 함 (drift 위험 큼).
+                reg_for = []
+            # 학습 atom 만 length≥3 — RM/AI/IT 같은 2-letter 영문 폴루션 차단.
+            reg_atoms = {a for a in _build_seed_atoms(reg_for) if len(a) >= 3}
+            return a_set, reg_atoms, len(reg_raw), len(reg_for)
+
+        anchor_set, registered_atoms, _reg_raw_n, _reg_learned_n = await asyncio.to_thread(_compute_reg_atoms)
+        _REG_ATOM_CACHE[customer_id] = {
+            "ts": _time.monotonic(),
+            "anchor_set": anchor_set,
+            "registered_atoms": registered_atoms,
+            "reg_raw_n": _reg_raw_n,
+            "reg_learned_n": _reg_learned_n,
+        }
 
     logger.warning(
         f"[pool/collect] user={uid} 도메인 토큰 {len(domain_token_set)}개 "
         f"basis={domain_basis} "
         f"+ 등록 atom {len(registered_atoms)}개 "
-        f"({len(registered_for_atoms)}/{len(registered_raw)} KW anchor 통과, "
-        f"anchor {len(anchor_set)}개) cold_start={cold_start}"
+        f"({_reg_learned_n}/{_reg_raw_n} KW anchor 통과, "
+        f"anchor {len(anchor_set)}개{' [cached]' if _cache_hit else ''}) cold_start={cold_start}"
     )
 
     # 도메인 미포함 키워드 자동 cleanup (registered 제외) — 매 라운드 시작 시
@@ -3013,7 +3034,7 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         f"[pool/collect] user={uid} 시작 target={target} seeds={len(seeds)} "
         f"whitelist={len(whitelist)} unified_tokens={len(unified_tokens)} "
         f"seed_atoms={len(seed_atoms)} reg_atoms={len(registered_atoms)} "
-        f"reg_learned_from={len(registered_for_atoms)} "
+        f"reg_learned_from={_reg_learned_n} "
         f"promoted={len(promoted)} loose={loose_mode}"
     )
 
@@ -5772,6 +5793,139 @@ async def keyword_pool_admin_add_seeds(
         import traceback
         logger.error(f"keyword-pool/admin/add-seeds 실패: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
+
+
+class SeedExplodeRequest(BaseModel):
+    seeds: List[str]
+    min_volume: int = 100  # 월 총 검색량 최소치 — 등록 가치 있는 것만
+    max_per_seed: int = 1000  # 시드당 최대 연관키워드 수
+    customer_id: Optional[str] = None
+
+
+async def _run_seed_explode(
+    user_id: int, customer_id: int, account: Dict,
+    seeds: List[str], min_volume: int, per_seed_cap: int,
+) -> None:
+    """연관키워드 폭발 — 시드별 keywordstool 연관키워드 수집 → 검색량 필터 → pending 직접 삽입.
+
+    AI classify / whitelist 게이트를 안 거친다 (사용자가 명시한 시드 = 신뢰). register cron
+    이 pending 을 네이버에 등록. 자동 발굴 파이프라인의 drift 방지 게이트와 별개 경로.
+    """
+    import time as _time
+    from services.naver_ad_service import NaverAdApiClient
+    pool = get_keyword_pool_db()
+    t0 = _time.monotonic()
+
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    def _to_int(v):
+        if v is None:
+            return 0
+        if isinstance(v, (int, float)):
+            return int(v)
+        s = str(v).replace(",", "").strip()
+        if s in ("< 10", "<10"):
+            return 5
+        try:
+            return int(float(s))
+        except (ValueError, TypeError):
+            return 0
+
+    seen: Set[str] = set()
+    items: List[Dict] = []
+    total_related = 0
+    for seed in seeds:
+        try:
+            resp = await client.get_related_keywords(seed, show_detail=True)
+        except Exception as e:
+            logger.warning(f"[pool/explode] seed='{seed}' 연관 조회 실패: {e}")
+            await asyncio.sleep(0.3)
+            continue
+        rows = resp.get("keywordList", []) if isinstance(resp, dict) else (resp if isinstance(resp, list) else [])
+        total_related += len(rows)
+        added_this_seed = 0
+        for it in rows:
+            kw = (it.get("relKeyword") or "").strip()
+            if not kw or kw in seen:
+                continue
+            pc = _to_int(it.get("monthlyPcQcCnt"))
+            mo = _to_int(it.get("monthlyMobileQcCnt"))
+            mt = pc + mo
+            if mt < min_volume:
+                continue
+            seen.add(kw)
+            items.append({
+                "keyword": kw, "seed": seed, "source": "seed_explode",
+                "monthly_total": mt, "monthly_pc": pc, "monthly_mobile": mo,
+                "comp_idx": it.get("compIdx", ""),
+            })
+            added_this_seed += 1
+            if added_this_seed >= per_seed_cap:
+                break
+        await asyncio.sleep(0.3)  # keywordstool 429 rate 회피
+
+    added = pool.add_candidates(user_id, customer_id, items) if items else 0
+    dur_ms = int((_time.monotonic() - t0) * 1000)
+    logger.warning(
+        f"[pool/explode] user={user_id} cid={customer_id} 시드 {len(seeds)} → "
+        f"연관 {total_related} → 검색량≥{min_volume} {len(items)} → pending +{added} ({dur_ms}ms)"
+    )
+    try:
+        pool.record_run(
+            user_id, customer_id, "seed_explode", "success" if added else "no_new",
+            added=added, seeds_count=len(seeds),
+            error_message=(
+                f"연관 {total_related} → 검색량≥{min_volume} {len(items)} → pending +{added}"
+            )[:300],
+            duration_ms=dur_ms,
+        )
+    except Exception:
+        pass
+
+
+@router.post("/keyword-pool/seed-explode-register")
+async def keyword_pool_seed_explode(
+    request: SeedExplodeRequest,
+    background_tasks: BackgroundTasks,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """연관키워드 폭발 등록 — 사용자가 고른 시드의 연관키워드를 대량 수집·검색량 필터만
+    통과시켜 pending 직접 삽입 (AI 도메인 게이트 우회). register cron 이 네이버 등록.
+
+    자동 발굴은 drift 방지 게이트가 빡빡해 통과율이 낮다. 사용자가 명시한 시드의
+    연관키워드는 신뢰 가능하므로 classify/whitelist 없이 검색량만 보고 대량 등록한다.
+    백그라운드 처리 (시드 다수 × keywordstool ~1s → fly 60s proxy 초과 방지). 결과는 실행 이력.
+    """
+    seeds = [s.strip() for s in (request.seeds or []) if s and s.strip()]
+    if not seeds:
+        raise HTTPException(status_code=400, detail="시드가 비어있습니다")
+    seeds = seeds[:50]  # 1회 최대 50 시드 (시드당 최대 1000 연관 = 최대 5만 후보)
+    min_volume = max(0, min(100_000, request.min_volume))
+    per_seed_cap = max(1, min(1000, request.max_per_seed))
+
+    account = _resolve_account(user_id, request.customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="네이버 광고 계정을 먼저 연동하세요")
+    customer_id = int(account.get("customer_id"))
+
+    background_tasks.add_task(
+        _run_seed_explode, user_id, customer_id, account, seeds, min_volume, per_seed_cap,
+    )
+    return {
+        "success": True,
+        "started": True,
+        "customer_id": customer_id,
+        "seeds_used": len(seeds),
+        "min_volume": min_volume,
+        "message": (
+            f"연관키워드 폭발 시작 — 시드 {len(seeds)}개의 연관키워드를 수집해 "
+            f"검색량≥{min_volume} 인 것을 pending 에 대량 추가합니다. "
+            f"진행/결과는 '최근 실행 이력'의 seed_explode 항목에서 확인하세요."
+        ),
+    }
 
 
 class AdminInspectRequest(BaseModel):

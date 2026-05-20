@@ -621,7 +621,7 @@ class NaverAdApiClient:
     async def get_related_keywords(self, keyword: str, show_detail: bool = True) -> List[dict]:
         """연관 키워드 조회 (키워드 도구)"""
         params = {
-            "hintKeywords": keyword,
+            "hintKeywords": (keyword or "").replace(" ", ""),  # 공백 포함 시 네이버 11001 거부
             "showDetail": "1" if show_detail else "0"
         }
         return await self._request("GET", "/keywordstool", params)
@@ -636,8 +636,15 @@ class NaverAdApiClient:
             return {}
         # 최대 5개
         batch = keywords[:5]
+        # hintKeywords 는 공백 불가 — 네이버가 공백 포함 키워드를 11001 BAD_REQUEST 로
+        # 배치 전체를 거부한다 (사고: 멀티워드 후보 '발바닥 무좀 연고 추천' 등이 섞이면
+        # 검색량 검증 0 → qualified 0 → pending 0 → 등록 '대상 없음'). 공백 제거 후 전송.
+        # 네이버는 relKeyword 를 공백 제거 형태로 반환 → 호출부의 kw.replace(' ','') 매칭과 일치.
+        cleaned = [k.replace(" ", "") for k in batch if k and k.replace(" ", "")]
+        if not cleaned:
+            return {}
         params = {
-            "hintKeywords": ",".join(batch),
+            "hintKeywords": ",".join(cleaned),
             "showDetail": "1",
         }
         try:

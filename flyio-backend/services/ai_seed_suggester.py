@@ -254,10 +254,19 @@ async def amplify_seeds(seeds: list, target_count: int) -> Dict[str, Any]:
     import asyncio as _asyncio
     backoffs = [1.0, 3.0]
     last_msg = "unknown"
+    # 스트리밍 — 비스트리밍 호출은 read timeout 이 "전체 생성 완료까지의 시간"이라
+    # 시드 500개(~3500 토큰) 생성이 55s 를 넘기면 ReadTimeout 으로 burst 전체 사망.
+    # stream=True 면 read timeout 은 "청크 간격"에만 적용 → 총 생성이 길어도 토큰이
+    # 흐르는 한 안 죽고, 진짜 멈추면 60s 후 재시도. 이 함수는 _seed_amplify_tick
+    # (백그라운드 cron, 10분 주기) 에서만 호출되므로 fly inbound proxy 60s 한계는
+    # 적용 안 됨 (옛 사용자 엔드포인트 시절 잔재 우려라 read 60s 로 넉넉히 상향).
+    stream_timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
     for attempt in range(3):
         try:
-            async with httpx.AsyncClient(timeout=55.0) as client:
-                resp = await client.post(
+            content = ""
+            async with httpx.AsyncClient(timeout=stream_timeout) as client:
+                async with client.stream(
+                    "POST",
                     OPENAI_URL,
                     headers={
                         "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
@@ -272,50 +281,67 @@ async def amplify_seeds(seeds: list, target_count: int) -> Dict[str, Any]:
                         "max_tokens": dyn_max,
                         "temperature": 0.4,
                         "response_format": {"type": "json_object"},
+                        "stream": True,
                     },
-                )
-                if resp.status_code != 200:
-                    last_msg = f"AI 서비스 오류 ({resp.status_code})"
-                    logger.error(f"OpenAI amplify error attempt={attempt+1}: {resp.status_code} - {resp.text[:200]}")
-                    # 5xx / 429 만 재시도. 4xx (auth/bad request) 는 즉시 포기.
-                    if resp.status_code >= 500 or resp.status_code == 429:
-                        if attempt < len(backoffs):
-                            await _asyncio.sleep(backoffs[attempt])
+                ) as resp:
+                    if resp.status_code != 200:
+                        body = (await resp.aread()).decode("utf-8", "ignore")
+                        last_msg = f"AI 서비스 오류 ({resp.status_code})"
+                        logger.error(f"OpenAI amplify error attempt={attempt+1}: {resp.status_code} - {body[:200]}")
+                        # 5xx / 429 만 재시도. 4xx (auth/bad request) 는 즉시 포기.
+                        if resp.status_code >= 500 or resp.status_code == 429:
+                            if attempt < len(backoffs):
+                                await _asyncio.sleep(backoffs[attempt])
+                                continue
+                        return {"success": False, "message": last_msg}
+
+                    # SSE 누적 — "data: {json}" 라인의 delta.content 만 모음.
+                    chunks: list = []
+                    async for line in resp.aiter_lines():
+                        if not line or not line.startswith("data:"):
                             continue
-                    return {"success": False, "message": last_msg}
+                        data = line[len("data:"):].strip()
+                        if data == "[DONE]":
+                            break
+                        try:
+                            obj = json.loads(data)
+                            delta = (obj["choices"][0].get("delta") or {}).get("content")
+                        except (json.JSONDecodeError, KeyError, IndexError):
+                            continue
+                        if delta:
+                            chunks.append(delta)
+                    content = "".join(chunks).strip()
 
-                result = resp.json()
-                content = result["choices"][0]["message"]["content"].strip()
-                try:
-                    parsed = json.loads(content)
-                except json.JSONDecodeError:
-                    return {"success": False, "message": "AI 응답 파싱 실패"}
+            try:
+                parsed = json.loads(content)
+            except json.JSONDecodeError:
+                return {"success": False, "message": "AI 응답 파싱 실패"}
 
-                raw_seeds = parsed.get("seeds") or []
-                # 원본 포함 보장 + 중복 제거 (순서 유지)
-                seen = set()
-                final_seeds: list = []
-                for s in list(clean_seeds) + [x for x in raw_seeds if isinstance(x, str)]:
-                    s = s.strip()
-                    if not s:
-                        continue
-                    k = s.replace(" ", "").lower()
-                    if k in seen:
-                        continue
-                    seen.add(k)
-                    final_seeds.append(s)
-                    if len(final_seeds) >= 500:
-                        break
+            raw_seeds = parsed.get("seeds") or []
+            # 원본 포함 보장 + 중복 제거 (순서 유지)
+            seen = set()
+            final_seeds: list = []
+            for s in list(clean_seeds) + [x for x in raw_seeds if isinstance(x, str)]:
+                s = s.strip()
+                if not s:
+                    continue
+                k = s.replace(" ", "").lower()
+                if k in seen:
+                    continue
+                seen.add(k)
+                final_seeds.append(s)
+                if len(final_seeds) >= 500:
+                    break
 
-                return {
-                    "success": True,
-                    "seeds": final_seeds,
-                    "input_count": len(clean_seeds),
-                    "output_count": len(final_seeds),
-                    "detected_pattern": parsed.get("detected_pattern", ""),
-                    "axes": parsed.get("axes", {}),
-                    "model": OPENAI_MODEL,
-                }
+            return {
+                "success": True,
+                "seeds": final_seeds,
+                "input_count": len(clean_seeds),
+                "output_count": len(final_seeds),
+                "detected_pattern": parsed.get("detected_pattern", ""),
+                "axes": parsed.get("axes", {}),
+                "model": OPENAI_MODEL,
+            }
         except (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError) as e:
             last_msg = f"{type(e).__name__}: {str(e)[:150]}"
             logger.warning(f"AI amplify transient error attempt={attempt+1}: {last_msg}")

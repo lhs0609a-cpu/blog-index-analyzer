@@ -23,10 +23,14 @@ if sys.platform == "win32":
 else:
     BACKUP_DIR = "/data/backups"
     DATABASE_PATH = "/data/blog_analyzer.db"
-MAX_BACKUPS = 8  # 16시간 분량 (2시간마다 백업) - 디스크 사용량 감소
+MAX_BACKUPS = 3  # 8 → 3: DB 가 471MB 로 커지며 백업 1개 ≈ 280MB. 8개면 2.2GB 로
+                 # 3GB 볼륨을 꽉 채워 backup/WAL 실패 + IO 폭주 → API 멈춤 유발.
 MAX_JSON_BACKUPS = 2  # JSON 백업은 2개만 유지 - 디스크 사용량 감소
+# 개수만으론 부족 — DB 가 더 커지면 3개도 위험. 총 용량 예산으로도 컷.
+MAX_BACKUP_TOTAL_MB = 1000  # 백업 디렉터리 총량 상한 (≈ 3~4 백업). 최소 2개는 항상 유지.
+MIN_BACKUPS_KEEP = 2  # 어떤 경우에도 복구 지점 2개는 보존
 BACKUP_INTERVAL_SECONDS = 7200  # 2시간마다 (리소스 절약)
-DISK_WARNING_THRESHOLD_MB = 100  # 100MB 이하면 경고
+DISK_WARNING_THRESHOLD_MB = 200  # 100 → 200: 백업 1개(280MB) 쓸 여유를 미리 확보
 
 
 def ensure_backup_dir():
@@ -101,6 +105,26 @@ def cleanup_old_backups():
             except Exception as e:
                 logger.warning(f"Failed to remove {old_backup}: {e}")
 
+        # 1-b. 용량 예산 컷 — 개수가 적어도 백업 1개가 크면 (DB 성장) 디스크를 채운다.
+        # 총량이 MAX_BACKUP_TOTAL_MB 를 넘으면 오래된 것부터 삭제, 단 MIN_BACKUPS_KEEP 는 보존.
+        def _size_mb(name: str) -> float:
+            try:
+                return os.path.getsize(os.path.join(BACKUP_DIR, name)) / (1024 * 1024)
+            except OSError:
+                return 0.0
+
+        total_mb = sum(_size_mb(f) for f in db_backups)
+        while total_mb > MAX_BACKUP_TOTAL_MB and len(db_backups) > MIN_BACKUPS_KEEP:
+            old_backup = db_backups.pop(0)
+            freed = _size_mb(old_backup)
+            try:
+                os.remove(os.path.join(BACKUP_DIR, old_backup))
+                total_mb -= freed
+                logger.info(f"Removed backup over size budget: {old_backup} ({freed:.0f}MB)")
+            except Exception as e:
+                logger.warning(f"Failed to remove {old_backup}: {e}")
+                break
+
         # 2. DB Journal 파일 정리 (backup과 쌍이 없는 것들 삭제)
         for f in os.listdir(BACKUP_DIR):
             if f.endswith(".db-journal"):
@@ -160,7 +184,9 @@ def emergency_cleanup():
             if f.startswith("backup_") and f.endswith(".db")
         ])
 
-        target_count = max(6, len(db_backups) // 2)  # 최소 6개는 유지
+        # 6 → MIN_BACKUPS_KEEP(2): 백업이 280MB+ 라 6개 floor 면 1.7GB 가 안 빠져
+        # 디스크가 영구히 막혔다 (실제 사고). 긴급 시엔 복구 지점 2개까지 줄인다.
+        target_count = max(MIN_BACKUPS_KEEP, len(db_backups) // 2)
         while len(db_backups) > target_count:
             old_backup = db_backups.pop(0)
             try:
@@ -403,13 +429,15 @@ class BackupScheduler:
 
     def _run_scheduler(self):
         """스케줄러 메인 루프"""
-        # 시작 시 즉시 백업 생성
-        create_backup()
+        # 시작 시 즉시 백업 생성 — cleanup 을 먼저 해서 새 백업(280MB) 쓸 공간 확보.
+        # (과거: create 먼저 → 디스크 풀이면 'disk is full' 로 실패하고 cleanup 못 가던 사고)
         cleanup_old_backups()
+        create_backup()
 
         while self.running:
             time.sleep(BACKUP_INTERVAL_SECONDS)
             if self.running:
+                cleanup_old_backups()
                 create_backup()
                 cleanup_old_backups()
                 # 매 6시간마다 JSON 내보내기

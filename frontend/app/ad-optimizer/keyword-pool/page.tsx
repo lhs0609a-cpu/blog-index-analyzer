@@ -122,6 +122,8 @@ export default function KeywordPoolPage() {
   const [loading, setLoading] = useState(true)
   const [seedInput, setSeedInput] = useState('')
   const [adding, setAdding] = useState(false)
+  const [exploding, setExploding] = useState(false)
+  const [explodeMinVol, setExplodeMinVol] = useState(100)
 
   // hydration safe — Date.now()/new Date() 가 SSR 과 client 에서 다르면 React #422 발생.
   // mounted=true 후에만 time-dependent UI 렌더.
@@ -890,6 +892,32 @@ export default function KeywordPoolPage() {
       toast.error(e?.response?.data?.detail || '추가 실패')
     } finally {
       setAdding(false)
+    }
+  }
+
+  // 연관키워드 폭발 등록 — 시드의 keywordstool 연관키워드를 검색량 필터만 통과시켜
+  // AI 게이트 우회로 pending 에 대량 추가. register cron 이 네이버 등록.
+  const handleSeedExplode = async () => {
+    const seeds = seedInput
+      .split(/[\n,]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+    if (!seeds.length) {
+      toast.error('시드를 입력하세요')
+      return
+    }
+    setExploding(true)
+    try {
+      const res = await adPost<{ success: boolean; seeds_used: number; message?: string }>(
+        `/api/naver-ad/keyword-pool/seed-explode-register`,
+        { seeds, min_volume: explodeMinVol, customer_id: selectedCid || undefined }
+      )
+      toast.success(res.message || `시드 ${res.seeds_used}개 연관키워드 폭발 시작`)
+      setTimeout(() => load(), 3000)
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || '폭발 등록 실패')
+    } finally {
+      setExploding(false)
     }
   }
 
@@ -2083,14 +2111,40 @@ export default function KeywordPoolPage() {
             className="w-full border border-gray-300 rounded-lg p-3 text-sm font-mono focus:ring-2 focus:ring-[#0064FF] focus:border-transparent outline-none"
             disabled={adding}
           />
-          <button
-            onClick={handleAddSeeds}
-            disabled={adding || !seedInput.trim()}
-            className="mt-3 px-4 py-2 bg-[#0064FF] text-white rounded-lg font-medium hover:shadow-lg disabled:bg-gray-300 inline-flex items-center gap-2"
-          >
-            {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-            시드 추가
-          </button>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleAddSeeds}
+              disabled={adding || !seedInput.trim()}
+              className="px-4 py-2 bg-[#0064FF] text-white rounded-lg font-medium hover:shadow-lg disabled:bg-gray-300 inline-flex items-center gap-2"
+            >
+              {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              시드 추가
+            </button>
+            <span className="text-gray-300">|</span>
+            <button
+              onClick={handleSeedExplode}
+              disabled={exploding || !seedInput.trim()}
+              className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-lg font-medium hover:shadow-lg disabled:opacity-50 inline-flex items-center gap-2"
+            >
+              {exploding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              연관키워드 대량 등록
+            </button>
+            <label className="text-sm text-gray-600 inline-flex items-center gap-1">
+              검색량 ≥
+              <input
+                type="number"
+                value={explodeMinVol}
+                onChange={(e) => setExplodeMinVol(Math.max(0, parseInt(e.target.value) || 0))}
+                className="w-20 border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-orange-400"
+                min={0}
+              />
+            </label>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            <span className="font-semibold text-orange-600">연관키워드 대량 등록</span>: 위 시드의
+            네이버 연관키워드를 검색량 필터만 통과시켜 AI 게이트 없이 pending 에 대량 추가합니다
+            (시드 신뢰). 자동 등록 cron 이 네이버에 등록 — 결과는 아래 실행 이력의 seed_explode.
+          </p>
         </div>
 
         {/* AI 도메인 시드 확장 — 1회성 수동 LLM (자동 ai_topup 으로 대체됨, 고급) */}
