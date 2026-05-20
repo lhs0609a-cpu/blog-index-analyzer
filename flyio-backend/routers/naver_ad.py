@@ -5352,12 +5352,31 @@ def keyword_pool_scheduler_diagnostics():
             import httpx as _httpx
             r = _httpx.get(
                 "http://127.0.0.1:8001/api/naver-ad/keyword-pool/diagnostics/scheduler-jobs",
-                timeout=3.0,
+                timeout=5.0,
             )
             if r.status_code == 200:
                 data = r.json()
                 data["via"] = "worker"
                 return data
+        except Exception:
+            pass
+        # 프록시 실패 (worker 가 무거운 cron 으로 바빠 :8001 응답 지연) — DB 최근 실행
+        # 기록으로 판단. cross-process 안정 (worker API 응답성에 의존 안 함).
+        try:
+            import sqlite3 as _sq
+            pool = get_keyword_pool_db()
+            with _sq.connect(pool.db_path) as _c:
+                row = _c.execute("SELECT MAX(started_at) FROM naverad_pool_runs").fetchone()
+            last = row[0] if row else None
+            if last:
+                age_min = (datetime.utcnow() - datetime.fromisoformat(str(last))).total_seconds() / 60.0
+                if age_min < 15:
+                    return {
+                        "success": True, "running": True, "jobs": [],
+                        "via": "db_recency",
+                        "message": f"스케줄러 정상 (worker, 최근 실행 {age_min:.0f}분 전)",
+                        "now": datetime.now().isoformat(timespec="seconds"),
+                    }
         except Exception:
             pass
         return {"success": False, "running": False, "message": "scheduler not running"}
