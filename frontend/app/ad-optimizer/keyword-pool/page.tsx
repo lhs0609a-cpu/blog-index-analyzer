@@ -921,6 +921,28 @@ export default function KeywordPoolPage() {
     }
   }
 
+  // 저장된 도메인 키워드 전체로 폭발 — 타이핑 없이 한 번에. 시드 = autoCleanup.relevance_keywords.
+  const handleExplodeFromDomain = async () => {
+    const seeds = autoCleanup.relevance_keywords || []
+    if (!seeds.length) {
+      toast.error('저장된 도메인 키워드가 없습니다. 위 "도메인 키워드"에 먼저 저장하세요.')
+      return
+    }
+    setExploding(true)
+    try {
+      const res = await adPost<{ success: boolean; seeds_used: number; message?: string }>(
+        `/api/naver-ad/keyword-pool/seed-explode-register`,
+        { seeds, min_volume: explodeMinVol, customer_id: selectedCid || undefined }
+      )
+      toast.success(res.message || `도메인 키워드 ${seeds.length}개로 폭발 시작`)
+      setTimeout(() => load(), 3000)
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || '폭발 등록 실패')
+    } finally {
+      setExploding(false)
+    }
+  }
+
   // AI 도메인 시드 확장 — base_seeds 만 도메인 의도로 사용 (풀 오염 우회)
   const [aiExpandInput, setAiExpandInput] = useState('')
   const [aiExpandCycles, setAiExpandCycles] = useState(1)
@@ -2140,6 +2162,16 @@ export default function KeywordPoolPage() {
               />
             </label>
           </div>
+          {autoCleanup.relevance_keywords.length > 0 && (
+            <button
+              onClick={handleExplodeFromDomain}
+              disabled={exploding}
+              className="mt-3 w-full px-4 py-2.5 bg-gradient-to-r from-rose-500 to-red-600 text-white rounded-lg font-bold hover:shadow-lg disabled:opacity-50 inline-flex items-center justify-center gap-2"
+            >
+              {exploding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              저장된 도메인 키워드 {autoCleanup.relevance_keywords.length}개로 한 번에 폭발 (타이핑 불필요)
+            </button>
+          )}
           <p className="text-xs text-gray-500 mt-2">
             <span className="font-semibold text-orange-600">연관키워드 대량 등록</span>: 위 시드의
             네이버 연관키워드 중 <b>검색량 ≥ 위 값</b> 이고 <b>연관성 점수 ≥ 50</b> 인 것만 pending 에

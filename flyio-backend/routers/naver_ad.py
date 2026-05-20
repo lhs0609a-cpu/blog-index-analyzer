@@ -5955,7 +5955,7 @@ async def keyword_pool_seed_explode(
     seeds = [s.strip() for s in (request.seeds or []) if s and s.strip()]
     if not seeds:
         raise HTTPException(status_code=400, detail="시드가 비어있습니다")
-    seeds = seeds[:50]  # 1회 최대 50 시드 (시드당 최대 1000 연관 = 최대 5만 후보)
+    seeds = seeds[:150]  # 1회 최대 150 시드 (저장된 도메인 키워드 전체 폭발 지원). 백그라운드 처리.
     min_volume = max(0, min(100_000, request.min_volume))
     per_seed_cap = max(1, min(1000, request.max_per_seed))
     min_score = max(0, min(100, request.min_score))
