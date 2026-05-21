@@ -8511,20 +8511,28 @@ async def keyword_pool_bid_bulk_update(
             if _naver_api_breaker.is_open():
                 kw_failed.append({"keyword_id": kid, "error": "circuit_open"})
                 return
-            # list 응답의 전체 body 를 그대로 → bidAmt 만 갱신.
-            # useGroupBidAmt=False 유지(개별 입찰가 명시적 override) + 새 bidAmt.
-            body = dict(kw_obj)
-            body["bidAmt"] = new_bid
-            body["useGroupBidAmt"] = False
+            # 이전 버전: full-body PUT (fields 쿼리 없음) → Naver 가 silent-ignore.
+            # 393 KW 중 대부분이 이미 70원이라 적용된 것처럼 보였지만 실제로 입찰가가
+            # 다르게 설정된 head KW (예: "강남두드러기한의원" 17,840원) 가 그대로 남음.
+            # 정답: update_keyword_bid (PUT ?fields=bidAmt + 최소 body).
+            cur = kw_obj.get("bidAmt")
+            ugba = kw_obj.get("useGroupBidAmt")
+            if cur == new_bid and ugba is False:
+                kw_success += 1  # 이미 목표값
+                return
             async with sem:
                 try:
-                    # fields 쿼리 없이 full-body PUT — 부분 갱신 silent ignore 회피.
-                    await client._request("PUT", f"/ncc/keywords/{kid}", body)
+                    await client.update_keyword_bid(kid, new_bid)
                     kw_success += 1
                 except NaverApiCircuitOpenError:
                     kw_failed.append({"keyword_id": kid, "error": "circuit_open"})
                 except Exception as e:
-                    kw_failed.append({"keyword_id": kid, "error": f"{type(e).__name__}: {str(e)[:120]}"})
+                    kw_failed.append({
+                        "keyword_id": kid,
+                        "keyword": kw_obj.get("keyword"),
+                        "before_bid": cur,
+                        "error": f"{type(e).__name__}: {str(e)[:120]}",
+                    })
 
         logger.warning(f"[bid/bulk] 시작 — scope={request.scope} ad_groups={len(ad_group_ids)} new_bid={new_bid}원")
         for idx, (cname, gid) in enumerate(ad_group_ids):
@@ -8652,6 +8660,101 @@ async def keyword_pool_bid_debug_one(
     except Exception as e:
         import traceback
         logger.error(f"keyword-pool/bid/debug-one 실패: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
+
+
+@router.post("/keyword-pool/bid/force-by-name")
+async def keyword_pool_bid_force_by_name(
+    names: List[str],
+    bid: int = 70,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """이름으로 키워드 찾아 강제 입찰가 변경 + 검증.
+
+    bulk-update 가 silent-ignore 되는지, 또는 그 키워드가 scope 밖 캠페인에 있는지
+    추적용. 모든 캠페인 (auto_ 외 포함) 스캔해서 매칭되는 키워드 다 업데이트.
+    """
+    from services.naver_ad_service import NaverAdApiClient
+    try:
+        account = _resolve_account(user_id, customer_id)
+        if not account or not account.get("is_connected"):
+            raise HTTPException(status_code=400, detail="광고 계정 미연결")
+        target_set = {n.strip() for n in names if n and n.strip()}
+        if not target_set:
+            raise HTTPException(status_code=400, detail="names 비어있음")
+        new_bid = max(70, int(bid))
+
+        client = NaverAdApiClient()
+        client.customer_id = account["customer_id"]
+        client.api_key = account["api_key"]
+        client.secret_key = account["secret_key"]
+
+        campaigns = await client.get_campaigns() or []
+        results: List[Dict] = []
+        not_found = set(target_set)
+
+        for c in campaigns:
+            cname = c.get("name") or ""
+            cid_str = c.get("nccCampaignId")
+            try:
+                groups = await client.get_ad_groups(campaign_id=cid_str) or []
+            except Exception:
+                continue
+            for g in groups:
+                gid = g.get("nccAdgroupId")
+                try:
+                    kws = await client.get_keywords(ad_group_id=gid) or []
+                except Exception:
+                    continue
+                for k in kws:
+                    kname = (k.get("keyword") or "").strip()
+                    if kname not in target_set:
+                        continue
+                    not_found.discard(kname)
+                    kid = k.get("nccKeywordId")
+                    before = {"bidAmt": k.get("bidAmt"), "useGroupBidAmt": k.get("useGroupBidAmt")}
+                    try:
+                        await client.update_keyword_bid(kid, new_bid)
+                        # 검증 — 재조회
+                        try:
+                            after_kw = await client.get_keyword(kid)
+                        except Exception:
+                            after_kw = {}
+                        after = {"bidAmt": after_kw.get("bidAmt"), "useGroupBidAmt": after_kw.get("useGroupBidAmt")}
+                        results.append({
+                            "keyword": kname,
+                            "keyword_id": kid,
+                            "campaign": cname,
+                            "ad_group_id": gid,
+                            "before": before,
+                            "after": after,
+                            "changed": before["bidAmt"] != after["bidAmt"],
+                        })
+                    except Exception as e:
+                        results.append({
+                            "keyword": kname,
+                            "keyword_id": kid,
+                            "campaign": cname,
+                            "ad_group_id": gid,
+                            "before": before,
+                            "error": f"{type(e).__name__}: {str(e)[:200]}",
+                        })
+                await asyncio.sleep(0.05)
+            await asyncio.sleep(0.05)
+
+        return {
+            "success": True,
+            "new_bid": new_bid,
+            "matched": len(results),
+            "not_found": sorted(not_found),
+            "results": results,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        logger.error(f"keyword-pool/bid/force-by-name 실패: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
 
 
