@@ -6941,8 +6941,11 @@ async def _run_domain_cleanup_for_account(
             )
         ]
     else:
-        # 비앵커 도메인 — 기존 점수<threshold (Option B: boundary 보존)
-        targets = [(kid, kw, s) for kid, kw, s in scored if s < threshold]
+        # 비앵커 도메인 — 점수<threshold 또는 negative 포함(substring 오매칭 off-domain 차단)
+        targets = [
+            (kid, kw, s) for kid, kw, s in scored
+            if s < threshold or (neg_tokens and kw and any(nt in kw for nt in neg_tokens))
+        ]
     targets.sort(key=lambda x: x[2])  # 무관한 것부터
     targets = targets[:max(0, min(max_delete, 5000))]
     if not targets:
@@ -7501,7 +7504,11 @@ async def keyword_pool_registered_cleanup_by_score(
                        or (_neg_tok and any(nt in kw for nt in _neg_tok)))
         ]
     else:
-        targets = [(kid, kw, s) for kid, kw, s in scored if s < threshold]  # Option B: boundary 보존
+        # 점수<threshold (Option B: boundary 보존) 또는 negative 포함(substring 오매칭 off-domain 차단)
+        targets = [
+            (kid, kw, s) for kid, kw, s in scored
+            if s < threshold or (_neg_tok and kw and any(nt in kw for nt in _neg_tok))
+        ]
     targets.sort(key=lambda x: x[2])  # 무관한 것부터
     targets_capped = targets[:max_delete]
     logger.warning(
@@ -9509,15 +9516,31 @@ async def keyword_pool_ads_backfill_creative(
             return {"success": False, "mode": "test_one", "ad_group_id": gid,
                     "error": f"{type(e).__name__}: {str(e)[:400]}"}
 
+    # 템플릿 소재(헤드라인/URL)가 이미 있는지 — 있으면 skip, 없으면 추가.
+    # (기존 "소재 있으면 skip" 은 보류 blog 소재만 있는 그룹이 두드러기 소재를 못 받던 버그)
+    _tpl_head = (tpl.get("headline_pc") or "").strip()
+    _tpl_url = (tpl.get("final_url_pc") or "").replace("https://", "").replace("http://", "").strip("/")
+
+    def _has_tpl(ads) -> bool:
+        for a in ads:
+            adobj = a.get("ad") if isinstance(a, dict) else None
+            if not isinstance(adobj, dict):
+                continue
+            h = (adobj.get("headline") or (adobj.get("pc") or {}).get("headline") or "").strip()
+            fu = (adobj.get("finalUrl") or adobj.get("displayUrl") or "").strip()
+            if (_tpl_head and h == _tpl_head) or (_tpl_url and _tpl_url in fu):
+                return True
+        return False
+
     async def _run():
         created = skipped = failed = 0
         for gid in ad_group_ids:
             try:
                 ads = _as_list(await client.get_ads(ad_group_id=gid) or [])
-                if ads:
-                    skipped += 1
+                if _has_tpl(ads):
+                    skipped += 1  # 이미 템플릿 소재 보유 — skip
                 else:
-                    await _create_one(gid)
+                    await _create_one(gid)  # 소재 없거나 보류 소재만 → 템플릿 소재 추가
                     created += 1
             except Exception as e:
                 failed += 1
