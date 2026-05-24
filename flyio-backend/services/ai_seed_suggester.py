@@ -584,3 +584,138 @@ async def classify_rejects(
     except Exception as e:
         logger.exception("AI classify rejects failed")
         return {"success": False, "message": f"AI 분류 실패: {str(e)[:200]}"}
+
+
+# ============ 전자동 광맥 발굴 — Domain Profile 생성기 (Stage 2) ============
+
+PROFILE_SYSTEM_PROMPT = """당신은 네이버 검색광고 키워드 도메인 설계 전문가입니다.
+광고주의 사업 설명 한 줄을 받아, 그 도메인에서 월 검색량 있는 키워드를 **무한히 조합 폭발**
+시킬 수 있는 "도메인 프로파일"을 설계합니다. 이건 사람이 손으로 짜던 키워드 사전을 대체합니다.
+
+## 출력 4종
+
+### 1) atom_library — 조합 폭발용 원자 사전 (가장 중요)
+- 도메인을 2~4개의 **축(axis)** 으로 분해. 축끼리 cartesian 곱하면 자연스러운 키워드가 나와야 함.
+- 각 축은 그 도메인의 실제 어휘로 30~50개씩 채움.
+- 축 예시 패턴:
+  * 의료대출: 대상[의사/치과의사/한의사/약사/수의사/간호사/전공의/개업의/봉직의…] × 상품[신용대출/개원자금/운영자금/마이너스통장/대환대출/담보대출…] × 의도[금리/한도/조건/후기/비교/서류/승인/갈아타기…]
+  * 피부한의원: 질환[아토피/건선/여드름/두드러기/지루성피부염…] × 의도[치료/원인/한약/한의원/후기/완치/비용…] × 부위·연령·계절…
+- "X대출"의 X처럼 좁은 도메인도 반드시 상위개념의 하위항목으로 축1을 만든다. "못 만들겠다" 금지.
+
+### 2) relevance_keywords — 관련성 채점 기준 (150~250개)
+- 수집된 키워드가 이 중 하나라도 의미상 포함하면 도메인으로 인정. 게이트/cleanup 점수 기준.
+- atom_library 의 모든 축 항목 + 동의어/상위어/하위어/전문용어를 펼쳐 넣음.
+- 너무 좁으면 통과율↓, 너무 넓으면 drift. 도메인 핵심 어휘를 빠짐없이.
+
+### 3) negative_keywords — drift 차단 제외 토큰 (10~40개)
+- 도메인과 무관하지만 축 단어 substring 으로 잘못 끌려올 것들.
+- 예: "의료대출" → 자동차대출/전세대출/학자금/일반인/주택담보/카드론 (의료인 무관)
+- 예: "피부한의원" → 료칸/도시락/자동차/부동산/마케팅대행 (실제 소잠 오염 사고 단어들)
+- 마케팅/대행/SEO/블로그업체 류는 거의 항상 포함.
+
+### 4) example_seeds — 검수용 예시 시드 30개
+- atom_library 축을 곱해 만든 실제 시드 샘플 30개. 사람이 보고 "이 도메인 맞다" 판단용.
+
+## 핵심 원칙
+- 반드시 한국어. 자연스러운 검색어.
+- atom_library 축 항목은 **실제 네이버에서 검색되는 어휘**여야 함 (가짜 단어 금지).
+- drift 방지: 축이 너무 일반적이면("대출" 단독) 무관 업종이 섞임 — 도메인 한정 수식 포함.
+
+반드시 아래 JSON 형식으로만 응답:
+{
+  "atom_library": {"축이름1": ["항목","..."], "축이름2": ["..."], "축이름3": ["..."]},
+  "relevance_keywords": ["...", "..."],
+  "negative_keywords": ["...", "..."],
+  "example_seeds": ["...", "..."],
+  "rationale": "축 구성 + 예상 키워드 규모 2~3줄"
+}"""
+
+
+async def generate_domain_profile(description: str, target_count: int = 100000) -> Dict[str, Any]:
+    """사업 설명 한 줄 → 전자동 발굴용 도메인 프로파일(atom_library/relevance/negative/예시) 생성.
+
+    사람이 손으로 짜던 키워드 사전을 LLM 이 대체. 검수 후 update_domain_profile 로 저장.
+    """
+    if not settings.OPENAI_API_KEY:
+        return {"success": False, "message": "OpenAI API 키가 설정되지 않았습니다"}
+    desc = (description or "").strip()
+    if not desc:
+        return {"success": False, "message": "사업 설명(description)이 비어있습니다"}
+
+    user_prompt = (
+        f"광고주 사업 설명: {desc}\n"
+        f"목표 키워드 수집 규모: {target_count:,}개\n\n"
+        "위 도메인의 전자동 키워드 발굴용 프로파일을 설계해주세요. "
+        "atom_library 축은 각 30~50개, relevance_keywords 150~250개. "
+        "출력이 잘리지 않도록 간결하게."
+    )
+    try:
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            resp = await client.post(
+                OPENAI_URL,
+                headers={
+                    "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": OPENAI_MODEL,
+                    "messages": [
+                        {"role": "system", "content": PROFILE_SYSTEM_PROMPT},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "max_tokens": 14000,
+                    "temperature": 0.4,
+                    "response_format": {"type": "json_object"},
+                },
+            )
+            if resp.status_code != 200:
+                logger.error(f"OpenAI profile error: {resp.status_code} - {resp.text[:200]}")
+                return {"success": False, "message": f"AI 서비스 오류 ({resp.status_code})"}
+            rj = resp.json()
+            finish = (rj.get("choices") or [{}])[0].get("finish_reason")
+            content = rj["choices"][0]["message"]["content"].strip()
+            try:
+                parsed = json.loads(content)
+            except json.JSONDecodeError:
+                # 잘림/잡텍스트 폴백 — 최외곽 {...} 추출 재시도
+                a, b = content.find("{"), content.rfind("}")
+                parsed = None
+                if a != -1 and b != -1 and b > a:
+                    try:
+                        parsed = json.loads(content[a:b + 1])
+                    except json.JSONDecodeError:
+                        parsed = None
+                if parsed is None:
+                    msg = "AI 응답 파싱 실패"
+                    if finish == "length":
+                        msg += " (출력 토큰 초과로 잘림 — 설명을 더 좁히거나 재시도)"
+                    logger.error(f"profile parse fail finish={finish} len={len(content)}")
+                    return {"success": False, "message": msg}
+
+            # 정규화 + 방어
+            def _clean_list(x, cap):
+                return [s.strip() for s in (x or []) if isinstance(s, str) and s.strip()][:cap]
+
+            atoms_raw = parsed.get("atom_library") or {}
+            atom_library = {}
+            if isinstance(atoms_raw, dict):
+                for axis, items in atoms_raw.items():
+                    cl = _clean_list(items, 120)
+                    if cl:
+                        atom_library[str(axis)[:30]] = cl
+            profile = {
+                "atom_library": atom_library,
+                "relevance_keywords": _clean_list(parsed.get("relevance_keywords"), 800),
+                "negative_keywords": _clean_list(parsed.get("negative_keywords"), 60),
+                "example_seeds": _clean_list(parsed.get("example_seeds"), 50),
+                "rationale": str(parsed.get("rationale") or "")[:500],
+            }
+            # 조합 규모 추정 (축 곱)
+            combo = 1
+            for items in atom_library.values():
+                combo *= max(1, len(items))
+            profile["estimated_combinations"] = combo
+            return {"success": True, "profile": profile, "model": OPENAI_MODEL}
+    except Exception as e:
+        logger.exception("generate_domain_profile failed")
+        return {"success": False, "message": f"프로파일 생성 실패: {str(e)[:200]}"}
