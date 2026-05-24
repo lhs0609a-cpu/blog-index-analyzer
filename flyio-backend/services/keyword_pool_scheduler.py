@@ -183,9 +183,9 @@ class KeywordPoolScheduler:
         if _os.environ.get("KEYWORD_POOL_AUTO_DISCOVERY_DISABLED") != "1":
             self.scheduler.add_job(
                 self._auto_discovery_tick,
-                IntervalTrigger(seconds=600),
+                IntervalTrigger(seconds=180),
                 id="keyword_pool_auto_discovery",
-                name="전자동 광맥 발굴 (10분 주기, atom_library 조합)",
+                name="전자동 광맥 발굴 (3분 주기 가속, atom_library 조합)",
                 replace_existing=True,
                 max_instances=1,
                 coalesce=True,
@@ -601,10 +601,10 @@ class KeywordPoolScheduler:
         """전자동 광맥 발굴 cron — automation_enabled=1 광고주의 atom_library 조합을
         매 tick BATCH 만큼 seed-explode (discovery_cursor 로 진행 추적, universe 소진까지).
 
-        가드: 목표 도달(active≥target) 또는 pending 적체(>3000) 시 skip — 무의미 발사/적체 차단.
+        가드: 목표 도달(active≥target) 또는 pending 적체(>8000) 시 skip — 무의미 발사/적체 차단.
         검색량0/무관 조합은 seed-explode min_volume=10 + S4 register 게이트(≥min_score)가 거름.
         """
-        BATCH = 150
+        BATCH = 300  # 가속 — 틱당 300조합 (register 처리능력에 맞춰 공급 ↑)
         try:
             from routers.naver_ad import _run_seed_explode
             from database.naver_ad_db import (
@@ -638,8 +638,8 @@ class KeywordPoolScheduler:
                         pending = int((pst.get("by_status") or {}).get("pending") or 0)
                     except Exception:
                         pending = 0
-                    if pending > 3000:
-                        logger.info(f"[auto-discovery] uid={uid} cid={cid} pending={pending}>3000 — skip (register 적체)")
+                    if pending > 8000:
+                        logger.info(f"[auto-discovery] uid={uid} cid={cid} pending={pending}>8000 — skip (register 적체)")
                         continue
                     combos = _build_seed_combinations(prof["atom_library"])
                     if not combos:

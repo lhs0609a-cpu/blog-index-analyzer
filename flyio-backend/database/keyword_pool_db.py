@@ -127,6 +127,18 @@ class KeywordPoolDB:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            # 카테고리별 active 캠페인 추적 (전자동 category_split 모드 — 의료/비의료 분리).
+            # 기존 naverad_pool_state(고객당 1행) 와 별개 — 소잠 등 비-split 계정 무영향.
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS naverad_pool_state_cat (
+                    account_customer_id INTEGER NOT NULL,
+                    category TEXT NOT NULL,
+                    campaign_id TEXT NOT NULL,
+                    ad_groups_count INTEGER DEFAULT 0,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (account_customer_id, category)
+                )
+            """)
             # collect 단계에서 도메인미스로 reject 된 KW 누적 — AI 분류로 user_seed 후보 발굴.
             # naver keywordstool 이 시드 BFS 로 추천 = 검색량 검증된 인접 도메인 KW.
             # classified_status: pending(미분류) / promoted(시드로 승격) / discarded(다른 도메인)
@@ -485,6 +497,35 @@ class KeywordPoolDB:
                      ad_groups_count = excluded.ad_groups_count,
                      updated_at = CURRENT_TIMESTAMP""",
                 (account_customer_id, campaign_id, ad_groups_count),
+            )
+
+    def get_active_pool_campaign_cat(self, account_customer_id: int, category: str) -> Optional[Dict]:
+        """카테고리별 active 캠페인 + 광고그룹 카운트 (category_split 모드)."""
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT campaign_id, ad_groups_count FROM naverad_pool_state_cat
+                   WHERE account_customer_id = ? AND category = ?""",
+                (account_customer_id, category),
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+    def set_active_pool_campaign_cat(
+        self, account_customer_id: int, category: str, campaign_id: str, ad_groups_count: int,
+    ) -> None:
+        """카테고리별 active 캠페인 update or insert."""
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """INSERT INTO naverad_pool_state_cat
+                     (account_customer_id, category, campaign_id, ad_groups_count, updated_at)
+                   VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                   ON CONFLICT(account_customer_id, category) DO UPDATE SET
+                     campaign_id = excluded.campaign_id,
+                     ad_groups_count = excluded.ad_groups_count,
+                     updated_at = CURRENT_TIMESTAMP""",
+                (account_customer_id, category, campaign_id, ad_groups_count),
             )
 
     def increment_pool_ad_groups(self, account_customer_id: int, delta: int) -> None:

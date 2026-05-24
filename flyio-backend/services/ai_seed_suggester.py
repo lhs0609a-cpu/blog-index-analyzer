@@ -616,6 +616,14 @@ PROFILE_SYSTEM_PROMPT = """당신은 네이버 검색광고 키워드 도메인 
 ### 4) example_seeds — 검수용 예시 시드 30개
 - atom_library 축을 곱해 만든 실제 시드 샘플 30개. 사람이 보고 "이 도메인 맞다" 판단용.
 
+### 5) required_tokens — 핵심의도 앵커 (drift 구조적 차단, 매우 중요)
+- 이 도메인의 **모든 키워드가 반드시 포함해야 하는 핵심어** (있으면). 등록 키워드가 이 중 하나도
+  없으면 무조건 제외 → 시설/인물 토큰만 매칭된 무관 키워드(예: 대출 도메인의 "병원세무사",
+  "의사채용") 가 구조적으로 차단됨.
+- 예: 대출 도메인 → ["대출","자금","금융","론","융자","대부","한도","금리","대환","상환","팩토링","할부"]
+- 예: 성형외과 → ["성형","수술","시술","쌍꺼풀","코","리프팅","필러","보톡스","흉터","제거"]
+- 도메인에 단일 핵심어가 없으면(너무 다양) 빈 배열 []. 있으면 5~20개. 핵심 행위/상품어 위주.
+
 ## 핵심 원칙
 - 반드시 한국어. 자연스러운 검색어.
 - atom_library 축 항목은 **실제 네이버에서 검색되는 어휘**여야 함 (가짜 단어 금지).
@@ -627,6 +635,7 @@ PROFILE_SYSTEM_PROMPT = """당신은 네이버 검색광고 키워드 도메인 
   "relevance_keywords": ["...", "..."],
   "negative_keywords": ["...", "..."],
   "example_seeds": ["...", "..."],
+  "required_tokens": ["...", "..."],
   "rationale": "축 구성 + 예상 키워드 규모 2~3줄"
 }"""
 
@@ -707,6 +716,7 @@ async def generate_domain_profile(description: str, target_count: int = 100000) 
                 "atom_library": atom_library,
                 "relevance_keywords": _clean_list(parsed.get("relevance_keywords"), 800),
                 "negative_keywords": _clean_list(parsed.get("negative_keywords"), 60),
+                "required_tokens": _clean_list(parsed.get("required_tokens"), 30),
                 "example_seeds": _clean_list(parsed.get("example_seeds"), 50),
                 "rationale": str(parsed.get("rationale") or "")[:500],
             }
