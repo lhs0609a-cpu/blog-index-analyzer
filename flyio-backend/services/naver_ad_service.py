@@ -339,6 +339,28 @@ class NaverAdApiClient:
         """캠페인 상세 조회"""
         return await self._request("GET", f"/ncc/campaigns/{campaign_id}")
 
+    async def update_campaign(self, campaign_id: str, data: dict, fields: str = "budget") -> dict:
+        """캠페인 수정 — fields 쿼리로 부분 수정 (예: 'budget' 만).
+
+        Naver SearchAd: fields 값은 JSON property 이름과 같아야 한다.
+        예산 변경 시 fields='budget' + body 에 dailyBudget/useDailyBudget 포함.
+        """
+        return await self._request(
+            "PUT",
+            f"/ncc/campaigns/{campaign_id}?fields={fields}",
+            data,
+        )
+
+    async def update_campaign_budget(self, campaign_id: str, daily_budget: int,
+                                      base: Optional[dict] = None) -> dict:
+        """캠페인 일예산 변경. base(=list 응답 원본 객체) 주면 full-body PUT 으로
+        silent-ignore 회피. 없으면 최소 body."""
+        body = dict(base) if base else {}
+        body["nccCampaignId"] = campaign_id
+        body["dailyBudget"] = int(daily_budget)
+        body["useDailyBudget"] = True
+        return await self.update_campaign(campaign_id, body, fields="budget")
+
     async def create_campaign(
         self,
         name: str,
@@ -481,14 +503,20 @@ class NaverAdApiClient:
         """
         return await self._request("GET", f"/ncc/ads?nccAdgroupId={ad_group_id}")
 
-    async def get_ad_extensions(self, owner_id: Optional[str] = None) -> List[dict]:
+    async def get_ad_extensions(self, owner_id: Optional[str] = None, owner_type: Optional[str] = None) -> List[dict]:
         """확장소재 목록 조회. owner_id 지정 시 해당 광고그룹/캠페인 소속만.
 
-        네이버: GET /ncc/adextensions?ownerId={id}
+        네이버: GET /ncc/adextensions?ownerId={id}&ownerType={ADGROUP|CAMPAIGN|...}
+        광고그룹 단위 조회 시 ownerType=ADGROUP 명시해야 404 안 남.
         """
-        endpoint = "/ncc/adextensions"
+        params = []
         if owner_id:
-            endpoint = f"/ncc/adextensions?ownerId={owner_id}"
+            params.append(f"ownerId={owner_id}")
+        if owner_type:
+            params.append(f"ownerType={owner_type}")
+        endpoint = "/ncc/adextensions"
+        if params:
+            endpoint = endpoint + "?" + "&".join(params)
         return await self._request("GET", endpoint)
 
     async def create_ad(
@@ -503,6 +531,7 @@ class NaverAdApiClient:
         description_mobile: Optional[str] = None,
         final_url_mobile: Optional[str] = None,
         ad_type: str = "TEXT_45",
+        medical_no: Optional[str] = None,
     ) -> dict:
         """파워링크 텍스트 소재 1개 생성.
 
@@ -533,6 +562,9 @@ class NaverAdApiClient:
                 "finalMobileUrl": final_url_mobile or final_url_pc,
             },
         }
+        # 의료광고 심의필 번호 — 의료 광고주 필수. 없으면 사전심의 제도상 노출 중단될 수 있음.
+        if medical_no:
+            payload["ad"]["medicalNo"] = medical_no
         return await self._request("POST", endpoint, payload)
 
     # ============ 확장소재 ============

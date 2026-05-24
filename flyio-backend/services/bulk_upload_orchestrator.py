@@ -67,6 +67,14 @@ class BulkUploadOrchestrator:
         if not tpl:
             return
 
+        # 의료광고 심의필 — 광고주 프로파일(automation_medical_no)에 있으면 신규 소재에 자동 부착.
+        med_no = ""
+        try:
+            from database.naver_ad_db import get_domain_profile as _gdp_med
+            med_no = (_gdp_med(user_id, str(customer_id)) or {}).get("medical_no", "") or ""
+        except Exception:
+            med_no = ""
+
         try:
             await self.api.create_ad(
                 ad_group_id=ad_group_id,
@@ -77,6 +85,7 @@ class BulkUploadOrchestrator:
                 headline_mobile=tpl.get("headline_mobile"),
                 description_mobile=tpl.get("description_mobile"),
                 final_url_mobile=tpl.get("final_url_mobile"),
+                medical_no=(med_no or None),
             )
         except Exception as e:
             logger.warning(
@@ -399,19 +408,21 @@ class BulkUploadOrchestrator:
 
                 await asyncio.sleep(API_RATE_LIMIT_DELAY)
 
-                # P4: 광고그룹 생성 직후 라운드로빈으로 소재 1개 자동 등록
-                # 등록 실패해도 키워드는 진행 (소재는 나중에 보정 가능)
-                if customer_id_int > 0:
-                    try:
-                        await self._auto_attach_ad_creative(
-                            user_id=config.user_id,
-                            customer_id=customer_id_int,
-                            ad_group_id=ad_group_id,
-                        )
-                    except Exception as ad_err:
-                        logger.warning(
-                            f"[Job {job_id}] 소재 자동 매칭 실패 (그룹 {ad_group_id}): {ad_err}"
-                        )
+                # P4: 소재 자동 등록 비활성화 (2026-05-22) — 자동 T&D 소재가 의료광고 심의
+                # (심의필 번호 미기재)로 네이버에 거부됨. 소재/확장소재는 사용자가 직접 등록.
+                # 키워드만 등록하고 소재 자동 부착은 하지 않음.
+                # (복구하려면 아래 블록 주석 해제)
+                # if customer_id_int > 0:
+                #     try:
+                #         await self._auto_attach_ad_creative(
+                #             user_id=config.user_id,
+                #             customer_id=customer_id_int,
+                #             ad_group_id=ad_group_id,
+                #         )
+                #     except Exception as ad_err:
+                #         logger.warning(
+                #             f"[Job {job_id}] 소재 자동 매칭 실패 (그룹 {ad_group_id}): {ad_err}"
+                #         )
 
                 # 이 광고그룹에 키워드 배치 등록 (100개씩)
                 ag_succeeded = 0

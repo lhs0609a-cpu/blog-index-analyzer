@@ -31,6 +31,7 @@ export default function AutoVeinEngine({ customerId }: { customerId: string }) {
   const [desc, setDesc] = useState('')
   const [minScore, setMinScore] = useState(80)
   const [target, setTarget] = useState(100000)
+  const [medicalNo, setMedicalNo] = useState('')  // 의료광고 심의필 번호 (의료 광고주만)
   // 생성된(검수 전) 프로파일
   const [draft, setDraft] = useState<Profile | null>(null)
 
@@ -58,6 +59,7 @@ export default function AutoVeinEngine({ customerId }: { customerId: string }) {
         setDesc(p.description || '')
         if (p.min_score) setMinScore(p.min_score)
         if (p.target_count) setTarget(p.target_count)
+        setMedicalNo((p as { medical_no?: string }).medical_no || '')
       }
     } catch {
       /* 미연동 등 — 조용히 */
@@ -105,6 +107,7 @@ export default function AutoVeinEngine({ customerId }: { customerId: string }) {
         min_score: minScore,
         target_count: target,
         enabled: enable,
+        medical_no: medicalNo.trim(),  // 의료광고 심의필 (비우면 미적용)
       }
       // draft(신규 생성)면 atom/relevance/negative 도 저장. 기존 프로파일 토글만이면 생략.
       if (draft) {
@@ -197,6 +200,16 @@ export default function AutoVeinEngine({ customerId }: { customerId: string }) {
                 className="ml-1 w-24 rounded border border-gray-300 px-1 py-0.5 text-sm"
               />
               개
+            </label>
+            <label className="text-xs text-gray-500" title="의료광고만 — 심의필 번호 입력 시 모든 소재에 자동 부착(예: 한42606). 비의료는 비워두세요">
+              의료광고 심의필
+              <input
+                type="text"
+                value={medicalNo}
+                placeholder="예: 한42606 (의료광고만)"
+                onChange={(e) => setMedicalNo(e.target.value)}
+                className="ml-1 w-36 rounded border border-gray-300 px-1 py-0.5 text-sm"
+              />
             </label>
           </div>
 

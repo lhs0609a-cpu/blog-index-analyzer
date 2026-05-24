@@ -9438,6 +9438,7 @@ class CreativeBackfillRequest(BaseModel):
     scope: str = Field("all", description="'all' 전체 캠페인, 'pool' auto_ 캠페인만")
     template_id: Optional[int] = Field(None, description="특정 템플릿 id 강제(없으면 첫 활성)")
     mode: str = Field("backfill", description="test_one | backfill")
+    medical_no: Optional[str] = Field(None, description="의료광고 심의필 번호 (예: 한42606). 의료 광고주 필수")
 
 
 @router.post("/keyword-pool/ads/backfill-creative")
@@ -9467,6 +9468,10 @@ async def keyword_pool_ads_backfill_creative(
         tpl = next((t for t in all_tpls if t.get("is_active")), None) or (all_tpls[0] if all_tpls else None)
     if not tpl:
         return {"success": False, "step": "no_template", "hint": "ad_templates 비어있음"}
+
+    # 의료광고 심의필 — 요청값 우선, 없으면 광고주 프로파일(automation_medical_no) 자동 사용.
+    from database.naver_ad_db import get_domain_profile as _gdp_med
+    _med_no = (request.medical_no or "").strip() or (_gdp_med(user_id, str(cid)) or {}).get("medical_no", "")
 
     def _as_list(x):
         if isinstance(x, list):
@@ -9504,6 +9509,7 @@ async def keyword_pool_ads_backfill_creative(
             headline_mobile=tpl.get("headline_mobile"),
             description_mobile=tpl.get("description_mobile"),
             final_url_mobile=tpl.get("final_url_mobile"),
+            medical_no=(_med_no or None),  # 의료광고 심의필 번호 (요청 or 프로파일)
         )
 
     if request.mode == "test_one":
@@ -9521,6 +9527,8 @@ async def keyword_pool_ads_backfill_creative(
     _tpl_head = (tpl.get("headline_pc") or "").strip()
     _tpl_url = (tpl.get("final_url_pc") or "").replace("https://", "").replace("http://", "").strip("/")
 
+    _req_medno = (_med_no or "").strip()
+
     def _has_tpl(ads) -> bool:
         for a in ads:
             adobj = a.get("ad") if isinstance(a, dict) else None
@@ -9528,7 +9536,11 @@ async def keyword_pool_ads_backfill_creative(
                 continue
             h = (adobj.get("headline") or (adobj.get("pc") or {}).get("headline") or "").strip()
             fu = (adobj.get("finalUrl") or adobj.get("displayUrl") or "").strip()
+            mn = (adobj.get("medicalNo") or "").strip()
             if (_tpl_head and h == _tpl_head) or (_tpl_url and _tpl_url in fu):
+                # 심의필 요구 시: medicalNo 일치해야 '보유' 인정 → 심의필 없는 기존 소재는 재추가(교체) 대상
+                if _req_medno and mn != _req_medno:
+                    continue
                 return True
         return False
 
@@ -9554,6 +9566,87 @@ async def keyword_pool_ads_backfill_creative(
             "message": f"백그라운드 시작 — {len(ad_group_ids)}개 광고그룹에 소재 부착 (이미 있으면 skip)"}
 
 
+@router.get("/keyword-pool/diagnostics/ad-creatives")
+async def keyword_pool_diag_ad_creatives(
+    customer_id: Optional[str] = None,
+    sample: int = 30,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """광고그룹 샘플의 소재(헤드라인+심의상태) 조회 — 소재 백필/심의 진행 확인용 (읽기)."""
+    from services.naver_ad_service import NaverAdApiClient
+    import random as _rnd
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    def _as_list(x):
+        if isinstance(x, list):
+            return x
+        if isinstance(x, dict):
+            return x.get("data") or x.get("list") or []
+        return []
+
+    camps = _as_list(await client.get_campaigns() or [])
+    gids: List[str] = []
+    for c in camps:
+        try:
+            for g in _as_list(await client.get_ad_groups(campaign_id=c.get("nccCampaignId")) or []):
+                if g.get("nccAdgroupId"):
+                    gids.append(g["nccAdgroupId"])
+        except Exception:
+            pass
+        await asyncio.sleep(0.05)
+    if not gids:
+        return {"success": False, "step": "no_ad_groups"}
+    sampled = _rnd.sample(gids, min(int(sample), len(gids)))
+    from collections import Counter as _C
+    head_ct, status_ct, url_ct, no_ad = _C(), _C(), _C(), 0
+    samples = []
+    raw_with_simui = None  # 한42606 등 심의필 들어간 raw ad 객체 (필드 위치 파악용)
+    for gid in sampled:
+        try:
+            ads = _as_list(await client.get_ads(ad_group_id=gid) or [])
+        except Exception:
+            continue
+        if not ads:
+            no_ad += 1
+            continue
+        if raw_with_simui is None:
+            import json as _json
+            for a in ads:
+                _txt = _json.dumps(a, ensure_ascii=False)
+                if "42606" in _txt or "심의" in _txt:
+                    raw_with_simui = a
+                    break
+        for a in ads:
+            adobj = a.get("ad") if isinstance(a, dict) else {}
+            adobj = adobj if isinstance(adobj, dict) else {}
+            h = (adobj.get("headline") or (adobj.get("pc") or {}).get("headline") or "")[:30]
+            url = (adobj.get("finalUrl") or adobj.get("displayUrl")
+                   or (adobj.get("pc") or {}).get("final") or "")
+            host = "sojam.co.kr" if "sojam.co.kr" in url else ("blog.naver" if "blog.naver" in url else (url[:24] or "?"))
+            st = a.get("inspectStatus") or a.get("status") or "?"
+            head_ct[h] += 1
+            status_ct[st] += 1
+            url_ct[host] += 1
+            if len(samples) < 15:
+                samples.append({"headline": h, "status": st, "url_host": host})
+        await asyncio.sleep(0.05)
+    return {
+        "success": True, "customer_id": int(account.get("customer_id")),
+        "ad_groups_total": len(gids), "sampled": len(sampled), "groups_without_ad": no_ad,
+        "headline_distribution": dict(head_ct.most_common(10)),
+        "status_distribution": dict(status_ct),
+        "url_host_distribution": dict(url_ct),
+        "samples": samples,
+        "raw_ad_with_simui": raw_with_simui,
+    }
+
+
 # ============ 전자동 광맥 발굴 — Domain Profile API (Stage 2) ============
 
 class DomainProfileGenerateRequest(BaseModel):
@@ -9575,6 +9668,7 @@ class DomainProfileSaveRequest(BaseModel):
     category_split: Optional[bool] = None
     nonmedical_budget: Optional[int] = None
     required_tokens: Optional[List[str]] = None
+    medical_no: Optional[str] = None
 
 
 @router.get("/keyword-pool/domain-profile")
@@ -9615,7 +9709,7 @@ async def keyword_pool_save_domain_profile(
     fields = {}
     for k in ("description", "atom_library", "relevance_keywords", "negative_keywords",
               "enabled", "min_score", "target_count", "daily_budget", "default_bid", "ad_template_id",
-              "category_split", "nonmedical_budget", "required_tokens"):
+              "category_split", "nonmedical_budget", "required_tokens", "medical_no"):
         v = getattr(request, k, None)
         if v is not None:
             fields[k] = v
