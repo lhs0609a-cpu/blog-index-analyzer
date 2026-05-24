@@ -374,6 +374,25 @@ def init_naver_ad_tables():
     # 사용자가 의도한 도메인만 strict 매칭. 비어있으면 user_seed 폴백.
     _ensure_column("ad_accounts", "relevance_keywords", "TEXT DEFAULT ''")
 
+    # ── 전자동 광맥 발굴 (Domain Profile) — 광고주당 1회 설정으로 무방치 자동화 ──
+    # description 한 줄 → LLM 이 atom_library/negative_keywords/relevance_keywords 생성(검수 후 저장).
+    # automation_enabled=1 이면 발굴 cron + 유지보수 cron 이 이 프로파일로 자동 동작.
+    _ensure_column("ad_accounts", "domain_description", "TEXT DEFAULT ''")
+    # atom_library: 조합 폭발용 원자 사전 (JSON). 예: {"대상":[...],"상품":[...],"의도":[...]}
+    _ensure_column("ad_accounts", "atom_library", "TEXT DEFAULT ''")
+    # negative_keywords: drift 차단 제외 토큰 (콤마/줄바꿈). 예: "자동차대출,학자금,전세대출"
+    _ensure_column("ad_accounts", "negative_keywords", "TEXT DEFAULT ''")
+    # 자동화 마스터 스위치 + 파라미터
+    _ensure_column("ad_accounts", "automation_enabled", "INTEGER DEFAULT 0")
+    _ensure_column("ad_accounts", "automation_min_score", "INTEGER DEFAULT 80")  # 게이트/클린업 관련성 점수
+    _ensure_column("ad_accounts", "automation_target_count", "INTEGER DEFAULT 100000")  # 등록 목표(=cap)
+    _ensure_column("ad_accounts", "automation_daily_budget", "INTEGER DEFAULT 3000")  # 신규 캠페인 일예산
+    _ensure_column("ad_accounts", "automation_ad_template_id", "INTEGER")  # 자동 부착 소재 템플릿 id
+    # 발굴 진행 커서(어디까지 조합 생성했는지) + cron 마지막 실행 시각
+    _ensure_column("ad_accounts", "discovery_cursor", "TEXT DEFAULT ''")
+    _ensure_column("ad_accounts", "automation_last_discovery_at", "TIMESTAMP")
+    _ensure_column("ad_accounts", "automation_last_maintenance_at", "TIMESTAMP")
+
     # 필터 통과 키워드 테이블 (검색량 있는 것만)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS volume_filter_results (
@@ -1436,6 +1455,114 @@ def update_ad_account_auto_cleanup(
     conn.commit()
     conn.close()
     return affected > 0
+
+
+# ============ 전자동 광맥 발굴 — Domain Profile (Stage 1) ============
+
+def get_domain_profile(user_id: int, customer_id: str) -> Dict:
+    """전자동 발굴용 도메인 프로파일 조회 (cron + UI 공용)."""
+    import json as _json
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT domain_description, atom_library, negative_keywords, relevance_keywords,
+               automation_enabled, automation_min_score, automation_target_count,
+               automation_daily_budget, automation_ad_template_id, default_bid,
+               discovery_cursor, automation_last_discovery_at, automation_last_maintenance_at
+        FROM ad_accounts
+        WHERE user_id = ? AND customer_id = ? AND is_active = TRUE LIMIT 1
+    """, (user_id, str(customer_id)))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return {}
+    d = dict(row)
+    try:
+        atoms = _json.loads(d.get("atom_library") or "{}")
+    except Exception:
+        atoms = {}
+    return {
+        "description": d.get("domain_description") or "",
+        "atom_library": atoms,
+        "negative_keywords": _parse_relevance_keywords(d.get("negative_keywords")),
+        "relevance_keywords": _parse_relevance_keywords(d.get("relevance_keywords")),
+        "enabled": bool(d.get("automation_enabled") or 0),
+        "min_score": int(d.get("automation_min_score") or 80),
+        "target_count": int(d.get("automation_target_count") or 100000),
+        "daily_budget": int(d.get("automation_daily_budget") or 3000),
+        "default_bid": int(d.get("default_bid") or 70),
+        "ad_template_id": d.get("automation_ad_template_id"),
+        "discovery_cursor": d.get("discovery_cursor") or "",
+        "last_discovery_at": d.get("automation_last_discovery_at"),
+        "last_maintenance_at": d.get("automation_last_maintenance_at"),
+    }
+
+
+def update_domain_profile(user_id: int, customer_id: str, **fields) -> bool:
+    """도메인 프로파일 부분 업데이트. None 필드는 건너뜀.
+    허용 키: description, atom_library(dict), negative_keywords(list), relevance_keywords(list),
+    enabled(bool), min_score, target_count, daily_budget, default_bid, ad_template_id, discovery_cursor."""
+    import json as _json
+    col_map = {
+        "description": ("domain_description", lambda v: str(v)),
+        "atom_library": ("atom_library", lambda v: _json.dumps(v, ensure_ascii=False)),
+        "negative_keywords": ("negative_keywords",
+                              lambda v: ",".join(str(x).strip() for x in v if str(x).strip())),
+        "relevance_keywords": ("relevance_keywords",
+                               lambda v: ",".join(str(x).strip() for x in v
+                                                  if str(x).strip() and len(str(x).strip()) >= 2)),
+        "enabled": ("automation_enabled", lambda v: 1 if v else 0),
+        "min_score": ("automation_min_score", lambda v: max(0, min(95, int(v)))),
+        "target_count": ("automation_target_count", lambda v: max(0, min(100000, int(v)))),
+        "daily_budget": ("automation_daily_budget", lambda v: max(70, int(v))),
+        "default_bid": ("default_bid", lambda v: max(70, int(v))),
+        "ad_template_id": ("automation_ad_template_id", lambda v: int(v) if v is not None else None),
+        "discovery_cursor": ("discovery_cursor", lambda v: str(v)),
+    }
+    sets, vals = [], []
+    for k, val in fields.items():
+        if k in col_map and val is not None:
+            col, conv = col_map[k]
+            sets.append(f"{col} = ?")
+            vals.append(conv(val))
+    if not sets:
+        return False
+    sets.append("updated_at = CURRENT_TIMESTAMP")
+    sql = f"UPDATE ad_accounts SET {', '.join(sets)} WHERE user_id = ? AND customer_id = ?"
+    vals.extend([user_id, str(customer_id)])
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(sql, vals)
+    affected = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return affected > 0
+
+
+def touch_automation_timestamp(user_id: int, customer_id: str, which: str) -> None:
+    """발굴/유지보수 cron 실행 시각 기록. which='discovery'|'maintenance'."""
+    col = "automation_last_discovery_at" if which == "discovery" else "automation_last_maintenance_at"
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        f"UPDATE ad_accounts SET {col}=CURRENT_TIMESTAMP WHERE user_id=? AND customer_id=?",
+        (user_id, str(customer_id)),
+    )
+    conn.commit()
+    conn.close()
+
+
+def list_automation_enabled_accounts() -> List[Dict]:
+    """automation_enabled=1 인 모든 광고주 — 발굴/유지보수 cron 이 순회."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT user_id, customer_id FROM ad_accounts
+        WHERE automation_enabled = 1 AND is_active = TRUE
+    """)
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
 
 
 def get_ad_account_relevance_keywords(user_id: int, customer_id: str) -> List[str]:

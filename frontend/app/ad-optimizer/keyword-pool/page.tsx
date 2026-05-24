@@ -6,6 +6,7 @@ import { ArrowLeft, Loader2, Plus, RefreshCw, Database, Activity, AlertCircle, C
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/lib/stores/auth'
 import { adGet, adPost, adDelete, adPatch } from '@/lib/api'
+import AutoVeinEngine from './AutoVeinEngine'
 
 interface PoolStats {
   total?: number
@@ -1188,6 +1189,13 @@ export default function KeywordPoolPage() {
             <span className="font-semibold">다중 광고주 모드</span> — 총 {accounts.length}개 광고주 등록됨.
             드롭다운에서 광고주 전환 시 풀 데이터/시드/실행이력이 그 광고주 기준으로 분리됩니다.
             cron(5분 주기) 은 모든 광고주를 각각 독립적으로 처리합니다.
+          </div>
+        )}
+
+        {/* 전자동 광맥 발굴 엔진 (Stage 6) */}
+        {selectedCid && (
+          <div className="mb-6">
+            <AutoVeinEngine customerId={selectedCid} />
           </div>
         )}
 

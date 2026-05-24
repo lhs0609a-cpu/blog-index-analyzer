@@ -4451,7 +4451,7 @@ async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch:
     else:
         bid = max(70, int(bid))
 
-    pending = pool.claim_pending(customer_id, limit=batch, min_volume=1)
+    pending = pool.claim_pending(customer_id, limit=batch, min_volume=10)  # 검색량 10 미만 등록 절대 차단
     if not pending:
         s = pool.stats(customer_id)
         pending_total = (s.get("by_status") or {}).get("pending", 0)
@@ -4473,6 +4473,81 @@ async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch:
         return
     keywords = [p["keyword"] for p in pending]
     logger.warning(f"[pool/register] user={uid} 시작 batch={len(keywords)}")
+
+    # ───── 도메인 하드 게이트 (register 단계, 2026-05-22) ─────
+    # collect/seed_amplify 가 pending 에 off-domain(다낭·유산균 등)을 넣어도 여기서 컷.
+    # saved relevance_keywords 로 점수 < 30 인 pending 은 'domain_skipped' 로 빼서
+    # pending 에서 제거(재claim 방지), 통과분만 네이버 등록. relevance 미설정 시 스킵(=구동작 유지).
+    try:
+        from database.naver_ad_db import get_ad_account_relevance_keywords as _grk_gate
+        _rel_gate = [s for s in (_grk_gate(uid, str(customer_id)) or []) if s and len(s) >= 2]
+        if len(_rel_gate) >= 3:
+            _ga3, _ga2 = set(), set()
+            for _s in _rel_gate:
+                if len(_s) >= 4:
+                    _ga3.add(_s)
+                for _n in (2, 3):
+                    for _i in range(len(_s) - _n + 1):
+                        _a = _s[_i:_i + _n]
+                        (_ga2 if len(_a) == 2 else _ga3).add(_a)
+            _on, _off_ids, _junk_n, _neg_n = [], [], 0, 0
+            _JUNK_TOKENS = ("후기", "추천", "비용", "상담", "전문", "정보", "비교", "잘하는곳")
+            # negative-token: 한의원 진료가 아닌 상업/비의료 단어. 짧은 질환명(기침·건선·태선·
+            # 모반 등)이 무관 단어에 substring 으로 박히는 오매칭 차단 (예: 아기'침대'·물'건선'반).
+            _NEG_TOKENS = (
+                "침대", "매트", "매트리스", "선반", "가구", "대여", "렌탈", "렌트", "침구", "이불",
+                "베개", "소파", "책상", "의자", "수납", "옷장", "주택", "분양", "아파트", "오피스텔",
+                "인테리어", "조명", "커튼", "벽지", "그릇", "용기", "포장", "택배", "자동차", "중고차",
+                "타이어", "보험", "대출", "적금", "예금", "주식", "펀드", "코인", "비트코인", "재테크",
+                "여행", "호텔", "펜션", "리조트", "항공권", "강의", "학원", "인강", "과외", "토익",
+                "토플", "자격증", "공무원", "게임", "영화", "드라마", "웹툰", "만화", "레시피", "맛집",
+                "식당", "배달", "쇼핑몰", "직구", "운동화", "신발", "가방", "지갑", "선글라스", "안경",
+                "화장품", "향수", "립스틱", "컨실러", "쿠션", "파운데이션", "비비크림", "마스카라",
+                "유산균", "젤리", "홍삼", "영양제", "비타민제", "콜라겐젤리", "오메가3", "프로틴",
+                "노트북", "휴대폰", "에어컨", "냉장고", "세탁기", "청소기", "공기청정기",
+            )
+            for _p in pending:
+                _kw = _p["keyword"] or ""
+                _kwc = _kw.replace(" ", "")
+                # 정크 컷 (GPT 패딩: 반복토큰 2회+ 또는 과길이) — Naver mt=10 floor 통과하는 무의미 문자열.
+                if len(_kwc) >= 20 or any(_kwc.count(_t) >= 2 for _t in _JUNK_TOKENS):
+                    _off_ids.append(_p["id"]); _junk_n += 1
+                    continue
+                # negative-token 컷 (상업/비의료 — substring 오매칭 방지)
+                if any(_neg in _kwc for _neg in _NEG_TOKENS):
+                    _off_ids.append(_p["id"]); _neg_n += 1
+                    continue
+                _sc = 0
+                _full = False
+                for _s in _rel_gate:
+                    if _s in _kw:
+                        _sc = 100; _full = True; break
+                    if _kw and _kw in _s:
+                        _sc = 95; _full = True; break
+                if not _full:
+                    _n3 = sum(1 for _a in _ga3 if _a in _kw)
+                    _n2 = sum(1 for _a in _ga2 if _a in _kw)
+                    _sc = min(95, min(80, _n3 * 20) + min(30, _n2 * 5))
+                if _sc >= 30:
+                    _on.append(_p)
+                else:
+                    _off_ids.append(_p["id"])
+            if _off_ids:
+                pool.mark_status(_off_ids, "domain_skipped")
+            logger.warning(
+                f"[pool/register] 도메인게이트: {len(pending)} → 통과 {len(_on)} / 컷 {len(_off_ids)} (정크 {_junk_n} / 상업컷 {_neg_n})"
+            )
+            pending = _on
+            keywords = [p["keyword"] for p in pending]
+            if not pending:
+                pool.record_run(
+                    uid, customer_id, "register", "no_pending",
+                    error_message="도메인게이트 통과 0 — claim 된 pending 전부 off-domain",
+                    duration_ms=int((_time.monotonic() - t0) * 1000),
+                )
+                return
+    except Exception as _e:
+        logger.warning(f"[pool/register] 도메인게이트 예외(무시, 전체등록 진행): {type(_e).__name__}: {_e}")
 
     client = NaverAdApiClient()
     client.customer_id = account["customer_id"]
@@ -5858,6 +5933,13 @@ async def _run_seed_explode(
     score_basis = get_ad_account_relevance_keywords(user_id, str(customer_id))
     if not score_basis:
         score_basis = [s for s in (pool.list_user_seeds(customer_id) or []) if s and len(s) >= 2]
+    # negative_keywords (drift 차단) — 도메인 프로파일에 있으면 substring 컷. 없으면 빈 리스트.
+    try:
+        from database.naver_ad_db import get_domain_profile as _get_prof
+        negatives = [n for n in (_get_prof(user_id, str(customer_id)) or {}).get("negative_keywords", [])
+                     if n and len(n) >= 2]
+    except Exception:
+        negatives = []
 
     client = NaverAdApiClient()
     client.customer_id = account["customer_id"]
@@ -5882,6 +5964,7 @@ async def _run_seed_explode(
     total_related = 0
     n_vol_pass = 0   # 검색량 통과 수
     n_score_cut = 0  # 검색량 통과했으나 점수 미달로 컷
+    n_neg_cut = 0    # negative_keywords 포함으로 컷 (drift 차단)
     for seed in seeds:
         try:
             resp = await client.get_related_keywords(seed, show_detail=True)
@@ -5905,6 +5988,9 @@ async def _run_seed_explode(
             # 연관성 점수 필터 — 자동삭제 크론(점수<min_score 삭제)과 일관. 점수 기준은
             # saved_relevance(없으면 user_seed). seen 은 점수 미달이어도 마킹해 재계산 방지.
             seen.add(kw)
+            if negatives and any(nt in kw for nt in negatives):
+                n_neg_cut += 1
+                continue
             if score_basis and _compute_relevance_score(kw, score_basis) < min_score:
                 n_score_cut += 1
                 continue
@@ -5923,7 +6009,7 @@ async def _run_seed_explode(
     logger.warning(
         f"[pool/explode] user={user_id} cid={customer_id} 시드 {len(seeds)} → "
         f"연관 {total_related} → 검색량≥{min_volume} {n_vol_pass} → 점수≥{min_score} {len(items)} "
-        f"(점수컷 {n_score_cut}) → pending +{added} ({dur_ms}ms)"
+        f"(점수컷 {n_score_cut}, neg컷 {n_neg_cut}) → pending +{added} ({dur_ms}ms)"
     )
     try:
         pool.record_run(
@@ -7415,6 +7501,186 @@ async def keyword_pool_registered_cleanup_by_score(
     }
 
 
+class ReactivateFailedRequest(BaseModel):
+    threshold: int = Field(50, ge=0, le=95, description="이 점수 이상(온도메인)만 pending 재활성화")
+    min_volume: int = Field(10, ge=0, le=100000, description="월 검색량 최소 (실볼륨만)")
+    max_reactivate: int = Field(50000, ge=0, le=200000, description="이번 호출 최대 재활성화 수")
+    dry_run: bool = Field(True)
+    relevance_keywords_override: Optional[List[str]] = None
+    include_statuses: Optional[List[str]] = Field(
+        None, description="재활성화 대상 status (기본 ['failed']; deleted 는 과거 off-domain 퍼지분이라 권장 제외)"
+    )
+    phantom_registered: bool = Field(
+        False,
+        description="True 면 status='registered'인데 라이브 추적(registered_keywords.ncc_keyword_id)이 없는 phantom 행만 스캔 — reconcile 버그로 등록 처리됐으나 실제 네이버엔 없는 것 재등록. include_statuses 무시.",
+    )
+
+
+@router.post("/keyword-pool/registered/reactivate-failed")
+async def keyword_pool_reactivate_failed(
+    request: ReactivateFailedRequest,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """잠든 failed(옵션 deleted/rejected) 키워드 중 온도메인(relevance≥threshold)을 pending 으로 되살림.
+
+    10만 채우기 supply 보충 — 이미 발굴+검색량 검증된 키워드 재활용 (신규 발굴 0, dedup 무관).
+    드리프트 방지: relevance 게이트 통과분만. deleted 는 기본 제외 (과거 off-domain 퍼지 부활 차단).
+    dry_run=true: 점수 분포 + 대상 미리보기. false: status='pending' UPDATE → register cron(30s) 소진.
+    """
+    import sqlite3 as _sqlite3
+    import time as _t
+    _t0 = _t.monotonic()
+
+    threshold = max(0, min(95, int(request.threshold)))
+    min_volume = max(0, int(request.min_volume))
+    max_reactivate = max(0, min(200000, int(request.max_reactivate)))
+    dry_run = bool(request.dry_run)
+    allowed = {"failed", "deleted", "rejected_by_naver"}
+    statuses = [s for s in (request.include_statuses or ["failed"]) if s in allowed] or ["failed"]
+
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+
+    pool = get_keyword_pool_db()
+
+    from database.naver_ad_db import get_ad_account_relevance_keywords
+    if request.relevance_keywords_override:
+        score_basis = [s.strip() for s in request.relevance_keywords_override if s and len(s.strip()) >= 2]
+        basis_source = "override"
+    else:
+        saved = get_ad_account_relevance_keywords(user_id, str(cid))
+        if saved:
+            score_basis = saved; basis_source = "saved"
+        else:
+            score_basis = [s for s in (pool.list_user_seeds(cid) or []) if s and len(s) >= 2]
+            basis_source = "user_seed_fallback"
+    if not score_basis:
+        raise HTTPException(status_code=400, detail="점수 기준 키워드 없음 — relevance_keywords 저장 또는 override 필요")
+    user_seeds = score_basis
+
+    if request.phantom_registered:
+        # phantom = pool.status='registered' 인데 registered_keywords(별도 DB)에 ncc_id 없음.
+        # 두 DB라 JOIN 불가 → Python 에서 live set 대조.
+        reg = get_registered_keywords_db()
+        with _sqlite3.connect(reg.db_path, timeout=30.0) as rc:
+            live_set = {
+                k for (k,) in rc.execute(
+                    "SELECT keyword FROM registered_keywords "
+                    "WHERE account_customer_id=? AND ncc_keyword_id IS NOT NULL",
+                    (cid,),
+                ).fetchall()
+            }
+        with _sqlite3.connect(pool.db_path, timeout=30.0) as conn:
+            all_reg = conn.execute(
+                """SELECT id, keyword, COALESCE(monthly_total,0)
+                   FROM naverad_keyword_pool
+                   WHERE account_customer_id=? AND status='registered'
+                     AND COALESCE(monthly_total,0) >= ?""",
+                (cid, min_volume),
+            ).fetchall()
+        rows = [(rid, kw, mt) for rid, kw, mt in all_reg if kw not in live_set]
+        statuses = ["registered(phantom)"]  # 로깅용
+    else:
+        placeholders = ",".join("?" * len(statuses))
+        with _sqlite3.connect(pool.db_path, timeout=30.0) as conn:
+            rows = conn.execute(
+                f"""SELECT id, keyword, COALESCE(monthly_total,0)
+                    FROM naverad_keyword_pool
+                    WHERE account_customer_id=?
+                      AND status IN ({placeholders})
+                      AND COALESCE(monthly_total,0) >= ?""",
+                (cid, *statuses, min_volume),
+            ).fetchall()
+
+    # cleanup-by-score 와 동일한 atom 점수 (precompute 1회) — to_thread 로 event loop 보호.
+    def _score_all():
+        atoms_3plus: set = set()
+        atoms_2: set = set()
+        for s in user_seeds:
+            if not s or len(s) < 2:
+                continue
+            if len(s) >= 4:
+                atoms_3plus.add(s)
+            for n in (2, 3):
+                for i in range(len(s) - n + 1):
+                    a = s[i:i + n]
+                    (atoms_2 if len(a) == 2 else atoms_3plus).add(a)
+        keep: List[Tuple[int, str, int, int]] = []
+        dist: Dict[int, int] = {}
+        for rid, kw, mt in rows:
+            if not kw:
+                dist[0] = dist.get(0, 0) + 1
+                continue
+            sc = 0
+            full = False
+            for s in user_seeds:
+                if not s or len(s) < 2:
+                    continue
+                if s in kw:
+                    sc = 100; full = True; break
+                if kw in s:
+                    sc = 95; full = True; break
+            if not full:
+                n_3 = sum(1 for a in atoms_3plus if a in kw)
+                n_2 = sum(1 for a in atoms_2 if a in kw)
+                sc = min(95, min(80, n_3 * 20) + min(30, n_2 * 5))
+            bucket = (sc // 10) * 10
+            dist[bucket] = dist.get(bucket, 0) + 1
+            if sc >= threshold:
+                keep.append((rid, kw, mt, sc))
+        return keep, dist
+
+    keep, dist = await asyncio.to_thread(_score_all)
+    keep.sort(key=lambda x: (-x[3], -x[2]))  # 온도메인·고볼륨 우선
+    capped = keep[:max_reactivate]
+    logger.warning(
+        f"[reactivate-failed] uid={user_id} cid={cid} dry_run={dry_run} statuses={statuses} "
+        f"scanned={len(rows)} on_domain={len(keep)} thr={threshold} minvol={min_volume} "
+        f"basis={basis_source}({len(user_seeds)}) elapsed={_t.monotonic()-_t0:.2f}s"
+    )
+
+    if dry_run:
+        return {
+            "success": True, "dry_run": True, "customer_id": cid,
+            "basis_source": basis_source, "basis_count": len(user_seeds),
+            "scanned_statuses": statuses, "min_volume": min_volume, "threshold": threshold,
+            "total_scanned": len(rows),
+            "score_distribution": dict(sorted(dist.items())),
+            "on_domain_reactivatable": len(keep),
+            "will_reactivate_now": len(capped),
+            "samples": [{"keyword": kw, "score": sc, "mt": mt} for _, kw, mt, sc in capped[:30]],
+        }
+
+    if not capped:
+        return {"success": True, "dry_run": False, "customer_id": cid,
+                "reactivated": 0, "message": f"score≥{threshold} 재활성화 대상 없음"}
+
+    ids = [rid for rid, _, _, _ in capped]
+    n = 0
+    with _sqlite3.connect(pool.db_path, timeout=30.0) as conn:
+        for i in range(0, len(ids), 900):
+            chunk = ids[i:i + 900]
+            ph = ",".join("?" * len(chunk))
+            cur = conn.execute(
+                f"""UPDATE naverad_keyword_pool
+                    SET status='pending', error_message=NULL, registered_at=NULL
+                    WHERE account_customer_id=? AND id IN ({ph})""",
+                (cid, *chunk),
+            )
+            n += cur.rowcount or 0
+        conn.commit()
+    logger.warning(f"[reactivate-failed] uid={user_id} cid={cid} → reactivated={n}")
+    return {
+        "success": True, "dry_run": False, "customer_id": cid,
+        "reactivated": n, "on_domain_total": len(keep),
+        "scanned_statuses": statuses, "threshold": threshold,
+        "message": f"{n}개 → pending. register cron(30초)이 순차 등록합니다.",
+    }
+
+
 # ============ 긴급 drift 일괄 정리 — registered + user_seed + pending 한 번에 ============
 # cleanup-by-score 는 registered 만. 100k drift 사고 시 user_seed 도 오염돼 있어 그것도
 # 같이 갈아야 다음 amplify 가 또 차 KW 안 만듦. 이 endpoint 는 3가지 정리를 한 번에:
@@ -8033,6 +8299,62 @@ async def keyword_pool_reconcile_naver(
     }
 
 
+@router.post("/keyword-pool/admin/wipe-customer-db")
+async def keyword_pool_wipe_customer_db(
+    customer_id: Optional[str] = None,
+    confirm: str = Query(..., description="WIPE 입력 시에만 실행 (안전장치)"),
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """광고주의 registered_keywords + naverad_keyword_pool row 일괄 wipe.
+
+    네이버 광고 콘솔에서 사용자가 KW 들을 직접 일괄 삭제한 경우, 우리 DB sync 용도.
+    pool 전체 wipe 라서 새 explode 가 깨끗하게 시작 가능 (이전 'registered'/'failed'
+    dedup 안 됨). 캠페인/광고그룹 row 는 건드리지 않음 — Naver 에 존재하면 재사용됨.
+
+    안전: confirm="WIPE" 필수. customer_id 명시 필수.
+    """
+    if confirm != "WIPE":
+        raise HTTPException(status_code=400, detail="confirm=WIPE 명시 필요 (안전장치)")
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="customer_id 필수")
+    import sqlite3 as _sqlite3
+    account = _resolve_account(user_id, customer_id)
+    if not account:
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+
+    reg = get_registered_keywords_db()
+    pool = get_keyword_pool_db()
+
+    n_reg = 0
+    n_pool = 0
+    with _sqlite3.connect(reg.db_path) as conn:
+        cur = conn.execute(
+            "DELETE FROM registered_keywords WHERE account_customer_id=?",
+            (cid,),
+        )
+        n_reg = cur.rowcount or 0
+        conn.commit()
+    with _sqlite3.connect(pool.db_path) as conn:
+        cur = conn.execute(
+            "DELETE FROM naverad_keyword_pool WHERE account_customer_id=?",
+            (cid,),
+        )
+        n_pool = cur.rowcount or 0
+        conn.commit()
+
+    logger.warning(
+        f"[admin/wipe-customer-db] uid={user_id} cid={cid} "
+        f"registered_rows={n_reg} pool_rows={n_pool}"
+    )
+    return {
+        "success": True,
+        "customer_id": cid,
+        "registered_rows_deleted": n_reg,
+        "pool_rows_deleted": n_pool,
+    }
+
+
 @router.post("/keyword-pool/admin/rebuild-from-naver")
 async def keyword_pool_rebuild_from_naver(
     customer_id: Optional[str] = None,
@@ -8436,6 +8758,7 @@ class BidBulkUpdateRequest(BaseModel):
 @router.post("/keyword-pool/bid/bulk-update")
 async def keyword_pool_bid_bulk_update(
     request: BidBulkUpdateRequest,
+    background_tasks: BackgroundTasks,
     customer_id: Optional[str] = None,
     user_id: int = Depends(get_user_id_with_fallback),
 ):
@@ -8458,119 +8781,127 @@ async def keyword_pool_bid_bulk_update(
         # 1. DB 저장 — 앞으로 cron 이 이 값 사용
         update_ad_account_default_bid(user_id, str(cid), new_bid)
 
-        # 2. 네이버 API 광고그룹 일괄 변경
-        client = NaverAdApiClient()
-        client.customer_id = account["customer_id"]
-        client.api_key = account["api_key"]
-        client.secret_key = account["secret_key"]
+        # 2. 백그라운드로 네이버 일괄 변경 (45k 키워드는 HTTP 타임아웃 초과 → bg 완주)
+        async def _run():
+            # 2. 네이버 API 광고그룹 일괄 변경
+            client = NaverAdApiClient()
+            client.customer_id = account["customer_id"]
+            client.api_key = account["api_key"]
+            client.secret_key = account["secret_key"]
 
-        campaigns = await client.get_campaigns() or []
-        if request.scope == "pool":
-            campaigns = [c for c in campaigns if (c.get("name") or "").startswith("auto_")]
+            campaigns = await client.get_campaigns() or []
+            if request.scope == "pool":
+                campaigns = [c for c in campaigns if (c.get("name") or "").startswith("auto_")]
+            else:
+                # 'all' = 파워링크(WEB_SITE) 키워드 캠페인만 — 파워컨텐츠/플레이스/브랜드검색 제외
+                campaigns = [c for c in campaigns if (c.get("campaignTp") or "") == "WEB_SITE"]
 
-        ad_group_ids: List[Tuple[str, str]] = []  # (campaign_name, ad_group_id)
-        for c in campaigns:
-            try:
-                groups = await client.get_ad_groups(campaign_id=c.get("nccCampaignId")) or []
-                for g in groups:
-                    gid = g.get("nccAdgroupId")
-                    if gid:
-                        ad_group_ids.append((c.get("name") or "", gid))
-            except Exception as e:
-                logger.warning(f"[bid/bulk] 광고그룹 list 실패 cid={c.get('nccCampaignId')}: {e}")
-            await asyncio.sleep(0.15)
-
-        # 광고그룹 default bid 변경
-        ag_success = 0
-        ag_failed: List[Dict] = []
-        for cname, gid in ad_group_ids:
-            try:
-                await client.update_ad_group_bid(gid, new_bid)
-                ag_success += 1
-            except Exception as e:
-                ag_failed.append({"ad_group_id": gid, "campaign": cname, "error": f"{type(e).__name__}: {str(e)[:120]}"})
-            await asyncio.sleep(0.15)
-
-        # 키워드별 bidAmt 일괄 변경 — 광고그룹별로 keyword list 받아 full-body PUT.
-        # 부분 PUT(?fields=) 은 Naver 가 silent ignore 하는 케이스가 있어서, list 응답에서
-        # 받은 전체 body 를 그대로 사용하고 bidAmt + useGroupBidAmt 만 수정해 PUT.
-        # 동시성 = 5 (이전 20). circuit breaker 와 협응해 outbound 폭주 차단.
-        kw_total = 0
-        kw_success = 0
-        kw_failed: List[Dict] = []
-        sem = asyncio.Semaphore(5)
-        progress_logged_at = 0
-        from services.naver_ad_service import _naver_api_breaker, NaverApiCircuitOpenError
-
-        async def _update_kw_full(kw_obj: Dict):
-            nonlocal kw_success
-            kid = kw_obj.get("nccKeywordId")
-            if not kid:
-                return
-            # circuit OPEN 시 task 진입 자체 skip
-            if _naver_api_breaker.is_open():
-                kw_failed.append({"keyword_id": kid, "error": "circuit_open"})
-                return
-            # 이전 버전: full-body PUT (fields 쿼리 없음) → Naver 가 silent-ignore.
-            # 393 KW 중 대부분이 이미 70원이라 적용된 것처럼 보였지만 실제로 입찰가가
-            # 다르게 설정된 head KW (예: "강남두드러기한의원" 17,840원) 가 그대로 남음.
-            # 정답: update_keyword_bid (PUT ?fields=bidAmt + 최소 body).
-            cur = kw_obj.get("bidAmt")
-            ugba = kw_obj.get("useGroupBidAmt")
-            if cur == new_bid and ugba is False:
-                kw_success += 1  # 이미 목표값
-                return
-            async with sem:
+            ad_group_ids: List[Tuple[str, str]] = []  # (campaign_name, ad_group_id)
+            for c in campaigns:
                 try:
-                    await client.update_keyword_bid(kid, new_bid)
-                    kw_success += 1
-                except NaverApiCircuitOpenError:
-                    kw_failed.append({"keyword_id": kid, "error": "circuit_open"})
+                    groups = await client.get_ad_groups(campaign_id=c.get("nccCampaignId")) or []
+                    for g in groups:
+                        gid = g.get("nccAdgroupId")
+                        if gid:
+                            ad_group_ids.append((c.get("name") or "", gid))
                 except Exception as e:
-                    kw_failed.append({
-                        "keyword_id": kid,
-                        "keyword": kw_obj.get("keyword"),
-                        "before_bid": cur,
-                        "error": f"{type(e).__name__}: {str(e)[:120]}",
-                    })
+                    logger.warning(f"[bid/bulk] 광고그룹 list 실패 cid={c.get('nccCampaignId')}: {e}")
+                await asyncio.sleep(0.15)
 
-        logger.warning(f"[bid/bulk] 시작 — scope={request.scope} ad_groups={len(ad_group_ids)} new_bid={new_bid}원")
-        for idx, (cname, gid) in enumerate(ad_group_ids):
-            try:
-                kws = await client.get_keywords(ad_group_id=gid) or []
-            except Exception as e:
-                logger.warning(f"[bid/bulk] keywords list 실패 ag={gid}: {e}")
-                continue
-            kw_total += len(kws)
-            if kws:
-                await asyncio.gather(*[_update_kw_full(k) for k in kws], return_exceptions=False)
-            # 1000 단위로 진행 로그 — 49k 가 16분 돌 때 시각적 확인용
-            if kw_success - progress_logged_at >= 1000:
-                progress_logged_at = kw_success
-                logger.warning(
-                    f"[bid/bulk] 진행 — 광고그룹 {idx+1}/{len(ad_group_ids)} · "
-                    f"키워드 {kw_success}/{kw_total} 성공"
-                )
-            await asyncio.sleep(0.05)
-        logger.warning(
-            f"[bid/bulk] 완료 — 광고그룹 {ag_success}/{len(ad_group_ids)} · "
-            f"키워드 {kw_success}/{kw_total} 성공 ({len(kw_failed)} 실패)"
-        )
+            # 광고그룹 default bid 변경
+            ag_success = 0
+            ag_failed: List[Dict] = []
+            for cname, gid in ad_group_ids:
+                try:
+                    await client.update_ad_group_bid(gid, new_bid)
+                    ag_success += 1
+                except Exception as e:
+                    ag_failed.append({"ad_group_id": gid, "campaign": cname, "error": f"{type(e).__name__}: {str(e)[:120]}"})
+                await asyncio.sleep(0.15)
 
-        return {
-            "success": True,
-            "customer_id": str(cid),
-            "new_bid": new_bid,
-            "scope": request.scope,
-            "campaigns_scanned": len(campaigns),
-            "ad_groups_total": len(ad_group_ids),
-            "ad_groups_updated": ag_success,
-            "ad_groups_failed": len(ag_failed),
-            "keywords_total": kw_total,
-            "keywords_updated": kw_success,
-            "keywords_failed": len(kw_failed),
-            "failed_samples": (ag_failed[:5] + kw_failed[:5])[:10],
-        }
+            # 키워드별 bidAmt 일괄 변경 — 광고그룹별로 keyword list 받아 full-body PUT.
+            # 부분 PUT(?fields=) 은 Naver 가 silent ignore 하는 케이스가 있어서, list 응답에서
+            # 받은 전체 body 를 그대로 사용하고 bidAmt + useGroupBidAmt 만 수정해 PUT.
+            # 동시성 = 5 (이전 20). circuit breaker 와 협응해 outbound 폭주 차단.
+            kw_total = 0
+            kw_success = 0
+            kw_failed: List[Dict] = []
+            sem = asyncio.Semaphore(5)
+            progress_logged_at = 0
+            from services.naver_ad_service import _naver_api_breaker, NaverApiCircuitOpenError
+
+            async def _update_kw_full(kw_obj: Dict):
+                nonlocal kw_success
+                kid = kw_obj.get("nccKeywordId")
+                if not kid:
+                    return
+                # circuit OPEN 시 task 진입 자체 skip
+                if _naver_api_breaker.is_open():
+                    kw_failed.append({"keyword_id": kid, "error": "circuit_open"})
+                    return
+                # 이전 버전: full-body PUT (fields 쿼리 없음) → Naver 가 silent-ignore.
+                # 393 KW 중 대부분이 이미 70원이라 적용된 것처럼 보였지만 실제로 입찰가가
+                # 다르게 설정된 head KW (예: "강남두드러기한의원" 17,840원) 가 그대로 남음.
+                # 정답: update_keyword_bid (PUT ?fields=bidAmt + 최소 body).
+                cur = kw_obj.get("bidAmt")
+                ugba = kw_obj.get("useGroupBidAmt")
+                if cur == new_bid and ugba is False:
+                    kw_success += 1  # 이미 목표값
+                    return
+                async with sem:
+                    try:
+                        await client.update_keyword_bid(kid, new_bid)
+                        kw_success += 1
+                    except NaverApiCircuitOpenError:
+                        kw_failed.append({"keyword_id": kid, "error": "circuit_open"})
+                    except Exception as e:
+                        kw_failed.append({
+                            "keyword_id": kid,
+                            "keyword": kw_obj.get("keyword"),
+                            "before_bid": cur,
+                            "error": f"{type(e).__name__}: {str(e)[:120]}",
+                        })
+
+            logger.warning(f"[bid/bulk] 시작 — scope={request.scope} ad_groups={len(ad_group_ids)} new_bid={new_bid}원")
+            for idx, (cname, gid) in enumerate(ad_group_ids):
+                try:
+                    kws = await client.get_keywords(ad_group_id=gid) or []
+                except Exception as e:
+                    logger.warning(f"[bid/bulk] keywords list 실패 ag={gid}: {e}")
+                    continue
+                kw_total += len(kws)
+                if kws:
+                    await asyncio.gather(*[_update_kw_full(k) for k in kws], return_exceptions=False)
+                # 1000 단위로 진행 로그 — 49k 가 16분 돌 때 시각적 확인용
+                if kw_success - progress_logged_at >= 1000:
+                    progress_logged_at = kw_success
+                    logger.warning(
+                        f"[bid/bulk] 진행 — 광고그룹 {idx+1}/{len(ad_group_ids)} · "
+                        f"키워드 {kw_success}/{kw_total} 성공"
+                    )
+                await asyncio.sleep(0.05)
+            logger.warning(
+                f"[bid/bulk] 완료 — 광고그룹 {ag_success}/{len(ad_group_ids)} · "
+                f"키워드 {kw_success}/{kw_total} 성공 ({len(kw_failed)} 실패)"
+            )
+
+            return {
+                "success": True,
+                "customer_id": str(cid),
+                "new_bid": new_bid,
+                "scope": request.scope,
+                "campaigns_scanned": len(campaigns),
+                "ad_groups_total": len(ad_group_ids),
+                "ad_groups_updated": ag_success,
+                "ad_groups_failed": len(ag_failed),
+                "keywords_total": kw_total,
+                "keywords_updated": kw_success,
+                "keywords_failed": len(kw_failed),
+                "failed_samples": (ag_failed[:5] + kw_failed[:5])[:10],
+            }
+        background_tasks.add_task(_run)
+        return {"success": True, "started": True, "scope": request.scope, "new_bid": new_bid,
+                "message": f"백그라운드 일괄 변경 시작 — scope={request.scope} 모든 키워드 {new_bid}원 적용 (수십분 소요, 로그에서 진행 확인)"}
     except HTTPException:
         raise
     except Exception as e:
@@ -8776,6 +9107,375 @@ class AdTemplateCreate(BaseModel):
 class AdExtensionCreate(BaseModel):
     kind: str  # PHONE_NUMBER / DESCRIPTION_EXTENSION / SUBLINK ...
     payload: Dict[str, Any]
+
+
+class ImageExtBackfillRequest(BaseModel):
+    image_path: Optional[str] = None  # 직접 지정 (없으면 기존 POWER_LINK_IMAGE 에서 자동 탐색)
+    scope: str = "pool"               # pool=auto_ 캠페인만, all=전체
+    mode: str = "test_one"            # test_one=1개 그룹 테스트(raw 반환) / backfill=전체 백그라운드
+    disable_others: bool = False
+
+
+@router.post("/keyword-pool/extension/image-backfill")
+async def keyword_pool_image_ext_backfill(
+    request: ImageExtBackfillRequest,
+    background_tasks: BackgroundTasks,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """POWER_LINK_IMAGE(파워링크 이미지) 확장소재를 광고그룹에 일괄 등록.
+
+    - image_path 미지정 → 기존 확장소재에서 POWER_LINK_IMAGE 의 imagePath 자동 탐색(ownerType=ADGROUP)
+    - mode=test_one → 첫 그룹 1개에만 생성 + Naver raw 응답 반환 (본문 포맷 검증용)
+    - mode=backfill → 전체 그룹 백그라운드 생성 (이미 있으면 skip)
+    """
+    from services.naver_ad_service import NaverAdApiClient
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    def _as_list(x):
+        if isinstance(x, list):
+            return x
+        if isinstance(x, dict):
+            return x.get("data") or x.get("list") or []
+        return []
+
+    all_campaigns = _as_list(await client.get_campaigns() or [])
+    auto_camps = [c for c in all_campaigns if (c.get("name") or "").startswith("auto_")]
+    manual_camps = [c for c in all_campaigns if not (c.get("name") or "").startswith("auto_")]
+    target_camps = auto_camps if request.scope == "pool" else all_campaigns
+
+    async def _groups_of(camps) -> List[str]:
+        out: List[str] = []
+        for c in camps:
+            try:
+                groups = _as_list(await client.get_ad_groups(campaign_id=c.get("nccCampaignId")) or [])
+                for g in groups:
+                    gid = g.get("nccAdgroupId")
+                    if gid:
+                        out.append(gid)
+            except Exception:
+                pass
+            await asyncio.sleep(0.08)
+        return out
+
+    # backfill 대상 그룹
+    ad_group_ids = await _groups_of(target_camps)
+    if not ad_group_ids:
+        return {"success": False, "step": "no_ad_groups"}
+
+    # imagePath 자동 탐색 — 수동 캠페인(파워링크 등)에 이미지가 있으므로 수동 먼저 스캔
+    image_path = request.image_path
+    discovered_from = None
+    if not image_path:
+        discover_groups = await _groups_of(manual_camps)  # 캡 없음 (수동 캠페인은 소수)
+        for gid in discover_groups:
+            try:
+                exts = _as_list(await client.get_ad_extensions(owner_id=gid, owner_type="ADGROUP") or [])
+                for e in exts:
+                    if isinstance(e, dict) and e.get("type") == "POWER_LINK_IMAGE":
+                        ad = e.get("adExtension") or {}
+                        ip = ad.get("imagePath") if isinstance(ad, dict) else None
+                        if ip:
+                            image_path = ip
+                            discovered_from = gid
+                            break
+                if image_path:
+                    break
+            except Exception:
+                pass
+            await asyncio.sleep(0.08)
+    if not image_path:
+        return {
+            "success": False, "step": "no_image_path_found",
+            "hint": "기존 POWER_LINK_IMAGE 확장소재를 못 찾음 — image_path 직접 지정 필요",
+            "ad_groups_scanned": min(len(ad_group_ids), 60),
+        }
+
+    content = {"adExtension": {"imagePath": image_path}}
+
+    if request.mode == "test_one":
+        gid = ad_group_ids[0]
+        try:
+            res = await client.create_ad_extension(
+                owner_id=gid, kind="POWER_LINK_IMAGE", content=content, owner_type="ADGROUP",
+            )
+            return {"success": True, "mode": "test_one", "ad_group_id": gid,
+                    "image_path": image_path, "discovered_from": discovered_from, "naver_response": res}
+        except Exception as e:
+            return {"success": False, "mode": "test_one", "ad_group_id": gid,
+                    "image_path": image_path, "error": f"{type(e).__name__}: {str(e)[:400]}"}
+
+    async def _run():
+        created = skipped = failed = 0
+        for gid in ad_group_ids:
+            try:
+                exts = _as_list(await client.get_ad_extensions(owner_id=gid, owner_type="ADGROUP") or [])
+                if any(isinstance(e, dict) and e.get("type") == "POWER_LINK_IMAGE" for e in exts):
+                    skipped += 1
+                else:
+                    await client.create_ad_extension(
+                        owner_id=gid, kind="POWER_LINK_IMAGE", content=content, owner_type="ADGROUP",
+                    )
+                    created += 1
+            except Exception as e:
+                failed += 1
+                logger.warning(f"[img-backfill] ag={gid} 실패: {type(e).__name__}: {str(e)[:120]}")
+            await asyncio.sleep(0.15)
+        logger.warning(f"[img-backfill] 완료 — 생성 {created} / skip {skipped} / 실패 {failed} / 총 {len(ad_group_ids)}")
+
+    background_tasks.add_task(_run)
+    return {"success": True, "mode": "backfill", "started": True, "image_path": image_path,
+            "ad_groups_total": len(ad_group_ids),
+            "message": f"백그라운드 시작 — {len(ad_group_ids)}개 광고그룹에 POWER_LINK_IMAGE 부착 (이미 있으면 skip)"}
+
+
+class CampaignBudgetBulkRequest(BaseModel):
+    daily_budget: int = Field(..., ge=70, le=100000000, description="일 예산(원)")
+    scope: str = Field("all", description="'all' 전체 캠페인, 'pool' auto_ 캠페인만")
+    dry_run: bool = Field(False)
+
+
+@router.post("/keyword-pool/campaign/budget-bulk")
+async def keyword_pool_campaign_budget_bulk(
+    request: CampaignBudgetBulkRequest,
+    background_tasks: BackgroundTasks,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """모든(또는 auto_) 캠페인의 일예산을 일괄 변경. dry_run=true 면 현재 예산 미리보기."""
+    from services.naver_ad_service import NaverAdApiClient
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    def _as_list(x):
+        if isinstance(x, list):
+            return x
+        if isinstance(x, dict):
+            return x.get("data") or x.get("list") or []
+        return []
+
+    campaigns = _as_list(await client.get_campaigns() or [])
+    if request.scope == "pool":
+        campaigns = [c for c in campaigns if (c.get("name") or "").startswith("auto_")]
+    else:
+        # 'all' = 파워링크(WEB_SITE) 키워드 캠페인만 — 파워컨텐츠/플레이스/브랜드검색 제외
+        campaigns = [c for c in campaigns if (c.get("campaignTp") or "") == "WEB_SITE"]
+    if not campaigns:
+        return {"success": False, "step": "no_campaigns"}
+
+    new_budget = int(request.daily_budget)
+    if request.dry_run:
+        return {
+            "success": True, "dry_run": True, "scope": request.scope,
+            "target_daily_budget": new_budget, "campaigns_total": len(campaigns),
+            "campaigns": [
+                {"name": c.get("name"), "id": c.get("nccCampaignId"),
+                 "current_budget": c.get("dailyBudget"),
+                 "useDailyBudget": c.get("useDailyBudget")}
+                for c in campaigns
+            ][:100],
+        }
+
+    async def _run():
+        ok = 0
+        failed: List[Dict] = []
+        for c in campaigns:
+            cid_camp = c.get("nccCampaignId")
+            if not cid_camp:
+                continue
+            try:
+                await client.update_campaign_budget(cid_camp, new_budget, base=c)
+                ok += 1
+            except Exception as e:
+                failed.append({"campaign": c.get("name"), "id": cid_camp,
+                               "error": f"{type(e).__name__}: {str(e)[:120]}"})
+            await asyncio.sleep(0.15)
+        logger.warning(f"[budget-bulk] 완료 — {ok}/{len(campaigns)} 캠페인 예산={new_budget}원 ({len(failed)} 실패)")
+
+    background_tasks.add_task(_run)
+    return {"success": True, "started": True, "scope": request.scope,
+            "daily_budget": new_budget, "campaigns_total": len(campaigns),
+            "message": f"백그라운드 시작 — {len(campaigns)}개 캠페인 일예산 {new_budget}원 적용"}
+
+
+class CreativeBackfillRequest(BaseModel):
+    scope: str = Field("all", description="'all' 전체 캠페인, 'pool' auto_ 캠페인만")
+    template_id: Optional[int] = Field(None, description="특정 템플릿 id 강제(없으면 첫 활성)")
+    mode: str = Field("backfill", description="test_one | backfill")
+
+
+@router.post("/keyword-pool/ads/backfill-creative")
+async def keyword_pool_ads_backfill_creative(
+    request: CreativeBackfillRequest,
+    background_tasks: BackgroundTasks,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """텍스트 소재(T&D)를 소재 없는 모든 광고그룹에 일괄 등록. 이미 소재 있으면 skip."""
+    from services.naver_ad_service import NaverAdApiClient
+    from database.ad_templates_db import get_ad_templates_db
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    tpl_db = get_ad_templates_db()
+    all_tpls = tpl_db.list_templates(user_id, cid) or []
+    if request.template_id is not None:
+        tpl = next((t for t in all_tpls if int(t.get("id")) == int(request.template_id)), None)
+    else:
+        tpl = next((t for t in all_tpls if t.get("is_active")), None) or (all_tpls[0] if all_tpls else None)
+    if not tpl:
+        return {"success": False, "step": "no_template", "hint": "ad_templates 비어있음"}
+
+    def _as_list(x):
+        if isinstance(x, list):
+            return x
+        if isinstance(x, dict):
+            return x.get("data") or x.get("list") or []
+        return []
+
+    all_campaigns = _as_list(await client.get_campaigns() or [])
+    if request.scope == "all":
+        # 파워링크(WEB_SITE) 키워드 캠페인만 — 파워컨텐츠/플레이스/브랜드검색 제외
+        target_camps = [c for c in all_campaigns if (c.get("campaignTp") or "") == "WEB_SITE"]
+    else:
+        target_camps = [c for c in all_campaigns if (c.get("name") or "").startswith("auto_")]
+
+    ad_group_ids: List[str] = []
+    for c in target_camps:
+        try:
+            groups = _as_list(await client.get_ad_groups(campaign_id=c.get("nccCampaignId")) or [])
+            for g in groups:
+                gid = g.get("nccAdgroupId")
+                if gid:
+                    ad_group_ids.append(gid)
+        except Exception:
+            pass
+        await asyncio.sleep(0.08)
+    if not ad_group_ids:
+        return {"success": False, "step": "no_ad_groups"}
+
+    async def _create_one(gid: str):
+        return await client.create_ad(
+            ad_group_id=gid,
+            headline_pc=tpl["headline_pc"], description_pc=tpl["description_pc"],
+            display_url=tpl["display_url"], final_url_pc=tpl["final_url_pc"],
+            headline_mobile=tpl.get("headline_mobile"),
+            description_mobile=tpl.get("description_mobile"),
+            final_url_mobile=tpl.get("final_url_mobile"),
+        )
+
+    if request.mode == "test_one":
+        gid = ad_group_ids[0]
+        try:
+            res = await _create_one(gid)
+            return {"success": True, "mode": "test_one", "ad_group_id": gid,
+                    "template_id": tpl.get("id"), "naver_response": res}
+        except Exception as e:
+            return {"success": False, "mode": "test_one", "ad_group_id": gid,
+                    "error": f"{type(e).__name__}: {str(e)[:400]}"}
+
+    async def _run():
+        created = skipped = failed = 0
+        for gid in ad_group_ids:
+            try:
+                ads = _as_list(await client.get_ads(ad_group_id=gid) or [])
+                if ads:
+                    skipped += 1
+                else:
+                    await _create_one(gid)
+                    created += 1
+            except Exception as e:
+                failed += 1
+                logger.warning(f"[creative-backfill] ag={gid} 실패: {type(e).__name__}: {str(e)[:120]}")
+            await asyncio.sleep(0.15)
+        logger.warning(f"[creative-backfill] 완료 — 생성 {created} / skip {skipped} / 실패 {failed} / 총 {len(ad_group_ids)}")
+
+    background_tasks.add_task(_run)
+    return {"success": True, "mode": "backfill", "started": True, "template_id": tpl.get("id"),
+            "ad_groups_total": len(ad_group_ids),
+            "message": f"백그라운드 시작 — {len(ad_group_ids)}개 광고그룹에 소재 부착 (이미 있으면 skip)"}
+
+
+# ============ 전자동 광맥 발굴 — Domain Profile API (Stage 2) ============
+
+class DomainProfileGenerateRequest(BaseModel):
+    description: str = Field(..., description="사업 설명 한 줄 (예: 의료인 대상 대출 — 병원/약사/한의사대출)")
+    target_count: int = Field(100000, ge=1000, le=100000)
+
+
+class DomainProfileSaveRequest(BaseModel):
+    description: Optional[str] = None
+    atom_library: Optional[Dict[str, Any]] = None
+    relevance_keywords: Optional[List[str]] = None
+    negative_keywords: Optional[List[str]] = None
+    enabled: Optional[bool] = None
+    min_score: Optional[int] = None
+    target_count: Optional[int] = None
+    daily_budget: Optional[int] = None
+    default_bid: Optional[int] = None
+    ad_template_id: Optional[int] = None
+
+
+@router.get("/keyword-pool/domain-profile")
+async def keyword_pool_get_domain_profile(
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """저장된 도메인 프로파일 조회 (자동화 설정 화면용)."""
+    from database.naver_ad_db import get_domain_profile
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    return {"success": True, "profile": get_domain_profile(user_id, str(account.get("customer_id")))}
+
+
+@router.post("/keyword-pool/domain-profile/generate")
+async def keyword_pool_generate_domain_profile(
+    request: DomainProfileGenerateRequest,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """사업 설명 → LLM 이 atom_library/relevance/negative/예시시드 생성 (검수용, 저장 X)."""
+    from services.ai_seed_suggester import generate_domain_profile
+    return await generate_domain_profile(request.description, request.target_count)
+
+
+@router.post("/keyword-pool/domain-profile/save")
+async def keyword_pool_save_domain_profile(
+    request: DomainProfileSaveRequest,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """검수한 도메인 프로파일 저장 + 자동화 ON/OFF. None 필드는 건너뜀."""
+    from database.naver_ad_db import update_domain_profile, get_domain_profile
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = str(account.get("customer_id"))
+    fields = {}
+    for k in ("description", "atom_library", "relevance_keywords", "negative_keywords",
+              "enabled", "min_score", "target_count", "daily_budget", "default_bid", "ad_template_id"):
+        v = getattr(request, k, None)
+        if v is not None:
+            fields[k] = v
+    ok = update_domain_profile(user_id, cid, **fields)
+    return {"success": ok, "profile": get_domain_profile(user_id, cid)}
 
 
 @router.get("/ad-templates")

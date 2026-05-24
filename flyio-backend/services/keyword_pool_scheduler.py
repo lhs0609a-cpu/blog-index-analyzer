@@ -16,6 +16,42 @@ from apscheduler.triggers.interval import IntervalTrigger
 logger = logging.getLogger(__name__)
 
 
+def _build_seed_combinations(atom_library: dict) -> list:
+    """도메인 프로파일 atom_library 축들로 **결정적 순서**의 시드 조합 생성.
+    순서(자연스러운 forward 순): 축쌍(i<j) → 축3개(i<j<k) → 단일항목. dedup, 길이 2~20.
+    discovery_cursor 로 이 리스트를 잘라 매 tick BATCH 만큼 발사 → universe 소진까지 진행.
+    """
+    axes = [list(v) for v in (atom_library or {}).values() if isinstance(v, list) and v]
+    out, seen = [], set()
+
+    def add(s: str):
+        s = (s or "").replace(" ", "").strip()
+        if 2 <= len(s) <= 20 and s not in seen:
+            seen.add(s)
+            out.append(s)
+
+    n = len(axes)
+    # 2-combo (forward 축쌍)
+    for i in range(n):
+        for j in range(i + 1, n):
+            for a in axes[i]:
+                for b in axes[j]:
+                    add(f"{a}{b}")
+    # 3-combo (forward 축3개)
+    for i in range(n):
+        for j in range(i + 1, n):
+            for k in range(j + 1, n):
+                for a in axes[i]:
+                    for b in axes[j]:
+                        for c in axes[k]:
+                            add(f"{a}{b}{c}")
+    # 단일 항목
+    for ax in axes:
+        for a in ax:
+            add(a)
+    return out
+
+
 class KeywordPoolScheduler:
     def __init__(self):
         self.scheduler = AsyncIOScheduler()
@@ -48,9 +84,9 @@ class KeywordPoolScheduler:
         # 충분. 진짜 slot 회수 시점은 register 가 자체 감지 못 하니 cron 으로 폴.
         self.scheduler.add_job(
             self._register_only,
-            IntervalTrigger(seconds=180),
+            IntervalTrigger(seconds=30),
             id="keyword_pool_register",
-            name="키워드 풀 register (3분 주기)",
+            name="키워드 풀 register (30초 주기 - 가속)",
             replace_existing=True,
             max_instances=1,
             coalesce=True,
@@ -141,6 +177,34 @@ class KeywordPoolScheduler:
             coalesce=True,
             next_run_time=_now + timedelta(seconds=150),
         )
+        # 전자동 광맥 발굴 cron — 10분 주기. automation_enabled=1 광고주만.
+        # atom_library 조합을 cursor 로 진행하며 매 tick 150 시드 발사. 끄려면 env
+        # KEYWORD_POOL_AUTO_DISCOVERY_DISABLED=1.
+        if _os.environ.get("KEYWORD_POOL_AUTO_DISCOVERY_DISABLED") != "1":
+            self.scheduler.add_job(
+                self._auto_discovery_tick,
+                IntervalTrigger(seconds=600),
+                id="keyword_pool_auto_discovery",
+                name="전자동 광맥 발굴 (10분 주기, atom_library 조합)",
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+                next_run_time=_now + timedelta(seconds=200),
+            )
+        # 전자동 유지보수 cron — 3시간 주기. automation_enabled=1 광고주만.
+        # rebuild(DB동기화) → cleanup(≥min_score) 로 drift 자동 제거. 끄려면 env
+        # KEYWORD_POOL_AUTO_MAINTENANCE_DISABLED=1.
+        if _os.environ.get("KEYWORD_POOL_AUTO_MAINTENANCE_DISABLED") != "1":
+            self.scheduler.add_job(
+                self._auto_maintenance_tick,
+                IntervalTrigger(seconds=10800),
+                id="keyword_pool_auto_maintenance",
+                name="전자동 유지보수 (3시간 주기, rebuild+cleanup drift 제거)",
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+                next_run_time=_now + timedelta(seconds=300),
+            )
         self.scheduler.start()
         self._running = True
         _ai_cleanup_status = (
@@ -532,6 +596,123 @@ class KeywordPoolScheduler:
                 )
         except Exception as e:
             logger.error(f"[pool/click-cleanup/tick] tick 실패: {type(e).__name__}: {e}", exc_info=True)
+
+    async def _auto_discovery_tick(self):
+        """전자동 광맥 발굴 cron — automation_enabled=1 광고주의 atom_library 조합을
+        매 tick BATCH 만큼 seed-explode (discovery_cursor 로 진행 추적, universe 소진까지).
+
+        가드: 목표 도달(active≥target) 또는 pending 적체(>3000) 시 skip — 무의미 발사/적체 차단.
+        검색량0/무관 조합은 seed-explode min_volume=10 + S4 register 게이트(≥min_score)가 거름.
+        """
+        BATCH = 150
+        try:
+            from routers.naver_ad import _run_seed_explode
+            from database.naver_ad_db import (
+                list_automation_enabled_accounts, get_domain_profile,
+                get_ad_account_by_customer, update_domain_profile, touch_automation_timestamp,
+            )
+            from database.registered_keywords_db import get_registered_keywords_db
+            from database.keyword_pool_db import get_keyword_pool_db
+            rows = list_automation_enabled_accounts() or []
+            if not rows:
+                return
+            reg = get_registered_keywords_db()
+            pool = get_keyword_pool_db()
+            for r in rows:
+                uid = int(r.get("user_id")); cid = int(r.get("customer_id"))
+                try:
+                    prof = get_domain_profile(uid, str(cid))
+                    if not prof or not prof.get("atom_library"):
+                        continue
+                    target = int(prof.get("target_count") or 100000)
+                    # 가드 1: 목표 도달
+                    try:
+                        active = int((reg.stats(cid) or {}).get("active") or 0)
+                    except Exception:
+                        active = 0
+                    if active >= target:
+                        continue
+                    # 가드 2: pending 적체 — register 가 따라잡을 때까지 발사 보류
+                    try:
+                        pst = pool.stats(cid) or {}
+                        pending = int((pst.get("by_status") or {}).get("pending") or 0)
+                    except Exception:
+                        pending = 0
+                    if pending > 3000:
+                        logger.info(f"[auto-discovery] uid={uid} cid={cid} pending={pending}>3000 — skip (register 적체)")
+                        continue
+                    combos = _build_seed_combinations(prof["atom_library"])
+                    if not combos:
+                        continue
+                    try:
+                        cursor = int(prof.get("discovery_cursor") or 0)
+                    except Exception:
+                        cursor = 0
+                    if cursor >= len(combos):
+                        # universe 1회 소진 — amplify/collect/autocomplete 가 추가 발굴 지속.
+                        continue
+                    batch = combos[cursor:cursor + BATCH]
+                    account = get_ad_account_by_customer(uid, str(cid))
+                    if not account or not account.get("is_connected"):
+                        continue
+                    # S4 게이트: explode 단계에서 연관키워드를 관련성≥min_score + negative_keywords
+                    # 로 거름 (pending 에 깨끗한 것만 도달). min_score 는 프로파일(기본 80).
+                    min_score = int(prof.get("min_score") or 80)
+                    await _run_seed_explode(uid, cid, account, batch, 10, 1000, min_score)
+                    update_domain_profile(uid, str(cid), discovery_cursor=str(cursor + len(batch)))
+                    touch_automation_timestamp(uid, str(cid), "discovery")
+                    logger.warning(
+                        f"[auto-discovery] uid={uid} cid={cid} fired {len(batch)} seeds "
+                        f"(cursor {cursor}→{cursor + len(batch)}/{len(combos)}, active={active}/{target})"
+                    )
+                except Exception as e:
+                    logger.error(f"[auto-discovery] uid={uid} cid={cid} 실패: {type(e).__name__}: {e}", exc_info=True)
+        except Exception as e:
+            logger.error(f"[auto-discovery] tick 실패: {type(e).__name__}: {e}", exc_info=True)
+
+    async def _auto_maintenance_tick(self):
+        """전자동 유지보수 cron — automation_enabled 광고주: rebuild(DB↔네이버 동기화) →
+        cleanup(관련성<min_score off-domain 삭제). 3시간 주기.
+
+        핵심: rebuild 가 ncc_id 사각지대를 없애 cleanup 이 **전체 라이브 키워드**를 채점/삭제
+        (이번 세션 도시락 4만 사각지대 사고의 근본 해결 — 자동화). 빈 슬롯은 발굴 cron 이 채움.
+        """
+        PER_ACCOUNT_TIMEOUT = 900   # 15분 — rebuild+cleanup 한 광고주 한계
+        try:
+            from routers.naver_ad import keyword_pool_rebuild_from_naver, _run_domain_cleanup_for_account
+            from database.naver_ad_db import (
+                list_automation_enabled_accounts, get_domain_profile, touch_automation_timestamp,
+            )
+            rows = list_automation_enabled_accounts() or []
+            if not rows:
+                return
+            for r in rows:
+                uid = int(r.get("user_id")); cid = int(r.get("customer_id"))
+                try:
+                    prof = get_domain_profile(uid, str(cid))
+                    min_score = int((prof or {}).get("min_score") or 80)
+                    # 1) rebuild — 라이브 네이버 KW 를 DB 에 UPSERT(ncc_id 채움). 사각지대 제거.
+                    try:
+                        await asyncio.wait_for(
+                            keyword_pool_rebuild_from_naver(customer_id=str(cid), user_id=uid),
+                            timeout=PER_ACCOUNT_TIMEOUT,
+                        )
+                    except Exception as e:
+                        logger.warning(f"[auto-maint] rebuild 실패 uid={uid} cid={cid}: {type(e).__name__}: {str(e)[:120]}")
+                    # 2) cleanup — 관련성<min_score off-domain 네이버 삭제 (max 2000/tick)
+                    try:
+                        res = await asyncio.wait_for(
+                            _run_domain_cleanup_for_account(uid, cid, min_score, max_delete=2000),
+                            timeout=PER_ACCOUNT_TIMEOUT,
+                        )
+                        logger.warning(f"[auto-maint] uid={uid} cid={cid} cleanup(thr={min_score}) → {res}")
+                    except Exception as e:
+                        logger.warning(f"[auto-maint] cleanup 실패 uid={uid} cid={cid}: {type(e).__name__}: {str(e)[:120]}")
+                    touch_automation_timestamp(uid, str(cid), "maintenance")
+                except Exception as e:
+                    logger.error(f"[auto-maint] uid={uid} cid={cid} 실패: {type(e).__name__}: {e}", exc_info=True)
+        except Exception as e:
+            logger.error(f"[auto-maint] tick 실패: {type(e).__name__}: {e}", exc_info=True)
 
 
 keyword_pool_scheduler = KeywordPoolScheduler()
