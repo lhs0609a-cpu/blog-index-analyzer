@@ -8901,7 +8901,8 @@ async def keyword_pool_bid_bulk_update(
         if not account or not account.get("is_connected"):
             raise HTTPException(status_code=400, detail="광고 계정 미연결")
         cid = int(account.get("customer_id"))
-        new_bid = max(70, int(request.bid))
+        # 네이버 입찰가는 10원 단위만 유효 (아니면 code 3904 'Invalid bid amount'). 10단위 반올림 + 최소 70.
+        new_bid = max(70, round(int(request.bid) / 10) * 10)
 
         # 1. DB 저장 — 앞으로 cron 이 이 값 사용
         update_ad_account_default_bid(user_id, str(cid), new_bid)
@@ -8975,7 +8976,7 @@ async def keyword_pool_bid_bulk_update(
                     return
                 async with sem:
                     try:
-                        await client.update_keyword_bid(kid, new_bid)
+                        await client.update_keyword_bid(kid, new_bid, ad_group_id=kw_obj.get("nccAdgroupId"))
                         kw_success += 1
                     except NaverApiCircuitOpenError:
                         kw_failed.append({"keyword_id": kid, "error": "circuit_open"})
@@ -9055,20 +9056,37 @@ async def keyword_pool_bid_debug_one(
         client.api_key = account["api_key"]
         client.secret_key = account["secret_key"]
 
-        # 첫 번째 auto_* 캠페인의 첫 광고그룹의 첫 키워드 찾기
+        # 키워드가 있는 첫 그룹을 찾을 때까지 WEB_SITE 캠페인을 스캔 (빈 그룹 skip).
+        # 이전엔 auto_[0]/groups[0] 만 봐서 그 그룹이 비면 no_keyword 로 검증 불가했음.
         campaigns = await client.get_campaigns() or []
-        auto_campaigns = [c for c in campaigns if (c.get("name") or "").startswith("auto_")]
-        if not auto_campaigns:
-            return {"success": False, "step": "no_auto_campaign"}
-        first_camp = auto_campaigns[0]
-        groups = await client.get_ad_groups(campaign_id=first_camp.get("nccCampaignId")) or []
-        if not groups:
-            return {"success": False, "step": "no_ad_group", "campaign": first_camp.get("name")}
-        gid = groups[0].get("nccAdgroupId")
-        kws = await client.get_keywords(ad_group_id=gid) or []
-        if not kws:
-            return {"success": False, "step": "no_keyword", "ad_group_id": gid}
-        first_kw = kws[0]
+        cand = [c for c in campaigns if (c.get("campaignTp") or "") == "WEB_SITE"]
+        if not cand:
+            cand = campaigns
+        first_camp = None; gid = None; first_kw = None; scanned_groups = 0
+        for c in cand:
+            try:
+                groups = await client.get_ad_groups(campaign_id=c.get("nccCampaignId")) or []
+            except Exception:
+                continue
+            for g in groups:
+                scanned_groups += 1
+                _gid = g.get("nccAdgroupId")
+                if not _gid:
+                    continue
+                try:
+                    kws = await client.get_keywords(ad_group_id=_gid) or []
+                except Exception:
+                    continue
+                if kws:
+                    first_camp = c; gid = _gid; first_kw = kws[0]; break
+                if scanned_groups >= 60:  # 안전 cap — 너무 많이 스캔 방지
+                    break
+            if first_kw:
+                break
+            if scanned_groups >= 60:
+                break
+        if not first_kw:
+            return {"success": False, "step": "no_keyword", "scanned_groups": scanned_groups}
         kid = first_kw.get("nccKeywordId")
 
         # before
@@ -9081,7 +9099,7 @@ async def keyword_pool_bid_debug_one(
 
         # PUT — 응답 그대로
         try:
-            put_response = await client.update_keyword_bid(kid, max(70, int(bid)))
+            put_response = await client.update_keyword_bid(kid, max(70, int(bid)), ad_group_id=first_kw.get("nccAdgroupId"))
         except Exception as e:
             import traceback
             return {

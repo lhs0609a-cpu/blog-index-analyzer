@@ -91,6 +91,8 @@ class KeywordPoolScheduler:
             max_instances=1,
             coalesce=True,
             next_run_time=_now + timedelta(seconds=20),
+            # 루프 점유로 30초 due 를 놓쳐도(기본 grace 1초) 스킵되지 않게 — 등록 누락 방지.
+            misfire_grace_time=120,
         )
         self.scheduler.add_job(
             self._inspect_full,
@@ -189,7 +191,13 @@ class KeywordPoolScheduler:
                 replace_existing=True,
                 max_instances=1,
                 coalesce=True,
-                next_run_time=_now + timedelta(seconds=200),
+                # 부팅 직후(30초) 첫 발사 — 잦은 배포/재시작에도 발굴이 살아남도록.
+                # 200초였을 때 워커가 그 전에 재시작되면 발굴이 한 번도 안 돌아 정지함.
+                next_run_time=_now + timedelta(seconds=30),
+                # 이벤트 루프가 다른 무거운 잡(collect/classify)에 점유돼 발굴이 정확히
+                # due될 때 못 돌면, 기본 grace(1초) 초과로 'missed' 스킵됨 → 발굴 영구 정지.
+                # grace 를 넉넉히(10분) 줘서 루프가 풀리는 즉시 발굴이 반드시 실행되게.
+                misfire_grace_time=600,
             )
         # 전자동 유지보수 cron — 3시간 주기. automation_enabled=1 광고주만.
         # rebuild(DB동기화) → cleanup(≥min_score) 로 drift 자동 제거. 끄려면 env
@@ -604,7 +612,10 @@ class KeywordPoolScheduler:
         가드: 목표 도달(active≥target) 또는 pending 적체(>8000) 시 skip — 무의미 발사/적체 차단.
         검색량0/무관 조합은 seed-explode min_volume=10 + S4 register 게이트(≥min_score)가 거름.
         """
-        BATCH = 300  # 가속 — 틱당 300조합 (register 처리능력에 맞춰 공급 ↑)
+        # 틱당 80조합 — 300이면 Naver relatedKeywords 300회 + ConnectTimeout 재시도로
+        # 배치가 3분 주기를 초과 → 다음 틱과 'max instances' 충돌 → cursor 영구 정체.
+        # 80이면 주기 안에 확실히 완료돼 cursor 가 매 틱 전진 (타임아웃에도 강건).
+        BATCH = 80
         try:
             from routers.naver_ad import _run_seed_explode
             from database.naver_ad_db import (
@@ -658,6 +669,9 @@ class KeywordPoolScheduler:
                     # S4 게이트: explode 단계에서 연관키워드를 관련성≥min_score + negative_keywords
                     # 로 거름 (pending 에 깨끗한 것만 도달). min_score 는 프로파일(기본 80).
                     min_score = int(prof.get("min_score") or 80)
+                    # min_volume=10 — 사용자가 롱테일까지 최대량 요청(사업자대출 niche 라
+                    # mt≥20 고유 키워드는 ~1~2만에서 소진). negative_keywords 가 개인/소비자 대출과
+                    # 비대출 노이즈를 거르므로, 10 으로 낮춰 사업자대출 롱테일을 대량 포섭.
                     await _run_seed_explode(uid, cid, account, batch, 10, 1000, min_score)
                     update_domain_profile(uid, str(cid), discovery_cursor=str(cursor + len(batch)))
                     touch_automation_timestamp(uid, str(cid), "discovery")

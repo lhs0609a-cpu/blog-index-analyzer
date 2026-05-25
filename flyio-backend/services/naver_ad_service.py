@@ -598,20 +598,29 @@ class NaverAdApiClient:
         """
         return await self._request("PUT", f"/ncc/keywords/{keyword_id}?fields={fields}", data)
 
-    async def update_keyword_bid(self, keyword_id: str, bid_amt: int) -> dict:
-        """키워드 입찰가 변경 — fields=bidAmt 만. useGroupBidAmt 는 Naver 의 keyword PUT
-        에서 별도 fields 값이 아니라 bidAmt 그룹 안에 포함됨. body 에 같이 보내면 적용된다.
-        과거 fields=bidAmt,useGroupBidAmt 는 무효 fields 값으로 silent ignore 발생.
+    async def update_keyword_bid(self, keyword_id: str, bid_amt: int, ad_group_id: str = None) -> dict:
+        """키워드 입찰가 변경 — fields=bidAmt. body 에 nccAdgroupId 필수.
+        nccAdgroupId 누락 시 Naver 가 400 code 3705 'Invalid ad group number' 반환(변경 안 됨).
+        과거 fields=bidAmt,useGroupBidAmt 는 무효 fields 값으로 silent ignore 였고, fields=bidAmt
+        로 고친 뒤엔 nccAdgroupId 누락으로 400 이 나던 것을 여기서 함께 수정.
+        ad_group_id 미제공 시 키워드 GET 으로 조회 (bulk 는 호출부에서 직접 넘겨 GET 생략).
         """
-        return await self.update_keyword(
-            keyword_id,
-            {
-                "nccKeywordId": keyword_id,
-                "bidAmt": bid_amt,
-                "useGroupBidAmt": False,
-            },
-            fields="bidAmt",
-        )
+        # 네이버 입찰가 10원 단위만 유효 (아니면 code 3904). 반올림 + 최소 70.
+        bid_amt = max(70, round(int(bid_amt) / 10) * 10)
+        if not ad_group_id:
+            try:
+                kw = await self._request("GET", f"/ncc/keywords/{keyword_id}")
+                ad_group_id = (kw or {}).get("nccAdgroupId")
+            except Exception:
+                ad_group_id = None
+        body = {
+            "nccKeywordId": keyword_id,
+            "bidAmt": bid_amt,
+            "useGroupBidAmt": False,
+        }
+        if ad_group_id:
+            body["nccAdgroupId"] = ad_group_id
+        return await self.update_keyword(keyword_id, body, fields="bidAmt")
 
     async def pause_keyword(self, keyword_id: str) -> dict:
         """키워드 일시정지"""
