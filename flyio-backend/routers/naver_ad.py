@@ -8878,6 +8878,7 @@ async def keyword_pool_ai_expand_seeds(
 class BidBulkUpdateRequest(BaseModel):
     bid: int = Field(..., ge=70, le=100000, description="새 입찰가 (네이버 최소 70원)")
     scope: str = Field("pool", description="'pool' = auto_ 프리픽스 캠페인만, 'all' = 전체 캠페인")
+    only_if_bid: Optional[int] = Field(None, description="설정 시 현재 입찰가가 이 값인 키워드만 변경 (예: 70 → 70원짜리만)")
 
 
 @router.post("/keyword-pool/bid/bulk-update")
@@ -8904,8 +8905,9 @@ async def keyword_pool_bid_bulk_update(
         # 네이버 입찰가는 10원 단위만 유효 (아니면 code 3904 'Invalid bid amount'). 10단위 반올림 + 최소 70.
         new_bid = max(70, round(int(request.bid) / 10) * 10)
 
-        # 1. DB 저장 — 앞으로 cron 이 이 값 사용
-        update_ad_account_default_bid(user_id, str(cid), new_bid)
+        # 1. DB 저장 — 앞으로 cron 이 이 값 사용. (only_if_bid 조건부 변경 시엔 default 유지)
+        if request.only_if_bid is None:
+            update_ad_account_default_bid(user_id, str(cid), new_bid)
 
         # 2. 백그라운드로 네이버 일괄 변경 (45k 키워드는 HTTP 타임아웃 초과 → bg 완주)
         async def _run():
@@ -8934,16 +8936,17 @@ async def keyword_pool_bid_bulk_update(
                     logger.warning(f"[bid/bulk] 광고그룹 list 실패 cid={c.get('nccCampaignId')}: {e}")
                 await asyncio.sleep(0.15)
 
-            # 광고그룹 default bid 변경
+            # 광고그룹 default bid 변경 — only_if_bid 조건부 변경 시엔 그룹 default 유지(키워드만 변경)
             ag_success = 0
             ag_failed: List[Dict] = []
-            for cname, gid in ad_group_ids:
-                try:
-                    await client.update_ad_group_bid(gid, new_bid)
-                    ag_success += 1
-                except Exception as e:
-                    ag_failed.append({"ad_group_id": gid, "campaign": cname, "error": f"{type(e).__name__}: {str(e)[:120]}"})
-                await asyncio.sleep(0.15)
+            if request.only_if_bid is None:
+                for cname, gid in ad_group_ids:
+                    try:
+                        await client.update_ad_group_bid(gid, new_bid)
+                        ag_success += 1
+                    except Exception as e:
+                        ag_failed.append({"ad_group_id": gid, "campaign": cname, "error": f"{type(e).__name__}: {str(e)[:120]}"})
+                    await asyncio.sleep(0.15)
 
             # 키워드별 bidAmt 일괄 변경 — 광고그룹별로 keyword list 받아 full-body PUT.
             # 부분 PUT(?fields=) 은 Naver 가 silent ignore 하는 케이스가 있어서, list 응답에서
@@ -8971,6 +8974,9 @@ async def keyword_pool_bid_bulk_update(
                 # 정답: update_keyword_bid (PUT ?fields=bidAmt + 최소 body).
                 cur = kw_obj.get("bidAmt")
                 ugba = kw_obj.get("useGroupBidAmt")
+                # only_if_bid: 현재 입찰가가 지정값인 키워드만 변경 (예: 70원짜리만 100원으로).
+                if request.only_if_bid is not None and cur != request.only_if_bid:
+                    return  # 조건 불일치 — 건드리지 않음
                 if cur == new_bid and ugba is False:
                     kw_success += 1  # 이미 목표값
                     return

@@ -309,24 +309,31 @@ export default function KeywordPoolPage() {
     try {
       const res = await adPost<{
         success: boolean
+        started?: boolean
+        message?: string
         new_bid: number
         scope: string
-        campaigns_scanned: number
-        ad_groups_total: number
-        ad_groups_updated: number
-        ad_groups_failed: number
-        keywords_total: number
-        keywords_updated: number
-        keywords_failed: number
+        ad_groups_total?: number
+        ad_groups_updated?: number
+        keywords_total?: number
+        keywords_updated?: number
       }>(
         `/api/naver-ad/keyword-pool/bid/bulk-update${cidQs()}`,
         { bid, scope },
-        { timeout: 3_600_000 }  // 키워드 50k+ 까지 — 60분 timeout (sem=20 으로 ~16분 예상)
+        { timeout: 3_600_000 }
       )
-      toast.success(
-        `입찰가 ${res.new_bid.toLocaleString()}원 일괄 변경 — 광고그룹 ${res.ad_groups_updated}/${res.ad_groups_total} · 키워드 ${res.keywords_updated.toLocaleString()}/${res.keywords_total.toLocaleString()} 성공`
-      )
-      // 광고주 default_bid 도 갱신됐으니 accounts 재조회
+      // 백엔드는 백그라운드로 처리하고 started=true 만 즉시 반환 (수십분 소요).
+      // 과거: keywords_updated(undefined).toLocaleString() 가 에러 → '실패' 토스트 오표시.
+      if (res.started) {
+        toast.success(
+          res.message ||
+          `입찰가 ${res.new_bid.toLocaleString()}원 일괄 변경 시작 — 백그라운드 처리 중 (키워드 수에 비례해 수십 분 소요). 잠시 후 광고관리자에서 확인하세요.`
+        )
+      } else {
+        toast.success(
+          `입찰가 ${res.new_bid.toLocaleString()}원 일괄 변경 — 광고그룹 ${res.ad_groups_updated ?? '?'}/${res.ad_groups_total ?? '?'} · 키워드 ${(res.keywords_updated ?? 0).toLocaleString()}/${(res.keywords_total ?? 0).toLocaleString()} 성공`
+        )
+      }
       loadAccounts()
     } catch (e: any) {
       toast.error(e?.message || '입찰가 변경 실패')
