@@ -486,7 +486,18 @@ export default function AccountSetupWizard({ userId, onComplete, onStartAutoOpti
     setIsConnecting(true)
     setConnectError(null)
     try {
-      await adPost('/api/naver-ad/account/connect', connectForm, { userId })
+      // 백엔드 connect 는 연결테스트(get_campaigns) 실패 시에도 HTTP 200 + {success:false}
+      // 로 응답한다 (네이버 일시 ConnectTimeout 등). adFetch 는 2xx 라 throw 안 하므로
+      // body.success 를 직접 확인해 거짓 성공("연동되었습니다!") 표시를 막는다.
+      const res = await adPost<{ success?: boolean; message?: string }>(
+        '/api/naver-ad/account/connect', connectForm, { userId }
+      )
+      if (res && res.success === false) {
+        setConnectError(
+          res.message || 'API 연결 확인에 실패했습니다. 고객 ID·API 키·비밀키를 확인하거나 잠시 후 다시 시도하세요.'
+        )
+        return
+      }
       toast.success('계정이 연동되었습니다!')
       setConnectedAccount({
         customer_id: connectForm.customer_id,
