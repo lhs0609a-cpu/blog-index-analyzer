@@ -491,6 +491,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if request.url.path in ("/", "/health", "/deployment-test-v6"):
             return await call_next(request)
 
+        # 내부 worker 프록시(127.0.0.1) 면제 — WorkerOffloadMiddleware 가 API→worker 로
+        # 위임한 요청. 모두 동일 IP(localhost)라 하나의 버킷에 묶여 오탐 차단되고,
+        # public 노출 없는 내부 트래픽이라 면제해도 안전.
+        if request.client and request.client.host in ("127.0.0.1", "::1"):
+            return await call_next(request)
+
         client_ip = request.client.host if request.client else "unknown"
         now = time.time()
 
@@ -548,6 +554,108 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(SecurityHeadersMiddleware)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Worker Offload Middleware — HTTP-트리거 무거운 키워드풀 마이닝을 worker(:8001)로 위임.
+#
+# 배경(근본 원인): entrypoint.sh 가 cron 스케줄러를 worker 프로세스로 분리했으나,
+# 사용자/필러 스크립트가 직접 POST 하는 마이닝 엔드포인트(seed-explode-register,
+# trigger-now 등)는 FastAPI BackgroundTask 로 **API 프로세스 이벤트 루프**에서 실행됐다.
+# 필러가 30초마다 발사 → _run_seed_explode 코루틴(naver keywordstool ×수십 시드 +
+# 429/ConnectTimeout 재시도)이 API 루프를 영구 점유 → login 등 모든 async 요청이
+# 수십~98초 hang (sync def·/health 도 공유 2 CPU 포화로 동반 지연). 2-프로세스 분리가
+# cron 만 옮기고 HTTP-트리거 경로는 못 옮겨 우회됐던 구조 결함.
+#
+# 해결: ROLE==app 프로세스는 아래 HEAVY 경로의 POST 를 내부 worker(:8001)로 그대로
+# 프록시하고 worker 의 응답을 즉시 반환. worker(ROLE=worker)는 이 미들웨어가 비활성이라
+# 자기 루프에서 BackgroundTask 실행 → API 루프는 절대 마이닝에 안 막힘. 별도 프로세스라
+# asyncio 루프/세마포어(NAVER_API_GLOBAL_SEMAPHORE) affinity 문제도 없음. 필러 fill 은
+# 그대로 작동(요청은 200 ack 즉시 수신, 무거운 작업은 worker 가 수행).
+#
+# 읽기(GET stats/accounts)·가벼운 저장(seeds/domain-profile)은 목록에서 제외 — API 가
+# 즉시 처리해야 페이지가 빠름. 새 무거운 트리거 엔드포인트 추가 시 아래 set 에 등록.
+# ROLE 미설정(=all, 로컬/단일프로세스)·worker 에서는 전부 비활성 → 로컬 실행.
+# ─────────────────────────────────────────────────────────────────────────────
+import httpx as _httpx_offload
+from starlette.responses import Response as _StarletteResponse
+
+# 루프로 반복 호출돼 API 루프를 포화시키는 **fire-and-forget**(응답은 정적 ack, 동기 결과
+# 불필요) 마이닝 트리거만 대상. 일회성 클릭 + 동기 결과 표시 엔드포인트(rebuild/reconcile/
+# cleanup-by-score 등)는 제외 — 포화 원인이 아니고, 프록시하면 결과 데이터 UX 깨짐.
+_WORKER_OFFLOAD_PATHS = frozenset({
+    "/api/naver-ad/keyword-pool/seed-explode-register",   # 필러 직격 경로(30s마다 ×3)
+    "/api/naver-ad/keyword-pool/trigger-now",             # 페이지 '즉시발굴'(fire-and-forget)
+    "/api/naver-ad/keyword-pool/admin/run",               # 관리자 즉시발굴(동일 패턴)
+    "/api/naver-ad/keyword-pool/extension/image-backfill", # 전 그룹 이미지 백필(7800+ 그룹 순회, cron 점유로 굶음)
+    # NOTE: ads/backfill-creative 는 offload 에서 제외 — 워커(nice 19)가 cron 으로 포화돼
+    # 8s 안에 ack 못하면 API 가 연결을 끊고 Starlette 가 background task(_run)를 건너뛰어
+    # **일회성** 백필이 영영 시작 못 함(202 만 받고 무실행). 응답을 끝까지 기다리는
+    # 클라이언트로 app 프로세스(scheduler OFF·free loop)에서 직접 돌리면 안정 완주.
+    # I/O 바운드(네이버 await)라 0.12s 페이싱이면 login 등 다른 요청도 안 막힘.
+})
+_WORKER_INTERNAL_URL = os.getenv("WORKER_INTERNAL_URL", "http://127.0.0.1:8001")
+_OFFLOAD_ROLE = os.getenv("ROLE", "all")
+
+
+class WorkerOffloadMiddleware(BaseHTTPMiddleware):
+    """ROLE==app: 무거운 마이닝 POST 를 worker 로 프록시해 API 이벤트 루프를 보호."""
+
+    async def dispatch(self, request: Request, call_next):
+        if (
+            _OFFLOAD_ROLE == "app"
+            and request.method == "POST"
+            and request.url.path in _WORKER_OFFLOAD_PATHS
+        ):
+            body = await request.body()
+            fwd_headers = {
+                k: v for k, v in request.headers.items()
+                if k.lower() not in ("host", "content-length", "connection")
+            }
+            fwd_headers["x-offloaded-from-api"] = "1"
+            url = _WORKER_INTERNAL_URL + request.url.path
+            if request.url.query:
+                url += "?" + request.url.query
+            try:
+                # read timeout 짧게(8s) — worker 가 즉시 ack 하면 그 응답을 반환. 못하면
+                # (worker 루프가 자기 cron 으로 포화) ReadTimeout → 요청은 이미 worker
+                # 소켓에 전달됐으니 worker 가 루프 풀리는 대로 처리. **절대 로컬 실행 안 함**
+                # (로컬 폴백이 바로 login 을 막던 원흉) → 즉시 합성 ack 반환.
+                async with _httpx_offload.AsyncClient(
+                    timeout=_httpx_offload.Timeout(connect=2.0, read=8.0, write=8.0, pool=2.0)
+                ) as hc:
+                    wr = await hc.request("POST", url, content=body, headers=fwd_headers)
+                resp_headers = {}
+                ct = wr.headers.get("content-type")
+                if ct:
+                    resp_headers["content-type"] = ct
+                return _StarletteResponse(
+                    content=wr.content, status_code=wr.status_code, headers=resp_headers,
+                )
+            except (_httpx_offload.ReadTimeout, _httpx_offload.PoolTimeout, _httpx_offload.WriteTimeout):
+                # worker 가 8s 안에 ack 못함(루프 포화) — 요청은 전달됨. 비동기 ack 즉시 반환,
+                # 무거운 작업은 worker 가 처리. fire-and-forget 엔드포인트라 동기 결과 불필요.
+                logger.info(f"[worker-offload] {request.url.path} → worker async(202)")
+                return JSONResponse(status_code=202, content={
+                    "success": True, "queued": True, "async": True,
+                    "message": "백그라운드 워커에 전달됨(비동기 처리). 진행은 stats/실행 이력에서 확인.",
+                })
+            except Exception as e:
+                # 연결 자체 실패(worker 다운/부팅중 등) — API 루프 보호가 최우선이므로
+                # 로컬 실행 절대 안 함. 503 으로 호출측이 재시도. worker 는 entrypoint trap
+                # 으로 API 와 생사 동행하므로 평상시 도달 가능.
+                logger.warning(
+                    f"[worker-offload] 프록시 연결실패 path={request.url.path} "
+                    f"{type(e).__name__}: {str(e)[:120]} — 503(로컬 실행 안 함)"
+                )
+                return JSONResponse(status_code=503, content={
+                    "success": False, "error": "worker_unavailable",
+                    "message": "백그라운드 워커 일시 불가 — 잠시 후 재시도하세요.",
+                })
+        return await call_next(request)
+
+
+app.add_middleware(WorkerOffloadMiddleware)
 
 
 # CORS 헤더 헬퍼 함수 (에러 응답용 - 미들웨어가 처리하지 못하는 경우)

@@ -191,6 +191,43 @@ export default function KeywordPoolPage() {
     }
   }
 
+  // 파워링크 이미지 자동 부착 — 계정에 있는 첫 POWER_LINK_IMAGE를 찾아 모든 광고그룹에 일괄 부착(이미 있는 그룹은 skip).
+  // image_path 옵션: URL 직접 입력하면 그 path로 우선 사용(자동탐색 우회).
+  const [imgBackfillRunning, setImgBackfillRunning] = useState(false)
+  const [imgPathInput, setImgPathInput] = useState('')  // 선택: 이미지 URL 직접 입력
+  const handleImgBackfill = async () => {
+    setImgBackfillRunning(true)
+    try {
+      const body: any = { scope: 'all', mode: 'backfill' }
+      const v = imgPathInput.trim()
+      if (v) {
+        // URL 입력 시 도메인 떼고 path-only로 변환 (네이버 imagePath 규격)
+        try {
+          const u = new URL(v)
+          body.image_path = u.pathname
+        } catch {
+          body.image_path = v.startsWith('/') ? v : '/' + v
+        }
+      }
+      const res = await adPost<{ success: boolean; started?: boolean; image_path?: string; discovered_from?: string; message?: string; step?: string; hint?: string }>(
+        `/api/naver-ad/keyword-pool/extension/image-backfill${cidQs()}`,
+        body,
+        { timeout: 30_000 }
+      )
+      if (res.success && res.started) {
+        toast.success(`파워링크 이미지 백필 시작 — imagePath ${(res.image_path || '').slice(-30)}${res.discovered_from ? ` (from ${res.discovered_from})` : ''}. 백그라운드로 전 그룹 부착.`)
+      } else if (res.step === 'no_image_path') {
+        toast.error('계정에 POWER_LINK_IMAGE가 없습니다 — 광고그룹 1개에 이미지를 먼저 등록하거나 위 입력란에 이미지 URL을 붙여넣으세요')
+      } else {
+        toast.error(res.message || res.hint || '백필 실패')
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || e?.message || '백필 실패')
+    } finally {
+      setImgBackfillRunning(false)
+    }
+  }
+
   // 백엔드 APScheduler 상태 — 가짜 client-side "다음 실행 예정" 대신 진짜 next_run_time.
   // recent_runs 가 비어있는데 스케줄러까지 죽었으면 사용자가 즉시 알 수 있어야 함.
   const [schedulerHealth, setSchedulerHealth] = useState<SchedulerHealth | null>(null)
@@ -1476,6 +1513,23 @@ export default function KeywordPoolPage() {
               >
                 {triggerRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
                 지금 실행
+              </button>
+              <input
+                type="text"
+                value={imgPathInput}
+                onChange={(e) => setImgPathInput(e.target.value)}
+                placeholder="이미지 URL (비우면 자동탐색)"
+                className="text-xs px-2 py-1.5 border border-gray-300 rounded-lg w-56"
+                title="비워두면 계정에 이미 있는 파워링크 이미지를 자동 탐색해 부착. URL 입력 시 그 이미지를 우선 사용"
+              />
+              <button
+                onClick={handleImgBackfill}
+                disabled={imgBackfillRunning}
+                className="text-xs px-3 py-1.5 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:bg-gray-300 inline-flex items-center gap-1"
+                title="파워링크 이미지를 전 광고그룹에 일괄 부착(이미 있으면 skip). 비워두면 자동탐색"
+              >
+                {imgBackfillRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                파워링크 이미지 백필
               </button>
               <span className="text-xs inline-flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-gray-500" />

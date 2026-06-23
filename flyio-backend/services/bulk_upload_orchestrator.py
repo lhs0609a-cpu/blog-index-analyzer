@@ -107,6 +107,50 @@ class BulkUploadOrchestrator:
                     f"[orchestrator] 확장소재 실패 ext={ext.get('id')} kind={ext.get('kind')}: {e}"
                 )
 
+        # POWER_LINK_IMAGE 자동 부착 — 계정 라이브러리에 첫 이미지 1콜 탐색 후 신규 그룹에 복제.
+        # 첫 그룹은 이미지가 아직 없으니 silent skip(다음 그룹부터 자동 부착). 중복은 네이버가 400(2023)로 거부 → skip.
+        try:
+            existing = await self.api.get_ad_extensions(owner_id=ad_group_id, owner_type="ADGROUP") or []
+            ex_list = existing if isinstance(existing, list) else (existing.get("data") or existing.get("list") or [])
+            already_has_img = any(isinstance(e, dict) and e.get("type") == "POWER_LINK_IMAGE" for e in ex_list)
+            if not already_has_img:
+                # 다른 그룹에서 imagePath 1콜만 탐색 (전 캠페인 스캔 X — 무거움). 계정의 최근 그룹 ~5개만.
+                from database.registered_keywords_db import get_registered_keywords_db
+                import sqlite3 as _sq
+                reg = get_registered_keywords_db()
+                img_path = None
+                with _sq.connect(reg.db_path, timeout=10.0) as conn:
+                    rows = conn.execute(
+                        "SELECT DISTINCT ad_group_id FROM registered_keywords "
+                        "WHERE account_customer_id=? AND ad_group_id IS NOT NULL AND ad_group_id != ? "
+                        "ORDER BY id DESC LIMIT 8",
+                        (customer_id, ad_group_id),
+                    ).fetchall()
+                for (g_id,) in rows:
+                    try:
+                        ee = await self.api.get_ad_extensions(owner_id=g_id, owner_type="ADGROUP") or []
+                        ee_list = ee if isinstance(ee, list) else (ee.get("data") or ee.get("list") or [])
+                        for e in ee_list:
+                            if isinstance(e, dict) and e.get("type") == "POWER_LINK_IMAGE":
+                                ad_ext = e.get("adExtension") or {}
+                                if isinstance(ad_ext, dict) and ad_ext.get("imagePath"):
+                                    img_path = ad_ext["imagePath"]; break
+                        if img_path: break
+                    except Exception:
+                        continue
+                if img_path:
+                    try:
+                        await self.api.create_ad_extension(
+                            owner_id=ad_group_id, kind="POWER_LINK_IMAGE",
+                            content={"adExtension": {"imagePath": img_path}}, owner_type="ADGROUP",
+                        )
+                    except Exception as e:
+                        msg = str(e)
+                        if "2023" not in msg and "already exists" not in msg.lower():
+                            logger.warning(f"[orchestrator] POWER_LINK_IMAGE 부착 실패 ag={ad_group_id}: {msg[:120]}")
+        except Exception as e:
+            logger.warning(f"[orchestrator] POWER_LINK_IMAGE 자동탐색 실패 ag={ad_group_id}: {str(e)[:120]}")
+
     async def run(self, config: BulkJobConfig, keywords: List[str]) -> Dict[str, Any]:
         """메인 실행 - 키워드 리스트를 받아 캠페인/광고그룹/키워드 자동 생성"""
         job_id = config.job_id

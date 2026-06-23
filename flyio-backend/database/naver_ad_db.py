@@ -1269,6 +1269,7 @@ def save_ad_account(user_id: int, customer_id: str, api_key: str, secret_key: st
             api_key = excluded.api_key,
             secret_key = excluded.secret_key,
             name = excluded.name,
+            is_active = TRUE,
             updated_at = CURRENT_TIMESTAMP
     """, (user_id, customer_id, api_key, secret_key, name or f"광고계정_{customer_id}"))
 

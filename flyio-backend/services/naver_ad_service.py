@@ -503,10 +503,14 @@ class NaverAdApiClient:
         """
         return await self._request("GET", f"/ncc/ads?nccAdgroupId={ad_group_id}")
 
+    async def get_ad_by_id(self, ad_id: str) -> dict:
+        """특정 소재 1개 조회 — GET /ncc/ads/{adId}. 소재 복사(다른 그룹에 동일 소재 생성)용."""
+        return await self._request("GET", f"/ncc/ads/{ad_id}")
+
     async def get_ad_extensions(self, owner_id: Optional[str] = None, owner_type: Optional[str] = None) -> List[dict]:
         """확장소재 목록 조회. owner_id 지정 시 해당 광고그룹/캠페인 소속만.
 
-        네이버: GET /ncc/adextensions?ownerId={id}&ownerType={ADGROUP|CAMPAIGN|...}
+        네이버: GET /ncc/ad-extensions?ownerId={id}&ownerType={ADGROUP|CAMPAIGN|...}
         광고그룹 단위 조회 시 ownerType=ADGROUP 명시해야 404 안 남.
         """
         params = []
@@ -514,7 +518,7 @@ class NaverAdApiClient:
             params.append(f"ownerId={owner_id}")
         if owner_type:
             params.append(f"ownerType={owner_type}")
-        endpoint = "/ncc/adextensions"
+        endpoint = "/ncc/ad-extensions"
         if params:
             endpoint = endpoint + "?" + "&".join(params)
         return await self._request("GET", endpoint)
@@ -567,6 +571,54 @@ class NaverAdApiClient:
             payload["ad"]["medicalNo"] = medical_no
         return await self._request("POST", endpoint, payload)
 
+    async def create_medical_ad(
+        self,
+        ad_group_id: str,
+        *,
+        basic: dict,
+    ) -> dict:
+        """병의원 업종 특화 소재(MEDICAL_AD) 1개 생성.
+
+        네이버: POST /ncc/ads?nccAdgroupId=...
+        body.type: "MEDICAL_AD"
+        body.ad: { basic: {headline, description, image, favicon, medicalNo, siteName, tags, pc:{...}, mobile:{...}} }
+        basic 객체를 그대로 전달(원본 raw 복제).
+        """
+        endpoint = f"/ncc/ads?nccAdgroupId={ad_group_id}"
+        payload = {
+            "nccAdgroupId": ad_group_id,
+            "type": "MEDICAL_AD",
+            "ad": {"basic": basic},
+        }
+        return await self._request("POST", endpoint, payload)
+
+    async def delete_ad(self, ad_id: str) -> dict:
+        """단일 광고소재 삭제 — DELETE /ncc/ads/{adId}."""
+        return await self._request("DELETE", f"/ncc/ads/{ad_id}")
+
+    # ============ 이미지 업로드 ============
+    async def upload_image(self, image_bytes: bytes, filename: str = "image.jpg") -> dict:
+        """파워링크 이미지 업로드. POST /ncc/uploads → imagePath 반환.
+
+        Naver SearchAd: multipart/form-data 로 file 필드에 이미지 전송.
+        응답: {"imagePath": "/ad-creative/...", ...}
+        """
+        import httpx
+        import mimetypes
+        mime = mimetypes.guess_type(filename)[0] or "image/jpeg"
+        url = f"{self.BASE_URL}/ncc/uploads"
+        headers = self._get_headers("POST", "/ncc/uploads")
+        # Content-Type은 httpx가 multipart로 자동 설정
+        headers.pop("Content-Type", None)
+        async with httpx.AsyncClient(timeout=60) as hc:
+            resp = await hc.post(
+                url,
+                headers=headers,
+                files={"file": (filename, image_bytes, mime)},
+            )
+            resp.raise_for_status()
+            return resp.json()
+
     # ============ 확장소재 ============
     async def create_ad_extension(
         self,
@@ -577,7 +629,7 @@ class NaverAdApiClient:
     ) -> dict:
         """확장소재 1개 생성.
 
-        네이버: /ncc/adextensions
+        네이버: /ncc/ad-extensions
         - ownerId: 광고그룹 ID 또는 캠페인 ID 또는 비즈채널 ID (owner_type에 따라)
         - type: PHONE_NUMBER / DESCRIPTION_EXTENSION / SUBLINK / PRICE_LINK / CALCULATION 등
         """
@@ -587,7 +639,7 @@ class NaverAdApiClient:
             "type": kind,
             **content,
         }
-        return await self._request("POST", "/ncc/adextensions", payload)
+        return await self._request("POST", "/ncc/ad-extensions", payload)
 
     async def update_keyword(self, keyword_id: str, data: dict, fields: str = "bidAmt") -> dict:
         """키워드 수정 — fields 쿼리 파라미터 필수 (Naver SearchAd API).
@@ -622,6 +674,13 @@ class NaverAdApiClient:
             body["nccAdgroupId"] = ad_group_id
         return await self.update_keyword(keyword_id, body, fields="bidAmt")
 
+    async def update_keywords_bid_bulk(self, items: List[dict]) -> list:
+        """키워드 입찰가 **bulk 수정** — PUT /ncc/keywords?fields=bidAmt + 배열 body (최대 100개/콜).
+        네이버는 복수 키워드 PUT(배열)을 지원 → 키워드별 단건 PUT(10만회) 대신 100개씩 묶어 ~100배 빠름.
+        items: [{nccKeywordId, nccAdgroupId, bidAmt, useGroupBidAmt}, ...]. 10원 단위 보정은 호출부에서.
+        """
+        return await self._request("PUT", "/ncc/keywords?fields=bidAmt", items)
+
     async def pause_keyword(self, keyword_id: str) -> dict:
         """키워드 일시정지"""
         return await self.update_keyword(
@@ -641,6 +700,29 @@ class NaverAdApiClient:
     async def delete_keyword(self, keyword_id: str) -> dict:
         """키워드 삭제"""
         return await self._request("DELETE", f"/ncc/keywords/{keyword_id}")
+
+    async def delete_keywords_bulk(self, ids: List[str]) -> dict:
+        """키워드 **bulk 삭제** — DELETE /ncc/keywords?ids=id1,id2,... (최대 100개/콜)."""
+        q = ",".join(ids[:100])
+        return await self._request("DELETE", f"/ncc/keywords?ids={q}")
+
+    async def set_keywords_userlock_bulk(self, items: List[dict]) -> list:
+        """키워드 **bulk userLock 변경**(일시정지/재개) — PUT /ncc/keywords?fields=userLock + 배열(최대 100/콜).
+        items: [{nccKeywordId, nccAdgroupId, userLock(bool)}, ...]. userLock=True=off(일시정지), False=on(재개).
+        삭제와 달리 되돌릴 수 있는 off — 도메인 밖 키워드 대량 일시정지용."""
+        return await self._request("PUT", "/ncc/keywords?fields=userLock", items[:100])
+
+    async def delete_ad_groups_bulk(self, ids: List[str]) -> dict:
+        """광고그룹 **bulk 삭제** — DELETE /ncc/adgroups?ids=id1,id2,... (최대 100개/콜).
+        빈 광고그룹(키워드 0개) 정리용. 호출 전 반드시 키워드 0개 확인할 것."""
+        q = ",".join(ids[:100])
+        return await self._request("DELETE", f"/ncc/adgroups?ids={q}")
+
+    async def delete_campaigns_bulk(self, ids: List[str]) -> dict:
+        """캠페인 **bulk 삭제** — DELETE /ncc/campaigns?ids=id1,id2,... (최대 100개/콜).
+        빈 캠페인(키워드 0개) 정리용. 호출 전 반드시 키워드 0개 확인할 것."""
+        q = ",".join(ids[:100])
+        return await self._request("DELETE", f"/ncc/campaigns?ids={q}")
 
     # ============ 제외 키워드 관리 ============
 
@@ -733,6 +815,39 @@ class NaverAdApiClient:
             "bids": 1000
         }
         return await self._request("POST", "/estimate/exposure/keyword", data)
+
+    async def get_min_exposure_bids(self, keywords: List[str], device: str = "PC") -> dict:
+        """PC 최소노출입찰가 추정 — POST /estimate/exposure-minimum-bid/keyword.
+        body: {device, items:[{key:키워드}, ...]} (최대 100개). 반환: 키워드별 최소노출 추정 입찰가.
+        """
+        data = {"device": device, "items": [{"key": k} for k in keywords[:100]]}
+        return await self._request("POST", "/estimate/exposure-minimum-bid/keyword", data)
+
+    async def try_min_exposure_formats(self, keywords: List[str]) -> dict:
+        """디버그 — 최소노출입찰가 API 의 여러 body/엔드포인트 형식을 시도해 맞는 것 탐색."""
+        kw = keywords[0] if keywords else "두드러기치료"
+        attempts = [
+            ("exposure-minimum-bid/keyword", {"device": "PC", "items": [{"keyword": kw}]}),
+            ("exposure-minimum-bid/keyword", {"items": [{"key": kw}]}),
+            ("exposure-minimum-bid/keyword", {"device": "PC", "items": [{"key": kw}], "type": "keyword"}),
+            ("average-position-bid/keyword", {"device": "PC", "items": [{"key": kw, "position": 5}]}),
+            ("average-position-bid/keyword", {"device": "PC", "items": [{"key": kw, "position": 10}]}),
+            ("average-position-bid/keyword", {"device": "PC", "items": [{"key": kw, "position": 15}]}),
+        ]
+        out = []
+        for ep, body in attempts:
+            try:
+                r = await self._request("POST", f"/estimate/{ep}", body)
+                out.append({"ep": ep, "body": body, "ok": True, "resp": str(r)[:200]})
+            except Exception as e:
+                out.append({"ep": ep, "body": body, "ok": False, "err": str(e)[:120]})
+        return {"attempts": out}
+
+    async def get_avg_position_bids(self, keywords: List[str], position: int, device: str = "PC") -> dict:
+        """순위(position)별 추정 입찰가 — POST /estimate/average-position-bid/keyword (최대 100개).
+        position 이 클수록(=낮은 순위) 입찰가 싸짐. PC 최대 ~10위. 반환 estimate:[{keyword,bid,position}]."""
+        data = {"device": device, "items": [{"key": k, "position": position} for k in keywords[:100]]}
+        return await self._request("POST", "/estimate/average-position-bid/keyword", data)
 
     # ============ 통계/보고서 ============
 
