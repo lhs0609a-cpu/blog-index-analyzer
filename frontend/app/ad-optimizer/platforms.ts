@@ -46,7 +46,7 @@ export const AD_PLATFORMS: AdPlatform[] = [
     apiAvailable: true,
     setupGuideUrl: 'https://searchad.naver.com',
     requiredFields: [
-      { name: 'customer_id', label: '고객 ID', type: 'text', placeholder: '네이버 광고 고객 ID (7자리)' },
+      { name: 'customer_id', label: '고객 ID', type: 'text', placeholder: '네이버 광고 고객 ID (6~10자리 숫자)' },
       { name: 'api_key', label: 'API 키', type: 'password', placeholder: 'API 액세스 라이선스' },
       { name: 'secret_key', label: '비밀 키', type: 'password', placeholder: 'API 비밀 키', helpText: '발급 시 1회만 표시됩니다' },
     ],

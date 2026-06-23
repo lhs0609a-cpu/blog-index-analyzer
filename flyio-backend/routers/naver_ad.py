@@ -4422,6 +4422,21 @@ async def _run_pool_autocomplete_mining(
     }
 
 
+# 의료/요양 기관·의료인 토큰 — category_split 모드에서 키워드 분류용.
+_MEDICAL_TOKENS = (
+    "병원", "약국", "한의원", "한방병원", "요양원", "요양병원", "동물병원", "산후조리원",
+    "재활병원", "정신병원", "치과", "검진센터", "노인요양", "요양시설", "의원", "의료기관",
+    "메디컬", "의료", "의사", "약사", "한의사", "수의사", "간호사", "전공의", "개원의",
+    "봉직의", "페이닥터", "전문의", "개원", "원장",
+)
+
+
+def _classify_medical(keyword: str) -> bool:
+    """키워드가 의료·요양 도메인이면 True (의료대출 캠페인), 아니면 False (비의료대출)."""
+    kw = (keyword or "").replace(" ", "")
+    return any(t in kw for t in _MEDICAL_TOKENS)
+
+
 async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch: int = 3000, bid: Optional[int] = None):
     """등록 1회 — pending → orchestrator로 일괄.
     customer_id 명시 시 그 광고주만 처리, 없으면 사용자의 가장 최근 광고주.
@@ -4558,64 +4573,120 @@ async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch:
     reg = get_registered_keywords_db()
     existing_before = set(reg.get_existing_set(customer_id, keywords) or set())
 
-    # 캠페인 재사용 — 매 라운드 새 캠페인 만들면 캠페인 폭증. 기존 풀 캠페인 광고그룹 cap (50)
-    # 까지 같은 캠페인에 광고그룹 추가. 도달 시 새 캠페인 생성.
-    pool_state = pool.get_active_pool_campaign(customer_id)
     AD_GROUPS_PER_POOL_CAMPAIGN = 50  # 50 × 1000 = 50,000 키워드/캠페인. 100k = 캠페인 2개.
     reuse_id: Optional[str] = None
-    start_idx = 0
-    new_groups_in_round = (len(keywords) + 999) // 1000  # 1000개당 광고그룹 1개
-    if pool_state and pool_state.get("ad_groups_count", 0) + new_groups_in_round <= AD_GROUPS_PER_POOL_CAMPAIGN:
-        reuse_id = pool_state["campaign_id"]
-        start_idx = pool_state["ad_groups_count"]
-        logger.warning(
-            f"[pool/register] 캠페인 재사용 cid={reuse_id} groups={pool_state['ad_groups_count']}+{new_groups_in_round}"
-        )
 
-    job_id = create_bulk_upload_job(
-        user_id=uid,
-        filename=f"pool_auto_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-        campaign_prefix="auto",
-        keywords_per_group=1000,
-        bid=bid,
-        daily_budget=10000,
-        total_keywords=len(keywords),
-    )
-    cfg = BulkJobConfig(
-        job_id=job_id, user_id=uid,
-        campaign_prefix="auto", keywords_per_group=1000,
-        bid=bid, daily_budget=10000, campaign_tp="WEB_SITE",
-        reuse_campaign_id=reuse_id,
-        start_ad_group_index=start_idx,
-    )
-    orchestrator = BulkUploadOrchestrator(client)
+    # category_split 모드 여부 (의료/비의료 한글 캠페인 분리). 비-split 계정(소잠 등)은 기존 'auto' 경로.
+    category_mode = False
+    _cat_budgets = (3000, 1000)
     try:
-        result = await orchestrator.run(cfg, keywords)
-    except Exception as e:
-        logger.error(f"[pool/register] orchestrator 실패: {e}", exc_info=True)
-        pool.mark_status([p["id"] for p in pending], "failed",
-                         error_message=f"{type(e).__name__}: {str(e)[:200]}")
-        pool.record_run(uid, customer_id, "register", "failed",
-                        failed=len(pending),
-                        error_message=f"{type(e).__name__}: {str(e)[:300]}",
-                        duration_ms=int((_time.monotonic()-t0)*1000))
-        return
+        from database.naver_ad_db import get_domain_profile as _gdp_cs
+        _profcs = _gdp_cs(uid, str(customer_id)) or {}
+        category_mode = bool(_profcs.get("category_split"))
+        _cat_budgets = (int(_profcs.get("daily_budget") or 3000), int(_profcs.get("nonmedical_budget") or 1000))
+    except Exception:
+        pass
+
+    if category_mode:
+        # ── 의료/비의료 분리 등록 — 각 카테고리별 한글 캠페인(재사용) + 차등 예산 ──
+        result = {"success": True, "campaign_ids": []}
+        med_kws = [k for k in keywords if _classify_medical(k)]
+        non_kws = [k for k in keywords if not _classify_medical(k)]
+        for _cat, _label, _kws, _bud in (
+            ("medical", "의료대출", med_kws, _cat_budgets[0]),
+            ("nonmedical", "비의료대출", non_kws, _cat_budgets[1]),
+        ):
+            if not _kws:
+                continue
+            _new_grp = (len(_kws) + 999) // 1000
+            _st = pool.get_active_pool_campaign_cat(customer_id, _cat)
+            _reuse = None; _sidx = 0
+            if _st and _st.get("ad_groups_count", 0) + _new_grp <= AD_GROUPS_PER_POOL_CAMPAIGN:
+                _reuse = _st["campaign_id"]; _sidx = _st["ad_groups_count"]
+            _jid = create_bulk_upload_job(
+                user_id=uid, filename=f"pool_{_cat}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                campaign_prefix=_label, keywords_per_group=1000, bid=bid,
+                daily_budget=_bud, total_keywords=len(_kws),
+            )
+            _cfg = BulkJobConfig(
+                job_id=_jid, user_id=uid, campaign_prefix=_label, keywords_per_group=1000,
+                bid=bid, daily_budget=_bud, campaign_tp="WEB_SITE",
+                reuse_campaign_id=_reuse, start_ad_group_index=_sidx,
+            )
+            try:
+                _r = await BulkUploadOrchestrator(client).run(_cfg, _kws)
+            except Exception as e:
+                logger.error(f"[pool/register-cat] {_label} orchestrator 실패: {e}", exc_info=True)
+                result["success"] = False; result["error"] = f"{type(e).__name__}: {str(e)[:160]}"
+                continue
+            _cids = _r.get("campaign_ids") or []
+            result["campaign_ids"].extend(_cids)
+            if not _r.get("success"):
+                result["success"] = False; result["error"] = _r.get("error")
+            try:
+                if _reuse:
+                    pool.set_active_pool_campaign_cat(customer_id, _cat, _reuse, _sidx + _new_grp)
+                elif _cids:
+                    pool.set_active_pool_campaign_cat(customer_id, _cat, _cids[0], _new_grp)
+            except Exception as e:
+                logger.warning(f"[pool/register-cat] {_label} cat-state 갱신 실패: {e}")
+            logger.warning(f"[pool/register-cat] {_label} {len(_kws)}개 (budget {_bud}, reuse={bool(_reuse)})")
+    else:
+        # ── 기존 경로 (auto_ 단일 캠페인, 예산 1만) — 변경 없음 ──
+        pool_state = pool.get_active_pool_campaign(customer_id)
+        start_idx = 0
+        new_groups_in_round = (len(keywords) + 999) // 1000  # 1000개당 광고그룹 1개
+        if pool_state and pool_state.get("ad_groups_count", 0) + new_groups_in_round <= AD_GROUPS_PER_POOL_CAMPAIGN:
+            reuse_id = pool_state["campaign_id"]
+            start_idx = pool_state["ad_groups_count"]
+            logger.warning(
+                f"[pool/register] 캠페인 재사용 cid={reuse_id} groups={pool_state['ad_groups_count']}+{new_groups_in_round}"
+            )
+        job_id = create_bulk_upload_job(
+            user_id=uid,
+            filename=f"pool_auto_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            campaign_prefix="auto",
+            keywords_per_group=1000,
+            bid=bid,
+            daily_budget=10000,
+            total_keywords=len(keywords),
+        )
+        cfg = BulkJobConfig(
+            job_id=job_id, user_id=uid,
+            campaign_prefix="auto", keywords_per_group=1000,
+            bid=bid, daily_budget=10000, campaign_tp="WEB_SITE",
+            reuse_campaign_id=reuse_id,
+            start_ad_group_index=start_idx,
+        )
+        orchestrator = BulkUploadOrchestrator(client)
+        try:
+            result = await orchestrator.run(cfg, keywords)
+        except Exception as e:
+            logger.error(f"[pool/register] orchestrator 실패: {e}", exc_info=True)
+            pool.mark_status([p["id"] for p in pending], "failed",
+                             error_message=f"{type(e).__name__}: {str(e)[:200]}")
+            pool.record_run(uid, customer_id, "register", "failed",
+                            failed=len(pending),
+                            error_message=f"{type(e).__name__}: {str(e)[:300]}",
+                            duration_ms=int((_time.monotonic()-t0)*1000))
+            return
 
     existing_after = set(reg.get_existing_set(customer_id, keywords) or set())
     new_in_naver = existing_after - existing_before  # 진짜 신규 등록
 
-    # 풀 state 업데이트 — 캠페인 재사용 또는 새 캠페인 등록
-    try:
-        result_campaign_ids = result.get("campaign_ids") or []
-        ad_groups_in_round = (len(keywords) + 999) // 1000
-        if reuse_id:
-            # 같은 캠페인에 광고그룹 추가됨
-            pool.increment_pool_ad_groups(customer_id, ad_groups_in_round)
-        elif result_campaign_ids:
-            # 새 캠페인 → state 갱신
-            pool.set_active_pool_campaign(customer_id, result_campaign_ids[0], ad_groups_in_round)
-    except Exception as e:
-        logger.warning(f"[pool/register] state 갱신 실패: {e}")
+    # 풀 state 업데이트 — 캠페인 재사용 또는 새 캠페인 등록 (category_mode 는 위에서 cat-state 갱신 완료)
+    if not category_mode:
+        try:
+            result_campaign_ids = result.get("campaign_ids") or []
+            ad_groups_in_round = (len(keywords) + 999) // 1000
+            if reuse_id:
+                # 같은 캠페인에 광고그룹 추가됨
+                pool.increment_pool_ad_groups(customer_id, ad_groups_in_round)
+            elif result_campaign_ids:
+                # 새 캠페인 → state 갱신
+                pool.set_active_pool_campaign(customer_id, result_campaign_ids[0], ad_groups_in_round)
+        except Exception as e:
+            logger.warning(f"[pool/register] state 갱신 실패: {e}")
 
     succeeded_ids = [p["id"] for p in pending if p["keyword"] in new_in_naver]
     skipped_ids = [p["id"] for p in pending if p["keyword"] in existing_before]
@@ -5933,13 +6004,16 @@ async def _run_seed_explode(
     score_basis = get_ad_account_relevance_keywords(user_id, str(customer_id))
     if not score_basis:
         score_basis = [s for s in (pool.list_user_seeds(customer_id) or []) if s and len(s) >= 2]
-    # negative_keywords (drift 차단) — 도메인 프로파일에 있으면 substring 컷. 없으면 빈 리스트.
+    # negative_keywords (drift 차단) + required_tokens (핵심의도 앵커) — 프로파일에서 로드.
+    negatives = []
+    required_tokens = []
     try:
         from database.naver_ad_db import get_domain_profile as _get_prof
-        negatives = [n for n in (_get_prof(user_id, str(customer_id)) or {}).get("negative_keywords", [])
-                     if n and len(n) >= 2]
+        _prof = _get_prof(user_id, str(customer_id)) or {}
+        negatives = [n for n in _prof.get("negative_keywords", []) if n and len(n) >= 2]
+        required_tokens = [t for t in _prof.get("required_tokens", []) if t and len(t) >= 2]
     except Exception:
-        negatives = []
+        pass
 
     client = NaverAdApiClient()
     client.customer_id = account["customer_id"]
@@ -5991,7 +6065,13 @@ async def _run_seed_explode(
             if negatives and any(nt in kw for nt in negatives):
                 n_neg_cut += 1
                 continue
-            if score_basis and _compute_relevance_score(kw, score_basis) < min_score:
+            # 핵심의도 앵커 — 필수 토큰 중 하나도 없으면 컷 (시설토큰만으론 통과 못 함).
+            if required_tokens and not any(rt in kw for rt in required_tokens):
+                n_neg_cut += 1
+                continue
+            # 관련성 점수 게이트 — 앵커 모드(required_tokens)면 앵커+negative 가 도메인 테스트이므로
+            # 점수 컷 skip (앵커있는 진짜 대출이 좁은 relevance 로 과삭제되는 것 방지). 비앵커 도메인만 점수.
+            if not required_tokens and score_basis and _compute_relevance_score(kw, score_basis) < min_score:
                 n_score_cut += 1
                 continue
             items.append({
@@ -6796,6 +6876,17 @@ async def _run_domain_cleanup_for_account(
     if not score_basis:
         return {"customer_id": customer_id, "deleted": 0, "reason": "no_score_basis"}
 
+    # 핵심의도 앵커 + negative — 앵커 모드면 (앵커없음 OR negative) 가 삭제 기준 (점수 무관).
+    required_tokens = []
+    neg_tokens = []
+    try:
+        from database.naver_ad_db import get_domain_profile as _gdp_ct
+        _pf_ct = _gdp_ct(user_id, str(customer_id)) or {}
+        required_tokens = [t for t in _pf_ct.get("required_tokens", []) if t and len(t) >= 2]
+        neg_tokens = [n for n in _pf_ct.get("negative_keywords", []) if n and len(n) >= 2]
+    except Exception:
+        pass
+
     reg = get_registered_keywords_db()
     with _sqlite3.connect(reg.db_path) as conn:
         rows = conn.execute(
@@ -6840,7 +6931,21 @@ async def _run_domain_cleanup_for_account(
         return out
 
     scored = await asyncio.to_thread(_score_all)
-    targets = [(kid, kw, s) for kid, kw, s in scored if s < threshold]  # Option B: boundary 보존
+    if required_tokens:
+        # 앵커 모드 — (앵커 하나도 없음) 또는 (negative 포함) 만 삭제. 점수 무시 (앵커있는 진짜 대출 보존).
+        targets = [
+            (kid, kw, s) for kid, kw, s in scored
+            if kw and (
+                not any(rt in kw for rt in required_tokens)
+                or (neg_tokens and any(nt in kw for nt in neg_tokens))
+            )
+        ]
+    else:
+        # 비앵커 도메인 — 점수<threshold 또는 negative 포함(substring 오매칭 off-domain 차단)
+        targets = [
+            (kid, kw, s) for kid, kw, s in scored
+            if s < threshold or (neg_tokens and kw and any(nt in kw for nt in neg_tokens))
+        ]
     targets.sort(key=lambda x: x[2])  # 무관한 것부터
     targets = targets[:max(0, min(max_delete, 5000))]
     if not targets:
@@ -7383,7 +7488,27 @@ async def keyword_pool_registered_cleanup_by_score(
     _t_db = _t.monotonic() - _t0
     scored, score_dist = await asyncio.to_thread(_score_all)
     _t_score = _t.monotonic() - _t0 - _t_db
-    targets = [(kid, kw, s) for kid, kw, s in scored if s < threshold]  # Option B: boundary 보존
+    # 앵커 모드 — required_tokens 있으면 (앵커없음 OR negative) 가 삭제기준(점수 무시). 진짜 대출 보존.
+    _req_tok = []; _neg_tok = []
+    try:
+        from database.naver_ad_db import get_domain_profile as _gdp_cbs
+        _pf_cbs = _gdp_cbs(user_id, str(cid)) or {}
+        _req_tok = [t for t in _pf_cbs.get("required_tokens", []) if t and len(t) >= 2]
+        _neg_tok = [n for n in _pf_cbs.get("negative_keywords", []) if n and len(n) >= 2]
+    except Exception:
+        pass
+    if _req_tok:
+        targets = [
+            (kid, kw, s) for kid, kw, s in scored
+            if kw and (not any(rt in kw for rt in _req_tok)
+                       or (_neg_tok and any(nt in kw for nt in _neg_tok)))
+        ]
+    else:
+        # 점수<threshold (Option B: boundary 보존) 또는 negative 포함(substring 오매칭 off-domain 차단)
+        targets = [
+            (kid, kw, s) for kid, kw, s in scored
+            if s < threshold or (_neg_tok and kw and any(nt in kw for nt in _neg_tok))
+        ]
     targets.sort(key=lambda x: x[2])  # 무관한 것부터
     targets_capped = targets[:max_delete]
     logger.warning(
@@ -8753,6 +8878,7 @@ async def keyword_pool_ai_expand_seeds(
 class BidBulkUpdateRequest(BaseModel):
     bid: int = Field(..., ge=70, le=100000, description="새 입찰가 (네이버 최소 70원)")
     scope: str = Field("pool", description="'pool' = auto_ 프리픽스 캠페인만, 'all' = 전체 캠페인")
+    only_if_bid: Optional[int] = Field(None, description="설정 시 현재 입찰가가 이 값인 키워드만 변경 (예: 70 → 70원짜리만)")
 
 
 @router.post("/keyword-pool/bid/bulk-update")
@@ -8776,10 +8902,12 @@ async def keyword_pool_bid_bulk_update(
         if not account or not account.get("is_connected"):
             raise HTTPException(status_code=400, detail="광고 계정 미연결")
         cid = int(account.get("customer_id"))
-        new_bid = max(70, int(request.bid))
+        # 네이버 입찰가는 10원 단위만 유효 (아니면 code 3904 'Invalid bid amount'). 10단위 반올림 + 최소 70.
+        new_bid = max(70, round(int(request.bid) / 10) * 10)
 
-        # 1. DB 저장 — 앞으로 cron 이 이 값 사용
-        update_ad_account_default_bid(user_id, str(cid), new_bid)
+        # 1. DB 저장 — 앞으로 cron 이 이 값 사용. (only_if_bid 조건부 변경 시엔 default 유지)
+        if request.only_if_bid is None:
+            update_ad_account_default_bid(user_id, str(cid), new_bid)
 
         # 2. 백그라운드로 네이버 일괄 변경 (45k 키워드는 HTTP 타임아웃 초과 → bg 완주)
         async def _run():
@@ -8808,16 +8936,17 @@ async def keyword_pool_bid_bulk_update(
                     logger.warning(f"[bid/bulk] 광고그룹 list 실패 cid={c.get('nccCampaignId')}: {e}")
                 await asyncio.sleep(0.15)
 
-            # 광고그룹 default bid 변경
+            # 광고그룹 default bid 변경 — only_if_bid 조건부 변경 시엔 그룹 default 유지(키워드만 변경)
             ag_success = 0
             ag_failed: List[Dict] = []
-            for cname, gid in ad_group_ids:
-                try:
-                    await client.update_ad_group_bid(gid, new_bid)
-                    ag_success += 1
-                except Exception as e:
-                    ag_failed.append({"ad_group_id": gid, "campaign": cname, "error": f"{type(e).__name__}: {str(e)[:120]}"})
-                await asyncio.sleep(0.15)
+            if request.only_if_bid is None:
+                for cname, gid in ad_group_ids:
+                    try:
+                        await client.update_ad_group_bid(gid, new_bid)
+                        ag_success += 1
+                    except Exception as e:
+                        ag_failed.append({"ad_group_id": gid, "campaign": cname, "error": f"{type(e).__name__}: {str(e)[:120]}"})
+                    await asyncio.sleep(0.15)
 
             # 키워드별 bidAmt 일괄 변경 — 광고그룹별로 keyword list 받아 full-body PUT.
             # 부분 PUT(?fields=) 은 Naver 가 silent ignore 하는 케이스가 있어서, list 응답에서
@@ -8845,12 +8974,15 @@ async def keyword_pool_bid_bulk_update(
                 # 정답: update_keyword_bid (PUT ?fields=bidAmt + 최소 body).
                 cur = kw_obj.get("bidAmt")
                 ugba = kw_obj.get("useGroupBidAmt")
+                # only_if_bid: 현재 입찰가가 지정값인 키워드만 변경 (예: 70원짜리만 100원으로).
+                if request.only_if_bid is not None and cur != request.only_if_bid:
+                    return  # 조건 불일치 — 건드리지 않음
                 if cur == new_bid and ugba is False:
                     kw_success += 1  # 이미 목표값
                     return
                 async with sem:
                     try:
-                        await client.update_keyword_bid(kid, new_bid)
+                        await client.update_keyword_bid(kid, new_bid, ad_group_id=kw_obj.get("nccAdgroupId"))
                         kw_success += 1
                     except NaverApiCircuitOpenError:
                         kw_failed.append({"keyword_id": kid, "error": "circuit_open"})
@@ -8930,20 +9062,37 @@ async def keyword_pool_bid_debug_one(
         client.api_key = account["api_key"]
         client.secret_key = account["secret_key"]
 
-        # 첫 번째 auto_* 캠페인의 첫 광고그룹의 첫 키워드 찾기
+        # 키워드가 있는 첫 그룹을 찾을 때까지 WEB_SITE 캠페인을 스캔 (빈 그룹 skip).
+        # 이전엔 auto_[0]/groups[0] 만 봐서 그 그룹이 비면 no_keyword 로 검증 불가했음.
         campaigns = await client.get_campaigns() or []
-        auto_campaigns = [c for c in campaigns if (c.get("name") or "").startswith("auto_")]
-        if not auto_campaigns:
-            return {"success": False, "step": "no_auto_campaign"}
-        first_camp = auto_campaigns[0]
-        groups = await client.get_ad_groups(campaign_id=first_camp.get("nccCampaignId")) or []
-        if not groups:
-            return {"success": False, "step": "no_ad_group", "campaign": first_camp.get("name")}
-        gid = groups[0].get("nccAdgroupId")
-        kws = await client.get_keywords(ad_group_id=gid) or []
-        if not kws:
-            return {"success": False, "step": "no_keyword", "ad_group_id": gid}
-        first_kw = kws[0]
+        cand = [c for c in campaigns if (c.get("campaignTp") or "") == "WEB_SITE"]
+        if not cand:
+            cand = campaigns
+        first_camp = None; gid = None; first_kw = None; scanned_groups = 0
+        for c in cand:
+            try:
+                groups = await client.get_ad_groups(campaign_id=c.get("nccCampaignId")) or []
+            except Exception:
+                continue
+            for g in groups:
+                scanned_groups += 1
+                _gid = g.get("nccAdgroupId")
+                if not _gid:
+                    continue
+                try:
+                    kws = await client.get_keywords(ad_group_id=_gid) or []
+                except Exception:
+                    continue
+                if kws:
+                    first_camp = c; gid = _gid; first_kw = kws[0]; break
+                if scanned_groups >= 60:  # 안전 cap — 너무 많이 스캔 방지
+                    break
+            if first_kw:
+                break
+            if scanned_groups >= 60:
+                break
+        if not first_kw:
+            return {"success": False, "step": "no_keyword", "scanned_groups": scanned_groups}
         kid = first_kw.get("nccKeywordId")
 
         # before
@@ -8956,7 +9105,7 @@ async def keyword_pool_bid_debug_one(
 
         # PUT — 응답 그대로
         try:
-            put_response = await client.update_keyword_bid(kid, max(70, int(bid)))
+            put_response = await client.update_keyword_bid(kid, max(70, int(bid)), ad_group_id=first_kw.get("nccAdgroupId"))
         except Exception as e:
             import traceback
             return {
@@ -9313,6 +9462,7 @@ class CreativeBackfillRequest(BaseModel):
     scope: str = Field("all", description="'all' 전체 캠페인, 'pool' auto_ 캠페인만")
     template_id: Optional[int] = Field(None, description="특정 템플릿 id 강제(없으면 첫 활성)")
     mode: str = Field("backfill", description="test_one | backfill")
+    medical_no: Optional[str] = Field(None, description="의료광고 심의필 번호 (예: 한42606). 의료 광고주 필수")
 
 
 @router.post("/keyword-pool/ads/backfill-creative")
@@ -9342,6 +9492,10 @@ async def keyword_pool_ads_backfill_creative(
         tpl = next((t for t in all_tpls if t.get("is_active")), None) or (all_tpls[0] if all_tpls else None)
     if not tpl:
         return {"success": False, "step": "no_template", "hint": "ad_templates 비어있음"}
+
+    # 의료광고 심의필 — 요청값 우선, 없으면 광고주 프로파일(automation_medical_no) 자동 사용.
+    from database.naver_ad_db import get_domain_profile as _gdp_med
+    _med_no = (request.medical_no or "").strip() or (_gdp_med(user_id, str(cid)) or {}).get("medical_no", "")
 
     def _as_list(x):
         if isinstance(x, list):
@@ -9379,6 +9533,7 @@ async def keyword_pool_ads_backfill_creative(
             headline_mobile=tpl.get("headline_mobile"),
             description_mobile=tpl.get("description_mobile"),
             final_url_mobile=tpl.get("final_url_mobile"),
+            medical_no=(_med_no or None),  # 의료광고 심의필 번호 (요청 or 프로파일)
         )
 
     if request.mode == "test_one":
@@ -9391,15 +9546,37 @@ async def keyword_pool_ads_backfill_creative(
             return {"success": False, "mode": "test_one", "ad_group_id": gid,
                     "error": f"{type(e).__name__}: {str(e)[:400]}"}
 
+    # 템플릿 소재(헤드라인/URL)가 이미 있는지 — 있으면 skip, 없으면 추가.
+    # (기존 "소재 있으면 skip" 은 보류 blog 소재만 있는 그룹이 두드러기 소재를 못 받던 버그)
+    _tpl_head = (tpl.get("headline_pc") or "").strip()
+    _tpl_url = (tpl.get("final_url_pc") or "").replace("https://", "").replace("http://", "").strip("/")
+
+    _req_medno = (_med_no or "").strip()
+
+    def _has_tpl(ads) -> bool:
+        for a in ads:
+            adobj = a.get("ad") if isinstance(a, dict) else None
+            if not isinstance(adobj, dict):
+                continue
+            h = (adobj.get("headline") or (adobj.get("pc") or {}).get("headline") or "").strip()
+            fu = (adobj.get("finalUrl") or adobj.get("displayUrl") or "").strip()
+            mn = (adobj.get("medicalNo") or "").strip()
+            if (_tpl_head and h == _tpl_head) or (_tpl_url and _tpl_url in fu):
+                # 심의필 요구 시: medicalNo 일치해야 '보유' 인정 → 심의필 없는 기존 소재는 재추가(교체) 대상
+                if _req_medno and mn != _req_medno:
+                    continue
+                return True
+        return False
+
     async def _run():
         created = skipped = failed = 0
         for gid in ad_group_ids:
             try:
                 ads = _as_list(await client.get_ads(ad_group_id=gid) or [])
-                if ads:
-                    skipped += 1
+                if _has_tpl(ads):
+                    skipped += 1  # 이미 템플릿 소재 보유 — skip
                 else:
-                    await _create_one(gid)
+                    await _create_one(gid)  # 소재 없거나 보류 소재만 → 템플릿 소재 추가
                     created += 1
             except Exception as e:
                 failed += 1
@@ -9411,6 +9588,87 @@ async def keyword_pool_ads_backfill_creative(
     return {"success": True, "mode": "backfill", "started": True, "template_id": tpl.get("id"),
             "ad_groups_total": len(ad_group_ids),
             "message": f"백그라운드 시작 — {len(ad_group_ids)}개 광고그룹에 소재 부착 (이미 있으면 skip)"}
+
+
+@router.get("/keyword-pool/diagnostics/ad-creatives")
+async def keyword_pool_diag_ad_creatives(
+    customer_id: Optional[str] = None,
+    sample: int = 30,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """광고그룹 샘플의 소재(헤드라인+심의상태) 조회 — 소재 백필/심의 진행 확인용 (읽기)."""
+    from services.naver_ad_service import NaverAdApiClient
+    import random as _rnd
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    def _as_list(x):
+        if isinstance(x, list):
+            return x
+        if isinstance(x, dict):
+            return x.get("data") or x.get("list") or []
+        return []
+
+    camps = _as_list(await client.get_campaigns() or [])
+    gids: List[str] = []
+    for c in camps:
+        try:
+            for g in _as_list(await client.get_ad_groups(campaign_id=c.get("nccCampaignId")) or []):
+                if g.get("nccAdgroupId"):
+                    gids.append(g["nccAdgroupId"])
+        except Exception:
+            pass
+        await asyncio.sleep(0.05)
+    if not gids:
+        return {"success": False, "step": "no_ad_groups"}
+    sampled = _rnd.sample(gids, min(int(sample), len(gids)))
+    from collections import Counter as _C
+    head_ct, status_ct, url_ct, no_ad = _C(), _C(), _C(), 0
+    samples = []
+    raw_with_simui = None  # 한42606 등 심의필 들어간 raw ad 객체 (필드 위치 파악용)
+    for gid in sampled:
+        try:
+            ads = _as_list(await client.get_ads(ad_group_id=gid) or [])
+        except Exception:
+            continue
+        if not ads:
+            no_ad += 1
+            continue
+        if raw_with_simui is None:
+            import json as _json
+            for a in ads:
+                _txt = _json.dumps(a, ensure_ascii=False)
+                if "42606" in _txt or "심의" in _txt:
+                    raw_with_simui = a
+                    break
+        for a in ads:
+            adobj = a.get("ad") if isinstance(a, dict) else {}
+            adobj = adobj if isinstance(adobj, dict) else {}
+            h = (adobj.get("headline") or (adobj.get("pc") or {}).get("headline") or "")[:30]
+            url = (adobj.get("finalUrl") or adobj.get("displayUrl")
+                   or (adobj.get("pc") or {}).get("final") or "")
+            host = "sojam.co.kr" if "sojam.co.kr" in url else ("blog.naver" if "blog.naver" in url else (url[:24] or "?"))
+            st = a.get("inspectStatus") or a.get("status") or "?"
+            head_ct[h] += 1
+            status_ct[st] += 1
+            url_ct[host] += 1
+            if len(samples) < 15:
+                samples.append({"headline": h, "status": st, "url_host": host})
+        await asyncio.sleep(0.05)
+    return {
+        "success": True, "customer_id": int(account.get("customer_id")),
+        "ad_groups_total": len(gids), "sampled": len(sampled), "groups_without_ad": no_ad,
+        "headline_distribution": dict(head_ct.most_common(10)),
+        "status_distribution": dict(status_ct),
+        "url_host_distribution": dict(url_ct),
+        "samples": samples,
+        "raw_ad_with_simui": raw_with_simui,
+    }
 
 
 # ============ 전자동 광맥 발굴 — Domain Profile API (Stage 2) ============
@@ -9431,6 +9689,10 @@ class DomainProfileSaveRequest(BaseModel):
     daily_budget: Optional[int] = None
     default_bid: Optional[int] = None
     ad_template_id: Optional[int] = None
+    category_split: Optional[bool] = None
+    nonmedical_budget: Optional[int] = None
+    required_tokens: Optional[List[str]] = None
+    medical_no: Optional[str] = None
 
 
 @router.get("/keyword-pool/domain-profile")
@@ -9470,7 +9732,8 @@ async def keyword_pool_save_domain_profile(
     cid = str(account.get("customer_id"))
     fields = {}
     for k in ("description", "atom_library", "relevance_keywords", "negative_keywords",
-              "enabled", "min_score", "target_count", "daily_budget", "default_bid", "ad_template_id"):
+              "enabled", "min_score", "target_count", "daily_budget", "default_bid", "ad_template_id",
+              "category_split", "nonmedical_budget", "required_tokens", "medical_no"):
         v = getattr(request, k, None)
         if v is not None:
             fields[k] = v

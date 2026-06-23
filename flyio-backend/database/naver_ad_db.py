@@ -386,7 +386,16 @@ def init_naver_ad_tables():
     _ensure_column("ad_accounts", "automation_enabled", "INTEGER DEFAULT 0")
     _ensure_column("ad_accounts", "automation_min_score", "INTEGER DEFAULT 80")  # 게이트/클린업 관련성 점수
     _ensure_column("ad_accounts", "automation_target_count", "INTEGER DEFAULT 100000")  # 등록 목표(=cap)
-    _ensure_column("ad_accounts", "automation_daily_budget", "INTEGER DEFAULT 3000")  # 신규 캠페인 일예산
+    _ensure_column("ad_accounts", "automation_daily_budget", "INTEGER DEFAULT 3000")  # 신규 캠페인 일예산(의료/기본)
+    # 카테고리 분리(의료/비의료) 모드 — 의료대출_NN(daily_budget) / 비의료대출_NN(nonmedical_budget)
+    _ensure_column("ad_accounts", "automation_category_split", "INTEGER DEFAULT 0")
+    _ensure_column("ad_accounts", "automation_nonmedical_budget", "INTEGER DEFAULT 1000")
+    # 핵심의도 앵커 — 키워드가 이 중 하나라도 포함해야 in-domain (drift 구조적 차단).
+    # 예: 대출 광고주 = "대출,자금,금융,론,융자,한도,금리". 비우면 미적용(관련성 점수만).
+    _ensure_column("ad_accounts", "automation_required_tokens", "TEXT DEFAULT ''")
+    # 의료광고 심의필 번호 — 의료 광고주만 기입(예: 한42606). 소재 생성 시 자동 부착(medicalNo).
+    # 비우면 미부착(비의료 광고주). 광고주당 1개.
+    _ensure_column("ad_accounts", "automation_medical_no", "TEXT DEFAULT ''")
     _ensure_column("ad_accounts", "automation_ad_template_id", "INTEGER")  # 자동 부착 소재 템플릿 id
     # 발굴 진행 커서(어디까지 조합 생성했는지) + cron 마지막 실행 시각
     _ensure_column("ad_accounts", "discovery_cursor", "TEXT DEFAULT ''")
@@ -1468,6 +1477,8 @@ def get_domain_profile(user_id: int, customer_id: str) -> Dict:
         SELECT domain_description, atom_library, negative_keywords, relevance_keywords,
                automation_enabled, automation_min_score, automation_target_count,
                automation_daily_budget, automation_ad_template_id, default_bid,
+               automation_category_split, automation_nonmedical_budget, automation_required_tokens,
+               automation_medical_no,
                discovery_cursor, automation_last_discovery_at, automation_last_maintenance_at
         FROM ad_accounts
         WHERE user_id = ? AND customer_id = ? AND is_active = TRUE LIMIT 1
@@ -1490,6 +1501,10 @@ def get_domain_profile(user_id: int, customer_id: str) -> Dict:
         "min_score": int(d.get("automation_min_score") or 80),
         "target_count": int(d.get("automation_target_count") or 100000),
         "daily_budget": int(d.get("automation_daily_budget") or 3000),
+        "category_split": bool(d.get("automation_category_split") or 0),
+        "nonmedical_budget": int(d.get("automation_nonmedical_budget") or 1000),
+        "required_tokens": _parse_relevance_keywords(d.get("automation_required_tokens")),
+        "medical_no": (d.get("automation_medical_no") or "").strip(),
         "default_bid": int(d.get("default_bid") or 70),
         "ad_template_id": d.get("automation_ad_template_id"),
         "discovery_cursor": d.get("discovery_cursor") or "",
@@ -1515,6 +1530,11 @@ def update_domain_profile(user_id: int, customer_id: str, **fields) -> bool:
         "min_score": ("automation_min_score", lambda v: max(0, min(95, int(v)))),
         "target_count": ("automation_target_count", lambda v: max(0, min(100000, int(v)))),
         "daily_budget": ("automation_daily_budget", lambda v: max(70, int(v))),
+        "category_split": ("automation_category_split", lambda v: 1 if v else 0),
+        "nonmedical_budget": ("automation_nonmedical_budget", lambda v: max(70, int(v))),
+        "required_tokens": ("automation_required_tokens",
+                            lambda v: ",".join(str(x).strip() for x in v if str(x).strip())),
+        "medical_no": ("automation_medical_no", lambda v: str(v).strip()),
         "default_bid": ("default_bid", lambda v: max(70, int(v))),
         "ad_template_id": ("automation_ad_template_id", lambda v: int(v) if v is not None else None),
         "discovery_cursor": ("discovery_cursor", lambda v: str(v)),
