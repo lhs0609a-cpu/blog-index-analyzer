@@ -5527,6 +5527,7 @@ class BulkPauseOffdomainRequest(BaseModel):
     loan_tokens: List[str] = Field(..., description="금융/대출 토큰. keep 후보는 이 중 하나 이상 포함해야 함")
     domain_tokens: List[str] = Field(..., description="의료/소상공인 주체 토큰. keep 후보는 이 중 하나 이상 포함해야 함")
     exclude_tokens: List[str] = Field(default_factory=list, description="부정 토큰. 이 중 하나라도 포함하면 keep에서 제외(off). 소상공인/지원금(grant)/브랜드 오매칭 제거용")
+    keywords: Optional[List[str]] = Field(None, description="명시적 키워드 리스트. 설정 시 토큰 로직 무시하고 '정확히 이 키워드들'만 off(activate면 재개). 정밀 정리용")
     dry_run: bool = Field(True, description="true: off 대상 개수+샘플, false: 실제 bulk userLock=true")
     max_pause: int = Field(200000, description="안전 상한")
     activate: bool = Field(False, description="true: keep(loan AND domain AND NOT exclude)을 userLock=false 로 재개(복구). 비keep은 건드리지 않음")
@@ -5569,7 +5570,18 @@ async def keyword_pool_bulk_pause_offdomain(
             return False
         return any(l in t for l in loan) and any(d in t for d in dom)
 
-    if request.activate:
+    explicit = None
+    if request.keywords:
+        explicit = {k.strip() for k in request.keywords if k and k.strip()}
+
+    if explicit is not None:
+        # 명시적 리스트 모드 — 정확히 이 키워드들만 대상(토큰 로직 무시)
+        sel = [(kw, nid, gid) for kw, nid, gid in rows if (kw or "").strip() in explicit]
+        if request.activate:
+            verb = "재개(userLock=false)"; lock_val = False
+        else:
+            verb = "일시정지(userLock=true)"; lock_val = True
+    elif request.activate:
         # 복구 모드 — keep 만 재개
         sel = [(kw, nid, gid) for kw, nid, gid in rows if _is_keep(kw)]
         verb = "재개(userLock=false)"
@@ -10246,6 +10258,7 @@ async def keyword_pool_bid_test_min_exposure(
 
 class CoreMinExposureRequest(BaseModel):
     core_tokens: Optional[List[str]] = Field(None, description="핵심 토큰(이 중 하나라도 포함된 키워드만 대상). 미지정 시 기본 소잠 핵심셋")
+    keywords: Optional[List[str]] = Field(None, description="명시적 키워드 리스트. 설정 시 토큰 무시하고 '정확히 이 키워드들'만 입찰 대상(정밀 적용)")
     whole_pool: bool = Field(False, description="true: 토큰 필터 무시하고 등록된 전체 키워드를 PC 최소노출가로")
     domain_tokens: Optional[List[str]] = Field(None, description="도메인(질환) 토큰 — 키워드가 이 중 하나는 반드시 포함(AND 조건)")
     intent_tokens: Optional[List[str]] = Field(None, description="의향 토큰 — 키워드가 이 중 하나는 반드시 포함(병원오기직전 bottom-funnel)")
@@ -10288,6 +10301,13 @@ async def keyword_pool_bid_core_min_exposure(
                 "WHERE account_customer_id=? AND ncc_keyword_id IS NOT NULL AND ad_group_id IS NOT NULL "
                 "AND removed_at IS NULL")
         params = [cid]
+        if request.keywords:
+            # 명시적 키워드 리스트 모드 — 전체 actionable 행을 가져와 파이썬에서 정확 매칭(SQL IN 한계 회피)
+            kset = {k.strip() for k in request.keywords if k and k.strip()}
+            with _sq.connect(reg.db_path) as conn:
+                allrows = conn.execute(base, params).fetchall()
+            rows = [r for r in allrows if (r[0] or "").strip() in kset]
+            return [{"id": r[2], "gid": r[1], "text": r[0], "bid": r[3]} for r in rows]
         dom = request.domain_tokens or []
         itn = request.intent_tokens or []
         exc = request.exclude_tokens or []
