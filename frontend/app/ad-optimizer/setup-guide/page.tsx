@@ -48,7 +48,7 @@ const PLATFORM_GUIDES = {
 
 - **API 라이선스**: 영문+숫자 조합 (예: 0100000000abcd1234...)
 - **시크릿 키**: Base64 인코딩된 문자열
-- **고객 ID**: 숫자 7자리 (예: 1234567)`,
+- **고객 ID**: 숫자 6~10자리 (예: 1234567, 계정에 따라 6자리일 수 있음)`,
         tips: ['시크릿 키는 한 번만 표시되므로 반드시 저장', 'API 라이선스와 시크릿 키 모두 필요']
       },
       {
@@ -63,7 +63,7 @@ const PLATFORM_GUIDES = {
       }
     ],
     requiredFields: [
-      { name: 'customer_id', label: '고객 ID', placeholder: '1234567', helpText: '광고 계정의 고객 ID (숫자 7자리)' },
+      { name: 'customer_id', label: '고객 ID', placeholder: '1234567', helpText: '광고 계정의 고객 ID (숫자 6~10자리)' },
       { name: 'api_license', label: 'API 라이선스', placeholder: '0100000000...', helpText: 'API 사용 관리에서 확인' },
       { name: 'secret_key', label: '시크릿 키', placeholder: 'AQAAAAA...', helpText: '최초 발급 시에만 확인 가능' }
     ],

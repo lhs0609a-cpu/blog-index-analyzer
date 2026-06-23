@@ -98,7 +98,7 @@ const TROUBLESHOOT_DATA: Record<number, TroubleshootItem[]> = {
   ],
   7: [
     { symptom: '"인증 실패" 오류가 나와요', solution: 'API 키와 비밀키가 같은 라이선스에서 발급된 것인지 확인하세요. 앞뒤 공백 없이 정확히 입력해야 합니다.', severity: 'critical' },
-    { symptom: '고객 ID 오류가 나와요', solution: '고객 ID는 정확히 숫자 7자리입니다. 광고시스템 좌상단에서 확인하세요.', severity: 'warning' },
+    { symptom: '고객 ID 오류가 나와요', solution: '고객 ID는 숫자 6~10자리입니다(계정에 따라 6자리·7자리 등 다름). 광고시스템 좌상단에서 확인하세요.', severity: 'warning' },
     { symptom: '서버 연결 오류가 나와요', solution: '인터넷 연결을 확인하고, 잠시 후 다시 시도해보세요.', severity: 'warning' },
   ],
   8: [],
@@ -533,7 +533,7 @@ export default function AccountSetupWizard({ userId, onComplete, onStartAutoOpti
   ) => {
     e.preventDefault()
     const pasted = e.clipboardData.getData('text').replace(/\s/g, '')
-    const value = field === 'customer_id' ? pasted.replace(/\D/g, '').slice(0, 7) : pasted
+    const value = field === 'customer_id' ? pasted.replace(/\D/g, '').slice(0, 10) : pasted
     setConnectForm(prev => ({ ...prev, [field]: value }))
     toast.success('붙여넣기 완료! (공백 자동 제거됨)', { duration: 2000, icon: '📋' })
   }
@@ -1332,7 +1332,7 @@ function Step7({
   onBack: () => void
   handlePaste: (field: 'customer_id' | 'api_key' | 'secret_key', e: ClipboardEvent<HTMLInputElement>) => void
 }) {
-  const customerIdValid = /^\d{7}$/.test(connectForm.customer_id)
+  const customerIdValid = /^\d{6,10}$/.test(connectForm.customer_id)
   const apiKeyValid = connectForm.api_key.length > 0 && connectForm.api_key.startsWith('0100')
   const apiKeyFilled = connectForm.api_key.length > 0
   const secretKeyFilled = connectForm.secret_key.length >= 20
@@ -1369,17 +1369,17 @@ function Step7({
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
                 <span className="w-5 h-5 bg-blue-100 text-blue-700 rounded flex items-center justify-center text-xs font-bold">1</span>
                 고객 ID (Customer ID) *
-                <span className="text-xs text-gray-400 ml-auto">정확히 7자리 숫자</span>
+                <span className="text-xs text-gray-400 ml-auto">숫자 6~10자리</span>
               </label>
               <input
                 type="text"
                 value={connectForm.customer_id}
                 onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, '').slice(0, 7)
+                  const val = e.target.value.replace(/\D/g, '').slice(0, 10)
                   setConnectForm({ ...connectForm, customer_id: val })
                 }}
                 onPaste={(e) => handlePaste('customer_id', e)}
-                placeholder="예: 1234567"
+                placeholder="예: 1234567 또는 441986"
                 className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all ${
                   connectForm.customer_id
                     ? customerIdValid
@@ -1389,7 +1389,7 @@ function Step7({
                 }`}
               />
               {connectForm.customer_id && !customerIdValid && (
-                <p className="text-xs text-red-500 mt-1">정확히 7자리 숫자를 입력하세요</p>
+                <p className="text-xs text-red-500 mt-1">숫자 6~10자리를 입력하세요</p>
               )}
               {customerIdValid && (
                 <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
