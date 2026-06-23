@@ -5498,6 +5498,115 @@ async def keyword_pool_bulk_pause_offdomain(
             "message": f"{len(sel)}개 {verb} 백그라운드 시작 (bulk userLock 100/콜, 로그 확인)"}
 
 
+class KeepVolumeAuditRequest(BaseModel):
+    loan_tokens: List[str] = Field(..., description="금융/대출 토큰. keep=이 중 1+ 포함")
+    domain_tokens: List[str] = Field(..., description="도메인(의료 등) 토큰. keep=이 중 1+ 포함")
+    min_volume: int = Field(1, description="실검색량 하한. monthly_total >= 이 값이면 '검색량 있음'")
+    check_live: bool = Field(True, description="true: 네이버에서 adgroup별 keyword 조회해 userLock(on/off) 실측")
+    max_groups: int = Field(2000, description="실측 시 조회할 adgroup 상한(안전)")
+
+
+@router.post("/keyword-pool/registered/keep-volume-audit")
+async def keyword_pool_keep_volume_audit(
+    request: KeepVolumeAuditRequest,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """keep(loan AND domain) 키워드 중 **실검색량 보유 + 현재 ON** 개수 집계.
+    검색량=naverad_keyword_pool.monthly_total, ON=네이버 userLock=false(실측, check_live)."""
+    import sqlite3 as _sq
+    from services.naver_ad_service import NaverAdApiClient
+    from database.registered_keywords_db import get_registered_keywords_db
+    from database.keyword_pool_db import get_keyword_pool_db
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+    loan = [t for t in (request.loan_tokens or []) if t and t.strip()]
+    dom = [t for t in (request.domain_tokens or []) if t and t.strip()]
+    if not loan or not dom:
+        raise HTTPException(status_code=400, detail="loan_tokens 와 domain_tokens 둘 다 필요")
+
+    reg = get_registered_keywords_db()
+    with _sq.connect(reg.db_path, timeout=30.0) as conn:
+        rows = conn.execute(
+            "SELECT keyword, ncc_keyword_id, ad_group_id FROM registered_keywords "
+            "WHERE account_customer_id=? AND ncc_keyword_id IS NOT NULL AND ad_group_id IS NOT NULL "
+            "AND removed_at IS NULL",
+            (cid,),
+        ).fetchall()
+
+    def _is_keep(kw: str) -> bool:
+        t = (kw or "").replace(" ", "")
+        return any(l in t for l in loan) and any(d in t for d in dom)
+
+    keep = [(kw, nid, gid) for kw, nid, gid in rows if _is_keep(kw)]
+
+    # 검색량 — pool 테이블에서 keep 키워드 monthly_total 로드
+    pool = get_keyword_pool_db()
+    vol = {}
+    keep_kws = list({kw for kw, _, _ in keep})
+    with _sq.connect(pool.db_path, timeout=30.0) as conn:
+        for i in range(0, len(keep_kws), 500):
+            chunk = keep_kws[i:i + 500]
+            ph = ",".join("?" * len(chunk))
+            for kw, mt in conn.execute(
+                f"SELECT keyword, monthly_total FROM naverad_keyword_pool "
+                f"WHERE account_customer_id=? AND keyword IN ({ph})",
+                [cid, *chunk],
+            ).fetchall():
+                vol[kw] = mt or 0
+
+    keep_total = len(keep)
+    keep_with_vol = sum(1 for kw, _, _ in keep if vol.get(kw, 0) >= request.min_volume)
+    no_vol_data = sum(1 for kw, _, _ in keep if kw not in vol)
+
+    result = {
+        "success": True, "customer_id": cid,
+        "keep_total": keep_total,
+        "keep_with_volume": keep_with_vol,
+        "min_volume": request.min_volume,
+        "keep_no_pool_volume_data": no_vol_data,
+        "live_checked": False,
+    }
+
+    if request.check_live:
+        client = NaverAdApiClient()
+        client.customer_id = account["customer_id"]; client.api_key = account["api_key"]; client.secret_key = account["secret_key"]
+        groups = list({gid for _, _, gid in keep})[: request.max_groups]
+        lock_by_id = {}
+        scanned = 0; gerr = 0
+        for gid in groups:
+            try:
+                kws = await client.get_keywords(ad_group_id=gid)
+                for k in (kws or []):
+                    nid = k.get("nccKeywordId")
+                    if nid:
+                        lock_by_id[nid] = bool(k.get("userLock"))
+                scanned += 1
+            except Exception:
+                gerr += 1
+            await asyncio.sleep(0.05)
+        keep_on = 0; keep_on_vol = 0; unknown = 0
+        for kw, nid, _ in keep:
+            st = lock_by_id.get(nid)
+            if st is None:
+                unknown += 1; continue
+            if st is False:  # userLock=false → ON
+                keep_on += 1
+                if vol.get(kw, 0) >= request.min_volume:
+                    keep_on_vol += 1
+        result.update({
+            "live_checked": True,
+            "groups_total": len({gid for _, _, gid in keep}),
+            "groups_scanned": scanned, "groups_error": gerr,
+            "keep_on": keep_on,
+            "keep_on_with_volume": keep_on_vol,
+            "keep_status_unknown": unknown,
+        })
+    return result
+
+
 class BulkRankBidRequest(BaseModel):
     """키워드별 중요도 점수 → 개별 PC 목표순위 → 순위별 estimate 입찰. 가중치는 옵션(기본값 내장)."""
     geo_top: List[str] = Field(default_factory=list, description="최상위 지역(강남권). 비우면 기본")
