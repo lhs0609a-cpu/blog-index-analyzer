@@ -5526,9 +5526,10 @@ async def keyword_pool_off_domain_cleanup(
 class BulkPauseOffdomainRequest(BaseModel):
     loan_tokens: List[str] = Field(..., description="금융/대출 토큰. keep 후보는 이 중 하나 이상 포함해야 함")
     domain_tokens: List[str] = Field(..., description="의료/소상공인 주체 토큰. keep 후보는 이 중 하나 이상 포함해야 함")
+    exclude_tokens: List[str] = Field(default_factory=list, description="부정 토큰. 이 중 하나라도 포함하면 keep에서 제외(off). 소상공인/지원금(grant)/브랜드 오매칭 제거용")
     dry_run: bool = Field(True, description="true: off 대상 개수+샘플, false: 실제 bulk userLock=true")
     max_pause: int = Field(200000, description="안전 상한")
-    activate: bool = Field(False, description="true: keep(loan AND domain)을 userLock=false 로 재개(복구). 비keep은 건드리지 않음")
+    activate: bool = Field(False, description="true: keep(loan AND domain AND NOT exclude)을 userLock=false 로 재개(복구). 비keep은 건드리지 않음")
 
 
 @router.post("/keyword-pool/registered/bulk-pause-offdomain")
@@ -5550,6 +5551,7 @@ async def keyword_pool_bulk_pause_offdomain(
     cid = int(account.get("customer_id"))
     loan = [t for t in (request.loan_tokens or []) if t and t.strip()]
     dom = [t for t in (request.domain_tokens or []) if t and t.strip()]
+    excl = [t for t in (request.exclude_tokens or []) if t and t.strip()]
     if not loan or not dom:
         raise HTTPException(status_code=400, detail="loan_tokens 와 domain_tokens 둘 다 필요")
     reg = get_registered_keywords_db()
@@ -5563,6 +5565,8 @@ async def keyword_pool_bulk_pause_offdomain(
 
     def _is_keep(kw: str) -> bool:
         t = (kw or "").replace(" ", "")
+        if excl and any(x in t for x in excl):
+            return False
         return any(l in t for l in loan) and any(d in t for d in dom)
 
     if request.activate:
@@ -5612,6 +5616,7 @@ async def keyword_pool_bulk_pause_offdomain(
 class KeepVolumeAuditRequest(BaseModel):
     loan_tokens: List[str] = Field(..., description="금융/대출 토큰. keep=이 중 1+ 포함")
     domain_tokens: List[str] = Field(..., description="도메인(의료 등) 토큰. keep=이 중 1+ 포함")
+    exclude_tokens: List[str] = Field(default_factory=list, description="부정 토큰. 이 중 1+ 포함 시 keep 제외")
     min_volume: int = Field(1, description="실검색량 하한. monthly_total >= 이 값이면 '검색량 있음'")
     check_live: bool = Field(True, description="true: 네이버에서 adgroup별 keyword 조회해 userLock(on/off) 실측")
     max_groups: int = Field(2000, description="실측 시 조회할 adgroup 상한(안전)")
@@ -5636,6 +5641,7 @@ async def keyword_pool_keep_volume_audit(
     cid = int(account.get("customer_id"))
     loan = [t for t in (request.loan_tokens or []) if t and t.strip()]
     dom = [t for t in (request.domain_tokens or []) if t and t.strip()]
+    excl = [t for t in (request.exclude_tokens or []) if t and t.strip()]
     if not loan or not dom:
         raise HTTPException(status_code=400, detail="loan_tokens 와 domain_tokens 둘 다 필요")
 
@@ -5650,6 +5656,8 @@ async def keyword_pool_keep_volume_audit(
 
     def _is_keep(kw: str) -> bool:
         t = (kw or "").replace(" ", "")
+        if excl and any(x in t for x in excl):
+            return False
         return any(l in t for l in loan) and any(d in t for d in dom)
 
     keep = [(kw, nid, gid) for kw, nid, gid in rows if _is_keep(kw)]
