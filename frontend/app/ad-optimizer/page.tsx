@@ -20,6 +20,7 @@ import { useFeature } from '@/lib/features/useFeatureAccess'
 import Tutorial, { adOptimizerTutorialSteps } from '@/components/Tutorial'
 import ValueProposition from '@/components/ad-optimizer/ValueProposition'
 import AccountSetupWizard from '@/components/ad-optimizer/AccountSetupWizard'
+import QuickConnectForm from '@/components/ad-optimizer/QuickConnectForm'
 
 // 타입 정의
 interface DashboardStats {
@@ -133,6 +134,8 @@ export default function AdOptimizerPage() {
   const [activeCustomerId, setActiveCustomerId] = useState<string | null>(null)
   const [adAccount, setAdAccount] = useState<AdAccount | null>(null)
   const [showAddWizard, setShowAddWizard] = useState(false)
+  // 계정 추가 모드: 기본 'quick'(키만 바로 입력), 'tutorial'(8단계 가이드)
+  const [addMode, setAddMode] = useState<'quick' | 'tutorial'>('quick')
 
   // 효율 추적 상태
   const [efficiency, setEfficiency] = useState<EfficiencySummary | null>(null)
@@ -847,16 +850,38 @@ export default function AdOptimizerPage() {
                   <ChevronLeft className="w-4 h-4" />
                   {adAccounts.length > 0 ? '계정 목록으로 돌아가기' : '취소'}
                 </button>
-                <AccountSetupWizard
-                  userId={userId}
-                  onComplete={async () => {
-                    await loadAccounts()
-                    setShowAddWizard(false)
-                    setActiveTab('dashboard')
-                    loadDashboard()
-                  }}
-                  onStartAutoOptimization={toggleAutoOptimization}
-                />
+                {addMode === 'quick' ? (
+                  <QuickConnectForm
+                    userId={userId}
+                    onComplete={async () => {
+                      await loadAccounts()
+                      setShowAddWizard(false)
+                      setActiveTab('dashboard')
+                      loadDashboard()
+                    }}
+                    onShowTutorial={() => setAddMode('tutorial')}
+                  />
+                ) : (
+                  <div className="space-y-3">
+                    <button
+                      onClick={() => setAddMode('quick')}
+                      className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      빠른 연동으로 돌아가기
+                    </button>
+                    <AccountSetupWizard
+                      userId={userId}
+                      onComplete={async () => {
+                        await loadAccounts()
+                        setShowAddWizard(false)
+                        setActiveTab('dashboard')
+                        loadDashboard()
+                      }}
+                      onStartAutoOptimization={toggleAutoOptimization}
+                    />
+                  </div>
+                )}
               </div>
             ) : (
               <>
@@ -958,7 +983,7 @@ export default function AdOptimizerPage() {
 
                 {/* 새 계정 추가 버튼 */}
                 <button
-                  onClick={() => setShowAddWizard(true)}
+                  onClick={() => { setAddMode('quick'); setShowAddWizard(true) }}
                   className="w-full py-4 rounded-2xl border-2 border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50 text-gray-600 hover:text-blue-700 font-medium transition-all flex items-center justify-center gap-2"
                 >
                   <Plus className="w-5 h-5" />
