@@ -41,6 +41,7 @@ class BulkJobConfig:
     campaign_tp: str = "WEB_SITE"
     reuse_campaign_id: Optional[str] = None  # 있으면 그 캠페인 재사용, 광고그룹만 새로 생성
     start_ad_group_index: int = 0           # 광고그룹 이름 인덱스 시작점 (재사용 시 충돌 방지)
+    descriptive_group_names: bool = False   # True면 광고그룹명에 청크 대표 키워드 기재 (한글 테마 등록용)
 
 
 class BulkUploadOrchestrator:
@@ -410,7 +411,14 @@ class BulkUploadOrchestrator:
                 campaign_id = created_campaigns[c_idx]
                 # 광고그룹 이름 — reuse 시 인덱스 시작점 + epoch suffix로 중복 방지
                 base_grp_idx = g_idx + 1 + config.start_ad_group_index
-                if config.reuse_campaign_id:
+                if config.descriptive_group_names:
+                    # 한글 테마 등록 — 그룹명에 청크 대표 키워드(가장 짧은=핵심 3개) 기재.
+                    _reps = "·".join(sorted(set(chunk), key=len)[:3])
+                    ad_group_name = f"{_reps}_{base_grp_idx:04d}"
+                    if config.reuse_campaign_id:
+                        ad_group_name = f"{ad_group_name}_{run_suffix}"
+                    ad_group_name = ad_group_name[:60]  # 네이버 광고그룹명 길이 제한 대비
+                elif config.reuse_campaign_id:
                     ad_group_name = f"{config.campaign_prefix}_grp_{base_grp_idx:04d}_{run_suffix}"
                 else:
                     ad_group_name = f"{config.campaign_prefix}_grp_{base_grp_idx:04d}"

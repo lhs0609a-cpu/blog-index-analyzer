@@ -4437,6 +4437,59 @@ def _classify_medical(keyword: str) -> bool:
     return any(t in kw for t in _MEDICAL_TOKENS)
 
 
+# ── 피부과 테마 분류 (한글 캠페인 등록용) ──────────────────────────────
+# 등록 시 키워드를 테마별 한글 캠페인 '[피부]<라벨>'으로 라우팅. customer 스코프됨.
+_SKIN_CAT_CUSTOMERS = {4422132}  # 리베리의원 — 테마 등록 + 화장품 허용 적용 대상
+# 화장품 키워드 허용 — register 하드게이트 _NEG_TOKENS 에서 이 토큰들만 (스코프된 계정 한정) 컷 해제.
+_COSMETIC_ALLOW_TOKENS = {"화장품", "향수", "립스틱", "컨실러", "쿠션", "파운데이션", "비비크림", "마스카라"}
+# (key, 한글라벨, 매칭토큰) — 우선순위 순. 위에서부터 첫 매칭 카테고리로 분류.
+_SKIN_CATEGORIES = [
+    ("질환", "피부질환", (
+        "아토피", "건선", "습진", "한포진", "두드러기", "백반증", "대상포진", "포진", "헤르페스",
+        "무좀", "백선", "완선", "어루러기", "진균", "조갑", "사마귀", "농가진", "모낭염", "봉와직염",
+        "한선염", "다한증", "액취증", "비립종", "쥐젖", "한관종", "켈로이드", "모공각화", "어린선",
+        "소양증", "주사피부염", "딸기코", "두피염", "비듬", "탈모", "피부염", "피부질환", "피부병",
+        "발진", "티눈", "지방종", "결절종", "표피낭종",
+    )),
+    ("주사", "주사·수액·부스터", (
+        "주사", "수액", "리쥬란", "쥬베룩", "스킨부스터", "물광", "연어", "백옥", "글루타치온", "태반",
+        "비타민", "엑소좀", "nctf", "필러", "윤곽주사", "스컬트라", "콜라겐주사", "부스터", "앰플",
+    )),
+    ("리프팅", "리프팅·탄력", (
+        "울쎄라", "써마지", "슈링크", "인모드", "올리지오", "볼뉴머", "덴서티", "소프웨이브", "온다",
+        "리프테라", "튠", "리프팅", "탄력", "처짐", "거상", "실리프팅", "민트실", "고주파", "초음파",
+        "hifu", "이중턱", "브이라인",
+    )),
+    ("색소", "색소·기미·미백", (
+        "기미", "잡티", "주근깨", "검버섯", "색소", "미백", "토닝", "피코", "점빼기", "점제거",
+        "멜라닌", "흑자", "ipl", "잡티제거",
+    )),
+    ("여드름", "여드름·트러블", (
+        "여드름", "트러블", "피지", "화농", "좁쌀", "압출", "아그네스", "pdt", "여드름흉터", "여드름자국",
+    )),
+    ("모공흉터", "모공·흉터", (
+        "모공", "흉터", "프락셀", "포텐자", "co2", "크로스", "서브시전", "패인", "피부결",
+    )),
+    ("주름", "주름·안티에이징", (
+        "주름", "팔자", "눈가", "이마", "미간", "보톡스", "안티에이징", "동안",
+    )),
+    ("화장품", "화장품·성분", (
+        "화장품", "세럼", "에센스", "크림", "로션", "토너", "클렌징", "클렌저", "선크림", "마스크팩",
+        "더마코스메틱", "코스메슈티컬", "스킨케어", "히알루론산", "세라마이드", "나이아신아마이드",
+        "레티놀", "판테놀", "마데카", "시카", "펩타이드", "성분",
+    )),
+]
+
+
+def _classify_skin_category(keyword: str):
+    """키워드 → (key, 한글라벨). 매칭 없으면 ('기타', '기타피부')."""
+    kw = (keyword or "").replace(" ", "")
+    for key, label, toks in _SKIN_CATEGORIES:
+        if any(t in kw for t in toks):
+            return key, label
+    return "기타", "기타피부"
+
+
 async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch: int = 3000, bid: Optional[int] = None):
     """등록 1회 — pending → orchestrator로 일괄.
     customer_id 명시 시 그 광고주만 처리, 없으면 사용자의 가장 최근 광고주.
@@ -4521,6 +4574,9 @@ async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch:
                 "유산균", "젤리", "홍삼", "영양제", "비타민제", "콜라겐젤리", "오메가3", "프로틴",
                 "노트북", "휴대폰", "에어컨", "냉장고", "세탁기", "청소기", "공기청정기",
             )
+            # 화장품 허용 계정(피부과 등)은 화장품 관련 토큰 컷 해제 — 도메인 게이트(relevance)로만 판정.
+            if customer_id in _SKIN_CAT_CUSTOMERS:
+                _NEG_TOKENS = tuple(t for t in _NEG_TOKENS if t not in _COSMETIC_ALLOW_TOKENS)
             for _p in pending:
                 _kw = _p["keyword"] or ""
                 _kwc = _kw.replace(" ", "")
@@ -4587,7 +4643,61 @@ async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch:
     except Exception:
         pass
 
-    if category_mode:
+    if customer_id in _SKIN_CAT_CUSTOMERS:
+        # ── 피부 테마별 한글 캠페인 등록 — '[피부]<라벨>' 캠페인(재사용) + 그룹명에 대표 키워드 ──
+        result = {"success": True, "campaign_ids": []}
+        _skin_budget = 10000
+        try:
+            _skin_budget = int(_profcs.get("daily_budget") or 10000)
+        except Exception:
+            pass
+        # 키워드를 테마별로 분류 (분류 순서는 _SKIN_CATEGORIES 우선순위)
+        _buckets: Dict[str, List[str]] = {}
+        _labels: Dict[str, str] = {}
+        for _kw in keywords:
+            _key, _lab = _classify_skin_category(_kw)
+            _buckets.setdefault(_key, []).append(_kw)
+            _labels[_key] = _lab
+        for _key, _kws in _buckets.items():
+            if not _kws:
+                continue
+            _label = _labels[_key]
+            _campname = f"[피부]{_label}"
+            _new_grp = (len(_kws) + 999) // 1000
+            _st = pool.get_active_pool_campaign_cat(customer_id, _key)
+            _reuse = None; _sidx = 0
+            if _st and _st.get("ad_groups_count", 0) + _new_grp <= AD_GROUPS_PER_POOL_CAMPAIGN:
+                _reuse = _st["campaign_id"]; _sidx = _st["ad_groups_count"]
+            _jid = create_bulk_upload_job(
+                user_id=uid, filename=f"pool_skin_{_key}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                campaign_prefix=_campname, keywords_per_group=1000, bid=bid,
+                daily_budget=_skin_budget, total_keywords=len(_kws),
+            )
+            _cfg = BulkJobConfig(
+                job_id=_jid, user_id=uid, campaign_prefix=_campname, keywords_per_group=1000,
+                bid=bid, daily_budget=_skin_budget, campaign_tp="WEB_SITE",
+                reuse_campaign_id=_reuse, start_ad_group_index=_sidx,
+                descriptive_group_names=True,
+            )
+            try:
+                _r = await BulkUploadOrchestrator(client).run(_cfg, _kws)
+            except Exception as e:
+                logger.error(f"[pool/register-skin] {_campname} orchestrator 실패: {e}", exc_info=True)
+                result["success"] = False; result["error"] = f"{type(e).__name__}: {str(e)[:160]}"
+                continue
+            _cids = _r.get("campaign_ids") or []
+            result["campaign_ids"].extend(_cids)
+            if not _r.get("success"):
+                result["success"] = False; result["error"] = _r.get("error")
+            try:
+                if _reuse:
+                    pool.set_active_pool_campaign_cat(customer_id, _key, _reuse, _sidx + _new_grp)
+                elif _cids:
+                    pool.set_active_pool_campaign_cat(customer_id, _key, _cids[0], _new_grp)
+            except Exception as e:
+                logger.warning(f"[pool/register-skin] {_campname} cat-state 갱신 실패: {e}")
+            logger.warning(f"[pool/register-skin] {_campname} {len(_kws)}개 (budget {_skin_budget}, reuse={bool(_reuse)})")
+    elif category_mode:
         # ── 의료/비의료 분리 등록 — 각 카테고리별 한글 캠페인(재사용) + 차등 예산 ──
         result = {"success": True, "campaign_ids": []}
         med_kws = [k for k in keywords if _classify_medical(k)]
@@ -4674,8 +4784,9 @@ async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch:
     existing_after = set(reg.get_existing_set(customer_id, keywords) or set())
     new_in_naver = existing_after - existing_before  # 진짜 신규 등록
 
-    # 풀 state 업데이트 — 캠페인 재사용 또는 새 캠페인 등록 (category_mode 는 위에서 cat-state 갱신 완료)
-    if not category_mode:
+    # 풀 state 업데이트 — 캠페인 재사용 또는 새 캠페인 등록
+    # (category_mode / 피부 테마 모드는 위에서 cat-state 갱신 완료 → 비-cat state 갱신 skip)
+    if not category_mode and customer_id not in _SKIN_CAT_CUSTOMERS:
         try:
             result_campaign_ids = result.get("campaign_ids") or []
             ad_groups_in_round = (len(keywords) + 999) // 1000
@@ -5504,6 +5615,7 @@ class KeepVolumeAuditRequest(BaseModel):
     min_volume: int = Field(1, description="실검색량 하한. monthly_total >= 이 값이면 '검색량 있음'")
     check_live: bool = Field(True, description="true: 네이버에서 adgroup별 keyword 조회해 userLock(on/off) 실측")
     max_groups: int = Field(2000, description="실측 시 조회할 adgroup 상한(안전)")
+    include_keywords: bool = Field(False, description="true: keep_on_with_volume(또는 check_live=false면 keep_with_volume) 키워드 목록을 [{keyword, monthly_total}]로 반환")
 
 
 @router.post("/keyword-pool/registered/keep-volume-audit")
@@ -5570,6 +5682,12 @@ async def keyword_pool_keep_volume_audit(
         "live_checked": False,
     }
 
+    if request.include_keywords and not request.check_live:
+        lst = [{"keyword": kw, "monthly_total": vol.get(kw, 0)}
+               for kw, _, _ in keep if vol.get(kw, 0) >= request.min_volume]
+        lst.sort(key=lambda x: x["monthly_total"], reverse=True)
+        result["keywords"] = lst
+
     if request.check_live:
         client = NaverAdApiClient()
         client.customer_id = account["customer_id"]; client.api_key = account["api_key"]; client.secret_key = account["secret_key"]
@@ -5588,6 +5706,7 @@ async def keyword_pool_keep_volume_audit(
                 gerr += 1
             await asyncio.sleep(0.05)
         keep_on = 0; keep_on_vol = 0; unknown = 0
+        on_vol_list = []
         for kw, nid, _ in keep:
             st = lock_by_id.get(nid)
             if st is None:
@@ -5596,6 +5715,8 @@ async def keyword_pool_keep_volume_audit(
                 keep_on += 1
                 if vol.get(kw, 0) >= request.min_volume:
                     keep_on_vol += 1
+                    if request.include_keywords:
+                        on_vol_list.append({"keyword": kw, "monthly_total": vol.get(kw, 0)})
         result.update({
             "live_checked": True,
             "groups_total": len({gid for _, _, gid in keep}),
@@ -5604,6 +5725,9 @@ async def keyword_pool_keep_volume_audit(
             "keep_on_with_volume": keep_on_vol,
             "keep_status_unknown": unknown,
         })
+        if request.include_keywords:
+            on_vol_list.sort(key=lambda x: x["monthly_total"], reverse=True)
+            result["keywords"] = on_vol_list
     return result
 
 
