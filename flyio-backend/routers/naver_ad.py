@@ -4490,6 +4490,61 @@ def _classify_skin_category(keyword: str):
     return "기타", "기타피부"
 
 
+# ── 두비전(DOVISION) 테마 분류 — 창의융합 뇌교육/아동 사고력 교육 프랜차이즈 ──────
+# 등록 시 키워드를 테마별 한글 캠페인 '[두비전]<라벨>'으로 라우팅. customer 스코프됨.
+# (key, 한글라벨, 매칭토큰) — 우선순위 순. 위에서부터 첫 매칭 카테고리로 분류.
+# 가맹·창업 의도를 최상단에 둬 "유아교육창업" 류가 주제 캠페인 대신 가맹으로 모이게 함.
+_DOVISION_CAT_CUSTOMERS = {4403292}  # 두비전 — 테마 등록 + 교육토큰 허용 적용 대상
+# 교육 도메인 키워드 허용 — register 하드게이트 _NEG_TOKENS 에서 이 토큰들만 (스코프 계정 한정)
+# 컷 해제. 교육업이라 학원/과외/강의/인강 이 핵심 도메인인데 기본 게이트는 이를 상업 컷으로 막음.
+_DOVISION_ALLOW_TOKENS = {"학원", "과외", "강의", "인강"}
+_DOVISION_CATEGORIES = [
+    ("가맹", "가맹·창업모집", (
+        # 창업·사업 의도가 명시된 토큰만 — bare '공부방/교습소'(B2C 학부모 검색)는 주제 캠페인으로.
+        "창업", "가맹", "프랜차이즈", "가맹점", "개원", "개설", "부업", "투잡", "재택",
+        "사업설명", "창업비용", "창업아이템", "분점", "지사", "방문교사", "교사모집",
+        "선생님모집", "원장모집", "창업박람회", "교육사업", "공부방창업", "교습소창업",
+    )),
+    ("두뇌", "두뇌개발·뇌교육", (
+        "뇌교육", "두뇌", "두뇌개발", "두뇌계발", "우뇌", "좌뇌", "전두엽", "브레인",
+        "두뇌훈련", "두뇌트레이닝", "집중력", "기억력", "뇌발달", "워킹메모리", "메타인지",
+    )),
+    ("사고력", "사고력·창의력", (
+        "사고력", "창의력", "창의", "논리", "추론", "문제해결", "융합", "스팀", "steam",
+        "창의융합", "논리력", "창의사고", "사고력향상",
+    )),
+    ("수학", "수학교육", (
+        "수학", "연산", "도형", "구구단", "교구수학", "창의수학", "사고력수학", "셈",
+        "수감각", "단위", "분수", "심화수학", "경시", "올림피아드", "가베", "오르다",
+    )),
+    ("독서논술", "독서·논술·글쓰기", (
+        "독서", "논술", "글쓰기", "독해", "어휘", "한자", "책읽기", "문해력", "작문",
+        "토론", "스피치", "발표력",
+    )),
+    ("코딩", "코딩·SW·로봇", (
+        "코딩", "소프트웨어", "sw교육", "로봇", "알고리즘", "파이썬", "스크래치",
+        "엔트리", "코딩교육", "ai교육", "인공지능교육",
+    )),
+    ("유아", "유아교육", (
+        "유아", "유치원", "어린이집", "누리", "5세", "6세", "7세", "영유아", "키즈",
+        "프리스쿨", "오감", "한글떼기", "유아교육", "유아학습",
+    )),
+    ("초등", "초등교육", (
+        "초등", "초등학교", "1학년", "2학년", "3학년", "4학년", "5학년", "6학년",
+        "저학년", "고학년", "초1", "초2", "초3", "초4", "초5", "초6", "예비초등", "학습지",
+    )),
+]
+
+
+def _classify_dovision_category(keyword: str):
+    """키워드 → (key, 한글라벨). 매칭 없으면 ('교육일반', '교육일반')."""
+    kw = (keyword or "").replace(" ", "").lower()
+    for key, label, toks in _DOVISION_CATEGORIES:
+        if any(t.lower() in kw for t in toks):
+            return key, label
+    return "교육일반", "교육일반"
+
+
 async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch: int = 3000, bid: Optional[int] = None):
     """등록 1회 — pending → orchestrator로 일괄.
     customer_id 명시 시 그 광고주만 처리, 없으면 사용자의 가장 최근 광고주.
@@ -4577,6 +4632,9 @@ async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch:
             # 화장품 허용 계정(피부과 등)은 화장품 관련 토큰 컷 해제 — 도메인 게이트(relevance)로만 판정.
             if customer_id in _SKIN_CAT_CUSTOMERS:
                 _NEG_TOKENS = tuple(t for t in _NEG_TOKENS if t not in _COSMETIC_ALLOW_TOKENS)
+            # 교육 광고주(두비전)는 학원/과외/강의/인강 이 핵심 도메인 — 상업 컷 해제.
+            elif customer_id in _DOVISION_CAT_CUSTOMERS:
+                _NEG_TOKENS = tuple(t for t in _NEG_TOKENS if t not in _DOVISION_ALLOW_TOKENS)
             for _p in pending:
                 _kw = _p["keyword"] or ""
                 _kwc = _kw.replace(" ", "")
@@ -4697,6 +4755,59 @@ async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch:
             except Exception as e:
                 logger.warning(f"[pool/register-skin] {_campname} cat-state 갱신 실패: {e}")
             logger.warning(f"[pool/register-skin] {_campname} {len(_kws)}개 (budget {_skin_budget}, reuse={bool(_reuse)})")
+    elif customer_id in _DOVISION_CAT_CUSTOMERS:
+        # ── 두비전 테마별 한글 캠페인 등록 — '[두비전]<라벨>' 캠페인(재사용) + 대표 키워드 그룹명 ──
+        result = {"success": True, "campaign_ids": []}
+        _dovi_budget = 10000
+        try:
+            _dovi_budget = int(_profcs.get("daily_budget") or 10000)
+        except Exception:
+            pass
+        _buckets: Dict[str, List[str]] = {}
+        _labels: Dict[str, str] = {}
+        for _kw in keywords:
+            _key, _lab = _classify_dovision_category(_kw)
+            _buckets.setdefault(_key, []).append(_kw)
+            _labels[_key] = _lab
+        for _key, _kws in _buckets.items():
+            if not _kws:
+                continue
+            _label = _labels[_key]
+            _campname = f"[두비전]{_label}"
+            _new_grp = (len(_kws) + 999) // 1000
+            _st = pool.get_active_pool_campaign_cat(customer_id, _key)
+            _reuse = None; _sidx = 0
+            if _st and _st.get("ad_groups_count", 0) + _new_grp <= AD_GROUPS_PER_POOL_CAMPAIGN:
+                _reuse = _st["campaign_id"]; _sidx = _st["ad_groups_count"]
+            _jid = create_bulk_upload_job(
+                user_id=uid, filename=f"pool_dovi_{_key}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                campaign_prefix=_campname, keywords_per_group=1000, bid=bid,
+                daily_budget=_dovi_budget, total_keywords=len(_kws),
+            )
+            _cfg = BulkJobConfig(
+                job_id=_jid, user_id=uid, campaign_prefix=_campname, keywords_per_group=1000,
+                bid=bid, daily_budget=_dovi_budget, campaign_tp="WEB_SITE",
+                reuse_campaign_id=_reuse, start_ad_group_index=_sidx,
+                descriptive_group_names=True,
+            )
+            try:
+                _r = await BulkUploadOrchestrator(client).run(_cfg, _kws)
+            except Exception as e:
+                logger.error(f"[pool/register-dovi] {_campname} orchestrator 실패: {e}", exc_info=True)
+                result["success"] = False; result["error"] = f"{type(e).__name__}: {str(e)[:160]}"
+                continue
+            _cids = _r.get("campaign_ids") or []
+            result["campaign_ids"].extend(_cids)
+            if not _r.get("success"):
+                result["success"] = False; result["error"] = _r.get("error")
+            try:
+                if _reuse:
+                    pool.set_active_pool_campaign_cat(customer_id, _key, _reuse, _sidx + _new_grp)
+                elif _cids:
+                    pool.set_active_pool_campaign_cat(customer_id, _key, _cids[0], _new_grp)
+            except Exception as e:
+                logger.warning(f"[pool/register-dovi] {_campname} cat-state 갱신 실패: {e}")
+            logger.warning(f"[pool/register-dovi] {_campname} {len(_kws)}개 (budget {_dovi_budget}, reuse={bool(_reuse)})")
     elif category_mode:
         # ── 의료/비의료 분리 등록 — 각 카테고리별 한글 캠페인(재사용) + 차등 예산 ──
         result = {"success": True, "campaign_ids": []}
@@ -4786,7 +4897,7 @@ async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch:
 
     # 풀 state 업데이트 — 캠페인 재사용 또는 새 캠페인 등록
     # (category_mode / 피부 테마 모드는 위에서 cat-state 갱신 완료 → 비-cat state 갱신 skip)
-    if not category_mode and customer_id not in _SKIN_CAT_CUSTOMERS:
+    if not category_mode and customer_id not in _SKIN_CAT_CUSTOMERS and customer_id not in _DOVISION_CAT_CUSTOMERS:
         try:
             result_campaign_ids = result.get("campaign_ids") or []
             ad_groups_in_round = (len(keywords) + 999) // 1000
@@ -9701,6 +9812,128 @@ async def keyword_pool_rebuild_from_naver(
         "pulled": len(rows),
         "new_active": new_active,
     }
+
+
+# 큰 계정용 백그라운드 rebuild 진행상태 (cid -> 상태dict). 워커 1개 가정.
+_REBUILD_BG_STATUS: Dict[int, dict] = {}
+
+
+@router.post("/keyword-pool/admin/rebuild-from-naver-bg")
+async def keyword_pool_rebuild_from_naver_bg(
+    background_tasks: BackgroundTasks,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """rebuild-from-naver 의 **백그라운드** 버전. 큰 계정(메디론 등)은 동기 호출이
+    오래 걸려 클라 disconnect → Starlette 가 핸들러 취소 → UPSERT 안 됨. 이 버전은
+    즉시 반환하고 백그라운드로 campaigns→adgroups→keywords pull 후 UPSERT(removed_at 클리어).
+    진행상태: GET .../rebuild-from-naver-bg/status?customer_id= . UPSERT 라 여러 번 안전."""
+    import sqlite3 as _sqlite3
+    from services.naver_ad_service import NaverAdApiClient
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+    _REBUILD_BG_STATUS[cid] = {"state": "running", "campaigns": 0, "ad_groups": 0,
+                              "pulled": 0, "new_active": None, "error": None}
+
+    async def _do():
+        st = _REBUILD_BG_STATUS[cid]
+        try:
+            client = NaverAdApiClient()
+            client.customer_id = account["customer_id"]
+            client.api_key = account["api_key"]
+            client.secret_key = account["secret_key"]
+            campaigns = await client.get_campaigns()
+            live_campaigns = [c for c in (campaigns or []) if c.get("nccCampaignId")]
+            st["campaigns"] = len(live_campaigns)
+            if not live_campaigns:
+                st["state"] = "error"; st["error"] = "campaigns empty"; return
+            sem = asyncio.Semaphore(8)
+
+            async def _fg(camp_id: str):
+                async with sem:
+                    try:
+                        ags = await client.get_ad_groups(campaign_id=camp_id) or []
+                        return [ag.get("nccAdgroupId") for ag in ags if ag.get("nccAdgroupId")]
+                    except Exception:
+                        return []
+
+            ag_lists = await asyncio.gather(*[_fg(c["nccCampaignId"]) for c in live_campaigns])
+            ag_to_camp: Dict[str, str] = {}
+            for c, ags in zip(live_campaigns, ag_lists):
+                for ag in ags:
+                    ag_to_camp[ag] = c["nccCampaignId"]
+            st["ad_groups"] = len(ag_to_camp)
+            if not ag_to_camp:
+                st["state"] = "error"; st["error"] = "ad_groups empty"; return
+
+            async def _fk(ag_id: str):
+                async with sem:
+                    try:
+                        return ag_id, (await client.get_keywords(ad_group_id=ag_id) or [])
+                    except Exception:
+                        return ag_id, []
+
+            kw_results = await asyncio.gather(*[_fk(a) for a in ag_to_camp.keys()])
+            rows = []
+            for ag_id, kws in kw_results:
+                camp_id = ag_to_camp.get(ag_id)
+                for kw in kws:
+                    text = (kw.get("keyword") or "").strip()
+                    if not text:
+                        continue
+                    rows.append((text, ag_id, camp_id, kw.get("bidAmt"), kw.get("nccKeywordId")))
+            st["pulled"] = len(rows)
+            if not rows:
+                st["state"] = "error"; st["error"] = "0 keywords pulled"; return
+            reg = get_registered_keywords_db()
+            with reg._conn() as conn:
+                cur = conn.cursor()
+                for text, ag_id, camp_id, bid, nid in rows:
+                    try:
+                        cur.execute(
+                            """INSERT INTO registered_keywords
+                               (user_id, account_customer_id, keyword, ad_group_id,
+                                campaign_id, bid_amt, ncc_keyword_id)
+                               VALUES (?, ?, ?, ?, ?, ?, ?)
+                               ON CONFLICT(account_customer_id, keyword) DO UPDATE SET
+                                 removed_at = NULL,
+                                 ad_group_id = excluded.ad_group_id,
+                                 campaign_id = excluded.campaign_id,
+                                 bid_amt = excluded.bid_amt,
+                                 ncc_keyword_id = excluded.ncc_keyword_id""",
+                            (user_id, cid, text, ag_id, camp_id, bid, nid),
+                        )
+                    except _sqlite3.Error:
+                        pass
+            st["new_active"] = int((reg.stats(cid) or {}).get("active") or 0)
+            st["state"] = "done"
+            logger.warning(
+                f"[rebuild-bg] cid={cid} campaigns={st['campaigns']} "
+                f"ad_groups={st['ad_groups']} pulled={st['pulled']} active={st['new_active']}"
+            )
+        except Exception as e:
+            st["state"] = "error"; st["error"] = f"{type(e).__name__}: {str(e)[:200]}"
+            logger.error(f"[rebuild-bg] cid={cid} 실패: {e}", exc_info=True)
+
+    background_tasks.add_task(_do)
+    return {"success": True, "started": True, "customer_id": cid,
+            "message": "백그라운드 rebuild 시작 — status 엔드포인트로 진행 확인"}
+
+
+@router.get("/keyword-pool/admin/rebuild-from-naver-bg/status")
+async def keyword_pool_rebuild_from_naver_bg_status(
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """백그라운드 rebuild 진행상태 조회."""
+    account = _resolve_account(user_id, customer_id)
+    if not account:
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+    return {"success": True, "customer_id": cid,
+            "status": _REBUILD_BG_STATUS.get(cid, {"state": "none"})}
 
 
 @router.delete("/keyword-pool/keywords/{keyword}")
