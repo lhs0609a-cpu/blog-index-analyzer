@@ -2310,17 +2310,77 @@ def calculate_post_score(p: Dict) -> Dict:
     }
 
 
+async def fetch_naver_visitor_series(blog_id: str) -> Dict:
+    """
+    네이버 공식 방문자 위젯(NVisitorgp4Ajax)에서 '실측' 일별 방문자를 가져온다.
+
+    블덱스 등 외부 지수 분석기가 "오늘 방문 / 최근 방문"을 조작 없이 보여줄 수 있는
+    이유가 바로 이 엔드포인트다. 응답은 최근 5일치 일별 방문 수만 준다 (누적 아님).
+
+        <visitorcnts>
+            <visitorcnt id="20260703" cnt="112" />
+            ...
+        </visitorcnts>
+
+    Returns:
+        {
+            "measured": bool,               # 실제로 값을 얻었는지
+            "daily": [{"date":"YYYYMMDD","count":int}, ...],  # 오래된→최신
+            "today": Optional[int],         # 가장 최신일 방문 수
+            "recent_avg": Optional[float],  # 최근 일평균 (오늘 제외 가능)
+            "source": "nvisitorgp",
+        }
+    """
+    result = {"measured": False, "daily": [], "today": None, "recent_avg": None, "source": "nvisitorgp"}
+    try:
+        client = await get_http_client()
+        url = f"https://blog.naver.com/NVisitorgp4Ajax.naver?blogId={blog_id}"
+        headers = {
+            "User-Agent": random.choice(USER_AGENTS),
+            "Referer": f"https://blog.naver.com/{blog_id}",
+            "Accept": "application/xml,text/xml,*/*;q=0.8",
+        }
+        resp = await client.get(url, headers=headers, timeout=5.0)
+        if resp.status_code != 200 or "visitorcnt" not in resp.text:
+            return result
+
+        # <visitorcnt id="20260703" cnt="112" />
+        pairs = re.findall(r'<visitorcnt\s+id="(\d{8})"\s+cnt="(\d+)"', resp.text)
+        if not pairs:
+            return result
+
+        daily = [{"date": d, "count": int(c)} for d, c in pairs]
+        daily.sort(key=lambda x: x["date"])  # 오래된→최신
+        result["daily"] = daily
+        result["measured"] = True
+        result["today"] = daily[-1]["count"]
+        # 최근 일평균: 마지막(오늘)은 진행 중일 수 있어 제외하고 평균
+        prior = [d["count"] for d in daily[:-1]] or [d["count"] for d in daily]
+        if prior:
+            result["recent_avg"] = round(sum(prior) / len(prior), 1)
+        return result
+    except Exception as e:
+        logger.debug(f"visitor series fetch failed for {blog_id}: {e}")
+        return result
+
+
 async def scrape_blog_stats_fast(blog_id: str) -> Dict:
     """
     HTTP 병렬 요청으로 블로그 통계를 빠르게 수집 (데스크톱 + 모바일 동시 요청)
     - Playwright 없이 httpx만 사용하여 병목 제거
     - 데스크톱 페이지의 <script> JSON 데이터 + 모바일 페이지 regex 추출
+    - NVisitorgp 위젯으로 '실측' 일별 방문자 동시 수집 (조작값 대체)
     """
     stats = {
         "total_posts": None,
         "neighbor_count": None,
         "total_visitors": None,
         "naver_level": None,
+        # ===== 실측 일별 방문자 (NVisitorgp) =====
+        "daily_visitors": None,      # 오늘(최신일) 실측 방문 수
+        "recent_avg_visitors": None, # 최근 일평균 실측
+        "visitor_series": None,      # [{"date","count"}, ...] 최근 5일
+        "visitor_measured": False,   # 실측 성공 여부 (조작값과 구분)
         "success": False,
         "source": "scrape_fast"
     }
@@ -2352,10 +2412,18 @@ async def scrape_blog_stats_fast(blog_id: str) -> Dict:
             except Exception:
                 return None
 
-        desktop_resp, mobile_resp = await asyncio.gather(
+        desktop_resp, mobile_resp, visitor_series = await asyncio.gather(
             fetch_page(desktop_url, desktop_headers),
             fetch_page(mobile_url, mobile_headers),
+            fetch_naver_visitor_series(blog_id),
         )
+
+        # 실측 일별 방문자 반영 (조작값과 명확히 구분)
+        if visitor_series and visitor_series.get("measured"):
+            stats["daily_visitors"] = visitor_series["today"]
+            stats["recent_avg_visitors"] = visitor_series["recent_avg"]
+            stats["visitor_series"] = visitor_series["daily"]
+            stats["visitor_measured"] = True
 
         # 비공개/존재하지 않는 블로그 감지
         for resp in [desktop_resp, mobile_resp]:
@@ -2479,10 +2547,10 @@ async def scrape_blog_stats_fast(blog_id: str) -> Dict:
                             stats["naver_level"] = level_val
                             break
 
-        # 성공 여부 판단 (최소 1개 이상 추출)
-        if stats["total_posts"] or stats["neighbor_count"] or stats["total_visitors"]:
+        # 성공 여부 판단 (최소 1개 이상 추출 — 실측 방문자 포함)
+        if stats["total_posts"] or stats["neighbor_count"] or stats["total_visitors"] or stats["visitor_measured"]:
             stats["success"] = True
-            logger.info(f"Blog scrape_fast success: {blog_id} - posts={stats['total_posts']}, neighbors={stats['neighbor_count']}, visitors={stats['total_visitors']}, naver_level={stats['naver_level']}")
+            logger.info(f"Blog scrape_fast success: {blog_id} - posts={stats['total_posts']}, neighbors={stats['neighbor_count']}, visitors={stats['total_visitors']}, daily_visitors={stats['daily_visitors']}(measured={stats['visitor_measured']}), naver_level={stats['naver_level']}")
         else:
             logger.warning(f"Blog scrape_fast: no stats found for {blog_id}")
 
@@ -2594,6 +2662,11 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
         "total_posts": None,
         "neighbor_count": None,
         "total_visitors": None,
+        # 실측 일별 방문자 (NVisitorgp) — 조작값과 구분
+        "daily_visitors": None,
+        "recent_avg_visitors": None,
+        "visitor_series": None,
+        "visitor_measured": False,
     }
 
     index = {
@@ -2668,6 +2741,13 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
                 stats["neighbor_count"] = scraped_stats["neighbor_count"]
             if scraped_stats["total_visitors"]:
                 stats["total_visitors"] = scraped_stats["total_visitors"]
+                analysis_data["cumulative_visitors_real"] = True
+            # 실측 일별 방문자 이관 (조작값보다 항상 우선)
+            if scraped_stats.get("visitor_measured"):
+                stats["daily_visitors"] = scraped_stats.get("daily_visitors")
+                stats["recent_avg_visitors"] = scraped_stats.get("recent_avg_visitors")
+                stats["visitor_series"] = scraped_stats.get("visitor_series")
+                stats["visitor_measured"] = True
             logger.info(f"Using scraped data for {blog_id}")
 
         # ===== 2단계: RSS 기반 데이터 수집 (보완/폴백) =====
@@ -2845,17 +2925,19 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
                     except Exception as e:
                         logger.warning(f"Fullparse failed for {blog_id}: {e}")
 
-                    # 이웃 수 추정 (글 수와 활동성 기반)
-                    if stats["total_posts"] and stats["total_posts"] > 100:
-                        stats["neighbor_count"] = get_consistent_value(blog_id, 200, 800, "neighbors")
-                    elif stats["total_posts"] and stats["total_posts"] > 50:
-                        stats["neighbor_count"] = get_consistent_value(blog_id, 100, 300, "neighbors")
-                    else:
-                        stats["neighbor_count"] = get_consistent_value(blog_id, 30, 150, "neighbors")
+                    # 이웃 수 추정 (글 수와 활동성 기반) — 실측값이 없을 때만 (실데이터 보존)
+                    if stats["neighbor_count"] is None:
+                        if stats["total_posts"] and stats["total_posts"] > 100:
+                            stats["neighbor_count"] = get_consistent_value(blog_id, 200, 800, "neighbors")
+                        elif stats["total_posts"] and stats["total_posts"] > 50:
+                            stats["neighbor_count"] = get_consistent_value(blog_id, 100, 300, "neighbors")
+                        else:
+                            stats["neighbor_count"] = get_consistent_value(blog_id, 30, 150, "neighbors")
 
-                    # 방문자 수 추정 (글 수 × 평균 방문)
-                    base_visitors = (stats["total_posts"] or 50) * get_consistent_value(blog_id, 500, 2000, "visitors")
-                    stats["total_visitors"] = base_visitors
+                    # 누적 방문자 추정 (글 수 × 평균 방문) — 실측값이 없을 때만 덮어쓰지 않음
+                    if stats["total_visitors"] is None:
+                        base_visitors = (stats["total_posts"] or 50) * get_consistent_value(blog_id, 500, 2000, "visitors")
+                        stats["total_visitors"] = base_visitors
 
                     logger.info(f"RSS analysis for {blog_id}: posts~{stats['total_posts']}, len={analysis_data['avg_post_length']}, cats={analysis_data['category_count']}")
                 else:
@@ -3100,8 +3182,28 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
 
         # Accuracy Score (신뢰도/정확성) - 0~100
         accuracy_score = 50  # Base
-        # 방문자 수 기반 (많은 방문 = 신뢰도 검증)
-        if stats["total_visitors"]:
+        # 우선순위 1: 실측 일별 방문자(NVisitorgp) — 조작값이 아닌 진짜 트래픽 신호
+        # 일 방문 기준 컷 (누적 아님): 1000+ 강한 활성, 10 미만 사실상 방치
+        if stats.get("visitor_measured") and stats.get("daily_visitors") is not None:
+            dv = stats.get("recent_avg_visitors") or stats["daily_visitors"]
+            if dv >= 3000:
+                accuracy_score = 95
+            elif dv >= 1000:
+                accuracy_score = 85
+            elif dv >= 500:
+                accuracy_score = 75
+            elif dv >= 200:
+                accuracy_score = 65
+            elif dv >= 100:
+                accuracy_score = 55
+            elif dv >= 30:
+                accuracy_score = 45
+            elif dv >= 10:
+                accuracy_score = 35
+            else:
+                accuracy_score = 25
+        # 우선순위 2: 스크랩된 누적 방문자(실측 HTML). 조작값(get_consistent_value)은 제외.
+        elif stats["total_visitors"] and "scrape" in analysis_data["data_sources"]:
             visitors = stats["total_visitors"]
             if visitors >= 10000000:
                 accuracy_score = 95
@@ -3119,6 +3221,7 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
                 accuracy_score = 40
             else:
                 accuracy_score = 30
+        # 그 외: 방문자 실측 불가 → 중립 50 유지 (조작값으로 점수 부풀리지 않음)
 
         # D.I.A. sub-weights — B 검증 결과(n=67) 기반 재조정
         # 측정 ρ: depth +0.022, information -0.090, accuracy -0.054 (모두 약함)
@@ -3164,7 +3267,13 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
         if stats["neighbor_count"]:
             neighbor_bonus = min(stats["neighbor_count"] / 1000, 1.0) * extra_factors.get('neighbor_count', 0.10) * 20
             extra_bonus += neighbor_bonus
-        if stats["total_visitors"]:
+        # 방문자 보너스: 실측일 때만. 조작값(get_consistent_value)으로는 점수 부풀리지 않음.
+        if stats.get("visitor_measured") and stats.get("daily_visitors") is not None:
+            # 실측 일방문 기준 (누적 100만 ≈ 일 1000 규모로 스케일)
+            dv = stats.get("recent_avg_visitors") or stats["daily_visitors"]
+            visitor_bonus = min(dv / 1000, 1.0) * extra_factors.get('visitor_count', 0.05) * 20
+            extra_bonus += visitor_bonus
+        elif stats["total_visitors"] and "scrape" in analysis_data["data_sources"]:
             visitor_bonus = min(stats["total_visitors"] / 1000000, 1.0) * extra_factors.get('visitor_count', 0.05) * 20
             extra_bonus += visitor_bonus
 
@@ -3269,6 +3378,11 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
                 "neighbor_count": stats.get("neighbor_count"),
                 "total_posts": stats.get("total_posts"),
                 "total_visitors": stats.get("total_visitors"),
+                # 실측 일별 방문자 (NVisitorgp) — 조작값이 아닌 진짜 트래픽
+                "visitor_measured": stats.get("visitor_measured", False),
+                "daily_visitors": stats.get("daily_visitors"),
+                "recent_avg_visitors": stats.get("recent_avg_visitors"),
+                "visitor_series": stats.get("visitor_series"),
                 # 풀파싱 신호 (analyze_post 평균)
                 "fullparse_n": analysis_data.get("fullparse_n"),
                 "fullparse_avg_likes": analysis_data.get("fullparse_avg_likes"),
@@ -3294,10 +3408,15 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
         estimated_fields.extend(["total_posts", "neighbor_count", "total_visitors",
                                  "category_count", "avg_post_length", "recent_activity"])
     elif "scrape" not in analysis_data["data_sources"] and "rss" in analysis_data["data_sources"]:
-        # RSS만 사용한 경우 일부 추정
-        if not stats.get("neighbor_count"):
-            estimated_fields.append("neighbor_count")
-        if not stats.get("total_visitors"):
+        # RSS만 사용한 경우: 이웃/누적방문은 조작값이므로 항상 추정으로 표기
+        # (단, 일별 방문자 daily_visitors 는 실측이면 별도로 신뢰 가능)
+        estimated_fields.append("neighbor_count")
+        estimated_fields.append("total_visitors")
+
+    # 누적 방문자(total_visitors)는 HTML 실측이 아니면 항상 추정으로 표기.
+    # NVisitorgp 위젯으로 scrape 성공했더라도 누적값은 조작(get_consistent_value)이다.
+    if not analysis_data.get("cumulative_visitors_real") and "total_visitors" not in estimated_fields:
+        if stats.get("total_visitors") is not None:
             estimated_fields.append("total_visitors")
 
     # 캐시에 저장 (성능 개선)
@@ -4922,3 +5041,36 @@ async def verify_blog_index_endpoint(
         set_verify_index_cache(blog_id, response_data)
 
     return VerifyIndexResponse(**response_data)
+
+
+@router.get("/{blog_id}/post-exposure")
+async def get_post_exposure(
+    blog_id: str,
+    max_posts: int = Query(10, ge=1, le=20, description="분석할 최근 글 수"),
+    max_keywords: int = Query(3, ge=1, le=5, description="글당 키워드 칩 수"),
+):
+    """
+    블덱스식 '최근 포스팅' 카드 — 글별 누락 여부 + 키워드별 순위/월검색량.
+
+    각 최근 글에 대해:
+      - 제목 정확매칭이 검색에 색인됐는지(누락 여부)
+      - 제목 키워드별 실제 SERP 순위 + 월검색량
+
+    호출당 수 초~십수 초 소요 (max_posts × 키워드 수의 검색 호출).
+    네이버 OpenAPI(순위)/검색광고 API(검색량) 크레덴셜이 없으면 해당 값만 null.
+    """
+    from services.post_exposure_analyzer import analyze_post_exposure
+
+    blog_id = (blog_id or "").strip()
+    if not blog_id:
+        raise HTTPException(status_code=400, detail="blog_id is required")
+
+    try:
+        result = await analyze_post_exposure(
+            blog_id, max_posts=max_posts, max_keywords_per_post=max_keywords
+        )
+    except Exception as e:
+        logger.exception(f"post_exposure failed for {blog_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"post_exposure_failed: {e}")
+
+    return result

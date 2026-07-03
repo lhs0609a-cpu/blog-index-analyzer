@@ -13,12 +13,30 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _resolve_naver_creds() -> tuple:
+    """네이버 검색 OpenAPI 크레덴셜 조회.
+
+    os.environ 우선, 없으면 pydantic settings(.env 로드분) 폴백.
+    RankChecker 가 os.environ 만 보면 .env 로만 설정된 프로덕션에서 크레덴셜을
+    못 찾아 순위/누락이 항상 '측정불가'로 빠지는 문제를 방지한다.
+    """
+    cid = os.environ.get('NAVER_CLIENT_ID', '')
+    csec = os.environ.get('NAVER_CLIENT_SECRET', '')
+    if not cid or not csec:
+        try:
+            from config import settings
+            cid = cid or getattr(settings, 'NAVER_CLIENT_ID', '') or ''
+            csec = csec or getattr(settings, 'NAVER_CLIENT_SECRET', '') or ''
+        except Exception:
+            pass
+    return cid, csec
+
+
 class RankChecker:
     """블로그 순위 조회"""
 
-    # 네이버 API 설정
-    NAVER_CLIENT_ID = os.environ.get('NAVER_CLIENT_ID', '')
-    NAVER_CLIENT_SECRET = os.environ.get('NAVER_CLIENT_SECRET', '')
+    # 네이버 API 설정 (os.environ → settings 폴백)
+    NAVER_CLIENT_ID, NAVER_CLIENT_SECRET = _resolve_naver_creds()
 
     # 검색 설정
     MAX_SEARCH_RESULTS = 30  # 최대 검색 결과 수
