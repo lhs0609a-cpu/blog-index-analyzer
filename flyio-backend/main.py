@@ -587,7 +587,10 @@ _WORKER_OFFLOAD_PATHS = frozenset({
     "/api/naver-ad/keyword-pool/seed-explode-register",   # 필러 직격 경로(30s마다 ×3)
     "/api/naver-ad/keyword-pool/trigger-now",             # 페이지 '즉시발굴'(fire-and-forget)
     "/api/naver-ad/keyword-pool/admin/run",               # 관리자 즉시발굴(동일 패턴)
-    "/api/naver-ad/keyword-pool/extension/image-backfill", # 전 그룹 이미지 백필(7800+ 그룹 순회, cron 점유로 굶음)
+    # NOTE: extension/image-backfill 도 offload 에서 제외 — 워커(nice 19)가 cron 으로 포화되면
+    # 이미지 백필(그룹당 조회+생성 2콜)이 CPU 굶음 + cron 과 네이버 API 경쟁으로 breaker 반복
+    # OPEN → 후반 그룹 이미지 대량 누락. backfill-creative 와 동일하게 app 프로세스(scheduler
+    # OFF·free loop)에서 직접 돌려야 0.12s 페이싱으로 안정 완주(텍스트 백필 실측 0실패).
     # NOTE: ads/backfill-creative 는 offload 에서 제외 — 워커(nice 19)가 cron 으로 포화돼
     # 8s 안에 ack 못하면 API 가 연결을 끊고 Starlette 가 background task(_run)를 건너뛰어
     # **일회성** 백필이 영영 시작 못 함(202 만 받고 무실행). 응답을 끝까지 기다리는

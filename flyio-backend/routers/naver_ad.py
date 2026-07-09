@@ -4687,7 +4687,12 @@ async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch:
     reg = get_registered_keywords_db()
     existing_before = set(reg.get_existing_set(customer_id, keywords) or set())
 
-    AD_GROUPS_PER_POOL_CAMPAIGN = 50  # 50 × 1000 = 50,000 키워드/캠페인. 100k = 캠페인 2개.
+    # 900 (네이버 캠페인당 그룹 한도 1000 아래 마진). 기존 50 은 조기 캠페인 분할을 유발:
+    # register tick 마다 테마 버킷당 새 그룹을 만들어(부분 그룹 이어채우기 미지원) 그룹이 희소해지고
+    # (그룹당 ~15/1000), 50 그룹 차면 테마별 새 캠페인 → 캠페인 폭증(리베리 180개) → 계정당 캠페인
+    # 한도(code 1014)에 막혀 pending 등록 실패. 900 으로 올리면 기존 테마 캠페인을 재사용해 신규
+    # 캠페인 생성 없이 등록 지속 (2026-07-06 패킹 fix).
+    AD_GROUPS_PER_POOL_CAMPAIGN = 900
     reuse_id: Optional[str] = None
 
     # category_split 모드 여부 (의료/비의료 한글 캠페인 분리). 비-split 계정(소잠 등)은 기존 'auto' 경로.
@@ -5488,7 +5493,7 @@ async def keyword_pool_ai_cleanup_registered(
 @router.get("/keyword-pool/diagnostics/off-domain-audit")
 async def keyword_pool_off_domain_audit(
     customer_id: int = Query(..., description="광고주 customer_id"),
-    sample: int = Query(40, ge=0, le=300),
+    sample: int = Query(40, ge=0, le=200000),
 ):
     """소잠 등 피부/한방 광고주의 off-domain(무관) 키워드 감지 (인증 없음, 진단).
     판정: 피부/한방/의료 on-domain 토큰이 하나도 없거나, 명백한 off-domain 토큰 포함 → off-domain."""
@@ -7544,6 +7549,396 @@ async def keyword_pool_clicked_keywords(
     except Exception as e:
         import traceback
         logger.error(f"clicked-keywords 실패: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
+
+
+@router.get("/keyword-pool/diagnostics/clicked-off-domain")
+async def keyword_pool_clicked_off_domain(
+    days: int = 7,
+    customer_id: Optional[str] = None,
+    min_clicks: int = 1,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """전체 계정 클릭 퍼널 — 캠페인→그룹→키워드로 좁혀 클릭 난 키워드를 전수 조회 후 소잠 on/off 토큰으로 분류.
+    clicked-keywords 는 오래된 1500개만 sample 하는 편향이 있어 대량 등록된 off-domain 을 놓침.
+    본 진단은 클릭이 소수 그룹에 몰리는 특성을 이용해 95k active 를 전수 커버(캠페인/그룹 stat 로 0클릭 가지치기)."""
+    from services.naver_ad_service import NaverAdApiClient, _stats_breaker, NaverApiCircuitOpenError
+    from datetime import datetime, timedelta
+
+    try:
+        account = _resolve_account(user_id, customer_id)
+        if not account or not account.get("is_connected"):
+            raise HTTPException(status_code=400, detail="광고 계정 미연결")
+        cid = int(account.get("customer_id"))
+        client = NaverAdApiClient()
+        client.customer_id = account["customer_id"]; client.api_key = account["api_key"]; client.secret_key = account["secret_key"]
+
+        end_date = datetime.now().strftime("%Y-%m-%d")
+        start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+
+        def _as_list(x):
+            if isinstance(x, list):
+                return x
+            if isinstance(x, dict):
+                return x.get("data") or x.get("list") or []
+            return []
+
+        def _clk(stats):
+            for s in (stats or []):
+                try:
+                    return int(s.get("clkCnt", 0) or 0)
+                except Exception:
+                    return 0
+            return 0
+
+        sem = asyncio.Semaphore(4)
+
+        async def _stat(_id):
+            if _stats_breaker.is_open():
+                return []
+            async with sem:
+                try:
+                    return await client.get_stats(stat_type="", ids=[_id],
+                                                  start_date=start_date, end_date=end_date) or []
+                except NaverApiCircuitOpenError:
+                    return []
+                except Exception:
+                    return []
+
+        # 1) 캠페인 전수 → 클릭 있는 것만
+        camps = [c for c in _as_list(await client.get_campaigns() or []) if c.get("nccCampaignId")]
+        camp_stats = await asyncio.gather(*[_stat(c["nccCampaignId"]) for c in camps])
+        clicked_camps = [c for c, s in zip(camps, camp_stats) if _clk(s) >= min_clicks]
+
+        # 2) 클릭 캠페인의 그룹 → 클릭 있는 것만
+        all_groups = []
+        for c in clicked_camps:
+            for _att in range(3):
+                try:
+                    gs = _as_list(await client.get_ad_groups(campaign_id=c["nccCampaignId"]) or [])
+                    all_groups.extend([g["nccAdgroupId"] for g in gs if g.get("nccAdgroupId")])
+                    break
+                except Exception:
+                    await asyncio.sleep(1.0)
+        grp_stats = await asyncio.gather(*[_stat(g) for g in all_groups])
+        clicked_groups = [g for g, s in zip(all_groups, grp_stats) if _clk(s) >= min_clicks]
+
+        # 3) 클릭 그룹의 키워드 → 전수 stat
+        kw_pairs = []  # (nccKeywordId, keyword)
+        for gid in clicked_groups:
+            try:
+                for k in _as_list(await client.get_keywords(ad_group_id=gid) or []):
+                    nid = k.get("nccKeywordId"); txt = k.get("keyword")
+                    if nid and txt:
+                        kw_pairs.append((nid, txt))
+            except Exception:
+                pass
+        kw_stats = await asyncio.gather(*[_stat(nid) for nid, _ in kw_pairs])
+
+        ON = _SOJAM_ON_TOKENS; OFF = _SOJAM_OFF_TOKENS
+        items = []
+        for (nid, txt), s in zip(kw_pairs, kw_stats):
+            st = (s or [None])[0] or {}
+            try:
+                clk = int(st.get("clkCnt", 0) or 0)
+            except Exception:
+                clk = 0
+            if clk < min_clicks:
+                continue
+            t = (txt or "").replace(" ", "")
+            if any(n in t for n in OFF):
+                verdict = "off_by_negative"
+            elif not any(o in t for o in ON):
+                verdict = "off_no_ondomain"
+            else:
+                verdict = "on_domain"
+            items.append({
+                "keyword_id": nid, "keyword": txt, "clicks": clk,
+                "impressions": int(st.get("impCnt", 0) or 0),
+                "cost": int(st.get("salesAmt", 0) or 0),
+                "ctr": float(st.get("ctr", 0) or 0),
+                "cpc": int(st.get("cpc", 0) or 0),
+                "verdict": verdict,
+            })
+        off_items = [i for i in items if i["verdict"] != "on_domain"]
+        # off 토큰 명확한 것 먼저, 그 다음 비용 큰 순 (낭비 큰 것 우선)
+        off_items.sort(key=lambda x: (x["verdict"] != "off_by_negative", -x["cost"]))
+        return {
+            "success": True, "customer_id": cid, "days": days,
+            "campaigns_total": len(camps), "campaigns_clicked": len(clicked_camps),
+            "groups_scanned": len(all_groups), "groups_clicked": len(clicked_groups),
+            "clicked_keywords_total": len(items),
+            "off_domain_total": len(off_items),
+            "off_by_negative": sum(1 for i in items if i["verdict"] == "off_by_negative"),
+            "off_no_ondomain": sum(1 for i in items if i["verdict"] == "off_no_ondomain"),
+            "on_domain": sum(1 for i in items if i["verdict"] == "on_domain"),
+            "off_domain": off_items,
+            "breaker_open": _stats_breaker.is_open(),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        logger.error(f"clicked-off-domain 실패: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
+
+
+class ClickedBidAdjustRequest(BaseModel):
+    days: int = Field(7, description="클릭 집계 기간(일)")
+    min_clicks: int = Field(1, description="이 클릭수 이상만 대상")
+    off_bid: int = Field(70, ge=70, description="off-domain(무관) 클릭 키워드 바닥 입찰가 — 싹 낮춤")
+    bid_cap: int = Field(2000, description="on-domain estimate 입찰 상한(원)")
+    device: str = Field("PC", description="PC 또는 MOBILE")
+    dry_run: bool = Field(True, description="true: 계획만, false: 실제 입찰 적용(백그라운드)")
+
+
+@router.post("/keyword-pool/registered/clicked-bid-adjust")
+async def keyword_pool_clicked_bid_adjust(
+    request: ClickedBidAdjustRequest,
+    background_tasks: BackgroundTasks,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """**클릭 난 키워드만** 대상으로 중요도 기반 입찰 조정.
+    on-domain(피부/한방) 클릭 KW → 중요도 점수(브랜드/지역/의도/질환)로 목표순위 입찰(estimate, cap).
+    off-domain(무관) 클릭 KW → off_bid(기본 70) 바닥가로 싹 낮춤. 클릭 퍼널로 95k 전수 커버."""
+    from services.naver_ad_service import NaverAdApiClient, _stats_breaker, NaverApiCircuitOpenError
+    from datetime import datetime, timedelta
+    from collections import defaultdict as _dd
+
+    try:
+        account = _resolve_account(user_id, customer_id)
+        if not account or not account.get("is_connected"):
+            raise HTTPException(status_code=400, detail="광고 계정 미연결")
+        cid = int(account.get("customer_id"))
+        client = NaverAdApiClient()
+        client.customer_id = account["customer_id"]; client.api_key = account["api_key"]; client.secret_key = account["secret_key"]
+        _dev = (request.device or "PC").upper()
+        if _dev not in ("PC", "MOBILE"):
+            _dev = "PC"
+        end_date = datetime.now().strftime("%Y-%m-%d")
+        start_date = (datetime.now() - timedelta(days=request.days)).strftime("%Y-%m-%d")
+
+        def _as_list(x):
+            if isinstance(x, list):
+                return x
+            if isinstance(x, dict):
+                return x.get("data") or x.get("list") or []
+            return []
+
+        def _clk(stats):
+            for s in (stats or []):
+                try:
+                    return int(s.get("clkCnt", 0) or 0)
+                except Exception:
+                    return 0
+            return 0
+
+        sem = asyncio.Semaphore(4)
+
+        async def _stat(_id):
+            if _stats_breaker.is_open():
+                return []
+            async with sem:
+                try:
+                    return await client.get_stats(stat_type="", ids=[_id],
+                                                  start_date=start_date, end_date=end_date) or []
+                except NaverApiCircuitOpenError:
+                    return []
+                except Exception:
+                    return []
+
+        # ── 클릭 퍼널: 캠페인 → 그룹 → 키워드 (gid 보존) ──
+        camps = [c for c in _as_list(await client.get_campaigns() or []) if c.get("nccCampaignId")]
+        camp_stats = await asyncio.gather(*[_stat(c["nccCampaignId"]) for c in camps])
+        clicked_camps = [c for c, s in zip(camps, camp_stats) if _clk(s) >= request.min_clicks]
+
+        all_groups = []
+        for c in clicked_camps:
+            for _att in range(3):
+                try:
+                    gs = _as_list(await client.get_ad_groups(campaign_id=c["nccCampaignId"]) or [])
+                    all_groups.extend([g["nccAdgroupId"] for g in gs if g.get("nccAdgroupId")])
+                    break
+                except Exception:
+                    await asyncio.sleep(1.0)
+        grp_stats = await asyncio.gather(*[_stat(g) for g in all_groups])
+        clicked_groups = [g for g, s in zip(all_groups, grp_stats) if _clk(s) >= request.min_clicks]
+
+        kw_triples = []  # (nid, txt, gid)
+        for gid in clicked_groups:
+            try:
+                for k in _as_list(await client.get_keywords(ad_group_id=gid) or []):
+                    nid = k.get("nccKeywordId"); txt = k.get("keyword")
+                    if nid and txt:
+                        kw_triples.append((nid, txt, gid))
+            except Exception:
+                pass
+        kw_stats = await asyncio.gather(*[_stat(nid) for nid, _, _ in kw_triples])
+
+        # ── 중요도 스코어 (bulk-rank-bid 와 동일 체계) ──
+        GEO_TOP = ["강남", "역삼", "논현", "신사", "청담", "압구정", "선릉", "대치", "학동", "신논현", "강남구", "양재", "도곡"]
+        GEO_ADJ = ["서초", "방배", "잠원", "개포", "수서", "일원", "세곡", "우면"]
+        DIS = ["아토피", "건선", "여드름", "두드러기", "습진", "지루성", "탈모", "무좀", "대상포진", "사마귀", "백반증", "기미",
+               "모낭염", "한포진", "주사비", "다한증", "켈로이드", "피부", "한방", "피부염", "피부질환", "가려움", "곤지름",
+               "헤르페스", "티눈", "뾰루지", "색소침착", "흉터", "모공", "땀띠", "주근깨", "비듬"]
+        BRAND = ["소잠"]
+        I_BOOK = ["예약", "상담", "문의", "예약문의", "전화상담", "예약하기", "당일"]
+        I_COST = ["비용", "가격", "얼마"]
+        I_CHOICE = ["추천", "후기", "잘하는곳", "명의", "유명"]
+        I_CLINIC = ["한의원", "한방병원", "병원", "의원", "피부과", "클리닉"]
+        I_TREAT = ["치료", "한약", "약침", "한방치료", "봉독", "완치", "낫는법"]
+        I_INFO = ["증상", "원인", "사진", "이미지", "뜻", "종류", "에좋은", "음식", "민간요법", "전염", "옮나", "초기증상"]
+
+        def _score(kw: str) -> int:
+            t = (kw or "").replace(" ", "")
+            s = 0
+            if any(b in t for b in BRAND): s += 50
+            if any(g in t for g in GEO_TOP): s += 40
+            elif any(g in t for g in GEO_ADJ): s += 25
+            if any(i in t for i in I_BOOK): s += 30
+            if any(i in t for i in I_COST): s += 25
+            if any(i in t for i in I_CHOICE): s += 20
+            if any(i in t for i in I_CLINIC): s += 15
+            elif any(i in t for i in I_TREAT): s += 8
+            if any(i in t for i in I_INFO): s -= 25
+            if any(d in t for d in DIS): s += 10
+            return s
+
+        def _pos(score: int):
+            if score >= 75: return 1
+            if score >= 60: return 2
+            if score >= 48: return 3
+            if score >= 38: return 5
+            if score >= 28: return 7
+            if score >= 18: return 10
+            return None
+
+        ON = _SOJAM_ON_TOKENS; OFF = _SOJAM_OFF_TOKENS
+        # 대상 분류: off → 바닥, on → pos 밴드
+        off_targets = []   # (nid, gid, kw, cost)
+        pos_targets = _dd(list)  # pos -> [(kw, nid, gid)]
+        floor_on = []      # on-domain 인데 점수 낮아 floor 유지
+        clicked_n = 0; on_n = 0; off_n = 0
+        dist = _dd(int)
+        cost_off = 0; cost_on = 0
+        for (nid, txt, gid), s in zip(kw_triples, kw_stats):
+            st = (s or [None])[0] or {}
+            try:
+                clk = int(st.get("clkCnt", 0) or 0)
+            except Exception:
+                clk = 0
+            if clk < request.min_clicks:
+                continue
+            clicked_n += 1
+            cost = int(st.get("salesAmt", 0) or 0)
+            t = (txt or "").replace(" ", "")
+            is_off = any(n in t for n in OFF) or not any(o in t for o in ON)
+            if is_off:
+                off_n += 1; cost_off += cost
+                off_targets.append((nid, gid, txt, cost))
+                dist["slash_off"] += 1
+            else:
+                on_n += 1; cost_on += cost
+                p = _pos(_score(txt))
+                if p:
+                    pos_targets[p].append((txt, nid, gid))
+                    dist[f"pos{p}"] += 1
+                else:
+                    floor_on.append((nid, gid, txt))
+                    dist["floor_on"] += 1
+
+        if request.dry_run:
+            off_targets.sort(key=lambda x: -x[3])
+            samp_pos = {f"pos{p}": [k[0] for k in pos_targets[p][:8]] for p in sorted(pos_targets)}
+            return {
+                "success": True, "dry_run": True, "customer_id": cid, "device": _dev,
+                "days": request.days,
+                "campaigns_clicked": len(clicked_camps), "groups_clicked": len(clicked_groups),
+                "clicked_keywords": clicked_n, "on_domain": on_n, "off_domain": off_n,
+                "cost_on_domain": cost_on, "cost_off_domain": cost_off,
+                "plan": {
+                    "off_slash_to": request.off_bid, "off_count": off_n,
+                    "on_by_position": dict(sorted(dist.items())),
+                    "bid_cap": request.bid_cap,
+                },
+                "off_samples_by_cost": [{"keyword": k[2], "cost": k[3]} for k in off_targets[:30]],
+                "on_pos_samples": samp_pos,
+                "breaker_open": _stats_breaker.is_open(),
+            }
+
+        EST_POS = {1, 2, 3, 5}
+        FLAT_POS = {7: 120, 10: 80}
+        CAP = max(70, int(request.bid_cap))
+        OFFB = max(70, int(request.off_bid))
+
+        async def _run():
+            total_done = 0; total_fail = 0
+            # 1) off-domain → 바닥가
+            by_gid = _dd(list)
+            for nid, gid, _txt, _c in off_targets:
+                by_gid[gid].append({"nccKeywordId": nid, "nccAdgroupId": gid, "bidAmt": OFFB, "useGroupBidAmt": False})
+            for nid, gid, _txt in floor_on:
+                by_gid[gid].append({"nccKeywordId": nid, "nccAdgroupId": gid, "bidAmt": 70, "useGroupBidAmt": False})
+            for gid, its in by_gid.items():
+                for i in range(0, len(its), 100):
+                    try:
+                        await client.update_keywords_bid_bulk(its[i:i + 100]); total_done += len(its[i:i + 100])
+                    except Exception:
+                        total_fail += len(its[i:i + 100])
+                    await asyncio.sleep(0.1)
+            logger.warning(f"[clicked-bid-adjust] off/floor 적용 {total_done} (실패 {total_fail})")
+            # 2) on-domain → 순위밴드
+            for pos in sorted(pos_targets.keys()):
+                items_kw = pos_targets[pos]
+                bg = _dd(list)
+                if pos in EST_POS:
+                    texts = list({k[0] for k in items_kw if k[0]})
+                    bidmap = {}
+                    for cas in [pos, 5, 3, 1, 2]:
+                        remaining = [t for t in texts if t not in bidmap]
+                        if not remaining:
+                            break
+                        for i in range(0, len(remaining), 15):
+                            try:
+                                r = await client.get_avg_position_bids(remaining[i:i + 15], cas, device=_dev)
+                                for e in (r.get("estimate") or []):
+                                    kt, bd = (e.get("keyword") or "").strip(), e.get("bid")
+                                    if kt and bd and kt not in bidmap:
+                                        bidmap[kt] = bd
+                            except Exception:
+                                pass
+                            await asyncio.sleep(0.2)
+                    for kw, nid, gid in items_kw:
+                        bd = bidmap.get((kw or "").strip())
+                        nb = min(CAP, max(70, round(int(bd) / 10) * 10)) if bd else 70
+                        bg[gid].append({"nccKeywordId": nid, "nccAdgroupId": gid, "bidAmt": nb, "useGroupBidAmt": False})
+                else:
+                    nb = FLAT_POS.get(pos, 70)
+                    for kw, nid, gid in items_kw:
+                        bg[gid].append({"nccKeywordId": nid, "nccAdgroupId": gid, "bidAmt": nb, "useGroupBidAmt": False})
+                d = 0; f = 0
+                for gid, its in bg.items():
+                    for i in range(0, len(its), 100):
+                        try:
+                            await client.update_keywords_bid_bulk(its[i:i + 100]); d += len(its[i:i + 100])
+                        except Exception:
+                            f += len(its[i:i + 100])
+                        await asyncio.sleep(0.1)
+                total_done += d; total_fail += f
+                logger.warning(f"[clicked-bid-adjust] pos={pos} 적용 {d} (실패 {f}, 대상 {len(items_kw)})")
+            logger.warning(f"[clicked-bid-adjust] 전체 완료 — 적용 {total_done} / 실패 {total_fail}")
+
+        background_tasks.add_task(_run)
+        return {"success": True, "started": True, "customer_id": cid, "device": _dev,
+                "clicked_keywords": clicked_n, "on_domain": on_n, "off_domain": off_n,
+                "off_slash_to": OFFB, "distribution": dict(sorted(dist.items())),
+                "message": "클릭 키워드 입찰 조정 백그라운드 시작 (로그 [clicked-bid-adjust])"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        logger.error(f"clicked-bid-adjust 실패: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
 
 
@@ -10501,6 +10896,7 @@ class CoreMinExposureRequest(BaseModel):
     scope: str = Field("all", description="'all' WEB_SITE 전체")
     dry_run: bool = Field(True, description="true: 대상 개수+샘플 미리보기, false: 실제 적용")
     max_keywords: int = Field(150000, description="안전 상한")
+    bid_cap: Optional[int] = Field(None, description="입찰가 상한(원). 설정 시 estimate 가 이보다 크면 cap 적용(고CPC 폭마 방지). 미지정 시 상한 없음")
 
 
 @router.post("/keyword-pool/bid/core-min-exposure")
@@ -10625,11 +11021,14 @@ async def keyword_pool_bid_core_min_exposure(
         # 키워드별 bidAmt 설정 (10원 단위, 최소 70). 광고그룹별로 묶어 bulk PUT.
         from collections import defaultdict
         by_gid = defaultdict(list)
+        _cap = int(request.bid_cap) if request.bid_cap else None
         for k in core_kws:
             bd = bidmap.get((k.get("text") or "").strip())
             if not bd:
                 continue
             nb = max(70, round(int(bd) / 10) * 10)
+            if _cap:
+                nb = min(nb, _cap)
             by_gid[k["gid"]].append({"nccKeywordId": k["id"], "nccAdgroupId": k["gid"], "bidAmt": nb, "useGroupBidAmt": False})
         done = 0
         for gid, items in by_gid.items():
@@ -11663,6 +12062,400 @@ async def keyword_pool_ads_purge(
     return {"success": True, "started": True, "dry_run": request.dry_run,
             "type": target_type, "headline_equals": he, "headline_contains": hc,
             "message": "백그라운드 시작. fly logs 의 [creative-purge] 라인에서 확인."}
+
+
+@router.get("/keyword-pool/diagnostics/find-ad-by-headline")
+async def keyword_pool_find_ad_by_headline(
+    customer_id: Optional[str] = None,
+    headline: str = Query(..., description="찾을 헤드라인(부분일치)"),
+    max_matches: int = Query(3, ge=1, le=50),
+    scope: str = Query("all", description="all=WEB_SITE 전체 / auto=auto_"),
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """헤드라인(부분일치)으로 소재의 캠페인/그룹/nccAdId + 그룹 POWER_LINK_IMAGE imagePath 조회(읽기).
+    소재 1개가 어느 캠페인/그룹에 있는지 특정 + 복제 소스(nccAdId)·이미지(imagePath) 확보용."""
+    from services.naver_ad_service import NaverAdApiClient
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    def _as_list(x):
+        if isinstance(x, list):
+            return x
+        if isinstance(x, dict):
+            return x.get("data") or x.get("list") or []
+        return []
+
+    def _ad_headline(adobj):
+        if not isinstance(adobj, dict):
+            return ""
+        h = adobj.get("headline") or ""
+        if not h and isinstance(adobj.get("pc"), dict):
+            h = adobj["pc"].get("headline") or ""
+        if not h and isinstance(adobj.get("basic"), dict):
+            h = adobj["basic"].get("headline") or ""
+        return (h or "").strip()
+
+    def _ad_final(adobj):
+        if not isinstance(adobj, dict):
+            return ""
+        for k in ("finalUrl", "displayUrl"):
+            v = adobj.get(k)
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+        pc = adobj.get("pc") if isinstance(adobj.get("pc"), dict) else {}
+        return (pc.get("final") or pc.get("finalUrl") or "") if isinstance(pc, dict) else ""
+
+    target = (headline or "").strip()
+    camps = _as_list(await client.get_campaigns() or [])
+    if scope == "auto":
+        camps = [c for c in camps if (c.get("name") or "").startswith("auto_")]
+    else:
+        camps = [c for c in camps if (c.get("campaignTp") or "") == "WEB_SITE"]
+
+    matches: List[Dict] = []
+    groups_scanned = 0
+    for c in camps:
+        try:
+            groups = _as_list(await client.get_ad_groups(campaign_id=c.get("nccCampaignId")) or [])
+        except Exception:
+            continue
+        for g in groups:
+            gid = g.get("nccAdgroupId")
+            if not gid:
+                continue
+            groups_scanned += 1
+            try:
+                ads = _as_list(await client.get_ads(ad_group_id=gid) or [])
+            except Exception:
+                continue
+            for a in ads:
+                if not isinstance(a, dict):
+                    continue
+                head = _ad_headline(a.get("ad") or {})
+                if target and target in head:
+                    image_path = None
+                    try:
+                        exts = _as_list(await client.get_ad_extensions(owner_id=gid, owner_type="ADGROUP") or [])
+                        for e in exts:
+                            if isinstance(e, dict) and e.get("type") == "POWER_LINK_IMAGE":
+                                ext = e.get("adExtension") or {}
+                                image_path = ext.get("imagePath") if isinstance(ext, dict) else None
+                                if image_path:
+                                    break
+                    except Exception:
+                        pass
+                    matches.append({
+                        "campaign_id": c.get("nccCampaignId"),
+                        "campaign_name": c.get("name"),
+                        "campaign_tp": c.get("campaignTp"),
+                        "ad_group_id": gid,
+                        "ncc_ad_id": a.get("nccAdId"),
+                        "type": a.get("type"),
+                        "headline": head,
+                        "final_url": _ad_final(a.get("ad") or {}),
+                        "inspect_status": a.get("inspectStatus") or a.get("status"),
+                        "image_path": image_path,
+                    })
+                    if len(matches) >= max_matches:
+                        return {"success": True, "customer_id": int(account["customer_id"]),
+                                "headline_query": target, "matches": matches,
+                                "groups_scanned": groups_scanned, "early_exit": True}
+            await asyncio.sleep(0.02)
+    return {"success": True, "customer_id": int(account["customer_id"]),
+            "headline_query": target, "matches": matches,
+            "groups_scanned": groups_scanned, "early_exit": False}
+
+
+class AdOffByHeadlineRequest(BaseModel):
+    customer_id: Optional[str] = None
+    type: str = Field(..., description="대상 소재 type (예: TEXT_45)")
+    headline_equals: Optional[str] = Field(None, description="ad.headline 완전 일치")
+    headline_contains: Optional[str] = Field(None, description="ad.headline 부분 일치")
+    lock: bool = Field(True, description="True=off(userLock ON) / False=재개(userLock OFF)")
+    dry_run: bool = Field(True, description="True: 매칭만 카운트, 실제 토글 안함")
+    scope: str = Field("all", description="all=WEB_SITE / auto=auto_")
+    test_ad_id: Optional[str] = Field(None, description="지정 시 이 소재 1개만 토글 후 raw 반환(메커니즘 검증)")
+
+
+@router.post("/keyword-pool/ads/off-by-headline")
+async def keyword_pool_ads_off_by_headline(
+    request: AdOffByHeadlineRequest,
+    background_tasks: BackgroundTasks,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """type+headline 매칭 소재를 userLock 으로 off(또는 재개). 삭제 아님 — 가역(백그라운드)."""
+    from services.naver_ad_service import NaverAdApiClient
+    cid = request.customer_id or customer_id
+    account = _resolve_account(user_id, cid)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    def _as_list(x):
+        if isinstance(x, list):
+            return x
+        if isinstance(x, dict):
+            return x.get("data") or x.get("list") or []
+        return []
+
+    async def _toggle(aid: str):
+        # Naver: PUT /ncc/ads/{adId}?fields=userLock  body {nccAdId, userLock}
+        return await client._request(
+            "PUT", f"/ncc/ads/{aid}?fields=userLock",
+            {"nccAdId": aid, "userLock": bool(request.lock)},
+        )
+
+    # ── 단일 소재 검증 모드 — userLock PUT 계약 확인용 ──
+    if request.test_ad_id:
+        try:
+            res = await _toggle(request.test_ad_id)
+            return {"success": True, "mode": "test_one", "ad_id": request.test_ad_id,
+                    "lock": request.lock, "naver_response": res}
+        except Exception as e:
+            return {"success": False, "mode": "test_one", "ad_id": request.test_ad_id,
+                    "error": f"{type(e).__name__}: {str(e)[:400]}"}
+
+    target_type = (request.type or "").strip().upper()
+    he = (request.headline_equals or "").strip()
+    hc = (request.headline_contains or "").strip()
+
+    def _ad_headline(adobj):
+        if not isinstance(adobj, dict):
+            return ""
+        h = adobj.get("headline") or ""
+        if not h and isinstance(adobj.get("pc"), dict):
+            h = adobj["pc"].get("headline") or ""
+        if not h and isinstance(adobj.get("basic"), dict):
+            h = adobj["basic"].get("headline") or ""
+        return (h or "").strip()
+
+    def _matches(ad_row):
+        t = (ad_row.get("type") or "").strip().upper()
+        if t != target_type:
+            return False
+        head = _ad_headline(ad_row.get("ad") or {})
+        if he and head != he:
+            return False
+        if hc and hc not in head:
+            return False
+        return True
+
+    def _target_campaigns(all_campaigns):
+        if request.scope == "auto":
+            return [c for c in all_campaigns if (c.get("name") or "").startswith("auto_")]
+        return [c for c in all_campaigns if (c.get("campaignTp") or "") == "WEB_SITE"]
+
+    async def _run():
+        logger.warning(f"[creative-off] 시작 cid={account['customer_id']} type={target_type} "
+                       f"eq={he!r} contains={hc!r} lock={request.lock} dry_run={request.dry_run}")
+        try:
+            camps = []
+            for _att in range(5):
+                try:
+                    camps = _as_list(await client.get_campaigns() or [])
+                    if camps:
+                        break
+                except Exception as e:
+                    logger.warning(f"[creative-off] get_campaigns 재시도 {_att+1}/5: {str(e)[:80]}")
+                    await asyncio.sleep(3.0)
+            targets = _target_campaigns(camps)
+            logger.warning(f"[creative-off] 캠페인 {len(camps)} → 대상 {len(targets)}")
+            gids: List[str] = []
+            for c in targets:
+                for _att in range(3):
+                    try:
+                        gs = _as_list(await client.get_ad_groups(campaign_id=c.get("nccCampaignId")) or [])
+                        for g in gs:
+                            if g.get("nccAdgroupId"):
+                                gids.append(g["nccAdgroupId"])
+                        break
+                    except Exception:
+                        await asyncio.sleep(1.5)
+                await asyncio.sleep(0.08)
+            logger.warning(f"[creative-off] 그룹 {len(gids)}")
+            matched = toggled = failed = 0
+            for i, gid in enumerate(gids):
+                try:
+                    ads = _as_list(await client.get_ads(ad_group_id=gid) or [])
+                except Exception:
+                    await asyncio.sleep(0.2)
+                    continue
+                victims = [a for a in ads if isinstance(a, dict) and _matches(a)]
+                for v in victims:
+                    matched += 1
+                    if request.dry_run:
+                        continue
+                    aid = v.get("nccAdId")
+                    if not aid:
+                        continue
+                    try:
+                        await _toggle(aid)
+                        toggled += 1
+                    except Exception as e:
+                        failed += 1
+                        if failed <= 5:
+                            logger.warning(f"[creative-off] toggle fail {aid}: {str(e)[:120]}")
+                    await asyncio.sleep(0.08)
+                if (i + 1) % 200 == 0:
+                    logger.warning(f"[creative-off] {i+1}/{len(gids)} matched={matched} toggled={toggled} failed={failed}")
+                await asyncio.sleep(0.03)
+            logger.warning(f"[creative-off] 완료 matched={matched} toggled={toggled} failed={failed} dry_run={request.dry_run}")
+        except Exception as e:
+            logger.exception(f"[creative-off] 예외: {e}")
+
+    background_tasks.add_task(_run)
+    return {"success": True, "started": True, "dry_run": request.dry_run, "lock": request.lock,
+            "type": target_type, "headline_equals": he, "headline_contains": hc,
+            "message": "백그라운드 시작. fly logs 의 [creative-off] 라인에서 확인."}
+
+
+class ExplicitBackfillRequest(BaseModel):
+    customer_id: Optional[str] = None
+    headline: str = Field(..., description="헤드라인 (PC=모바일 동일 적용)")
+    description: str = Field(..., description="설명 (PC=모바일 동일 적용)")
+    final_url: str = Field(..., description="연결 URL")
+    display_url: Optional[str] = Field(None, description="표시 URL (없으면 final_url 도메인)")
+    scope: str = Field("all", description="all=WEB_SITE / auto=auto_")
+    mode: str = Field("backfill", description="test_one | backfill")
+
+
+@router.post("/keyword-pool/ads/backfill-explicit")
+async def keyword_pool_ads_backfill_explicit(
+    request: ExplicitBackfillRequest,
+    background_tasks: BackgroundTasks,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """명시적 텍스트 소재(TEXT_45)를 전 그룹에 생성 — PC·모바일 헤드라인/설명 동일 통일.
+    불량 소재(source pc/mobile 불일치) 복제 회피용. 이미 동일 소재 있으면 3822=기존보유."""
+    from services.naver_ad_service import NaverAdApiClient
+    cid = request.customer_id or customer_id
+    account = _resolve_account(user_id, cid)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    def _as_list(x):
+        if isinstance(x, list):
+            return x
+        if isinstance(x, dict):
+            return x.get("data") or x.get("list") or []
+        return []
+
+    H = request.headline.strip()
+    D = request.description.strip()
+    U = request.final_url.strip()
+    disp = (request.display_url or "").strip() or U.replace("https://", "").replace("http://", "").split("/")[0]
+
+    async def _create_one(gid: str):
+        return await client.create_ad(
+            ad_group_id=gid,
+            headline_pc=H, description_pc=D, display_url=disp, final_url_pc=U,
+            headline_mobile=H, description_mobile=D, final_url_mobile=U,
+        )
+
+    def _target_campaigns(all_campaigns):
+        if request.scope == "auto":
+            return [c for c in all_campaigns if (c.get("name") or "").startswith("auto_")]
+        return [c for c in all_campaigns if (c.get("campaignTp") or "") == "WEB_SITE"]
+
+    if request.mode == "test_one":
+        all_campaigns = _as_list(await client.get_campaigns() or [])
+        gid = None
+        for c in _target_campaigns(all_campaigns):
+            try:
+                groups = _as_list(await client.get_ad_groups(campaign_id=c.get("nccCampaignId")) or [])
+            except Exception:
+                continue
+            for g in groups:
+                if g.get("nccAdgroupId"):
+                    gid = g["nccAdgroupId"]; break
+            if gid:
+                break
+        if not gid:
+            return {"success": False, "step": "no_ad_groups"}
+        try:
+            res = await _create_one(gid)
+            return {"success": True, "mode": "test_one", "ad_group_id": gid, "naver_response": res}
+        except Exception as e:
+            return {"success": False, "mode": "test_one", "ad_group_id": gid,
+                    "error": f"{type(e).__name__}: {str(e)[:400]}"}
+
+    async def _run():
+        logger.warning(f"[backfill-explicit] 시작 cid={account['customer_id']} head={H!r} scope={request.scope}")
+        try:
+            all_campaigns = []
+            for _att in range(5):
+                try:
+                    all_campaigns = _as_list(await client.get_campaigns() or [])
+                    if all_campaigns:
+                        break
+                except Exception as _e:
+                    logger.warning(f"[backfill-explicit] get_campaigns 재시도 {_att+1}/5: {str(_e)[:80]}")
+                    await asyncio.sleep(3.0)
+            target_camps = _target_campaigns(all_campaigns)
+            logger.warning(f"[backfill-explicit] 캠페인 {len(all_campaigns)} → 대상 {len(target_camps)}")
+            if not target_camps:
+                logger.warning("[backfill-explicit] 대상 캠페인 0 — 종료")
+                return
+            ad_group_ids: List[str] = []
+            _camp_fail = 0
+            for c in target_camps:
+                ok = False
+                for _attempt in range(3):
+                    try:
+                        groups = _as_list(await client.get_ad_groups(campaign_id=c.get("nccCampaignId")) or [])
+                        for g in groups:
+                            gid = g.get("nccAdgroupId")
+                            if gid:
+                                ad_group_ids.append(gid)
+                        ok = True
+                        break
+                    except Exception:
+                        await asyncio.sleep(1.5)
+                if not ok:
+                    _camp_fail += 1
+                await asyncio.sleep(0.08)
+            logger.warning(f"[backfill-explicit] 그룹 수집 — 캠페인 {len(target_camps)}(실패 {_camp_fail}) → 그룹 {len(ad_group_ids)}")
+            if not ad_group_ids:
+                logger.warning("[backfill-explicit] 대상 그룹 0 — 종료")
+                return
+            created = existed = failed = 0
+            for i, gid in enumerate(ad_group_ids):
+                try:
+                    await _create_one(gid)
+                    created += 1
+                except Exception as e:
+                    msg = str(e)
+                    if "3822" in msg or "same content" in msg.lower():
+                        existed += 1
+                    else:
+                        failed += 1
+                        if failed <= 10:
+                            logger.warning(f"[backfill-explicit] ag={gid} 실패: {type(e).__name__}: {msg[:120]}")
+                if (i + 1) % 500 == 0:
+                    logger.warning(f"[backfill-explicit] 진행 {i+1}/{len(ad_group_ids)} — 생성 {created} 기존보유 {existed} 실패 {failed}")
+                await asyncio.sleep(0.12)
+            logger.warning(f"[backfill-explicit] 완료 — 생성 {created} / 기존보유 {existed} / 실패 {failed} / 총 {len(ad_group_ids)} (캠페인조회실패 {_camp_fail})")
+        except Exception as e:
+            import traceback as _tb
+            logger.error(f"[backfill-explicit] 태스크 예외 — {type(e).__name__}: {str(e)[:200]}\n{_tb.format_exc()[:1000]}")
+
+    background_tasks.add_task(_run)
+    return {"success": True, "mode": "backfill", "started": True, "headline": H,
+            "message": "백그라운드 시작 — 명시적 소재 전 그룹 부착. fly logs 의 [backfill-explicit] 라인에서 확인."}
 
 
 @router.get("/keyword-pool/diagnostics/ad-by-id")
