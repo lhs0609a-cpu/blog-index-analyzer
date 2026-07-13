@@ -4498,6 +4498,16 @@ _DOVISION_CAT_CUSTOMERS = {4403292}  # 두비전 — 테마 등록 + 교육토�
 # 교육 도메인 키워드 허용 — register 하드게이트 _NEG_TOKENS 에서 이 토큰들만 (스코프 계정 한정)
 # 컷 해제. 교육업이라 학원/과외/강의/인강 이 핵심 도메인인데 기본 게이트는 이를 상업 컷으로 막음.
 _DOVISION_ALLOW_TOKENS = {"학원", "과외", "강의", "인강"}
+# 키네스(441986) — 무관도메인 강제등록 (2026-07-10 사용자 결정: 84k 클린천장 넘어 확장).
+# register 하드게이트에서 학부모/아동 도메인(육아·교육·영양제·아동가구)을 막던 상업 neg-token 해제
+# + relevance 점수컷(≥30) 우회 → seed_explode 앵커(required_tokens 210)만 통과하면 등록.
+# 자동차/코인/보험/여행/가전 등 진짜 잡동사니 neg-token 은 그대로 유지(순수쓰레기 차단).
+# ⚠️ 오염 감수. 노출 전 캠페인 분리 필수. 되돌리려면 이 계정을 set 에서 제거 후 재배포.
+_KINESS_FORCE_CUSTOMERS = {441986}
+_KINESS_ALLOW_TOKENS = {"학원", "과외", "강의", "인강", "영양제", "유산균", "오메가3", "홍삼",
+                        "젤리", "비타민제", "프로틴", "콜라겐젤리", "책상", "의자", "가구",
+                        "침대", "매트", "매트리스", "선반", "침구", "이불", "베개", "소파",
+                        "수납", "옷장"}
 _DOVISION_CATEGORIES = [
     ("가맹", "가맹·창업모집", (
         # 창업·사업 의도가 명시된 토큰만 — bare '공부방/교습소'(B2C 학부모 검색)는 주제 캠페인으로.
@@ -4635,6 +4645,11 @@ async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch:
             # 교육 광고주(두비전)는 학원/과외/강의/인강 이 핵심 도메인 — 상업 컷 해제.
             elif customer_id in _DOVISION_CAT_CUSTOMERS:
                 _NEG_TOKENS = tuple(t for t in _NEG_TOKENS if t not in _DOVISION_ALLOW_TOKENS)
+            # 키네스 강제등록 — 학부모/아동 도메인 neg-token 대량 해제.
+            elif customer_id in _KINESS_FORCE_CUSTOMERS:
+                _NEG_TOKENS = tuple(t for t in _NEG_TOKENS if t not in _KINESS_ALLOW_TOKENS)
+            # 키네스 강제등록 — relevance 점수컷 우회(floor=0). junk/neg-token 만 남기고 통과.
+            _score_floor = 0 if customer_id in _KINESS_FORCE_CUSTOMERS else 30
             for _p in pending:
                 _kw = _p["keyword"] or ""
                 _kwc = _kw.replace(" ", "")
@@ -4657,7 +4672,7 @@ async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch:
                     _n3 = sum(1 for _a in _ga3 if _a in _kw)
                     _n2 = sum(1 for _a in _ga2 if _a in _kw)
                     _sc = min(95, min(80, _n3 * 20) + min(30, _n2 * 5))
-                if _sc >= 30:
+                if _sc >= _score_floor:
                     _on.append(_p)
                 else:
                     _off_ids.append(_p["id"])
@@ -9250,7 +9265,9 @@ async def keyword_pool_reactivate_failed(
     min_volume = max(0, int(request.min_volume))
     max_reactivate = max(0, min(200000, int(request.max_reactivate)))
     dry_run = bool(request.dry_run)
-    allowed = {"failed", "deleted", "rejected_by_naver"}
+    # domain_skipped: register 하드게이트가 off-domain 으로 뺀 것. 게이트 완화(키네스 강제등록) 후
+    # threshold=0 으로 되살리면 재게이팅됨(완화된 gate 가 재판정). include_statuses 로 opt-in.
+    allowed = {"failed", "deleted", "rejected_by_naver", "domain_skipped"}
     statuses = [s for s in (request.include_statuses or ["failed"]) if s in allowed] or ["failed"]
 
     account = _resolve_account(user_id, customer_id)
@@ -12456,6 +12473,460 @@ async def keyword_pool_ads_backfill_explicit(
     background_tasks.add_task(_run)
     return {"success": True, "mode": "backfill", "started": True, "headline": H,
             "message": "백그라운드 시작 — 명시적 소재 전 그룹 부착. fly logs 의 [backfill-explicit] 라인에서 확인."}
+
+
+class CampaignRenameKoreanRequest(BaseModel):
+    customer_id: Optional[str] = None
+    prefix: str = Field("리베리", description="캠페인명 접두어")
+    top_n: int = Field(3, ge=1, le=6, description="이름에 넣을 대표 키워드 수")
+    sample_groups: int = Field(2, ge=1, le=10, description="캠페인당 샘플링할 광고그룹 수(키워드 대표성 vs API 콜)")
+    scope: str = Field("all", description="all=WEB_SITE 전체 / auto=auto_ 이름만 / unnamed=prefix 로 시작 안하는 것만")
+    skip_already: bool = Field(True, description="이미 prefix 로 시작하는(=한글화 완료) 캠페인은 건너뜀")
+    max_len: int = Field(30, description="캠페인명 최대 길이 가드(네이버 한도 30자)")
+    max_campaigns: int = Field(2000, description="안전 상한")
+    body_mode: str = Field("fullreplace", description="fullreplace=fields없는 전체 PUT(이름변경 정답) / fields_name=예전 잘못된 경로(실패)")
+    test_campaign_id: Optional[str] = Field(None, description="지정 시 이 캠페인 1개만 즉시 개명 후 raw 반환(계약 검증, 샘플링 생략)")
+    name_override: Optional[str] = Field(None, description="test 모드에서 강제할 새 이름")
+    dry_run: bool = Field(True, description="true: rename 계획 미리보기(동기), false: 실제 rename(백그라운드)")
+
+
+@router.post("/keyword-pool/campaigns/rename-korean")
+async def keyword_pool_campaigns_rename_korean(
+    request: CampaignRenameKoreanRequest,
+    background_tasks: BackgroundTasks,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """계정의 캠페인을 **안에 든 대표 키워드로 한글 개명** — 'auto_001_178658_0' 같은 무의미 이름을
+    '리베리_여드름_모공_흉터_#178658' 처럼 바꿔 어떤 키워드 버킷인지 한눈에.
+    캠페인당 광고그룹 sample_groups 개를 샘플링해 head 키워드(짧을수록 대표) top_n 을 뽑음.
+    cid tail 로 유니크 보장(네이버 캠페인명 중복 불가). 이미 개명된 건 skip → 재실행 안전.
+    dry_run=true: rename 계획만 동기 반환(승인용). false: 백그라운드 rename(로그 [campaign-rename])."""
+    from services.naver_ad_service import NaverAdApiClient
+    cid_arg = request.customer_id or customer_id
+    account = _resolve_account(user_id, cid_arg)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    def _as_list(x):
+        if isinstance(x, list):
+            return x
+        if isinstance(x, dict):
+            return x.get("data") or x.get("list") or []
+        return []
+
+    prefix = (request.prefix or "리베리").strip()
+    top_n = int(request.top_n)
+    max_len = max(20, int(request.max_len))
+
+    def _rep_keywords(texts):
+        # head term 우선: 글자수 짧고 토큰 적은 것 = 대표. 서로 포함관계인 건 하나만.
+        uniq = sorted({t.strip() for t in texts if t and t.strip()},
+                      key=lambda s: (len(s.replace(" ", "")), len(s.split())))
+        picks: List[str] = []
+        for t in uniq:
+            tn = t.replace(" ", "")
+            if any(tn in p.replace(" ", "") or p.replace(" ", "") in tn for p in picks):
+                continue
+            picks.append(t)
+            if len(picks) >= top_n:
+                break
+        return picks, len(uniq)
+
+    def _uniq_tag(camp_id: str) -> str:
+        digits = re.findall(r"\d{4,}", camp_id or "")
+        if digits:
+            return max(digits, key=len)[-6:]
+        return (camp_id or "")[-6:]
+
+    def _build_name(reps, camp_id):
+        # 네이버 한도 30자. 태그는 언더스코어+숫자만(#/[] 금지, 유니크·추적용).
+        # core 는 예산 안에서 키워드를 통째로 그리디 패킹(중간 잘림 방지).
+        tag = f"_{_uniq_tag(camp_id)}"
+        avail = max_len - len(prefix) - 1 - len(tag)  # '리베리' + '_' + core + tag
+        picks: List[str] = []
+        used = 0
+        for r in reps:
+            add = len(r) + (1 if picks else 0)  # 키워드 사이 언더스코어
+            if used + add <= avail:
+                picks.append(r)
+                used += add
+        core = "_".join(picks)
+        if not core:  # 첫 키워드가 avail 보다 길면 하나만 잘라서라도 표기
+            core = (reps[0][:max(1, avail)] if reps else "빈버킷")
+        return f"{prefix}_{core}{tag}"
+
+    async def _do_rename(camp_id: str, new_name: str, mode: str):
+        # 네이버: fields 부분수정 화이트리스트=userLock/budget/period (name 불가).
+        # 이름 변경은 fields 없는 전체 PUT(full replace)로만 가능 → 원본 body echo + name 교체.
+        base = await client.get_campaign(camp_id)
+        body = dict(base) if isinstance(base, dict) else {}
+        body["nccCampaignId"] = camp_id
+        body["name"] = new_name
+        if mode == "fields_name":  # (실패 확인용) 예전 잘못된 경로
+            return await client.update_campaign(camp_id, body, fields="name")
+        # fullreplace (기본): fields 쿼리 없이 전체 PUT
+        return await client._request("PUT", f"/ncc/campaigns/{camp_id}", body)
+
+    # ── 단일 테스트 모드: 샘플링(80s) 생략, 한 캠페인만 즉시 개명 후 raw 반환 ──
+    if request.test_campaign_id:
+        tid = request.test_campaign_id
+        nm = (request.name_override or f"{prefix}_테스트개명_{_uniq_tag(tid)}").strip()
+        try:
+            res = await _do_rename(tid, nm, request.body_mode)
+            return {"success": True, "mode": "test_one", "campaign_id": tid, "new": nm,
+                    "body_mode": request.body_mode, "naver_response": res}
+        except Exception as e:
+            return {"success": False, "mode": "test_one", "campaign_id": tid, "new": nm,
+                    "body_mode": request.body_mode, "error": f"{type(e).__name__}: {str(e)[:600]}"}
+
+    def _target_campaigns(all_campaigns):
+        out = []
+        for c in all_campaigns:
+            name = c.get("name") or ""
+            if request.scope == "auto":
+                if not name.startswith("auto_"):
+                    continue
+            elif request.scope == "unnamed":
+                if name.startswith(prefix):
+                    continue
+            else:  # all
+                if (c.get("campaignTp") or "") != "WEB_SITE":
+                    continue
+            if request.skip_already and name.startswith(prefix):
+                continue
+            out.append(c)
+        return out
+
+    sem = asyncio.Semaphore(6)
+
+    want = int(request.sample_groups)
+    scan_cap = max(want + 4, want * 4)  # 빈 그룹 건너뛰고 키워드 있는 그룹을 찾을 때까지 (상한)
+
+    async def _sample(camp):
+        cid0 = camp.get("nccCampaignId")
+        async with sem:
+            try:
+                groups = _as_list(await client.get_ad_groups(campaign_id=cid0) or [])
+            except Exception as e:
+                return camp, [], 0, f"adgroups_err:{type(e).__name__}"
+            texts: List[str] = []
+            filled = 0
+            for g in groups[:scan_cap]:
+                gid = g.get("nccAdgroupId")
+                if not gid:
+                    continue
+                try:
+                    kws = [k.get("keyword") for k in _as_list(await client.get_keywords(ad_group_id=gid) or [])
+                           if k.get("keyword")]
+                except Exception:
+                    kws = []
+                if kws:
+                    texts.extend(kws)
+                    filled += 1
+                    if filled >= want:  # 키워드 있는 그룹 want 개 확보하면 중단
+                        break
+            return camp, texts, len(groups), None
+
+    all_campaigns = _as_list(await client.get_campaigns() or [])
+    targets = _target_campaigns(all_campaigns)[: int(request.max_campaigns)]
+    if not targets:
+        return {"success": True, "customer_id": int(account["customer_id"]),
+                "campaigns_total": len(all_campaigns), "targets": 0,
+                "message": "대상 캠페인 0 (이미 개명됐거나 scope 미해당)."}
+
+    sampled = await asyncio.gather(*[_sample(c) for c in targets])
+
+    rows = []
+    seen = set()
+    for camp, texts, ngroups, err in sampled:
+        cid0 = camp.get("nccCampaignId")
+        old = camp.get("name") or ""
+        reps, uniq_kw = _rep_keywords(texts)
+        new = _build_name(reps, cid0)
+        if new in seen:  # 극히 드문 tag 충돌 방어 (30자 유지: 뒤 2자를 cid 끝 2자로 치환)
+            new = (new[:max_len - 2] + cid0[-2:]) if len(new) >= max_len - 2 else f"{new}{cid0[-2:]}"
+        seen.add(new)
+        rows.append({
+            "campaign_id": cid0, "old": old, "new": new,
+            "ad_groups": ngroups, "sampled_uniq_kw": uniq_kw,
+            "reps": reps, "unchanged": (old == new), "err": err or "",
+        })
+    rows.sort(key=lambda r: r["old"])
+    changed = [r for r in rows if not r["unchanged"] and not r["err"]]
+
+    if request.dry_run:
+        return {
+            "success": True, "dry_run": True, "customer_id": int(account["customer_id"]),
+            "campaigns_total": len(all_campaigns), "targets": len(targets),
+            "will_rename": len(changed), "unchanged": sum(1 for r in rows if r["unchanged"]),
+            "errors": sum(1 for r in rows if r["err"]),
+            "preview": [{"old": r["old"], "new": r["new"], "ad_groups": r["ad_groups"],
+                         "reps": r["reps"], "err": r["err"]} for r in rows[:80]],
+            "note": f"미리보기 최대 80개 표시(총 {len(rows)}). 확인 후 dry_run=false 로 실제 개명.",
+        }
+
+    async def _run():
+        logger.warning(f"[campaign-rename] 시작 cid={account['customer_id']} 대상 {len(changed)} "
+                       f"scope={request.scope} prefix={prefix!r} body_mode={request.body_mode}")
+        ok = fail = 0
+        for r in changed:
+            cid0, new = r["campaign_id"], r["new"]
+            try:
+                await _do_rename(cid0, new, request.body_mode)
+                ok += 1
+                if ok % 20 == 0:
+                    logger.warning(f"[campaign-rename] 진행 {ok}/{len(changed)}")
+            except Exception as e:
+                fail += 1
+                if fail <= 10:
+                    logger.warning(f"[campaign-rename] 실패 {r['old']}→{new}: {type(e).__name__} {str(e)[:400]}")
+            await asyncio.sleep(0.2)
+        logger.warning(f"[campaign-rename] 완료 — 개명 {ok} / 실패 {fail} / 대상 {len(changed)}")
+
+    background_tasks.add_task(_run)
+    return {"success": True, "started": True, "dry_run": False,
+            "customer_id": int(account["customer_id"]),
+            "targets": len(targets), "will_rename": len(changed),
+            "message": "백그라운드 개명 시작. fly logs 의 [campaign-rename] 라인에서 확인."}
+
+
+class PromoteCoreRequest(BaseModel):
+    """중요도 상위(pos1-3) 핵심 키워드를 풀에서 빼내 **고예산 전용 캠페인**으로 이동 + 의료심의 소재 부착.
+    100원에 묶여 노출 못하던 강남/역삼 피부과추천류를 실제로 밀어주기 위한 '핵심 전용 분리'."""
+    campaign_name: str = Field("소잠_핵심_강남피부", description="생성할 전용 캠페인명(30자 한도)")
+    daily_budget: int = Field(30000, ge=100, le=10000000, description="전용 캠페인 일예산(원)")
+    score_min: int = Field(48, description="이 점수 이상만 핵심으로 승격. 48=pos3, 60=pos2, 75=pos1")
+    init_bid: int = Field(990, ge=70, le=100000, description="핵심 키워드 초기 입찰가(이후 bulk-rank-bid로 순위 최적화)")
+    keywords_per_group: int = Field(300, ge=1, le=1000, description="광고그룹당 키워드 수")
+    max_keywords: int = Field(20000)
+    delete_pool_copies: bool = Field(True, description="승격 후 기존 100원 풀 복사본을 네이버에서 삭제(중복 제거). 실패해도 무해(코어가 경매 우선)")
+    defund_campaign_id: Optional[str] = Field(None, description="코어 예산 재원 마련용으로 감액할 기존 캠페인 ID(예: 생 파워링크). 총 예산 상한 유지")
+    defund_to_budget: int = Field(100, ge=70, description="defund 캠페인을 이 일예산으로 낮춤(사실상 정지)")
+    # 의료심의 소재(기존 승인본 복제 — 심의필 한42606)
+    headline: str = Field("두드러기치료, 소잠한의원", description="소재 헤드라인(15자). 심의필과 세트인 승인본 유지 권장")
+    description: str = Field("만성두드러기, 콜린성두드러기, 만성피부질환, 해독, 체질개선, 면역강화", description="소재 설명(45자)")
+    display_url: str = Field("https://sojam.co.kr")
+    final_url: str = Field("https://sojam.co.kr")
+    medical_no: str = Field("한42606", description="의료광고 심의필 번호")
+    dry_run: bool = Field(True)
+
+
+@router.post("/keyword-pool/campaigns/promote-core")
+async def keyword_pool_promote_core(
+    request: PromoteCoreRequest,
+    background_tasks: BackgroundTasks,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """중요도 상위(score>=score_min) 핵심 키워드를 풀에서 전용 고예산 캠페인으로 이동 + 의료심의 소재 부착.
+    스코어링은 bulk-rank-bid 와 동일(지역/의도/질환/브랜드). dry_run: 승격 대상 분포/샘플/구조 미리보기."""
+    import sqlite3 as _sq
+    from services.naver_ad_service import NaverAdApiClient
+    from database.registered_keywords_db import get_registered_keywords_db
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+
+    # ── 스코어링 (bulk-rank-bid 동일 기준) ──
+    GEO_TOP = ["강남", "역삼", "논현", "신사", "청담", "압구정", "선릉", "대치", "학동", "신논현", "강남구", "양재", "도곡"]
+    GEO_ADJ = ["서초", "방배", "잠원", "개포", "수서", "일원", "세곡", "우면"]
+    GEO_OTHER = ["위례", "동탄", "분당", "판교", "수지", "기흥", "일산", "평촌", "산본", "범계", "부천", "안산", "광명", "시흥",
+        "인천", "부평", "송도", "부산", "해운대", "서면", "대구", "수성", "범어", "만촌", "광주", "대전", "울산", "세종", "수원", "성남",
+        "용인", "고양", "천안", "아산", "청주", "전주", "익산", "군산", "포항", "경주", "구미", "창원", "김해", "양산", "진주",
+        "목포", "여수", "순천", "제주", "춘천", "원주", "강릉", "노원", "송파", "마포", "은평", "구로", "관악", "동작", "성북"]
+    DIS = ["아토피", "건선", "여드름", "두드러기", "습진", "지루성", "탈모", "무좀", "대상포진", "사마귀", "백반증", "기미", "모낭염",
+        "한포진", "주사비", "다한증", "켈로이드", "피부", "한방", "피부염", "피부질환", "가려움", "곤지름", "헤르페스", "티눈",
+        "뾰루지", "구내염", "색소침착", "흉터", "모공", "땀띠", "주근깨", "비듬"]
+    BRAND = ["소잠"]
+    I_BOOK = ["예약", "상담", "문의", "예약문의", "전화상담", "예약하기", "당일"]
+    I_COST = ["비용", "가격", "얼마"]
+    I_CHOICE = ["추천", "후기", "잘하는곳", "명의", "유명"]
+    I_CLINIC = ["한의원", "한방병원", "병원", "의원", "피부과", "클리닉"]
+    I_TREAT = ["치료", "한약", "약침", "한방치료", "봉독", "완치", "낫는법"]
+    I_INFO = ["증상", "원인", "사진", "이미지", "뜻", "종류", "에좋은", "음식", "민간요법", "전염", "옮나", "초기증상"]
+
+    def _score(kw: str) -> int:
+        t = (kw or "").replace(" ", "")
+        s = 0
+        if any(b in t for b in BRAND): s += 50
+        if any(g in t for g in GEO_TOP): s += 40
+        elif any(g in t for g in GEO_ADJ): s += 25
+        elif any(g in t for g in GEO_OTHER): s -= 25
+        if any(i in t for i in I_BOOK): s += 30
+        if any(i in t for i in I_COST): s += 25
+        if any(i in t for i in I_CHOICE): s += 20
+        if any(i in t for i in I_CLINIC): s += 15
+        elif any(i in t for i in I_TREAT): s += 8
+        if any(i in t for i in I_INFO): s -= 25
+        if any(d in t for d in DIS): s += 10
+        return s
+
+    reg = get_registered_keywords_db()
+    with _sq.connect(reg.db_path, timeout=30.0) as conn:
+        rows = conn.execute(
+            "SELECT keyword, ncc_keyword_id, ad_group_id FROM registered_keywords "
+            "WHERE account_customer_id=? AND ncc_keyword_id IS NOT NULL AND ad_group_id IS NOT NULL AND removed_at IS NULL",
+            (cid,),
+        ).fetchall()
+    # 핵심 선별 + keyword 중복 제거(UNIQUE(account,keyword) — 최고점 1건 유지)
+    best: Dict[str, Tuple[int, str, str]] = {}  # keyword -> (score, old_ncc_id, old_gid)
+    for kw, nid, gid in rows:
+        sc = _score(kw)
+        if sc < request.score_min:
+            continue
+        if kw not in best or sc > best[kw][0]:
+            best[kw] = (sc, nid, gid)
+    core = [(kw, v[1], v[2], v[0]) for kw, v in best.items()][: request.max_keywords]  # (kw, old_ncc, old_gid, score)
+
+    from collections import Counter as _Counter
+    band = _Counter()
+    for _, _, _, sc in core:
+        b = "pos1(>=75)" if sc >= 75 else "pos2(>=60)" if sc >= 60 else "pos3(>=48)" if sc >= 48 else "sub"
+        band[b] += 1
+    n_groups = (len(core) + request.keywords_per_group - 1) // max(1, request.keywords_per_group)
+
+    if request.dry_run:
+        return {
+            "success": True, "dry_run": True, "customer_id": cid,
+            "core_selected": len(core), "score_min": request.score_min,
+            "band_distribution": dict(band),
+            "plan": {
+                "new_campaign": request.campaign_name, "daily_budget": request.daily_budget,
+                "ad_groups": n_groups, "keywords_per_group": request.keywords_per_group,
+                "init_bid": request.init_bid,
+                "creative": {"type": "TEXT_45", "headline": request.headline,
+                             "medical_no": request.medical_no, "final_url": request.final_url},
+                "delete_pool_copies": request.delete_pool_copies,
+                "defund_campaign_id": request.defund_campaign_id,
+                "defund_to_budget": request.defund_to_budget,
+            },
+            "samples": sorted([c[0] for c in core[:60]]),
+            "note": "dry_run=false 로 실제 승격(캠페인+그룹+키워드+의료소재 생성, DB 이동, 풀 복사본 삭제).",
+        }
+
+    if not core:
+        return {"success": False, "step": "no_core_keywords", "score_min": request.score_min}
+
+    async def _run():
+        client = NaverAdApiClient()
+        client.customer_id = account["customer_id"]; client.api_key = account["api_key"]; client.secret_key = account["secret_key"]
+        # 1) 비즈채널(WEB_SITE) 확보
+        ch_id = None
+        try:
+            channels = await client.list_business_channels() or []
+            ws = [c for c in channels if c.get("channelTp") == "WEB_SITE"] or channels
+            if ws:
+                ch = ws[0]
+                ch_id = (ch.get("nccBusinessChannelId") or ch.get("businessChannelId")
+                         or ch.get("nccChannelId") or ch.get("id"))
+        except Exception as e:
+            logger.error(f"[promote-core] 비즈채널 조회 실패: {e}")
+        if not ch_id:
+            logger.error("[promote-core] 비즈채널 없음 — 중단"); return
+        # 2) 전용 캠페인 생성 (이름 중복 시 suffix)
+        cname = request.campaign_name
+        new_cid = None
+        for attempt in range(3):
+            try:
+                camp = await client.create_campaign(name=cname, daily_budget=request.daily_budget, campaign_tp="WEB_SITE")
+                new_cid = camp.get("nccCampaignId")
+                if new_cid:
+                    break
+            except Exception as e:
+                if "already in use" in str(e) or "3506" in str(e):
+                    cname = f"{request.campaign_name}_{attempt+2}"; await asyncio.sleep(0.3); continue
+                logger.error(f"[promote-core] 캠페인 생성 실패: {e}"); return
+        if not new_cid:
+            logger.error("[promote-core] 캠페인 ID 없음 — 중단"); return
+        logger.warning(f"[promote-core] 캠페인 생성 ✓ {cname} ({new_cid}) 예산={request.daily_budget} 핵심={len(core)}")
+        # 3) 그룹별: 광고그룹 → 키워드(100/콜) → 의료소재
+        moved: List[Tuple[str, str, str]] = []  # (keyword, new_ncc_id, gid)
+        old_ncc_by_kw = {c[0]: c[1] for c in core}
+        grp_idx = 0
+        for i in range(0, len(core), request.keywords_per_group):
+            chunk = core[i:i + request.keywords_per_group]
+            grp_idx += 1
+            gname = f"{request.campaign_name}_grp_{grp_idx:03d}"
+            try:
+                ag = await client.create_ad_group(campaign_id=new_cid, name=gname, bid_amt=request.init_bid,
+                                                   business_channel_id=ch_id)
+                gid = ag.get("nccAdgroupId")
+                if not gid:
+                    logger.warning(f"[promote-core] 그룹 {gname} ID 없음 — skip"); continue
+            except Exception as e:
+                logger.warning(f"[promote-core] 그룹 생성 실패 {gname}: {str(e)[:120]}"); continue
+            # 키워드 100개씩
+            for j in range(0, len(chunk), 100):
+                sub = chunk[j:j + 100]
+                body = [{"nccAdgroupId": gid, "keyword": c[0], "bidAmt": request.init_bid, "useGroupBidAmt": False}
+                        for c in sub]
+                try:
+                    res = await client.create_keywords(body, ad_group_id=gid) or []
+                    for k in res:
+                        kt, knid = (k.get("keyword") or "").strip(), k.get("nccKeywordId")
+                        if kt and knid:
+                            moved.append((kt, knid, gid))
+                except Exception as e:
+                    logger.warning(f"[promote-core] 키워드 생성 실패 grp{grp_idx} sub{j}: {str(e)[:120]}")
+                await asyncio.sleep(0.15)
+            # 의료심의 소재 1개
+            try:
+                await client.create_ad(
+                    ad_group_id=gid, headline_pc=request.headline, description_pc=request.description,
+                    display_url=request.display_url, final_url_pc=request.final_url,
+                    medical_no=request.medical_no,
+                )
+            except Exception as e:
+                logger.warning(f"[promote-core] 소재 생성 실패 grp{grp_idx}: {str(e)[:120]}")
+            await asyncio.sleep(0.2)
+        logger.warning(f"[promote-core] 이동 생성 완료 — {len(moved)}개 (그룹 {grp_idx})")
+        # 4) DB 이동 반영 (keyword 기준 UPDATE → 코어 캠페인 지시)
+        try:
+            with _sq.connect(reg.db_path, timeout=30.0) as conn:
+                for kt, knid, gid in moved:
+                    conn.execute(
+                        "UPDATE registered_keywords SET campaign_id=?, ad_group_id=?, ncc_keyword_id=?, bid_amt=? "
+                        "WHERE account_customer_id=? AND keyword=?",
+                        (new_cid, gid, knid, request.init_bid, cid, kt),
+                    )
+                conn.commit()
+        except Exception as e:
+            logger.warning(f"[promote-core] DB 업데이트 실패: {str(e)[:120]}")
+        # 5) 풀 복사본 삭제 (성공 이동분의 옛 ncc_id — 실패해도 무해)
+        if request.delete_pool_copies:
+            old_ids = [old_ncc_by_kw[kt] for kt, _, _ in moved if kt in old_ncc_by_kw and old_ncc_by_kw[kt]]
+            done = 0; fail = 0
+            for i in range(0, len(old_ids), 100):
+                try:
+                    await client.delete_keywords_bulk(old_ids[i:i + 100]); done += len(old_ids[i:i + 100])
+                except Exception:
+                    fail += len(old_ids[i:i + 100])
+                await asyncio.sleep(0.1)
+            logger.warning(f"[promote-core] 풀 복사본 삭제 — {done} (실패 {fail})")
+        # 6) 코어 예산 재원 마련 — 지정 캠페인 감액(총 상한 유지)
+        if request.defund_campaign_id:
+            try:
+                base = await client.get_campaign(request.defund_campaign_id)
+                await client.update_campaign_budget(
+                    request.defund_campaign_id, request.defund_to_budget,
+                    base=base if isinstance(base, dict) else None)
+                logger.warning(f"[promote-core] defund {request.defund_campaign_id} → {request.defund_to_budget}원")
+            except Exception as e:
+                logger.warning(f"[promote-core] defund 실패: {str(e)[:120]}")
+        logger.warning(f"[promote-core] 전체 완료 — 캠페인 {cname}({new_cid}) 핵심 {len(moved)}개 이동")
+
+    background_tasks.add_task(_run)
+    return {"success": True, "started": True, "customer_id": cid,
+            "core_selected": len(core), "band_distribution": dict(band),
+            "new_campaign": request.campaign_name, "daily_budget": request.daily_budget,
+            "ad_groups_planned": n_groups,
+            "message": "핵심 전용 캠페인 승격 백그라운드 시작 (로그 [promote-core])"}
 
 
 @router.get("/keyword-pool/diagnostics/ad-by-id")
