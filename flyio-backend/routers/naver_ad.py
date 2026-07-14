@@ -5662,6 +5662,7 @@ class BulkPauseOffdomainRequest(BaseModel):
     dry_run: bool = Field(True, description="true: off 대상 개수+샘플, false: 실제 bulk userLock=true")
     max_pause: int = Field(200000, description="안전 상한")
     activate: bool = Field(False, description="true: keep(loan AND domain AND NOT exclude)을 userLock=false 로 재개(복구). 비keep은 건드리지 않음")
+    keep_campaign_prefixes: Optional[List[str]] = Field(None, description="이 prefix 로 시작하는 캠페인명의 키워드는 토큰 판정과 무관하게 절대 off/재개 대상에서 제외(보호). 예: ['제휴_'] — PG/지급대행 별도 라인 보호용")
 
 
 @router.post("/keyword-pool/registered/bulk-pause-offdomain")
@@ -5689,11 +5690,29 @@ async def keyword_pool_bulk_pause_offdomain(
     reg = get_registered_keywords_db()
     with _sq.connect(reg.db_path, timeout=30.0) as conn:
         rows = conn.execute(
-            "SELECT keyword, ncc_keyword_id, ad_group_id FROM registered_keywords "
+            "SELECT keyword, ncc_keyword_id, ad_group_id, campaign_id FROM registered_keywords "
             "WHERE account_customer_id=? AND ncc_keyword_id IS NOT NULL AND ad_group_id IS NOT NULL "
             "AND removed_at IS NULL",
             (cid,),
         ).fetchall()
+
+    # 캠페인 prefix 보호: 지정 prefix 로 시작하는 캠페인의 키워드는 대상에서 완전 제외
+    protected_campaign_ids: set = set()
+    prefixes = [p for p in (request.keep_campaign_prefixes or []) if p and p.strip()]
+    if prefixes:
+        _pc = NaverAdApiClient()
+        _pc.customer_id = account["customer_id"]; _pc.api_key = account["api_key"]; _pc.secret_key = account["secret_key"]
+        try:
+            camps = await _pc.get_campaigns()
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"캠페인 조회 실패(prefix 보호 불가): {str(e)[:120]}")
+        for c in (camps or []):
+            nm = (c.get("name") or "")
+            if any(nm.startswith(p) for p in prefixes):
+                protected_campaign_ids.add(c.get("nccCampaignId"))
+    if protected_campaign_ids:
+        rows = [r for r in rows if r[3] not in protected_campaign_ids]
+    rows = [(r[0], r[1], r[2]) for r in rows]
 
     def _is_keep(kw: str) -> bool:
         t = (kw or "").replace(" ", "")
@@ -5728,6 +5747,7 @@ async def keyword_pool_bulk_pause_offdomain(
         return {
             "success": True, "dry_run": True, "customer_id": cid, "mode": verb,
             "scanned": len(rows), "targets": len(sel),
+            "protected_campaigns": len(protected_campaign_ids),
             "samples": [s[0] for s in sel[:40]],
         }
 
@@ -5880,6 +5900,121 @@ async def keyword_pool_keep_volume_audit(
             on_vol_list.sort(key=lambda x: x["monthly_total"], reverse=True)
             result["keywords"] = on_vol_list
     return result
+
+
+class LiveOffdomainScanRequest(BaseModel):
+    off_tokens: List[str] = Field(default_factory=list, description="명백한 무관 토큰. 키워드가 이 중 1+ 포함하면 무관 후보")
+    keep_tokens: List[str] = Field(default_factory=list, description="보호 토큰. 무관 후보라도 이 중 1+ 포함하면 제외(오탐 방지)")
+    no_ondomain_mode: bool = Field(False, description="true: off_tokens 대신 'keep_tokens(온도메인)을 하나도 안 가진' 키워드를 후보로. keep_tokens=온도메인 토큰")
+    min_volume: int = Field(0, description="pool monthly_total 하한. 이 값 이상만 반환/집계")
+    max_groups: int = Field(4000, description="라이브 조회할 adgroup 상한(안전)")
+    sample: int = Field(80, ge=0, le=5000)
+
+
+@router.post("/keyword-pool/registered/live-offdomain-scan")
+async def keyword_pool_live_offdomain_scan(
+    request: LiveOffdomainScanRequest,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """**현재 ON(userLock=false) 상태인 무관 키워드**만 라이브 실측으로 골라낸다 (읽기 전용, 아무것도 안 바꿈).
+    후보 선정: off_tokens 포함(기본) 또는 no_ondomain_mode=true 면 keep_tokens 하나도 없음.
+    keep_tokens 는 오탐 방지 보호. 후보가 든 adgroup만 네이버 라이브 조회 → userLock 실측 → ON 만 반환.
+    검색량(pool monthly_total) 조인해 큰 것부터 정렬."""
+    import sqlite3 as _sq
+    from services.naver_ad_service import NaverAdApiClient
+    from database.registered_keywords_db import get_registered_keywords_db
+    from database.keyword_pool_db import get_keyword_pool_db
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+    off = [t for t in (request.off_tokens or []) if t and t.strip()]
+    keep = [t for t in (request.keep_tokens or []) if t and t.strip()]
+    if request.no_ondomain_mode:
+        if not keep:
+            raise HTTPException(status_code=400, detail="no_ondomain_mode 는 keep_tokens(온도메인) 필요")
+    elif not off:
+        raise HTTPException(status_code=400, detail="off_tokens 필요 (또는 no_ondomain_mode=true)")
+
+    reg = get_registered_keywords_db()
+    with _sq.connect(reg.db_path, timeout=30.0) as conn:
+        rows = conn.execute(
+            "SELECT keyword, ncc_keyword_id, ad_group_id FROM registered_keywords "
+            "WHERE account_customer_id=? AND ncc_keyword_id IS NOT NULL AND ad_group_id IS NOT NULL "
+            "AND removed_at IS NULL",
+            (cid,),
+        ).fetchall()
+
+    def _is_candidate(kw: str) -> bool:
+        t = (kw or "").replace(" ", "")
+        if keep and any(k in t for k in keep):
+            return False
+        if request.no_ondomain_mode:
+            return True  # keep(온도메인) 토큰 하나도 없음 = 후보
+        return any(o in t for o in off)
+
+    cand = [(kw, nid, gid) for kw, nid, gid in rows if _is_candidate(kw)]
+
+    # 검색량 로드
+    pool = get_keyword_pool_db()
+    vol = {}
+    cand_kws = list({kw for kw, _, _ in cand})
+    with _sq.connect(pool.db_path, timeout=30.0) as conn:
+        for i in range(0, len(cand_kws), 500):
+            chunk = cand_kws[i:i + 500]
+            ph = ",".join("?" * len(chunk))
+            for kw, mt in conn.execute(
+                f"SELECT keyword, monthly_total FROM naverad_keyword_pool "
+                f"WHERE account_customer_id=? AND keyword IN ({ph})",
+                [cid, *chunk],
+            ).fetchall():
+                vol[kw] = mt or 0
+
+    # 후보가 든 adgroup만 라이브 조회 → userLock 실측
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]; client.api_key = account["api_key"]; client.secret_key = account["secret_key"]
+    groups = list({gid for _, _, gid in cand})[: request.max_groups]
+    lock_by_id = {}
+    scanned = 0; gerr = 0
+    for gid in groups:
+        try:
+            kws = await client.get_keywords(ad_group_id=gid)
+            for k in (kws or []):
+                nid = k.get("nccKeywordId")
+                if nid:
+                    lock_by_id[nid] = bool(k.get("userLock"))
+            scanned += 1
+        except Exception:
+            gerr += 1
+        await asyncio.sleep(0.03)
+
+    on_list = []; off_cnt = 0; unknown = 0
+    for kw, nid, _ in cand:
+        st = lock_by_id.get(nid)
+        if st is None:
+            unknown += 1; continue
+        if st is False:  # userLock=false → ON
+            on_list.append({"keyword": kw, "monthly_total": vol.get(kw, 0)})
+        else:
+            off_cnt += 1
+    # 검색량 하한 적용 + 정렬
+    on_flt = [x for x in on_list if x["monthly_total"] >= request.min_volume]
+    on_flt.sort(key=lambda x: x["monthly_total"], reverse=True)
+
+    return {
+        "success": True, "customer_id": cid,
+        "registered_total": len(rows),
+        "candidates": len(cand),
+        "groups_total": len({gid for _, _, gid in cand}),
+        "groups_scanned": scanned, "groups_error": gerr,
+        "candidate_on": len(on_list),
+        "candidate_off_already": off_cnt,
+        "candidate_status_unknown": unknown,
+        "min_volume": request.min_volume,
+        "on_with_min_volume": len(on_flt),
+        "samples": on_flt[: request.sample],
+    }
 
 
 class BulkRankBidRequest(BaseModel):
@@ -11465,6 +11600,10 @@ async def keyword_pool_image_ext_backfill(
     image_path = img_path_param
     discovered_from = None
     types_seen: Set[str] = set()
+    _raw_ext_dump: List[dict] = []
+    # POWER_LINK_IMAGE 생성 필수 부가필드 — discover 스캔에서 기존 확장소재로부터 캡처.
+    img_w = img_h = None
+    pc_channel_id = mobile_channel_id = None
     if not image_path:
         try:
             all_campaigns = await _campaigns_retry()
@@ -11476,6 +11615,10 @@ async def keyword_pool_image_ext_backfill(
                 cand = all_campaigns
                 per_cap = 2      # 미지정이면 캠페인당 첫 2그룹만
             scanned = 0
+            img_variants: dict = {}   # imagePath -> {w,h,pc,mo,from} (치수별 후보 수집)
+            MIN_DIM = 640             # 네이버 API 파워링크 이미지 생성 최소 규격(640×640)
+            _scan_cap = 150 if not dc else 900   # 전수 스캔은 fly 60s 프록시 내로 제한
+            qualified = None          # >=640 이미지(생성 가능) 발견 시 저장
             for c in cand:
                 try:
                     groups = _as_list(await client.get_ad_groups(campaign_id=c.get("nccCampaignId")) or [])
@@ -11498,29 +11641,56 @@ async def keyword_pool_image_ext_backfill(
                             if t == "POWER_LINK_IMAGE":
                                 ad = e.get("adExtension") or {}
                                 ip = ad.get("imagePath") if isinstance(ad, dict) else None
-                                if ip:
-                                    image_path = ip
-                                    discovered_from = gid
-                                    break
-                    if image_path:
+                                if ip and ip not in img_variants:
+                                    w = ad.get("imageWidth"); h = ad.get("imageHeight")
+                                    img_variants[ip] = {"w": w, "h": h, "from": gid,
+                                                        "pc": e.get("pcChannelId"),
+                                                        "mo": e.get("mobileChannelId")}
+                                    if not _raw_ext_dump:
+                                        _raw_ext_dump.append(e)
+                                    if (isinstance(w, int) and isinstance(h, int)
+                                            and w >= MIN_DIM and h >= MIN_DIM and qualified is None):
+                                        qualified = (ip, img_variants[ip])
+                    if qualified or scanned >= _scan_cap:
                         break
-                    if scanned >= 900:
-                        break
-                if image_path or scanned >= 900:
+                if qualified or scanned >= _scan_cap:
                     break
+            # 선택: 640+ 우선, 없으면 첫 발견분(생성 시 640 미달로 거부되지만 진단용)
+            chosen_ip, chosen = (qualified if qualified else
+                                 (next(iter(img_variants.items())) if img_variants else (None, None)))
+            if chosen:
+                image_path = chosen_ip
+                discovered_from = chosen["from"]
+                img_w, img_h = chosen["w"], chosen["h"]
+                pc_channel_id, mobile_channel_id = chosen["pc"], chosen["mo"]
         except Exception as ex:
             return {"success": False, "step": "discover_failed", "error": f"{type(ex).__name__}: {str(ex)[:250]}"}
 
     if req_mode == "discover":
         return {"success": bool(image_path), "mode": "discover", "image_path": image_path,
                 "discovered_from": discovered_from, "types_seen": sorted(types_seen),
-                "scanned": locals().get("scanned", 0)}
+                "scanned": locals().get("scanned", 0),
+                "chosen_dims": {"w": img_w, "h": img_h},
+                "qualified_640": bool(locals().get("qualified")),
+                "variants": [{"w": v["w"], "h": v["h"], "path": p[:48]}
+                             for p, v in list(locals().get("img_variants", {}).items())[:20]],
+                "raw_ext": _raw_ext_dump[:1]}
 
     if not image_path:
         return {"success": False, "step": "no_image_path",
                 "hint": "계정에 POWER_LINK_IMAGE 확장소재가 없음 — image_path 직접 지정 필요"}
 
-    content = {"adExtension": {"imagePath": image_path}}
+    # POWER_LINK_IMAGE 생성 body — imagePath 만으론 code 1010. imageWidth/Height + 비즈채널 필수.
+    _ad_ext = {"imagePath": image_path}
+    if img_w is not None:
+        _ad_ext["imageWidth"] = img_w
+    if img_h is not None:
+        _ad_ext["imageHeight"] = img_h
+    content = {"adExtension": _ad_ext}
+    if pc_channel_id:
+        content["pcChannelId"] = pc_channel_id
+    if mobile_channel_id:
+        content["mobileChannelId"] = mobile_channel_id
 
     # test_one: 첫 캠페인 첫 그룹 1개에만 동기 생성 + 네이버 응답 반환(검증용, 빠름).
     if req_mode == "test_one":
@@ -11665,6 +11835,98 @@ async def keyword_pool_campaign_budget_bulk(
     return {"success": True, "started": True, "scope": request.scope,
             "daily_budget": new_budget, "campaigns_total": len(campaigns),
             "message": f"백그라운드 시작 — {len(campaigns)}개 캠페인 일예산 {new_budget}원 적용"}
+
+
+class CampaignConfigItem(BaseModel):
+    campaign_id: str = Field(..., description="nccCampaignId")
+    new_name: Optional[str] = Field(None, description="새 캠페인명(30자 한도). None 이면 이름 유지")
+    daily_budget: Optional[int] = Field(None, description="일예산(원). None 이면 예산 유지")
+    user_lock: Optional[bool] = Field(None, description="False=ON(활성), True=OFF(중지). None 이면 상태 유지")
+
+
+class CampaignBulkConfigureRequest(BaseModel):
+    items: List[CampaignConfigItem] = Field(..., description="캠페인별 개별 설정 리스트")
+    dry_run: bool = Field(True)
+
+
+@router.post("/keyword-pool/campaign/bulk-configure")
+async def keyword_pool_campaign_bulk_configure(
+    request: CampaignBulkConfigureRequest,
+    background_tasks: BackgroundTasks,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """캠페인별로 이름/일예산/활성상태(userLock)를 개별 설정 — full-body PUT 한 번에.
+    지점 캠페인처럼 캠페인마다 다른 이름·예산이 필요할 때. 이름변경은 fields없는 전체 PUT 필수(원본 body echo).
+    user_lock=False 로 중지 캠페인 활성. dry_run 으로 계획 미리보기."""
+    from services.naver_ad_service import NaverAdApiClient
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    items = request.items or []
+    if not items:
+        return {"success": False, "step": "no_items"}
+    for it in items:
+        if it.new_name and len(it.new_name) > 30:
+            raise HTTPException(status_code=400, detail=f"캠페인명 30자 초과: {it.new_name}")
+
+    if request.dry_run:
+        # 현재 캠페인 목록으로 현행값 대조(미리보기)
+        try:
+            campaigns = await client.get_campaigns() or []
+        except Exception:
+            campaigns = []
+        by_id = {c.get("nccCampaignId"): c for c in campaigns if isinstance(c, dict)}
+        preview = []
+        for it in items:
+            base = by_id.get(it.campaign_id) or {}
+            preview.append({
+                "campaign_id": it.campaign_id,
+                "old_name": base.get("name"),
+                "new_name": it.new_name,
+                "old_budget": base.get("dailyBudget"),
+                "new_budget": it.daily_budget,
+                "old_userLock": base.get("userLock"),
+                "new_userLock": it.user_lock,
+                "found": bool(base),
+            })
+        return {"success": True, "dry_run": True, "customer_id": int(account["customer_id"]),
+                "count": len(items), "preview": preview}
+
+    async def _run():
+        ok = 0
+        failed: List[Dict] = []
+        for it in items:
+            try:
+                base = await client.get_campaign(it.campaign_id)
+                body = dict(base) if isinstance(base, dict) else {}
+                body["nccCampaignId"] = it.campaign_id
+                if it.new_name:
+                    body["name"] = it.new_name
+                if it.daily_budget is not None:
+                    body["dailyBudget"] = int(it.daily_budget)
+                    body["useDailyBudget"] = True
+                if it.user_lock is not None:
+                    body["userLock"] = bool(it.user_lock)
+                # 이름변경 포함 = fields 없는 전체 PUT(full replace)
+                await client._request("PUT", f"/ncc/campaigns/{it.campaign_id}", body)
+                ok += 1
+            except Exception as e:
+                failed.append({"campaign_id": it.campaign_id, "name": it.new_name,
+                               "error": f"{type(e).__name__}: {str(e)[:150]}"})
+            await asyncio.sleep(0.15)
+        logger.warning(f"[campaign-bulk-configure] 완료 — {ok}/{len(items)} 적용 ({len(failed)} 실패)")
+        if failed:
+            logger.warning(f"[campaign-bulk-configure] 실패 상세: {failed[:10]}")
+
+    background_tasks.add_task(_run)
+    return {"success": True, "started": True, "count": len(items),
+            "message": f"백그라운드 시작 — {len(items)}개 캠페인 개별설정(이름/예산/활성) 적용 (로그 [campaign-bulk-configure])"}
 
 
 class CreativeBackfillRequest(BaseModel):
@@ -11932,6 +12194,204 @@ async def keyword_pool_ads_backfill_creative(
             "medical_no": (_med_no or None),
             "message": "백그라운드 시작 — 캠페인 순회 + 소재 부착 진행(즉시 응답). "
                        "중복은 기존보유 처리. 결과는 fly logs 의 [creative-backfill] 라인에서 확인."}
+
+
+class RsaBackfillRequest(BaseModel):
+    source_ad_id: str = Field(..., description="복제 소스 RSA_AD 소재(nccAdId) — 이 소재의 assets(헤드라인/설명)+URL을 소재 없는 그룹에 복제")
+    scope: str = Field("all", description="'all' 전체 파워링크(WEB_SITE) 캠페인 / 'pool' auto_ 캠페인만")
+    mode: str = Field("discover", description="discover(추출만) | test_one(첫 그룹 1개 생성+raw) | backfill(전체 백그라운드)")
+
+
+@router.post("/keyword-pool/ads/backfill-rsa")
+async def keyword_pool_ads_backfill_rsa(
+    request: RsaBackfillRequest,
+    background_tasks: BackgroundTasks,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """반응형 소재(RSA_AD)를 소스 소재 통째 복제로 소재 없는 모든 광고그룹에 부착.
+
+    - create_ad(TEXT_45)는 헤드라인 15/설명 45자로 잘라 RSA 재현 불가 → 소스 assets 배열을 그대로 복제.
+    - mode=discover: 소스에서 뽑은 assets/URL 요약만 반환(생성 없음).
+    - mode=test_one: 첫 (소재 없는) 그룹 1개에 생성 + 네이버 raw 응답 반환(payload 계약 검증).
+    - mode=backfill: WEB_SITE 캠페인 전체 순회, 이미 소재 있는 그룹은 skip, 나머지에 RSA 생성(백그라운드).
+    """
+    from services.naver_ad_service import NaverAdApiClient
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    def _as_list(x):
+        if isinstance(x, list):
+            return x
+        if isinstance(x, dict):
+            return x.get("data") or x.get("list") or []
+        return []
+
+    # ── 1) 소스 RSA 소재 조회 + assets/URL 추출 ──
+    try:
+        src = await client.get_ad_by_id(request.source_ad_id) or {}
+    except Exception as e:
+        return {"success": False, "step": "source_fetch_failed", "error": f"{type(e).__name__}: {str(e)[:300]}"}
+    src_type = (src.get("type") or "").strip().upper()
+    if src_type != "RSA_AD":
+        return {"success": False, "step": "source_not_rsa", "type": src_type,
+                "hint": "이 엔드포인트는 RSA_AD 전용. TEXT_45 는 /backfill-creative 사용."}
+    src_assets = src.get("assets") or (src.get("ad") or {}).get("assets") or []
+    adobj = src.get("ad") if isinstance(src.get("ad"), dict) else {}
+    pc_src = adobj.get("pc") if isinstance(adobj.get("pc"), dict) else {}
+    mo_src = adobj.get("mobile") if isinstance(adobj.get("mobile"), dict) else {}
+
+    def _clean_url_block(o):
+        # 생성 시 필요한 URL 필드만 — final/display (punyCode 등 메타 제외)
+        out = {}
+        if isinstance(o, dict):
+            if o.get("final"):
+                out["final"] = o["final"]
+            if o.get("display"):
+                out["display"] = o["display"]
+        return out
+
+    pc = _clean_url_block(pc_src)
+    mobile = _clean_url_block(mo_src) or pc
+
+    # assets 배열 → 생성용 최소 필드로 재구성(nccAssetId/링크ID/시각 메타 제거, pin 보존)
+    create_assets: List[dict] = []
+    for a in src_assets:
+        if not isinstance(a, dict):
+            continue
+        ad_data = a.get("assetData") or {}
+        text_v = ad_data.get("text") if isinstance(ad_data, dict) else None
+        link_type = a.get("linkType")
+        if not text_v or link_type not in ("HEADLINE", "DESCRIPTION"):
+            continue
+        item = {"assetType": a.get("assetType") or "TEXT",
+                "assetData": {"text": text_v},
+                "linkType": link_type}
+        if a.get("pin"):
+            item["pin"] = str(a["pin"])
+        create_assets.append(item)
+
+    n_head = sum(1 for a in create_assets if a["linkType"] == "HEADLINE")
+    n_desc = sum(1 for a in create_assets if a["linkType"] == "DESCRIPTION")
+    if not (create_assets and n_head and n_desc and pc.get("final")):
+        return {"success": False, "step": "source_incomplete",
+                "headlines": n_head, "descriptions": n_desc, "pc": pc}
+
+    summary = {"headlines": n_head, "descriptions": n_desc, "pc": pc, "mobile": mobile,
+               "pinned": [a for a in create_assets if a.get("pin")]}
+
+    if request.mode == "discover":
+        return {"success": True, "mode": "discover", "source_ad_id": request.source_ad_id,
+                "assets_total": len(create_assets), **summary,
+                "assets_preview": [a["assetData"]["text"][:24] for a in create_assets[:6]]}
+
+    async def _create_one(gid: str):
+        return await client.create_rsa_ad(gid, assets=create_assets, pc=pc, mobile=mobile)
+
+    def _target_campaigns(all_campaigns):
+        if request.scope == "all":
+            return [c for c in all_campaigns if (c.get("campaignTp") or "") == "WEB_SITE"]
+        return [c for c in all_campaigns if (c.get("name") or "").startswith("auto_")]
+
+    async def _campaigns_retry():
+        for _att in range(5):
+            try:
+                cs = _as_list(await client.get_campaigns() or [])
+                if cs:
+                    return cs
+            except Exception:
+                pass
+            await asyncio.sleep(2.5)
+        return []
+
+    # ── test_one: 소재 없는 첫 그룹 1개에만 생성 + raw 반환(계약 검증) ──
+    if request.mode == "test_one":
+        all_campaigns = await _campaigns_retry()
+        gid = None
+        for c in _target_campaigns(all_campaigns):
+            try:
+                groups = _as_list(await client.get_ad_groups(campaign_id=c.get("nccCampaignId")) or [])
+            except Exception:
+                continue
+            for g in groups:
+                cand = g.get("nccAdgroupId")
+                if not cand:
+                    continue
+                try:
+                    existing = _as_list(await client.get_ads(ad_group_id=cand) or [])
+                except Exception:
+                    existing = []
+                if not existing:            # 소재 없는 그룹만 대상(중복 방지)
+                    gid = cand
+                    break
+            if gid:
+                break
+        if not gid:
+            return {"success": False, "step": "no_empty_ad_group",
+                    "hint": "모든 그룹에 이미 소재 있음 or 그룹 없음"}
+        try:
+            res = await _create_one(gid)
+            return {"success": True, "mode": "test_one", "ad_group_id": gid,
+                    "assets_total": len(create_assets), "naver_response": res}
+        except Exception as e:
+            return {"success": False, "mode": "test_one", "ad_group_id": gid,
+                    "assets_total": len(create_assets),
+                    "error": f"{type(e).__name__}: {str(e)[:500]}"}
+
+    # ── backfill: 전체 백그라운드 ──
+    async def _run():
+        logger.warning(f"[rsa-backfill] 시작 — scope={request.scope} src={request.source_ad_id} "
+                       f"assets={len(create_assets)}(H{n_head}/D{n_desc})")
+        all_campaigns = await _campaigns_retry()
+        target_camps = _target_campaigns(all_campaigns)
+        logger.warning(f"[rsa-backfill] 캠페인 {len(all_campaigns)} → 대상(파워링크) {len(target_camps)}")
+        if not target_camps:
+            logger.warning("[rsa-backfill] 대상 캠페인 0 — 종료")
+            return
+        ad_group_ids: List[str] = []
+        for c in target_camps:
+            for _attempt in range(3):
+                try:
+                    groups = _as_list(await client.get_ad_groups(campaign_id=c.get("nccCampaignId")) or [])
+                    for g in groups:
+                        if g.get("nccAdgroupId"):
+                            ad_group_ids.append(g["nccAdgroupId"])
+                    break
+                except Exception:
+                    await asyncio.sleep(1.5)
+            await asyncio.sleep(0.08)
+        logger.warning(f"[rsa-backfill] 대상 그룹 {len(ad_group_ids)}")
+        created = existed = failed = 0
+        for i, gid in enumerate(ad_group_ids):
+            try:
+                # 이미 소재 있으면 skip(멱등 — 중간에 끊겨도 재실행하면 이어짐)
+                existing = _as_list(await client.get_ads(ad_group_id=gid) or [])
+                if existing:
+                    existed += 1
+                else:
+                    await _create_one(gid)
+                    created += 1
+            except Exception as e:
+                msg = str(e)
+                if "3822" in msg or "same content" in msg.lower():
+                    existed += 1
+                else:
+                    failed += 1
+                    logger.warning(f"[rsa-backfill] ag={gid} 실패: {type(e).__name__}: {msg[:120]}")
+            if (i + 1) % 300 == 0:
+                logger.warning(f"[rsa-backfill] 진행 {i+1}/{len(ad_group_ids)} — 생성{created} 기존{existed} 실패{failed}")
+            await asyncio.sleep(0.12)
+        logger.warning(f"[rsa-backfill] 완료 — 생성 {created} / 기존 {existed} / 실패 {failed} / 총 {len(ad_group_ids)}")
+
+    background_tasks.add_task(_run)
+    return {"success": True, "mode": "backfill", "started": True,
+            "source_ad_id": request.source_ad_id, "assets_total": len(create_assets),
+            "message": "백그라운드 시작 — RSA 소재 전 그룹 부착(이미 소재 있으면 skip). 로그 [rsa-backfill]."}
 
 
 class CreativePurgeRequest(BaseModel):

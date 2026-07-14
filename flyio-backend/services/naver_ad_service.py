@@ -592,6 +592,31 @@ class NaverAdApiClient:
         }
         return await self._request("POST", endpoint, payload)
 
+    async def create_rsa_ad(
+        self,
+        ad_group_id: str,
+        *,
+        assets: List[dict],
+        pc: dict,
+        mobile: Optional[dict] = None,
+    ) -> dict:
+        """반응형 검색광고(RSA_AD) 소재 1개 생성 — 소스 RSA 소재 복제용.
+
+        네이버: POST /ncc/ads?nccAdgroupId=...
+        body.type: "RSA_AD"
+        body.ad: { pc: {final, display}, mobile: {final, display} }  ← URL 만
+        body.assets: [ {assetType:"TEXT", assetData:{text}, linkType:"HEADLINE"|"DESCRIPTION", pin?}, ... ]
+          - GET /ncc/ads/{id} 응답의 assets 배열 구조를 그대로 반영(pin 포함).
+        """
+        endpoint = f"/ncc/ads?nccAdgroupId={ad_group_id}"
+        payload = {
+            "nccAdgroupId": ad_group_id,
+            "type": "RSA_AD",
+            "ad": {"pc": pc, "mobile": mobile or pc},
+            "assets": assets,
+        }
+        return await self._request("POST", endpoint, payload)
+
     async def delete_ad(self, ad_id: str) -> dict:
         """단일 광고소재 삭제 — DELETE /ncc/ads/{adId}."""
         return await self._request("DELETE", f"/ncc/ads/{ad_id}")
