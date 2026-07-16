@@ -272,6 +272,19 @@ class KeywordPoolDB:
             )
             return [r["keyword"] for r in cur.fetchall() if r["keyword"]]
 
+    def list_registered_rows(self, account_customer_id: int) -> List[Dict]:
+        """등록 상태 pool row 전체 (id, keyword) — 계층 마이그레이션 재분류용."""
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT id, keyword FROM naverad_keyword_pool
+                   WHERE account_customer_id = ?
+                     AND status = 'registered'
+                     AND keyword IS NOT NULL""",
+                (account_customer_id,),
+            )
+            return [dict(r) for r in cur.fetchall()]
+
     def list_registered_random_seeds(
         self,
         account_customer_id: int,

@@ -186,6 +186,28 @@ class RegisteredKeywordsDB:
             row = cur.fetchone()
             return dict(row) if row else {}
 
+    def get_ncc_ids(self, account_customer_id: int, keywords: Iterable[str]) -> List[Dict]:
+        """주어진 키워드의 네이버 ID 조회 — 계층 마이그레이션 삭제용.
+        반환: [{keyword, ncc_keyword_id, ad_group_id, campaign_id}] (미삭제분만)."""
+        kws = list(set(k.strip() for k in keywords if k and k.strip()))
+        if not kws:
+            return []
+        out: List[Dict] = []
+        with self._conn() as conn:
+            cur = conn.cursor()
+            for i in range(0, len(kws), 500):
+                chunk = kws[i:i + 500]
+                placeholders = ",".join("?" * len(chunk))
+                cur.execute(
+                    f"""SELECT keyword, ncc_keyword_id, ad_group_id, campaign_id
+                        FROM registered_keywords
+                        WHERE account_customer_id = ? AND removed_at IS NULL
+                          AND keyword IN ({placeholders})""",
+                    [account_customer_id, *chunk],
+                )
+                out.extend(dict(r) for r in cur.fetchall())
+        return out
+
     def mark_removed(self, account_customer_id: int, keywords: Iterable[str]) -> int:
         """네이버에서 수동 삭제된 키워드를 sync — removed_at 채움.
 

@@ -7654,6 +7654,106 @@ class AdminDeleteRequest(BaseModel):
     user_id: int
 
 
+class DovisionMigrateRequest(BaseModel):
+    customer_id: Optional[str] = None
+    mid_key: Optional[str] = Field(default=None, description="대상 중분류 key (없으면 분포만)")
+    dry_run: bool = Field(default=True, description="True면 재분류 분포만 반환(무변경)")
+    limit: int = Field(default=2000, description="1회 처리 배치 — 반복 호출로 재개")
+
+
+@router.post("/keyword-pool/admin/dovision-migrate-hierarchy")
+async def dovision_migrate_hierarchy(
+    request: DovisionMigrateRequest,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """두비전 계층 마이그레이션 — 중분류 단위 단계 실행 (blast radius 최소화).
+
+    dry_run=True  : 등록분을 새 계층으로 재분류한 분포만 반환 (변경 없음).
+    dry_run=False + mid_key : 그 중분류 키워드만 네이버에서 삭제 → registered/pool 을
+      pending 으로 되돌림 → 배포된 계층 register 크론이 '[두비전] 대 - 중' 캠페인의
+      소분류 그룹으로 자동 재등록. limit 단위로 끊어 실행하므로 반복 호출로 재개 가능.
+      캠페인을 통째로 지우지 않아 다른 중분류 노출은 유지됨.
+    """
+    from services.naver_ad_service import NaverAdApiClient
+
+    account = _resolve_account(user_id, request.customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+    if cid not in _DOVISION_CAT_CUSTOMERS:
+        raise HTTPException(status_code=400, detail=f"두비전 전용 엔드포인트 (cid {cid} 대상 아님)")
+
+    pool = get_keyword_pool_db()
+    rows = pool.list_registered_rows(cid)
+    buckets: Dict[str, Dict[str, Any]] = {}
+    for _r in rows:
+        _mk, _clabel, _slabel = _classify_dovision_category(_r["keyword"])
+        _b = buckets.setdefault(_mk, {"label": _clabel, "count": 0, "subs": {}, "rows": []})
+        _b["count"] += 1
+        _b["subs"][_slabel] = _b["subs"].get(_slabel, 0) + 1
+        _b["rows"].append(_r)
+
+    if request.dry_run or not request.mid_key:
+        return {
+            "success": True, "customer_id": cid, "dry_run": True,
+            "total_registered": len(rows),
+            "distribution": [
+                {
+                    "mid_key": _k, "campaign": f"[두비전] {_v['label']}",
+                    "keywords": _v["count"],
+                    "groups": sorted(_v["subs"].items(), key=lambda x: -x[1]),
+                }
+                for _k, _v in sorted(buckets.items(), key=lambda x: -x[1]["count"])
+            ],
+        }
+
+    b = buckets.get(request.mid_key)
+    if not b:
+        raise HTTPException(status_code=400, detail=f"mid_key '{request.mid_key}' 해당 등록 키워드 없음")
+    batch = b["rows"][: max(1, min(int(request.limit or 2000), 5000))]
+    kws = [_r["keyword"] for _r in batch]
+    ids = [_r["id"] for _r in batch]
+
+    reg = get_registered_keywords_db()
+    ncc_rows = reg.get_ncc_ids(cid, kws)
+    ncc_ids = [x["ncc_keyword_id"] for x in ncc_rows if x.get("ncc_keyword_id")]
+
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    deleted, del_fail = 0, 0
+    for i in range(0, len(ncc_ids), 100):
+        chunk = ncc_ids[i:i + 100]
+        try:
+            await client.delete_keywords_bulk(chunk)
+            deleted += len(chunk)
+        except Exception as e:
+            del_fail += len(chunk)
+            logger.warning(f"[dovi-migrate] 키워드 삭제 실패 {len(chunk)}개: {e}")
+        await asyncio.sleep(0.2)
+
+    # 네이버 삭제가 전량 실패하면 되돌리지 않음 — 중복등록 방지.
+    if ncc_ids and deleted == 0:
+        raise HTTPException(status_code=502, detail=f"네이버 삭제 전량 실패 ({del_fail}개) — 상태 미변경")
+
+    removed = reg.mark_removed(cid, kws)
+    requeued = pool.mark_status(ids, "pending")
+    logger.warning(
+        f"[dovi-migrate] cid={cid} {request.mid_key} 배치 {len(batch)} → "
+        f"naver삭제 {deleted}(실패 {del_fail}) / reg-removed {removed} / pool→pending {requeued}"
+    )
+    return {
+        "success": True, "customer_id": cid, "dry_run": False,
+        "mid_key": request.mid_key, "campaign": f"[두비전] {b['label']}",
+        "batch": len(batch), "naver_deleted": deleted, "naver_delete_failed": del_fail,
+        "reg_removed": removed, "pool_requeued": requeued,
+        "remaining_in_mid": b["count"] - len(batch),
+        "note": "register 크론이 새 계층 캠페인으로 재등록합니다. remaining_in_mid>0 이면 재호출로 이어서 진행.",
+    }
+
+
 @router.post("/keyword-pool/admin/delete-keywords")
 async def keyword_pool_admin_delete_keywords(
     request: AdminDeleteRequest,
