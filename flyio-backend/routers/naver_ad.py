@@ -4508,51 +4508,119 @@ _KINESS_ALLOW_TOKENS = {"학원", "과외", "강의", "인강", "영양제", "�
                         "젤리", "비타민제", "프로틴", "콜라겐젤리", "책상", "의자", "가구",
                         "침대", "매트", "매트리스", "선반", "침구", "이불", "베개", "소파",
                         "수납", "옷장"}
-_DOVISION_CATEGORIES = [
-    ("가맹", "가맹·창업모집", (
-        # 창업·사업 의도가 명시된 토큰만 — bare '공부방/교습소'(B2C 학부모 검색)는 주제 캠페인으로.
-        "창업", "가맹", "프랜차이즈", "가맹점", "개원", "개설", "부업", "투잡", "재택",
-        "사업설명", "창업비용", "창업아이템", "분점", "지사", "방문교사", "교사모집",
-        "선생님모집", "원장모집", "창업박람회", "교육사업", "공부방창업", "교습소창업",
-    )),
-    ("두뇌", "두뇌개발·뇌교육", (
-        "뇌교육", "두뇌", "두뇌개발", "두뇌계발", "우뇌", "좌뇌", "전두엽", "브레인",
-        "두뇌훈련", "두뇌트레이닝", "집중력", "기억력", "뇌발달", "워킹메모리", "메타인지",
-    )),
-    ("사고력", "사고력·창의력", (
-        "사고력", "창의력", "창의", "논리", "추론", "문제해결", "융합", "스팀", "steam",
-        "창의융합", "논리력", "창의사고", "사고력향상",
-    )),
-    ("수학", "수학교육", (
-        "수학", "연산", "도형", "구구단", "교구수학", "창의수학", "사고력수학", "셈",
-        "수감각", "단위", "분수", "심화수학", "경시", "올림피아드", "가베", "오르다",
-    )),
-    ("독서논술", "독서·논술·글쓰기", (
-        "독서", "논술", "글쓰기", "독해", "어휘", "한자", "책읽기", "문해력", "작문",
-        "토론", "스피치", "발표력",
-    )),
-    ("코딩", "코딩·SW·로봇", (
-        "코딩", "소프트웨어", "sw교육", "로봇", "알고리즘", "파이썬", "스크래치",
-        "엔트리", "코딩교육", "ai교육", "인공지능교육",
-    )),
-    ("유아", "유아교육", (
-        "유아", "유치원", "어린이집", "누리", "5세", "6세", "7세", "영유아", "키즈",
-        "프리스쿨", "오감", "한글떼기", "유아교육", "유아학습",
-    )),
-    ("초등", "초등교육", (
-        "초등", "초등학교", "1학년", "2학년", "3학년", "4학년", "5학년", "6학년",
-        "저학년", "고학년", "초1", "초2", "초3", "초4", "초5", "초6", "예비초등", "학습지",
-    )),
+# 계층 분류: (mid_key, 대분류, 중분류, [(소분류, (토큰...)), ...]). 위에서부터 첫 매칭.
+# 캠페인명 = '[두비전] 대분류 - 중분류', 광고그룹명 = 소분류. 창업(B2B)을 먼저 둬
+# '유아교육창업' 류가 교육 주제 대신 창업으로 모이게 함. 교육 토큰은 창업 미매칭분만 도달.
+_DOVISION_TAXONOMY = [
+    # ── 대분류 B. 창업·수익 (B2B, 먼저 매칭) ──
+    ("biz_edu", "창업·수익", "교육창업", [
+        ("공부방·교습소창업", ("공부방창업", "공부방차리기", "공부방프랜차이즈", "공부방운영",
+                          "공부방부업", "교습소창업", "교습소차리기", "1인교습소")),
+        ("학원창업", ("학원창업", "학원차리기", "보습학원창업", "학원인수", "소형학원창업", "공부방인수")),
+        ("교육프랜차이즈", ("교육프랜차이즈", "교육창업", "교육사업", "교육가맹", "아동교육창업",
+                       "유아교육창업", "초등교육창업", "사고력수학창업", "뇌교육창업", "코딩학원창업",
+                       "독서논술창업", "영어공부방창업", "수학공부방창업", "방문학습지창업", "홈스쿨창업")),
+        ("교사·원장모집", ("교사모집", "원장모집", "선생님모집", "강사모집", "방문교사", "학습지교사", "지사장")),
+    ]),
+    ("biz_online", "창업·수익", "무인·온라인", [
+        ("무인매장", ("무인",)),
+        ("온라인·스마트스토어", ("스마트스토어", "온라인창업", "온라인판매", "쇼핑몰창업", "위탁판매",
+                          "공동구매", "체험단", "전자상거래")),
+        ("무점포", ("무점포",)),
+    ]),
+    ("biz_side", "창업·수익", "소자본·부업", [
+        ("부업·투잡", ("부업", "투잡", "부수입", "재택근무", "재택부업", "재택알바", "부업사이트", "부업거리")),
+        ("소자본·1인창업", ("소자본", "1인창업", "소액창업")),
+        ("전업맘·주부창업", ("전업맘", "주부창업", "여성창업", "경력단절")),
+        ("돈버는아이템", ("돈버는", "돈되는", "부업추천")),
+    ]),
+    ("biz_industry", "창업·수익", "업종창업", [
+        ("카페·디저트", ("카페", "커피", "베이커리", "디저트", "탕후루", "붕어빵", "아이스크림")),
+        ("외식", ("치킨", "분식", "떡볶이", "피자", "햄버거", "샐러드", "밀키트", "반찬", "도시락",
+                "마라탕", "핫도그", "곱창", "국밥", "김밥", "샌드위치", "포장마차", "술집", "주점")),
+        ("서비스업", ("세탁", "빨래방", "애견", "헬스장", "필라테스", "요가", "pt샵", "공유주방",
+                   "사진관", "네컷", "노래방", "청소", "심부름", "문구", "다이소", "인형뽑기")),
+    ]),
+    ("biz_franchise", "창업·수익", "프랜차이즈·창업일반", [
+        ("프랜차이즈", ("프랜차이즈", "가맹")),
+        ("창업일반", ("창업", "개업", "사업자", "자영업", "소상공인", "예비창업자")),
+    ]),
+    # ── 대분류 A. 교육 (B2C, 창업 미매칭분) ──
+    ("edu_infant", "교육", "유아", [
+        ("유아수학·한글", ("유아수학", "유아한글", "한글떼기", "유아학습")),
+        ("오감·놀이", ("오감", "놀이교구", "놀이학교")),
+        ("교구·가베", ("가베", "프뢰벨", "몬테소리", "교구")),
+        ("누리·프리스쿨", ("누리", "프리스쿨", "유치원", "어린이집", "영유아", "유아교육", "유아", "전집")),
+    ]),
+    ("edu_math", "교육", "수학", [
+        ("사고력수학", ("사고력수학", "창의수학", "교구수학")),
+        ("연산", ("연산", "구구단", "주산", "암산", "셈")),
+        ("도형", ("도형", "기하")),
+        ("심화·경시", ("심화수학", "경시", "올림피아드", "미적분", "확률과통계")),
+        ("수학일반", ("수학",)),
+    ]),
+    ("edu_korean", "교육", "국어·독서논술", [
+        ("독서", ("독서", "책읽기")),
+        ("논술·글쓰기", ("논술", "글쓰기", "작문")),
+        ("독해·문해력", ("독해", "문해력")),
+        ("어휘·한자", ("어휘", "한자")),
+        ("토론·발표", ("토론", "스피치", "발표")),
+        ("국어일반", ("국어", "비문학", "문학")),
+    ]),
+    ("edu_english", "교육", "영어", [
+        ("파닉스", ("파닉스",)),
+        ("영어회화", ("영어회화", "화상영어", "전화영어", "회화")),
+        ("영문법·어휘", ("영문법", "영어단어", "리스닝")),
+        ("영어독서", ("영어독서", "영어원서", "영어도서")),
+        ("영어유치원", ("영어유치원", "영어유아")),
+        ("영어일반", ("영어",)),
+    ]),
+    ("edu_science", "교육", "과학·사회", [
+        ("과학실험", ("과학", "실험")),
+        ("한국사·역사", ("한국사", "역사", "세계사")),
+        ("사회·경제", ("사회", "지리", "경제")),
+    ]),
+    ("edu_coding", "교육", "코딩·SW", [
+        ("코딩", ("코딩", "소프트웨어", "sw교육")),
+        ("로봇코딩", ("로봇",)),
+        ("스크래치·엔트리", ("스크래치", "엔트리")),
+        ("파이썬·앱", ("파이썬", "앱개발", "게임개발", "웹개발")),
+        ("AI·메이커", ("ai교육", "인공지능", "메이커", "드론코딩", "아두이노")),
+    ]),
+    ("edu_brain", "교육", "두뇌·사고력", [
+        ("뇌교육", ("뇌교육", "두뇌", "전두엽", "브레인")),
+        ("집중력·기억력", ("집중력", "기억력", "워킹메모리", "메타인지")),
+        ("창의력", ("창의력", "창의융합", "창의")),
+        ("영재교육", ("영재",)),
+        ("융합·STEAM", ("steam", "스팀", "융합", "논리", "문제해결", "추론", "사고력")),
+    ]),
+    ("edu_art", "교육", "예체능", [
+        ("미술", ("미술", "그림", "드로잉")),
+        ("음악", ("피아노", "바이올린", "첼로", "드럼", "보컬", "성악", "실용음악", "작곡")),
+        ("체육", ("태권도", "줄넘기", "수영", "축구", "농구", "체육")),
+        ("무용·댄스", ("발레", "무용", "방송댄스", "댄스")),
+        ("웅변·연기", ("웅변", "연기", "뮤지컬")),
+    ]),
+    ("edu_elem", "교육", "초등·학습관리", [
+        ("초등전과목", ("초등", "전과목")),
+        ("방과후", ("방과후",)),
+        ("학습지", ("학습지",)),
+        ("자기주도학습", ("자기주도", "학습습관", "학습코칭")),
+        ("방문·공부방·과외", ("방문학습", "방문수업", "공부방", "교습소", "과외", "그룹과외", "홈스쿨", "엄마표")),
+    ]),
 ]
+_DOVISION_FALLBACK = ("edu_etc", "교육", "교육일반", "교육일반")
 
 
 def _classify_dovision_category(keyword: str):
-    """키워드 → (key, 한글라벨). 매칭 없으면 ('교육일반', '교육일반')."""
+    """키워드 → (mid_key, 캠페인라벨 '대분류 - 중분류', 소분류라벨). 매칭 없으면 교육일반."""
     kw = (keyword or "").replace(" ", "").lower()
-    for key, label, toks in _DOVISION_CATEGORIES:
-        if any(t.lower() in kw for t in toks):
-            return key, label
-    return "교육일반", "교육일반"
+    for mid_key, major, mid, subs in _DOVISION_TAXONOMY:
+        for sub_label, toks in subs:
+            if any(t.lower() in kw for t in toks):
+                return mid_key, f"{major} - {mid}", sub_label
+    mk, major, mid, sub = _DOVISION_FALLBACK
+    return mk, f"{major} - {mid}", sub
 
 
 async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch: int = 3000, bid: Optional[int] = None):
@@ -4776,58 +4844,68 @@ async def _run_pool_register(uid: int, customer_id: Optional[int] = None, batch:
                 logger.warning(f"[pool/register-skin] {_campname} cat-state 갱신 실패: {e}")
             logger.warning(f"[pool/register-skin] {_campname} {len(_kws)}개 (budget {_skin_budget}, reuse={bool(_reuse)})")
     elif customer_id in _DOVISION_CAT_CUSTOMERS:
-        # ── 두비전 테마별 한글 캠페인 등록 — '[두비전]<라벨>' 캠페인(재사용) + 대표 키워드 그룹명 ──
+        # ── 두비전 계층 한글 캠페인 등록 — 중분류=캠페인 '[두비전] 대 - 중'(재사용), 소분류=광고그룹명 ──
         result = {"success": True, "campaign_ids": []}
         _dovi_budget = 10000
         try:
             _dovi_budget = int(_profcs.get("daily_budget") or 10000)
         except Exception:
             pass
-        _buckets: Dict[str, List[str]] = {}
-        _labels: Dict[str, str] = {}
+        # 이중 버킷: mid_key → {label: '대 - 중', subs: {소분류: [kw]}}
+        _mid_buckets: Dict[str, Dict[str, Any]] = {}
         for _kw in keywords:
-            _key, _lab = _classify_dovision_category(_kw)
-            _buckets.setdefault(_key, []).append(_kw)
-            _labels[_key] = _lab
-        for _key, _kws in _buckets.items():
-            if not _kws:
-                continue
-            _label = _labels[_key]
-            _campname = f"[두비전]{_label}"
-            _new_grp = (len(_kws) + 999) // 1000
-            _st = pool.get_active_pool_campaign_cat(customer_id, _key)
+            _mk, _clabel, _slabel = _classify_dovision_category(_kw)
+            _b = _mid_buckets.setdefault(_mk, {"label": _clabel, "subs": {}})
+            _b["subs"].setdefault(_slabel, []).append(_kw)
+        for _mk, _mb in _mid_buckets.items():
+            _campname = f"[두비전] {_mb['label']}"
+            # 이 틱에서 만들 그룹 수 = 소분류별 ceil(n/1000) 합
+            _new_grp = sum((len(_v) + 999) // 1000 for _v in _mb["subs"].values())
+            _st = pool.get_active_pool_campaign_cat(customer_id, _mk)
             _reuse = None; _sidx = 0
             if _st and _st.get("ad_groups_count", 0) + _new_grp <= AD_GROUPS_PER_POOL_CAMPAIGN:
                 _reuse = _st["campaign_id"]; _sidx = _st["ad_groups_count"]
-            _jid = create_bulk_upload_job(
-                user_id=uid, filename=f"pool_dovi_{_key}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-                campaign_prefix=_campname, keywords_per_group=1000, bid=bid,
-                daily_budget=_dovi_budget, total_keywords=len(_kws),
-            )
-            _cfg = BulkJobConfig(
-                job_id=_jid, user_id=uid, campaign_prefix=_campname, keywords_per_group=1000,
-                bid=bid, daily_budget=_dovi_budget, campaign_tp="WEB_SITE",
-                reuse_campaign_id=_reuse, start_ad_group_index=_sidx,
-                descriptive_group_names=True,
-            )
+            _created_cid = _reuse          # 첫 소분류 등록이 새 캠페인을 만들면 채워짐 → 이후 소분류 재사용
+            _grp_cursor = _sidx
+            for _slabel, _skws in _mb["subs"].items():
+                if not _skws:
+                    continue
+                _sub_grp = (len(_skws) + 999) // 1000
+                _jid = create_bulk_upload_job(
+                    user_id=uid, filename=f"pool_dovi_{_mk}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                    campaign_prefix=_campname, keywords_per_group=1000, bid=bid,
+                    daily_budget=_dovi_budget, total_keywords=len(_skws),
+                )
+                _cfg = BulkJobConfig(
+                    job_id=_jid, user_id=uid, campaign_prefix=_campname, keywords_per_group=1000,
+                    bid=bid, daily_budget=_dovi_budget, campaign_tp="WEB_SITE",
+                    reuse_campaign_id=_created_cid, start_ad_group_index=_grp_cursor,
+                    group_label=_slabel,
+                )
+                try:
+                    _r = await BulkUploadOrchestrator(client).run(_cfg, _skws)
+                except Exception as e:
+                    logger.error(f"[pool/register-dovi] {_campname}/{_slabel} orchestrator 실패: {e}", exc_info=True)
+                    result["success"] = False; result["error"] = f"{type(e).__name__}: {str(e)[:160]}"
+                    continue
+                _cids = _r.get("campaign_ids") or []
+                if not _created_cid and _cids:
+                    _created_cid = _cids[0]
+                    result["campaign_ids"].extend(_cids)
+                if not _r.get("success"):
+                    result["success"] = False; result["error"] = _r.get("error")
+                _grp_cursor += _sub_grp
+                logger.warning(f"[pool/register-dovi] {_campname} / {_slabel} {len(_skws)}개 (reuse={bool(_created_cid)})")
+                # 새 캠페인 확보 실패(첫 소분류 등록 실패) 시 중단 — 다음 소분류가 동명 캠페인을
+                # 또 만드는 중복 방지. 미등록 키워드는 pending 유지되어 다음 틱에 재시도.
+                if not _created_cid:
+                    logger.warning(f"[pool/register-dovi] {_campname} 캠페인 미확보 → 잔여 소분류 이번 틱 보류")
+                    break
             try:
-                _r = await BulkUploadOrchestrator(client).run(_cfg, _kws)
-            except Exception as e:
-                logger.error(f"[pool/register-dovi] {_campname} orchestrator 실패: {e}", exc_info=True)
-                result["success"] = False; result["error"] = f"{type(e).__name__}: {str(e)[:160]}"
-                continue
-            _cids = _r.get("campaign_ids") or []
-            result["campaign_ids"].extend(_cids)
-            if not _r.get("success"):
-                result["success"] = False; result["error"] = _r.get("error")
-            try:
-                if _reuse:
-                    pool.set_active_pool_campaign_cat(customer_id, _key, _reuse, _sidx + _new_grp)
-                elif _cids:
-                    pool.set_active_pool_campaign_cat(customer_id, _key, _cids[0], _new_grp)
+                if _created_cid:
+                    pool.set_active_pool_campaign_cat(customer_id, _mk, _created_cid, _grp_cursor)
             except Exception as e:
                 logger.warning(f"[pool/register-dovi] {_campname} cat-state 갱신 실패: {e}")
-            logger.warning(f"[pool/register-dovi] {_campname} {len(_kws)}개 (budget {_dovi_budget}, reuse={bool(_reuse)})")
     elif category_mode:
         # ── 의료/비의료 분리 등록 — 각 카테고리별 한글 캠페인(재사용) + 차등 예산 ──
         result = {"success": True, "campaign_ids": []}
