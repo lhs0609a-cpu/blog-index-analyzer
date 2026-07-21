@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, Loader2, Sparkles, TrendingUp, Award, Zap, AlertCircle, BarChart3, ArrowLeft, Target, PenTool, Lightbulb, ChevronRight, Lock, HelpCircle, Clock, CheckCircle } from 'lucide-react'
+import { Search, Loader2, Sparkles, TrendingUp, Award, Zap, AlertCircle, BarChart3, ArrowLeft, Target, PenTool, Lightbulb, ChevronRight, Lock, HelpCircle, Clock, CheckCircle, Gauge, XCircle, MinusCircle } from 'lucide-react'
 import Confetti from 'react-confetti'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useWindowSize } from '@/lib/hooks/useWindowSize'
-import { analyzeBlog, saveBlogToList, verifyBlogIndex, type VerifyIndexResponse } from '@/lib/api/blog'
+import { analyzeBlog, saveBlogToList, verifyBlogIndex, getExposureCeiling, judgeKeyword, type VerifyIndexResponse, type ExposureCeilingResponse, type JudgeKeywordResponse } from '@/lib/api/blog'
 import { registerBlog, startRankCheck, getTrackedBlogs } from '@/lib/api/rankTracker'
 import type { BlogIndexResult } from '@/lib/types/api'
 import toast from 'react-hot-toast'
@@ -348,120 +348,179 @@ function IndexVerificationCard({ blogId }: { blogId: string }) {
   )
 }
 
-// P0-2: Killer Feature - 상위 노출 가능 키워드 예측 (무료 1개 노출)
-function RankableKeywordPreview({ result, isFreeUser }: { result: any; isFreeUser: boolean }) {
-  const level = result.index.level
+// 노출 천장 카드 — 이 블로그가 '실제로' 상위노출한 키워드들의 검색량 상한
+function ExposureCeilingCard({ blogId }: { blogId: string }) {
+  const [data, setData] = useState<ExposureCeilingResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  // 레벨별 추천 키워드 예시 (실제로는 API에서 가져와야 함)
-  const sampleKeywords = [
-    { keyword: '소자본 창업', monthlySearch: 1200, competition: '낮음', chance: 78, reason: '검색량 대비 경쟁 적음' },
-    { keyword: '카페 인테리어', monthlySearch: 3400, competition: '중간', chance: 45, reason: '레벨 상승 시 가능' },
-    { keyword: '서울 맛집', monthlySearch: 89000, competition: '높음', chance: 12, reason: '현재 레벨에서 어려움' },
-  ]
-
-  // 레벨에 따라 첫 번째 키워드의 chance 조정
-  const adjustedKeywords = sampleKeywords.map((kw, idx) => ({
-    ...kw,
-    chance: Math.min(95, kw.chance + (level - 5) * 5),
-    isRecommended: idx === 0
-  }))
+  const measure = async () => {
+    setLoading(true); setError(null)
+    try {
+      const res = await getExposureCeiling(blogId)
+      setData(res)
+      if (!res.ok) setError(res.error === 'no_posts_via_rss' ? '글을 찾을 수 없어 측정할 수 없습니다.' : '상위노출 실적이 부족해 천장을 측정하지 못했습니다.')
+    } catch {
+      setError('측정 중 오류가 발생했습니다. 잠시 후 다시 시도하세요.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.2 }}
-      className="rounded-3xl p-8 bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-200/50 shadow-xl mb-8"
+      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+      className="glass-3d p-8 mb-8"
     >
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h3 className="text-2xl font-bold flex items-center gap-2">
-            <Zap className="w-6 h-6 text-purple-600" />
-            당신이 이길 수 있는 키워드
-          </h3>
-          <p className="text-sm text-gray-600 mt-1">Lv.{level} 기준 상위 노출 가능성 분석</p>
-        </div>
-        <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold">
-          Pro 핵심 기능
-        </span>
-      </div>
-
-      <div className="space-y-3">
-        {adjustedKeywords.map((kw, idx) => {
-          const isLocked = isFreeUser && idx > 0
-
-          return (
-            <div
-              key={kw.keyword}
-              className={`relative p-4 rounded-xl border ${
-                kw.isRecommended ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-200' : 'bg-white border-gray-200'
-              } ${isLocked ? 'overflow-hidden' : ''}`}
-            >
-              {isLocked && (
-                <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-10">
-                  <div className="text-center">
-                    <Lock className="w-5 h-5 text-gray-400 mx-auto mb-1" />
-                    <span className="text-sm text-gray-500">Pro 플랜에서 확인</span>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  {kw.isRecommended && (
-                    <span className="px-2 py-0.5 bg-green-500 text-white text-xs font-bold rounded">추천</span>
-                  )}
-                  <div>
-                    <div className="font-bold text-gray-900">{kw.keyword}</div>
-                    <div className="text-xs text-gray-500">
-                      월 {kw.monthlySearch.toLocaleString()}회 검색 · 경쟁 {kw.competition}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <div className={`text-2xl font-bold ${
-                    kw.chance >= 60 ? 'text-green-600' :
-                    kw.chance >= 40 ? 'text-amber-600' :
-                    'text-red-500'
-                  }`}>
-                    {kw.chance}점
-                  </div>
-                  <div className="text-xs text-gray-500">경쟁력 지수</div>
-                </div>
-              </div>
-
-              {kw.isRecommended && (
-                <div className="mt-3 pt-3 border-t border-green-200 flex items-center justify-between">
-                  <span className="text-sm text-green-700">💡 {kw.reason}</span>
-                  <Link
-                    href={`/keyword-search?keyword=${encodeURIComponent(kw.keyword)}`}
-                    className="px-4 py-1.5 bg-green-500 text-white rounded-lg text-sm font-bold hover:bg-green-600 transition-colors"
-                  >
-                    이 키워드로 검색하기
-                  </Link>
-                </div>
-              )}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Gauge className="w-6 h-6 text-[#0064FF]" />
+          <h3 className="text-xl font-bold">노출 천장 측정</h3>
+          <div className="group relative">
+            <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+            <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-72 p-3 bg-gray-900 text-white text-xs rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-20 shadow-xl text-left font-normal leading-relaxed">
+              이 블로그가 최근 글 제목의 키워드로 네이버 블로그 검색에서 실제로 상위노출된 결과만으로 낸 실적 기반 수치입니다. 추정 지수가 아닙니다.
             </div>
-          )
-        })}
+          </div>
+        </div>
+        {!data && (
+          <button onClick={measure} disabled={loading}
+            className="toss-btn-primary px-5 py-2.5 text-sm disabled:opacity-50">
+            {loading ? <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />측정 중…</span> : '측정하기'}
+          </button>
+        )}
       </div>
 
-      {isFreeUser && (
-        <div className="mt-4 p-4 bg-purple-100 rounded-xl text-center">
-          <div className="font-bold text-purple-800 mb-1">
-            Pro 플랜에서 무제한 키워드 분석
+      {loading && !data && (
+        <p className="text-sm text-gray-500">최근 글 키워드로 실제 검색 순위를 확인하는 중입니다. 최대 1분 정도 걸립니다…</p>
+      )}
+      {error && !loading && <p className="text-sm text-orange-600">{error}</p>}
+
+      {data?.ok && data.ceiling_volume != null && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
+            <div className="text-center p-4 rounded-2xl bg-white/50">
+              <div className="text-2xl font-bold gradient-text">{data.ceiling_volume.toLocaleString()}</div>
+              <div className="text-xs text-gray-600 mt-1">뚫은 최대 검색량</div>
+            </div>
+            <div className="text-center p-4 rounded-2xl bg-white/50">
+              <div className="text-2xl font-bold">{data.ceiling_p50?.toLocaleString() ?? '—'}</div>
+              <div className="text-xs text-gray-600 mt-1">안정권(중앙값)</div>
+            </div>
+            <div className="text-center p-4 rounded-2xl bg-white/50">
+              <div className="text-2xl font-bold">{Math.round(data.win_rate * 100)}%</div>
+              <div className="text-xs text-gray-600 mt-1">1페이지 진입률</div>
+            </div>
+            <div className="text-center p-4 rounded-2xl bg-white/50">
+              <div className="text-2xl font-bold">{data.ranked_count}<span className="text-sm text-gray-400">/{data.tested}</span></div>
+              <div className="text-xs text-gray-600 mt-1">상위노출 키워드</div>
+            </div>
           </div>
-          <div className="text-sm text-purple-600 mb-3">
-            당신 레벨에 맞는 "이길 수 있는 키워드"를 매일 새롭게 추천받으세요
+          {data.ranked_keywords.length > 0 && (
+            <div className="mt-5">
+              <p className="text-sm font-semibold text-gray-700 mb-2">실제 상위노출 중인 키워드</p>
+              <div className="flex flex-wrap gap-2">
+                {data.ranked_keywords.slice(0, 10).map((k) => (
+                  <span key={k.keyword} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 text-sm">
+                    <span className="font-medium text-gray-800">{k.keyword}</span>
+                    <span className="text-gray-400">·</span>
+                    <span className="text-gray-500">{k.volume.toLocaleString()}회</span>
+                    <span className="text-[#0064FF] font-semibold">{k.rank}위</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          <p className="mt-4 text-xs text-gray-400">신뢰도 {data.confidence} · {data.disclaimer}</p>
+        </>
+      )}
+    </motion.div>
+  )
+}
+
+// 키워드 상위노출 판정 위젯 — 내 천장 + 경쟁자 체력으로 가능/경합/불가 판정
+const VERDICT_UI: Record<string, { label: string; cls: string; Icon: typeof CheckCircle }> = {
+  likely:    { label: '상위노출 가능', cls: 'text-emerald-700 bg-emerald-50 border-emerald-200', Icon: CheckCircle },
+  contested: { label: '경합 — 노려볼 만함', cls: 'text-amber-700 bg-amber-50 border-amber-200', Icon: MinusCircle },
+  unlikely:  { label: '현재는 어려움', cls: 'text-red-700 bg-red-50 border-red-200', Icon: XCircle },
+  unknown:   { label: '판정 불가', cls: 'text-gray-600 bg-gray-50 border-gray-200', Icon: AlertCircle },
+}
+
+function KeywordJudgeWidget({ blogId, isFreeUser }: { blogId: string; isFreeUser: boolean }) {
+  const [keyword, setKeyword] = useState('')
+  const [result, setResult] = useState<JudgeKeywordResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [usedFree, setUsedFree] = useState(false)
+
+  const locked = isFreeUser && usedFree
+
+  const judge = async () => {
+    const kw = keyword.trim()
+    if (!kw) { toast.error('키워드를 입력하세요'); return }
+    if (locked) return
+    setLoading(true)
+    try {
+      const res = await judgeKeyword(blogId, kw)
+      setResult(res)
+      if (isFreeUser) setUsedFree(true)
+    } catch {
+      toast.error('판정 중 오류가 발생했습니다')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const v = result ? VERDICT_UI[result.verdict] : null
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+      className="glass-3d p-8 mb-8"
+    >
+      <div className="flex items-center gap-2 mb-1">
+        <Target className="w-6 h-6 text-[#0064FF]" />
+        <h3 className="text-xl font-bold">이 키워드, 상위노출 될까?</h3>
+      </div>
+      <p className="text-sm text-gray-500 mb-5">내 블로그의 노출 천장과 경쟁자 체력을 실제로 재서 판정합니다.</p>
+
+      <div className="flex gap-2">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && judge()}
+            placeholder="예: 아토피 치료"
+            className="toss-input pl-9"
+            disabled={loading || locked}
+          />
+        </div>
+        <button onClick={judge} disabled={loading || locked}
+          className="toss-btn-primary px-6 disabled:opacity-50">
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : '판정'}
+        </button>
+      </div>
+
+      {locked && (
+        <div className="mt-4 flex items-center justify-between gap-3 p-4 rounded-xl bg-gray-50 border border-gray-200">
+          <span className="flex items-center gap-2 text-sm text-gray-600"><Lock className="w-4 h-4" />무료 1회를 사용했습니다. Pro에서 무제한 판정하세요.</span>
+          <Link href="/pricing" className="toss-btn-primary px-4 py-2 text-sm whitespace-nowrap">Pro 보기</Link>
+        </div>
+      )}
+
+      {v && result && !locked && (
+        <div className={`mt-5 p-5 rounded-2xl border ${v.cls}`}>
+          <div className="flex items-center gap-2 mb-2">
+            <v.Icon className="w-6 h-6" />
+            <span className="text-lg font-bold">{v.label}</span>
+            <span className="ml-auto text-xs opacity-70">신뢰도 {result.confidence}</span>
           </div>
-          <Link
-            href="/pricing"
-            className="inline-flex items-center gap-2 px-5 py-2 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition-colors"
-          >
-            7일 무료 체험 시작
-            <ChevronRight className="w-4 h-4" />
-          </Link>
+          <p className="text-sm leading-relaxed opacity-90">{result.reason}</p>
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs opacity-80">
+            <span>검색량 {result.target_volume.toLocaleString()}회</span>
+            {result.ceiling.ceiling_volume != null && <span>내 천장 {result.ceiling.ceiling_volume.toLocaleString()}회</span>}
+            {result.serp_difficulty?.label && <span>SERP 난이도 {result.serp_difficulty.label}</span>}
+          </div>
         </div>
       )}
     </motion.div>
@@ -613,7 +672,7 @@ function ConcreteRecommendations({ result, isFreeUser }: { result: any; isFreeUs
   const blurredRecs = isFreeUser && recommendations.length > 3 ? recommendations.slice(3, 4) : []
 
   return (
-    <div className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50">
+    <div className="glass-3d p-8 ">
       <h3 className="text-2xl font-bold mb-2 flex items-center gap-2">
         <Sparkles className="w-6 h-6 text-[#0064FF]" />
         맞춤 개선 가이드
@@ -989,7 +1048,7 @@ function DetailedMetricsSection({ result, isFreeUser }: { result: any; isFreeUse
   }
 
   return (
-    <div className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50">
+    <div className="glass-3d p-8 ">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="text-2xl font-bold flex items-center gap-2">
@@ -1385,7 +1444,7 @@ function DetailedMetricsSection({ result, isFreeUser }: { result: any; isFreeUse
                 <div className="space-y-3">
                   <Link href="/pricing" className="block">
                     <button className="w-full py-3 bg-[#0064FF] text-white font-bold rounded-xl hover:shadow-lg shadow-lg shadow-[#0064FF]/25 transition-all">
-                      7일 무료 체험 시작
+                      7일 환불 보장으로 시작
                     </button>
                   </Link>
                   <p className="text-xs text-gray-500 text-center">클릭 한 번으로 언제든 해지 · 위약금 0원</p>
@@ -1648,7 +1707,14 @@ export default function AnalyzePage() {
   }, [autoAnalyzeTriggered, blogId])
 
   return (
-    <div className="min-h-screen bg-[#fafafa] pt-24 pb-12">
+    <div className="min-h-screen pt-24 pb-12 relative overflow-hidden">
+      {/* AURORA GLASS — 배경 3D 오브 (장식, 포인터 이벤트 없음) */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+        <div className="orb w-72 h-72 -top-16 -left-16 opacity-70" />
+        <div className="orb orb-cyan w-52 h-52 top-1/3 -right-10 opacity-60" style={{ animationDelay: '-4s' }} />
+        <div className="orb w-40 h-40 bottom-24 left-1/4 opacity-40" style={{ animationDelay: '-8s' }} />
+      </div>
+
       {showConfetti && <Confetti width={width} height={height} recycle={false} numberOfPieces={200} />}
 
       <div className="container mx-auto px-4">
@@ -1695,7 +1761,7 @@ export default function AnalyzePage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="rounded-3xl p-8 mb-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50"
+            className="glass-3d p-8 mb-8 "
           >
             <div className="flex gap-4">
               <div className="relative flex-1">
@@ -1743,7 +1809,7 @@ export default function AnalyzePage() {
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
-                className="rounded-3xl p-12 text-center bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50"
+                className="glass-3d p-12 text-center"
               >
                 <motion.div
                   animate={{ rotate: 360 }}
@@ -1797,7 +1863,7 @@ export default function AnalyzePage() {
                 className="space-y-6"
               >
                 {/* Score Card */}
-                <div className="rounded-3xl p-8 relative overflow-hidden bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50">
+                <div className="glass-3d p-8 relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-64 h-64 bg-[#0064FF]/10 rounded-full blur-3xl" />
 
                   <div className="relative flex items-center justify-between">
@@ -1977,12 +2043,63 @@ export default function AnalyzePage() {
                     </div>
                   )}
 
+                  {/* 활동성 배지 — 누적 지표에 가려지던 '지금 살아있는가'를 최상단에 */}
+                  {result.index.vitality_state && result.index.vitality_state !== 'unknown' && (() => {
+                    const VS: Record<string, { label: string; cls: string; dot: string }> = {
+                      active:            { label: '활발히 운영 중',   cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
+                      slowing:           { label: '발행 둔화',        cls: 'bg-amber-50 text-amber-700 border-amber-200',       dot: 'bg-amber-500' },
+                      dormant_entering:  { label: '휴면 진입',        cls: 'bg-orange-50 text-orange-700 border-orange-200',    dot: 'bg-orange-500' },
+                      dormant:           { label: '휴면',             cls: 'bg-orange-50 text-orange-700 border-orange-200',    dot: 'bg-orange-500' },
+                      stopped:           { label: '운영 중단',        cls: 'bg-red-50 text-red-700 border-red-200',             dot: 'bg-red-500' },
+                      abandoned:         { label: '사실상 방치',      cls: 'bg-red-50 text-red-700 border-red-200',             dot: 'bg-red-500' },
+                    }
+                    const v = VS[result.index.vitality_state!]
+                    if (!v) return null
+                    const days = result.index.days_since_last_post
+                    return (
+                      <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+                        <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold ${v.cls}`}>
+                          <span className={`w-2 h-2 rounded-full ${v.dot}`} />
+                          {v.label}
+                          {typeof days === 'number' && (
+                            <span className="font-normal opacity-80">· 마지막 글 {days}일 전</span>
+                          )}
+                        </span>
+                        {typeof result.index.vitality === 'number' && result.index.vitality < 1 && (
+                          <span className="text-xs text-gray-500">
+                            활동성 반영으로 점수 ×{result.index.vitality.toFixed(2)} 적용됨
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })()}
+
                   <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
                     {[
                       { label: '운영 건강도', value: `${result.index.total_score.toFixed(1)}/100`, icon: '🎯', isScore: true },
-                      { label: '포스트', value: result.stats.total_posts, icon: '📝', isScore: false },
-                      { label: '방문자', value: result.stats.total_visitors.toLocaleString(), icon: '👥', isScore: false },
-                      { label: '이웃', value: result.stats.neighbor_count, icon: '❤️', isScore: false },
+                      {
+                        label: '포스트',
+                        value: result.stats.total_posts != null
+                          ? result.stats.total_posts.toLocaleString()
+                          : (result.stats.total_posts_min != null ? `${result.stats.total_posts_min}+` : '측정 불가'),
+                        icon: '📝', isScore: false,
+                      },
+                      {
+                        // 누적 방문자는 죽어도 줄지 않아 현재 상태를 못 보여준다.
+                        // 실측 일평균이 있으면 그것을 주지표로 노출한다.
+                        label: result.stats.recent_avg_visitors != null ? '일평균 방문자' : '누적 방문자',
+                        value: result.stats.recent_avg_visitors != null
+                          ? result.stats.recent_avg_visitors.toLocaleString()
+                          : (result.stats.total_visitors != null ? result.stats.total_visitors.toLocaleString() : '측정 불가'),
+                        icon: '👥', isScore: false,
+                      },
+                      {
+                        label: '이웃',
+                        value: result.stats.neighbor_count != null
+                          ? result.stats.neighbor_count.toLocaleString()
+                          : '측정 불가',
+                        icon: '❤️', isScore: false,
+                      },
                     ].map((stat, index) => (
                       <motion.div
                         key={stat.label}
@@ -2015,7 +2132,7 @@ export default function AnalyzePage() {
 
                 {/* Daily Visitors Chart - 무료 플랜은 3일 미리보기 */}
                 {result.daily_visitors && result.daily_visitors.length > 0 && (
-                  <div className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50 relative overflow-hidden">
+                  <div className="glass-3d p-8  relative overflow-hidden">
                     <h3 className="text-2xl font-bold mb-6 flex items-center gap-2">
                       <BarChart3 className="w-6 h-6 text-[#0064FF]" />
                       일일 방문자 추이
@@ -2173,8 +2290,11 @@ export default function AnalyzePage() {
                 {/* 실제 네이버 인덱스 검증 (일반/준최/최적/최적+) */}
                 <IndexVerificationCard blogId={result.blog.blog_id} />
 
-                {/* P0-2: Killer Feature - 상위 노출 가능 키워드 예측 */}
-                <RankableKeywordPreview result={result} isFreeUser={isFreeUser} />
+                {/* 노출 천장 — 실제 상위노출 실적 기반 */}
+                <ExposureCeilingCard blogId={result.blog.blog_id} />
+
+                {/* 키워드 상위노출 판정 (내 천장 + 경쟁자 체력) */}
+                <KeywordJudgeWidget blogId={result.blog.blog_id} isFreeUser={isFreeUser} />
 
                 {/* Recommendations - 구체적 수치 포함 */}
                 <ConcreteRecommendations result={result} isFreeUser={isFreeUser} />
@@ -2184,7 +2304,7 @@ export default function AnalyzePage() {
 
                 {/* Warnings */}
                 {result.warnings.length > 0 && (
-                  <div className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50">
+                  <div className="glass-3d p-8 ">
                     <h3 className="text-2xl font-bold mb-6 flex items-center gap-2">
                       <AlertCircle className="w-6 h-6 text-orange-600" />
                       주의사항

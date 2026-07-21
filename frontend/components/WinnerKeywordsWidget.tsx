@@ -333,7 +333,7 @@ export default function WinnerKeywordsWidget({ blogId, className = '' }: WinnerK
               href="/pricing"
               className="px-4 py-2 bg-white text-purple-600 rounded-lg font-semibold text-sm hover:bg-purple-50 transition-colors"
             >
-              무료 체험
+              시작하기
             </Link>
           </div>
         </div>

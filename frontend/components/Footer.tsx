@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { Building2, ArrowRight, Mic, Sparkles, Shield, Crown, Check } from 'lucide-react'
+import { BlankMark } from './BlankLogo'
 
 export default function Footer() {
   return (
@@ -17,7 +18,7 @@ export default function Footer() {
             <div className="flex items-center gap-4">
               <div className="hidden md:flex items-center gap-2 text-white/80 text-sm">
                 <Check className="w-4 h-4" />
-                <span>7일 무료 체험</span>
+                <span>7일 내 전액 환불</span>
                 <span className="mx-2">·</span>
                 <Check className="w-4 h-4" />
                 <span>클릭 한 번 해지</span>
@@ -26,7 +27,7 @@ export default function Footer() {
                 href="/pricing"
                 className="px-5 py-2 bg-white text-[#0064FF] font-bold rounded-lg hover:bg-blue-50 transition-colors text-sm"
               >
-                무료 체험 시작
+                지금 시작하기
               </Link>
             </div>
           </div>
@@ -39,9 +40,7 @@ export default function Footer() {
           {/* Company Info */}
           <div className="md:col-span-2">
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-white" />
-              </div>
+              <BlankMark className="w-10 h-10 drop-shadow-[0_4px_14px_rgba(0,100,255,0.4)]" />
               <span className="text-xl font-bold text-white">블랭크</span>
               <span className="text-xs text-gray-600 bg-gray-800 px-2 py-0.5 rounded">v2.0</span>
             </div>

@@ -152,7 +152,7 @@ export default function ChallengePage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="rounded-3xl p-8 mb-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50"
+            className="glass-3d p-8 mb-8 "
           >
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">

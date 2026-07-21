@@ -29,20 +29,43 @@ export interface BlogIndexResult {
     description?: string
   }
   stats: {
-    total_posts: number
-    total_visitors: number
-    neighbor_count: number
+    // ⚠️ 측정 실패 시 null. 예전에는 추정값을 생성해 항상 값이 있었으나,
+    //    실측값처럼 표시되어 사용자를 오도하므로 null 을 그대로 내보낸다.
+    total_posts: number | null
+    total_visitors: number | null
+    neighbor_count: number | null
+    /** RSS 50개 캡에 걸려 총 발행수를 알 수 없을 때의 하한값 */
+    total_posts_min?: number | null
+    /** 최근 실측 일평균 방문자 (NVisitorgp) — 현재 상태를 반영하는 유일한 지표 */
+    recent_avg_visitors?: number | null
+    daily_visitors?: number | null
+    visitor_measured?: boolean
     is_influencer: boolean
     avg_likes?: number
     avg_comments?: number
     posting_frequency?: number
   }
+  /** 측정 실패로 값이 없는 필드명 목록 */
+  unmeasured?: string[]
+  /** 200 + 빈 RSS 피드 (미발행/비공개 가능성) */
+  rss_empty?: boolean
   index: {
     level: number
     grade: string
     level_category: string
     total_score: number
     percentile: number
+    /** 활동성 계수 (0.10~1.0). 최종 점수에 곱해진다 */
+    vitality?: number
+    vitality_state?:
+      | 'active' | 'slowing' | 'dormant_entering'
+      | 'dormant' | 'stopped' | 'abandoned' | 'unknown'
+    days_since_last_post?: number | null
+    posts_last_90d?: number | null
+    rss_truncated?: boolean
+    /** 레벨 산출 근거: 실측 색인 검증 vs 휴리스틱 */
+    level_source?: 'measured' | 'heuristic'
+    confidence?: 'high' | 'medium' | 'low'
     score_breakdown: {
       c_rank: number  // C-Rank (출처 신뢰도) 50%
       dia: number     // D.I.A. (문서 품질) 50%

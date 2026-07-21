@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { useAuthStore } from '@/lib/stores/auth'
 import UsageIndicator from './UsageIndicator'
+import { BlankMark } from './BlankLogo'
 import toast from 'react-hot-toast'
 
 // 네비게이션 메뉴 아이템
@@ -85,15 +86,13 @@ export default function GlobalNav() {
               {/* Logo */}
               <Link href="/" className="flex items-center gap-2 flex-shrink-0">
                 <motion.div
-                  className="relative w-9 h-9 rounded-xl overflow-hidden"
-                  whileHover={{ scale: 1.1, rotate: 5 }}
+                  className="relative w-9 h-9"
+                  whileHover={{ scale: 1.08, rotate: 4 }}
+                  transition={{ type: 'spring', stiffness: 320, damping: 18 }}
                 >
-                  <div className="absolute inset-0 bg-[#0064FF]" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Sparkles className="w-4 h-4 text-white" />
-                  </div>
+                  <BlankMark className="w-9 h-9 drop-shadow-[0_4px_12px_rgba(0,100,255,0.32)]" />
                 </motion.div>
-                <span className="text-lg font-black text-[#0064FF] hidden sm:block">블랭크</span>
+                <span className="text-lg font-black tracking-tight gradient-text hidden sm:block">블랭크</span>
               </Link>
 
               {/* Desktop Menu */}
@@ -190,7 +189,7 @@ export default function GlobalNav() {
                       className="px-3 py-2 text-sm font-semibold text-[#0064FF] hover:text-[#0050CC] transition-colors flex items-center gap-1"
                     >
                       <Sparkles className="w-4 h-4" />
-                      7일 무료 체험
+                      요금제 보기
                     </motion.button>
                   </Link>
                   <Link href="/login">
@@ -252,10 +251,8 @@ export default function GlobalNav() {
               {/* Header */}
               <div className="flex items-center justify-between p-4 border-b">
                 <Link href="/" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-xl bg-[#0064FF] flex items-center justify-center">
-                    <Sparkles className="w-4 h-4 text-white" />
-                  </div>
-                  <span className="text-lg font-black text-[#0064FF]">블랭크</span>
+                  <BlankMark className="w-9 h-9 drop-shadow-[0_4px_12px_rgba(0,100,255,0.32)]" />
+                  <span className="text-lg font-black tracking-tight gradient-text">블랭크</span>
                 </Link>
                 <button
                   onClick={() => setMobileMenuOpen(false)}

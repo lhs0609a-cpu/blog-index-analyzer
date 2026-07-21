@@ -3228,7 +3228,7 @@ export default function ToolsPage() {
           </div>
 
           {/* 콘텐츠 제작 */}
-          <div id="section-content" className="rounded-2xl p-4 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50">
+          <div id="section-content" className="glass-3d p-4">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-2 h-2 rounded-full bg-[#0064FF]" />
               <span className="text-sm font-bold text-gray-700">콘텐츠 제작</span>
@@ -3268,7 +3268,7 @@ export default function ToolsPage() {
           </div>
 
           {/* 분석 & 추적 */}
-          <div id="section-analysis" className="rounded-2xl p-4 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50">
+          <div id="section-analysis" className="glass-3d p-4">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-2 h-2 rounded-full bg-blue-500" />
               <span className="text-sm font-bold text-gray-700">분석 & 추적</span>
@@ -3309,7 +3309,7 @@ export default function ToolsPage() {
 
           {/* 현재 플랜 안내 */}
           {plan !== 'business' && (
-            <div className="rounded-2xl p-4 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-lg shadow-blue-100/50">
+            <div className="glass-3d p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <Crown className="w-5 h-5 text-[#0064FF]" />
@@ -3342,7 +3342,7 @@ export default function ToolsPage() {
               exit={{ opacity: 0, y: -20 }}
               className="space-y-6"
             >
-              <div className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50">
+              <div className="glass-3d p-8 ">
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
                     <div className="p-3 rounded-xl bg-gradient-to-r from-[#0064FF] to-[#3182F6]">
@@ -3485,7 +3485,7 @@ export default function ToolsPage() {
                             href="/pricing"
                             className="px-4 py-2 bg-[#0064FF] text-white rounded-lg font-medium hover:bg-blue-600 transition-colors"
                           >
-                            7일 무료 체험
+                            7일 내 전액 환불
                           </Link>
                         </div>
                       </div>
@@ -3505,7 +3505,7 @@ export default function ToolsPage() {
               exit={{ opacity: 0, y: -20 }}
               className="space-y-6"
             >
-              <div className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50">
+              <div className="glass-3d p-8 ">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500">
                     <Compass className="w-6 h-6 text-white" />
@@ -3675,7 +3675,7 @@ export default function ToolsPage() {
               exit={{ opacity: 0, y: -20 }}
               className="space-y-6"
             >
-              <div className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50">
+              <div className="glass-3d p-8 ">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500">
                     <FileText className="w-6 h-6 text-white" />
@@ -3842,7 +3842,7 @@ export default function ToolsPage() {
               exit={{ opacity: 0, y: -20 }}
               className="space-y-6"
             >
-              <div className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50">
+              <div className="glass-3d p-8 ">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500">
                     <Hash className="w-6 h-6 text-white" />
@@ -3963,7 +3963,7 @@ export default function ToolsPage() {
               exit={{ opacity: 0, y: -20 }}
               className="space-y-6"
             >
-              <div className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50">
+              <div className="glass-3d p-8 ">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-3 rounded-xl bg-gradient-to-r from-teal-500 to-cyan-500">
                     <Activity className="w-6 h-6 text-white" />
@@ -4139,7 +4139,7 @@ export default function ToolsPage() {
               exit={{ opacity: 0, y: -20 }}
               className="space-y-6"
             >
-              <div className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50">
+              <div className="glass-3d p-8 ">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-3 rounded-xl bg-gradient-to-r from-[#0064FF] to-[#3182F6]">
                     <Scan className="w-6 h-6 text-white" />
@@ -4305,7 +4305,7 @@ export default function ToolsPage() {
               exit={{ opacity: 0, y: -20 }}
               className="space-y-6"
             >
-              <div className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50">
+              <div className="glass-3d p-8 ">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-3 rounded-xl bg-gradient-to-r from-red-500 to-orange-500">
                     <Radio className="w-6 h-6 text-white" />

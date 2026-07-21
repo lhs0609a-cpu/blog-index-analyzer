@@ -408,7 +408,7 @@ export default function AdOptimizerPage() {
               >
                 <p className="text-gray-500 text-xs flex items-center justify-center gap-2">
                   <CheckCircle className="w-4 h-4 text-green-500" />
-                  7일 무료 체험 · 언제든 해지 가능 · 환불 보장
+                  7일 내 전액 환불 · 언제든 해지 가능 · 위약금 0원
                 </p>
               </motion.div>
             </div>

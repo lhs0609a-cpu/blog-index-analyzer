@@ -120,7 +120,7 @@ export default function PricingPage() {
       const paymentInfo = await preparePayment(user!.id, selectedTrialPlan, billingCycle)
 
       // 토스페이먼츠 결제창 열기
-      router.push(`/payment?orderId=${paymentInfo.order_id}&amount=${paymentInfo.amount}&orderName=${encodeURIComponent(paymentInfo.order_name)}&planType=${selectedTrialPlan}&billingCycle=${billingCycle}&trial=true`)
+      router.push(`/payment?orderId=${paymentInfo.order_id}&amount=${paymentInfo.amount}&orderName=${encodeURIComponent(paymentInfo.order_name)}&planType=${selectedTrialPlan}&billingCycle=${billingCycle}`)
 
     } catch (error) {
       console.error('Failed to prepare payment:', error)
@@ -307,7 +307,7 @@ export default function PricingPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl mb-12"
+          className="glass-3d p-8 mb-12"
         >
           <h2 className="text-2xl font-bold text-center mb-8">Pro 플랜 주요 기능</h2>
 
@@ -390,7 +390,7 @@ export default function PricingPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
-                className={`relative rounded-3xl p-6 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50 transition-transform ${
+                className={`relative glass-3d p-6  transition-transform ${
                   isPro ? 'ring-2 ring-[#0064FF] shadow-2xl md:scale-105' : ''
                 } ${isCurrentPlan ? 'ring-2 ring-green-500' : ''}`}
               >
@@ -524,8 +524,8 @@ export default function PricingPage() {
                     '무료 시작'
                   ) : (
                     <span className="flex flex-col">
-                      <span>7일 무료 체험</span>
-                      <span className="text-xs opacity-80">이후 월 {formatPrice(monthlyPrice)}원</span>
+                      <span>월 {formatPrice(monthlyPrice)}원으로 시작</span>
+                      <span className="text-xs opacity-80">7일 내 전액 환불 보장</span>
                     </span>
                   )}
                 </button>
@@ -664,7 +664,7 @@ export default function PricingPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="rounded-3xl p-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50"
+          className="glass-3d p-8 "
         >
           <h2 className="text-2xl font-bold text-center mb-8">기능 비교</h2>
 
@@ -863,7 +863,7 @@ export default function PricingPage() {
           </p>
 
           <div className="grid md:grid-cols-2 gap-6 text-left max-w-4xl mx-auto">
-            <div className="rounded-2xl p-6 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-lg shadow-blue-100/50">
+            <div className="glass-3d p-6">
               <h3 className="font-bold mb-2">정기결제는 어떻게 작동하나요?</h3>
               <p className="text-gray-600 text-sm">
                 월간 결제 시 매월 같은 날짜에, 연간 결제 시 1년 후 같은 날짜에
@@ -871,7 +871,7 @@ export default function PricingPage() {
                 <strong className="text-green-600">마이페이지에서 클릭 한 번으로 즉시 해지</strong> 가능합니다.
               </p>
             </div>
-            <div className="rounded-2xl p-6 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-lg shadow-blue-100/50">
+            <div className="glass-3d p-6">
               <h3 className="font-bold mb-2">환불 정책은 어떻게 되나요?</h3>
               <p className="text-gray-600 text-sm">
                 <strong>7일 이내:</strong> 서비스 미사용 시 전액 환불<br/>
@@ -884,14 +884,14 @@ export default function PricingPage() {
                 </Link>
               </p>
             </div>
-            <div className="rounded-2xl p-6 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-lg shadow-blue-100/50">
+            <div className="glass-3d p-6">
               <h3 className="font-bold mb-2">언제든 플랜을 변경할 수 있나요?</h3>
               <p className="text-gray-600 text-sm">
                 네, 언제든 업그레이드하거나 다운그레이드할 수 있습니다.
                 업그레이드 시 즉시 적용되며, 다운그레이드는 현재 결제 기간 종료 후 적용됩니다.
               </p>
             </div>
-            <div className="rounded-2xl p-6 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-lg shadow-blue-100/50">
+            <div className="glass-3d p-6">
               <h3 className="font-bold mb-2">결제 수단은 무엇이 있나요?</h3>
               <p className="text-gray-600 text-sm">
                 신용카드와 체크카드를 지원합니다.
@@ -939,10 +939,10 @@ export default function PricingPage() {
                   <Crown className="w-8 h-8 text-[#0064FF]" />
                 </div>
                 <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                  {PLAN_INFO[selectedTrialPlan].name} 플랜 7일 무료 체험
+                  {PLAN_INFO[selectedTrialPlan].name} 플랜 시작하기
                 </h3>
                 <p className="text-gray-600">
-                  모든 프리미엄 기능을 7일간 무료로 체험하세요
+                  7일 이내 미사용 시 100% 환불해드립니다
                 </p>
               </div>
 
@@ -961,9 +961,9 @@ export default function PricingPage() {
                 <div className="flex items-start gap-3">
                   <Check className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
                   <div className="text-sm">
-                    <p className="font-semibold text-green-800 mb-1">7일 무료, 결제는 그 이후</p>
+                    <p className="font-semibold text-green-800 mb-1">7일 이내 전액 환불</p>
                     <p className="text-green-700">
-                      체험 기간 내 해지하면 <strong>0원</strong> · 체험 종료 후 월 {PLAN_INFO[selectedTrialPlan].price.toLocaleString()}원
+                      결제 후 7일 이내 서비스 미사용 시 <strong>100% 환불</strong> · 이후엔 남은 기간 일할 계산 환불
                     </p>
                   </div>
                 </div>
@@ -972,16 +972,16 @@ export default function PricingPage() {
               {/* 체험 일정 */}
               <div className="bg-gray-50 rounded-xl p-4 mb-6">
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-600">체험 시작</span>
-                  <span className="font-medium">오늘</span>
+                  <span className="text-gray-600">오늘 결제 금액</span>
+                  <span className="font-medium">{PLAN_INFO[selectedTrialPlan].price.toLocaleString()}원</span>
                 </div>
                 <div className="flex justify-between items-center text-sm mt-2">
-                  <span className="text-gray-600">체험 종료</span>
-                  <span className="font-medium">7일 후</span>
+                  <span className="text-gray-600">전액 환불 가능 기한</span>
+                  <span className="font-medium">결제일로부터 7일</span>
                 </div>
                 <div className="flex justify-between items-center text-sm mt-2">
-                  <span className="text-gray-600">해지 알림</span>
-                  <span className="font-medium text-[#0064FF]">종료 3일 전 이메일 발송</span>
+                  <span className="text-gray-600">다음 결제일</span>
+                  <span className="font-medium text-[#0064FF]">{billingCycle === 'yearly' ? '1년 후' : '한 달 후'} 같은 날짜</span>
                 </div>
               </div>
 
@@ -996,10 +996,10 @@ export default function PricingPage() {
                   className="w-5 h-5 rounded border-gray-300 text-[#0064FF] focus:ring-[#0064FF] mt-0.5 flex-shrink-0"
                 />
                 <span className="text-sm text-gray-700">
-                  <strong>7일 무료 체험 약관에 동의합니다</strong>
+                  <strong>이용약관 및 환불정책에 동의합니다</strong>
                   <br/>
                   <span className="text-xs text-gray-500 mt-1 block">
-                    7일 후 자동 결제되며, 언제든 마이페이지에서 클릭 한 번으로 해지할 수 있습니다.
+                    지금 {PLAN_INFO[selectedTrialPlan].price.toLocaleString()}원이 결제되며 이후 자동 갱신됩니다. 7일 이내 미사용 시 전액 환불되고, 언제든 마이페이지에서 클릭 한 번으로 해지할 수 있습니다.
                     <Link href="/terms" className="text-[#0064FF] hover:underline ml-1">
                       전문 보기
                     </Link>
@@ -1020,7 +1020,7 @@ export default function PricingPage() {
                       처리 중...
                     </span>
                   ) : (
-                    '7일 무료 체험 시작'
+                    `${PLAN_INFO[selectedTrialPlan].price.toLocaleString()}원 결제하고 시작하기`
                   )}
                 </button>
 
@@ -1028,7 +1028,7 @@ export default function PricingPage() {
                 {!processingPlan && (
                   <div className="text-center text-xs text-gray-500 flex items-center justify-center gap-2">
                     <Shield className="w-3 h-3" />
-                    <span>위약금 0원 · 클릭 한 번으로 해지</span>
+                    <span>7일 내 전액 환불 · 위약금 0원 · 클릭 한 번으로 해지</span>
                   </div>
                 )}
 

@@ -115,7 +115,7 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
                       onClick={onClose}
                       className="inline-flex items-center gap-2 text-sm font-bold text-yellow-600 hover:text-yellow-700"
                     >
-                      7일 무료 체험
+                      7일 내 전액 환불
                       <ArrowRight className="w-4 h-4" />
                     </Link>
                   </div>
@@ -131,7 +131,7 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
                     <ul className="text-sm text-green-800 space-y-1">
                       <li>무료로 블로그 분석과 키워드 검색을 매일 이용할 수 있습니다</li>
                       <li>Pro로 업그레이드하면 1위 가능 키워드를 매일 추천받습니다</li>
-                      <li>7일 무료 체험 후 결제 여부를 선택할 수 있습니다</li>
+                      <li>결제 후 7일 이내 미사용 시 전액 환불받을 수 있습니다</li>
                     </ul>
                   </div>
                 </div>

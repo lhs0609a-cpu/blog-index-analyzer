@@ -331,6 +331,76 @@ export async function verifyBlogIndex(
 }
 
 /**
+ * 노출 천장 — 이 블로그가 실제로 상위노출한 키워드들의 검색량 상한
+ */
+export interface ExposureCeilingResponse {
+  ok: boolean
+  blog_id: string
+  ceiling_volume: number | null   // 1페이지 진입 키워드 중 최대 검색량
+  ceiling_p50: number | null      // 안정적으로 뚫는 수준(중앙값)
+  top30_ceiling: number | null
+  win_rate: number
+  ranked_keywords: { keyword: string; volume: number; rank: number }[]
+  tested: number
+  ranked_count: number
+  confidence: 'high' | 'medium' | 'low'
+  disclaimer: string | null
+  error: string | null
+  cached?: boolean
+}
+
+export async function getExposureCeiling(
+  blogId: string,
+  refresh = false
+): Promise<ExposureCeilingResponse> {
+  const response = await apiClient.get<ExposureCeilingResponse>(
+    `/api/blogs/${blogId}/exposure-ceiling${refresh ? '?refresh=true' : ''}`,
+    { timeout: 90000 }
+  )
+  return response.data
+}
+
+/**
+ * 키워드 상위노출 가능여부 판정 (내 천장 + 경쟁자 체력 결합)
+ */
+export interface JudgeKeywordResponse {
+  blog_id: string
+  keyword: string
+  prediction_id: number | null
+  target_volume: number
+  ceiling: {
+    ceiling_volume: number | null
+    ceiling_p50: number | null
+    confidence: 'high' | 'medium' | 'low'
+    ranked_count: number
+    tested: number
+  }
+  serp_difficulty: {
+    score: number | null
+    label: string | null
+    dormant_ratio: number | null
+    alive_ratio: number | null
+  } | null
+  verdict: 'likely' | 'contested' | 'unlikely' | 'unknown'
+  reason: string
+  confidence: 'high' | 'medium' | 'low'
+  serp_adjustment: 'up' | 'down' | 'none'
+  disclaimer: string | null
+}
+
+export async function judgeKeyword(
+  blogId: string,
+  keyword: string
+): Promise<JudgeKeywordResponse> {
+  const response = await apiClient.post<JudgeKeywordResponse>(
+    '/api/blogs/judge-keyword',
+    { blog_id: blogId, keyword, include_serp: true },
+    { timeout: 90000 }
+  )
+  return response.data
+}
+
+/**
  * Search blogs by keyword (returns all results at once)
  */
 export async function searchKeyword(keyword: string, limit: number = 100): Promise<any> {

@@ -134,6 +134,31 @@ class RankTrackerDB:
                 )
             """)
 
+            # 6. 키워드 상위노출 예측 원장 (정답지 축적 루프)
+            #    judge-keyword 판정을 기록하고, 나중에 실측 순위로 검증해
+            #    예측 정확도(calibration)를 계산한다. "예측 vs 실측"을 저장하는
+            #    이 코드베이스 최초의 테이블.
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS keyword_predictions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    blog_id TEXT NOT NULL,
+                    keyword TEXT NOT NULL,
+                    target_volume INTEGER,
+                    predicted_verdict TEXT NOT NULL,     -- likely|contested|unlikely|unknown
+                    ceiling_volume INTEGER,
+                    ceiling_p50 INTEGER,
+                    serp_difficulty_label TEXT,
+                    confidence TEXT,
+                    predicted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    -- 실측 검증 (나중에 채워짐)
+                    actual_rank INTEGER,                 -- 블로그탭 실제 순위 (NULL=미노출/미검증)
+                    actual_indexed INTEGER,              -- 1=상위30 내 노출, 0=미노출
+                    actual_page1 INTEGER,                -- 1=상위10, 0=아님
+                    actual_checked_at TIMESTAMP,
+                    outcome TEXT                         -- hit|miss|pending
+                )
+            """)
+
             # 인덱스 생성
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_tracked_blogs_user_id ON tracked_blogs(user_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_tracked_posts_blog_id ON tracked_posts(tracked_blog_id)")
@@ -141,6 +166,8 @@ class RankTrackerDB:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_rank_history_keyword_id ON rank_history(post_keyword_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_rank_history_checked_at ON rank_history(checked_at)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_rank_check_tasks_task_id ON rank_check_tasks(task_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_kw_pred_blog ON keyword_predictions(blog_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_kw_pred_outcome ON keyword_predictions(outcome)")
 
             logger.info("Rank tracker tables initialized")
 
@@ -385,6 +412,126 @@ class RankTrackerDB:
                 "rank_blog_tab": rank_blog_tab,
                 "rank_view_tab": rank_view_tab
             }
+
+    # ============ 키워드 예측 원장 (정답지 축적 루프) ============
+
+    def add_keyword_prediction(self, blog_id: str, keyword: str, target_volume: int,
+                               predicted_verdict: str, ceiling_volume: int = None,
+                               ceiling_p50: int = None, serp_difficulty_label: str = None,
+                               confidence: str = None) -> int:
+        """judge-keyword 판정을 원장에 기록. 반환: prediction id."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO keyword_predictions
+                    (blog_id, keyword, target_volume, predicted_verdict,
+                     ceiling_volume, ceiling_p50, serp_difficulty_label, confidence, outcome)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+            """, (blog_id, keyword, target_volume, predicted_verdict,
+                  ceiling_volume, ceiling_p50, serp_difficulty_label, confidence))
+            return cursor.lastrowid
+
+    def record_prediction_actual(self, prediction_id: int, actual_rank: int = None) -> Dict:
+        """예측을 실측 순위로 검증하고 hit/miss 판정.
+
+        판정 규칙:
+          - likely/contested 예측: 실제 상위10 노출되면 hit
+          - unlikely 예측: 실제 상위10 밖(또는 미노출)이면 hit
+          - unknown: 채점 제외 (outcome='pending' 유지)
+        """
+        indexed = 1 if (actual_rank is not None and actual_rank <= 30) else 0
+        page1 = 1 if (actual_rank is not None and actual_rank <= 10) else 0
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            row = cursor.execute(
+                "SELECT predicted_verdict FROM keyword_predictions WHERE id = ?",
+                (prediction_id,)
+            ).fetchone()
+            if not row:
+                return {"error": "prediction_not_found"}
+            verdict = row["predicted_verdict"]
+
+            if verdict in ("likely", "contested"):
+                outcome = "hit" if page1 else "miss"
+            elif verdict == "unlikely":
+                outcome = "hit" if not page1 else "miss"
+            else:
+                outcome = "pending"  # unknown 은 채점 안 함
+
+            cursor.execute("""
+                UPDATE keyword_predictions
+                SET actual_rank = ?, actual_indexed = ?, actual_page1 = ?,
+                    actual_checked_at = CURRENT_TIMESTAMP, outcome = ?
+                WHERE id = ?
+            """, (actual_rank, indexed, page1, outcome, prediction_id))
+            return {"id": prediction_id, "verdict": verdict, "actual_rank": actual_rank,
+                    "actual_page1": bool(page1), "outcome": outcome}
+
+    def get_pending_predictions(self, min_age_hours: int = 0, limit: int = 100) -> List[Dict]:
+        """아직 실측 검증 안 된 예측들. min_age_hours 로 '발행 후 색인될 시간' 확보."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, blog_id, keyword, predicted_verdict, predicted_at
+                FROM keyword_predictions
+                WHERE actual_checked_at IS NULL
+                  AND predicted_at <= datetime('now', ?)
+                ORDER BY predicted_at ASC
+                LIMIT ?
+            """, (f'-{int(min_age_hours)} hours', limit))
+            return [dict(r) for r in cursor.fetchall()]
+
+    def get_prediction_calibration(self, blog_id: str = None) -> Dict:
+        """예측 정확도(calibration) 집계. blog_id 주면 해당 블로그만.
+
+        반환: 전체 정확도 + verdict별 hit/miss/총계.
+        이것이 '정답지가 쌓이면 판정이 정확해진다'를 실제로 증명하는 수치.
+        """
+        where = "WHERE outcome IN ('hit','miss')"
+        params: tuple = ()
+        if blog_id:
+            where += " AND blog_id = ?"
+            params = (blog_id,)
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            rows = cursor.execute(f"""
+                SELECT predicted_verdict,
+                       SUM(CASE WHEN outcome='hit' THEN 1 ELSE 0 END) as hits,
+                       SUM(CASE WHEN outcome='miss' THEN 1 ELSE 0 END) as misses,
+                       COUNT(*) as total
+                FROM keyword_predictions
+                {where}
+                GROUP BY predicted_verdict
+            """, params).fetchall()
+
+            per_verdict = {}
+            th = tm = 0
+            for r in rows:
+                per_verdict[r["predicted_verdict"]] = {
+                    "hits": r["hits"], "misses": r["misses"], "total": r["total"],
+                    "accuracy": round(r["hits"] / r["total"], 3) if r["total"] else None,
+                }
+                th += r["hits"]
+                tm += r["misses"]
+            graded = th + tm
+            return {
+                "graded_total": graded,
+                "overall_accuracy": round(th / graded, 3) if graded else None,
+                "per_verdict": per_verdict,
+                "pending": self._count_pending(blog_id),
+            }
+
+    def _count_pending(self, blog_id: str = None) -> int:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if blog_id:
+                r = cursor.execute(
+                    "SELECT COUNT(*) c FROM keyword_predictions WHERE outcome='pending' AND blog_id=?",
+                    (blog_id,)).fetchone()
+            else:
+                r = cursor.execute(
+                    "SELECT COUNT(*) c FROM keyword_predictions WHERE outcome='pending'").fetchone()
+            return r["c"] if r else 0
 
     def get_latest_ranks(self, tracked_blog_id: int) -> List[Dict]:
         """블로그의 최신 순위 조회"""

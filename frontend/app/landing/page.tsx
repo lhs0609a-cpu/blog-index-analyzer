@@ -671,7 +671,7 @@ function PricingSection() {
           <div className="inline-flex items-center gap-3 bg-slate-800/50 border border-slate-700 rounded-xl px-6 py-4">
             <Shield className="w-8 h-8 text-green-400" />
             <div className="text-left">
-              <p className="text-white font-bold">7일 무료 체험 + 환불 보장</p>
+              <p className="text-white font-bold">7일 이내 100% 환불 보장</p>
               <p className="text-gray-400 text-sm">효과 없으면 100% 환불해 드립니다</p>
             </div>
           </div>

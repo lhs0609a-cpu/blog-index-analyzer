@@ -223,7 +223,7 @@ export default function BlueOceanPage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-3xl p-6 mb-8 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50"
+          className="glass-3d p-6 mb-8 "
         >
           <div className="text-center mb-6">
             <h2 className="text-2xl font-bold text-gray-800 mb-2">

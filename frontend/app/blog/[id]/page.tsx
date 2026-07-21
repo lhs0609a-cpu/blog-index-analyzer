@@ -267,15 +267,15 @@ export default function BlogDetailPage() {
                 {/* Stats Grid */}
                 <div className="grid grid-cols-4 gap-6 mt-6">
                   <div className="text-center">
-                    <div className="text-2xl font-bold gradient-text">{displayData.stats.total_posts}</div>
+                    <div className="text-2xl font-bold gradient-text">{displayData.stats.total_posts ?? '—'}</div>
                     <div className="text-sm text-gray-600">포스트</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold gradient-text">{displayData.stats.total_visitors.toLocaleString()}</div>
+                    <div className="text-2xl font-bold gradient-text">{displayData.stats.total_visitors?.toLocaleString() ?? '—'}</div>
                     <div className="text-sm text-gray-600">방문자</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold gradient-text">{displayData.stats.neighbor_count}</div>
+                    <div className="text-2xl font-bold gradient-text">{displayData.stats.neighbor_count ?? '—'}</div>
                     <div className="text-sm text-gray-600">이웃</div>
                   </div>
                   <div className="text-center">
@@ -818,7 +818,7 @@ export default function BlogDetailPage() {
                         </div>
                         <div>
                           <p className="text-gray-600">총 방문자</p>
-                          <p className="font-bold text-lg">{breakdownData.blog_info.total_visitors.toLocaleString()}명</p>
+                          <p className="font-bold text-lg">{breakdownData.blog_info.total_visitors?.toLocaleString() ?? "—"}명</p>
                         </div>
                         <div>
                           <p className="text-gray-600">운영 기간</p>

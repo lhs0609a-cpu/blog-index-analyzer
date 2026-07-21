@@ -1,10 +1,71 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
   <defs>
-    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#0064FF"/>
-      <stop offset="100%" style="stop-color:#3182F6"/>
+    <!-- 본체: 심해 블루 → 바이올렛 이리데슨스 -->
+    <linearGradient id="bodyGrad" x1="8%" y1="0%" x2="92%" y2="100%">
+      <stop offset="0%" stop-color="#4C7DFF"/>
+      <stop offset="42%" stop-color="#0064FF"/>
+      <stop offset="100%" stop-color="#6D3BFF"/>
     </linearGradient>
+
+    <!-- 상단 스펙큘러(유리 반사) -->
+    <linearGradient id="specGrad" x1="0%" y1="0%" x2="30%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.55"/>
+      <stop offset="55%" stop-color="#FFFFFF" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- 유리 슬래브 머티리얼 (앞으로 올수록 불투명) -->
+    <linearGradient id="slabA" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#D8E6FF" stop-opacity="0.62"/>
+    </linearGradient>
+    <linearGradient id="slabB" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.88"/>
+      <stop offset="100%" stop-color="#BFE9FF" stop-opacity="0.48"/>
+    </linearGradient>
+    <linearGradient id="slabC" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#EAF3FF" stop-opacity="0.72"/>
+      <stop offset="100%" stop-color="#9FC6FF" stop-opacity="0.34"/>
+    </linearGradient>
+
+    <!-- 시안 림라이트 -->
+    <linearGradient id="rimGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#22D3EE" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#22D3EE" stop-opacity="0"/>
+    </linearGradient>
+
+    <filter id="slabShadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3.2" flood-color="#001A4D" flood-opacity="0.34"/>
+    </filter>
   </defs>
-  <rect width="100" height="100" rx="20" fill="url(#gradient)"/>
-  <text x="50" y="65" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="white" text-anchor="middle">B</text>
+
+  <!-- 스퀘어클 본체 -->
+  <rect x="4" y="4" width="120" height="120" rx="34" fill="url(#bodyGrad)"/>
+
+  <!-- 베젤(깊이감) -->
+  <rect x="4" y="4" width="120" height="120" rx="34" fill="none"
+        stroke="#001B57" stroke-opacity="0.28" stroke-width="1.5"/>
+
+  <!-- 상단 유리 반사 -->
+  <path d="M4 38 A34 34 0 0 1 38 4 H94 A34 34 0 0 1 124 30 C96 46 40 52 4 38 Z"
+        fill="url(#specGrad)"/>
+
+  <!-- 시안 림라이트 (좌하단) -->
+  <path d="M4 94 A34 34 0 0 0 38 124 H70 C40 118 14 108 4 94 Z" fill="url(#rimGrad)"/>
+
+  <!-- 상승하는 3개 유리 슬래브 = '지수 측정' 은유 -->
+  <g filter="url(#slabShadow)">
+    <rect x="30" y="74" width="19" height="28" rx="8" fill="url(#slabC)"/>
+    <rect x="54.5" y="56" width="19" height="46" rx="8" fill="url(#slabB)"/>
+    <rect x="79" y="34" width="19" height="68" rx="8" fill="url(#slabA)"/>
+  </g>
+
+  <!-- 슬래브 상단 하이라이트 (유리 두께) -->
+  <rect x="30" y="74" width="19" height="6" rx="3" fill="#FFFFFF" fill-opacity="0.55"/>
+  <rect x="54.5" y="56" width="19" height="6" rx="3" fill="#FFFFFF" fill-opacity="0.7"/>
+  <rect x="79" y="34" width="19" height="6" rx="3" fill="#FFFFFF" fill-opacity="0.85"/>
+
+  <!-- 궤적 스파크 -->
+  <circle cx="88.5" cy="22" r="4.5" fill="#FFFFFF" fill-opacity="0.95"/>
+  <circle cx="88.5" cy="22" r="8.5" fill="#FFFFFF" fill-opacity="0.18"/>
 </svg>

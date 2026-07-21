@@ -200,7 +200,7 @@ export default function UpgradeModal({ isOpen, onClose, feature, currentUsage, m
                   className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 text-center"
                 >
                   <span className="text-amber-700 text-sm font-medium">
-                    🔥 지금 시작하면 <span className="font-bold">7일 무료 체험</span> + 첫 달 20% 할인!
+                    🔥 지금 시작하면 <span className="font-bold">첫 달 20% 할인</span> · 7일 내 전액 환불 보장!
                   </span>
                 </motion.div>
               )}
@@ -215,7 +215,7 @@ export default function UpgradeModal({ isOpen, onClose, feature, currentUsage, m
                   className="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-xl hover:shadow-lg shadow-lg shadow-blue-500/25 transition-all flex items-center justify-center gap-2"
                 >
                   <Crown className="w-5 h-5" />
-                  7일 무료 체험 시작
+                  7일 환불 보장으로 시작
                 </motion.button>
               </Link>
 

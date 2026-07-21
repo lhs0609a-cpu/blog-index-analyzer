@@ -455,7 +455,7 @@ export default function Dashboard() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
                 whileHover={{ y: -5 }}
-                className="rounded-3xl p-6 bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 shadow-xl shadow-blue-100/50 hover:shadow-2xl transition-all duration-300 cursor-pointer"
+                className="glass-3d p-6  hover:shadow-2xl transition-all duration-300 cursor-pointer"
               >
               {/* Blog Header */}
               <div className="flex items-center gap-4 mb-6">

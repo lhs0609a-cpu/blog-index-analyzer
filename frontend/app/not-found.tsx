@@ -75,7 +75,7 @@ export default function NotFound() {
             href="/pricing"
             className="text-purple-400 hover:text-purple-300 text-sm font-medium"
           >
-            7일 무료 체험 시작 →
+            7일 환불 보장으로 시작 →
           </Link>
         </div>
       </div>

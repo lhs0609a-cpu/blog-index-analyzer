@@ -547,6 +547,8 @@ class BlogAnalysisRequest(BaseModel):
     blog_id: str
     post_limit: Optional[int] = 10
     quick_mode: Optional[bool] = False
+    # 실측 색인 검증(최신 글의 실제 검색 노출 측정). SERP 호출 비용이 있어 기본 off.
+    verify_index: Optional[bool] = False
 
 
 class BlogInfoResponse(BaseModel):
@@ -2650,7 +2652,7 @@ async def scrape_blog_stats(blog_id: str) -> Dict:
     return stats
 
 
-async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
+async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = False) -> Dict:
     """Analyze a single blog - FAST version using API only (no Playwright)"""
     # 캐시 확인 (성능 개선)
     cached = get_cached_blog_analysis(blog_id)
@@ -2694,7 +2696,14 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
         "category_entropy": None,         # Shannon entropy — 카테고리 분포 다양성 (낮을수록 집중도 ↑)
         "avg_image_count": None,          # RSS description의 <img> 카운트 (요약 기준)
         "avg_word_count": None,           # 포스트당 평균 단어 수 (RSS description 기반)
-        "posting_interval_days": None,    # 평균 발행 간격 (일)
+        "posting_interval_days": None,    # 평균 발행 간격 (일) — 마지막 글→오늘 공백 포함
+        "posting_burstiness": None,       # 발행 간격 변동계수 (덤프 발행 감지)
+        "rss_window_days": None,          # RSS 관측창 (가장 오래된 아이템의 나이)
+        "rss_truncated": False,           # RSS 50개 캡에 걸림 = 고빈도 발행으로 과소측정
+        "posts_last_90d": None,
+        "rss_empty": False,               # 200 + 빈 피드 (미발행/비공개 가능성)
+        # 측정에 실패해 값이 없는 필드 목록. 절대 추정값으로 채우지 않는다.
+        "unmeasured": [],
         # 풀파싱 신호 (analyze_post 호출, 최근 N개 평균)
         "fullparse_n": None,
         "fullparse_avg_likes": None,
@@ -2782,17 +2791,19 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
                     if "rss" not in analysis_data["data_sources"]:
                         analysis_data["data_sources"].append("rss")
 
-                    # 포스트 수 - 스크래핑 데이터가 없을 때만 RSS 추정 사용
+                    # 포스트 수 — 스크래핑 실패 시.
+                    # RSS는 정확히 50개에서 잘리므로 총 발행수를 알 수 없다.
+                    # 예전에는 md5 시드로 200~500 같은 숫자를 지어냈으나 폐기.
+                    # 50개 미만이면 그것이 전체이므로 실측값으로 인정하고,
+                    # 50개로 꽉 찼으면 '최소 N개 이상'으로만 표기한다.
                     if not stats["total_posts"]:
                         rss_count = len(items)
                         if rss_count >= 48:
-                            stats["total_posts"] = get_consistent_value(blog_id, 200, 500, "posts")
-                        elif rss_count >= 30:
-                            stats["total_posts"] = get_consistent_value(blog_id, 100, 200, "posts")
-                        elif rss_count >= 10:
-                            stats["total_posts"] = get_consistent_value(blog_id, 50, 100, "posts")
+                            stats["total_posts"] = None
+                            stats["total_posts_min"] = rss_count
+                            analysis_data["unmeasured"].append("total_posts")
                         else:
-                            stats["total_posts"] = rss_count * 2
+                            stats["total_posts"] = rss_count
 
                     # 평균 글 길이 + A-2 진짜 신호 계산 (처음 10개) - 항상 RSS에서 가져옴
                     total_len = 0
@@ -2836,36 +2847,68 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
                         )
                         analysis_data["category_entropy"] = round(entropy, 3)
 
-                    # 평균 발행 간격 (전체 items의 pubDate 차이)
+                    # ===== 발행 이력 파싱 (활동성 판정의 원자료) =====
+                    # 주의: RSS는 아이템 50개 하드캡. 매일 발행하는 블로그는 최근 50일치만
+                    # 보이므로 "최근 N일 발행량"을 그대로 쓰면 활발한 블로그가 오히려 손해를
+                    # 본다. rss_truncated 로 잘림을 표시하고 하위 로직에서 보정한다.
                     try:
                         from email.utils import parsedate_to_datetime
-                        dates = []
-                        for item in items[:20]:
+                        from datetime import datetime, timezone
+
+                        now_utc = datetime.now(timezone.utc)
+                        all_dates = []
+                        for item in items:
                             p = item.find('pubDate')
                             if p:
                                 try:
-                                    dates.append(parsedate_to_datetime(p.get_text()))
-                                except:
+                                    all_dates.append(parsedate_to_datetime(p.get_text()))
+                                except Exception:
                                     pass
-                        if len(dates) >= 2:
-                            dates.sort(reverse=True)
-                            intervals = [(dates[i] - dates[i+1]).days for i in range(len(dates) - 1)]
+
+                        if all_dates:
+                            all_dates.sort(reverse=True)
+
+                            # 최근 활동일 (= 마지막 글로부터 경과일)
+                            gap_days = (now_utc - all_dates[0]).days
+                            analysis_data["recent_activity"] = max(gap_days, 0)
+
+                            # RSS 관측창: 가장 오래된 아이템의 나이
+                            oldest_days = max((now_utc - all_dates[-1]).days, 0)
+                            analysis_data["rss_window_days"] = oldest_days
+                            # 50개 꽉 찼는데 관측창이 90일 미만 = 고빈도 발행으로 잘린 상태
+                            analysis_data["rss_truncated"] = bool(len(all_dates) >= 48 and oldest_days < 90)
+
+                            # 최근 90일 발행량 (잘렸으면 하한값으로만 해석해야 함)
+                            analysis_data["posts_last_90d"] = sum(
+                                1 for d in all_dates if (now_utc - d).days <= 90
+                            )
+
+                            # 평균 발행 간격 — 마지막 글에서 '오늘'까지의 공백을 반드시 포함.
+                            # 과거 글들 사이 간격만 평균내면 "몰아쓰고 방치"한 블로그가
+                            # 오히려 조밀한 발행으로 집계되어 고득점한다.
+                            recent_dates = all_dates[:20]
+                            intervals = [
+                                (recent_dates[i] - recent_dates[i + 1]).days
+                                for i in range(len(recent_dates) - 1)
+                            ]
                             intervals = [d for d in intervals if d >= 0]
+                            intervals.append(gap_days)  # ← 현재까지의 공백
                             if intervals:
-                                analysis_data["posting_interval_days"] = round(sum(intervals) / len(intervals), 1)
+                                analysis_data["posting_interval_days"] = round(
+                                    sum(intervals) / len(intervals), 1
+                                )
+
+                            # 덤프 발행 패턴: 간격 변동계수(표준편차/평균).
+                            # 하루에 몰아넣고 장기 방치하면 값이 크게 튄다.
+                            if len(intervals) >= 4:
+                                import statistics
+                                mean_iv = sum(intervals) / len(intervals)
+                                if mean_iv > 0:
+                                    analysis_data["posting_burstiness"] = round(
+                                        statistics.pstdev(intervals) / mean_iv, 2
+                                    )
                     except Exception:
                         pass
-
-                    # 최근 활동일 계산
-                    pub = items[0].find('pubDate')
-                    if pub:
-                        try:
-                            from email.utils import parsedate_to_datetime
-                            from datetime import datetime, timezone
-                            last = parsedate_to_datetime(pub.get_text())
-                            analysis_data["recent_activity"] = (datetime.now(timezone.utc) - last).days
-                        except:
-                            analysis_data["recent_activity"] = 7
 
                     # ===== A-2 풀파싱: 최근 포스트 N개의 진짜 신호 평균 =====
                     # RSS만으론 RSS description(요약)밖에 못 봄.
@@ -2925,52 +2968,42 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
                     except Exception as e:
                         logger.warning(f"Fullparse failed for {blog_id}: {e}")
 
-                    # 이웃 수 추정 (글 수와 활동성 기반) — 실측값이 없을 때만 (실데이터 보존)
+                    # ⚠️ 이웃 수·누적 방문자는 측정 실패 시 '지어내지 않는다'.
+                    # 예전에는 md5(blog_id) 시드로 그럴듯한 숫자를 생성했으나,
+                    # 화면에 실측값처럼 표시되어 사용자를 오도했다. None을 유지하고
+                    # unmeasured 에 기록해 UI가 '측정 불가'로 표시하게 한다.
                     if stats["neighbor_count"] is None:
-                        if stats["total_posts"] and stats["total_posts"] > 100:
-                            stats["neighbor_count"] = get_consistent_value(blog_id, 200, 800, "neighbors")
-                        elif stats["total_posts"] and stats["total_posts"] > 50:
-                            stats["neighbor_count"] = get_consistent_value(blog_id, 100, 300, "neighbors")
-                        else:
-                            stats["neighbor_count"] = get_consistent_value(blog_id, 30, 150, "neighbors")
-
-                    # 누적 방문자 추정 (글 수 × 평균 방문) — 실측값이 없을 때만 덮어쓰지 않음
+                        analysis_data["unmeasured"].append("neighbor_count")
                     if stats["total_visitors"] is None:
-                        base_visitors = (stats["total_posts"] or 50) * get_consistent_value(blog_id, 500, 2000, "visitors")
-                        stats["total_visitors"] = base_visitors
+                        analysis_data["unmeasured"].append("total_visitors")
 
                     logger.info(f"RSS analysis for {blog_id}: posts~{stats['total_posts']}, len={analysis_data['avg_post_length']}, cats={analysis_data['category_count']}")
                 else:
-                    # RSS가 비어있는 경우 - 블로그 ID 기반 일관된 추정값 사용
-                    stats["total_posts"] = get_consistent_value(blog_id, 20, 80, "posts_empty")
-                    stats["neighbor_count"] = get_consistent_value(blog_id, 50, 200, "neighbors_empty")
-                    stats["total_visitors"] = get_consistent_value(blog_id, 10000, 100000, "visitors_empty")
-                    analysis_data["category_count"] = get_consistent_value(blog_id, 2, 8, "category")
-                    analysis_data["avg_post_length"] = get_consistent_value(blog_id, 800, 2000, "length")
-                    analysis_data["recent_activity"] = get_consistent_value(blog_id, 1, 30, "activity")
-                    analysis_data["data_sources"].append("estimated")
-                    logger.warning(f"Empty RSS for {blog_id}, using estimated values")
+                    # RSS가 비어있음(200 + 빈 XML). 네이버는 미발행/비공개 블로그에
+                    # 404가 아니라 빈 피드를 200으로 반환하므로 '죽은 블로그'로 단정할 수 없다.
+                    # 추정값을 지어내지 않고 측정 불가로 남긴다.
+                    analysis_data["unmeasured"].extend(
+                        ["total_posts", "neighbor_count", "total_visitors",
+                         "category_count", "avg_post_length", "recent_activity"]
+                    )
+                    analysis_data["rss_empty"] = True
+                    analysis_data["data_sources"].append("rss_empty")
+                    logger.warning(f"Empty RSS for {blog_id} — 미발행/비공개 가능성, 추정값 생성 안 함")
             else:
-                # RSS 접근 실패 - 블로그 ID 기반 일관된 추정값 사용
-                stats["total_posts"] = get_consistent_value(blog_id, 30, 100, "posts_fail")
-                stats["neighbor_count"] = get_consistent_value(blog_id, 50, 300, "neighbors_fail")
-                stats["total_visitors"] = get_consistent_value(blog_id, 20000, 150000, "visitors_fail")
-                analysis_data["category_count"] = get_consistent_value(blog_id, 3, 10, "category_fail")
-                analysis_data["avg_post_length"] = get_consistent_value(blog_id, 1000, 2500, "length_fail")
-                analysis_data["recent_activity"] = get_consistent_value(blog_id, 1, 14, "activity_fail")
-                analysis_data["data_sources"].append("estimated")
-                logger.warning(f"RSS failed for {blog_id}, using consistent estimated values")
+                # RSS 접근 실패 — 추정값 생성 안 함
+                analysis_data["unmeasured"].extend(
+                    ["total_posts", "neighbor_count", "total_visitors",
+                     "category_count", "avg_post_length", "recent_activity"]
+                )
+                logger.warning(f"RSS failed for {blog_id} (status={resp.status_code}) — 추정값 생성 안 함")
 
         except Exception as e:
             logger.warning(f"RSS fetch error for {blog_id}: {e}")
-            # 오류 시 블로그 ID 기반 일관된 추정값 사용
-            stats["total_posts"] = get_consistent_value(blog_id, 40, 120, "posts_error")
-            stats["neighbor_count"] = get_consistent_value(blog_id, 80, 400, "neighbors_error")
-            stats["total_visitors"] = get_consistent_value(blog_id, 30000, 200000, "visitors_error")
-            analysis_data["category_count"] = get_consistent_value(blog_id, 3, 8, "category_error")
-            analysis_data["avg_post_length"] = get_consistent_value(blog_id, 1200, 2200, "length_error")
-            analysis_data["recent_activity"] = get_consistent_value(blog_id, 1, 21, "activity_error")
-            analysis_data["data_sources"].append("estimated")
+            # 오류 시에도 지어내지 않는다
+            analysis_data["unmeasured"].extend(
+                ["total_posts", "neighbor_count", "total_visitors",
+                 "category_count", "avg_post_length", "recent_activity"]
+            )
 
         # ============================================
         # SCORE CALCULATION - Using category + learned weights
@@ -3155,10 +3188,16 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
                 recency_score = 65
             elif days <= 30:
                 recency_score = 50
+            elif days <= 60:
+                recency_score = 38
             elif days <= 90:
-                recency_score = 35
+                recency_score = 28
+            elif days <= 180:
+                recency_score = 18
+            elif days <= 365:
+                recency_score = 10
             else:
-                recency_score = 20
+                recency_score = 5
         else:
             recency_score = 50
 
@@ -3292,7 +3331,66 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
             # RSS만 있음 → 10% 패널티 (기존 30%에서 완화)
             total_score = total_score * 0.9
 
+        # ===== 활동성 게이트 (vitality) — 덧셈이 아니라 곱셈 =====
+        # 방치된 블로그는 "점수가 조금 낮은 좋은 블로그"가 아니라 범주가 다르다.
+        # 감점 항목으로 두면 누적 지표(총방문자·총포스팅·이웃)가 상쇄해버리므로
+        # 최종 점수에 계수를 곱한다.
+        #
+        # ⚠️ 아래 구간표는 업계 표준이 아니라 자체 휴리스틱이다.
+        #    네이버는 포스팅 주기를 랭킹 요소로 공식화한 적이 없고,
+        #    "N일이면 방치"에 해당하는 공신력 있는 출처도 확인되지 않았다.
+        #    (D.I.A.의 '최신성'은 문서 내용의 최신성이지 발행 빈도가 아님)
+        vitality = 1.0
+        vitality_state = "unknown"
+        days_idle = analysis_data.get("recent_activity")
+
+        if days_idle is None:
+            # RSS를 못 읽음 → 활동성 판정 불가. 감점하지 않고 중립 유지.
+            vitality, vitality_state = 1.0, "unknown"
+        elif days_idle <= 7:
+            vitality, vitality_state = 1.0, "active"
+        elif days_idle <= 30:
+            vitality, vitality_state = 0.95, "active"
+        elif days_idle <= 60:
+            vitality, vitality_state = 0.82, "slowing"
+        elif days_idle <= 90:
+            vitality, vitality_state = 0.65, "dormant_entering"
+        elif days_idle <= 180:
+            vitality, vitality_state = 0.42, "dormant"
+        elif days_idle <= 365:
+            vitality, vitality_state = 0.25, "stopped"
+        else:
+            vitality, vitality_state = 0.15, "abandoned"
+
+        # 발행량 보정: 최근 글은 있으나 발행이 희박한 경우 추가 감쇠.
+        # 단 RSS 50개 캡에 걸려 잘린(=고빈도 발행) 블로그는 과소측정이므로 면제.
+        if (
+            vitality_state in ("active", "slowing")
+            and not analysis_data.get("rss_truncated")
+            and analysis_data.get("posts_last_90d") is not None
+        ):
+            p90 = analysis_data["posts_last_90d"]
+            if p90 <= 1:
+                vitality *= 0.75
+            elif p90 <= 3:
+                vitality *= 0.88
+
+        # 덤프 발행(몰아쓰고 방치) 패턴 감쇠.
+        # 변동계수가 크면 규칙적 운영이 아니라 대량발행 후 이탈에 가깝다.
+        burst = analysis_data.get("posting_burstiness")
+        if burst is not None and burst >= 1.5 and vitality_state != "active":
+            vitality *= 0.9
+
+        vitality = round(max(vitality, 0.10), 3)
+
+        total_score = total_score * vitality
+
         index["total_score"] = min(round(total_score, 1), 100)
+        index["vitality"] = vitality
+        index["vitality_state"] = vitality_state
+        index["days_since_last_post"] = days_idle
+        index["posts_last_90d"] = analysis_data.get("posts_last_90d")
+        index["rss_truncated"] = analysis_data.get("rss_truncated", False)
 
         # ===== 실제 백분위 시스템 =====
         # 분석된 모든 블로그 중에서 현재 블로그의 위치를 계산
@@ -3322,6 +3420,53 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
                 index["level_category"] = "일반"
 
             logger.info(f"Blog {blog_id}: score={index['total_score']}, percentile={percentile:.1f}%, level={level} ({grade})")
+
+            # ===== 실측 색인 검증 (선택) =====
+            # 백분위 레벨은 합성 시드가 섞인 모집단 대비 상대값이라 근거가 약하다.
+            # verify_index=True 이면 최신 글들이 실제로 검색에 노출되는지 측정해
+            # 그 결과를 권위 있는 판정으로 승격한다(관측 가능한 아웃풋 기반).
+            # SERP 호출이 발생하므로 기본은 꺼져 있다.
+            if verify_index:
+                try:
+                    from services.blog_index_verifier import verify_blog_index_level
+
+                    # 24h 캐시 (raw: 네임스페이스 — 전용 엔드포인트의 응답 형태와 구분)
+                    cache_key = f"raw:{blog_id}"
+                    verified = get_cached_verify_index(cache_key)
+                    if verified is None:
+                        verified = await verify_blog_index_level(
+                            blog_id,
+                            blog_stats={
+                                "neighbor_count": stats.get("neighbor_count"),
+                                "total_visitors": stats.get("total_visitors"),
+                                "total_posts": stats.get("total_posts"),
+                            },
+                        )
+                        if verified.get("ok"):
+                            set_verify_index_cache(cache_key, verified)
+                    index["index_verification"] = verified
+
+                    if verified.get("ok") and verified.get("detailed_level"):
+                        # 휴리스틱 레벨은 보존하고, 실측 레벨을 주 판정으로 교체
+                        index["level_heuristic"] = index["level"]
+                        index["grade_heuristic"] = index["grade"]
+                        index["level"] = verified["detailed_level"]
+                        index["grade"] = verified.get("detailed_label") or index["grade"]
+                        index["level_category"] = verified.get("level_category") or index["level_category"]
+                        index["level_source"] = "measured"
+                        index["confidence"] = verified.get("confidence")
+                        logger.info(
+                            f"Blog {blog_id}: 실측 색인 검증 적용 "
+                            f"level={index['level']} ({index['grade']}), "
+                            f"confidence={verified.get('confidence')}"
+                        )
+                    else:
+                        index["level_source"] = "heuristic"
+                except Exception as verify_error:
+                    logger.warning(f"Index verification failed for {blog_id}: {verify_error}")
+                    index["level_source"] = "heuristic"
+            else:
+                index["level_source"] = "heuristic"
 
         except Exception as percentile_error:
             logger.warning(f"Percentile calculation failed, using fallback: {percentile_error}")
@@ -3402,19 +3547,18 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
         import traceback
         logger.debug(traceback.format_exc())
 
-    # estimated_fields 추적 - 어떤 필드가 추정값인지 명시
-    estimated_fields = []
-    if "estimated" in analysis_data["data_sources"]:
-        estimated_fields.extend(["total_posts", "neighbor_count", "total_visitors",
-                                 "category_count", "avg_post_length", "recent_activity"])
-    elif "scrape" not in analysis_data["data_sources"] and "rss" in analysis_data["data_sources"]:
-        # RSS만 사용한 경우: 이웃/누적방문은 조작값이므로 항상 추정으로 표기
-        # (단, 일별 방문자 daily_visitors 는 실측이면 별도로 신뢰 가능)
-        estimated_fields.append("neighbor_count")
-        estimated_fields.append("total_visitors")
+    # unmeasured: 측정 실패로 값이 아예 없는 필드 (추정값을 생성하지 않음)
+    unmeasured = sorted(set(analysis_data.get("unmeasured", [])))
 
-    # 누적 방문자(total_visitors)는 HTML 실측이 아니면 항상 추정으로 표기.
-    # NVisitorgp 위젯으로 scrape 성공했더라도 누적값은 조작(get_consistent_value)이다.
+    # estimated_fields: 값은 있으나 실측이 아닌 파생/추정치인 필드
+    estimated_fields = []
+    if "scrape" not in analysis_data["data_sources"] and "rss" in analysis_data["data_sources"]:
+        # RSS만으로는 이웃수·누적방문을 알 수 없다 (RSS에 해당 필드 자체가 없음)
+        for f in ("neighbor_count", "total_visitors"):
+            if stats.get(f) is not None:
+                estimated_fields.append(f)
+
+    # 누적 방문자는 HTML 실측이 아니면 추정으로 표기
     if not analysis_data.get("cumulative_visitors_real") and "total_visitors" not in estimated_fields:
         if stats.get("total_visitors") is not None:
             estimated_fields.append("total_visitors")
@@ -3427,6 +3571,8 @@ async def analyze_blog(blog_id: str, keyword: str = None) -> Dict:
         "blog_name": analysis_data.get("blog_name"),
         "data_sources": analysis_data["data_sources"],
         "estimated_fields": estimated_fields,
+        "unmeasured": unmeasured,
+        "rss_empty": analysis_data.get("rss_empty", False),
     }
     set_blog_analysis_cache(blog_id, result)
     return result
@@ -3787,7 +3933,7 @@ async def analyze_blog_endpoint(request: BlogAnalysisRequest):
 
     try:
         # Run blog analysis
-        result = await analyze_blog(blog_id)
+        result = await analyze_blog(blog_id, verify_index=bool(request.verify_index))
 
         # 에러 응답 처리 (비공개 블로그, 존재하지 않는 블로그 등)
         if result.get("error_code"):
@@ -5041,6 +5187,195 @@ async def verify_blog_index_endpoint(
         set_verify_index_cache(blog_id, response_data)
 
     return VerifyIndexResponse(**response_data)
+
+
+@router.get("/{blog_id}/exposure-ceiling")
+async def get_exposure_ceiling(
+    blog_id: str,
+    refresh: bool = Query(False, description="캐시 무시하고 재측정"),
+):
+    """
+    노출 천장 측정 — 이 블로그가 '실제로' 상위노출한 키워드들의 검색량 상한.
+
+    추정 지수가 아니라 실적 기반: 최근 글 제목의 키워드로 네이버 블로그 검색을
+    직접 던져 몇 위에 뜨는지 확인하고, 1페이지 진입한 키워드들의 검색량 분포를
+    낸다. 호출당 검색 API를 여러 번 사용하므로 24h 캐시된다.
+    """
+    from services.exposure_ceiling import measure_exposure_ceiling
+
+    blog_id = (blog_id or "").strip()
+    if not blog_id:
+        raise HTTPException(status_code=400, detail="blog_id is required")
+
+    try:
+        result = await measure_exposure_ceiling(blog_id, use_cache=not refresh)
+    except Exception as e:
+        logger.exception(f"exposure_ceiling failed for {blog_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"ceiling_measurement_failed: {e}")
+
+    return {"blog_id": blog_id, **result}
+
+
+@router.get("/serp-difficulty")
+async def get_serp_difficulty(
+    keyword: str = Query(..., description="난이도를 측정할 키워드"),
+    top_n: int = Query(10, ge=5, le=15),
+):
+    """
+    키워드 1페이지 경쟁자들의 체력으로 SERP 난이도 측정.
+
+    상위 블로그들의 활동성(RSS만, 저비용)을 재서 '죽은 SERP(뚫기 쉬움)'와
+    '활발한 강자들의 SERP(어려움)'를 구분한다.
+    """
+    from services.serp_difficulty import measure_serp_difficulty
+
+    keyword = (keyword or "").strip()
+    if not keyword:
+        raise HTTPException(status_code=400, detail="keyword is required")
+
+    try:
+        return await measure_serp_difficulty(keyword, top_n=top_n)
+    except Exception as e:
+        logger.exception(f"serp_difficulty failed for {keyword}: {e}")
+        raise HTTPException(status_code=500, detail=f"serp_difficulty_failed: {e}")
+
+
+class KeywordJudgeRequest(BaseModel):
+    blog_id: str
+    keyword: str
+    # 경쟁자 체력까지 반영해 판정 보정 (검색 1회 추가, 약간 느려짐)
+    include_serp: Optional[bool] = True
+
+
+@router.post("/judge-keyword")
+async def judge_keyword_endpoint(request: KeywordJudgeRequest):
+    """
+    특정 키워드를 이 블로그가 상위노출 시킬 수 있는지 실적 기반으로 판정.
+
+    1) 블로그의 노출 천장 측정(캐시)  — 내 공급 능력
+    2) 대상 키워드의 월 검색량 조회      — 수요
+    3) (선택) 1페이지 경쟁자 체력 측정   — 경쟁
+    4) 셋을 결합해 가능/경합/불가 + 확신도 판정
+    """
+    from services.exposure_ceiling import (
+        measure_exposure_ceiling, judge_keyword, _fetch_volumes,
+    )
+
+    blog_id = (request.blog_id or "").strip()
+    keyword = (request.keyword or "").strip()
+    if not blog_id or not keyword:
+        raise HTTPException(status_code=400, detail="blog_id and keyword are required")
+
+    # 천장 + 검색량 병렬
+    ceiling_task = measure_exposure_ceiling(blog_id, use_cache=True)
+    vols_task = _fetch_volumes([keyword])
+
+    serp = None
+    if request.include_serp:
+        from services.serp_difficulty import measure_serp_difficulty
+        ceiling, vols, serp = await asyncio.gather(
+            ceiling_task, vols_task, measure_serp_difficulty(keyword)
+        )
+    else:
+        ceiling, vols = await asyncio.gather(ceiling_task, vols_task)
+
+    target_volume = vols.get(keyword.replace(" ", ""), 0)
+    verdict = judge_keyword(ceiling, target_volume, serp=serp)
+
+    # 정답지 축적: 판정을 원장에 기록(나중에 실측 순위로 검증 → calibration)
+    prediction_id = None
+    try:
+        from database.rank_tracker_db import get_rank_tracker_db
+        prediction_id = get_rank_tracker_db().add_keyword_prediction(
+            blog_id=blog_id, keyword=keyword, target_volume=target_volume,
+            predicted_verdict=verdict["verdict"],
+            ceiling_volume=ceiling.get("ceiling_volume"),
+            ceiling_p50=ceiling.get("ceiling_p50"),
+            serp_difficulty_label=(serp.get("difficulty_label") if serp and serp.get("ok") else None),
+            confidence=verdict.get("confidence"),
+        )
+    except Exception as e:
+        logger.warning(f"prediction ledger write failed: {e}")
+
+    return {
+        "blog_id": blog_id,
+        "keyword": keyword,
+        "prediction_id": prediction_id,
+        "target_volume": target_volume,
+        "ceiling": {
+            "ceiling_volume": ceiling.get("ceiling_volume"),
+            "ceiling_p50": ceiling.get("ceiling_p50"),
+            "confidence": ceiling.get("confidence"),
+            "ranked_count": ceiling.get("ranked_count"),
+            "tested": ceiling.get("tested"),
+        },
+        "serp_difficulty": ({
+            "score": serp.get("difficulty_score"),
+            "label": serp.get("difficulty_label"),
+            "dormant_ratio": serp.get("dormant_ratio"),
+            "alive_ratio": serp.get("alive_ratio"),
+        } if serp and serp.get("ok") else None),
+        **verdict,
+        "disclaimer": ceiling.get("disclaimer"),
+    }
+
+
+@router.get("/predictions/calibration")
+async def get_prediction_calibration(
+    blog_id: Optional[str] = Query(None, description="특정 블로그만 (없으면 전체)"),
+):
+    """예측 정확도(calibration) 조회 — 정답지가 쌓인 결과.
+
+    verdict별 hit/miss와 전체 정확도를 반환한다. graded_total 이 충분히 커지면
+    이 수치로 판정 임계값을 재보정할 수 있다.
+    """
+    from database.rank_tracker_db import get_rank_tracker_db
+    return get_rank_tracker_db().get_prediction_calibration(blog_id=blog_id)
+
+
+@router.post("/predictions/verify-pending")
+async def verify_pending_predictions(
+    min_age_hours: int = Query(72, ge=0, description="발행 후 색인될 시간 확보(기본 72h)"),
+    limit: int = Query(30, ge=1, le=100),
+):
+    """대기 중인 예측들을 실제 순위로 검증해 hit/miss 채점.
+
+    각 예측의 (블로그, 키워드)로 네이버 블로그탭 실제 순위를 조회하고,
+    예측이 맞았는지 원장에 기록한다. 정답지 축적 루프의 실측 단계.
+    검색 API를 예측 수만큼 호출하므로 limit 로 배치 크기를 제한한다.
+    """
+    from database.rank_tracker_db import get_rank_tracker_db
+    from services.rank_checker import RankChecker
+
+    db = get_rank_tracker_db()
+    pending = db.get_pending_predictions(min_age_hours=min_age_hours, limit=limit)
+    if not pending:
+        return {"checked": 0, "results": [], "message": "검증 대기 중인 예측이 없습니다"}
+
+    checker = RankChecker()
+    sem = asyncio.Semaphore(5)
+
+    async def _verify(p):
+        async with sem:
+            try:
+                rank = await checker.check_blog_tab_rank(p["keyword"], p["blog_id"], max_results=30)
+            except Exception as e:
+                logger.warning(f"verify rank failed {p['blog_id']}/{p['keyword']}: {e}")
+                return None
+            return db.record_prediction_actual(p["id"], actual_rank=rank)
+
+    try:
+        results = await asyncio.gather(*[_verify(p) for p in pending])
+    finally:
+        await checker.close()
+
+    graded = [r for r in results if r and r.get("outcome") in ("hit", "miss")]
+    return {
+        "checked": len([r for r in results if r]),
+        "hits": sum(1 for r in graded if r["outcome"] == "hit"),
+        "misses": sum(1 for r in graded if r["outcome"] == "miss"),
+        "results": [r for r in results if r],
+    }
 
 
 @router.get("/{blog_id}/post-exposure")

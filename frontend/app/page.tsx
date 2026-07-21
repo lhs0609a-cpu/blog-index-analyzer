@@ -470,7 +470,7 @@ export default function Home() {
               <TiltCard className="h-full">
                 <motion.div
                   whileHover={{ scale: 1.02, y: -5 }}
-                  className="relative h-full p-8 rounded-3xl bg-gradient-to-br from-blue-50 to-white border border-blue-100/50 overflow-hidden shadow-xl shadow-blue-100/50"
+                  className="relative h-full p-8 glass-3d overflow-hidden shadow-xl shadow-blue-100/50"
                 >
                   <div className="absolute top-0 right-0 w-32 h-32 bg-blue-100/30 rounded-full blur-[60px]" />
                   <div className="relative">
@@ -947,7 +947,7 @@ export default function Home() {
                 <div className="text-center mb-6">
                   <div className="text-2xl font-bold mb-1">Pro</div>
                   <div className="text-4xl font-black">19,900원<span className="text-lg font-normal">/월</span></div>
-                  <div className="text-sm opacity-80 mt-1">7일 무료 체험</div>
+                  <div className="text-sm opacity-80 mt-1">7일 내 전액 환불</div>
                 </div>
                 <ul className="space-y-3">
                   {[
@@ -970,7 +970,7 @@ export default function Home() {
                   href="/pricing"
                   className="block w-full mt-6 py-3 text-center bg-white text-[#0064FF] font-bold rounded-xl hover:bg-blue-50 transition-colors"
                 >
-                  7일 무료 체험 시작
+                  7일 환불 보장으로 시작
                 </Link>
                 <p className="text-xs text-center mt-2 opacity-80">클릭 한 번으로 언제든 해지</p>
               </div>
@@ -1067,7 +1067,7 @@ export default function Home() {
                 className="group inline-flex items-center gap-3 px-10 py-5 bg-white text-[#0064FF] rounded-2xl font-bold text-lg hover:scale-105 transition-all shadow-2xl"
               >
                 <Crown className="w-6 h-6" />
-                7일 무료 체험 시작
+                7일 환불 보장으로 시작
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Link>
 
@@ -1144,7 +1144,7 @@ export default function Home() {
                 href="/pricing"
                 className="group inline-flex items-center gap-3 px-8 py-4 bg-[#0064FF] text-white rounded-2xl font-bold text-lg hover:shadow-lg hover:shadow-[#0064FF]/20 transition-all"
               >
-                7일 무료 체험 시작
+                7일 환불 보장으로 시작
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Link>
               <p className="text-xs text-gray-400 mt-3">클릭 한 번으로 언제든 해지 가능</p>
