@@ -1,0 +1,60 @@
+name: Keyword prediction calibration cron
+
+# 매일 KST 05:00 (UTC 20:00 전날) 대기 중인 키워드 상위노출 예측을 실측 채점.
+# judge-keyword 로 쌓인 예측(keyword_predictions)을 발행 후 72h 지난 것부터
+# 실제 네이버 순위로 검증 → hit/miss 기록. 정답지가 쌓이면 GET /predictions/calibration
+# 으로 verdict별 정확도를 확인하고 판정 임계값을 재보정할 수 있다.
+#
+# 필요 GitHub Secrets:
+#   CRON_TOKEN — 백엔드 CRON_TOKEN과 동일 값 (serp-cron 과 공유)
+
+on:
+  schedule:
+    - cron: "0 20 * * *"   # UTC 20:00 = KST 05:00 (serp-cron 04:00 이후)
+  workflow_dispatch:
+    inputs:
+      min_age_hours:
+        description: "발행 후 색인될 시간 확보(시간)"
+        required: false
+        default: "72"
+      limit:
+        description: "이번 실행에서 채점할 최대 예측 수"
+        required: false
+        default: "50"
+
+jobs:
+  calibrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Verify pending predictions
+        env:
+          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
+          BACKEND_URL: https://blog-index-analyzer.fly.dev
+          MIN_AGE_HOURS: ${{ github.event.inputs.min_age_hours || '72' }}
+          LIMIT: ${{ github.event.inputs.limit || '50' }}
+        run: |
+          if [ -z "$CRON_TOKEN" ]; then
+            echo "::error::CRON_TOKEN secret 미설정"
+            exit 1
+          fi
+
+          response=$(curl -sS -w "\n%{http_code}" \
+            -X POST "${BACKEND_URL}/api/blogs/predictions/verify-pending?min_age_hours=${MIN_AGE_HOURS}&limit=${LIMIT}" \
+            -H "Authorization: Bearer ${CRON_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --max-time 300)
+
+          body=$(echo "$response" | head -n -1)
+          status=$(echo "$response" | tail -n 1)
+
+          echo "status=$status"
+          echo "body=$body"
+
+          if [ "$status" != "200" ]; then
+            echo "::error::예측 채점 실패 status=$status"
+            exit 1
+          fi
+
+          echo "::notice::예측 채점 완료: $body"

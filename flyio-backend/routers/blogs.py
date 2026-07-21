@@ -1,7 +1,7 @@
 """
 Blog analysis router with related keywords support
 """
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Header
 from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
 import httpx
@@ -321,78 +321,65 @@ def get_consistent_value(blog_id: str, min_val: int, max_val: int, salt: str = "
 
 def estimate_from_successful_results(blog_id: str, successful_results: list) -> Dict:
     """
-    분석 성공한 블로그들의 평균을 기반으로 추정값 생성
-    크로스 추정: 같은 검색 결과에서 분석 성공한 블로그들의 데이터 활용
+    같은 SERP에서 분석 성공한 동료 블로그들의 평균으로 실패 블로그를 '대략' 추정.
+
+    ⚠️ 여기서 만드는 값은 이 블로그의 실측이 아니라 'SERP 동료 평균'이다.
+       level_category='추정' 으로 명확히 라벨하고, 개별 블로그의 고유 수치는
+       지어내지 않는다. (구버전은 md5(blog_id) 해시로 포스트/이웃/방문자를
+       발명했으나, 실측처럼 표시되어 사용자를 오도하므로 전면 제거함.)
+       동료 데이터가 없으면 None — 숫자를 만들어내지 않는다.
 
     Args:
-        blog_id: 추정할 블로그 ID
-        successful_results: 분석 성공한 결과 리스트 [{stats, index}, ...]
+        blog_id: 추정 대상 (더 이상 값 생성 시드로 쓰지 않음)
+        successful_results: 분석 성공 결과 [{stats, index}, ...]
 
     Returns:
-        추정된 stats, index 딕셔너리
+        {stats, index, data_sources} — 값이 없으면 None
     """
-    if not successful_results:
-        # 기본값 반환
-        return {
-            "stats": {
-                "total_posts": get_consistent_value(blog_id, 50, 150, "cross_posts"),
-                "neighbor_count": get_consistent_value(blog_id, 100, 500, "cross_neighbors"),
-                "total_visitors": get_consistent_value(blog_id, 50000, 200000, "cross_visitors"),
-            },
-            "index": {
-                "total_score": 25.0,
-                "level": 3,
-                "grade": "준최적화",
-                "level_category": "일반",
-                "percentile": 30,
-                "score_breakdown": {"c_rank": 12.0, "dia": 13.0}
-            },
-            "data_sources": ["default_estimate"]
-        }
+    def _avg(vals):
+        return sum(vals) / len(vals) if vals else None
 
-    # 성공한 결과들의 평균 계산
-    scores = []
-    levels = []
-    posts = []
-    neighbors = []
-    visitors = []
-    c_ranks = []
-    dias = []
+    scores, levels, posts, neighbors, visitors, c_ranks, dias = [], [], [], [], [], [], []
+    for result in successful_results or []:
+        idx = result.get("index") or {}
+        if idx.get("total_score"):
+            scores.append(idx["total_score"])
+        if idx.get("level"):
+            levels.append(idx["level"])
+        if idx.get("score_breakdown"):
+            c_ranks.append(idx["score_breakdown"].get("c_rank", 0))
+            dias.append(idx["score_breakdown"].get("dia", 0))
+        st = result.get("stats") or {}
+        if st.get("total_posts"):
+            posts.append(st["total_posts"])
+        if st.get("neighbor_count"):
+            neighbors.append(st["neighbor_count"])
+        if st.get("total_visitors"):
+            visitors.append(st["total_visitors"])
 
-    for result in successful_results:
-        if result.get("index"):
-            idx = result["index"]
-            if idx.get("total_score"):
-                scores.append(idx["total_score"])
-            if idx.get("level"):
-                levels.append(idx["level"])
-            if idx.get("score_breakdown"):
-                c_ranks.append(idx["score_breakdown"].get("c_rank", 0))
-                dias.append(idx["score_breakdown"].get("dia", 0))
+    # SERP 동료 평균 (실데이터). 없으면 None — 발명하지 않는다.
+    avg_score = _avg(scores)
+    avg_level = round(_avg(levels)) if levels else None
+    avg_posts = int(_avg(posts)) if posts else None
+    avg_neighbors = int(_avg(neighbors)) if neighbors else None
+    avg_visitors = int(_avg(visitors)) if visitors else None
 
-        if result.get("stats"):
-            st = result["stats"]
-            if st.get("total_posts"):
-                posts.append(st["total_posts"])
-            if st.get("neighbor_count"):
-                neighbors.append(st["neighbor_count"])
-            if st.get("total_visitors"):
-                visitors.append(st["total_visitors"])
-
-    # 평균 계산 (약간의 랜덤 변동 추가)
-    variation = get_consistent_value(blog_id, 85, 115, "variation") / 100.0
-
-    avg_score = (sum(scores) / len(scores) * variation) if scores else 25.0
-    avg_level = round(sum(levels) / len(levels)) if levels else 3
-    avg_posts = int(sum(posts) / len(posts) * variation) if posts else get_consistent_value(blog_id, 50, 150, "est_posts")
-    avg_neighbors = int(sum(neighbors) / len(neighbors) * variation) if neighbors else get_consistent_value(blog_id, 100, 500, "est_neighbors")
-    avg_visitors = int(sum(visitors) / len(visitors) * variation) if visitors else get_consistent_value(blog_id, 50000, 200000, "est_visitors")
-    avg_c_rank = (sum(c_ranks) / len(c_ranks) * variation) if c_ranks else avg_score * 0.48
-    avg_dia = (sum(dias) / len(dias) * variation) if dias else avg_score * 0.52
-
-    # 레벨에 따른 등급 결정
     grades = ["비활성", "입문", "초보", "준최적화", "일반", "중급", "우수", "최적화", "준프로", "프로", "인플루언서"]
-    grade = grades[min(avg_level, 10)]
+
+    index_out: Dict = {
+        "level_category": "추정",
+        "data_estimated": True,  # UI 가 '추정치'로 표시할 수 있도록
+    }
+    if avg_score is not None:
+        index_out["total_score"] = round(avg_score, 1)
+        index_out["percentile"] = min(int(avg_score), 99)
+        index_out["score_breakdown"] = {
+            "c_rank": round(_avg(c_ranks), 1) if c_ranks else round(avg_score * 0.48, 1),
+            "dia": round(_avg(dias), 1) if dias else round(avg_score * 0.52, 1),
+        }
+    if avg_level is not None:
+        index_out["level"] = avg_level
+        index_out["grade"] = grades[min(avg_level, 10)]
 
     return {
         "stats": {
@@ -400,18 +387,8 @@ def estimate_from_successful_results(blog_id: str, successful_results: list) -> 
             "neighbor_count": avg_neighbors,
             "total_visitors": avg_visitors,
         },
-        "index": {
-            "total_score": round(avg_score, 1),
-            "level": avg_level,
-            "grade": grade,
-            "level_category": "추정",
-            "percentile": min(int(avg_score), 99),
-            "score_breakdown": {
-                "c_rank": round(avg_c_rank, 1),
-                "dia": round(avg_dia, 1)
-            }
-        },
-        "data_sources": ["cross_estimate"]
+        "index": index_out,
+        "data_sources": ["cross_estimate"] if successful_results else ["unmeasured"],
     }
 
 
@@ -5337,13 +5314,27 @@ async def get_prediction_calibration(
 async def verify_pending_predictions(
     min_age_hours: int = Query(72, ge=0, description="발행 후 색인될 시간 확보(기본 72h)"),
     limit: int = Query(30, ge=1, le=100),
+    authorization: Optional[str] = Header(None),
 ):
     """대기 중인 예측들을 실제 순위로 검증해 hit/miss 채점.
 
     각 예측의 (블로그, 키워드)로 네이버 블로그탭 실제 순위를 조회하고,
     예측이 맞았는지 원장에 기록한다. 정답지 축적 루프의 실측 단계.
     검색 API를 예측 수만큼 호출하므로 limit 로 배치 크기를 제한한다.
+
+    인증: Authorization: Bearer {CRON_TOKEN} (measure-all 과 동일).
+    GitHub Actions cron 이 매일 호출해 예측을 자동 채점 → calibration 축적.
     """
+    import os
+    import hmac as _hmac
+    expected = os.environ.get("CRON_TOKEN", "").strip()
+    if not expected:
+        raise HTTPException(status_code=503, detail="CRON_TOKEN 환경변수가 설정되지 않음")
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authorization Bearer 토큰 필요")
+    if not _hmac.compare_digest(authorization.split(" ", 1)[1].strip(), expected):
+        raise HTTPException(status_code=403, detail="잘못된 cron 토큰")
+
     from database.rank_tracker_db import get_rank_tracker_db
     from services.rank_checker import RankChecker
 
