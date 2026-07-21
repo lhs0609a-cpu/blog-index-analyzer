@@ -13349,6 +13349,430 @@ async def keyword_pool_campaigns_rename_korean(
             "message": "백그라운드 개명 시작. fly logs 의 [campaign-rename] 라인에서 확인."}
 
 
+# ══════════════════════════════════════════════════════════════════════════
+#  지역 기반 캠페인 개명 + 지역(REGIONAL_TARGET) 근사 타겟팅
+#  ─ 파워링크는 반경(km) 타겟팅이 없음 → 시/도 코드 집합으로 근사.
+#    서울지점=서울(9), 경기/인천지점=수도권, 지방지점=해당광역시+인접도.
+# ══════════════════════════════════════════════════════════════════════════
+
+# 시/도 코드 (네이버 검색광고 REGIONAL_TARGET location.KR — 공식 FAQ 검증)
+_SIDO_CODE = {
+    "서울": "9", "부산": "8", "대구": "6", "인천": "11", "광주": "5", "대전": "7",
+    "울산": "10", "세종": "17", "경기": "2", "강원": "1", "충북": "16", "충남": "15",
+    "전북": "13", "전남": "12", "경북": "4", "경남": "3", "제주": "14",
+}
+# 시/도 코드 → 권역 표시명 (개명 접두어)
+_SIDO_KWON = {
+    "9": "서울", "11": "인천", "2": "경기",
+    "8": "영남", "6": "영남", "10": "영남", "3": "영남", "4": "영남",
+    "7": "충청", "15": "충청", "16": "충청", "17": "충청",
+    "5": "호남", "12": "호남", "13": "호남",
+    "1": "강원", "14": "제주",
+}
+
+# 지점 토큰 → (권역표시, 지점라벨, 근사반경 시도코드집합)
+#   서울권=서울시(가장 좁음 ~7km) / 수도권=경기+인천+서울(~15km) / 지방=광역+인접도(~30km)
+_KINESS_BRANCH = {
+    "강남": ("서울", "강남점", ["9"]),
+    "마포": ("서울", "마포점", ["9"]),
+    "목동": ("서울", "목동점", ["9"]),
+    "반포": ("서울", "반포점", ["9"]),
+    "성북": ("서울", "성북점", ["9"]),
+    "잠실": ("서울", "잠실점", ["9"]),
+    "부천": ("경기", "부천점", ["2", "11", "9"]),
+    "분당": ("경기", "분당점", ["2", "11", "9"]),
+    "송도": ("인천", "송도점", ["11", "2", "9"]),
+    "수원": ("경기", "수원점", ["2", "11", "9"]),
+    "수지": ("경기", "수지점", ["2", "11", "9"]),
+    "용인수지": ("경기", "수지점", ["2", "11", "9"]),
+    "일산": ("경기", "일산점", ["2", "11", "9"]),
+    "평촌": ("경기", "평촌점", ["2", "11", "9"]),
+    "평택": ("경기", "평택점", ["2", "15"]),      # 경기 남단 → 충남 인접
+    "대구": ("영남", "대구점", ["6", "4"]),        # 대구+경북
+    "부산": ("영남", "부산점", ["8", "3", "10"]),  # 부산+경남+울산
+    "창원": ("영남", "창원점", ["3", "8"]),        # 경남+부산
+}
+
+# 도시/구/군 토큰 → 시도코드 (풀·롱테일 캠페인 대표지역 추정용)
+_REGION_TOKEN = {
+    # 서울
+    "강남": "9", "서초": "9", "반포": "9", "방배": "9", "마포": "9", "목동": "9",
+    "양천": "9", "잠실": "9", "송파": "9", "성북": "9", "노원": "9", "강북": "9",
+    "관악": "9", "성동": "9", "은평": "9", "구로": "9", "동작": "9", "영등포": "9",
+    # 경기·인천
+    "부천": "2", "분당": "2", "성남": "2", "판교": "2", "수원": "2", "영통": "2",
+    "용인": "2", "수지": "2", "동백": "2", "고양": "2", "일산": "2", "파주": "2",
+    "운정": "2", "안양": "2", "평촌": "2", "평택": "2", "광명": "2", "이천": "2",
+    "안산": "2", "화성": "2", "동탄": "2", "광교": "2", "과천": "2", "김포": "2",
+    "남양주": "2", "의정부": "2", "인천": "11", "송도": "11", "청라": "11", "부평": "11",
+    # 영남
+    "대구": "6", "구미": "4", "경산": "4", "포항": "4", "경주": "4", "안동": "4",
+    "부산": "8", "서면": "8", "해운대": "8", "울산": "10", "창원": "3", "김해": "3",
+    "양산": "3", "거제": "3", "진주": "3", "율하": "3",
+    # 충청
+    "대전": "7", "천안": "15", "아산": "15", "논산": "15", "청주": "16", "충주": "16",
+    "세종": "17",
+    # 호남·제주
+    "광주": "5", "전주": "13", "익산": "13", "군산": "13", "목포": "12", "여수": "12",
+    "순천": "12", "강진": "12", "제주": "14",
+    # 강원
+    "원주": "1", "춘천": "1", "강릉": "1", "속초": "1", "동해": "1",
+}
+
+# 풀 지역 캠페인명(키네스풀_07_지역_서울 등) 접미 → 권역
+_POOL_REGION_SUFFIX = {
+    "서울": "서울", "경기인천": "경기", "경기": "경기", "인천": "인천",
+    "영남": "영남", "충청": "충청", "호남제주": "호남", "호남": "호남", "강원": "강원",
+}
+
+
+def _kiness_region_uniq_tag(camp_id: str) -> str:
+    digits = re.findall(r"\d{4,}", camp_id or "")
+    if digits:
+        return max(digits, key=len)[-6:]
+    return (camp_id or "")[-6:]
+
+
+def _classify_campaign_region(name: str, sample_keywords: List[str]):
+    """캠페인 → (권역표시, 개명label, 지역타겟 시도코드리스트, method).
+    1) 지점 캠페인(이름에 지점토큰) → _KINESS_BRANCH 확정 매핑
+    2) 풀 지역 캠페인(키네스풀_..지역_XX) → 접미 권역
+    3) 그 외(카테고리/롱테일) → 샘플 키워드 지역토큰 최빈 시도 → 권역, 없으면 전국
+    """
+    nm = name or ""
+    nmz = nm.replace(" ", "")
+    # 자동생성 롱테일(끝이 _숫자6자리)·풀 카테고리는 지점 매칭에서 제외
+    #  (이름 안에 우연히 든 지역 substring 이 지점으로 오인식되는 것 방지)
+    is_longtail = bool(re.search(r"_\d{4,}$", nmz))
+    is_pool_cat = nmz.startswith("키네스풀") and "지역_" not in nm
+    # 1) 지점 캠페인 — 실제 지점 형태만. 긴 토큰 우선(용인수지 > 수지)
+    if not is_longtail and not is_pool_cat:
+        for tok in sorted(_KINESS_BRANCH.keys(), key=len, reverse=True):
+            if tok in nmz:
+                kwon, label, codes = _KINESS_BRANCH[tok]
+                region = label[:-1] if label.endswith("점") else label
+                # 성장판/사춘기 클린 시리즈는 지점 시리즈와 구분되게 label 다르게
+                if "성장판" in nmz or "사춘기" in nmz:
+                    label = f"{region}_성장"
+                return kwon, label, codes, "branch"
+    # 2) 풀 지역 캠페인
+    if "지역_" in nm:
+        suf = nm.split("지역_")[-1].strip().replace(" ", "")
+        for key, kwon in _POOL_REGION_SUFFIX.items():
+            if suf.startswith(key):
+                codes = _kwon_target_codes(kwon)
+                return kwon, "통합풀", codes, "pool_region"
+    # 2.5) 풀 카테고리 캠페인(02핵심·03성장지연·13건기식 등) → 전국 고정
+    if is_pool_cat:
+        cat = re.sub(r"^키네스풀_", "", nm).strip()
+        return "전국", cat or "통합", [], "pool_cat"
+    # 3) 샘플 키워드 지역토큰 최빈
+    tally: Dict[str, int] = {}
+    for kw in sample_keywords or []:
+        kwz = (kw or "").replace(" ", "")
+        for tok in sorted(_REGION_TOKEN.keys(), key=len, reverse=True):
+            if tok in kwz:
+                tally[_REGION_TOKEN[tok]] = tally.get(_REGION_TOKEN[tok], 0) + 1
+                break
+    if tally:
+        top_sido = max(tally.items(), key=lambda x: x[1])[0]
+        kwon = _SIDO_KWON.get(top_sido, "전국")
+        # 최빈이 과반이 아니면 혼재로 간주 → 전국
+        total = sum(tally.values())
+        if tally[top_sido] * 2 < total:
+            return "전국", "혼합", [], "mixed"
+        return kwon, "롱테일", _kwon_target_codes(kwon), "keyword"
+    return "전국", "", [], "none"
+
+
+def _kwon_target_codes(kwon: str) -> List[str]:
+    """권역 표시명 → 근사반경 시도코드 집합 (풀/롱테일 캠페인용 기본값)."""
+    return {
+        "서울": ["9"],
+        "경기": ["2", "11", "9"],
+        "인천": ["11", "2", "9"],
+        "영남": ["8", "6", "3", "10", "4"],
+        "충청": ["7", "15", "16", "17"],
+        "호남": ["5", "12", "13"],
+        "강원": ["1"],
+        "제주": ["14"],
+        "전국": [],
+    }.get(kwon, [])
+
+
+class RenameByRegionRequest(BaseModel):
+    customer_id: Optional[str] = None
+    sample_groups: int = Field(1, ge=1, le=5, description="캠페인당 샘플링 광고그룹 수(대표지역 추정용)")
+    max_campaigns: int = Field(2000)
+    max_len: int = Field(30, description="네이버 캠페인명 한도")
+    skip_if_prefixed: bool = Field(True, description="이미 권역_ 로 시작하면 skip(재실행 안전)")
+    dry_run: bool = Field(True, description="true=계획 미리보기 / false=실제 개명(백그라운드)")
+
+
+@router.post("/keyword-pool/campaigns/rename-by-region")
+async def keyword_pool_campaigns_rename_by_region(
+    request: RenameByRegionRequest,
+    background_tasks: BackgroundTasks,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """캠페인을 **권역_지점** 형식으로 개명 (서울_강남점 / 경기_분당점 / 영남_대구점).
+    지점 캠페인은 확정 매핑, 풀/롱테일은 대표 지역 추정. register 라우팅은 campaign_id
+    기반이라 개명해도 자동등록 안 깨짐. dry_run=true 로 계획 확인 후 false 실행."""
+    from services.naver_ad_service import NaverAdApiClient
+    account = _resolve_account(user_id, request.customer_id or customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    def _as_list(x):
+        if isinstance(x, list):
+            return x
+        if isinstance(x, dict):
+            return x.get("data") or x.get("list") or []
+        return []
+
+    _KWON_SET = {"서울", "경기", "인천", "영남", "충청", "호남", "강원", "제주", "전국"}
+
+    def _already(nm: str) -> bool:
+        head = (nm or "").split("_", 1)[0]
+        return head in _KWON_SET
+
+    max_len = max(20, int(request.max_len))
+    sem = asyncio.Semaphore(6)
+
+    async def _sample(camp):
+        cid0 = camp.get("nccCampaignId")
+        async with sem:
+            texts: List[str] = []
+            try:
+                groups = _as_list(await client.get_ad_groups(campaign_id=cid0) or [])
+            except Exception:
+                return camp, texts, 0
+            filled = 0
+            for g in groups[: max(request.sample_groups + 4, 8)]:
+                gid = g.get("nccAdgroupId")
+                if not gid:
+                    continue
+                try:
+                    kws = [k.get("keyword") for k in _as_list(await client.get_keywords(ad_group_id=gid) or [])
+                           if k.get("keyword")]
+                except Exception:
+                    kws = []
+                if kws:
+                    texts.extend(kws)
+                    filled += 1
+                    if filled >= request.sample_groups:
+                        break
+            return camp, texts, len(groups)
+
+    all_campaigns = [c for c in _as_list(await client.get_campaigns() or [])
+                     if (c.get("campaignTp") or "") == "WEB_SITE"][: int(request.max_campaigns)]
+    targets = [c for c in all_campaigns
+               if not (request.skip_if_prefixed and _already(c.get("name") or ""))]
+    if not targets:
+        return {"success": True, "customer_id": int(account["customer_id"]),
+                "campaigns_total": len(all_campaigns), "targets": 0,
+                "message": "대상 0 (이미 권역_ 로 개명됐거나 WEB_SITE 없음)."}
+
+    sampled = await asyncio.gather(*[_sample(c) for c in targets])
+
+    rows = []
+    seen = set()
+    for camp, texts, ngroups in sampled:
+        cid0 = camp.get("nccCampaignId")
+        old = camp.get("name") or ""
+        kwon, label, codes, method = _classify_campaign_region(old, texts)
+        tag = f"_{_kiness_region_uniq_tag(cid0)}"
+        # core: label 있으면 label, 없으면 기존이름 축약
+        core = label or re.sub(r"^(키네스풀?_|[AB]\d\s*|C\d\s*|키네스_)", "", old).strip()
+        core = core.replace(" ", "")[: max(1, max_len - len(kwon) - 1)]
+        base = (f"{kwon}_{core}" if core else kwon)[:max_len]
+        # 깔끔한 이름 우선 — 충돌(중복 지점/혼합)일 때만 캠페인ID 6자리 tag 부착
+        new = base
+        if new in seen:
+            new = f"{base}{tag}"[:max_len]
+        if new in seen:
+            new = (new[:max_len - 2] + cid0[-2:])
+        seen.add(new)
+        rows.append({"campaign_id": cid0, "old": old, "new": new, "kwon": kwon,
+                     "codes": codes, "method": method, "ad_groups": ngroups,
+                     "unchanged": (old == new)})
+    rows.sort(key=lambda r: (r["kwon"], r["old"]))
+    changed = [r for r in rows if not r["unchanged"]]
+
+    async def _do_rename(camp_id: str, new_name: str):
+        base = await client.get_campaign(camp_id)
+        body = dict(base) if isinstance(base, dict) else {}
+        body["nccCampaignId"] = camp_id
+        body["name"] = new_name
+        return await client._request("PUT", f"/ncc/campaigns/{camp_id}", body)
+
+    if request.dry_run:
+        from collections import Counter
+        by_kwon = Counter(r["kwon"] for r in rows)
+        return {
+            "success": True, "dry_run": True, "customer_id": int(account["customer_id"]),
+            "campaigns_total": len(all_campaigns), "targets": len(targets),
+            "will_rename": len(changed), "by_kwon": dict(by_kwon),
+            "preview": [{"old": r["old"], "new": r["new"], "권역": r["kwon"],
+                         "지역코드": r["codes"], "method": r["method"]} for r in rows[:120]],
+            "note": f"미리보기 최대 120(총 {len(rows)}). method: branch=확정지점 / pool_region=풀지역 "
+                    f"/ keyword=키워드추정 / mixed=다지역혼합(전국) / none=지역미상(전국). "
+                    f"확인 후 dry_run=false 로 실제 개명.",
+        }
+
+    async def _run():
+        logger.warning(f"[rename-region] 시작 cid={account['customer_id']} 대상 {len(changed)}")
+        ok = fail = 0
+        for r in changed:
+            try:
+                await _do_rename(r["campaign_id"], r["new"])
+                ok += 1
+            except Exception as e:
+                fail += 1
+                if fail <= 10:
+                    logger.warning(f"[rename-region] 실패 {r['old']}→{r['new']}: {type(e).__name__} {str(e)[:300]}")
+            await asyncio.sleep(0.2)
+        logger.warning(f"[rename-region] 완료 — 개명 {ok} / 실패 {fail} / 대상 {len(changed)}")
+
+    background_tasks.add_task(_run)
+    return {"success": True, "started": True, "dry_run": False,
+            "customer_id": int(account["customer_id"]), "will_rename": len(changed),
+            "message": "백그라운드 개명 시작. fly logs 의 [rename-region] 라인에서 확인."}
+
+
+class SetRegionalTargetRequest(BaseModel):
+    customer_id: Optional[str] = None
+    only_branch: bool = Field(True, description="지점 캠페인(확정 지역)만 타겟 설정(권장). false=풀/롱테일도 추정지역으로")
+    campaign_name_contains: Optional[str] = Field(None, description="특정 캠페인명 부분일치만 대상(예: '서울')")
+    max_campaigns: int = Field(2000)
+    max_groups_per_campaign: int = Field(2000)
+    dry_run: bool = Field(True, description="true=대상/코드 미리보기 / false=실제 REGIONAL_TARGET 설정(백그라운드)")
+
+
+@router.post("/keyword-pool/adgroups/set-regional-target")
+async def keyword_pool_set_regional_target(
+    request: SetRegionalTargetRequest,
+    background_tasks: BackgroundTasks,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """캠페인의 모든 광고그룹에 **지역(REGIONAL_TARGET) 근사 타겟팅** 설정.
+    파워링크는 반경(km) 불가 → 시/도 코드 집합으로 근사(서울지점=서울, 경기=수도권, 지방=광역+인접).
+    only_branch=true(기본): 지역이 확정된 지점 캠페인만. dry_run=true 로 대상·코드 확인 후 실행."""
+    from services.naver_ad_service import NaverAdApiClient
+    account = _resolve_account(user_id, request.customer_id or customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    def _as_list(x):
+        if isinstance(x, list):
+            return x
+        if isinstance(x, dict):
+            return x.get("data") or x.get("list") or []
+        return []
+
+    sem = asyncio.Semaphore(6)
+
+    async def _plan(camp):
+        cid0 = camp.get("nccCampaignId")
+        name = camp.get("name") or ""
+        async with sem:
+            texts: List[str] = []
+            try:
+                groups = _as_list(await client.get_ad_groups(campaign_id=cid0) or [])
+            except Exception:
+                return {"campaign_id": cid0, "name": name, "error": "adgroups_fetch"}
+            # 대표지역 추정용 소량 샘플
+            for g in groups[:2]:
+                gid = g.get("nccAdgroupId")
+                if not gid:
+                    continue
+                try:
+                    kws = [k.get("keyword") for k in _as_list(await client.get_keywords(ad_group_id=gid) or [])
+                           if k.get("keyword")]
+                    texts.extend(kws)
+                except Exception:
+                    pass
+        kwon, label, codes, method = _classify_campaign_region(name, texts)
+        gids = [g.get("nccAdgroupId") for g in groups if g.get("nccAdgroupId")][: request.max_groups_per_campaign]
+        return {"campaign_id": cid0, "name": name, "kwon": kwon, "codes": codes,
+                "method": method, "adgroup_ids": gids, "adgroups": len(gids)}
+
+    all_campaigns = [c for c in _as_list(await client.get_campaigns() or [])
+                     if (c.get("campaignTp") or "") == "WEB_SITE"]
+    if request.campaign_name_contains:
+        needle = request.campaign_name_contains.strip()
+        all_campaigns = [c for c in all_campaigns if needle in (c.get("name") or "")]
+    all_campaigns = all_campaigns[: int(request.max_campaigns)]
+
+    plans = await asyncio.gather(*[_plan(c) for c in all_campaigns])
+    # 적용 대상: 코드가 있고(전국=제한없음 제외), only_branch면 branch method만
+    def _eligible(p):
+        if p.get("error") or not p.get("codes"):
+            return False
+        if request.only_branch and p.get("method") != "branch":
+            return False
+        return True
+
+    apply_plans = [p for p in plans if _eligible(p)]
+    total_groups = sum(p["adgroups"] for p in apply_plans)
+
+    if request.dry_run:
+        from collections import Counter
+        by_kwon = Counter(p["kwon"] for p in apply_plans)
+        return {
+            "success": True, "dry_run": True, "customer_id": int(account["customer_id"]),
+            "campaigns_total": len(all_campaigns), "will_apply_campaigns": len(apply_plans),
+            "will_apply_adgroups": total_groups, "by_kwon": dict(by_kwon),
+            "preview": [{"campaign": p["name"], "권역": p["kwon"], "지역코드": p["codes"],
+                         "광고그룹": p["adgroups"], "method": p["method"]}
+                        for p in sorted(apply_plans, key=lambda x: x["kwon"])[:120]],
+            "skipped": [{"campaign": p["name"], "method": p.get("method"), "reason":
+                         ("no_codes/전국" if not p.get("codes") else "not_branch")}
+                        for p in plans if not _eligible(p) and not p.get("error")][:40],
+            "note": "코드 배열=적용할 시/도(9=서울,2=경기,11=인천,8=부산,6=대구,3=경남,10=울산,4=경북,15=충남 등). "
+                    "only_branch=false 로 풀/롱테일 추정지역까지 확장 가능. 확인 후 dry_run=false 실행.",
+        }
+
+    async def _run():
+        logger.warning(f"[regional-target] 시작 cid={account['customer_id']} "
+                       f"캠페인 {len(apply_plans)} / 광고그룹 {total_groups}")
+        ok = fail = 0
+        gsem = asyncio.Semaphore(5)
+
+        async def _one(gid, codes):
+            nonlocal ok, fail
+            async with gsem:
+                try:
+                    await client.set_ad_group_regional_target(gid, codes)
+                    ok += 1
+                except Exception as e:
+                    fail += 1
+                    if fail <= 15:
+                        logger.warning(f"[regional-target] 실패 gid={gid}: {type(e).__name__} {str(e)[:250]}")
+                await asyncio.sleep(0.1)
+
+        for p in apply_plans:
+            await asyncio.gather(*[_one(gid, p["codes"]) for gid in p["adgroup_ids"]])
+            logger.warning(f"[regional-target] {p['name']} → {p['codes']} (누적 ok={ok} fail={fail})")
+        logger.warning(f"[regional-target] 완료 — 성공 {ok} / 실패 {fail} / 광고그룹 {total_groups}")
+
+    background_tasks.add_task(_run)
+    return {"success": True, "started": True, "dry_run": False,
+            "customer_id": int(account["customer_id"]),
+            "will_apply_campaigns": len(apply_plans), "will_apply_adgroups": total_groups,
+            "message": "백그라운드 지역타겟 설정 시작. fly logs 의 [regional-target] 라인에서 확인."}
+
+
 class PromoteCoreRequest(BaseModel):
     """중요도 상위(pos1-3) 핵심 키워드를 풀에서 빼내 **고예산 전용 캠페인**으로 이동 + 의료심의 소재 부착.
     100원에 묶여 노출 못하던 강남/역삼 피부과추천류를 실제로 밀어주기 위한 '핵심 전용 분리'."""

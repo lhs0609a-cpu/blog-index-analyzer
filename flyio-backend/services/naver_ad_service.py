@@ -415,6 +415,47 @@ class NaverAdApiClient:
             fields="bidAmt",
         )
 
+    # ============ 지역 타겟팅 (REGIONAL_TARGET) ============
+    async def get_ad_group_targets(self, ad_group_id: str) -> dict:
+        """광고그룹 타게팅 정보 조회 — GET /ncc/adgroups/{id}/targets.
+        반환은 targetTp 키의 map: {"REGIONAL_TARGET": {...}, "PC_MOBILE_TARGET": {...}, ...}.
+        각 Target 객체는 nccTargetId/ownerId/targetTp/target 필드를 가짐.
+        """
+        return await self._request("GET", f"/ncc/adgroups/{ad_group_id}/targets")
+
+    async def set_ad_group_regional_target(self, ad_group_id: str, kr_codes: List[str]) -> dict:
+        """광고그룹 지역 타게팅 설정 — 파워링크는 반경(km)이 아니라 시/도 코드 집합.
+
+        Naver SearchAd 방식(java-sample AdManagementSample 검증):
+          1) GET /ncc/adgroups/{id}/targets 로 기존 REGIONAL_TARGET 객체(nccTargetId/ownerId 보존)를 가져옴
+          2) target.location.KR 을 원하는 코드 배열로 교체 (OTHERS 는 빈 배열)
+          3) PUT /ncc/adgroups/{id}?fields=targetLocation 로 targets 배열에 담아 전송
+
+        kr_codes: 시/도 코드 문자열 배열 (예: 서울=["9"], 수도권=["2","11","9"]).
+                  빈 배열이면 지역 제한 해제(전국).
+        """
+        codes = [str(c) for c in (kr_codes or []) if str(c).strip()]
+        # 기존 타게팅 맵 조회 → REGIONAL_TARGET 원본 유지(nccTargetId/ownerId 보존)
+        try:
+            tmap = await self.get_ad_group_targets(ad_group_id) or {}
+        except Exception:
+            tmap = {}
+        if isinstance(tmap, list):  # 일부 응답이 list 형태로 올 때 대비
+            tmap = {t.get("targetTp"): t for t in tmap if isinstance(t, dict)}
+        regional = None
+        if isinstance(tmap, dict):
+            regional = tmap.get("REGIONAL_TARGET")
+        if not isinstance(regional, dict):
+            regional = {"targetTp": "REGIONAL_TARGET", "ownerId": ad_group_id}
+        regional = dict(regional)
+        regional["targetTp"] = "REGIONAL_TARGET"
+        regional.setdefault("ownerId", ad_group_id)
+        regional["target"] = {"location": {"KR": codes, "OTHERS": []}}
+        body = {"nccAdgroupId": ad_group_id, "targets": [regional]}
+        return await self._request(
+            "PUT", f"/ncc/adgroups/{ad_group_id}?fields=targetLocation", body
+        )
+
     async def create_ad_group(self, campaign_id: str, name: str, bid_amt: int = 70,
                               business_channel_id: str = None,
                               pc_channel_id: str = None,
