@@ -286,27 +286,38 @@ class KeywordPoolScheduler:
             logger.error(f"[pool/inspect-full] 실패: {e}", exc_info=True)
 
     async def _collect_only(self):
-        """collect 만 — 모든 활성 광고주 순차. register/inspect 는 별도 cron."""
+        """collect — 모든 활성 광고주를 계정 병렬(최대 3)로 처리해 처리량↑. register/inspect 는 별도 cron.
+
+        계정 병렬 안전성: 계정별 독립 네이버 자격증명 + collect 내부는 순차 keywordstool 호출이라
+        계정당 전역 Semaphore(8) 슬롯 1개만 점유(나머지 유휴) → 병렬화가 그 유휴 슬롯을 채운다.
+        API 폭주는 services.naver_ad_service.NAVER_API_GLOBAL_SEMAPHORE(8) 하드캡이 원천 차단.
+        SQLite 는 WAL + busy_timeout 30s 로 동시 write 직렬화. breaker OPEN(15s)는 자동 회복.
+        동시성 3: pass 시간 ~40분 → ~13분(계정당 collect 빈도 3배 → floor 하강·채우기 3배).
+        """
         try:
-            from routers.naver_ad import _run_pool_collect
+            from routers.naver_ad import _run_pool_collect, _fill_escalation_decide
             from database.naver_ad_db import list_connected_ad_accounts
             accts = list_connected_ad_accounts() or []
             if not accts:
                 return
             pairs = [(int(a["user_id"]), int(a["customer_id"])) for a in accts if a.get("user_id") and a.get("customer_id")]
-            logger.warning(f"[pool/scheduler] collect tick — accounts={len(pairs)}")
-            from routers.naver_ad import _fill_escalation_decide
-            for uid, cid in pairs:
-                try:
-                    await _run_pool_collect(uid, customer_id=cid)
-                except Exception as e:
-                    logger.error(f"[pool/scheduler] collect 실패 user={uid} cid={cid}: {e}", exc_info=True)
-                # 10만 채우기 에스컬레이션 — collect 결과로 레벨/floor 갱신(상태 upsert).
-                # 다음 collect 의 L2 조합·L5 floor 게이트가 이 상태를 읽는다. collect 성패와 무관.
-                try:
-                    await _fill_escalation_decide(uid, cid)
-                except Exception as e:
-                    logger.warning(f"[pool/scheduler] escalation decide 실패 cid={cid}: {e}")
+            logger.warning(f"[pool/scheduler] collect tick — accounts={len(pairs)} (parallel<=3)")
+            sem = asyncio.Semaphore(3)
+
+            async def _one(uid: int, cid: int):
+                async with sem:
+                    try:
+                        await _run_pool_collect(uid, customer_id=cid)
+                    except Exception as e:
+                        logger.error(f"[pool/scheduler] collect 실패 user={uid} cid={cid}: {e}", exc_info=True)
+                    # 10만 채우기 에스컬레이션 — collect 결과로 레벨/floor 갱신(상태 upsert).
+                    # 다음 collect 의 L2 조합·L5 floor 게이트가 이 상태를 읽는다. collect 성패와 무관.
+                    try:
+                        await _fill_escalation_decide(uid, cid)
+                    except Exception as e:
+                        logger.warning(f"[pool/scheduler] escalation decide 실패 cid={cid}: {e}")
+
+            await asyncio.gather(*[_one(uid, cid) for uid, cid in pairs])
         except Exception as e:
             logger.error(f"[pool/scheduler] collect tick 실패: {type(e).__name__}: {e}", exc_info=True)
 
