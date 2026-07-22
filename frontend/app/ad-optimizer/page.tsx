@@ -1,14 +1,14 @@
 ﻿'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import {
   TrendingUp, Settings, Play, Pause, RefreshCw, Search,
-  Plus, Trash2, RotateCcw, Download, Filter, Clock,
-  Target, DollarSign, MousePointer, Eye, ShoppingCart,
-  AlertTriangle, CheckCircle, XCircle,
-  Zap, BarChart3, PieChart, Activity, ArrowUpRight, ArrowDownRight,
-  Loader2, Save, Bell, History, Sparkles, Link2, Wallet, Flame,
+  Plus, Download, Filter, Clock,
+  Target, DollarSign,
+  AlertTriangle, CheckCircle,
+  Zap, BarChart3, ArrowUpRight, ArrowDownRight,
+  Loader2, Save, Sparkles, Link2, Wallet, Flame,
   Star, Check, X, ChevronLeft
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -55,25 +55,6 @@ interface BidChange {
   changed_at: string
 }
 
-interface DiscoveredKeyword {
-  id: number
-  keyword: string
-  monthly_search_count: number
-  competition_level: string
-  suggested_bid: number
-  relevance_score: number
-  potential_score: number
-  status: string
-}
-
-interface ExcludedKeyword {
-  id: number
-  keyword_id: string
-  keyword_text: string
-  reason: string
-  excluded_at: string
-}
-
 interface OptimizationSettings {
   strategy: string
   target_roas: number
@@ -106,23 +87,10 @@ interface AdAccount {
 
 const ACTIVE_CID_KEY = 'blank.ad.activeCustomerId'
 
-interface EfficiencySummary {
-  total_saved: number
-  savings_rate: number
-  total_bid_changes: number
-  roas_improvement: number
-  ctr_improvement: number
-  position_improvement: number
-  total_conversions: number
-  total_revenue: number
-  avg_roas_before: number
-  avg_roas_after: number
-}
-
 export default function AdOptimizerPage() {
   const { isAuthenticated, user } = useAuthStore()
   const { allowed: hasAccess, isLocked, upgradeHint } = useFeature('adOptimizer')
-  const [activeTab, setActiveTab] = useState<'connect' | 'dashboard' | 'efficiency' | 'discover' | 'excluded' | 'settings' | 'logs'>('connect')
+  const [activeTab, setActiveTab] = useState<'connect' | 'discover' | 'dashboard' | 'settings'>('connect')
   const [isLoading, setIsLoading] = useState(false)
   const userId = user?.id
 
@@ -137,22 +105,10 @@ export default function AdOptimizerPage() {
   // 계정 추가 모드: 기본 'quick'(키만 바로 입력), 'tutorial'(8단계 가이드)
   const [addMode, setAddMode] = useState<'quick' | 'tutorial'>('quick')
 
-  // 효율 추적 상태
-  const [efficiency, setEfficiency] = useState<EfficiencySummary | null>(null)
-  const [efficiencyHistory, setEfficiencyHistory] = useState<any[]>([])
-
   // 대시보드 상태
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null)
   const [recentChanges, setRecentChanges] = useState<BidChange[]>([])
   const [isAutoRunning, setIsAutoRunning] = useState(false)
-
-  // 키워드 발굴 상태
-  const [seedKeywords, setSeedKeywords] = useState('')
-  const [discoveredKeywords, setDiscoveredKeywords] = useState<DiscoveredKeyword[]>([])
-  const [isDiscovering, setIsDiscovering] = useState(false)
-
-  // 제외 키워드 상태
-  const [excludedKeywords, setExcludedKeywords] = useState<ExcludedKeyword[]>([])
 
   // 설정 상태
   const [settings, setSettings] = useState<OptimizationSettings>({
@@ -177,10 +133,6 @@ export default function AdOptimizerPage() {
   const [blacklistInput, setBlacklistInput] = useState('')
   const [coreTermsInput, setCoreTermsInput] = useState('')
   const [conversionKeywordsInput, setConversionKeywordsInput] = useState('')
-  const [isDiscoveringConversion, setIsDiscoveringConversion] = useState(false)
-
-  // 로그 상태
-  const [logs, setLogs] = useState<any[]>([])
 
   // 미인증 시 로그인 리다이렉트
   useEffect(() => {
@@ -454,30 +406,6 @@ export default function AdOptimizerPage() {
     }
   }, [userId])
 
-  // 제외 키워드 로드
-  const loadExcludedKeywords = useCallback(async () => {
-    try {
-      const data = await adGet('/api/naver-ad/keywords/excluded', { userId })
-      if (data) {
-        setExcludedKeywords(data.keywords || [])
-      }
-    } catch (error) {
-      console.error('Excluded keywords load error:', error)
-    }
-  }, [userId])
-
-  // 로그 로드
-  const loadLogs = useCallback(async () => {
-    try {
-      const data = await adGet('/api/naver-ad/logs?limit=50', { userId })
-      if (data) {
-        setLogs(data.logs || [])
-      }
-    } catch (error) {
-      console.error('Logs load error:', error)
-    }
-  }, [userId])
-
   // 광고주 계정 리스트 로드 — /keyword-pool/accounts 가 사용자의 모든 활성 광고주 반환
   // 활성 계정은 localStorage 우선 → 없으면 첫 번째 → 빈 배열이면 null
   const loadAccounts = useCallback(async () => {
@@ -502,30 +430,6 @@ export default function AdOptimizerPage() {
       setAdAccount(nextCid ? list.find(a => a.customer_id === nextCid) || null : null)
     } catch (error) {
       console.error('Accounts load error:', error)
-    }
-  }, [userId])
-
-  // 효율 요약 로드
-  const loadEfficiency = useCallback(async () => {
-    try {
-      const data = await adGet('/api/naver-ad/efficiency/summary?days=7', { userId })
-      if (data?.data) {
-        setEfficiency(data.data)
-      }
-    } catch (error) {
-      console.error('Efficiency load error:', error)
-    }
-  }, [userId])
-
-  // 효율 히스토리 로드 (차트용)
-  const loadEfficiencyHistory = useCallback(async () => {
-    try {
-      const data = await adGet('/api/naver-ad/efficiency/history?days=30', { userId })
-      if (data) {
-        setEfficiencyHistory(data.data || [])
-      }
-    } catch (error) {
-      console.error('Efficiency history load error:', error)
     }
   }, [userId])
 
@@ -570,16 +474,6 @@ export default function AdOptimizerPage() {
     loadSettings()
   }, [loadAccounts, loadDashboard, loadSettings])
 
-  // 탭 변경 시 데이터 로드
-  useEffect(() => {
-    if (activeTab === 'excluded') loadExcludedKeywords()
-    if (activeTab === 'logs') loadLogs()
-    if (activeTab === 'efficiency') {
-      loadEfficiency()
-      loadEfficiencyHistory()
-    }
-  }, [activeTab, loadExcludedKeywords, loadLogs, loadEfficiency, loadEfficiencyHistory])
-
   // 자동 새로고침 (1분마다)
   useEffect(() => {
     if (isAutoRunning) {
@@ -619,30 +513,6 @@ export default function AdOptimizerPage() {
   }
 
   // 키워드 발굴
-  const discoverKeywords = async () => {
-    if (!seedKeywords.trim()) {
-      toast.error('시드 키워드를 입력해주세요')
-      return
-    }
-
-    setIsDiscovering(true)
-    try {
-      const data = await adPost('/api/naver-ad/keywords/discover', {
-        seed_keywords: seedKeywords.split(',').map(k => k.trim()),
-        max_keywords: 50,
-        min_search_volume: 100,
-        max_competition: 0.85,
-        auto_add: false
-      }, { userId })
-      setDiscoveredKeywords(data.keywords || [])
-      toast.success(`${data.discovered}개 키워드 발굴 완료`)
-    } catch (error) {
-      // adFetch handles error toasts automatically
-    } finally {
-      setIsDiscovering(false)
-    }
-  }
-
   // 설정 저장
   const saveSettings = async () => {
     setIsLoading(true)
@@ -664,54 +534,17 @@ export default function AdOptimizerPage() {
     }
   }
 
-  // 전환 키워드 발굴
-  const discoverConversionKeywords = async () => {
-    if (!seedKeywords.trim()) {
-      toast.error('시드 키워드를 입력해주세요')
-      return
-    }
-
-    setIsDiscoveringConversion(true)
-    try {
-      const data = await adPost('/api/naver-ad/keywords/discover-conversion', {
-        seed_keywords: seedKeywords.split(',').map(k => k.trim()),
-        max_keywords: 50,
-        min_search_volume: 50,
-        max_competition: 0.85,
-        auto_add: false
-      }, { userId })
-      setDiscoveredKeywords(data.keywords || [])
-      toast.success(`전환 키워드 ${data.discovered}개 발굴 완료!`)
-    } catch (error) {
-      // adFetch handles error toasts automatically
-    } finally {
-      setIsDiscoveringConversion(false)
-    }
-  }
-
   // 비효율 키워드 평가
   const evaluateKeywords = async () => {
     setIsLoading(true)
     try {
       const data = await adPost('/api/naver-ad/keywords/evaluate', undefined, { userId })
       toast.success(`${data.excluded?.length || 0}개 키워드 제외됨`)
-      loadExcludedKeywords()
       loadDashboard()
     } catch (error) {
       // adFetch handles error toasts automatically
     } finally {
       setIsLoading(false)
-    }
-  }
-
-  // 제외 키워드 복원
-  const restoreKeyword = async (keywordId: string) => {
-    try {
-      await adPost(`/api/naver-ad/keywords/restore/${keywordId}`, undefined, { userId })
-      toast.success('키워드가 복원되었습니다')
-      loadExcludedKeywords()
-    } catch (error) {
-      // adFetch handles error toasts automatically
     }
   }
 
@@ -731,7 +564,7 @@ export default function AdOptimizerPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 pt-20">
+    <div className="min-h-screen pt-20">
       {/* BETA 경고 배너 - 법적 면책 조항 포함 */}
       <div className="bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-orange-500/10 border-b border-orange-300/50">
         <div className="max-w-7xl mx-auto px-4 py-4">
@@ -762,7 +595,7 @@ export default function AdOptimizerPage() {
             <div className="flex items-center gap-3">
               <div className="w-px h-6 bg-gray-300" />
               <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-[linear-gradient(135deg,#4C7DFF_0%,#0064FF_46%,#6D3BFF_100%)] flex items-center justify-center">
                   <Zap className="w-6 h-6 text-white" />
                 </div>
                 <div>
@@ -814,19 +647,16 @@ export default function AdOptimizerPage() {
             { id: 'connect', label: '계정 연동', icon: Link2 },
             { id: 'discover', label: '키워드 발굴·자동등록', icon: Sparkles },
             { id: 'dashboard', label: '대시보드', icon: BarChart3 },
-            { id: 'efficiency', label: '효율 추적', icon: Wallet },
-            { id: 'excluded', label: '제외 키워드', icon: XCircle },
-            { id: 'settings', label: '설정', icon: Settings },
-            { id: 'logs', label: '로그', icon: History }
+            { id: 'settings', label: '설정', icon: Settings }
           ].map(tab => (
             <button
               key={tab.id}
               id={`ad-${tab.id}-tab`}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap ${
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all whitespace-nowrap ${
                 activeTab === tab.id
-                  ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30'
-                  : 'bg-white text-gray-600 hover:bg-gray-50'
+                  ? 'text-white shadow-md bg-[linear-gradient(135deg,#4C7DFF_0%,#0064FF_46%,#6D3BFF_100%)] shadow-[0_6px_18px_rgba(0,100,255,0.28)]'
+                  : 'bg-white/70 backdrop-blur text-gray-600 border border-gray-100 hover:bg-white hover:text-gray-900'
               }`}
             >
               <tab.icon className="w-4 h-4" />
@@ -889,7 +719,7 @@ export default function AdOptimizerPage() {
                 {adAccounts.length > 1 && (
                   <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-900">
                     <span className="font-semibold">다중 광고주 모드</span> — 총 {adAccounts.length}개 광고주가 연동되어 있습니다.
-                    카드를 클릭하면 활성 광고주가 전환됩니다. 자동 최적화/대시보드/효율 추적은 활성 광고주 기준으로 표시됩니다.
+                    카드를 클릭하면 활성 광고주가 전환됩니다. 자동 최적화·대시보드는 활성 광고주 기준으로 표시됩니다.
                   </div>
                 )}
 
@@ -919,19 +749,19 @@ export default function AdOptimizerPage() {
                         onClick={() => !isActive && selectAccount(acct.customer_id)}
                         className={`rounded-2xl p-5 transition-all cursor-pointer ${
                           isActive
-                            ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg shadow-green-500/20'
+                            ? 'bg-[linear-gradient(135deg,#4C7DFF_0%,#0064FF_46%,#6D3BFF_100%)] text-white shadow-[0_8px_24px_rgba(0,100,255,0.22)]'
                             : acct.is_connected
-                              ? 'bg-white border border-gray-200 hover:border-green-300 hover:shadow-md'
+                              ? 'bg-white border border-gray-200 hover:border-[#0064FF]/40 hover:shadow-md'
                               : 'bg-white border border-red-200'
                         }`}
                       >
                         <div className="flex items-center justify-between gap-4">
                           <div className="flex items-center gap-4 min-w-0">
                             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${
-                              isActive ? 'bg-white/20' : acct.is_connected ? 'bg-green-100' : 'bg-red-100'
+                              isActive ? 'bg-white/20' : acct.is_connected ? 'bg-[#0064FF]/10' : 'bg-red-100'
                             }`}>
                               {acct.is_connected ? (
-                                <CheckCircle className={`w-6 h-6 ${isActive ? 'text-white' : 'text-green-600'}`} />
+                                <CheckCircle className={`w-6 h-6 ${isActive ? 'text-white' : 'text-[#0064FF]'}`} />
                               ) : (
                                 <AlertTriangle className="w-6 h-6 text-red-600" />
                               )}
@@ -952,11 +782,11 @@ export default function AdOptimizerPage() {
                                   </span>
                                 )}
                               </div>
-                              <p className={`text-sm ${isActive ? 'text-green-50' : 'text-gray-600'}`}>
+                              <p className={`text-sm ${isActive ? 'text-white/85' : 'text-gray-600'}`}>
                                 고객 ID: {acct.customer_id}
                               </p>
                               {acct.last_sync_at && (
-                                <p className={`text-xs mt-1 ${isActive ? 'text-green-100' : 'text-gray-500'}`}>
+                                <p className={`text-xs mt-1 ${isActive ? 'text-white/70' : 'text-gray-500'}`}>
                                   마지막 동기화: {new Date(acct.last_sync_at).toLocaleString('ko-KR')}
                                 </p>
                               )}
@@ -999,207 +829,30 @@ export default function AdOptimizerPage() {
               transition={{ delay: 0.1 }}
               className="grid md:grid-cols-3 gap-4"
             >
-              <div className="bg-white rounded-2xl p-6 shadow-sm">
-                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-4">
-                  <Zap className="w-6 h-6 text-blue-600" />
+              <div className="glass-card rounded-2xl p-6">
+                <div className="w-12 h-12 bg-[#0064FF]/10 rounded-xl flex items-center justify-center mb-4">
+                  <Zap className="w-6 h-6 text-[#0064FF]" />
                 </div>
                 <h3 className="font-bold text-gray-900 mb-2">실시간 자동 최적화</h3>
                 <p className="text-sm text-gray-600">24시간 자동으로 입찰가를 조정하여 광고 효율을 극대화합니다.</p>
               </div>
 
-              <div className="bg-white rounded-2xl p-6 shadow-sm">
-                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-4">
-                  <Wallet className="w-6 h-6 text-green-600" />
+              <div className="glass-card rounded-2xl p-6">
+                <div className="w-12 h-12 bg-[#0064FF]/10 rounded-xl flex items-center justify-center mb-4">
+                  <Wallet className="w-6 h-6 text-[#0064FF]" />
                 </div>
                 <h3 className="font-bold text-gray-900 mb-2">비용 절감 추적</h3>
                 <p className="text-sm text-gray-600">얼마나 비용을 절감했는지 실시간으로 확인할 수 있습니다.</p>
               </div>
 
-              <div className="bg-white rounded-2xl p-6 shadow-sm">
-                <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center mb-4">
-                  <Flame className="w-6 h-6 text-orange-600" />
+              <div className="glass-card rounded-2xl p-6">
+                <div className="w-12 h-12 bg-[#0064FF]/10 rounded-xl flex items-center justify-center mb-4">
+                  <Flame className="w-6 h-6 text-[#0064FF]" />
                 </div>
                 <h3 className="font-bold text-gray-900 mb-2">트렌드 키워드 추천</h3>
                 <p className="text-sm text-gray-600">검색량이 급상승하는 키워드를 자동으로 추천받습니다.</p>
               </div>
             </motion.div>
-          </div>
-        )}
-
-        {/* 효율 추적 탭 */}
-        {activeTab === 'efficiency' && (
-          <div className="space-y-6">
-            {/* 효율 요약 카드 */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 text-white"
-              >
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-                    <DollarSign className="w-5 h-5" />
-                  </div>
-                  <span className="text-sm text-green-100">총 절감액</span>
-                </div>
-                <p className="text-3xl font-bold">
-                  {formatCurrency(efficiency?.total_saved || 0)}
-                </p>
-                <p className="text-green-200 text-sm mt-1">
-                  절감률: {((efficiency?.savings_rate || 0) * 100).toFixed(1)}%
-                </p>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className="bg-white rounded-2xl p-6 shadow-sm"
-              >
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                    <TrendingUp className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <span className="text-sm text-gray-500">ROAS 개선</span>
-                </div>
-                <p className="text-3xl font-bold text-gray-900">
-                  +{((efficiency?.roas_improvement || 0) * 100).toFixed(1)}%
-                </p>
-                <p className="text-gray-500 text-sm mt-1">
-                  {efficiency?.avg_roas_before?.toFixed(0)}% → {efficiency?.avg_roas_after?.toFixed(0)}%
-                </p>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="bg-white rounded-2xl p-6 shadow-sm"
-              >
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                    <MousePointer className="w-5 h-5 text-[#0064FF]" />
-                  </div>
-                  <span className="text-sm text-gray-500">CTR 개선</span>
-                </div>
-                <p className="text-3xl font-bold text-gray-900">
-                  +{((efficiency?.ctr_improvement || 0) * 100).toFixed(2)}%
-                </p>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="bg-white rounded-2xl p-6 shadow-sm"
-              >
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
-                    <Activity className="w-5 h-5 text-orange-600" />
-                  </div>
-                  <span className="text-sm text-gray-500">입찰 조정</span>
-                </div>
-                <p className="text-3xl font-bold text-gray-900">
-                  {efficiency?.total_bid_changes || 0}회
-                </p>
-              </motion.div>
-            </div>
-
-            {/* 성과 비교 */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="bg-white rounded-2xl p-6 shadow-sm"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-gray-900">최적화 전후 비교</h3>
-                <button
-                  onClick={() => { loadEfficiency(); loadEfficiencyHistory(); }}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <RefreshCw className="w-4 h-4 text-gray-500" />
-                </button>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="p-4 bg-red-50 rounded-xl border border-red-100">
-                  <h4 className="font-medium text-red-800 mb-3 flex items-center gap-2">
-                    <XCircle className="w-4 h-4" />
-                    최적화 전 (평균)
-                  </h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-red-600">ROAS</span>
-                      <span className="font-semibold text-red-800">{efficiency?.avg_roas_before?.toFixed(0) || 0}%</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-red-600">비효율 지출</span>
-                      <span className="font-semibold text-red-800">높음</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-4 bg-green-50 rounded-xl border border-green-100">
-                  <h4 className="font-medium text-green-800 mb-3 flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4" />
-                    최적화 후 (평균)
-                  </h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-green-600">ROAS</span>
-                      <span className="font-semibold text-green-800">{efficiency?.avg_roas_after?.toFixed(0) || 0}%</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-green-600">절감된 비용</span>
-                      <span className="font-semibold text-green-800">{formatCurrency(efficiency?.total_saved || 0)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-
-            {/* 효율 히스토리 */}
-            {efficiencyHistory.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-                className="bg-white rounded-2xl p-6 shadow-sm"
-              >
-                <h3 className="text-lg font-bold text-gray-900 mb-4">일별 절감 내역</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="text-left text-sm text-gray-500 border-b">
-                        <th className="pb-3">날짜</th>
-                        <th className="pb-3 text-right">비용 전</th>
-                        <th className="pb-3 text-right">비용 후</th>
-                        <th className="pb-3 text-right">절감액</th>
-                        <th className="pb-3 text-right">ROAS 변화</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {efficiencyHistory.slice(0, 10).map((item, idx) => (
-                        <tr key={idx} className="border-b last:border-0">
-                          <td className="py-3">{new Date(item.date).toLocaleDateString('ko-KR')}</td>
-                          <td className="py-3 text-right text-gray-500">{formatCurrency(item.cost_before)}</td>
-                          <td className="py-3 text-right">{formatCurrency(item.cost_after)}</td>
-                          <td className="py-3 text-right text-green-600 font-semibold">
-                            -{formatCurrency(item.cost_saved)}
-                          </td>
-                          <td className="py-3 text-right">
-                            <span className="text-green-600">
-                              {item.roas_before?.toFixed(0)}% → {item.roas_after?.toFixed(0)}%
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </motion.div>
-            )}
           </div>
         )}
 
@@ -1214,8 +867,8 @@ export default function AdOptimizerPage() {
                 className="bg-white rounded-2xl p-6 shadow-sm"
               >
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                    <Search className="w-5 h-5 text-blue-600" />
+                  <div className="w-10 h-10 rounded-xl bg-[#0064FF]/10 flex items-center justify-center">
+                    <Search className="w-5 h-5 text-[#0064FF]" />
                   </div>
                   <span className="text-sm text-gray-500">활성 키워드</span>
                 </div>
@@ -1231,8 +884,8 @@ export default function AdOptimizerPage() {
                 className="bg-white rounded-2xl p-6 shadow-sm"
               >
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
-                    <TrendingUp className="w-5 h-5 text-green-600" />
+                  <div className="w-10 h-10 rounded-xl bg-[#0064FF]/10 flex items-center justify-center">
+                    <TrendingUp className="w-5 h-5 text-[#0064FF]" />
                   </div>
                   <span className="text-sm text-gray-500">오늘 입찰 변경</span>
                 </div>
@@ -1248,8 +901,8 @@ export default function AdOptimizerPage() {
                 className="bg-white rounded-2xl p-6 shadow-sm"
               >
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
-                    <DollarSign className="w-5 h-5 text-orange-600" />
+                  <div className="w-10 h-10 rounded-xl bg-[#0064FF]/10 flex items-center justify-center">
+                    <DollarSign className="w-5 h-5 text-[#0064FF]" />
                   </div>
                   <span className="text-sm text-gray-500">ROAS</span>
                 </div>
@@ -1265,7 +918,7 @@ export default function AdOptimizerPage() {
                 className="bg-white rounded-2xl p-6 shadow-sm"
               >
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-xl bg-[#0064FF]/10 flex items-center justify-center">
                     <Target className="w-5 h-5 text-[#0064FF]" />
                   </div>
                   <span className="text-sm text-gray-500">전략</span>
@@ -1333,7 +986,7 @@ export default function AdOptimizerPage() {
                   <button
                     onClick={runOptimizationOnce}
                     disabled={isLoading}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-medium transition-colors disabled:opacity-50"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#0064FF] hover:bg-[#0052D4] text-white rounded-xl font-semibold transition-colors disabled:opacity-50"
                   >
                     {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
                     입찰 최적화 1회 실행
@@ -1342,7 +995,7 @@ export default function AdOptimizerPage() {
                   <button
                     onClick={evaluateKeywords}
                     disabled={isLoading}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-medium transition-colors disabled:opacity-50"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-semibold transition-colors disabled:opacity-50"
                   >
                     {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Filter className="w-4 h-4" />}
                     비효율 키워드 평가
@@ -1350,7 +1003,7 @@ export default function AdOptimizerPage() {
 
                   <button
                     onClick={() => setActiveTab('discover')}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#0064FF] hover:bg-[#0052D4] text-white rounded-xl font-medium transition-colors"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-semibold transition-colors"
                   >
                     <Sparkles className="w-4 h-4" />
                     키워드 발굴하기
@@ -1420,277 +1073,88 @@ export default function AdOptimizerPage() {
         {/* 키워드 발굴 탭 */}
         {activeTab === 'discover' && (
           <div className="space-y-6">
-            {/* ===== 1순위: 자동 운영 ===== */}
+            {/* ===== 핵심: 한 번 입력 → 10만 완전자동 ===== */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <span className="px-2 py-1 bg-rose-100 text-rose-700 text-xs font-bold rounded-full">1순위</span>
-                <h2 className="text-base font-bold text-gray-800">한 번 켜두면 자동으로 굴러가는 핵심 기능</h2>
+                <span className="px-2.5 py-1 bg-[#0064FF]/10 text-[#0064FF] text-xs font-bold rounded-full">핵심</span>
+                <h2 className="text-base font-bold text-gray-800">한 번만 켜두면 자동으로 굴러가는 기능</h2>
               </div>
 
-              {/* HERO: 24h 자동 키워드 풀 */}
+              {/* HERO: 24h 자동 키워드 풀 — 사이트 공통 브랜드 그라디언트 */}
               <Link
                 href="/ad-optimizer/keyword-pool"
-                className="block bg-gradient-to-r from-rose-500 via-pink-600 to-fuchsia-600 rounded-2xl p-6 text-white hover:shadow-2xl hover:scale-[1.01] transition-all shadow-lg shadow-rose-500/30 relative overflow-hidden"
+                className="spec-sweep block rounded-3xl p-7 text-white relative overflow-hidden transition-all hover:-translate-y-1 bg-[linear-gradient(135deg,#4C7DFF_0%,#0064FF_46%,#6D3BFF_100%)] shadow-[0_12px_40px_rgba(0,100,255,0.28)]"
               >
-                <div className="absolute top-2 right-3 px-2 py-0.5 bg-white/20 rounded-full text-[10px] font-bold tracking-wider">RECOMMENDED</div>
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-white/25 rounded-2xl flex items-center justify-center flex-shrink-0">
-                    <Zap className="w-7 h-7" />
+                <div className="absolute top-3 right-4 px-2.5 py-0.5 bg-white/20 rounded-full text-[10px] font-bold tracking-wider">RECOMMENDED</div>
+                <div className="flex items-center gap-5">
+                  <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center flex-shrink-0">
+                    <Zap className="w-8 h-8" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-xl font-extrabold mb-1">🔥 24시간 자동 키워드 풀</h3>
-                    <p className="text-rose-50 text-sm">
-                      시드 1번 등록 → 매일 새 키워드 자동 발굴·중복 제외·즉시 광고 등록 (계정 한도 10만개까지)
+                    <h3 className="text-2xl font-extrabold mb-1.5">24시간 자동 키워드 풀</h3>
+                    <p className="text-white/90 text-sm leading-relaxed">
+                      시드 키워드 <span className="font-bold">한 번만 입력</span>하면 매일 새 키워드를 자동 발굴·중복 제외·즉시 광고 등록.
+                      <span className="font-bold"> 최대 10만 개까지 완전 자동</span>으로 채웁니다.
                     </p>
                   </div>
-                  <ArrowUpRight className="w-6 h-6" />
-                </div>
-              </Link>
-
-              {/* 소재 가져오기 */}
-              <Link
-                href="/ad-optimizer/ad-templates"
-                className="block bg-gradient-to-r from-amber-500 to-orange-600 rounded-2xl p-5 text-white hover:shadow-xl transition-shadow"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <Download className="w-6 h-6" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-bold mb-1">🎨 소재·확장소재 풀 — 기존 광고 가져오기</h3>
-                    <p className="text-amber-50 text-sm">
-                      네이버에 이미 등록된 소재/확장소재를 한 번에 끌어와 라운드로빈 풀로 사용 (자동 등록 시 자동 매칭)
-                    </p>
-                  </div>
-                  <ArrowUpRight className="w-5 h-5" />
+                  <ArrowUpRight className="w-6 h-6 flex-shrink-0" />
                 </div>
               </Link>
             </div>
 
-            {/* ===== 2순위: 엑셀로 직접 등록 ===== */}
+            {/* ===== 엑셀 대량 등록 ===== */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full">2순위</span>
+                <span className="px-2.5 py-1 bg-gray-100 text-gray-600 text-xs font-bold rounded-full">엑셀</span>
                 <h2 className="text-base font-bold text-gray-800">엑셀 가지고 있을 때 — 수동 대량 등록</h2>
               </div>
 
-              {/* 검색량 필터링 (권장) */}
-              <Link
-                href="/ad-optimizer/volume-filter"
-                className="block bg-gradient-to-r from-emerald-500 to-teal-700 rounded-2xl p-5 text-white hover:shadow-xl transition-shadow"
-              >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <Filter className="w-6 h-6" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-bold mb-1">🎯 검색량 필터링 → 자동 등록 (50만 규모, 권장)</h3>
-                  <p className="text-teal-100 text-sm">
-                    엑셀 → 월 검색량 ≥10만 필터링 → 캠페인 자동 생성 → 광고 등록 (검색량 없는 키워드 자동 제외)
-                  </p>
-                </div>
-                <ArrowUpRight className="w-5 h-5" />
-              </div>
-            </Link>
-
-            {/* 대량 등록 (10만) - 필터 없이 */}
-            <Link
-              href="/ad-optimizer/scale-upload"
-              className="block bg-gradient-to-r from-purple-600 to-indigo-700 rounded-2xl p-6 text-white hover:shadow-xl transition-shadow"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <Flame className="w-6 h-6" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-bold mb-1">🚀 대량 등록 (10만 규모, 필터 없음)</h3>
-                  <p className="text-indigo-100 text-sm">
-                    검색량 체크 없이 엑셀의 모든 키워드를 곧바로 등록. 검색량 걸러진 엑셀이 있을 때 사용.
-                  </p>
-                </div>
-                <ArrowUpRight className="w-5 h-5" />
-              </div>
-            </Link>
-
-            {/* 엑셀 단건 일괄 등록 */}
-            <Link
-              href="/ad-optimizer/keyword-upload"
-              className="block bg-gradient-to-r from-indigo-500 to-blue-600 rounded-2xl p-5 text-white hover:shadow-xl transition-shadow"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <Download className="w-6 h-6 rotate-180" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-bold mb-1">📋 엑셀/CSV 단건 등록 (최대 500개)</h3>
-                  <p className="text-indigo-100 text-sm">
-                    단일 광고그룹에 키워드 대량 등록 (500개 이하). 10만 개 이상은 위 "대량 등록" 사용.
-                  </p>
-                </div>
-                <ArrowUpRight className="w-5 h-5" />
-              </div>
-            </Link>
-            </div>
-
-            {/* ===== 3순위: 시드로 키워드만 발굴 ===== */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs font-bold rounded-full">3순위</span>
-                <h2 className="text-base font-bold text-gray-800">시드만 있을 때 — AI 키워드 발굴</h2>
-              </div>
-
-            {/* 전환 키워드 발굴 안내 */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl p-6 text-white"
-            >
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <Target className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold mb-2">💰 전환 키워드를 싸게 사는 법</h3>
-                  <p className="text-green-100 text-sm">
-                    구매의도가 높은 키워드(가격, 추천, 비교 등)를 자동으로 발굴합니다.
-                    전환 키워드 발굴 버튼을 사용하면 전환 가능성이 높은 키워드만 추출됩니다.
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-white rounded-2xl p-6 shadow-sm"
-            >
-              <h3 className="text-lg font-bold text-gray-900 mb-4">키워드 발굴</h3>
-              <p className="text-gray-600 mb-6">
-                시드 키워드를 입력하면 관련성 높은 키워드를 자동으로 발굴합니다.
-              </p>
-
-              <div className="space-y-4 mb-6">
-                <input
-                  type="text"
-                  value={seedKeywords}
-                  onChange={(e) => setSeedKeywords(e.target.value)}
-                  placeholder="시드 키워드 입력 (쉼표로 구분) - 예: 블로그 분석, 블로그 지수, 키워드 분석"
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <div className="flex gap-3">
-                  <button
-                    onClick={discoverConversionKeywords}
-                    disabled={isDiscoveringConversion}
-                    className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl font-medium transition-all disabled:opacity-50 shadow-lg shadow-green-500/30"
-                  >
-                    {isDiscoveringConversion ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Target className="w-4 h-4" />
-                    )}
-                    🔥 전환 키워드 발굴 (추천)
-                  </button>
-                  <button
-                    onClick={discoverKeywords}
-                    disabled={isDiscovering}
-                    className="flex items-center gap-2 px-6 py-3 bg-[#0064FF] hover:bg-[#0052D4] text-white rounded-xl font-medium transition-colors disabled:opacity-50"
-                  >
-                    {isDiscovering ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="w-4 h-4" />
-                    )}
-                    전체 발굴
-                  </button>
-                </div>
-              </div>
-
-              {/* 발굴된 키워드 목록 */}
-              {discoveredKeywords.length > 0 && (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="text-left text-sm text-gray-500 border-b">
-                        <th className="pb-3">키워드</th>
-                        <th className="pb-3 text-right">월간 검색량</th>
-                        <th className="pb-3 text-center">경쟁도</th>
-                        <th className="pb-3 text-right">추천 입찰가</th>
-                        <th className="pb-3 text-right">관련성</th>
-                        <th className="pb-3 text-right">잠재력</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {discoveredKeywords.map((kw, idx) => (
-                        <tr key={idx} className="border-b last:border-0 hover:bg-gray-50">
-                          <td className="py-3 font-medium">{kw.keyword}</td>
-                          <td className="py-3 text-right">{formatNumber(kw.monthly_search_count)}</td>
-                          <td className="py-3 text-center">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              kw.competition_level === 'LOW' ? 'bg-green-100 text-green-700' :
-                              kw.competition_level === 'MEDIUM' ? 'bg-yellow-100 text-yellow-700' :
-                              'bg-red-100 text-red-700'
-                            }`}>
-                              {kw.competition_level === 'LOW' ? '낮음' :
-                               kw.competition_level === 'MEDIUM' ? '보통' : '높음'}
-                            </span>
-                          </td>
-                          <td className="py-3 text-right">{formatCurrency(kw.suggested_bid)}</td>
-                          <td className="py-3 text-right">{(kw.relevance_score * 100).toFixed(0)}%</td>
-                          <td className="py-3 text-right font-semibold text-[#0064FF]">
-                            {kw.potential_score.toFixed(1)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </motion.div>
-            </div>
-          </div>
-        )}
-
-        {/* 제외 키워드 탭 */}
-        {activeTab === 'excluded' && (
-          <div className="space-y-6">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white rounded-2xl p-6 shadow-sm"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-gray-900">제외된 키워드</h3>
-                <span className="text-sm text-gray-500">{excludedKeywords.length}개</span>
-              </div>
-
-              {excludedKeywords.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  제외된 키워드가 없습니다
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {excludedKeywords.map((kw, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                      <div>
-                        <p className="font-medium text-gray-900">{kw.keyword_text}</p>
-                        <p className="text-sm text-gray-500">{kw.reason}</p>
-                        <p className="text-xs text-gray-400">
-                          {new Date(kw.excluded_at).toLocaleString('ko-KR')}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => restoreKeyword(kw.keyword_id)}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors"
-                      >
-                        <RotateCcw className="w-4 h-4" />
-                        복원
-                      </button>
+              {[
+                {
+                  href: '/ad-optimizer/volume-filter',
+                  icon: Filter,
+                  title: '검색량 필터링 → 자동 등록',
+                  badge: '권장',
+                  desc: '엑셀 → 월 검색량 ≥10만 필터링 → 캠페인 자동 생성 → 광고 등록 (검색량 없는 키워드 자동 제외)',
+                },
+                {
+                  href: '/ad-optimizer/scale-upload',
+                  icon: Flame,
+                  title: '대량 등록 (10만 규모, 필터 없음)',
+                  badge: null,
+                  desc: '검색량 체크 없이 엑셀의 모든 키워드를 곧바로 등록. 검색량이 이미 걸러진 엑셀이 있을 때 사용.',
+                },
+                {
+                  href: '/ad-optimizer/keyword-upload',
+                  icon: Download,
+                  title: '엑셀/CSV 단건 등록 (최대 500개)',
+                  badge: null,
+                  desc: '단일 광고그룹에 키워드 대량 등록 (500개 이하). 10만 개 이상은 위 "대량 등록"을 사용하세요.',
+                },
+              ].map((card) => (
+                <Link
+                  key={card.href}
+                  href={card.href}
+                  className="glass-card block rounded-2xl p-5 transition-all hover:-translate-y-0.5 group"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-[#0064FF]/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <card.icon className="w-6 h-6 text-[#0064FF]" />
                     </div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="text-base font-bold text-gray-900">{card.title}</h3>
+                        {card.badge && (
+                          <span className="px-2 py-0.5 bg-[#0064FF]/10 text-[#0064FF] text-[10px] font-bold rounded-full">{card.badge}</span>
+                        )}
+                      </div>
+                      <p className="text-gray-500 text-sm leading-relaxed">{card.desc}</p>
+                    </div>
+                    <ArrowUpRight className="w-5 h-5 text-gray-400 group-hover:text-[#0064FF] transition-colors flex-shrink-0" />
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
         )}
 
@@ -1730,14 +1194,14 @@ export default function AdOptimizerPage() {
                 {/* 전환 최적화 설정 (CPA 전략일 때만 표시) */}
                 {(settings.strategy === 'target_cpa' || settings.strategy === 'maximize_conversions') && (
                   <>
-                    <div className="md:col-span-2 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200">
-                      <h4 className="font-semibold text-green-800 mb-3 flex items-center gap-2">
+                    <div className="md:col-span-2 p-4 bg-[#0064FF]/5 rounded-xl border border-[#0064FF]/20">
+                      <h4 className="font-semibold text-[#0064FF] mb-3 flex items-center gap-2">
                         <Target className="w-4 h-4" />
                         전환 최적화 설정
                       </h4>
                       <div className="grid md:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-green-700 mb-2">목표 CPA (전환당 비용)</label>
+                          <label className="block text-sm font-medium text-[#0064FF] mb-2">목표 CPA (전환당 비용)</label>
                           <div className="relative">
                             <input
                               type="number"
@@ -1745,14 +1209,14 @@ export default function AdOptimizerPage() {
                               max="10000000"
                               value={settings.target_cpa}
                               onChange={(e) => setSettings({ ...settings, target_cpa: Number(e.target.value) })}
-                              className="w-full px-4 py-3 border border-green-200 rounded-xl focus:ring-2 focus:ring-green-500 bg-white"
+                              className="w-full px-4 py-3 border border-[#0064FF]/20 rounded-xl focus:ring-2 focus:ring-[#0064FF] bg-white"
                             />
                             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500">원</span>
                           </div>
-                          <p className="mt-1 text-xs text-green-600">전환 1건당 허용 가능한 최대 광고비</p>
+                          <p className="mt-1 text-xs text-gray-500">전환 1건당 허용 가능한 최대 광고비</p>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-green-700 mb-2">전환 가치 (LTV)</label>
+                          <label className="block text-sm font-medium text-[#0064FF] mb-2">전환 가치 (LTV)</label>
                           <div className="relative">
                             <input
                               type="number"
@@ -1760,15 +1224,15 @@ export default function AdOptimizerPage() {
                               max="100000000"
                               value={settings.conversion_value}
                               onChange={(e) => setSettings({ ...settings, conversion_value: Number(e.target.value) })}
-                              className="w-full px-4 py-3 border border-green-200 rounded-xl focus:ring-2 focus:ring-green-500 bg-white"
+                              className="w-full px-4 py-3 border border-[#0064FF]/20 rounded-xl focus:ring-2 focus:ring-[#0064FF] bg-white"
                             />
                             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500">원</span>
                           </div>
-                          <p className="mt-1 text-xs text-green-600">고객 1명의 평균 생애 가치 (예: 월 19,900원 × 6개월 = 119,400원)</p>
+                          <p className="mt-1 text-xs text-gray-500">고객 1명의 평균 생애 가치 (예: 월 19,900원 × 6개월 = 119,400원)</p>
                         </div>
                       </div>
                       <div className="mt-3 p-3 bg-white/60 rounded-lg">
-                        <p className="text-sm text-green-800">
+                        <p className="text-sm text-gray-700">
                           <strong>예상 ROAS:</strong> {settings.conversion_value && settings.target_cpa ? ((settings.conversion_value / settings.target_cpa) * 100).toFixed(0) : 0}%
                           {' '}| <strong>손익분기 CPA:</strong> {formatCurrency(settings.conversion_value || 0)}
                         </p>
@@ -1923,7 +1387,7 @@ export default function AdOptimizerPage() {
               <button
                 onClick={saveSettings}
                 disabled={isLoading}
-                className="mt-6 flex items-center justify-center gap-2 w-full px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-medium transition-colors disabled:opacity-50"
+                className="mt-6 flex items-center justify-center gap-2 w-full px-6 py-3 bg-[#0064FF] hover:bg-[#0052D4] text-white rounded-xl font-semibold transition-colors disabled:opacity-50"
               >
                 {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 설정 저장
@@ -1932,58 +1396,6 @@ export default function AdOptimizerPage() {
           </div>
         )}
 
-        {/* 로그 탭 */}
-        {activeTab === 'logs' && (
-          <div className="space-y-6">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white rounded-2xl p-6 shadow-sm"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-gray-900">최적화 로그</h3>
-                <button
-                  onClick={loadLogs}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <RefreshCw className="w-4 h-4 text-gray-500" />
-                </button>
-              </div>
-
-              {logs.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  로그가 없습니다
-                </div>
-              ) : (
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {logs.map((log, idx) => (
-                    <div key={idx} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                        log.log_type === 'optimization_start' ? 'bg-green-100' :
-                        log.log_type === 'optimization_stop' ? 'bg-red-100' :
-                        log.log_type === 'keyword_discovery' ? 'bg-blue-100' :
-                        log.log_type === 'keyword_evaluation' ? 'bg-orange-100' :
-                        'bg-blue-100'
-                      }`}>
-                        {log.log_type === 'optimization_start' ? <Play className="w-4 h-4 text-green-600" /> :
-                         log.log_type === 'optimization_stop' ? <Pause className="w-4 h-4 text-red-600" /> :
-                         log.log_type === 'keyword_discovery' ? <Sparkles className="w-4 h-4 text-[#0064FF]" /> :
-                         log.log_type === 'keyword_evaluation' ? <Filter className="w-4 h-4 text-orange-600" /> :
-                         <Activity className="w-4 h-4 text-blue-600" />}
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-900">{log.message}</p>
-                        <p className="text-xs text-gray-500">
-                          {new Date(log.created_at).toLocaleString('ko-KR')}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          </div>
-        )}
       </main>
 
       {/* 튜토리얼 */}
