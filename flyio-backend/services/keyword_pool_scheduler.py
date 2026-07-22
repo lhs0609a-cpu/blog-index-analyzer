@@ -295,11 +295,18 @@ class KeywordPoolScheduler:
                 return
             pairs = [(int(a["user_id"]), int(a["customer_id"])) for a in accts if a.get("user_id") and a.get("customer_id")]
             logger.warning(f"[pool/scheduler] collect tick — accounts={len(pairs)}")
+            from routers.naver_ad import _fill_escalation_decide
             for uid, cid in pairs:
                 try:
                     await _run_pool_collect(uid, customer_id=cid)
                 except Exception as e:
                     logger.error(f"[pool/scheduler] collect 실패 user={uid} cid={cid}: {e}", exc_info=True)
+                # 10만 채우기 에스컬레이션 — collect 결과로 레벨/floor 갱신(상태 upsert).
+                # 다음 collect 의 L2 조합·L5 floor 게이트가 이 상태를 읽는다. collect 성패와 무관.
+                try:
+                    await _fill_escalation_decide(uid, cid)
+                except Exception as e:
+                    logger.warning(f"[pool/scheduler] escalation decide 실패 cid={cid}: {e}")
         except Exception as e:
             logger.error(f"[pool/scheduler] collect tick 실패: {type(e).__name__}: {e}", exc_info=True)
 
