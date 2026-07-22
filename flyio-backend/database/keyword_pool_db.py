@@ -165,6 +165,65 @@ class KeywordPoolDB:
                     last_run_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            # 10만 자동채우기 에스컬레이션 상태 — 오퍼레이터 사다리 레벨/마른라운드 추적.
+            # level: 0=BFS기본 1=LLM앵글공격 2=조합생성 3=표면채굴 4=LLM앵글강화 5=관련성floor↓(티어)
+            # dry_streak: fresh 수율<임계 연속 collect 라운드 수. 임계 이상 연속이면 level 상승.
+            # relevance_floor: 현재 등록 관련성 하한(기본 50). level 5 진입 시에만 단계적 하강.
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS naverad_pool_escalation (
+                    account_customer_id INTEGER PRIMARY KEY,
+                    level INTEGER DEFAULT 0,
+                    dry_streak INTEGER DEFAULT 0,
+                    relevance_floor INTEGER DEFAULT 50,
+                    last_added INTEGER DEFAULT 0,
+                    note TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+    def get_escalation(self, account_customer_id: int) -> Dict:
+        """채우기 에스컬레이션 상태 조회 — 없으면 기본(level 0) 반환."""
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT level, dry_streak, relevance_floor, last_added, note, updated_at
+                   FROM naverad_pool_escalation WHERE account_customer_id = ?""",
+                (account_customer_id,),
+            )
+            r = cur.fetchone()
+            if r:
+                return dict(r)
+            return {
+                "level": 0, "dry_streak": 0, "relevance_floor": 50,
+                "last_added": 0, "note": None, "updated_at": None,
+            }
+
+    def set_escalation(
+        self,
+        account_customer_id: int,
+        level: int,
+        dry_streak: int,
+        relevance_floor: int,
+        last_added: int,
+        note: Optional[str] = None,
+    ) -> None:
+        """채우기 에스컬레이션 상태 upsert."""
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """INSERT INTO naverad_pool_escalation
+                   (account_customer_id, level, dry_streak, relevance_floor, last_added, note, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                   ON CONFLICT(account_customer_id) DO UPDATE SET
+                     level=excluded.level, dry_streak=excluded.dry_streak,
+                     relevance_floor=excluded.relevance_floor, last_added=excluded.last_added,
+                     note=excluded.note, updated_at=CURRENT_TIMESTAMP""",
+                (
+                    account_customer_id, int(level), int(dry_streak),
+                    int(relevance_floor), int(last_added),
+                    (note or "")[:300] if note else None,
+                ),
+            )
 
     def record_run(
         self,

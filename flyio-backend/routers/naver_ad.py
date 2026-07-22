@@ -2728,6 +2728,25 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     customer_id = int(account.get("customer_id"))
     customer_id_for_log = customer_id
 
+    # 채우기 에스컬레이션 — 관련성 floor/level 을 읽어 이번 라운드 게이트/조합주입에 반영.
+    # level<5 이면 floor=50(기본) → ADD/DELETE 게이트가 오늘과 동일. 상위 레벨에서 floor 가
+    # 내려가면 collect ADD gate 와 cap self-heal DELETE gate 를 함께 낮춰(대칭) thrash 없이
+    # 관련성 낮은 롱테일까지 순서대로 흡수 → 10만 채우기. level≥2 면 조합 시드 주입 발동.
+    try:
+        _esc = pool.get_escalation(customer_id)
+        _esc_floor = int(_esc.get("relevance_floor") or 50)
+        _esc_level = int(_esc.get("level") or 0)
+    except Exception:
+        _esc_floor, _esc_level = 50, 0
+
+    # STALL 방지 — floor 를 낮춰 약관련 롱테일을 흡수할 때는 등록 가능(volume≥10) 후보만 admit.
+    # register 는 volume≥10 만 가져가므로(claim_pending min_volume=10), volume<10 을 admit 하면
+    # pending 에 영구 적체 → headroom(=100k−active−pending) 잠식 → active 가 10만 못 미치고 정지.
+    # floor<50 (티어 하강 중) 이면 min_volume 을 10 으로 올려 "등록되는 롱테일"만 채운다.
+    # floor=50 (level<5) 이면 오늘과 동일(min_volume 그대로).
+    if _esc_floor < 50:
+        min_volume = max(min_volume, 10)
+
     reg = get_registered_keywords_db()
     pool_pending = (pool.stats(customer_id).get("by_status") or {}).get("pending", 0)
     active_reg = int((reg.stats(customer_id) or {}).get("active") or 0)
@@ -2744,7 +2763,9 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
         if cfg.get("enabled"):
             cleaned = await _cap_triggered_self_heal(
                 uid, customer_id, account,
-                threshold=int(cfg.get("threshold") or 30),
+                # DELETE 임계를 ADD floor(_esc_floor) 이하로 고정 — floor 가 25 로 내려가도
+                # DELETE<floor, ADD≥floor 대칭 유지 → add→delete→add thrash 차단.
+                threshold=min(int(cfg.get("threshold") or 30), _esc_floor),
                 saved_relevance=list(cfg.get("relevance_keywords") or []),
                 max_delete=500,
             )
@@ -2832,6 +2853,10 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     from database.naver_ad_db import get_ad_account_auto_cleanup as _get_collect_thr_cfg
     _collect_thr_cfg = _get_collect_thr_cfg(uid, str(customer_id)) or {}
     _collect_score_thr = int(_collect_thr_cfg.get("threshold") or 50)
+    # 에스컬레이션 floor 하강 반영 — floor 는 낮추기만(min), 절대 올리지 않음.
+    # level<5 이면 floor=50 이라 기본 threshold(50) 와 동일. 상위 레벨에서 floor 가
+    # 45→40→…→25 로 내려가면 도메인 토큰은 통과했으나 점수 낮은 롱테일까지 순서대로 흡수.
+    _collect_score_thr = min(_collect_score_thr, _esc_floor)
     _collect_score_seeds = list(saved_relevance) if saved_relevance and len([s for s in saved_relevance if s and len(s) >= 2]) >= 3 else []
 
     # 등록 KW atom — cleanup/collect 게이트와 동일 기준.
@@ -3110,29 +3135,38 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
     except Exception:
         pass
 
-    if saturated:
-        logger.warning(
-            f"[pool/collect] user={uid} SATURATION — 시드 확장 주입 (지역+의도 suffix)"
-        )
-        # 한국 광고 검색 보편 확장어 — 시드와 결합해 새 hint 생성.
-        # 같은 시드 반복 호출이 같은 결과를 돌려주는 한계를 깸.
+    # L2 조합 생성 — 지역·의도 수식어 × 머리어(시드) 로 새 hint 생성해 keywordstool
+    # 폐포를 깬다. 같은 시드 반복 호출이 같은 결과만 돌려주는 유리천장 돌파의 핵심.
+    # 발동: 포화 감지(기존) 또는 에스컬레이션 level≥2. level<2 이고 미포화면 오늘과 동일.
+    if saturated or _esc_level >= 2:
+        # 전국 시/도·주요 시 + 구매의도 수식어 — level≥2 면 조합 폭을 넓힌다.
         EXPANSION_AFFIXES = [
-            "강남", "서울", "부산", "대구", "인천", "경기",
-            "추천", "후기", "비교", "가격", "잘하는곳", "잘하는", "찾기",
-            "전문", "전문점", "무료", "상담", "신청",
+            "강남", "서울", "부산", "대구", "인천", "경기", "대전", "광주", "울산",
+            "수원", "성남", "고양", "용인", "창원", "청주", "전주", "천안", "제주",
+            "추천", "후기", "비교", "가격", "잘하는곳", "잘하는", "찾기", "순위",
+            "전문", "전문점", "무료", "상담", "신청", "예약", "할인", "이벤트",
+            "문의", "근처", "당일", "야간", "주말",
         ]
+        # level 이 높을수록 시드당 조합 수·주입 상한을 키운다.
+        per_seed = 3 if _esc_level < 2 else (4 if _esc_level < 4 else 5)
+        take = 60 if _esc_level < 2 else (120 if _esc_level < 4 else 200)
+        seed_span = 30 if _esc_level < 2 else 60
+        logger.warning(
+            f"[pool/collect] user={uid} L2 조합 주입 — saturated={saturated} level={_esc_level} "
+            f"(per_seed={per_seed} take={take})"
+        )
         existing = set(seeds)
         injected: List[str] = []
-        for s in seeds[:30]:
-            for aff in random.sample(EXPANSION_AFFIXES, 3):
+        for s in seeds[:seed_span]:
+            for aff in random.sample(EXPANSION_AFFIXES, min(per_seed, len(EXPANSION_AFFIXES))):
                 for combo in (aff + s, s + aff):
                     if combo not in existing and len(combo) <= 25:
                         injected.append(combo)
                         existing.add(combo)
         if injected:
-            seeds = list(seeds) + injected[:60]
+            seeds = list(seeds) + injected[:take]
             logger.warning(
-                f"[pool/collect] user={uid} 확장 시드 {len(injected[:60])}개 주입 (sample: "
+                f"[pool/collect] user={uid} 확장 시드 {len(injected[:take])}개 주입 (sample: "
                 + ", ".join(injected[:5]) + ")"
             )
 
@@ -5504,12 +5538,97 @@ async def _run_pool_ai_seed_topup(uid: int, customer_id: int) -> Dict[str, Any]:
     return {"added": added, "llm": len(candidates), "validated": len(validated), "duration_ms": duration_ms}
 
 
+# ==========================================================================
+# 10만 자동채우기 에스컬레이션 컨트롤러 (#1 골격)
+# 오퍼레이터 사다리를 영속 상태(naverad_pool_escalation)로 관리. collect 가 마르면
+# 레벨을 올려 더 공격적으로 시드/앵글을 주입하고, 생산적이면 값싼 BFS 로 복귀한다.
+# level 0 = 오늘과 100% 동일 동작. 상위 레벨의 신규 오퍼레이터(조합 생성·표면 채굴·
+# 관련성 티어 하강)는 후속 단계에서 이 골격 위에 부착한다.
+# ==========================================================================
+_FILL_CAP = 100_000
+_FILL_FRESH_OK = 30            # collect added ≥ 이면 생산적 라운드로 판정
+_FILL_DRY_ESCALATE_AFTER = 2   # 마른 라운드 연속 N회 → 레벨 +1
+_FILL_MAX_LEVEL = 5
+_FILL_FLOOR_START = 50
+_FILL_FLOOR_MIN = 25
+_FILL_LEVEL_LABELS = {
+    0: "BFS 기본 발굴",
+    1: "LLM 앵글 시드 주입(공격)",
+    2: "조합 생성(지역·수식어×머리어)",
+    3: "표면 채굴(자동완성·연관검색어)",
+    4: "LLM 앵글 강화",
+    5: "관련성 티어 하강(롱테일·약관련 흡수)",
+}
+
+
+def _fill_next_lever(level: int) -> str:
+    return _FILL_LEVEL_LABELS.get(min(level + 1, _FILL_MAX_LEVEL), "최대 단계")
+
+
+async def _fill_escalation_decide(uid: int, cid: int) -> Dict[str, Any]:
+    """직전 collect 결과를 보고 에스컬레이션 레벨을 갱신하고 이번 tick 의 결정을 반환.
+    부작용은 상태 upsert 뿐. 실패 시 안전 기본값(run_topup=None → 호출부 폴백) 반환."""
+    pool = get_keyword_pool_db()
+    try:
+        reg = get_registered_keywords_db()
+        active_reg = int((reg.stats(cid) or {}).get("active") or 0)
+        pool_pending = int((pool.stats(cid).get("by_status") or {}).get("pending", 0) or 0)
+        headroom = _FILL_CAP - active_reg - pool_pending
+
+        recent = pool.recent_runs(cid, limit=6) or []
+        last_collect = next((r for r in recent if r.get("kind") == "collect"), None)
+        last_added = int(last_collect.get("added") or 0) if last_collect else 0
+
+        st = pool.get_escalation(cid)
+        level = int(st.get("level") or 0)
+        dry_streak = int(st.get("dry_streak") or 0)
+        floor = int(st.get("relevance_floor") or _FILL_FLOOR_START)
+
+        if headroom <= 0:
+            # 이미 10만 도달 — 레벨 유지, 물갈이는 collect 내부 self-heal 담당.
+            note = f"cap_reached active={active_reg} pending={pool_pending}"
+            pool.set_escalation(cid, level, dry_streak, floor, last_added, note)
+            return {"level": level, "dry_streak": dry_streak, "relevance_floor": floor,
+                    "headroom": headroom, "run_topup": False, "note": note,
+                    "next_lever": _fill_next_lever(level)}
+
+        if last_added >= _FILL_FRESH_OK:
+            # 생산적 — 값싼 BFS 로 복귀(de-escalate), floor 복원.
+            dry_streak = 0
+            level = max(0, level - 1)
+            floor = min(_FILL_FLOOR_START, floor + 5)
+            note = f"productive added={last_added} → level={level}"
+        else:
+            dry_streak += 1
+            if dry_streak >= _FILL_DRY_ESCALATE_AFTER:
+                dry_streak = 0
+                if level < _FILL_MAX_LEVEL:
+                    level += 1
+                elif floor > _FILL_FLOOR_MIN:
+                    floor = max(_FILL_FLOOR_MIN, floor - 5)  # 최상단: 관련성 순서로 하강 지속
+                note = f"dry added={last_added} → escalate level={level} floor={floor}"
+            else:
+                note = f"dry added={last_added} streak={dry_streak}"
+
+        pool.set_escalation(cid, level, dry_streak, floor, last_added, note)
+        # 레벨 ≥ 1 이면 마른우물이 아니어도 LLM 앵글 topup 발동 (기존 <10 트리거보다 공격적).
+        run_topup = (level >= 1) or (last_added < 10)
+        return {"level": level, "dry_streak": dry_streak, "relevance_floor": floor,
+                "headroom": headroom, "run_topup": run_topup, "note": note,
+                "next_lever": _fill_next_lever(level)}
+    except Exception as e:
+        logger.warning(f"[pool/fill] escalation decide 실패 cid={cid}: {e}")
+        return {"level": 0, "dry_streak": 0, "relevance_floor": _FILL_FLOOR_START,
+                "headroom": None, "run_topup": None, "note": f"error:{e}",
+                "next_lever": _fill_next_lever(0)}
+
+
 async def _run_pool_workers_for_accounts(pairs: List[Tuple[int, int]]):
     """B 시나리오 — (user_id, customer_id) 페어별로 collect+register+inspect.
     한 사용자 여러 광고주를 가진 경우 광고주마다 독립적으로 워커 실행.
     inspect 는 register 와 분리 실행 — register 의 pending=0 early return 누수 차단."""
     pool = get_keyword_pool_db()
-    AI_TOPUP_TRIGGER_THRESHOLD = 10  # 직전 collect added < N 이면 AI 시드 확장 트리거
+    AI_TOPUP_TRIGGER_THRESHOLD = 10  # 컨트롤러 실패 시 폴백용 — 직전 collect added < N 이면 topup
     for uid, cid in pairs:
         try:
             await _run_pool_collect(uid, customer_id=cid)
@@ -5521,19 +5640,28 @@ async def _run_pool_workers_for_accounts(pairs: List[Tuple[int, int]]):
             except Exception:
                 pass
 
-        # AI 시드 자동 확장 — 직전 collect 가 마른 우물이면 LLM 으로 새 시드 주입.
-        # cooldown / daily cap 은 _run_pool_ai_seed_topup 내부에서 관리.
-        try:
-            recent = pool.recent_runs(cid, limit=3) or []
-            last_collect = next((r for r in recent if r.get("kind") == "collect"), None)
-            last_added = int(last_collect.get("added") or 0) if last_collect else 0
-            if last_added < AI_TOPUP_TRIGGER_THRESHOLD:
+        # 채우기 에스컬레이션 컨트롤러 — 레벨 갱신 + 이번 tick 오퍼레이터 결정.
+        # LLM 앵글 topup(cooldown/daily cap 내장)을 레벨 기반으로 발동. 컨트롤러 실패 시
+        # 기존 "마른 우물(<10)" 휴리스틱으로 폴백해 안전망 유지.
+        decision = await _fill_escalation_decide(uid, cid)
+        do_topup = decision.get("run_topup")
+        if do_topup is None:
+            try:
+                recent = pool.recent_runs(cid, limit=3) or []
+                lc = next((r for r in recent if r.get("kind") == "collect"), None)
+                do_topup = (int(lc.get("added") or 0) if lc else 0) < AI_TOPUP_TRIGGER_THRESHOLD
+            except Exception:
+                do_topup = False
+        if do_topup:
+            try:
                 logger.warning(
-                    f"[pool/run] uid={uid} cid={cid} 마른 우물 (last collect added={last_added}) → AI top-up 트리거"
+                    f"[pool/fill] uid={uid} cid={cid} level={decision.get('level')} "
+                    f"floor={decision.get('relevance_floor')} headroom={decision.get('headroom')} "
+                    f"→ LLM 앵글 topup ({decision.get('note')})"
                 )
                 await _run_pool_ai_seed_topup(uid, cid)
-        except Exception as e:
-            logger.error(f"[pool/run] ai-topup 실패 user={uid} cid={cid}: {e}", exc_info=True)
+            except Exception as e:
+                logger.error(f"[pool/run] ai-topup 실패 user={uid} cid={cid}: {e}", exc_info=True)
 
         try:
             await _run_pool_register(uid, customer_id=cid)
@@ -6925,6 +7053,59 @@ async def keyword_pool_ai_cleanup_preview_first(
     return res
 
 
+@router.get("/keyword-pool/diagnostics/fill-progress")
+async def keyword_pool_fill_progress(
+    user_id: int = Depends(get_user_id_with_fallback),
+    customer_id: Optional[str] = Query(None),
+):
+    """10만 자동채우기 진행/에스컬레이션 상태 — 계정별 레벨·마른streak·관련성floor·다음레버.
+    '왜 5.2만에서 안 늘지?' 를 한눈에 보고 어떤 레버가 다음에 열리는지 확인하는 진단 패널."""
+    from database.naver_ad_db import list_ad_accounts_for_user, get_ad_account_by_customer
+    pool = get_keyword_pool_db()
+    reg = get_registered_keywords_db()
+
+    if customer_id:
+        acct = get_ad_account_by_customer(user_id, str(customer_id))
+        accounts = [acct] if acct else []
+    else:
+        accounts = list_ad_accounts_for_user(user_id) or []
+
+    out: List[Dict[str, Any]] = []
+    for a in accounts:
+        if not a or not a.get("customer_id"):
+            continue
+        cid = int(a.get("customer_id"))
+        try:
+            active = int((reg.stats(cid) or {}).get("active") or 0)
+        except Exception:
+            active = 0
+        by_status = (pool.stats(cid) or {}).get("by_status") or {}
+        pending = int(by_status.get("pending") or 0)
+        st = pool.get_escalation(cid)
+        recent = pool.recent_runs(cid, limit=12) or []
+        collect_added = [int(r.get("added") or 0) for r in recent if r.get("kind") == "collect"][:5]
+        level = int(st.get("level") or 0)
+        headroom = _FILL_CAP - active - pending
+        out.append({
+            "customer_id": str(cid),
+            "name": a.get("name"),
+            "active_registered": active,
+            "pending": pending,
+            "cap": _FILL_CAP,
+            "headroom": headroom,
+            "fill_pct": round((active + pending) / _FILL_CAP * 100, 1),
+            "level": level,
+            "level_label": _FILL_LEVEL_LABELS.get(level, str(level)),
+            "dry_streak": int(st.get("dry_streak") or 0),
+            "relevance_floor": int(st.get("relevance_floor") or _FILL_FLOOR_START),
+            "recent_collect_added": collect_added,
+            "next_lever": _fill_next_lever(level),
+            "last_note": st.get("note"),
+            "updated_at": st.get("updated_at"),
+        })
+    return {"success": True, "cap": _FILL_CAP, "accounts": out}
+
+
 @router.get("/keyword-pool/diagnostics/scheduler-jobs")
 def keyword_pool_scheduler_diagnostics():
     """APScheduler 등록 cron + 다음 실행 시각 — cron 살아있는지 즉시 확인. sync def."""
@@ -8284,6 +8465,364 @@ async def keyword_pool_clicked_bid_adjust(
         import traceback
         logger.error(f"clicked-bid-adjust 실패: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
+
+
+# 클릭 전수 census 진행상태 (cid -> 상태/결과 dict). 워커 1개 가정.
+_CLICK_CENSUS_STATUS: Dict[int, dict] = {}
+
+
+def _census_path(cid: int) -> str:
+    return f"/data/_click_census_{cid}.json"
+
+
+def _census_load(cid: int) -> Optional[dict]:
+    import json as _json
+    try:
+        with open(_census_path(cid), "r", encoding="utf-8") as f:
+            return _json.load(f)
+    except Exception:
+        return None
+
+
+def _census_summarize(doc: dict) -> dict:
+    """저장 doc(items_full 포함) → 가벼운 status 요약 + 상위 샘플."""
+    items = doc.get("items_full") or []
+    off = [i for i in items if i.get("verdict") != "on_domain"]
+    on = [i for i in items if i.get("verdict") == "on_domain"]
+    off.sort(key=lambda x: (x.get("verdict") != "off_by_negative", -int(x.get("cost") or 0)))
+    on.sort(key=lambda x: -int(x.get("cost") or 0))
+    cb = list(doc.get("campaign_breakdown") or [])
+    cb.sort(key=lambda x: -int(x.get("cost") or 0))
+    return {
+        "state": doc.get("state"), "phase": doc.get("phase"),
+        "days": doc.get("days"), "min_clicks": doc.get("min_clicks"),
+        "plan_built_at": doc.get("plan_built_at"),
+        "campaigns_total": doc.get("campaigns_total"),
+        "campaigns_clicked": doc.get("campaigns_clicked"),
+        "groups_scanned": doc.get("groups_scanned"),
+        "groups_clicked": doc.get("groups_clicked"),
+        "groups_processed": len(doc.get("processed_group_ids") or []),
+        "clicked_keywords_total": len(items),
+        "on_domain": len(on), "off_domain_total": len(off),
+        "off_by_negative": sum(1 for i in items if i.get("verdict") == "off_by_negative"),
+        "off_no_ondomain": sum(1 for i in items if i.get("verdict") == "off_no_ondomain"),
+        "total_cost": sum(int(i.get("cost") or 0) for i in items),
+        "cost_off_domain": sum(int(i.get("cost") or 0) for i in off),
+        "cost_on_domain": sum(int(i.get("cost") or 0) for i in on),
+        "campaign_breakdown": cb[:200],
+        "off_domain_keywords": off[:500],
+        "on_domain_top_cost": on[:100],
+        "error": doc.get("error"), "breaker_open": doc.get("breaker_open"),
+    }
+
+
+@router.post("/keyword-pool/diagnostics/clicked-census-bg")
+async def keyword_pool_clicked_census_bg(
+    background_tasks: BackgroundTasks,
+    days: int = 7,
+    min_clicks: int = 1,
+    force: bool = False,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """clicked-off-domain 의 **백그라운드 + 재시작내성 + 재개** 버전.
+    소잠(그룹 ~4천, 후보키워드 ~6만) 같은 큰 계정은 네이버 /stats 단일ID·저속 때문에
+    per-ID 전수 stat 이 ~80분+ 걸려 (a) HTTP 타임아웃 (b) fly 재배포/재시작 시 유실된다.
+    이 버전은:
+      · 캠페인 stat 후 **예산 브레이크다운을 즉시 /data 파일에 저장**(20~30초 내 예산답 확정)
+      · 클릭 그룹을 **비용 큰 순으로 정렬**해 낭비 큰 곳부터 키워드 stat
+      · 그룹 배치마다 부분결과를 파일에 **증분 저장**(재시작해도 부분결과 상시 조회 가능)
+      · 재호출 시 **처리한 그룹은 건너뛰고 이어서 진행(resume)** — plan 6h 캐시.
+    force=true 면 처음부터. 진행/결과: GET .../clicked-census-bg/status?customer_id="""
+    from services.naver_ad_service import NaverAdApiClient, _stats_breaker, NaverApiCircuitOpenError
+    from datetime import datetime, timedelta
+    from collections import defaultdict as _dd
+    import json as _json
+
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+
+    prev = _CLICK_CENSUS_STATUS.get(cid)
+    if prev and prev.get("state") == "running":
+        return {"success": True, "already_running": True, "customer_id": cid,
+                "status": {k: prev.get(k) for k in ("state", "phase", "groups_clicked",
+                           "groups_processed", "clicked_keywords_total")},
+                "message": "이미 census 진행 중 — status 로 확인"}
+
+    ON = _SOJAM_ON_TOKENS
+    OFF = _SOJAM_OFF_TOKENS
+
+    def _as_list(x):
+        if isinstance(x, list):
+            return x
+        if isinstance(x, dict):
+            return x.get("data") or x.get("list") or []
+        return []
+
+    def _clk(stats):
+        for s in (stats or []):
+            try:
+                return int(s.get("clkCnt", 0) or 0)
+            except Exception:
+                return 0
+        return 0
+
+    # 재개용 저장 doc 로드
+    doc = None if force else _census_load(cid)
+    if doc and doc.get("state") == "done" and doc.get("days") == days \
+            and doc.get("min_clicks") == min_clicks:
+        return {"success": True, "already_done": True, "customer_id": cid,
+                "message": "완료된 census 존재 — status 로 결과 확인 (force=true 로 재실행)"}
+
+    st = {
+        "state": "running", "phase": "init", "days": days, "min_clicks": min_clicks,
+        "campaigns_total": 0, "campaigns_clicked": 0,
+        "groups_scanned": 0, "groups_clicked": 0, "groups_processed": 0,
+        "clicked_keywords_total": 0, "error": None, "breaker_open": False,
+    }
+    _CLICK_CENSUS_STATUS[cid] = st
+
+    async def _do():
+        try:
+            client = NaverAdApiClient()
+            client.customer_id = account["customer_id"]
+            client.api_key = account["api_key"]
+            client.secret_key = account["secret_key"]
+            end_date = datetime.now().strftime("%Y-%m-%d")
+            start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+            sem = asyncio.Semaphore(4)
+
+            async def _stat(_id):
+                # ★정합성: breaker 열림 시 skip(=키워드 누락) 하지 않고 닫힐 때까지 대기·재시도.
+                # get_stats 는 예외/breaker 를 삼키고 [] 반환하므로, 빈 결과가 breaker 탓인지
+                # 실제 무실적인지 breaker 상태로 구분해 재시도한다(진짜 무실적만 [] 확정).
+                for _att in range(240):
+                    while _stats_breaker.is_open():
+                        await asyncio.sleep(3)
+                    async with sem:
+                        try:
+                            r = await client.get_stats(stat_type="", ids=[_id],
+                                                       start_date=start_date, end_date=end_date) or []
+                        except NaverApiCircuitOpenError:
+                            r = []
+                        except Exception:
+                            return []  # 이 id 실제 오류 — 포기(드묾)
+                    if r:
+                        return r
+                    if _stats_breaker.is_open():
+                        await asyncio.sleep(3)
+                        continue
+                    return []  # breaker 안 열렸는데 빈 결과 = 진짜 무실적
+                return []
+
+            # ── 재개 판단: 최근(<6h) plan 이 같은 days/min_clicks 면 재사용 ──
+            reuse = None
+            if doc and not force and doc.get("days") == days and doc.get("min_clicks") == min_clicks:
+                try:
+                    built = datetime.fromisoformat(doc.get("plan_built_at"))
+                    if (datetime.now() - built).total_seconds() < 6 * 3600 and doc.get("plan"):
+                        reuse = doc
+                except Exception:
+                    reuse = None
+
+            if reuse:
+                plan = reuse["plan"]
+                clicked_groups_cost = [tuple(x) for x in plan["clicked_groups"]]  # [(gid,cost)]
+                gid_to_camp = plan["gid_to_camp"]
+                camp_meta = plan["camp_meta"]
+                camp_break = reuse.get("campaign_breakdown") or []
+                processed = set(reuse.get("processed_group_ids") or [])
+                items = list(reuse.get("items_full") or [])
+                plan_built_at = reuse.get("plan_built_at")
+                st["campaigns_total"] = reuse.get("campaigns_total") or 0
+                st["campaigns_clicked"] = reuse.get("campaigns_clicked") or 0
+                st["groups_scanned"] = reuse.get("groups_scanned") or 0
+                st["groups_clicked"] = len(clicked_groups_cost)
+                st["phase"] = "resume_keyword_stats"
+            else:
+                # 1) 캠페인 전수 stat → 예산 브레이크다운
+                st["phase"] = "campaigns"
+                camps = [c for c in _as_list(await client.get_campaigns() or []) if c.get("nccCampaignId")]
+                st["campaigns_total"] = len(camps)
+                st["phase"] = "campaign_stats"
+                camp_stats = await asyncio.gather(*[_stat(c["nccCampaignId"]) for c in camps])
+                camp_break = []
+                clicked_camps = []
+                camp_meta = {}
+                for c, s in zip(camps, camp_stats):
+                    s0 = (s or [None])[0] or {}
+                    try:
+                        clk = int(s0.get("clkCnt", 0) or 0)
+                    except Exception:
+                        clk = 0
+                    cost = int(s0.get("salesAmt", 0) or 0)
+                    cmid = c["nccCampaignId"]
+                    camp_meta[cmid] = {"name": c.get("name")}
+                    camp_break.append({
+                        "campaign_id": cmid, "name": c.get("name"),
+                        "campaignTp": c.get("campaignTp"),
+                        "dailyBudget": c.get("dailyBudget"), "useDailyBudget": c.get("useDailyBudget"),
+                        "clicks": clk, "cost": cost, "impressions": int(s0.get("impCnt", 0) or 0),
+                    })
+                    if clk >= min_clicks:
+                        clicked_camps.append(c)
+                st["campaigns_clicked"] = len(clicked_camps)
+                # 예산답은 여기서 이미 확정 — 즉시 저장(빠른 예산답 + 재시작내성)
+                plan_built_at = datetime.now().isoformat()
+                try:
+                    with open(_census_path(cid), "w", encoding="utf-8") as _f:
+                        _json.dump({"state": "running", "phase": "campaign_done",
+                                    "days": days, "min_clicks": min_clicks,
+                                    "plan_built_at": plan_built_at,
+                                    "campaigns_total": st["campaigns_total"],
+                                    "campaigns_clicked": st["campaigns_clicked"],
+                                    "groups_scanned": 0, "groups_clicked": 0,
+                                    "campaign_breakdown": camp_break,
+                                    "processed_group_ids": [], "items_full": [],
+                                    "breaker_open": _stats_breaker.is_open(),
+                                    "error": None, "plan": None}, _f, ensure_ascii=False)
+                except Exception:
+                    pass
+
+                async def _fg(cmid):
+                    async with sem:
+                        try:
+                            gs = _as_list(await client.get_ad_groups(campaign_id=cmid) or [])
+                            return cmid, [g["nccAdgroupId"] for g in gs if g.get("nccAdgroupId")]
+                        except Exception:
+                            return cmid, []
+
+                st["phase"] = "groups"
+                fg_res = await asyncio.gather(*[_fg(c["nccCampaignId"]) for c in clicked_camps])
+                gid_to_camp = {}
+                all_groups = []
+                for cmid, gids in fg_res:
+                    for g in gids:
+                        gid_to_camp[g] = cmid
+                        all_groups.append(g)
+                st["groups_scanned"] = len(all_groups)
+                st["phase"] = "group_stats"
+                grp_stats = await asyncio.gather(*[_stat(g) for g in all_groups])
+                clicked_groups_cost = sorted(
+                    [(g, int(((s or [None])[0] or {}).get("salesAmt", 0) or 0))
+                     for g, s in zip(all_groups, grp_stats) if _clk(s) >= min_clicks],
+                    key=lambda x: -x[1])  # 비용 큰 그룹부터
+                st["groups_clicked"] = len(clicked_groups_cost)
+                processed = set()
+                items = []
+
+            def _save(state_val):
+                st["state"] = state_val
+                st["breaker_open"] = _stats_breaker.is_open()
+                st["clicked_keywords_total"] = len(items)
+                st["groups_processed"] = len(processed)
+                doc_out = {
+                    "state": state_val, "phase": st["phase"], "days": days, "min_clicks": min_clicks,
+                    "plan_built_at": plan_built_at,
+                    "campaigns_total": st["campaigns_total"], "campaigns_clicked": st["campaigns_clicked"],
+                    "groups_scanned": st["groups_scanned"], "groups_clicked": st["groups_clicked"],
+                    "campaign_breakdown": camp_break,
+                    "processed_group_ids": list(processed),
+                    "items_full": items,
+                    "breaker_open": st["breaker_open"], "error": st.get("error"),
+                    "plan": {"clicked_groups": [list(x) for x in clicked_groups_cost],
+                             "gid_to_camp": gid_to_camp, "camp_meta": camp_meta},
+                }
+                try:
+                    with open(_census_path(cid), "w", encoding="utf-8") as f:
+                        _json.dump(doc_out, f, ensure_ascii=False)
+                except Exception as fe:
+                    logger.warning(f"[clicked-census-bg] 저장 실패: {fe}")
+
+            # 예산 브레이크다운 즉시 저장
+            st["phase"] = st.get("phase") or "keyword_stats"
+            _save("running")
+
+            async def _fk(gid):
+                async with sem:
+                    try:
+                        ks = _as_list(await client.get_keywords(ad_group_id=gid) or [])
+                        return [(k.get("nccKeywordId"), k.get("keyword"), gid)
+                                for k in ks if k.get("nccKeywordId") and k.get("keyword")]
+                    except Exception:
+                        return []
+
+            # 2) 남은 클릭 그룹을 비용순으로 배치 처리 (배치마다 증분 저장)
+            st["phase"] = "keyword_stats"
+            remaining = [gc for gc in clicked_groups_cost if gc[0] not in processed]
+            BATCH = 8
+            for bi in range(0, len(remaining), BATCH):
+                chunk = [gc[0] for gc in remaining[bi:bi + BATCH]]
+                fk_res = await asyncio.gather(*[_fk(g) for g in chunk])
+                triples = [t for sub in fk_res for t in sub]
+                kw_stats = await asyncio.gather(*[_stat(nid) for nid, _, _ in triples])
+                for (nid, txt, gid), s in zip(triples, kw_stats):
+                    s0 = (s or [None])[0] or {}
+                    try:
+                        clk = int(s0.get("clkCnt", 0) or 0)
+                    except Exception:
+                        clk = 0
+                    if clk < min_clicks:
+                        continue
+                    t = (txt or "").replace(" ", "")
+                    if any(n in t for n in OFF):
+                        verdict = "off_by_negative"
+                    elif not any(o in t for o in ON):
+                        verdict = "off_no_ondomain"
+                    else:
+                        verdict = "on_domain"
+                    cmid = gid_to_camp.get(gid)
+                    items.append({
+                        "keyword_id": nid, "keyword": txt, "clicks": clk,
+                        "impressions": int(s0.get("impCnt", 0) or 0),
+                        "cost": int(s0.get("salesAmt", 0) or 0),
+                        "ctr": float(s0.get("ctr", 0) or 0), "cpc": int(s0.get("cpc", 0) or 0),
+                        "campaign": (camp_meta.get(cmid) or {}).get("name"),
+                        "verdict": verdict,
+                    })
+                processed.update(chunk)
+                _save("running")
+
+            _save("done")
+            logger.warning(
+                f"[clicked-census-bg] cid={cid} DONE camps={st['campaigns_total']}/{st['campaigns_clicked']} "
+                f"grps={st['groups_clicked']} clicked_kw={len(items)}"
+            )
+        except Exception as e:
+            st["state"] = "error"
+            st["error"] = f"{type(e).__name__}: {str(e)[:200]}"
+            logger.error(f"[clicked-census-bg] cid={cid} 실패: {e}", exc_info=True)
+
+    background_tasks.add_task(_do)
+    return {"success": True, "started": True, "customer_id": cid, "days": days,
+            "min_clicks": min_clicks, "resuming": bool(doc and not force),
+            "message": "클릭 census 백그라운드 시작(증분저장·재개) — status 로 진행/결과 확인"}
+
+
+@router.get("/keyword-pool/diagnostics/clicked-census-bg/status")
+async def keyword_pool_clicked_census_bg_status(
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """클릭 census 진행상태/결과 조회. 인메모리 없으면(재시작 등) /data 파일에서 복구."""
+    account = _resolve_account(user_id, customer_id)
+    if not account:
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+    mem = _CLICK_CENSUS_STATUS.get(cid)
+    doc = _census_load(cid)
+    if doc is not None:
+        summary = _census_summarize(doc)
+        # 인메모리가 running 이면 진행 phase 를 덮어써 최신 반영
+        if mem and mem.get("state") == "running":
+            summary["state"] = "running"
+            summary["phase"] = mem.get("phase")
+            summary["groups_processed"] = mem.get("groups_processed", summary.get("groups_processed"))
+        return {"success": True, "customer_id": cid, "source": "file", "status": summary}
+    return {"success": True, "customer_id": cid, "source": "memory",
+            "status": mem or {"state": "none"}}
 
 
 class BulkDeleteKeywordsRequest(BaseModel):
