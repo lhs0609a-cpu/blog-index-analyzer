@@ -3137,8 +3137,8 @@ async def _run_pool_collect(uid: int, customer_id: Optional[int] = None, max_new
 
     # L2 조합 생성 — 지역·의도 수식어 × 머리어(시드) 로 새 hint 생성해 keywordstool
     # 폐포를 깬다. 같은 시드 반복 호출이 같은 결과만 돌려주는 유리천장 돌파의 핵심.
-    # 발동: 포화 감지(기존) 또는 에스컬레이션 level≥2. level<2 이고 미포화면 오늘과 동일.
-    if saturated or _esc_level >= 2:
+    # 발동: 포화 감지(기존) 또는 에스컬레이션 floor 하강 중(_esc_floor<50). 미포화·floor50이면 오늘과 동일.
+    if saturated or _esc_floor < 50:
         # 전국 시/도·주요 시 + 구매의도 수식어 — level≥2 면 조합 폭을 넓힌다.
         EXPANSION_AFFIXES = [
             "강남", "서울", "부산", "대구", "인천", "경기", "대전", "광주", "울산",
@@ -5585,34 +5585,37 @@ async def _fill_escalation_decide(uid: int, cid: int) -> Dict[str, Any]:
         floor = int(st.get("relevance_floor") or _FILL_FLOOR_START)
 
         if headroom <= 0:
-            # 이미 10만 도달 — 레벨 유지, 물갈이는 collect 내부 self-heal 담당.
+            # 이미 10만 도달 — floor 유지, 물갈이는 collect 내부 self-heal 담당.
             note = f"cap_reached active={active_reg} pending={pool_pending}"
+            level = (_FILL_FLOOR_START - floor) // 5
             pool.set_escalation(cid, level, dry_streak, floor, last_added, note)
             return {"level": level, "dry_streak": dry_streak, "relevance_floor": floor,
                     "headroom": headroom, "run_topup": False, "note": note,
                     "next_lever": _fill_next_lever(level)}
 
+        # 압축 사다리 — 레벨 5칸 대기 없이 관련성 floor 를 직접 조절.
+        # L2 조합·L3 자동완성·seed_amplify 는 이미 독립 cron 으로 상시 실행되므로,
+        # 컨트롤러의 고유 역할은 "그래도 마르면 관련성 floor 를 낮춰 롱테일 흡수".
+        # collect 는 계정당 ~30분에 한 번 도므로, 매 dry collect 마다 floor 1스텝 하강해야
+        # 몇 시간 안에 floor 25 까지 도달(레벨 climb 대기 제거).
         if last_added >= _FILL_FRESH_OK:
-            # 생산적 — 값싼 BFS 로 복귀(de-escalate), floor 복원.
+            # 생산적 — floor 를 서서히 복원(관련성 회복), dry 리셋.
             dry_streak = 0
-            level = max(0, level - 1)
             floor = min(_FILL_FLOOR_START, floor + 5)
-            note = f"productive added={last_added} → level={level}"
+            note = f"productive added={last_added} floor={floor}"
         else:
             dry_streak += 1
-            if dry_streak >= _FILL_DRY_ESCALATE_AFTER:
-                dry_streak = 0
-                if level < _FILL_MAX_LEVEL:
-                    level += 1
-                elif floor > _FILL_FLOOR_MIN:
-                    floor = max(_FILL_FLOOR_MIN, floor - 5)  # 최상단: 관련성 순서로 하강 지속
-                note = f"dry added={last_added} → escalate level={level} floor={floor}"
+            if dry_streak >= _FILL_DRY_ESCALATE_AFTER and floor > _FILL_FLOOR_MIN:
+                # 2회 이상 연속 마름 → 매 dry 라운드 floor 5씩 하강(50→25).
+                floor = max(_FILL_FLOOR_MIN, floor - 5)
+                note = f"dry x{dry_streak} → floor↓ {floor}"
             else:
-                note = f"dry added={last_added} streak={dry_streak}"
+                note = f"dry added={last_added} streak={dry_streak} floor={floor}"
 
+        level = (_FILL_FLOOR_START - floor) // 5   # 0(floor50)..5(floor25) 표시용
         pool.set_escalation(cid, level, dry_streak, floor, last_added, note)
-        # 레벨 ≥ 1 이면 마른우물이 아니어도 LLM 앵글 topup 발동 (기존 <10 트리거보다 공격적).
-        run_topup = (level >= 1) or (last_added < 10)
+        # 마르기 시작하면(또는 floor 하강 중) LLM 앵글 topup 발동.
+        run_topup = (dry_streak >= 1) or (floor < _FILL_FLOOR_START)
         return {"level": level, "dry_streak": dry_streak, "relevance_floor": floor,
                 "headroom": headroom, "run_topup": run_topup, "note": note,
                 "next_lever": _fill_next_lever(level)}
