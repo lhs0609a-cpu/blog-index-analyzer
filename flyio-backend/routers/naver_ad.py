@@ -14314,6 +14314,49 @@ async def keyword_pool_inspect_regional_target(
             "results": results}
 
 
+class NaverRawRequest(BaseModel):
+    customer_id: Optional[str] = None
+    method: str = Field("GET", description="GET|POST|PUT|DELETE")
+    path: str = Field(..., description="네이버 API 경로. /ncc/ 로 시작해야 함 (예: /ncc/targets)")
+    body: Optional[dict] = Field(None, description="요청 body(JSON)")
+
+
+@router.post("/keyword-pool/debug/naver-raw")
+async def keyword_pool_debug_naver_raw(
+    request: NaverRawRequest,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """진단 전용 — 네이버 SearchAd API 를 직접 호출하고 원본 응답/에러를 반환.
+
+    지역타게팅(REGIONAL_TARGET) 생성 경로를 찾기 위해 추가. 광고그룹 PUT 은
+    기존 타겟 수정만 되고 신규 생성은 200 OK 로 조용히 무시되기 때문에
+    /ncc/targets 등 다른 경로를 재배포 없이 탐색해야 한다.
+
+    경로는 /ncc/ 하위로 제한(계정 자격증명은 서버가 보유, 호출자가 지정 불가).
+    """
+    from services.naver_ad_service import NaverAdApiClient
+    account = _resolve_account(user_id, request.customer_id or customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    path = (request.path or "").strip()
+    if not path.startswith("/ncc/"):
+        raise HTTPException(status_code=400, detail="path 는 /ncc/ 로 시작해야 함")
+    method = (request.method or "GET").upper()
+    if method not in ("GET", "POST", "PUT", "DELETE"):
+        raise HTTPException(status_code=400, detail="method 불가")
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+    try:
+        resp = await client._request(method, path, request.body)
+        return {"success": True, "method": method, "path": path, "response": resp}
+    except Exception as e:
+        return {"success": False, "method": method, "path": path,
+                "error": f"{type(e).__name__}: {str(e)[:1000]}"}
+
+
 class DebugRegionalTargetRequest(BaseModel):
     customer_id: Optional[str] = None
     adgroup_id: str = Field(..., description="대상 광고그룹 nccAdgroupId")
