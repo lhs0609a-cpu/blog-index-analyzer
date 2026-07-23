@@ -14187,6 +14187,133 @@ async def keyword_pool_campaigns_rename_by_region(
             "message": "백그라운드 개명 시작. fly logs 의 [rename-region] 라인에서 확인."}
 
 
+@router.get("/keyword-pool/business-channels")
+async def keyword_pool_list_business_channels(
+    customer_id: Optional[str] = None,
+    channel_tp: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """READ-ONLY. 계정 비즈채널 목록 — 지점 플레이스 채널의 **주소**를 뽑는 용도.
+    반경(km) 지역타게팅은 중심 주소가 필요한데, 지점 주소가 여기 들어있다.
+    channel_tp 로 필터(예: PLACE / SITE / PHONE)."""
+    from services.naver_ad_service import NaverAdApiClient
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+    try:
+        chans = await client.list_business_channels() or []
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"비즈채널 조회 실패: {str(e)[:200]}")
+    if isinstance(chans, dict):
+        chans = chans.get("data") or chans.get("list") or []
+    out = []
+    for ch in chans:
+        if not isinstance(ch, dict):
+            continue
+        tp = ch.get("channelTp") or ch.get("businessChannelTp")
+        if channel_tp and tp != channel_tp:
+            continue
+        out.append({k: v for k, v in ch.items() if k not in ("customerId",)})
+    from collections import Counter
+    return {"success": True, "customer_id": int(account["customer_id"]),
+            "total": len(out),
+            "by_tp": dict(Counter((c.get("channelTp") or c.get("businessChannelTp")) for c in out)),
+            "channels": out}
+
+
+class InspectRegionalTargetRequest(BaseModel):
+    customer_id: Optional[str] = None
+    campaign_name_contains: Optional[str] = Field(None, description="특정 캠페인명 부분일치만 조회(예: '강남')")
+    groups_per_campaign: int = Field(2, description="캠페인당 조회할 광고그룹 수(샘플)")
+    max_campaigns: int = Field(80)
+    raw: bool = Field(False, description="true=REGIONAL_TARGET 원본 JSON 그대로(코드체계 역공학용)")
+
+
+@router.post("/keyword-pool/adgroups/inspect-regional-target")
+async def keyword_pool_inspect_regional_target(
+    request: InspectRegionalTargetRequest,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """READ-ONLY. 광고그룹에 **실제로 걸려있는** REGIONAL_TARGET 을 조회.
+
+    set-regional-target 의 dry_run 은 '계획'만 보여줘서 실제 적용 여부를 알 수 없다.
+    본 엔드포인트는 GET /ncc/adgroups/{id}/targets 를 실호출해 현재 상태를 확인한다.
+    raw=true 면 원본 JSON 을 그대로 반환 — 읍/면/동 코드나 주소기준 반경(km) 타게팅이
+    어떤 스키마로 저장되는지 역공학하는 용도(UI 로 한 그룹 설정 후 읽어보면 됨).
+    """
+    from services.naver_ad_service import NaverAdApiClient
+    account = _resolve_account(user_id, request.customer_id or customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    def _as_list(x):
+        if isinstance(x, list):
+            return x
+        if isinstance(x, dict):
+            return x.get("data") or x.get("list") or []
+        return []
+
+    camps = [c for c in _as_list(await client.get_campaigns() or [])
+             if (c.get("campaignTp") or "") == "WEB_SITE"]
+    if request.campaign_name_contains:
+        needle = request.campaign_name_contains.strip()
+        camps = [c for c in camps if needle in (c.get("name") or "")]
+    camps = camps[: int(request.max_campaigns)]
+
+    sem = asyncio.Semaphore(5)
+
+    async def _one(camp):
+        async with sem:
+            try:
+                groups = _as_list(await client.get_ad_groups(campaign_id=camp.get("nccCampaignId")) or [])
+            except Exception as e:
+                return {"campaign": camp.get("name"), "error": f"adgroups: {str(e)[:120]}"}
+            out = []
+            for g in groups[: int(request.groups_per_campaign)]:
+                gid = g.get("nccAdgroupId")
+                if not gid:
+                    continue
+                try:
+                    tmap = await client.get_ad_group_targets(gid) or {}
+                except Exception as e:
+                    out.append({"adgroup": g.get("name"), "id": gid, "error": str(e)[:120]})
+                    continue
+                if isinstance(tmap, list):
+                    tmap = {t.get("targetTp"): t for t in tmap if isinstance(t, dict)}
+                reg = tmap.get("REGIONAL_TARGET") if isinstance(tmap, dict) else None
+                loc = ((reg or {}).get("target") or {}).get("location") or {}
+                kr = loc.get("KR")
+                item = {"adgroup": g.get("name"), "id": gid,
+                        "has_regional_target": bool(reg),
+                        "kr_codes": kr,
+                        "kr_count": len(kr) if isinstance(kr, list) else None,
+                        "targetTps": sorted(tmap.keys()) if isinstance(tmap, dict) else None}
+                if request.raw:
+                    item["raw_regional"] = reg
+                out.append(item)
+            return {"campaign": camp.get("name"), "campaign_id": camp.get("nccCampaignId"),
+                    "groups_checked": len(out), "groups": out}
+
+    results = await asyncio.gather(*[_one(c) for c in camps])
+    targeted = sum(1 for r in results for g in (r.get("groups") or []) if g.get("has_regional_target"))
+    total_g = sum(len(r.get("groups") or []) for r in results)
+    return {"success": True, "customer_id": int(account["customer_id"]),
+            "campaigns_checked": len(results),
+            "adgroups_checked": total_g,
+            "adgroups_with_regional_target": targeted,
+            "adgroups_without": total_g - targeted,
+            "results": results}
+
+
 class SetRegionalTargetRequest(BaseModel):
     customer_id: Optional[str] = None
     only_branch: bool = Field(True, description="지점 캠페인(확정 지역)만 타겟 설정(권장). false=풀/롱테일도 추정지역으로")
