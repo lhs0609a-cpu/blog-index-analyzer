@@ -14314,6 +14314,100 @@ async def keyword_pool_inspect_regional_target(
             "results": results}
 
 
+class DebugRegionalTargetRequest(BaseModel):
+    customer_id: Optional[str] = None
+    adgroup_id: str = Field(..., description="대상 광고그룹 nccAdgroupId")
+    kr_codes: List[str] = Field(default_factory=list, description="시/도·시군구·읍면동 코드 배열. 빈배열=해제")
+    fields: str = Field("targetLocation", description="PUT fields 파라미터. 예: 'targetLocation' / 'targetLocation,targetMedia,targetTime'")
+    include_all_targets: bool = Field(False, description="true=기존 모든 타겟(MEDIA/PC_MOBILE 등)을 targets 배열에 함께 전송")
+    echo_adgroup: bool = Field(False, description="true=광고그룹 원본 body 를 통째로 echo 하고 targets 만 교체(full replace)")
+    raw_target: Optional[dict] = Field(None, description="지정 시 target 객체를 이 값으로 그대로 사용(반경 스키마 실험용)")
+
+
+@router.post("/keyword-pool/adgroups/debug-regional-target")
+async def keyword_pool_debug_regional_target(
+    request: DebugRegionalTargetRequest,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """진단 전용 — 광고그룹 1개에 REGIONAL_TARGET 을 **동기적으로** 설정하고
+    네이버 원본 응답/에러를 그대로 반환. set-regional-target 이 백그라운드라
+    실패 원인이 로그에 묻히는 문제 때문에 추가.
+
+    fields / include_all_targets / echo_adgroup / raw_target 조합을 바꿔가며
+    어떤 방식이 실제로 먹히는지 실험할 수 있다(재배포 없이).
+    """
+    from services.naver_ad_service import NaverAdApiClient
+    account = _resolve_account(user_id, request.customer_id or customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+    gid = request.adgroup_id
+
+    out: Dict[str, Any] = {"adgroup_id": gid, "fields": request.fields}
+
+    # 1) 기존 타겟 조회
+    try:
+        tmap = await client.get_ad_group_targets(gid) or {}
+    except Exception as e:
+        return {"success": False, "step": "get_targets", "error": f"{type(e).__name__}: {str(e)[:400]}"}
+    if isinstance(tmap, list):
+        tmap = {t.get("targetTp"): t for t in tmap if isinstance(t, dict)}
+    out["before_targetTps"] = sorted(tmap.keys()) if isinstance(tmap, dict) else None
+    out["before_regional"] = tmap.get("REGIONAL_TARGET")
+
+    # 2) regional 객체 구성
+    codes = [str(c) for c in (request.kr_codes or []) if str(c).strip()]
+    regional = dict(tmap.get("REGIONAL_TARGET") or {})
+    regional["targetTp"] = "REGIONAL_TARGET"
+    regional.setdefault("ownerId", gid)
+    regional["target"] = request.raw_target if request.raw_target is not None \
+        else {"location": {"KR": codes, "OTHERS": []}}
+
+    targets = [regional]
+    if request.include_all_targets and isinstance(tmap, dict):
+        for tp, obj in tmap.items():
+            if tp != "REGIONAL_TARGET" and isinstance(obj, dict):
+                targets.append(obj)
+
+    if request.echo_adgroup:
+        try:
+            base = await client.get_ad_group(gid) if hasattr(client, "get_ad_group") else None
+        except Exception:
+            base = None
+        body = dict(base) if isinstance(base, dict) else {"nccAdgroupId": gid}
+        body["nccAdgroupId"] = gid
+        body["targets"] = targets
+    else:
+        body = {"nccAdgroupId": gid, "targets": targets}
+
+    out["request_body"] = body
+
+    # 3) PUT 실행 — 에러를 그대로 반환
+    try:
+        resp = await client._request("PUT", f"/ncc/adgroups/{gid}?fields={request.fields}", body)
+        out["put_response"] = resp
+        out["put_ok"] = True
+    except Exception as e:
+        out["put_ok"] = False
+        out["put_error"] = f"{type(e).__name__}: {str(e)[:800]}"
+
+    # 4) 사후 재조회로 실제 반영 확인
+    try:
+        tmap2 = await client.get_ad_group_targets(gid) or {}
+        if isinstance(tmap2, list):
+            tmap2 = {t.get("targetTp"): t for t in tmap2 if isinstance(t, dict)}
+        out["after_targetTps"] = sorted(tmap2.keys()) if isinstance(tmap2, dict) else None
+        out["after_regional"] = tmap2.get("REGIONAL_TARGET")
+        out["applied"] = bool(tmap2.get("REGIONAL_TARGET"))
+    except Exception as e:
+        out["after_error"] = str(e)[:300]
+    return {"success": True, **out}
+
+
 class SetRegionalTargetRequest(BaseModel):
     customer_id: Optional[str] = None
     only_branch: bool = Field(True, description="지점 캠페인(확정 지역)만 타겟 설정(권장). false=풀/롱테일도 추정지역으로")
