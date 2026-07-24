@@ -12,6 +12,7 @@ import { registerBlog, startRankCheck, getTrackedBlogs } from '@/lib/api/rankTra
 import type { BlogIndexResult } from '@/lib/types/api'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/lib/stores/auth'
+import GlassIcon from '@/components/GlassIcon'
 import { useBlogContextStore } from '@/lib/stores/blogContext'
 import { useXPStore } from '@/lib/stores/xp'
 import { incrementUsage, checkUsageLimit } from '@/lib/api/subscription'
@@ -1737,9 +1738,9 @@ export default function AnalyzePage() {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: "spring", duration: 0.5 }}
-              className="inline-flex p-4 rounded-full bg-[#0064FF] mb-6 shadow-lg shadow-[#0064FF]/15"
+              className="inline-flex mb-6"
             >
-              <Sparkles className="w-8 h-8 text-white" />
+              <GlassIcon icon={Sparkles} size={76} />
             </motion.div>
 
             <h1 className="text-5xl font-bold mb-4">
@@ -1811,13 +1812,9 @@ export default function AnalyzePage() {
                 exit={{ opacity: 0, scale: 0.9 }}
                 className="glass-3d p-12 text-center"
               >
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                  className="inline-flex p-6 rounded-full bg-[#0064FF] mb-6 shadow-lg shadow-[#0064FF]/15"
-                >
-                  <Sparkles className="w-12 h-12 text-white" />
-                </motion.div>
+                <div className="inline-flex mb-6">
+                  <GlassIcon icon={Sparkles} size={100} />
+                </div>
 
                 <h3 className="text-2xl font-bold mb-2">AI가 분석중입니다</h3>
                 <p className="text-gray-600">40+ 지표를 종합 분석하고 있어요...</p>
@@ -1892,8 +1889,8 @@ export default function AnalyzePage() {
                       transition={{ type: "spring", delay: 0.3 }}
                       className="text-center"
                     >
-                      <div className="inline-flex p-8 rounded-full bg-[#0064FF] shadow-2xl mb-6 shadow-[#0064FF]/25">
-                        <Award className="w-16 h-16 text-white" />
+                      <div className="inline-flex mb-6">
+                        <GlassIcon icon={Award} size={116} />
                       </div>
                       <div className="mt-4">
                         <div className="text-6xl font-black gradient-text mb-4">

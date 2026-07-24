@@ -838,10 +838,65 @@ body::before {
     radial-gradient(at 90% 82%, rgba(255, 92, 168, 0.08) 0px, transparent 52%) !important;
 }
 
+/* ============================================================
+   추상 글래스 아이콘 (giorb) — 강도 III
+   납작한 원형 아이콘 배지를 색수차·굴절·이리데선스·부유 샤드가
+   들어간 스퀘어클 유리 오브로 대체. 배경 장식용 .orb 와 별개 네임스페이스.
+   ============================================================ */
+.giorb { position: relative; display: inline-grid; place-items: center; flex: none;
+  isolation: isolate; border-radius: 32% / 34%; }
+.giorb > i { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
+/* 색수차 프린지 (시안/마젠타 고스트) */
+.giorb .gi-fc { z-index: 0; mix-blend-mode: screen; opacity: .55; filter: blur(2px);
+  transform: translate(-3px, 3px) scale(1.02);
+  background: radial-gradient(120% 120% at 32% 20%, var(--au-cyan), transparent 55%); }
+.giorb .gi-fm { z-index: 0; mix-blend-mode: screen; opacity: .5; filter: blur(2px);
+  transform: translate(3px, -3px) scale(1.02);
+  background: radial-gradient(120% 120% at 70% 82%, #C026D3, transparent 55%); }
+/* 유리 슬래브 본체 */
+.giorb .gi-base { z-index: 1;
+  background: radial-gradient(130% 130% at 30% 14%, #9CBAFF 0%, #2E6BFF 40%, #0A3AE6 66%, #5B2BE0 100%);
+  box-shadow: 0 16px 34px -14px rgba(0, 60, 255, .5),
+    inset 0 3px 5px rgba(255, 255, 255, .8),
+    inset 0 -14px 26px -8px rgba(2, 8, 40, .6),
+    inset 0 0 0 1px rgba(255, 255, 255, .12); }
+/* 이리데선트 유막 */
+.giorb .gi-iris { z-index: 2; mix-blend-mode: overlay; opacity: .5;
+  background: conic-gradient(from 210deg at 60% 40%, #FF4ECD, #4EE0FF, #8B5CFF, #4EFFC3, #FF4ECD); }
+/* 파편 굴절 패널 */
+.giorb .gi-pane { z-index: 3; border: 1px solid rgba(255, 255, 255, .35); mix-blend-mode: screen; }
+.giorb .gi-p1 { transform: rotate(-18deg) scale(.86); border-radius: 30% 46% 34% 40%;
+  background: linear-gradient(130deg, rgba(255, 255, 255, .42), transparent 55%); }
+.giorb .gi-p2 { transform: rotate(24deg) scale(.72); border-radius: 44% 30% 44% 30%;
+  background: linear-gradient(300deg, rgba(120, 220, 255, .4), transparent 60%); }
+/* 스페큘러 + 하단 시안 림 */
+.giorb .gi-spec { z-index: 4;
+  background:
+    radial-gradient(42% 26% at 30% 15%, rgba(255, 255, 255, .95), transparent 60%),
+    radial-gradient(90% 62% at 78% 100%, rgba(34, 211, 238, .55), transparent 55%); }
+/* 부유 유리 샤드 */
+.giorb .gi-shard { z-index: 5; inset: auto; border-radius: 22%;
+  background: linear-gradient(135deg, rgba(255, 255, 255, .9), rgba(180, 220, 255, .35));
+  border: 1px solid rgba(255, 255, 255, .6); box-shadow: 0 4px 10px -4px rgba(2, 8, 40, .5); }
+.giorb .gi-s1 { top: -9%; right: 2%; width: 26%; height: 26%; transform: rotate(28deg); }
+.giorb .gi-s2 { bottom: -6%; left: 6%; width: 18%; height: 18%; transform: rotate(-14deg); opacity: .9; }
+/* 글리프 (lucide 아이콘) */
+.giorb > .gi-glyph { position: relative; z-index: 6; display: grid; place-items: center;
+  color: #fff; filter: drop-shadow(0 2px 4px rgba(2, 8, 40, .55)); }
+.giorb > .gi-glyph > svg { width: 100%; height: 100%; }
+/* 모션 */
+.giorb.gi-float { animation: giBob 4.6s ease-in-out infinite; }
+@keyframes giBob { 0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-6px) rotate(-1.5deg); } }
+.giorb .gi-spin { animation: giSpin 9s linear infinite; }
+@keyframes giSpin { to { transform: rotate(360deg); } }
+
 /* 접근성: 모션 최소화 설정 존중 */
 @media (prefers-reduced-motion: reduce) {
   body::before,
   .orb,
+  .giorb.gi-float,
+  .giorb .gi-spin,
   .gradient-text,
   .iri-border::before { animation: none !important; }
   .spec-sweep::after { transition: none !important; }
