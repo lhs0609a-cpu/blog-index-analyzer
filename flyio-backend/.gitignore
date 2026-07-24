@@ -1,0 +1,9 @@
+
+# 백엔드 등록 러너 자격증명 (커밋 금지)
+_backend_creds.json
+_medilon_creds.json
+_reberry_creds.json
+
+# 리네임 러너 산출물
+_reberry_rename_ckpt.json
+_reberry_rename_preview.csv

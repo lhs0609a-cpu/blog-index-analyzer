@@ -1,0 +1,12 @@
+/flyio-backend
+/backend_learning_api
+/data
+/database
+/docker
+/deploy
+/docs
+/chrome-extension
+/scratchpad
+/*.db
+/*.log
+/*.json

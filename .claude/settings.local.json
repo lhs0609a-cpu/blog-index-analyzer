@@ -42,7 +42,10 @@
       "Bash(unzip:*)",
       "Bash(iconv:*)",
       "Bash(findstr:*)",
-      "Bash(ping:*)"
+      "Bash(ping:*)",
+      "Bash(cd /d/UserFolders/Downloads)",
+      "Bash(ls -la keywords_2000.xlsx)",
+      "WebFetch(domain:www.megaload.co.kr)"
     ]
   }
 }
