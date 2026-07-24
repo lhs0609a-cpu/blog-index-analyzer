@@ -1,7 +1,7 @@
 """
 Blog analysis router with related keywords support
 """
-from fastapi import APIRouter, HTTPException, Query, Header
+from fastapi import APIRouter, HTTPException, Query, Header, BackgroundTasks
 from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
 import httpx
@@ -5104,6 +5104,58 @@ async def debug_rank_accuracy(req: RankAccuracyRequest):
         "openapi_agree_at_1": len(agree1),
         "results": results,
     }
+
+
+# ============ 판정기 백테스트 (대량 표본으로 정확도 검증) ============
+
+class CeilingBacktestRequest(BaseModel):
+    seeds: List[str] = []            # 키워드 우주 시드(연관어 수확). 비면 기본 시드
+    target_keywords: int = 400       # 스크래핑할 키워드 수(라벨 ≈ ×상위30 관측)
+    force: bool = False              # 처음부터 재실행(기본은 resume)
+
+
+_BACKTEST_DEFAULT_SEEDS = [
+    "맛집", "여행", "카페", "다이어트", "인테리어", "육아", "재테크",
+    "화장품", "부동산", "영어공부", "캠핑", "강아지", "홈트", "주식",
+]
+
+
+@router.post("/debug/ceiling-backtest")
+async def start_ceiling_backtest(req: CeilingBacktestRequest, background_tasks: BackgroundTasks):
+    """노출천장 '판정 정확도'를 대량 표본으로 백테스트(백그라운드·재개).
+
+    미래를 기다리지 않는다: 키워드를 대량 스크래핑해 (블로그,키워드,볼륨,실제순위) 정답을
+    즉시 쌓고, 블로그별 관측을 train/test 로 갈라 천장을 학습→held-out 채점한다.
+    진행/결과: GET /api/blogs/debug/ceiling-backtest/status
+    """
+    from services.ceiling_backtest import run_backtest, BACKTEST_STATUS, _RUN_KEY
+
+    prev = BACKTEST_STATUS.get(_RUN_KEY)
+    if prev and prev.get("state") == "running" and not req.force:
+        return {"started": False, "already_running": True,
+                "status": {k: prev.get(k) for k in ("phase", "scraped", "planned", "ledger_size")},
+                "message": "이미 백테스트 진행 중 — status 로 확인"}
+
+    seeds = [s.strip() for s in (req.seeds or []) if s.strip()] or _BACKTEST_DEFAULT_SEEDS
+    target = max(20, min(req.target_keywords, 3000))
+    background_tasks.add_task(run_backtest, seeds, target, req.force)
+    return {"started": True, "seeds": seeds, "target_keywords": target,
+            "resuming": not req.force,
+            "message": "백테스트 시작(스크래핑→채점, 증분저장·재개) — status 로 진행/결과 확인"}
+
+
+@router.get("/debug/ceiling-backtest/status")
+async def ceiling_backtest_status():
+    """백테스트 진행상태 + 채점 결과(Brier/skill/base_rate/보정곡선). 재시작 시 파일 복구."""
+    from services.ceiling_backtest import backtest_status
+    return {"ok": True, "status": backtest_status()}
+
+
+@router.post("/debug/ceiling-backtest/rescore")
+async def ceiling_backtest_rescore():
+    """수집된 원장 그대로 채점만 재실행(판정식/파라미터 바꿔 재평가). 스크래핑 없음."""
+    from services.ceiling_backtest import backtest_rescore
+    return {"ok": True, "score": backtest_rescore()}
 
 
 @router.get("/debug/searchad-status")

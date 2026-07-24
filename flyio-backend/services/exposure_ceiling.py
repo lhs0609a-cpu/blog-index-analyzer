@@ -160,25 +160,65 @@ def _confidence(tested: int, ranked: int) -> str:
     return "low"
 
 
+# fetch_naver_search_results 는 스크래핑 실패 시 openapi/RSS/모바일로 **조용히 폴백**한다.
+# ground truth 로 쓰려면 결과의 rank_source 가 실제 탭 스크래핑 계열인지 반드시 확인해야 한다.
+# (확인 없이 쓰면 "openapi 가 틀렸다"를 openapi 로 채점하는 자기모순이 되고, 대량 측정에서는
+#  차단률이 오를수록 라벨이 조용히 openapi 로 바뀌어 결과 전체가 무의미해진다.)
+_SCRAPE_SOURCES = frozenset({"playwright", "http", "http_regex"})
+
+
+async def blog_tab_serp(keyword: str, limit: int = RANK_CUTOFF_INDEXED) -> Optional[List[Dict]]:
+    """'실제 블로그탭' SERP 를 스크래핑 소스로만 조회. 폴백 결과면 None.
+
+    Returns: [{blog_id, rank, post_url, rank_source}, ...] (순위 오름차순) 또는
+             None (스크래핑 실패 → openapi/RSS 폴백이 반환됐거나 조회 자체 실패).
+    """
+    from routers.blogs import fetch_naver_search_results  # 지연 import (순환 회피)
+    try:
+        results = await fetch_naver_search_results(keyword, limit=limit)
+    except Exception as e:
+        logger.warning(f"[ceiling] blog-tab scrape failed {keyword!r}: {e}")
+        return None
+    if not results:
+        return None
+
+    # 폴백 감지: 스크래핑 계열이 아닌 소스가 섞여 오면 ground truth 로 쓸 수 없다.
+    sources = {r.get("rank_source") for r in results}
+    if not (sources & _SCRAPE_SOURCES):
+        logger.warning(f"[ceiling] {keyword!r}: 스크래핑 실패, 폴백 소스({sources}) — ground truth 아님")
+        return None
+
+    rows, seen = [], set()
+    for r in results:
+        if r.get("rank_source") not in _SCRAPE_SOURCES:
+            continue  # 폴백으로 보충된 행은 제외 (순위 신뢰 불가)
+        bid = r.get("blog_id")
+        rank = r.get("source_rank") or r.get("rank")
+        if not bid or not rank or bid in seen:
+            continue
+        seen.add(bid)
+        rows.append({"blog_id": bid, "rank": int(rank),
+                     "post_url": r.get("post_url"), "rank_source": r.get("rank_source")})
+    rows.sort(key=lambda x: x["rank"])
+    return rows or None
+
+
 async def blog_tab_true_rank(keyword: str, blog_id: str, limit: int = RANK_CUTOFF_INDEXED) -> Optional[int]:
     """'실제 블로그탭 스크래핑'으로 blog_id의 진짜 순위를 조회.
 
     openapi search/blog.json(sort=sim)은 실제 블로그탭 노출 순서와 다르므로, 천장 산정과
     정답지 채점의 ground truth 는 반드시 이 함수(실제 탭 스크래핑)를 쓴다.
-    routers.blogs 를 함수 내부에서 지연 import (순환 import 회피 — serp_difficulty 와 동일 패턴).
 
-    Returns: 실제 순위(1-based) 또는 None(상위 limit 내 미노출/조회실패).
+    ⚠️ 반환 None 은 두 가지가 섞인다: (a) 상위 limit 내 미노출 (b) 스크래핑 실패.
+    (b)를 미노출로 오해하면 라벨이 오염되므로, 둘을 구분해야 하는 호출부는
+    blog_tab_serp() 를 직접 써서 None(=측정불가) 과 빈 순위(=미노출)를 구분하라.
     """
-    from routers.blogs import fetch_naver_search_results  # 지연 import
-    try:
-        results = await fetch_naver_search_results(keyword, limit=limit)
-    except Exception as e:
-        logger.warning(f"[ceiling] blog-tab scrape failed {blog_id}/{keyword!r}: {e}")
+    rows = await blog_tab_serp(keyword, limit=limit)
+    if rows is None:
         return None
-    for r in results or []:
-        if r.get("blog_id") == blog_id:
-            rank = r.get("source_rank") or r.get("rank")
-            return int(rank) if rank else None
+    for r in rows:
+        if r["blog_id"] == blog_id:
+            return r["rank"]
     return None
 
 
@@ -353,34 +393,51 @@ async def measure_exposure_ceiling(
                             "openapi_hint_rank": p["openapi_rank"]})
 
     # 천장은 '확정된 실제 순위'만으로 계산 (idea13022 유형 오측정 방지)
-    confirmed_ranked = [r for r in confirmed if r["rank"] is not None]
-    page1 = [r for r in confirmed_ranked if r["rank"] <= RANK_CUTOFF_PAGE1]
-    top30 = [r for r in confirmed_ranked if r["rank"] <= RANK_CUTOFF_INDEXED]
+    data = ceiling_from_observations(
+        [{"keyword": r["keyword"], "volume": r["volume"], "rank": r["rank"]} for r in confirmed],
+        extra={
+            "tested": len(testable),           # 프리필터한 후보 수
+            "scrape_confirmed": len(confirmed),  # 실제 스크래핑으로 확정한 수
+            "candidates": len(candidates),
+        },
+    )
+    _cache_set(blog_id, data)
+    return data
+
+
+def ceiling_from_observations(rows: List[Dict], extra: Optional[Dict] = None) -> Dict:
+    """실측 관측행 [{keyword, volume, rank}]에서 노출 천장을 계산.
+
+    measure_exposure_ceiling(단일 블로그 라이브 측정)과 백테스트(대량 정답지에서 블로그별
+    train 행)가 **동일한 천장 정의**를 공유하도록 분리한 순수 함수. rank=None 은 미노출.
+    volume 은 이미 부착돼 있어야 한다(호출부가 검색량 조회 책임).
+    """
+    ranked = [r for r in rows if r.get("rank") is not None]
+    page1 = [r for r in ranked if r["rank"] <= RANK_CUTOFF_PAGE1]
+    top30 = [r for r in ranked if r["rank"] <= RANK_CUTOFF_INDEXED]
 
     page1_vols = sorted((r["volume"] for r in page1), reverse=True)
     top30_vols = [r["volume"] for r in top30]
+    n = len(rows)
 
     data = {
         "ok": True,
         "ceiling_volume": page1_vols[0] if page1_vols else None,
         "ceiling_p50": int(statistics.median(page1_vols)) if page1_vols else None,
         "top30_ceiling": max(top30_vols) if top30_vols else None,
-        "win_rate": round(len(page1) / len(confirmed), 3) if confirmed else 0.0,
+        "win_rate": round(len(page1) / n, 3) if n else 0.0,
         "ranked_keywords": sorted(
-            [{"keyword": r["keyword"], "volume": r["volume"], "rank": r["rank"],
-              "rank_source": r.get("rank_source", "scraped")} for r in top30],
+            [{"keyword": r["keyword"], "volume": r["volume"], "rank": r["rank"]} for r in top30],
             key=lambda x: x["volume"], reverse=True,
         )[:15],
-        "tested": len(testable),           # 프리필터한 후보 수
-        "scrape_confirmed": len(confirmed),  # 실제 스크래핑으로 확정한 수
-        "candidates": len(candidates),
         "ranked_count": len(page1),
-        "confidence": _confidence(len(confirmed), len(page1)),
+        "confidence": _confidence(n, len(page1)),
         "rank_source": "blog_tab_scraping",
         "disclaimer": _DISCLAIMER,
         "error": None,
     }
-    _cache_set(blog_id, data)
+    if extra:
+        data.update(extra)
     return data
 
 
