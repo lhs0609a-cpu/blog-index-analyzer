@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import { registerBilling, type PlanType } from '@/lib/api/subscription'
 import toast from 'react-hot-toast'
+import GlassIcon from '@/components/GlassIcon'
 
 // 토스페이먼츠 타입 정의
 interface TossPaymentsInstance {
@@ -59,6 +60,9 @@ function PaymentContent() {
   const customerKey = searchParams.get('customerKey')
   const authKey = searchParams.get('authKey')
   const success = searchParams.get('success')
+  // 토스가 failUrl 에 붙여주는 실패 사유 (code/message) — 그동안 버려져서 깜깜이였음
+  const failCode = searchParams.get('code')
+  const failMessage = searchParams.get('message')
 
   const [isProcessing, setIsProcessing] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
@@ -137,7 +141,8 @@ function PaymentContent() {
       await tossPayments.requestBillingAuth('카드', {
         customerKey: customerKey,
         successUrl: `${window.location.origin}/payment?success=true&orderId=${orderId}&planType=${planType}&billingCycle=${billingCycle}&amount=${amount}&orderName=${encodeURIComponent(orderName)}`,
-        failUrl: `${window.location.origin}/payment?success=false&orderId=${orderId}`,
+        // 실패 시에도 주문정보를 유지해야 "다시 시도"가 시작 화면을 복원할 수 있음
+        failUrl: `${window.location.origin}/payment?success=false&orderId=${orderId}&planType=${planType}&billingCycle=${billingCycle}&amount=${amount}&orderName=${encodeURIComponent(orderName)}`,
       })
     } catch (error) {
       console.error('Toss billing error:', error)
@@ -204,11 +209,18 @@ function PaymentContent() {
             <CreditCard className="w-16 h-16 text-red-500" />
           </div>
           <h1 className="text-3xl font-bold mb-4">등록 실패</h1>
-          <p className="text-gray-600 mb-6">
+          <p className="text-gray-600 mb-4">
             카드 등록이 취소되었거나 오류가 발생했습니다.
             <br />
             다시 시도해주세요.
           </p>
+          {(failMessage || failCode) && (
+            <div className="mb-6 text-left bg-red-50 border border-red-200 rounded-xl p-4">
+              <p className="text-sm font-semibold text-red-700 mb-1">토스 결제사 응답</p>
+              {failMessage && <p className="text-sm text-red-600 break-keep">{failMessage}</p>}
+              {failCode && <p className="text-xs text-red-400 mt-1 font-mono">code: {failCode}</p>}
+            </div>
+          )}
           <div className="flex gap-4 justify-center">
             <Link href="/pricing">
               <button className="px-8 py-3 rounded-xl bg-gray-200 text-gray-700 font-semibold">
@@ -216,7 +228,7 @@ function PaymentContent() {
               </button>
             </Link>
             <button
-              onClick={initiateBillingPayment}
+              onClick={() => router.push(`/payment?orderId=${orderId}&amount=${amount}&orderName=${encodeURIComponent(orderName)}&planType=${planType}&billingCycle=${billingCycle}`)}
               className="px-8 py-3 rounded-xl instagram-gradient text-white font-semibold"
             >
               다시 시도
@@ -250,8 +262,8 @@ function PaymentContent() {
         >
           {/* Header */}
           <div className="text-center mb-8">
-            <div className="inline-flex p-4 rounded-full instagram-gradient mb-4">
-              <CreditCard className="w-8 h-8 text-white" />
+            <div className="inline-flex mb-4">
+              <GlassIcon icon={CreditCard} size={72} />
             </div>
             <h1 className="text-3xl font-bold">정기결제 등록</h1>
             <p className="text-gray-500 mt-2 text-sm">한 클릭으로 언제든 해지 가능</p>

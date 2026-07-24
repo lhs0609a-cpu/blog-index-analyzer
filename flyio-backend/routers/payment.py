@@ -140,6 +140,85 @@ def get_toss_headers():
     }
 
 
+# ============ 결제 진단 (실카드 없이 점검) ============
+
+@router.get("/debug/status")
+async def debug_payment_status():
+    """결제 시스템 진단: 토스 키 유효성 + 정기결제 엔드포인트 응답 + pending 주문 실제 대조.
+
+    실카드 결제는 못 하지만, 토스 API 응답코드로 (1)키가 유효한지 (2)정기결제 통신이 되는지
+    판별하고, (3)DB의 pending 주문들이 토스에 '진짜 결제'로 존재하는지 대조한다.
+    스크래핑 없음 — 토스 HTTP 호출 몇 번뿐이라 안전.
+    """
+    key_mode = ("live" if TOSS_SECRET_KEY.startswith("live_")
+                else "test" if TOSS_SECRET_KEY.startswith("test_")
+                else "unknown")
+    result = {
+        "toss_key_set": bool(TOSS_SECRET_KEY),
+        "toss_secret_mode": key_mode,          # live_sk_ / test_sk_ (프론트 live_ck_ 와 짝 맞아야 함)
+        "toss_key_valid": None,
+        "billing_probe": None,
+        "pending_reconciliation": [],
+        "verdict": None,
+    }
+    if not TOSS_SECRET_KEY:
+        result["verdict"] = "❌ TOSS_SECRET_KEY 미설정 — 결제 자체 불가"
+        return result
+
+    # 1) 키 유효성 + 정기결제 프로브 (더미 authKey → 인증은 통과하되 authKey에서 거절되어야 정상)
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.post(
+                f"{TOSS_API_URL}/billing/authorizations/issue",
+                headers=get_toss_headers(),
+                json={"customerKey": "DEBUG_PROBE", "authKey": "DEBUG_INVALID_AUTHKEY"},
+            )
+        try:
+            body = r.json()
+        except Exception:
+            body = {}
+        code = body.get("code")
+        result["billing_probe"] = {"http": r.status_code, "code": code, "message": body.get("message")}
+        if r.status_code == 401 or code in ("UNAUTHORIZED_KEY", "INVALID_API_KEY", "NOT_FOUND_TERMINAL_MID"):
+            result["toss_key_valid"] = False
+            result["verdict"] = "❌ 토스 시크릿 키/계약 문제 — 결제 전원 실패의 근본원인 후보"
+        elif key_mode == "test":
+            result["toss_key_valid"] = True
+            result["verdict"] = ("❌ 백엔드가 TEST 시크릿 키인데 프론트는 live_ck_ → 모드 불일치. "
+                                 "실카드 결제를 토스가 거부함(실결제 0건의 유력 원인). 백엔드 TOSS_SECRET_KEY를 live_sk_ 로 교체 필요.")
+        else:
+            result["toss_key_valid"] = True
+            result["verdict"] = (f"✅ 토스 통신·키 정상(mode={key_mode}, 빌링 엔드포인트가 authKey 거절로 응답). "
+                                 "결제 실패는 프론트 승인호출 미완/사용자 이탈 쪽 가능성")
+    except Exception as e:
+        result["billing_probe"] = {"error": str(e)[:200]}
+        result["verdict"] = "⚠️ 토스 서버 통신 실패"
+        return result
+
+    # 2) pending 주문 실제 대조 (진짜 결제된 게 있나)
+    try:
+        from database.subscription_db import get_all_payments_admin
+        pend = get_all_payments_admin(limit=5, status="pending")
+        orders = [p.get("order_id") for p in (pend.get("payments") or []) if p.get("order_id")]
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            for oid in orders[:5]:
+                try:
+                    rr = await client.get(f"{TOSS_API_URL}/payments/orders/{oid}", headers=get_toss_headers())
+                    if rr.status_code == 200:
+                        pd = rr.json()
+                        result["pending_reconciliation"].append(
+                            {"order_id": oid, "toss_status": pd.get("status"), "real_payment": True})
+                    else:
+                        result["pending_reconciliation"].append(
+                            {"order_id": oid, "toss_code": (rr.json() or {}).get("code"), "real_payment": False})
+                except Exception as e:
+                    result["pending_reconciliation"].append({"order_id": oid, "error": str(e)[:80]})
+    except Exception as e:
+        result["pending_reconciliation"] = [{"error": str(e)[:120]}]
+
+    return result
+
+
 # ============ Pydantic 모델 ============
 
 class PaymentPrepareRequest(BaseModel):
