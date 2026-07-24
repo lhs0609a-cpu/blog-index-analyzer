@@ -205,7 +205,8 @@ async def fetch_blog_posts_via_rss(blog_id: str) -> List[Dict]:
                     'title': title_elem.text,
                     'link': link_elem.text if link_elem is not None else '',
                     'pubDate': None,
-                    'content_length': 0
+                    'content_length': 0,
+                    'description_text': ''  # 본문 요약(태그 제거) — 키워드 시드 확장용
                 }
 
                 # 발행일 파싱
@@ -216,10 +217,11 @@ async def fetch_blog_posts_via_rss(blog_id: str) -> List[Dict]:
                     except:
                         pass
 
-                # 콘텐츠 길이
+                # 콘텐츠 길이 + 본문 텍스트(키워드 시드 확장용)
                 if desc_elem is not None and desc_elem.text:
                     text = re.sub(r'<[^>]+>', '', desc_elem.text)
                     post['content_length'] = len(text)
+                    post['description_text'] = text[:2000]  # 시드 추출용 상한
 
                 posts.append(post)
 

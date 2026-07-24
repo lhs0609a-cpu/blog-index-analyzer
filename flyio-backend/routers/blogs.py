@@ -5026,6 +5026,86 @@ async def get_keyword_category_info(keyword: str):
         }
 
 
+class RankAccuracyRequest(BaseModel):
+    mode: str = "run"            # "harvest"(연관어 수확) | "run"(배치 스크래핑+openapi 비교)
+    seeds: List[str] = []        # harvest 시드 힌트
+    keywords: List[str] = []     # run 대상 키워드 배치
+    limit: int = 500             # harvest 상한
+    volume_floor: int = 10
+
+
+@router.post("/debug/rank-accuracy")
+async def debug_rank_accuracy(req: RankAccuracyRequest):
+    """순위 측정 정확도 검증 (디버그).
+
+    ground truth = 실제 블로그탭 스크래핑. 각 키워드의 실제 1위 블로그를 openapi로도 조회해
+    (1) 스크래핑 파이프라인이 대규모에서 정상인지, (2) openapi(sort=sim)가 실제 탭 대비
+    얼마나 틀리는지(재설계 정당성)를 정량화한다.
+
+    harvest 모드: 검색광고 연관어를 수확해 검증 키워드 우주를 만든다(추가 스크래핑 없음, 쌈).
+    run 모드: keywords 배치(≤120)를 실제 스크래핑 + openapi 비교. 여러 번 호출해 누적.
+    """
+    from services.exposure_ceiling import _fetch_volumes
+    from services.rank_checker import RankChecker
+
+    if req.mode == "harvest":
+        vols = await _fetch_volumes(req.seeds)
+        uni = sorted(((k, v) for k, v in vols.items() if v >= req.volume_floor),
+                     key=lambda x: x[1], reverse=True)
+        return {"universe": len(uni), "count": min(len(uni), req.limit),
+                "keywords": [k for k, _ in uni][:req.limit]}
+
+    keywords = [k.strip() for k in (req.keywords or []) if k.strip()][:120]
+    if not keywords:
+        raise HTTPException(status_code=400, detail="run 모드는 keywords 필요")
+
+    checker = RankChecker()
+    scrape_sem = asyncio.Semaphore(2)   # 스크래핑 밴 방지 (낮은 동시성)
+    api_sem = asyncio.Semaphore(5)
+
+    async def _one(kw: str):
+        async with scrape_sem:
+            try:
+                real = await fetch_naver_search_results(kw, limit=10)
+            except Exception as e:
+                return {"keyword": kw, "scraped": False, "error": str(e)[:120]}
+        real_blogs, seen = [], set()
+        for r in real or []:
+            bid = r.get("blog_id")
+            if bid and bid not in seen:
+                seen.add(bid)
+                real_blogs.append({"blog_id": bid, "rank": r.get("source_rank") or r.get("rank")})
+        if not real_blogs:
+            return {"keyword": kw, "scraped": True, "real_count": 0}
+        top1 = real_blogs[0]
+        async with api_sem:
+            try:
+                oa = await checker.check_blog_tab_rank(kw, top1["blog_id"], max_results=30)
+            except Exception:
+                oa = None
+        return {"keyword": kw, "scraped": True, "real_count": len(real_blogs),
+                "real_top1_blog": top1["blog_id"], "real_top1_rank": top1["rank"],
+                "openapi_rank_of_real_top1": oa}
+
+    try:
+        results = await asyncio.gather(*[_one(k) for k in keywords])
+    finally:
+        await checker.close()
+
+    scraped_ok = [r for r in results if r.get("scraped") and r.get("real_count")]
+    with_oa = [r for r in scraped_ok if r.get("openapi_rank_of_real_top1") is not None]
+    agree1 = [r for r in with_oa if r["openapi_rank_of_real_top1"] == 1]
+    return {
+        "batch_size": len(keywords),
+        "scraped_ok": len(scraped_ok),
+        "scrape_fail": len(keywords) - len(scraped_ok),
+        "openapi_has_real_top1": len(with_oa),
+        "openapi_missing_real_top1": len(scraped_ok) - len(with_oa),
+        "openapi_agree_at_1": len(agree1),
+        "results": results,
+    }
+
+
 @router.get("/debug/searchad-status")
 async def debug_searchad_status():
     """
@@ -5270,6 +5350,7 @@ async def judge_keyword_endpoint(request: KeywordJudgeRequest):
             ceiling_p50=ceiling.get("ceiling_p50"),
             serp_difficulty_label=(serp.get("difficulty_label") if serp and serp.get("ok") else None),
             confidence=verdict.get("confidence"),
+            predicted_prob=verdict.get("probability"),
         )
     except Exception as e:
         logger.warning(f"prediction ledger write failed: {e}")
@@ -5336,29 +5417,28 @@ async def verify_pending_predictions(
         raise HTTPException(status_code=403, detail="잘못된 cron 토큰")
 
     from database.rank_tracker_db import get_rank_tracker_db
-    from services.rank_checker import RankChecker
+    from services.exposure_ceiling import blog_tab_true_rank
 
     db = get_rank_tracker_db()
     pending = db.get_pending_predictions(min_age_hours=min_age_hours, limit=limit)
     if not pending:
         return {"checked": 0, "results": [], "message": "검증 대기 중인 예측이 없습니다"}
 
-    checker = RankChecker()
-    sem = asyncio.Semaphore(5)
+    # ⚠️ 실측 라벨은 예측(천장)과 '동일한 순위 소스(실제 블로그탭 스크래핑)'로 확정해야
+    #    calibration 이 유효하다. openapi(sort=sim)로 채점하면 예측/라벨 소스 불일치로
+    #    Brier/보정 곡선이 왜곡된다. 그래서 blog_tab_true_rank 를 공유한다.
+    sem = asyncio.Semaphore(2)  # 스크래핑은 무거워 동시성 낮춤
 
     async def _verify(p):
         async with sem:
             try:
-                rank = await checker.check_blog_tab_rank(p["keyword"], p["blog_id"], max_results=30)
+                rank = await blog_tab_true_rank(p["keyword"], p["blog_id"], limit=30)
             except Exception as e:
                 logger.warning(f"verify rank failed {p['blog_id']}/{p['keyword']}: {e}")
                 return None
             return db.record_prediction_actual(p["id"], actual_rank=rank)
 
-    try:
-        results = await asyncio.gather(*[_verify(p) for p in pending])
-    finally:
-        await checker.close()
+    results = await asyncio.gather(*[_verify(p) for p in pending])
 
     graded = [r for r in results if r and r.get("outcome") in ("hit", "miss")]
     return {

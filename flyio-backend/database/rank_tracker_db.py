@@ -22,6 +22,38 @@ else:
 DB_PATH = os.environ.get("DATABASE_PATH", _default_path)
 
 
+def _pav_isotonic(pairs: List[tuple]) -> List[Dict]:
+    """CORP 신뢰도 곡선: Pool-Adjacent-Violators 등장정회귀(파라미터 없음, 재현가능).
+
+    입력: [(predicted_prob, actual_0or1), ...]. 예측확률 오름차순 정렬 후 PAV 로 단조증가
+    적합값을 만들고, 같은 적합값 구간을 하나의 신뢰도 bin 으로 묶어 반환한다.
+    임의적 수동 비닝(bin 개수에 결과가 좌우됨)을 피하는 표준 방식(Dimitriadis+Gneiting+Jordan, PNAS 2021).
+
+    반환: [{mean_pred, mean_actual, count}] — 신뢰도 다이어그램의 x=mean_pred, y=mean_actual.
+    """
+    if not pairs:
+        return []
+    pts = sorted(pairs, key=lambda x: x[0])
+    # 각 점을 블록으로 시작 (sum_y, count, sum_pred)
+    blocks = [[float(y), 1, float(p)] for p, y in pts]
+    i = 0
+    while i < len(blocks) - 1:
+        # 단조성 위반(앞 블록 평균 > 뒤 블록 평균)이면 병합
+        if blocks[i][0] / blocks[i][1] > blocks[i + 1][0] / blocks[i + 1][1]:
+            blocks[i][0] += blocks[i + 1][0]
+            blocks[i][1] += blocks[i + 1][1]
+            blocks[i][2] += blocks[i + 1][2]
+            del blocks[i + 1]
+            if i > 0:
+                i -= 1  # 뒤로 돌아가 재검사
+        else:
+            i += 1
+    return [
+        {"mean_pred": round(sp / c, 3), "mean_actual": round(sy / c, 3), "count": c}
+        for sy, c, sp in blocks
+    ]
+
+
 class RankTrackerDB:
     """블로그 순위 추적 데이터베이스 클라이언트"""
 
@@ -168,6 +200,11 @@ class RankTrackerDB:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_rank_check_tasks_task_id ON rank_check_tasks(task_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_kw_pred_blog ON keyword_predictions(blog_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_kw_pred_outcome ON keyword_predictions(outcome)")
+
+            # 마이그레이션: 연속 예측확률 컬럼 (Brier/CORP 채점용). 기존 DB에도 안전하게 추가.
+            existing = {r[1] for r in cursor.execute("PRAGMA table_info(keyword_predictions)").fetchall()}
+            if "predicted_prob" not in existing:
+                cursor.execute("ALTER TABLE keyword_predictions ADD COLUMN predicted_prob REAL")
 
             logger.info("Rank tracker tables initialized")
 
@@ -418,17 +455,22 @@ class RankTrackerDB:
     def add_keyword_prediction(self, blog_id: str, keyword: str, target_volume: int,
                                predicted_verdict: str, ceiling_volume: int = None,
                                ceiling_p50: int = None, serp_difficulty_label: str = None,
-                               confidence: str = None) -> int:
-        """judge-keyword 판정을 원장에 기록. 반환: prediction id."""
+                               confidence: str = None, predicted_prob: float = None) -> int:
+        """judge-keyword 판정을 원장에 기록. 반환: prediction id.
+
+        predicted_prob: 1페이지 진입 예측확률(0~1). Brier/CORP 채점의 예측값.
+        """
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO keyword_predictions
                     (blog_id, keyword, target_volume, predicted_verdict,
-                     ceiling_volume, ceiling_p50, serp_difficulty_label, confidence, outcome)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                     ceiling_volume, ceiling_p50, serp_difficulty_label, confidence,
+                     predicted_prob, outcome)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
             """, (blog_id, keyword, target_volume, predicted_verdict,
-                  ceiling_volume, ceiling_p50, serp_difficulty_label, confidence))
+                  ceiling_volume, ceiling_p50, serp_difficulty_label, confidence,
+                  predicted_prob))
             return cursor.lastrowid
 
     def record_prediction_actual(self, prediction_id: int, actual_rank: int = None) -> Dict:
@@ -482,10 +524,16 @@ class RankTrackerDB:
             return [dict(r) for r in cursor.fetchall()]
 
     def get_prediction_calibration(self, blog_id: str = None) -> Dict:
-        """예측 정확도(calibration) 집계. blog_id 주면 해당 블로그만.
+        """예측 정확도(calibration) 집계 — 3축(보정·판별·종합가치) 채점.
 
-        반환: 전체 정확도 + verdict별 hit/miss/총계.
-        이것이 '정답지가 쌓이면 판정이 정확해진다'를 실제로 증명하는 수치.
+        blog_id 주면 해당 블로그만. 정답지가 쌓이면 이 수치로 판정 임계값을 재보정한다.
+        딥리서치(2026-07) 근거로 단순 hit-rate 를 넘어 다음을 함께 반환:
+          - per_verdict: verdict별 hit/miss/정확도 (기존, 하위호환)
+          - brier: 확률예측 종합 점수 (=mean((p−y)²), 0완벽~1최악) — Brier
+          - base_rate: 실제 1페이지 진입 빈도(기준선). brier < base_rate*(1-base_rate)면 예측이 유의
+          - reliability_curve: CORP/PAV 신뢰도 곡선 [{mean_pred, mean_actual, count}]
+          - calibration_error: Σ count·|mean_pred−mean_actual| / N (0에 가까울수록 잘 보정됨)
+          - split: 시간순 분할(과거→미래 held-out) held-out Brier — 미래 일반화 성능
         """
         where = "WHERE outcome IN ('hit','miss')"
         params: tuple = ()
@@ -514,12 +562,61 @@ class RankTrackerDB:
                 th += r["hits"]
                 tm += r["misses"]
             graded = th + tm
+
+            # 확률예측 채점: predicted_prob 있고 실측된 것만 (예측 시각순)
+            prob_rows = cursor.execute(f"""
+                SELECT predicted_prob AS p, actual_page1 AS y, predicted_at
+                FROM keyword_predictions
+                {where} AND predicted_prob IS NOT NULL AND actual_page1 IS NOT NULL
+                ORDER BY predicted_at ASC
+            """, params).fetchall()
+
+            prob_result = self._score_probabilities([(r["p"], r["y"]) for r in prob_rows])
+
             return {
                 "graded_total": graded,
                 "overall_accuracy": round(th / graded, 3) if graded else None,
                 "per_verdict": per_verdict,
                 "pending": self._count_pending(blog_id),
+                **prob_result,
             }
+
+    @staticmethod
+    def _score_probabilities(pairs: List[tuple]) -> Dict:
+        """(predicted_prob, actual_0or1) 목록을 Brier·기준선·CORP곡선·시간순분할로 채점."""
+        n = len(pairs)
+        if n == 0:
+            return {"prob_graded": 0, "brier": None, "base_rate": None,
+                    "calibration_error": None, "reliability_curve": [], "split": None}
+
+        def _brier(ps):
+            return round(sum((p - y) ** 2 for p, y in ps) / len(ps), 4) if ps else None
+
+        base_rate = round(sum(y for _, y in pairs) / n, 3)
+        brier = _brier(pairs)
+        # 기준선(무정보) Brier = base_rate*(1-base_rate). 이보다 낮아야 예측이 값어치 있음.
+        ref_brier = round(base_rate * (1 - base_rate), 4)
+
+        curve = _pav_isotonic(pairs)
+        cal_err = round(sum(b["count"] * abs(b["mean_pred"] - b["mean_actual"]) for b in curve) / n, 4)
+
+        # 시간순 분할: 앞 70% 로 '학습', 뒤 30% held-out Brier (미래 일반화). 표본 충분할 때만.
+        split = None
+        if n >= 20:
+            cut = int(n * 0.7)
+            held = pairs[cut:]
+            split = {"train_n": cut, "test_n": len(held), "test_brier": _brier(held)}
+
+        return {
+            "prob_graded": n,
+            "brier": brier,
+            "reference_brier": ref_brier,
+            "skill": round(1 - brier / ref_brier, 3) if ref_brier else None,  # >0이면 무정보 기준선보다 나음
+            "base_rate": base_rate,
+            "calibration_error": cal_err,
+            "reliability_curve": curve,
+            "split": split,
+        }
 
     def _count_pending(self, blog_id: str = None) -> int:
         with self.get_connection() as conn:

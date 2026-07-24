@@ -8,6 +8,7 @@ email-validator==2.1.0
 
 # HTTP Client
 httpx==0.25.2
+aiohttp>=3.9.0  # rank_checker(블로그탭 순위조회) — 노출천장/판정 엔드포인트가 의존
 requests==2.31.0
 beautifulsoup4==4.12.2
 lxml==5.1.0
