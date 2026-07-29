@@ -13,7 +13,7 @@
 import asyncio
 import json
 import logging
-from typing import Dict, List, Set
+from typing import Dict, List, Optional, Set
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -139,6 +139,7 @@ async def collect_autocomplete_expanded(
     concurrency: int = 10,
     timeout: float = 5.0,
     adaptive: bool = True,
+    budget_seconds: Optional[float] = 150.0,
 ) -> Dict[str, List[str]]:
     """자모 접두사까지 확장해 자동완성을 수집한다.
 
@@ -164,8 +165,13 @@ async def collect_autocomplete_expanded(
                 owner[q] = s
                 queries.append(q)
 
+    # tier1 에 예산의 2/3, tier2 에 나머지. tier1 이 주력이므로 먼저 확보한다.
+    t1_budget = None if budget_seconds is None else budget_seconds * (2 / 3)
+    t2_budget = None if budget_seconds is None else budget_seconds - t1_budget
+
     raw = await collect_autocomplete(
-        queries, per_seed=per_seed, concurrency=concurrency, timeout=timeout
+        queries, per_seed=per_seed, concurrency=concurrency, timeout=timeout,
+        budget_seconds=t1_budget,
     )
 
     merged: Dict[str, Set[str]] = {s.strip(): set() for s in valid}
@@ -187,7 +193,8 @@ async def collect_autocomplete_expanded(
                         q2.append(q)
             if q2:
                 raw2 = await collect_autocomplete(
-                    q2, per_seed=per_seed, concurrency=concurrency, timeout=timeout
+                    q2, per_seed=per_seed, concurrency=concurrency, timeout=timeout,
+                    budget_seconds=t2_budget,
                 )
                 for q, kws in raw2.items():
                     src = owner2.get(q)
@@ -235,11 +242,13 @@ async def collect_bing_expanded(
     *,
     concurrency: int = 5,
     timeout: float = 8.0,
+    budget_seconds: Optional[float] = 60.0,
 ) -> Set[str]:
     """시드 + 자모 변형으로 Bing 서제스트를 훑는다.
 
     Bing 도 자모 접두사에 반응한다(실측: 시드만 44개 신규 → 자모까지 598개 신규).
     네이버가 막히거나 느려도 이 채널만 따로 죽으면 되도록 예외를 삼킨다.
+    보조 채널이라 시간 예산도 짧게 준다 — 초과분은 그냥 버린다.
     """
     valid = [s.strip() for s in seeds if s and isinstance(s, str) and len(s.strip()) >= 2]
     if not valid:
@@ -252,11 +261,22 @@ async def collect_bing_expanded(
 
     sem = asyncio.Semaphore(concurrency)
     out: Set[str] = set()
+    deadline = None if budget_seconds is None else (
+        asyncio.get_event_loop().time() + budget_seconds
+    )
+    skipped = 0
 
     try:
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
             async def _one(q: str) -> List[str]:
+                nonlocal skipped
+                if deadline is not None and asyncio.get_event_loop().time() >= deadline:
+                    skipped += 1
+                    return []
                 async with sem:
+                    if deadline is not None and asyncio.get_event_loop().time() >= deadline:
+                        skipped += 1
+                        return []
                     r = await _fetch_bing(client, q)
                     await asyncio.sleep(0.1)
                     return r
@@ -268,7 +288,10 @@ async def collect_bing_expanded(
         logger.warning(f"[bing] 수집 실패 — 네이버 결과만 사용: {type(e).__name__}: {e}")
         return set()
 
-    logger.warning(f"[bing] 질의 {len(queries)}회 → KW {len(out)}개")
+    logger.warning(
+        f"[bing] 질의 {len(queries) - skipped}/{len(queries)}회 → KW {len(out)}개"
+        + (f" (예산 {budget_seconds}s 초과로 {skipped} 건너뜀)" if skipped else "")
+    )
     return out
 
 
@@ -278,6 +301,7 @@ async def collect_autocomplete(
     per_seed: int = 10,
     concurrency: int = 10,
     timeout: float = 5.0,
+    budget_seconds: Optional[float] = None,
 ) -> Dict[str, List[str]]:
     """시드 N개의 자동완성 KW 를 동시 수집.
 
@@ -286,16 +310,33 @@ async def collect_autocomplete(
         per_seed: 시드당 자동완성 KW 최대 개수
         concurrency: 동시 호출 수 (rate limit 보호)
         timeout: 시드당 timeout (s)
+        budget_seconds: 전체 수집 시간 상한. 넘기면 남은 질의를 건너뛰고
+            그때까지 모은 결과를 반환한다. None 이면 무제한(기존 동작).
 
     Returns:
         { seed: [kw1, kw2, ...], ... }
     """
     sem = asyncio.Semaphore(concurrency)
     result: Dict[str, List[str]] = {}
+    # 시간 예산 — 자모 확장으로 질의가 시드당 15~43배가 되어 한 계정이 수천 건을
+    # 던진다. 비공식 endpoint 가 느려지거나 조이면 건당 timeout(5s)이 쌓여 한 계정이
+    # 채굴 채널 전체를 몇십 분씩 붙잡는다(실측: 시작 로그만 있고 완료 로그가 없음).
+    # 예산을 넘기면 남은 질의는 요청 없이 건너뛰고, 그때까지 모은 결과로 진행한다.
+    deadline = None if budget_seconds is None else (
+        asyncio.get_event_loop().time() + budget_seconds
+    )
+    skipped = 0
 
     async with httpx.AsyncClient(timeout=timeout, http2=False) as client:
         async def _one(seed: str):
+            nonlocal skipped
+            if deadline is not None and asyncio.get_event_loop().time() >= deadline:
+                skipped += 1
+                return seed, []
             async with sem:
+                if deadline is not None and asyncio.get_event_loop().time() >= deadline:
+                    skipped += 1
+                    return seed, []
                 kws = await _fetch_one(client, seed, limit=per_seed)
                 # rate limit 회피 — 시드당 최소 0.15s 간격
                 await asyncio.sleep(0.15)
@@ -308,4 +349,8 @@ async def collect_autocomplete(
                 result[seed] = kws
             except Exception as e:
                 logger.warning(f"[autocomplete] task 실패: {type(e).__name__}: {e}")
+    if skipped:
+        logger.warning(
+            f"[autocomplete] 시간예산({budget_seconds}s) 초과 — 질의 {skipped}/{len(tasks)} 건너뜀"
+        )
     return result
