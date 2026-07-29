@@ -4,6 +4,14 @@ primary_region = "nrt"
 [build]
   dockerfile = "Dockerfile"
 
+[env]
+  # 천장 백테스트 스크래핑. limit=30 은 playwright(30스크롤)+HTTP 페이지네이션이라 키워드당
+  # 2분 이상 걸린다 — 타임아웃은 **무한대기만** 끊는 안전장치여야 하고, 느리지만 정상인
+  # 스크래핑을 자르면 라벨이 전부 폐기된다(2026-07-27 실측: 150s → 10키워드/라벨 0).
+  BACKTEST_SCRAPE_TIMEOUT = "420"
+  # 공유 2 vCPU + /health 트래픽과 경합 → 3 은 키워드당 시간을 늘려 역효과. census 와 동일 보수치 2.
+  BACKTEST_CONCURRENCY = "2"
+
 [mounts]
   source = "blog_index_data"
   destination = "/data"

@@ -1639,10 +1639,11 @@ async def get_user_by_id(
 
 @router.post("/percentile/reset-seed")
 async def reset_percentile_seed_data(admin: dict = Depends(require_admin)):
-    """백분위 시드 데이터 리셋 (admin only)
+    """백분위 모집단 정리 (admin only)
 
-    새로운 점수 분포로 시드 데이터를 재생성합니다.
-    실제 분석된 블로그 데이터는 유지됩니다.
+    가짜 시드와 구버전(SCORING_VERSION 이전) 점수를 삭제합니다.
+    시드 재생성은 하지 않습니다 — 합성 시드가 모든 블로그를 "준최1"로
+    떨어뜨린 원인이었습니다. 현재 버전으로 실측된 블로그만 남습니다.
     """
     from database.blog_percentile_db import get_blog_percentile_db
 

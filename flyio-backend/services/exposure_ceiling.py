@@ -167,7 +167,8 @@ def _confidence(tested: int, ranked: int) -> str:
 _SCRAPE_SOURCES = frozenset({"playwright", "http", "http_regex"})
 
 
-async def blog_tab_serp(keyword: str, limit: int = RANK_CUTOFF_INDEXED) -> Optional[List[Dict]]:
+async def blog_tab_serp(keyword: str, limit: int = RANK_CUTOFF_INDEXED,
+                        max_scrolls: Optional[int] = None) -> Optional[List[Dict]]:
     """'실제 블로그탭' SERP 를 스크래핑 소스로만 조회. 폴백 결과면 None.
 
     Returns: [{blog_id, rank, post_url, rank_source}, ...] (순위 오름차순) 또는
@@ -175,7 +176,7 @@ async def blog_tab_serp(keyword: str, limit: int = RANK_CUTOFF_INDEXED) -> Optio
     """
     from routers.blogs import fetch_naver_search_results  # 지연 import (순환 회피)
     try:
-        results = await fetch_naver_search_results(keyword, limit=limit)
+        results = await fetch_naver_search_results(keyword, limit=limit, max_scrolls=max_scrolls)
     except Exception as e:
         logger.warning(f"[ceiling] blog-tab scrape failed {keyword!r}: {e}")
         return None

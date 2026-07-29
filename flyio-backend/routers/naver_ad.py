@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends, U
 from pydantic import BaseModel, Field
 from routers.auth_deps import get_user_id_with_fallback
 from routers.admin import require_admin
-from typing import Optional, List, Dict, Any, Tuple, Set
+from typing import Optional, List, Dict, Any, Tuple, Set, Union
 from datetime import datetime, timedelta
 import logging
 import asyncio
@@ -14318,7 +14318,9 @@ class NaverRawRequest(BaseModel):
     customer_id: Optional[str] = None
     method: str = Field("GET", description="GET|POST|PUT|DELETE")
     path: str = Field(..., description="네이버 API 경로. /ncc/ 로 시작해야 함 (예: /ncc/targets)")
-    body: Optional[dict] = Field(None, description="요청 body(JSON)")
+    # 네이버는 키워드 생성(POST /ncc/keywords)·입찰 bulk(PUT /ncc/keywords) 를 **배열 body** 로만 받는다.
+    # dict 전용이면 400 "Cannot deserialize ArrayList from Object value" → list 도 허용.
+    body: Optional[Union[dict, list]] = Field(None, description="요청 body(JSON). 객체 또는 배열")
 
 
 @router.post("/keyword-pool/debug/naver-raw")

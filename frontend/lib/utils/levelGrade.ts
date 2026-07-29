@@ -60,6 +60,48 @@ export function getGradeBadgeStyle(grade: string): string {
 }
 
 /**
+ * 레벨 진입 컷 점수 (백엔드 services/blog_analyzer.py:_LEVEL_CUTS 와 동일해야 함)
+ * 2026-07-29 실측 380개 분포 기반.
+ */
+export const LEVEL_CUTS: Array<{ level: number; cut: number }> = [
+  { level: 15, cut: 98.9 },
+  { level: 14, cut: 98.0 },
+  { level: 13, cut: 97.5 },
+  { level: 12, cut: 96.9 },
+  { level: 11, cut: 95.9 },
+  { level: 10, cut: 94.5 },
+  { level: 9, cut: 93.0 },
+  { level: 8, cut: 90.1 },
+  { level: 7, cut: 86.8 },
+  { level: 6, cut: 82.9 },
+  { level: 5, cut: 80.0 },
+  { level: 4, cut: 75.7 },
+  { level: 3, cut: 66.8 },
+  { level: 2, cut: 47.2 },
+]
+
+/**
+ * 다음 레벨까지 남은 점수.
+ *
+ * 예전에는 `(level + 1) * 6.67 - total_score` 라는 가짜 공식을 썼는데,
+ * 점수와 레벨이 그런 선형 관계였던 적이 없어서 음수("-3점 필요")가 표시됐다.
+ * 실제 컷 테이블에서 다음 구간 경계를 찾아 계산한다.
+ *
+ * @returns 이미 최고 레벨이면 null
+ */
+export function getPointsToNextLevel(
+  level: number,
+  totalScore: number
+): { nextLevel: number; pointsNeeded: number } | null {
+  const next = LEVEL_CUTS.filter((c) => c.level > level).sort((a, b) => a.level - b.level)[0]
+  if (!next) return null
+  return {
+    nextLevel: next.level,
+    pointsNeeded: Math.max(0, Math.ceil((next.cut - totalScore) * 10) / 10),
+  }
+}
+
+/**
  * 다음 등급까지 필요한 레벨 수 계산
  */
 export function getLevelsToNextGrade(level: number): { nextGrade: string; levelsNeeded: number } | null {

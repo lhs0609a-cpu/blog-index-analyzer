@@ -22,14 +22,16 @@ import TrialExpiryBanner from '@/components/TrialExpiryBanner'
 import { AnimatedScore, AnimatedLevel, CircularProgress } from '@/components/AnimatedScore'
 import ShareResult from '@/components/ShareResult'
 import { LiveToastNotifications } from '@/components/SocialProofSystem'
-import { getLevelGrade, getGradeBadgeStyle, getLevelsToNextGrade } from '@/lib/utils/levelGrade'
+import { getLevelGrade, getGradeBadgeStyle, getLevelsToNextGrade, getPointsToNextLevel } from '@/lib/utils/levelGrade'
 import TermTooltip from '@/components/TermTooltip'
 
 // P0-1: "그래서 뭐?" 문제 해결 - 점수 해석 & 예상 효과 컴포넌트
 function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywordSearch: () => void }) {
   const level = result.index.level
   const totalScore = result.index.total_score
-  const percentile = result.index.percentile || 50  // 실제 백분위 값 사용
+  // 실측 모집단이 얇으면 백분위가 null로 온다. 예전처럼 50을 채워 넣으면
+  // "상위 50%"라는 근거 없는 문구가 표시되므로, 없을 때는 등급으로만 말한다.
+  const percentile: number | null = result.index.percentile ?? null
   const cRank = result.index.score_breakdown?.c_rank || 50
   const dia = result.index.score_breakdown?.dia || 50
 
@@ -65,7 +67,7 @@ function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywo
   }
 
   const interpretation = levelInterpretation[level as keyof typeof levelInterpretation] || levelInterpretation[1]
-  const percentileText = getPercentileText(percentile)
+  const percentileText = percentile === null ? interpretation.tier : getPercentileText(percentile)
 
   // 1레벨 올랐을 때 예상 효과
   const nextLevelEffect = {
@@ -89,7 +91,9 @@ function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywo
       <div className="grid md:grid-cols-3 gap-4 mb-6">
         {/* 현재 위치 - P2-1: 등급 표시 추가 */}
         <div className="bg-white rounded-2xl p-5 border border-emerald-100">
-          <div className="text-sm text-gray-500 mb-1">전체 블로거 중</div>
+          <div className="text-sm text-gray-500 mb-1">
+            {percentile === null ? '현재 등급' : '전체 블로거 중'}
+          </div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-3xl font-bold text-emerald-600">{percentileText}</span>
             <span className={`px-2 py-1 rounded-lg text-sm font-bold ${getGradeBadgeStyle(gradeInfo.grade)}`}>
@@ -1672,11 +1676,25 @@ export default function AnalyzePage() {
         toast.error('분석 결과를 받지 못했습니다.')
       }
     } catch (error) {
-      const axiosError = error as { response?: { data?: { detail?: string } }; message?: string }
-      // 에러 유형별 메시지 분기
-      const errorMessage = axiosError?.response?.data?.detail || axiosError?.message || ''
+      type ErrorDetail = { error_code?: string; message?: string; canonical_blog_id?: string }
+      const axiosError = error as {
+        response?: { data?: { detail?: string | ErrorDetail } }
+        message?: string
+      }
+      // 백엔드는 detail을 객체로 내려준다 (문자열로 가정하면 .includes에서 터진다)
+      const rawDetail = axiosError?.response?.data?.detail
+      const detail: ErrorDetail = typeof rawDetail === 'object' && rawDetail !== null ? rawDetail : {}
+      const errorMessage =
+        (typeof rawDetail === 'string' ? rawDetail : detail.message) || axiosError?.message || ''
 
-      if (errorMessage.includes('not found') || errorMessage.includes('404') || errorMessage.includes('존재하지 않')) {
+      // 계정 ID를 블로그 주소로 착각한 경우 — 진짜 주소를 알려주고 바로 재시도시킨다
+      if (detail.error_code === 'MOVED' && detail.canonical_blog_id) {
+        const canonical = detail.canonical_blog_id
+        toast.error(`'${blogId}'는 블로그 주소가 아닙니다. 실제 주소는 '${canonical}' 입니다.`, {
+          duration: 8000,
+        })
+        setBlogId(canonical)
+      } else if (errorMessage.includes('not found') || errorMessage.includes('404') || errorMessage.includes('존재하지 않')) {
         toast.error('존재하지 않는 블로그입니다. ID를 확인해주세요.')
       } else if (errorMessage.includes('private') || errorMessage.includes('비공개')) {
         toast.error('비공개 블로그는 분석할 수 없습니다.')
@@ -1852,7 +1870,26 @@ export default function AnalyzePage() {
 
           {/* Results */}
           <AnimatePresence>
-            {result && !isAnalyzing && (
+            {/* 측정 불가 — 네이버에서 지표를 못 가져온 경우.
+                등급을 지어내지 않고 그 사실을 그대로 알린다. */}
+            {result && !isAnalyzing && result.index.level === null && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="glass-3d p-8 text-center"
+              >
+                <div className="text-5xl mb-4">🔍</div>
+                <h2 className="text-2xl font-bold mb-2">측정할 수 없습니다</h2>
+                <p className="text-gray-600 mb-1">
+                  {result.index.unmeasurable_reason || '네이버에서 블로그 지표를 가져오지 못했습니다.'}
+                </p>
+                <p className="text-sm text-gray-500">
+                  블로그가 비공개이거나 아직 글이 없을 수 있습니다. 잠시 후 다시 시도해 주세요.
+                </p>
+              </motion.div>
+            )}
+
+            {result && !isAnalyzing && result.index.level !== null && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1988,10 +2025,10 @@ export default function AnalyzePage() {
                           </div>
 
                           {/* 다음 티어 안내 - 롤 스타일 */}
-                          {result.index.level < 15 && (
+                          {result.index.level !== null && result.index.level < 15 && (
                             <div className="mt-8 text-center">
                               {(() => {
-                                const level = result.index.level
+                                const level = result.index.level as number
                                 const nextTierInfo =
                                   level <= 2 ? { nextTier: 'Bronze', color: 'text-amber-700', bg: 'bg-amber-100' } :
                                   level <= 4 ? { nextTier: 'Silver', color: 'text-slate-700', bg: 'bg-slate-100' } :
@@ -2001,7 +2038,9 @@ export default function AnalyzePage() {
                                   level <= 13 ? { nextTier: 'Challenger', color: 'text-orange-700', bg: 'bg-orange-100' } :
                                   { nextTier: 'MAX', color: 'text-[#0064FF]', bg: 'bg-blue-100' }
 
-                                const pointsNeeded = Math.ceil((result.index.level + 1) * 6.67 - result.index.total_score)
+                                // 실제 레벨 컷 테이블 기준 (예전 level*6.67 공식은 음수가 나왔다)
+                                const nextStep = getPointsToNextLevel(level, result.index.total_score)
+                                const pointsNeeded = nextStep?.pointsNeeded ?? 0
 
                                 return (
                                   <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-[#0064FF]/5 to-[#3182F6]/10 rounded-2xl border border-blue-100 shadow-sm">

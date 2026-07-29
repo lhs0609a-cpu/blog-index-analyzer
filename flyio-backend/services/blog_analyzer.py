@@ -9,56 +9,45 @@ from typing import Dict, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 
-def get_blog_level_from_score(score: float) -> Tuple[int, str]:
-    """
-    점수 기반 레벨 계산 (일반/준최/최적/최적+ 체계)
+# ===== 절대 기준표 (백분위 모집단이 얇을 때의 판정 기준) =====
+#
+# 구간은 임의로 고른 숫자가 아니라 실측으로 뽑았다.
+# 2026-07-29, 네이버 블로그 검색(24개 주제 × 상위글)에서 모은 실제 블로그 380개를
+# 현재 스코어링(SCORING_VERSION=4)으로 채점해 그 분포의 분위수를 구간 경계로 삼았다.
+#   측정 분포: min 31.8 / 중앙값 82.9 / max 99.1
+# 각 레벨이 가져가는 비율은 blog_percentile_db.get_level_from_percentile과 동일하게 맞췄다
+# (최적+ 상위 5%, 최적 상위 17%, 준최 그 아래, 일반 하위 3%).
+#
+# ⚠️ 모집단 성격: "검색에 노출되는 블로그"다. 전체 네이버 블로그 평균이 아니다.
+#    방치 블로그는 이 표본에 거의 없으므로 중앙값이 82.9로 높게 잡힌다.
+#    즉 이 등급은 "검색 경쟁권 블로그들 사이에서의 위치"로 읽어야 한다.
+_LEVEL_CUTS = [
+    (98.9, 15, "최적4+"),
+    (98.0, 14, "최적3+"),
+    (97.5, 13, "최적2+"),
+    (96.9, 12, "최적1+"),
+    (95.9, 11, "최적3"),
+    (94.5, 10, "최적2"),
+    (93.0, 9, "최적1"),
+    (90.1, 8, "준최7"),
+    (86.8, 7, "준최6"),
+    (82.9, 6, "준최5"),
+    (80.0, 5, "준최4"),
+    (75.7, 4, "준최3"),
+    (66.8, 3, "준최2"),
+    (47.2, 2, "준최1"),
+]
 
-    - 95+ : Lv.15 최적4+
-    - 90+ : Lv.14 최적3+
-    - 85+ : Lv.13 최적2+
-    - 80+ : Lv.12 최적1+
-    - 75+ : Lv.11 최적3
-    - 72+ : Lv.10 최적2
-    - 68+ : Lv.9  최적1
-    - 65+ : Lv.8  준최7
-    - 60+ : Lv.7  준최6
-    - 55+ : Lv.6  준최5
-    - 50+ : Lv.5  준최4
-    - 45+ : Lv.4  준최3
-    - 35+ : Lv.3  준최2
-    - 25+ : Lv.2  준최1
-    - <25 : Lv.1  일반
+
+def get_blog_level_from_score(score: float) -> Tuple[int, str]:
+    """점수 → 레벨/등급 (일반/준최/최적/최적+ 체계)
+
+    구간 근거는 위 _LEVEL_CUTS 주석 참조 (실측 380개 분포 기반).
     """
-    if score >= 95:
-        return 15, "최적4+"
-    elif score >= 90:
-        return 14, "최적3+"
-    elif score >= 85:
-        return 13, "최적2+"
-    elif score >= 80:
-        return 12, "최적1+"
-    elif score >= 75:
-        return 11, "최적3"
-    elif score >= 72:
-        return 10, "최적2"
-    elif score >= 68:
-        return 9, "최적1"
-    elif score >= 65:
-        return 8, "준최7"
-    elif score >= 60:
-        return 7, "준최6"
-    elif score >= 55:
-        return 6, "준최5"
-    elif score >= 50:
-        return 5, "준최4"
-    elif score >= 45:
-        return 4, "준최3"
-    elif score >= 35:
-        return 3, "준최2"
-    elif score >= 25:
-        return 2, "준최1"
-    else:
-        return 1, "일반"
+    for cut, level, grade in _LEVEL_CUTS:
+        if score >= cut:
+            return level, grade
+    return 1, "일반"
 
 
 async def analyze_blog(blog_id: str, keyword: str = None) -> Optional[Dict]:

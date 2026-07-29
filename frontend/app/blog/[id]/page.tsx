@@ -197,8 +197,8 @@ export default function BlogDetailPage() {
       })
     }
 
-    // 레벨 기반 추천
-    if (blogData.index.level < 5) {
+    // 레벨 기반 추천 (측정 불가면 레벨 근거 추천을 하지 않는다 — null < 5 는 true다)
+    if (blogData.index.level !== null && blogData.index.level < 5) {
       tips.push({
         title: '콘텐츠 품질 향상',
         description: '이미지, 영상 등 멀티미디어를 활용하고 깊이 있는 콘텐츠를 작성하세요.',
@@ -296,9 +296,11 @@ export default function BlogDetailPage() {
                   <Award className="w-12 h-12 text-white" />
                 </div>
                 <div className="text-4xl font-bold gradient-text mb-1">
-                  Level {displayData.index.level}
+                  {displayData.index.level === null ? '측정 불가' : `Level ${displayData.index.level}`}
                 </div>
-                <div className="text-sm text-gray-600 mb-2">Lv.{displayData.index.level}</div>
+                {displayData.index.level !== null && (
+                  <div className="text-sm text-gray-600 mb-2">Lv.{displayData.index.level}</div>
+                )}
               </motion.div>
             </div>
 

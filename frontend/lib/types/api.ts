@@ -50,11 +50,17 @@ export interface BlogIndexResult {
   /** 200 + 빈 RSS 피드 (미발행/비공개 가능성) */
   rss_empty?: boolean
   index: {
-    level: number
+    /** 실측 신호를 하나도 못 얻으면 null — 등급을 지어내지 않는다 */
+    level: number | null
     grade: string
     level_category: string
     total_score: number
-    percentile: number
+    /** 실측 모집단이 얇으면 null (절대 기준표로 판정 중) */
+    percentile: number | null
+    /** 레벨 판정 근거: 실측 모집단 백분위 vs 절대 기준표 */
+    level_basis?: 'percentile' | 'absolute'
+    /** 측정 불가 사유 (level === null 일 때) */
+    unmeasurable_reason?: string
     /** 활동성 계수 (0.10~1.0). 최종 점수에 곱해진다 */
     vitality?: number
     vitality_state?:
@@ -63,8 +69,8 @@ export interface BlogIndexResult {
     days_since_last_post?: number | null
     posts_last_90d?: number | null
     rss_truncated?: boolean
-    /** 레벨 산출 근거: 실측 색인 검증 vs 휴리스틱 */
-    level_source?: 'measured' | 'heuristic'
+    /** 레벨 산출 근거: 실측 색인 검증 vs 휴리스틱 vs 측정 불가 */
+    level_source?: 'measured' | 'heuristic' | 'unavailable'
     confidence?: 'high' | 'medium' | 'low'
     score_breakdown: {
       c_rank: number  // C-Rank (출처 신뢰도) 50%

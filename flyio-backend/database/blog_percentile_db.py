@@ -19,6 +19,16 @@ else:
     _default_path = "/data/blog_percentile.db"
 PERCENTILE_DB_PATH = os.environ.get("PERCENTILE_DB_PATH", _default_path)
 
+# ===== 점수 산출 버전 =====
+# 스코어링 파이프라인이 바뀌면 과거 점수는 다른 자로 잰 값이라 같은 분포에 섞으면 안 된다.
+# v4: 모바일 하이드레이션 스크래핑 복구(포스트/이웃/방문자 실측) +
+#     c_rank/dia 가중치 정규화(총점 상한 56 → 100). 그 이전 점수는 전부 무효.
+SCORING_VERSION = 4
+
+# 백분위를 신뢰하려면 실측 모집단이 이만큼은 있어야 한다.
+# 그 아래에서는 표본이 얇아 백분위가 요동치므로 절대 기준표로 판정한다.
+MIN_POPULATION_FOR_PERCENTILE = 300
+
 
 class BlogPercentileDB:
     """블로그 백분위 데이터베이스"""
@@ -27,7 +37,7 @@ class BlogPercentileDB:
         self.db_path = db_path
         self._ensure_db_exists()
         self._init_tables()
-        self._seed_initial_data()
+        self._purge_invalid_scores()
 
     def _ensure_db_exists(self):
         """DB 디렉토리 생성"""
@@ -63,6 +73,12 @@ class BlogPercentileDB:
                 )
             """)
 
+            # 기존 DB에 scoring_version 컬럼 추가 (마이그레이션)
+            cursor.execute("PRAGMA table_info(blog_scores)")
+            columns = {row['name'] for row in cursor.fetchall()}
+            if 'scoring_version' not in columns:
+                cursor.execute("ALTER TABLE blog_scores ADD COLUMN scoring_version INTEGER DEFAULT 0")
+
             # 점수 분포 캐시 테이블 - 빠른 백분위 계산용
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS score_distribution (
@@ -93,120 +109,62 @@ class BlogPercentileDB:
         finally:
             conn.close()
 
-    def _seed_initial_data(self):
-        """초기 데이터 시드 - 실제 네이버 블로그 레벨 분포 반영 (v3)
+    def _purge_invalid_scores(self):
+        """가짜 시드 + 구버전 점수 제거.
 
-        실제 네이버 블로그 레벨 분포 (크롤링 데이터 기반 추정):
-        - 네이버 Lv.1 (신규/방치): 약 10-12%
-        - 네이버 Lv.2 (초보): 약 28-32%
-        - 네이버 Lv.3 (활성): 약 40-45%
-        - 네이버 Lv.4 (우수): 약 15-18%
+        예전에는 여기서 가상 블로그 10만 개를 심어 그 분포로 백분위를 냈다.
+        그 시드의 중앙값은 55점인데 당시 실측 파이프라인은 스크래핑이 깨져 30점을
+        넘지 못했다. 결과적으로 어떤 블로그를 넣어도 하위 5%로 떨어져
+        전부 "준최1"이 나왔다. (2026-07-29 진단)
 
-        블랭크 레벨 매핑:
-        - 네이버 Lv.1 → 블랭크 Lv.1-2 (점수 15-35)
-        - 네이버 Lv.2 → 블랭크 Lv.3-4 (점수 35-50)
-        - 네이버 Lv.3 → 블랭크 Lv.5-7 (점수 50-70)
-        - 네이버 Lv.4 → 블랭크 Lv.8-15 (점수 70-100)
-
-        키워드 검색 상위 노출 블로그 기준:
-        - 상위 노출되는 블로그는 대부분 Lv.3-4
-        - 따라서 분석 결과에서도 Lv.3-4가 많이 나와야 함
+        이제 백분위는 같은 SCORING_VERSION으로 실측된 블로그끼리만 계산하고,
+        모집단이 얇으면 아예 백분위를 쓰지 않는다(절대 기준표로 폴백).
         """
         conn = self._get_connection()
         try:
             cursor = conn.cursor()
 
-            # 시드 데이터 버전 (v3 = 실제 네이버 레벨 분포 반영)
-            SEED_VERSION = 3.0
+            cursor.execute("DELETE FROM blog_scores WHERE is_seed = 1")
+            seed_deleted = cursor.rowcount
 
-            cursor.execute("""
-                SELECT stat_value FROM percentile_stats WHERE stat_key = 'seed_version'
-            """)
-            version_row = cursor.fetchone()
-            current_version = version_row['stat_value'] if version_row else None
+            # 다른 자로 잰 점수는 같은 분포에 섞을 수 없다
+            cursor.execute(
+                "DELETE FROM blog_scores WHERE COALESCE(scoring_version, 0) < ?",
+                (SCORING_VERSION,),
+            )
+            stale_deleted = cursor.rowcount
 
-            if current_version and current_version >= SEED_VERSION:
-                # 이미 최신 버전 시드 데이터가 있음
-                cursor.execute("SELECT COUNT(*) as cnt FROM blog_scores WHERE is_seed = 1")
-                row = cursor.fetchone()
-                if row and row['cnt'] > 1000:
-                    return
-
-            # 버전이 낮거나 없으면 기존 시드 삭제 후 재생성
-            if current_version and current_version < SEED_VERSION:
-                logger.info(f"Upgrading seed data from v{current_version} to v{SEED_VERSION}")
-                cursor.execute("DELETE FROM blog_scores WHERE is_seed = 1")
+            if seed_deleted or stale_deleted:
                 cursor.execute("DELETE FROM score_distribution")
-                conn.commit()
+                self._update_distribution_cache(cursor)
+                logger.info(
+                    f"Purged percentile population: seeds={seed_deleted}, "
+                    f"stale(<v{SCORING_VERSION})={stale_deleted}"
+                )
 
-            logger.info(f"Seeding blog score distribution v{SEED_VERSION} (실제 네이버 레벨 분포 반영)...")
-
-            # ========================================================
-            # 실제 네이버 블로그 레벨 분포 기반 점수 분포
-            # ========================================================
-            #
-            # 네이버 Lv.1 (10%): 점수 15-35 → 블랭크 Lv.1-2
-            # 네이버 Lv.2 (30%): 점수 35-50 → 블랭크 Lv.3-4
-            # 네이버 Lv.3 (43%): 점수 50-70 → 블랭크 Lv.5-7 (가장 많음)
-            # 네이버 Lv.4 (17%): 점수 70-100 → 블랭크 Lv.8-15
-            #
-            # 키워드 검색 상위 노출 블로그는 대부분 Lv.3-4이므로
-            # 분석 결과에서 블랭크 Lv.3-7이 많이 나와야 함
-
-            distribution = [
-                # 네이버 Lv.1 영역 (10%) - 블랭크 Lv.1-2
-                (15, 25, 5000),     # 5% - 방치/신규 블로그
-                (25, 35, 5000),     # 5% - 저활동 블로그
-
-                # 네이버 Lv.2 영역 (30%) - 블랭크 Lv.3-4
-                (35, 42, 15000),    # 15% - 초보 블로그
-                (42, 50, 15000),    # 15% - 입문 블로그
-
-                # 네이버 Lv.3 영역 (43%) - 블랭크 Lv.5-7 (가장 많음)
-                (50, 57, 15000),    # 15% - 일반 활성 블로그
-                (57, 63, 14000),    # 14% - 활성 블로그
-                (63, 70, 14000),    # 14% - 준최적화 블로그
-
-                # 네이버 Lv.4 영역 (17%) - 블랭크 Lv.8-15
-                (70, 78, 8000),     # 8% - 최적화 블로그
-                (78, 85, 5000),     # 5% - 인플루언서급
-                (85, 92, 2500),     # 2.5% - 파워블로거
-                (92, 100, 1500),    # 1.5% - 최상위
-            ]
-
-            seed_data = []
-            for min_score, max_score, count in distribution:
-                for i in range(count):
-                    # 각 범위 내에서 정규 분포에 가깝게 점수 생성
-                    mid = (min_score + max_score) / 2
-                    std = (max_score - min_score) / 4
-                    score = random.gauss(mid, std)
-                    score = max(min_score, min(max_score - 0.1, score))
-
-                    # 가상 블로그 ID
-                    fake_blog_id = f"seed_v3_{min_score}_{i}"
-                    seed_data.append((fake_blog_id, round(score, 1), 1))
-
-            # 배치 삽입
-            cursor.executemany("""
-                INSERT OR IGNORE INTO blog_scores (blog_id, total_score, is_seed)
-                VALUES (?, ?, ?)
-            """, seed_data)
-
-            # 점수 분포 캐시 업데이트
-            self._update_distribution_cache(cursor)
-
-            # 시드 버전 저장
-            cursor.execute("""
-                INSERT OR REPLACE INTO percentile_stats (stat_key, stat_value, updated_at)
-                VALUES ('seed_version', ?, CURRENT_TIMESTAMP)
-            """, (SEED_VERSION,))
-
+            cursor.execute(
+                "INSERT OR REPLACE INTO percentile_stats (stat_key, stat_value, updated_at) "
+                "VALUES ('scoring_version', ?, CURRENT_TIMESTAMP)",
+                (SCORING_VERSION,),
+            )
             conn.commit()
-            logger.info(f"Seeded {len(seed_data)} blog scores (v{SEED_VERSION})")
         except Exception as e:
-            logger.error(f"Error seeding data: {e}")
+            logger.error(f"Error purging invalid scores: {e}")
             conn.rollback()
+        finally:
+            conn.close()
+
+    def get_population_size(self) -> int:
+        """현재 스코어링 버전으로 실측된 블로그 수 (백분위 신뢰도의 근거)"""
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT COUNT(*) as cnt FROM blog_scores "
+                "WHERE is_seed = 0 AND scoring_version = ?",
+                (SCORING_VERSION,),
+            )
+            return cursor.fetchone()['cnt']
         finally:
             conn.close()
 
@@ -228,10 +186,11 @@ class BlogPercentileDB:
                 INSERT INTO score_distribution (score_bucket, count)
                 SELECT CAST(total_score AS INTEGER) as bucket, COUNT(*) as cnt
                 FROM blog_scores
+                WHERE is_seed = 0 AND scoring_version = ?
                 GROUP BY bucket
-            """)
+            """, (SCORING_VERSION,))
 
-            # 통계 업데이트
+            # 통계 업데이트 (현재 버전 실측 모집단 기준)
             cursor.execute("""
                 SELECT
                     COUNT(*) as total,
@@ -239,7 +198,8 @@ class BlogPercentileDB:
                     MIN(total_score) as min_score,
                     MAX(total_score) as max_score
                 FROM blog_scores
-            """)
+                WHERE is_seed = 0 AND scoring_version = ?
+            """, (SCORING_VERSION,))
             row = cursor.fetchone()
 
             if row:
@@ -269,14 +229,16 @@ class BlogPercentileDB:
             cursor = conn.cursor()
 
             cursor.execute("""
-                INSERT INTO blog_scores (blog_id, total_score, level, is_seed, updated_at)
-                VALUES (?, ?, ?, 0, CURRENT_TIMESTAMP)
+                INSERT INTO blog_scores (blog_id, total_score, level, is_seed, scoring_version, updated_at)
+                VALUES (?, ?, ?, 0, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(blog_id) DO UPDATE SET
                     total_score = ?,
                     level = ?,
                     is_seed = 0,
+                    scoring_version = ?,
                     updated_at = CURRENT_TIMESTAMP
-            """, (blog_id, total_score, level, total_score, level))
+            """, (blog_id, total_score, level, SCORING_VERSION,
+                  total_score, level, SCORING_VERSION))
 
             conn.commit()
             return True
@@ -286,28 +248,32 @@ class BlogPercentileDB:
         finally:
             conn.close()
 
-    def get_percentile(self, total_score: float) -> float:
-        """주어진 점수의 백분위 계산 (0-100)
+    def get_percentile(self, total_score: float) -> Optional[float]:
+        """주어진 점수의 백분위 계산 (0-100).
 
-        백분위 = (이 점수보다 낮은 블로그 수 / 전체 블로그 수) * 100
+        같은 SCORING_VERSION으로 실측된 블로그만 모집단에 넣는다.
+        모집단이 MIN_POPULATION_FOR_PERCENTILE 미만이면 **None**을 돌려준다.
+        예전처럼 50.0 같은 값을 지어내지 않는다 — 표본이 없는데 백분위를 만들어내면
+        호출부가 그걸 근거 있는 판정으로 착각한다.
         """
         conn = self._get_connection()
         try:
             cursor = conn.cursor()
 
-            # 이 점수보다 낮은 블로그 수
             cursor.execute("""
                 SELECT COUNT(*) as cnt FROM blog_scores
-                WHERE total_score < ?
-            """, (total_score,))
-            lower_count = cursor.fetchone()['cnt']
-
-            # 전체 블로그 수
-            cursor.execute("SELECT COUNT(*) as cnt FROM blog_scores")
+                WHERE is_seed = 0 AND scoring_version = ?
+            """, (SCORING_VERSION,))
             total_count = cursor.fetchone()['cnt']
 
-            if total_count == 0:
-                return 50.0  # 데이터 없으면 중간값
+            if total_count < MIN_POPULATION_FOR_PERCENTILE:
+                return None
+
+            cursor.execute("""
+                SELECT COUNT(*) as cnt FROM blog_scores
+                WHERE is_seed = 0 AND scoring_version = ? AND total_score < ?
+            """, (SCORING_VERSION, total_score))
+            lower_count = cursor.fetchone()['cnt']
 
             percentile = (lower_count / total_count) * 100
             return round(percentile, 1)
@@ -410,34 +376,49 @@ class BlogPercentileDB:
             cursor.execute("SELECT COUNT(*) as cnt FROM blog_scores WHERE is_seed = 0")
             stats['real_blogs'] = cursor.fetchone()['cnt']
 
+            cursor.execute(
+                "SELECT COUNT(*) as cnt FROM blog_scores WHERE is_seed = 0 AND scoring_version = ?",
+                (SCORING_VERSION,),
+            )
+            population = cursor.fetchone()['cnt']
+            stats['population'] = population
+            stats['scoring_version'] = SCORING_VERSION
+            stats['min_population_for_percentile'] = MIN_POPULATION_FOR_PERCENTILE
+            # False면 절대 기준표로 판정 중이라는 뜻
+            stats['percentile_active'] = population >= MIN_POPULATION_FOR_PERCENTILE
+
             return stats
         finally:
             conn.close()
 
-    def get_score_for_percentile(self, target_percentile: float) -> float:
-        """특정 백분위에 해당하는 점수 조회"""
+    def get_score_for_percentile(self, target_percentile: float) -> Optional[float]:
+        """특정 백분위에 해당하는 점수 조회 (모집단이 없으면 None)"""
         conn = self._get_connection()
         try:
             cursor = conn.cursor()
 
-            # 전체 블로그 수
-            cursor.execute("SELECT COUNT(*) as cnt FROM blog_scores")
+            # 현재 스코어링 버전의 실측 모집단만
+            cursor.execute(
+                "SELECT COUNT(*) as cnt FROM blog_scores WHERE is_seed = 0 AND scoring_version = ?",
+                (SCORING_VERSION,),
+            )
             total = cursor.fetchone()['cnt']
 
             if total == 0:
-                return 50.0
+                return None
 
             # 해당 백분위 위치의 점수
             offset = int(total * (target_percentile / 100))
 
             cursor.execute("""
                 SELECT total_score FROM blog_scores
+                WHERE is_seed = 0 AND scoring_version = ?
                 ORDER BY total_score ASC
                 LIMIT 1 OFFSET ?
-            """, (offset,))
+            """, (SCORING_VERSION, offset))
 
             row = cursor.fetchone()
-            return row['total_score'] if row else 50.0
+            return row['total_score'] if row else None
         finally:
             conn.close()
 
@@ -453,32 +434,20 @@ class BlogPercentileDB:
             conn.close()
 
     def reset_seed_data(self):
-        """시드 데이터 리셋 - 새로운 분포로 재생성"""
-        conn = self._get_connection()
-        try:
-            cursor = conn.cursor()
+        """가짜 시드/구버전 점수 제거 (재생성하지 않는다).
 
-            # 기존 시드 데이터 삭제
-            cursor.execute("DELETE FROM blog_scores WHERE is_seed = 1")
-            deleted_count = cursor.rowcount
-
-            # 분포 캐시 초기화
-            cursor.execute("DELETE FROM score_distribution")
-
-            conn.commit()
-            logger.info(f"Deleted {deleted_count} seed records")
-
-            # 새로운 시드 데이터 생성
-            self._seed_initial_data()
-
-            logger.info("Seed data reset completed with new distribution")
-            return {"deleted": deleted_count, "status": "success"}
-        except Exception as e:
-            logger.error(f"Error resetting seed data: {e}")
-            conn.rollback()
-            return {"error": str(e), "status": "failed"}
-        finally:
-            conn.close()
+        이름은 호환을 위해 유지한다. 시드 재생성은 폐기됐다 —
+        가짜 모집단이 모든 블로그를 "준최1"로 만든 원인이었다.
+        """
+        self._purge_invalid_scores()
+        population = self.get_population_size()
+        logger.info(f"Percentile population after purge: {population}")
+        return {
+            "status": "success",
+            "population": population,
+            "scoring_version": SCORING_VERSION,
+            "percentile_active": population >= MIN_POPULATION_FOR_PERCENTILE,
+        }
 
 
 # 싱글톤 인스턴스

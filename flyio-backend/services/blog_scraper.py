@@ -800,7 +800,8 @@ async def scrape_view_tab_results(keyword: str, limit: int = 20) -> list:
         return []
 
 
-async def scrape_blog_tab_results(keyword: str, limit: int = 20) -> list:
+async def scrape_blog_tab_results(keyword: str, limit: int = 20,
+                                  max_scrolls: Optional[int] = None) -> list:
     """
     Scrape Naver BLOG tab search results using Playwright
     BLOG tab shows only blog posts (no cafe, news, etc.)
@@ -808,10 +809,15 @@ async def scrape_blog_tab_results(keyword: str, limit: int = 20) -> list:
     Args:
         keyword: Search keyword
         limit: Maximum number of results to return
+        max_scrolls: 지연로딩 스크롤 횟수(기본 30 = 기존 동작). 상위 10위만 필요한 호출자는
+            낮추면 크게 싸진다 — 스크롤 sleep 만 30×0.3s + 더보기 후 10×0.3s + 4s 라서
+            포화된 CPU 에서는 이 상수가 키워드당 수분을 만든다(2026-07-27 백테스트 420s
+            타임아웃 실측). None/30 이면 기존 호출자 동작 무변경.
 
     Returns:
         List of blog results with blog_id, post_url, post_title, etc.
     """
+    n_scrolls = 30 if max_scrolls is None else max(1, int(max_scrolls))
     from urllib.parse import quote
     global _browser, _playwright
     results = []
@@ -860,26 +866,28 @@ async def scrape_blog_tab_results(keyword: str, limit: int = 20) -> list:
 
         # Scroll down multiple times to load more results (lazy loading)
         # 스크롤 횟수 대폭 증가 (15 → 30) - 더 많은 결과 로드
-        for i in range(30):
-            await page.evaluate(f'window.scrollTo(0, document.body.scrollHeight * {(i+1)/30})')
+        for i in range(n_scrolls):
+            await page.evaluate(f'window.scrollTo(0, document.body.scrollHeight * {(i+1)/n_scrolls})')
             await asyncio.sleep(0.3)
 
         # Final scroll to absolute bottom
         await page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
         await asyncio.sleep(2)
 
-        # "더보기" 버튼이 있으면 클릭하여 더 많은 결과 로드
-        try:
-            more_button = await page.query_selector('a.btn_more, button.btn_more, .api_more_wrap a')
-            if more_button:
-                await more_button.click()
-                await asyncio.sleep(2)
-                # 추가 스크롤 (더 많이)
-                for i in range(10):
-                    await page.evaluate(f'window.scrollTo(0, document.body.scrollHeight * {(i+1)/10})')
-                    await asyncio.sleep(0.3)
-        except:
-            pass
+        # "더보기" 버튼이 있으면 클릭하여 더 많은 결과 로드.
+        # 스크롤을 줄인 호출자(= 상위 소수만 필요)에게는 순수 낭비라 생략한다.
+        if max_scrolls is None or n_scrolls >= 30:
+            try:
+                more_button = await page.query_selector('a.btn_more, button.btn_more, .api_more_wrap a')
+                if more_button:
+                    await more_button.click()
+                    await asyncio.sleep(2)
+                    # 추가 스크롤 (더 많이)
+                    for i in range(10):
+                        await page.evaluate(f'window.scrollTo(0, document.body.scrollHeight * {(i+1)/10})')
+                        await asyncio.sleep(0.3)
+            except:
+                pass
 
         # Extract blog post links using JavaScript - 실제 검색 결과 순서대로 추출
         blog_links = await page.evaluate('''() => {

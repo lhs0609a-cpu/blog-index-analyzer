@@ -377,6 +377,20 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"⚠️ Reputation monitor failed to start: {e}")
 
+    # 천장 백테스트 이어받기 — 수시간~수십시간 run 이 재배포/재시작을 만나도 완주하게.
+    # RUN_SCHEDULERS(=worker 프로세스)에서만: API 프로세스에서 돌리면 스크래핑이 이벤트루프 점유.
+    if RUN_SCHEDULERS:
+        try:
+            from services.ceiling_backtest import resume_if_interrupted, backtest_watchdog_loop
+            resumed = resume_if_interrupted(ignore_stale=True)  # 부팅 = 러너 없음이 확실
+            if resumed:
+                logger.warning(f"🔁 Ceiling backtest resumed: {resumed}")
+            # 워치독: 재시작 없이 요청이 유실된 경우(오프로드 ack 타임아웃)도 5분 내 복구.
+            asyncio.create_task(backtest_watchdog_loop())
+            logger.info("✅ Ceiling backtest watchdog started (every 5 min)")
+        except Exception as e:
+            logger.warning(f"⚠️ Ceiling backtest resume failed: {e}")
+
     yield
 
     # Shutdown - 빠른 종료 (타임아웃 방지)
@@ -587,6 +601,10 @@ _WORKER_OFFLOAD_PATHS = frozenset({
     "/api/naver-ad/keyword-pool/seed-explode-register",   # 필러 직격 경로(30s마다 ×3)
     "/api/naver-ad/keyword-pool/trigger-now",             # 페이지 '즉시발굴'(fire-and-forget)
     "/api/naver-ad/keyword-pool/admin/run",               # 관리자 즉시발굴(동일 패턴)
+    # NOTE: blogs/debug/ceiling-backtest 는 **오프로드 안 함** — 프록시가 8s ReadTimeout 후
+    # httpx 를 닫으면 worker 요청이 끊겨 핸들러가 아예 안 돌았다(2026-07-27 실측, 202 만 받고
+    # 무실행). 대신 app 핸들러는 /data 에 요청파일만 쓰고(가벼움) worker 워치독이 claim 해
+    # 실행한다 — 제어는 HTTP, 실행 트리거는 공유 볼륨.
     # NOTE: extension/image-backfill 도 offload 에서 제외 — 워커(nice 19)가 cron 으로 포화되면
     # 이미지 백필(그룹당 조회+생성 2콜)이 CPU 굶음 + cron 과 네이버 API 경쟁으로 breaker 반복
     # OPEN → 후반 그룹 이미지 대량 누락. backfill-creative 와 동일하게 app 프로세스(scheduler

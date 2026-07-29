@@ -22,9 +22,15 @@ from services.category_weights import detect_keyword_category, get_category_weig
 from database.keyword_analysis_db import get_cached_related_keywords, cache_related_keywords
 from services.learning_engine import train_model, calculate_blog_score
 from database.blog_percentile_db import get_blog_percentile_db
+from services.blog_analyzer import get_blog_level_from_score
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+class _LevelJudgementSkipped(Exception):
+    """실측 신호가 없어 레벨 판정을 건너뛴다는 내부 신호 (에러가 아님)."""
+
 
 # ===== 글로벌 동시 요청 제한 (서버 과부하 방지) =====
 # 여러 키워드 동시 분석 시에도 전체 요청 수 제한
@@ -723,14 +729,19 @@ def apply_diversity_filter(search_results: List[Dict]) -> List[Dict]:
     return reordered
 
 
-async def fetch_naver_search_results(keyword: str, limit: int = 10) -> List[Dict]:
-    """Fetch search results from Naver Blog Tab (actual search results)"""
+async def fetch_naver_search_results(keyword: str, limit: int = 10,
+                                     max_scrolls: Optional[int] = None) -> List[Dict]:
+    """Fetch search results from Naver Blog Tab (actual search results)
+
+    max_scrolls: playwright 지연로딩 스크롤 횟수(기본 None=30, 기존 동작). 대량 측정처럼
+        상위 소수만 필요한 호출자가 낮춰 쓴다 — 스크롤 상수가 키워드당 비용을 지배한다.
+    """
     results = []
 
     try:
         # 1. 먼저 실제 네이버 블로그 탭 스크래핑 시도 (가장 정확한 결과)
         logger.info(f"Trying blog tab scraping for keyword: {keyword}")
-        results = await fetch_via_blog_tab_scraping(keyword, limit)
+        results = await fetch_via_blog_tab_scraping(keyword, limit, max_scrolls=max_scrolls)
         if results:
             return results
 
@@ -886,7 +897,8 @@ async def fetch_naver_search_results_both_tabs(keyword: str, limit: int = 10) ->
         return {"view_results": [], "blog_results": []}
 
 
-async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
+async def fetch_via_blog_tab_scraping(keyword: str, limit: int,
+                                      max_scrolls: Optional[int] = None) -> List[Dict]:
     """Fetch blog results using Playwright (JS 렌더링 지원) with HTTP fallback"""
     results = []
 
@@ -895,7 +907,7 @@ async def fetch_via_blog_tab_scraping(keyword: str, limit: int) -> List[Dict]:
         from services.blog_scraper import scrape_blog_tab_results
 
         logger.info(f"[BLOG] Using Playwright to scrape BLOG tab for: {keyword}")
-        raw_results = await scrape_blog_tab_results(keyword, limit)
+        raw_results = await scrape_blog_tab_results(keyword, limit, max_scrolls=max_scrolls)
 
         if raw_results:
             for idx, item in enumerate(raw_results):
@@ -2343,11 +2355,37 @@ async def fetch_naver_visitor_series(blog_id: str) -> Dict:
         return result
 
 
+async def resolve_canonical_blog_id(blog_id: str) -> Optional[str]:
+    """
+    입력값이 실제 블로그 주소가 아닐 때 진짜 주소를 찾아준다.
+
+    네이버 RSS는 계정 ID나 옛 주소로 요청하면 현재 블로그 주소로 302를 준다.
+        rss.blog.naver.com/leegustjr9.xml → http://rss.blog.naver.com/goodspolice
+    사용자가 로그인 ID를 블로그 주소로 착각하는 경우가 잦아 이 힌트가 유용하다.
+
+    Returns: 다른 주소를 찾으면 그 blog_id, 아니면 None
+    """
+    try:
+        client = await get_http_client()
+        resp = await client.get(
+            f"https://rss.blog.naver.com/{blog_id}.xml",
+            follow_redirects=False,
+            timeout=5.0,
+        )
+        location = resp.headers.get("location") or ""
+        match = re.search(r'rss\.blog\.naver\.com/([^/?.]+)', location)
+        if match and match.group(1) != blog_id:
+            return match.group(1)
+    except Exception as e:
+        logger.debug(f"canonical id resolve failed for {blog_id}: {e}")
+    return None
+
+
 async def scrape_blog_stats_fast(blog_id: str) -> Dict:
     """
     HTTP 병렬 요청으로 블로그 통계를 빠르게 수집 (데스크톱 + 모바일 동시 요청)
     - Playwright 없이 httpx만 사용하여 병목 제거
-    - 데스크톱 페이지의 <script> JSON 데이터 + 모바일 페이지 regex 추출
+    - 지표 본체는 모바일 페이지의 하이드레이션 JSON (데스크톱은 프레임 껍데기라 값이 없음)
     - NVisitorgp 위젯으로 '실측' 일별 방문자 동시 수집 (조작값 대체)
     """
     stats = {
@@ -2355,6 +2393,7 @@ async def scrape_blog_stats_fast(blog_id: str) -> Dict:
         "neighbor_count": None,
         "total_visitors": None,
         "naver_level": None,
+        "visitor_source": None,
         # ===== 실측 일별 방문자 (NVisitorgp) =====
         "daily_visitors": None,      # 오늘(최신일) 실측 방문 수
         "recent_avg_visitors": None, # 최근 일평균 실측
@@ -2404,15 +2443,40 @@ async def scrape_blog_stats_fast(blog_id: str) -> Dict:
             stats["visitor_series"] = visitor_series["daily"]
             stats["visitor_measured"] = True
 
-        # 비공개/존재하지 않는 블로그 감지
+        # ===== 비공개/존재하지 않는 블로그 감지 =====
+        # 네이버는 없는 주소에도 HTTP 200을 준다. 상태코드만 보면 전부 통과하므로
+        # 아래 세 가지 실제 응답 형태를 모두 본다.
+        #   1) m.blog → MobileErrorView.naver 로 302 (가장 확실)
+        #   2) 데스크톱 → 200 + alert("게시물이 삭제되었거나 다른 페이지로 변경되었습니다.")
+        #   3) 레거시 문구
+        not_found = False
+
+        if mobile_resp is not None and "MobileErrorView" in str(mobile_resp.url):
+            not_found = True
+
         for resp in [desktop_resp, mobile_resp]:
             if resp is None:
                 continue
             html = resp.text
             if resp.status_code == 404 or "존재하지 않는 블로그" in html:
-                return {**stats, "error_code": "NOT_FOUND", "error_message": "존재하지 않는 블로그입니다."}
+                not_found = True
+            if "게시물이 삭제되었거나 다른 페이지로 변경되었습니다" in html:
+                not_found = True
             if "비공개 블로그" in html or "이 블로그는 공개설정이" in html:
                 return {**stats, "error_code": "PRIVATE_BLOG", "error_message": "비공개 블로그입니다."}
+
+        if not_found:
+            # 계정 ID를 블로그 주소로 착각한 경우가 흔하다. RSS 리다이렉트가
+            # 실제 주소를 알려주므로 찾아서 안내에 실어 보낸다.
+            canonical = await resolve_canonical_blog_id(blog_id)
+            if canonical and canonical != blog_id:
+                return {
+                    **stats,
+                    "error_code": "MOVED",
+                    "error_message": f"'{blog_id}'는 블로그 주소가 아닙니다. 실제 주소는 '{canonical}'입니다.",
+                    "canonical_blog_id": canonical,
+                }
+            return {**stats, "error_code": "NOT_FOUND", "error_message": "존재하지 않는 블로그입니다."}
 
         # 데스크톱 페이지에서 JSON 데이터 추출 (script 태그 내 정확한 데이터)
         if desktop_resp and desktop_resp.status_code == 200:
@@ -2450,13 +2514,12 @@ async def scrape_blog_stats_fast(blog_id: str) -> Dict:
                     break
 
             # 네이버 공식 레벨 추출 (Lv.1 ~ Lv.4)
+            # 키 이름을 특정한 것만 쓴다. 예전의 r'"level":(\d+)' / r'Lv\.?\s*(\d+)' 는
+            # 하이드레이션 JSON의 무관한 값(fontType, style 등)까지 잡아 가짜 레벨을 만들었다.
             naver_level_patterns = [
                 r'"bloggerLevel"\s*:\s*(\d+)',
-                r'"level"\s*:\s*(\d+)',
                 r'"blogLevel"\s*:\s*(\d+)',
                 r'"userLevel"\s*:\s*(\d+)',
-                r'Lv\.?\s*(\d+)',
-                r'레벨\s*(\d+)',
             ]
             for pattern in naver_level_patterns:
                 match = re.search(pattern, html, re.IGNORECASE)
@@ -2467,56 +2530,50 @@ async def scrape_blog_stats_fast(blog_id: str) -> Dict:
                         break
 
 
-        # 모바일 페이지에서 보완 (데스크톱에서 못 찾은 항목만)
+        # ===== 모바일 페이지 = 1차 소스 =====
+        # 데스크톱(blog.naver.com/{id})은 프레임 껍데기(≈2.8KB)만 반환하므로 지표가 없다.
+        # 실제 값은 모바일 SPA가 심어둔 하이드레이션 JSON에 들어 있다:
+        #   "postCount": 2507, "subscriberCount": 387798,
+        #   "totalVisitorCount": 87137182, "dayVisitorCount": 35350
+        # (2026-07-29 ranto28/naverschool/goodspolice 실측 확인)
         if mobile_resp and mobile_resp.status_code == 200:
             html = mobile_resp.text
 
-            if stats["total_posts"] is None:
-                post_patterns = [
-                    r'게시글\s*(\d[\d,]*)',
-                    r'포스트\s*(\d[\d,]*)',
-                    r'전체글\s*\((\d[\d,]*)\)',
-                    r'"postCnt":\s*(\d+)',
-                    r'글\s*(\d[\d,]*)\s*개',
-                ]
-                for pattern in post_patterns:
+            # 하이드레이션 JSON 키 — 가장 신뢰도 높은 소스라 데스크톱 값보다 우선한다
+            hydration_map = [
+                ("total_posts", [r'"postCount"\s*:\s*(\d+)', r'"postCnt"\s*:\s*(\d+)']),
+                ("neighbor_count", [r'"subscriberCount"\s*:\s*(\d+)', r'"buddyCount"\s*:\s*(\d+)', r'"buddyCnt"\s*:\s*(\d+)']),
+                ("total_visitors", [r'"totalVisitorCount"\s*:\s*(\d+)', r'"visitorcnt"\s*:\s*"?(\d+)"?']),
+            ]
+            for field, patterns in hydration_map:
+                for pattern in patterns:
                     match = re.search(pattern, html)
                     if match:
-                        stats["total_posts"] = int(match.group(1).replace(',', ''))
+                        value = int(match.group(1))
+                        # postCount=0 은 "미발행"이라는 실제 정보이므로 그대로 채택한다.
+                        stats[field] = value
                         break
 
+            # 오늘 방문자 — NVisitorgp가 막혔을 때의 폴백 (실측값과 동급으로 취급하지 않음)
+            if not stats["visitor_measured"]:
+                day_match = re.search(r'"dayVisitorCount"\s*:\s*(\d+)', html)
+                if day_match:
+                    stats["daily_visitors"] = int(day_match.group(1))
+                    stats["visitor_measured"] = True
+                    stats["visitor_source"] = "mobile_hydration"
+
+            # 텍스트 폴백 — 하이드레이션 키가 바뀌었을 때만 사용.
+            # 주의: 실제 마크업은 "387,798명의 이웃" 순서라 숫자가 앞에 온다.
             if stats["neighbor_count"] is None:
-                neighbor_patterns = [
-                    r'이웃\s*(\d[\d,]*)',
-                    r'"buddyCnt":\s*(\d+)',
-                    r'서로이웃\s*(\d[\d,]*)',
-                ]
-                for pattern in neighbor_patterns:
-                    match = re.search(pattern, html)
-                    if match:
-                        stats["neighbor_count"] = int(match.group(1).replace(',', ''))
-                        break
-
-            if stats["total_visitors"] is None:
-                visitor_patterns = [
-                    r'방문자\s*(\d[\d,]*)',
-                    r'"visitorcnt":\s*"?(\d+)"?',
-                    r'전체방문\s*(\d[\d,]*)',
-                    r'총\s*방문\s*(\d[\d,]*)',
-                ]
-                for pattern in visitor_patterns:
-                    match = re.search(pattern, html, re.IGNORECASE)
-                    if match:
-                        stats["total_visitors"] = int(match.group(1).replace(',', ''))
-                        break
+                match = re.search(r'(\d[\d,]*)\s*명의\s*이웃', html)
+                if match:
+                    stats["neighbor_count"] = int(match.group(1).replace(',', ''))
 
             # 모바일에서도 네이버 레벨 추출 시도 (데스크톱에서 못 찾은 경우)
             if stats["naver_level"] is None:
                 mobile_level_patterns = [
                     r'"bloggerLevel"\s*:\s*(\d+)',
-                    r'"level"\s*:\s*(\d+)',
                     r'"blogLevel"\s*:\s*(\d+)',
-                    r'Lv\.?\s*(\d+)',
                 ]
                 for pattern in mobile_level_patterns:
                     match = re.search(pattern, html, re.IGNORECASE)
@@ -2527,7 +2584,13 @@ async def scrape_blog_stats_fast(blog_id: str) -> Dict:
                             break
 
         # 성공 여부 판단 (최소 1개 이상 추출 — 실측 방문자 포함)
-        if stats["total_posts"] or stats["neighbor_count"] or stats["total_visitors"] or stats["visitor_measured"]:
+        # `is not None` 으로 본다: postCount=0 은 실패가 아니라 "미발행"이라는 측정 결과다.
+        if (
+            stats["total_posts"] is not None
+            or stats["neighbor_count"] is not None
+            or stats["total_visitors"] is not None
+            or stats["visitor_measured"]
+        ):
             stats["success"] = True
             logger.info(f"Blog scrape_fast success: {blog_id} - posts={stats['total_posts']}, neighbors={stats['neighbor_count']}, visitors={stats['total_visitors']}, daily_visitors={stats['daily_visitors']}(measured={stats['visitor_measured']}), naver_level={stats['naver_level']}")
         else:
@@ -2713,6 +2776,7 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
                 "stats": None,
                 "index": None,
                 "analysis": None,
+                "canonical_blog_id": scraped_stats.get("canonical_blog_id"),
                 "data_sources": ["error"]
             }
 
@@ -2721,9 +2785,10 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
 
         if scraped_stats["success"]:
             analysis_data["data_sources"].append("scrape")
-            if scraped_stats["total_posts"]:
+            # `is not None` — 0은 유효한 측정값(미발행/이웃없음)이지 미측정이 아니다
+            if scraped_stats["total_posts"] is not None:
                 stats["total_posts"] = scraped_stats["total_posts"]
-            if scraped_stats["neighbor_count"]:
+            if scraped_stats["neighbor_count"] is not None:
                 stats["neighbor_count"] = scraped_stats["neighbor_count"]
             if scraped_stats["total_visitors"]:
                 stats["total_visitors"] = scraped_stats["total_visitors"]
@@ -3132,8 +3197,8 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
         # D.I.A.: Depth(깊이) + Information(정보성) + Accuracy(정확성)
 
         # Depth Score (분석 깊이) - 0~100
-        depth_score = 50  # Base
-        if stats["total_posts"]:
+        depth_score = 50  # Base (미측정 시 중립)
+        if stats["total_posts"] is not None:
             posts = stats["total_posts"]
             if posts >= 2000:
                 depth_score = 95
@@ -3272,8 +3337,86 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
             extra_factors = {'post_count': 0.05, 'neighbor_count': 0.03, 'visitor_count': 0.02}
             bonus_factors = {'has_map': 0.03, 'has_link': 0.02, 'video_count': 0.05, 'engagement': 0.05}
 
-        # Base score from C-Rank and D.I.A.
-        base_score = (c_rank_score * c_rank_weight + dia_score * dia_weight)
+        # ===== CONTENT FACTORS SCORE =====
+        # 학습 가중치의 46%가 걸려 있는 차원인데 예전 코드는 계산 자체를 하지 않았다.
+        # (weights_used에 이름만 실려 나갔고 총점에는 한 번도 들어가지 않음)
+        # 결과적으로 모델의 절반이 죽어 총점 상한이 56점에 묶였다.
+        #
+        # 키워드 의존 항목(keyword_count/keyword_density/title_keyword)은 블로그 단위
+        # 분석에서는 측정할 수 없다. 측정 가능한 항목만 쓰고 그 하위 가중치로 재정규화한다.
+        cf_sub = (category_weights or {}).get('content_factors', {}).get('sub_weights', {}) or {}
+        content_factor_parts = []   # (측정값 0~100, 하위 가중치)
+
+        cf_len = analysis_data.get("fullparse_avg_content_length") or avg_len
+        if cf_len:
+            if cf_len >= 3000:
+                s = 95
+            elif cf_len >= 2000:
+                s = 85
+            elif cf_len >= 1500:
+                s = 75
+            elif cf_len >= 1000:
+                s = 65
+            elif cf_len >= 500:
+                s = 50
+            else:
+                s = 35
+            content_factor_parts.append((s, cf_sub.get('content_length', 0.32)))
+
+        cf_headings = analysis_data.get("fullparse_avg_headings")
+        if cf_headings is not None:
+            content_factor_parts.append((min(95, 30 + cf_headings * 15), cf_sub.get('heading_count', 0.05)))
+
+        cf_paragraphs = analysis_data.get("fullparse_avg_paragraphs")
+        if cf_paragraphs is not None:
+            content_factor_parts.append((min(95, 25 + cf_paragraphs * 7), cf_sub.get('paragraph_count', 0.05)))
+
+        cf_images = analysis_data.get("fullparse_avg_images")
+        if cf_images is None:
+            cf_images = analysis_data.get("avg_image_count")
+        if cf_images is not None:
+            content_factor_parts.append((min(95, 30 + cf_images * 8), cf_sub.get('image_count', 0.05)))
+
+        # freshness — 마지막 발행 경과일 (recency_score와 같은 신호지만 차원이 다르다)
+        if analysis_data.get("recent_activity") is not None:
+            days = analysis_data["recent_activity"]
+            if days <= 3:
+                s = 95
+            elif days <= 7:
+                s = 85
+            elif days <= 14:
+                s = 70
+            elif days <= 30:
+                s = 55
+            elif days <= 90:
+                s = 35
+            else:
+                s = 15
+            content_factor_parts.append((s, cf_sub.get('freshness', 0.16)))
+
+        if content_factor_parts:
+            cf_weight_sum = sum(w for _, w in content_factor_parts)
+            if cf_weight_sum > 0:
+                content_factor_score = sum(s * w for s, w in content_factor_parts) / cf_weight_sum
+            else:
+                content_factor_score = sum(s for s, _ in content_factor_parts) / len(content_factor_parts)
+        else:
+            content_factor_score = None   # 측정 불가 → 총점 정규화에서 제외
+
+        # ===== Base score =====
+        # 측정된 차원끼리만 가중치를 정규화한다. 측정 못 한 차원의 몫을 0점으로
+        # 깔아버리면(예전 동작) 총점 상한이 인위적으로 눌린다.
+        dimensions = [
+            (c_rank_score, c_rank_weight),
+            (dia_score, dia_weight),
+        ]
+        if content_factor_score is not None:
+            dimensions.append((content_factor_score, content_weight))
+
+        weight_sum = sum(w for _, w in dimensions)
+        if weight_sum <= 0:
+            weight_sum = 1.0
+        base_score = sum(s * w for s, w in dimensions) / weight_sum
 
         # Extra factor bonuses
         extra_bonus = 0
@@ -3369,20 +3512,44 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
         index["posts_last_90d"] = analysis_data.get("posts_last_90d")
         index["rss_truncated"] = analysis_data.get("rss_truncated", False)
 
-        # ===== 실제 백분위 시스템 =====
-        # 분석된 모든 블로그 중에서 현재 블로그의 위치를 계산
+        # ===== 측정 가능성 게이트 =====
+        # 실측 신호가 하나도 없으면 레벨을 만들어내지 않는다.
+        # 예전에는 이 경우에도 기본 25점 → 백분위 → "준최1"을 출력해서,
+        # 측정 실패를 낮은 등급으로 오인하게 만들었다.
+        measurable = ("scrape" in analysis_data["data_sources"]) or ("rss" in analysis_data["data_sources"])
+        if not measurable:
+            index["level"] = None
+            index["grade"] = "측정 불가"
+            index["level_category"] = "측정 불가"
+            index["percentile"] = None
+            index["level_source"] = "unavailable"
+            index["unmeasurable_reason"] = "네이버에서 블로그 지표를 가져오지 못했습니다."
+            logger.warning(f"Blog {blog_id}: 실측 신호 없음 — 레벨 판정 생략")
+
+        # ===== 레벨 판정 =====
+        # 원칙: 백분위는 '같은 자로 잰' 실측 모집단이 충분할 때만 쓴다.
+        # 모집단이 얇으면(초기 운영/스코어링 버전 교체 직후) 절대 기준표로 판정한다.
         try:
+            if not measurable:
+                raise _LevelJudgementSkipped()
+
             percentile_db = get_blog_percentile_db()
 
             # 점수 저장 (실제 분석된 블로그로 기록)
             percentile_db.add_blog_score(blog_id, index["total_score"])
 
-            # 실제 백분위 계산 (0-100, 높을수록 상위)
+            # 모집단이 부족하면 None을 돌려준다 (지어낸 50%가 아니라)
             percentile = percentile_db.get_percentile(index["total_score"])
-            index["percentile"] = percentile
 
-            # 백분위 기반 레벨 계산
-            level, grade = percentile_db.get_level_from_percentile(percentile)
+            if percentile is not None:
+                level, grade = percentile_db.get_level_from_percentile(percentile)
+                index["percentile"] = percentile
+                index["level_basis"] = "percentile"
+            else:
+                level, grade = get_blog_level_from_score(index["total_score"])
+                index["percentile"] = None
+                index["level_basis"] = "absolute"
+
             index["level"] = level
             index["grade"] = grade
 
@@ -3396,7 +3563,10 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
             else:
                 index["level_category"] = "일반"
 
-            logger.info(f"Blog {blog_id}: score={index['total_score']}, percentile={percentile:.1f}%, level={level} ({grade})")
+            logger.info(
+                f"Blog {blog_id}: score={index['total_score']}, "
+                f"basis={index['level_basis']}, percentile={percentile}, level={level} ({grade})"
+            )
 
             # ===== 실측 색인 검증 (선택) =====
             # 백분위 레벨은 합성 시드가 섞인 모집단 대비 상대값이라 근거가 약하다.
@@ -3445,30 +3615,31 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
             else:
                 index["level_source"] = "heuristic"
 
+        except _LevelJudgementSkipped:
+            # 측정 불가 — 위에서 이미 "측정 불가"로 표시했다. 등급을 지어내지 않는다.
+            pass
+
         except Exception as percentile_error:
             logger.warning(f"Percentile calculation failed, using fallback: {percentile_error}")
-            # 폴백: 고정 기준 레벨 (백분위 DB 실패 시)
-            if total_score >= 70:
-                index["level"], index["grade"] = 15, "최적4+"
-            elif total_score >= 60:
-                index["level"], index["grade"] = 12, "최적1+"
-            elif total_score >= 50:
-                index["level"], index["grade"] = 10, "최적2"
-            elif total_score >= 40:
-                index["level"], index["grade"] = 8, "준최7"
-            elif total_score >= 30:
-                index["level"], index["grade"] = 6, "준최5"
-            elif total_score >= 20:
-                index["level"], index["grade"] = 4, "준최3"
-            else:
-                index["level"], index["grade"] = 2, "준최1"
-            index["percentile"] = min(index["total_score"], 99)
-            index["level_category"] = "최적+" if index["level"] >= 12 else "최적" if index["level"] >= 9 else "준최" if index["level"] >= 2 else "일반"
+            # 폴백: 절대 기준표 (백분위 DB 실패 시).
+            # 예전에는 여기에 별도 구간표가 중복 정의돼 있어 본 경로와 결과가 어긋났다.
+            level, grade = get_blog_level_from_score(index["total_score"])
+            index["level"], index["grade"] = level, grade
+            index["percentile"] = None
+            index["level_basis"] = "absolute"
+            index["level_source"] = "heuristic"
+            index["level_category"] = "최적+" if level >= 12 else "최적" if level >= 9 else "준최" if level >= 2 else "일반"
 
         # Store detailed breakdown with category info + A-2 raw signals
+        # 총점과 자릿수를 맞추기 위해 정규화된 기여분으로 보고한다
+        # (c_rank + dia = base_score 가 성립해야 사용자가 합을 검산할 수 있다)
         index["score_breakdown"] = {
-            "c_rank": round(c_rank_score * c_rank_weight, 1),
-            "dia": round(dia_score * dia_weight, 1),
+            "c_rank": round(c_rank_score * c_rank_weight / weight_sum, 1),
+            "dia": round(dia_score * dia_weight / weight_sum, 1),
+            "content_factors": (
+                round(content_factor_score * content_weight / weight_sum, 1)
+                if content_factor_score is not None else None
+            ),
             "c_rank_detail": {
                 "context": round(context_score, 1),
                 "content": round(content_score, 1),
@@ -3920,20 +4091,23 @@ async def analyze_blog_endpoint(request: BlogAnalysisRequest):
             # 에러 코드별 HTTP 상태 코드 매핑
             status_code_map = {
                 "NOT_FOUND": 404,
+                "MOVED": 404,
                 "PRIVATE_BLOG": 403,
                 "BLOCKED": 429,
                 "TIMEOUT": 504
             }
             status_code = status_code_map.get(error_code, 400)
 
-            raise HTTPException(
-                status_code=status_code,
-                detail={
-                    "error_code": error_code,
-                    "message": error_message,
-                    "blog_id": blog_id
-                }
-            )
+            detail = {
+                "error_code": error_code,
+                "message": error_message,
+                "blog_id": blog_id
+            }
+            # 실제 블로그 주소를 알아냈으면 프론트가 재시도를 제안할 수 있게 실어 보낸다
+            if result.get("canonical_blog_id"):
+                detail["canonical_blog_id"] = result["canonical_blog_id"]
+
+            raise HTTPException(status_code=status_code, detail=detail)
 
         stats = result.get("stats", {})
         index = result.get("index", {})
@@ -5114,34 +5288,62 @@ class CeilingBacktestRequest(BaseModel):
     force: bool = False              # 처음부터 재실행(기본은 resume)
 
 
+# ⚠️ 시드는 **좁아야** 한다. 채점은 블로그당 관측 ≥MIN_OBS_PER_BLOG 를 요구하는데, 주제를
+# 흩뿌리면 같은 블로그가 재등장하지 않아 전원 1회 관측으로 끝난다(2026-07-24 30키워드,
+# 2026-07-27 20키워드 실측 모두 blogs_scored=0, dropped_min_obs=전원). 그래서 기본값을
+# 광범위 카테고리(맛집/여행/…)에서 **단일 임상 니치**로 교체 — 같은 병원 블로그가 반복 등장한다.
 _BACKTEST_DEFAULT_SEEDS = [
-    "맛집", "여행", "카페", "다이어트", "인테리어", "육아", "재테크",
-    "화장품", "부동산", "영어공부", "캠핑", "강아지", "홈트", "주식",
+    "두통", "편두통", "긴장성두통", "군발두통", "만성두통", "두통한의원",
+    "머리아픔", "뒷목통증두통", "어지럼증두통", "두통치료",
 ]
 
 
 @router.post("/debug/ceiling-backtest")
-async def start_ceiling_backtest(req: CeilingBacktestRequest, background_tasks: BackgroundTasks):
+async def start_ceiling_backtest(req: CeilingBacktestRequest):
     """노출천장 '판정 정확도'를 대량 표본으로 백테스트(백그라운드·재개).
 
     미래를 기다리지 않는다: 키워드를 대량 스크래핑해 (블로그,키워드,볼륨,실제순위) 정답을
     즉시 쌓고, 블로그별 관측을 train/test 로 갈라 천장을 학습→held-out 채점한다.
     진행/결과: GET /api/blogs/debug/ceiling-backtest/status
     """
-    from services.ceiling_backtest import run_backtest, BACKTEST_STATUS, _RUN_KEY
+    from services.ceiling_backtest import (
+        backtest_status, request_backtest, start_backtest_task,
+    )
 
-    prev = BACKTEST_STATUS.get(_RUN_KEY)
-    if prev and prev.get("state") == "running" and not req.force:
+    # 살아있는 run(하트비트 최신)만 중복으로 보고 막는다. state 가 stalled 면 이어받아야 하므로
+    # 통과시킨다 — 예전엔 죽은 run 이 "running" 으로 남아 재시작 자체가 영구 차단됐다.
+    prev = backtest_status()
+    if prev.get("state") == "running" and not req.force:
         return {"started": False, "already_running": True,
-                "status": {k: prev.get(k) for k in ("phase", "scraped", "planned", "ledger_size")},
+                "status": {k: prev.get(k) for k in
+                           ("phase", "scraped", "planned", "ledger_size", "updated_at_str")},
                 "message": "이미 백테스트 진행 중 — status 로 확인"}
 
     seeds = [s.strip() for s in (req.seeds or []) if s.strip()] or _BACKTEST_DEFAULT_SEEDS
     target = max(20, min(req.target_keywords, 3000))
-    background_tasks.add_task(run_backtest, seeds, target, req.force)
-    return {"started": True, "seeds": seeds, "target_keywords": target,
-            "resuming": not req.force,
-            "message": "백테스트 시작(스크래핑→채점, 증분저장·재개) — status 로 진행/결과 확인"}
+    # 요청을 디스크에 남긴다 — 실행 주체는 worker(스케줄러 켜진 프로세스). app 은 절대
+    # 스크래핑하지 않는다(이벤트루프 보호). worker 워치독이 60초 내 claim 해서 시작한다.
+    import os  # 이 모듈은 os 를 지연 import 하는 관례(모듈 레벨엔 없음)
+
+    queued = request_backtest(seeds, target, req.force)
+    started = False
+    if os.getenv("SCHEDULERS_DISABLED") != "1":
+        # 이 프로세스가 worker(또는 로컬 단일 프로세스) → 즉시 시작(워치독 대기 불필요)
+        from services.ceiling_backtest import _claim_request
+        if _claim_request():
+            started = start_backtest_task(seeds, target, req.force)
+    return {"queued": queued.get("queued", False), "started_now": started,
+            "seeds": seeds, "target_keywords": target, "resuming": not req.force,
+            "message": ("백테스트 시작(스크래핑→채점, 증분저장·재개) — status 로 진행/결과 확인"
+                        if started else
+                        "요청 접수 — worker 가 60초 내 시작(status 의 pending_request 로 확인)")}
+
+
+@router.post("/debug/ceiling-backtest/stop")
+async def stop_ceiling_backtest():
+    """진행중 백테스트 중지(디스크 플래그 → 러너가 키워드마다 확인). 원장은 보존된다."""
+    from services.ceiling_backtest import request_stop
+    return {"ok": True, **request_stop()}
 
 
 @router.get("/debug/ceiling-backtest/status")
@@ -5152,10 +5354,24 @@ async def ceiling_backtest_status():
 
 
 @router.post("/debug/ceiling-backtest/rescore")
-async def ceiling_backtest_rescore():
-    """수집된 원장 그대로 채점만 재실행(판정식/파라미터 바꿔 재평가). 스크래핑 없음."""
+async def ceiling_backtest_rescore(min_obs: Optional[int] = Query(None, ge=3, le=50),
+                                   dry: bool = Query(False),
+                                   absence: bool = Query(True),
+                                   min_pos: int = Query(2, ge=1, le=20)):
+    """수집된 원장 그대로 채점만 재실행(판정식/파라미터 바꿔 재평가). 스크래핑 없음.
+
+    min_obs: 채점 최소 관측수(기본 6). 낮추면 표본↑·블로그별 천장 신뢰도↓ —
+             여러 값으로 돌려 skill 이 유지되는지 보면 tradeoff 가 눈에 보인다.
+    dry:     결과를 문서에 저장하지 않음(중간 진단용). run 진행중이면 자동 dry.
+    absence: 부재(수집 키워드 상위에 없었음)를 음성 라벨로 사용(기본 on). off 로 돌려보면
+             왜 필요한지 보인다 — 양성만 남아 base_rate≈1.0 이 되고 skill 이 무의미해진다.
+    min_pos: 채점 대상 블로그의 최소 '실제 상위진입' 횟수(기본 2). 부재를 켜면 모든 블로그가
+             전 키워드 관측을 갖게 되므로 이쪽이 진짜 게이트다. 1 로 낮추면 1회성 블로그가
+             부재 음성만 잔뜩 들고 들어와 skill 이 음수로 무너진다(합성 실측 -2.18 vs +0.39).
+    """
     from services.ceiling_backtest import backtest_rescore
-    return {"ok": True, "score": backtest_rescore()}
+    return {"ok": True, "score": backtest_rescore(min_obs=min_obs, dry=dry,
+                                                  absence=absence, min_pos=min_pos)}
 
 
 @router.get("/debug/searchad-status")
