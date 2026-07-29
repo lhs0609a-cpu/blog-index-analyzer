@@ -4118,15 +4118,19 @@ async def _run_pool_autocomplete_mining(
     uid: int,
     customer_id: int,
     *,
-    # 자모 확장으로 시드당 질의가 15배(넓은 시드는 43배)로 늘었다. 비공식
-    # 자동완성 endpoint 부담과 하류 검색량 검증량을 맞추려고 시드 표본을 줄인다.
-    # 200×1질의(수확 ~1,400) → 60×15질의(수확 ~6,000) 로 호출은 4.5배, 수확은 4배.
-    seed_sample_size: int = 60,
+    # ⚠️ 총 질의 수를 원래 수준(~200)으로 유지해야 한다.
+    # 2026-07-29 실측: 60시드×15변형=900질의로 올렸더니 네이버/Bing 이 Fly IP 를
+    # 스로틀링해 처리율이 초당 0.06~0.63 질의로 떨어졌다(로컬은 33.6). 그 결과
+    # 100초 예산 안에 900개 중 45개만 처리, **수확이 109개 → 1개로 회귀**했다.
+    # 12시드 × 15변형 = 180질의 ≈ 원래 200질의. 자모 이득은 유지하면서 스로틀은 피한다.
+    seed_sample_size: int = 12,
     per_seed: int = 30,
     min_volume: int = 1,
-    # 후보가 20배로 늘어 250개 검증(=50청크)은 대부분을 버린다. 150청크(750KW)로 확대.
+    # 후보가 늘어 250개 검증(=50청크)은 대부분을 버린다. 150청크(750KW)로 확대.
     # sleep 0.3 유지 → 45초, keywordstool 429 안전구간.
     chunks_cap: int = 150,
+    # Bing 은 Fly IP 스로틀로 프로덕션 수확이 거의 없다 → 기본 OFF (위 주석 참조)
+    use_bing: bool = False,
 ) -> Dict[str, Any]:
     """naver 검색 자동완성으로 시드 인접 KW 발굴 → GPT 분류 → 자식 풀 직접 추가.
 
@@ -4208,11 +4212,11 @@ async def _run_pool_autocomplete_mining(
     # "완전포화" 판정이 이 표면 하나를 안 훑어서 나온 오판인 경우가 많다.
     ac_t0 = _time.monotonic()
     try:
-        # concurrency 를 10→6 으로 낮춘다: 질의 수가 시드당 15배로 늘어
-        # 총 호출이 200 → 900+ 이 됐다. 인증 없는 비공식 endpoint 라
-        # 초당 요청률을 올리면 차단 위험이 커진다(호출 수는 늘리되 속도는 낮춘다).
+        # adaptive=False: tier2(시드당 42변형)를 끈다. 켜면 질의가 다시 500+ 로
+        # 불어나 스로틀을 유발한다. tier1(자모 14변형)이 질의당 신규 KW 의 주력이다.
         ac_result = await collect_autocomplete_expanded(
-            seed_sample, per_seed=max(per_seed, 30), concurrency=6, timeout=5.0,
+            seed_sample, per_seed=max(per_seed, 30), concurrency=4, timeout=5.0,
+            adaptive=False, budget_seconds=200.0,
         )
     except Exception as e:
         logger.error(f"[pool/autocomplete] 자동완성 호출 실패: {e}", exc_info=True)
@@ -4230,16 +4234,21 @@ async def _run_pool_autocomplete_mining(
         for k in kws:
             all_kws.add(k)
 
-    # Bing 서제스트 — 네이버와 다른 결과 집합이라 합집합이 커진다(실측 +40%).
-    # 보조 채널이므로 실패해도 네이버 결과로 계속 진행한다.
+    # Bing 서제스트 — 로컬에서는 네이버 위에 +40%를 얹는다(1,516 → 2,128).
+    # 그러나 프로덕션(Fly IP)에서는 처리율이 초당 0.18~0.63 질의로 스로틀돼
+    # 60초 예산에 900개 중 11~38개만 처리하고 KW 0~36개를 얻었다. 그 60초는
+    # 네이버 질의에 쓰는 편이 낫다 → 기본 OFF. 스로틀이 풀리면 다시 켠다.
     naver_only = len(all_kws)
-    try:
-        all_kws |= await collect_bing_expanded(seed_sample, concurrency=5)
-    except Exception as e:
-        logger.warning(f"[pool/autocomplete] Bing 채널 실패 — 네이버만 사용: {type(e).__name__}")
-    logger.warning(
-        f"[pool/autocomplete] 표면 합집합 — 네이버 {naver_only} → +Bing {len(all_kws)}"
-    )
+    if use_bing:
+        try:
+            all_kws |= await collect_bing_expanded(seed_sample, concurrency=3)
+        except Exception as e:
+            logger.warning(f"[pool/autocomplete] Bing 채널 실패 — 네이버만 사용: {type(e).__name__}")
+        logger.warning(
+            f"[pool/autocomplete] 표면 합집합 — 네이버 {naver_only} → +Bing {len(all_kws)}"
+        )
+    else:
+        logger.warning(f"[pool/autocomplete] 네이버 표면 수확 {naver_only}개 (Bing OFF)")
 
     if not all_kws:
         pool.record_run(
