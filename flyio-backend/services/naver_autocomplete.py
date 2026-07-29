@@ -11,6 +11,7 @@
   → ≥50 → GPT 분류 → 통과 KW source='ai_autocomplete' 자식 풀 추가
 """
 import asyncio
+import json
 import logging
 from typing import Dict, List, Set
 import httpx
@@ -195,6 +196,80 @@ async def collect_autocomplete_expanded(
             logger.info(f"[autocomplete] tier2 확장: 넓은 시드 {len(broad)}개 → 질의 {len(q2)}회")
 
     return {s: sorted(kws) for s, kws in merged.items()}
+
+
+# ===== Bing 서제스트 — 네이버와 다른 결과 집합 =====
+# 2026-07-29 표면 조사 결과, 실제로 쓸 수 있는 추가 채널은 Bing 뿐이었다:
+#   네이버 st 파라미터(100/111/1100/1001/110) — 전부 **동일 결과**. 모바일 채널 아님.
+#   구글 suggestqueries/complete — "Sorry..." 차단 페이지.
+#   다음 sushi suggest — 404 (엔드포인트 폐기).
+# Bing 은 네이버+자모 합집합 위에 +40%를 얹는다(실측 1,516 → 2,128).
+# 다만 노이즈가 네이버보다 크다("제모 추천 디시" 등) — 하류 앵커/GPT 게이트에 의존한다.
+BING_SUGGEST_URL = "https://api.bing.com/osjson.aspx"
+
+
+async def _fetch_bing(client: httpx.AsyncClient, query: str) -> List[str]:
+    """Bing 서제스트 1건. 실패는 조용히 빈 리스트 (보조 채널이라 죽어도 무방)."""
+    q = (query or "").strip()
+    if len(q) < 2:
+        return []
+    try:
+        resp = await client.get(
+            BING_SUGGEST_URL,
+            params={"query": q, "market": "ko-KR"},
+            headers={"User-Agent": _HEADERS["User-Agent"]},
+        )
+        if resp.status_code != 200:
+            return []
+        data = json.loads(resp.text)
+    except Exception as e:
+        logger.debug(f"[bing] {q} 실패: {type(e).__name__}: {e}")
+        return []
+    if not (isinstance(data, list) and len(data) > 1 and isinstance(data[1], list)):
+        return []
+    return [x.strip() for x in data[1] if isinstance(x, str) and len(x.strip()) >= 2]
+
+
+async def collect_bing_expanded(
+    seeds: List[str],
+    *,
+    concurrency: int = 5,
+    timeout: float = 8.0,
+) -> Set[str]:
+    """시드 + 자모 변형으로 Bing 서제스트를 훑는다.
+
+    Bing 도 자모 접두사에 반응한다(실측: 시드만 44개 신규 → 자모까지 598개 신규).
+    네이버가 막히거나 느려도 이 채널만 따로 죽으면 되도록 예외를 삼킨다.
+    """
+    valid = [s.strip() for s in seeds if s and isinstance(s, str) and len(s.strip()) >= 2]
+    if not valid:
+        return set()
+
+    queries: List[str] = []
+    for s in valid:
+        queries.append(s)
+        queries.extend(build_jamo_variants(s, tier=1))
+
+    sem = asyncio.Semaphore(concurrency)
+    out: Set[str] = set()
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+            async def _one(q: str) -> List[str]:
+                async with sem:
+                    r = await _fetch_bing(client, q)
+                    await asyncio.sleep(0.1)
+                    return r
+
+            for chunk in await asyncio.gather(*(_one(q) for q in queries), return_exceptions=True):
+                if isinstance(chunk, list):
+                    out.update(chunk)
+    except Exception as e:
+        logger.warning(f"[bing] 수집 실패 — 네이버 결과만 사용: {type(e).__name__}: {e}")
+        return set()
+
+    logger.info(f"[bing] 질의 {len(queries)}회 → KW {len(out)}개")
+    return out
 
 
 async def collect_autocomplete(

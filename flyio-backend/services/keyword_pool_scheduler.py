@@ -57,7 +57,10 @@ class KeywordPoolScheduler:
     # 9개 계정을 한 틱에서 순차로 돌면 5분 interval 을 넘겨 max_instances=1 에
     # 걸리고, coalesce 로 다음 틱이 통째로 스킵된다(실측: 리베리 마지막 실행이
     # 90분 전). 계정을 나눠 매 틱을 확실히 완주시키는 쪽이 총 처리량이 크다.
-    _AC_ACCOUNTS_PER_TICK = 2
+    # 계정당 소요: 네이버 자모 900질의 + Bing 900질의 + 검색량 150청크 + GPT ≈ 3~4분.
+    # 2개면 7분이라 5분 interval 을 다시 넘긴다 → 1개로 낮춘다.
+    # 9계정 한 바퀴 45분. 그래도 개선 전(90분 넘게 방치, 후보 109개)보다 훨씬 낫다.
+    _AC_ACCOUNTS_PER_TICK = 1
 
     def __init__(self):
         self.scheduler = AsyncIOScheduler()

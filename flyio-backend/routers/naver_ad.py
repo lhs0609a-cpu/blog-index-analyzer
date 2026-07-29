@@ -4141,7 +4141,7 @@ async def _run_pool_autocomplete_mining(
       5) 통과 KW source='ai_autocomplete' 로 add_candidates → 자식 풀 즉시 진입
       6) 분류 결과 reject 풀에 INSERT+mark → 다음 cron 재호출 차단
     """
-    from services.naver_autocomplete import collect_autocomplete_expanded
+    from services.naver_autocomplete import collect_autocomplete_expanded, collect_bing_expanded
     from services.naver_ad_service import NaverAdApiClient
     from services.ai_seed_suggester import classify_rejects
     from database.naver_ad_db import get_ad_account_by_customer
@@ -4229,6 +4229,17 @@ async def _run_pool_autocomplete_mining(
     for kws in ac_result.values():
         for k in kws:
             all_kws.add(k)
+
+    # Bing 서제스트 — 네이버와 다른 결과 집합이라 합집합이 커진다(실측 +40%).
+    # 보조 채널이므로 실패해도 네이버 결과로 계속 진행한다.
+    naver_only = len(all_kws)
+    try:
+        all_kws |= await collect_bing_expanded(seed_sample, concurrency=5)
+    except Exception as e:
+        logger.warning(f"[pool/autocomplete] Bing 채널 실패 — 네이버만 사용: {type(e).__name__}")
+    logger.warning(
+        f"[pool/autocomplete] 표면 합집합 — 네이버 {naver_only} → +Bing {len(all_kws)}"
+    )
 
     if not all_kws:
         pool.record_run(
