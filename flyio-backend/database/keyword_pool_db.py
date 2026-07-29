@@ -274,6 +274,32 @@ class KeywordPoolDB:
             )
             return [dict(r) for r in cur.fetchall()]
 
+    def last_run_by_kind(self, account_customer_id: int) -> Dict[str, Dict]:
+        """종류별 **마지막** 실행 1건씩.
+
+        recent_runs(limit=N) 로 최근 N행을 훑어 종류별로 나누는 방식은 못 쓴다.
+        register 가 30초마다 행을 쓰기 때문에 N=200 이어도 창이 몇 분치밖에 안 되고,
+        45분 주기인 autocomplete 는 창 밖으로 밀려 "이력 없음"으로 보인다.
+        (실측: 해울 autocomplete 이력이 조회할 때마다 나타났다 사라졌다 했다)
+        """
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT r.kind, r.status, r.added, r.registered, r.failed,
+                          COALESCE(r.skipped, 0) AS skipped,
+                          r.seeds_count, r.pending_after, r.error_message,
+                          r.duration_ms, r.started_at
+                     FROM naverad_pool_runs r
+                     JOIN (SELECT kind, MAX(id) AS mid
+                             FROM naverad_pool_runs
+                            WHERE account_customer_id = ?
+                            GROUP BY kind) m
+                       ON r.id = m.mid
+                    WHERE r.account_customer_id = ?""",
+                (account_customer_id, account_customer_id),
+            )
+            return {row["kind"]: dict(row) for row in cur.fetchall() if row["kind"]}
+
     def detect_saturation(
         self,
         account_customer_id: int,

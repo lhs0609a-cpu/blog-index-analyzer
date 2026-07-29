@@ -7226,9 +7226,15 @@ async def keyword_pool_cleanup_audit(
         kind = r.get("kind") or ""
         by_kind[kind].append(r)
 
+    # 종류별 '마지막 실행'은 최근 200행 창이 아니라 kind 별 MAX(id) 로 뽑는다.
+    # register 가 30초마다 행을 써서 200행이 몇 분치밖에 안 되고, 45분 주기인
+    # autocomplete 는 창 밖으로 밀려 조회할 때마다 나타났다 사라졌다 한다.
+    last_by_kind = pool.last_run_by_kind(cid)
+
     summary: Dict[str, Dict[str, Any]] = {}
-    for kind, rs in by_kind.items():
-        last = rs[0] if rs else {}
+    for kind in set(list(by_kind.keys()) + list(last_by_kind.keys())):
+        rs = by_kind.get(kind) or []
+        last = last_by_kind.get(kind) or (rs[0] if rs else {})
         recent = rs[:24]
         summary[kind] = {
             "last_run_at": last.get("started_at"),
@@ -7236,6 +7242,7 @@ async def keyword_pool_cleanup_audit(
             "last_added": last.get("added"),
             "last_skipped": last.get("skipped"),
             "last_message": (last.get("error_message") or "")[:200],
+            # 아래 3개는 '최근 200행 창' 기준이라 자주 도는 cron 만 의미가 있다
             "runs_count_recent": len(recent),
             "total_added_recent": sum(int(r.get("added") or 0) for r in recent),
             "total_skipped_recent": sum(int(r.get("skipped") or 0) for r in recent),
