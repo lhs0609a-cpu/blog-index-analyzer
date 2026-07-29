@@ -63,7 +63,16 @@ class KeywordPoolScheduler:
     _AC_ACCOUNTS_PER_TICK = 1
 
     def __init__(self):
-        self.scheduler = AsyncIOScheduler()
+        # ⚠️ misfire_grace_time 기본값(1초)이 이 앱에서는 사실상 "실행 안 함"이다.
+        # 이벤트 루프가 1초만 바빠도 그 회차가 통째로 취소되고 APScheduler 는
+        # 'Run time of job ... was missed by 0:00:01' 만 남긴다.
+        # 실측(2026-07-29, 17분 창): autocomplete 3회 예약 → 3회 전부 missed,
+        # collect 3회·ai_classify 4회도 동일. 11개 job 중 9개가 기본값이었다.
+        # 마이닝/스크래핑이 루프를 점유하는 구조라 지연은 상시 발생한다 →
+        # "늦더라도 실행"이 맞다. coalesce 와 함께 쓰므로 밀린 회차는 1회로 합쳐진다.
+        self.scheduler = AsyncIOScheduler(
+            job_defaults={"misfire_grace_time": 300, "coalesce": True}
+        )
         self._running = False
         self._lock = asyncio.Lock()
         self._ac_offset = 0
@@ -443,7 +452,9 @@ class KeywordPoolScheduler:
             batch = [pairs[(start + i) % len(pairs)] for i in range(n)]
             self._ac_offset = (start + n) % len(pairs)
 
-            logger.info(
+            # 이 앱은 파이썬 INFO 로그를 내보내지 않는다(실측: 로그에 INFO 0줄).
+            # 운영 관측용 라인은 WARNING 으로 남기는 게 이 코드베이스의 관례다.
+            logger.warning(
                 f"[pool/autocomplete] tick — 계정 {len(batch)}/{len(pairs)} 처리 "
                 f"(offset {start} → {self._ac_offset})"
             )

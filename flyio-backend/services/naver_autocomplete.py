@@ -193,7 +193,7 @@ async def collect_autocomplete_expanded(
                     src = owner2.get(q)
                     if src is not None:
                         merged[src].update(kws)
-            logger.info(f"[autocomplete] tier2 확장: 넓은 시드 {len(broad)}개 → 질의 {len(q2)}회")
+            logger.warning(f"[autocomplete] tier2 확장: 넓은 시드 {len(broad)}개 → 질의 {len(q2)}회")
 
     return {s: sorted(kws) for s, kws in merged.items()}
 
@@ -268,7 +268,7 @@ async def collect_bing_expanded(
         logger.warning(f"[bing] 수집 실패 — 네이버 결과만 사용: {type(e).__name__}: {e}")
         return set()
 
-    logger.info(f"[bing] 질의 {len(queries)}회 → KW {len(out)}개")
+    logger.warning(f"[bing] 질의 {len(queries)}회 → KW {len(out)}개")
     return out
 
 
