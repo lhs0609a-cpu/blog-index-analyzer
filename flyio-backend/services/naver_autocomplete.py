@@ -96,6 +96,107 @@ async def _fetch_one(
     return out
 
 
+# ===== 자모 접두사 확장 =====
+# 네이버 자동완성은 접두사가 1글자만 달라져도 **완전히 다른 결과 집합**을 준다.
+# 시드를 그대로 던지면 7~10개에서 끝나지만, 초성 자모를 붙여 14번 물으면 그 10배가 나온다.
+#
+# 2026-07-29 실측 (질의당 신규 KW):
+#   A 시드 그대로   1회  → 7.0
+#   B 시드+자모     14회 → 9.9 / 3.1   ← 주력
+#   C 시드+공백+자모 14회 → 2.4 / 0.1   ← 시드 편차 큼
+#   D 시드+가나다    14회 → 3.8 / 0.1   ← 시드 편차 큼
+#   E 시드+공백+가나다     → 0.1 / 0.0  ← 버림
+# 예: "리프팅" 7개 → 자모 확장 140개(20배).
+# 해울 두통에서 "완전포화" 판정을 뒤집은 기법이 이것이다(클린우주 7,080→19,841).
+_CHOSUNG = "ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ"
+_GANADA = "가나다라마바사아자차카타파하"
+
+# B 가 이 정도 못 내면 좁은 시드로 보고 C/D 를 건너뛴다 (호출비 낭비 방지)
+_BROAD_SEED_THRESHOLD = 60
+
+
+def build_jamo_variants(seed: str, *, tier: int = 1) -> List[str]:
+    """시드의 자동완성 질의 변형 목록.
+
+    tier 1 = B(자모 붙임) 14개, tier 2 = B + C + D 42개.
+    시드 자신은 포함하지 않는다 (호출부가 따로 조회).
+    """
+    s = (seed or "").strip()
+    if not s:
+        return []
+    out = [f"{s}{c}" for c in _CHOSUNG]
+    if tier >= 2:
+        out += [f"{s} {c}" for c in _CHOSUNG]
+        out += [f"{s}{c}" for c in _GANADA]
+    return out
+
+
+async def collect_autocomplete_expanded(
+    seeds: List[str],
+    *,
+    per_seed: int = 30,
+    concurrency: int = 10,
+    timeout: float = 5.0,
+    adaptive: bool = True,
+) -> Dict[str, List[str]]:
+    """자모 접두사까지 확장해 자동완성을 수집한다.
+
+    시드 그대로만 묻는 collect_autocomplete 의 상위 버전. 질의 수는 시드당
+    15배(tier1)~43배(tier2)로 늘지만 수확은 그 이상으로 늘어난다.
+
+    adaptive=True 면 tier1 수확이 _BROAD_SEED_THRESHOLD 이상인 넓은 시드에만
+    tier2 를 추가로 돌린다.
+
+    Returns: { 원본시드: [kw, ...] } — 변형별로 쪼개지 않고 시드 단위로 합쳐서 준다.
+    """
+    valid = [s for s in seeds if s and isinstance(s, str) and len(s.strip()) >= 2]
+    if not valid:
+        return {}
+
+    # 1차: 시드 자신 + tier1 변형
+    queries: List[str] = []
+    owner: Dict[str, str] = {}   # 질의 → 원본 시드
+    for s in valid:
+        s = s.strip()
+        for q in [s] + build_jamo_variants(s, tier=1):
+            if q not in owner:
+                owner[q] = s
+                queries.append(q)
+
+    raw = await collect_autocomplete(
+        queries, per_seed=per_seed, concurrency=concurrency, timeout=timeout
+    )
+
+    merged: Dict[str, Set[str]] = {s.strip(): set() for s in valid}
+    for q, kws in raw.items():
+        src = owner.get(q)
+        if src is not None:
+            merged[src].update(kws)
+
+    # 2차: 넓은 시드만 tier2 추가
+    if adaptive:
+        broad = [s for s, kws in merged.items() if len(kws) >= _BROAD_SEED_THRESHOLD]
+        if broad:
+            q2: List[str] = []
+            owner2: Dict[str, str] = {}
+            for s in broad:
+                for q in build_jamo_variants(s, tier=2):
+                    if q not in owner and q not in owner2:
+                        owner2[q] = s
+                        q2.append(q)
+            if q2:
+                raw2 = await collect_autocomplete(
+                    q2, per_seed=per_seed, concurrency=concurrency, timeout=timeout
+                )
+                for q, kws in raw2.items():
+                    src = owner2.get(q)
+                    if src is not None:
+                        merged[src].update(kws)
+            logger.info(f"[autocomplete] tier2 확장: 넓은 시드 {len(broad)}개 → 질의 {len(q2)}회")
+
+    return {s: sorted(kws) for s, kws in merged.items()}
+
+
 async def collect_autocomplete(
     seeds: List[str],
     *,

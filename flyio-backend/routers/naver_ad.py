@@ -4118,10 +4118,15 @@ async def _run_pool_autocomplete_mining(
     uid: int,
     customer_id: int,
     *,
-    seed_sample_size: int = 200,
-    per_seed: int = 10,
+    # 자모 확장으로 시드당 질의가 15배(넓은 시드는 43배)로 늘었다. 비공식
+    # 자동완성 endpoint 부담과 하류 검색량 검증량을 맞추려고 시드 표본을 줄인다.
+    # 200×1질의(수확 ~1,400) → 60×15질의(수확 ~6,000) 로 호출은 4.5배, 수확은 4배.
+    seed_sample_size: int = 60,
+    per_seed: int = 30,
     min_volume: int = 1,
-    chunks_cap: int = 50,
+    # 후보가 20배로 늘어 250개 검증(=50청크)은 대부분을 버린다. 150청크(750KW)로 확대.
+    # sleep 0.3 유지 → 45초, keywordstool 429 안전구간.
+    chunks_cap: int = 150,
 ) -> Dict[str, Any]:
     """naver 검색 자동완성으로 시드 인접 KW 발굴 → GPT 분류 → 자식 풀 직접 추가.
 
@@ -4136,7 +4141,7 @@ async def _run_pool_autocomplete_mining(
       5) 통과 KW source='ai_autocomplete' 로 add_candidates → 자식 풀 즉시 진입
       6) 분류 결과 reject 풀에 INSERT+mark → 다음 cron 재호출 차단
     """
-    from services.naver_autocomplete import collect_autocomplete
+    from services.naver_autocomplete import collect_autocomplete_expanded
     from services.naver_ad_service import NaverAdApiClient
     from services.ai_seed_suggester import classify_rejects
     from database.naver_ad_db import get_ad_account_by_customer
@@ -4197,11 +4202,17 @@ async def _run_pool_autocomplete_mining(
         f"(used {used}/100k)"
     )
 
-    # 1) 자동완성 batch 수집
+    # 1) 자동완성 batch 수집 — 자모 접두사까지 확장
+    # 시드를 그대로만 물으면 시드당 7~10개에서 끝난다. 초성 자모를 붙여 물으면
+    # 네이버가 전혀 다른 결과 집합을 준다(2026-07-29 실측: "리프팅" 7개 → 140개, 20배).
+    # "완전포화" 판정이 이 표면 하나를 안 훑어서 나온 오판인 경우가 많다.
     ac_t0 = _time.monotonic()
     try:
-        ac_result = await collect_autocomplete(
-            seed_sample, per_seed=per_seed, concurrency=10, timeout=5.0,
+        # concurrency 를 10→6 으로 낮춘다: 질의 수가 시드당 15배로 늘어
+        # 총 호출이 200 → 900+ 이 됐다. 인증 없는 비공식 endpoint 라
+        # 초당 요청률을 올리면 차단 위험이 커진다(호출 수는 늘리되 속도는 낮춘다).
+        ac_result = await collect_autocomplete_expanded(
+            seed_sample, per_seed=max(per_seed, 30), concurrency=6, timeout=5.0,
         )
     except Exception as e:
         logger.error(f"[pool/autocomplete] 자동완성 호출 실패: {e}", exc_info=True)
@@ -4257,6 +4268,11 @@ async def _run_pool_autocomplete_mining(
     # chunks_cap 50 × CHUNK 5 = 최대 250 KW 검증. sleep 0.3 — keywordstool 429 rate 회피.
     # 실측 (cid 1858907): chunks 250 × sleep 0.1 = 90~230초 + 429 retry → 4분 소요 + 결과 0.
     # chunks 50 × sleep 0.3 = 15초, 429 회피 + 정상 결과.
+    # 후보가 cap 을 넘으면 앞에서부터 자른다. 순서를 고정하면 뒤쪽 후보는 매 라운드
+    # 똑같이 잘려 영영 검증되지 않는다(검색량 미달 KW 는 기록되지 않아 다음 라운드에도
+    # 다시 앞자리를 차지한다). 섞어서 라운드마다 다른 표본이 뽑히게 한다.
+    if len(fresh_kws) > chunks_cap * CHUNK:
+        random.shuffle(fresh_kws)
     chunks = [fresh_kws[i:i + CHUNK] for i in range(0, len(fresh_kws), CHUNK)][:chunks_cap]
     for chunk in chunks:
         try:
