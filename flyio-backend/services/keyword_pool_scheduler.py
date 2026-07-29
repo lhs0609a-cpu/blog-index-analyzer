@@ -53,10 +53,17 @@ def _build_seed_combinations(atom_library: dict) -> list:
 
 
 class KeywordPoolScheduler:
+    # autocomplete tick 라운드로빈 오프셋 — 틱마다 일부 계정만 처리한다.
+    # 9개 계정을 한 틱에서 순차로 돌면 5분 interval 을 넘겨 max_instances=1 에
+    # 걸리고, coalesce 로 다음 틱이 통째로 스킵된다(실측: 리베리 마지막 실행이
+    # 90분 전). 계정을 나눠 매 틱을 확실히 완주시키는 쪽이 총 처리량이 크다.
+    _AC_ACCOUNTS_PER_TICK = 2
+
     def __init__(self):
         self.scheduler = AsyncIOScheduler()
         self._running = False
         self._lock = asyncio.Lock()
+        self._ac_offset = 0
 
     def start(self, interval_seconds: int = 300):
         if self._running:
@@ -423,7 +430,21 @@ class KeywordPoolScheduler:
                 return
             pairs = [(int(a["user_id"]), int(a["customer_id"]))
                      for a in accts if a.get("user_id") and a.get("customer_id")]
-            for uid, cid in pairs:
+            if not pairs:
+                return
+
+            # 라운드로빈 — 이번 틱 몫만 처리하고 오프셋을 넘긴다.
+            # 전량 순회는 interval 을 넘겨 틱 자체가 스킵되므로 오히려 손해다.
+            n = min(self._AC_ACCOUNTS_PER_TICK, len(pairs))
+            start = self._ac_offset % len(pairs)
+            batch = [pairs[(start + i) % len(pairs)] for i in range(n)]
+            self._ac_offset = (start + n) % len(pairs)
+
+            logger.info(
+                f"[pool/autocomplete] tick — 계정 {len(batch)}/{len(pairs)} 처리 "
+                f"(offset {start} → {self._ac_offset})"
+            )
+            for uid, cid in batch:
                 try:
                     await _run_pool_autocomplete_mining(uid, cid)
                 except Exception as e:
