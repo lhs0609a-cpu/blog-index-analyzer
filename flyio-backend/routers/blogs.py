@@ -465,10 +465,11 @@ class BlogStats(BaseModel):
 
 class BlogIndex(BaseModel):
     total_score: float = 0
-    level: int = 0
+    # 측정 불가(level) / 모집단 부족(percentile) 시 None — BlogIndexResponse 와 동일 정책
+    level: Optional[int] = 0
     grade: str = ""
     level_category: str = ""
-    percentile: float = 0
+    percentile: Optional[float] = None
     score_breakdown: Optional[Dict[str, Any]] = None
 
 
@@ -557,11 +558,17 @@ class SimpleScoreBreakdown(BaseModel):
 
 
 class BlogIndexResponse(BaseModel):
-    level: int = 0
+    # level/percentile 은 None 이 될 수 있다 (있는 척하지 않는다):
+    #  - level=None      : 실측 신호를 하나도 못 얻어 판정 불가
+    #  - percentile=None : 실측 모집단이 얇아 절대 기준표로 판정 (level_basis="absolute")
+    level: Optional[int] = 0
     grade: str = ""
     level_category: str = ""
     total_score: float = 0
-    percentile: float = 0
+    percentile: Optional[float] = None
+    level_basis: Optional[str] = None
+    level_source: Optional[str] = None
+    unmeasurable_reason: Optional[str] = None
     score_breakdown: SimpleScoreBreakdown = SimpleScoreBreakdown()
 
 
@@ -4133,11 +4140,16 @@ async def analyze_blog_endpoint(request: BlogAnalysisRequest):
         )
 
         index_response = BlogIndexResponse(
-            level=index.get("level", 0),
+            # level/percentile 은 None 을 그대로 통과시킨다 (0으로 뭉개면
+            # "측정 불가"가 "레벨 0"으로 둔갑한다)
+            level=index.get("level"),
             grade=index.get("grade", ""),
             level_category=index.get("level_category", ""),
             total_score=index.get("total_score", 0),
-            percentile=index.get("percentile", 0),
+            percentile=index.get("percentile"),
+            level_basis=index.get("level_basis"),
+            level_source=index.get("level_source"),
+            unmeasurable_reason=index.get("unmeasurable_reason"),
             score_breakdown=SimpleScoreBreakdown(
                 c_rank=c_rank,
                 dia=dia
@@ -4188,6 +4200,12 @@ async def analyze_blog_endpoint(request: BlogAnalysisRequest):
             message="분석이 완료되었습니다.",
             result=blog_result
         )
+
+    except HTTPException:
+        # NOT_FOUND / MOVED / PRIVATE_BLOG 는 의도된 4xx다.
+        # 아래 광범위 except 가 삼키면 200 + status="failed" 로 나가서
+        # 클라이언트가 error_code/canonical_blog_id 를 볼 수 없다.
+        raise
 
     except Exception as e:
         logger.error(f"Error analyzing blog {blog_id}: {e}")
