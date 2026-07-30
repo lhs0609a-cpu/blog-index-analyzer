@@ -7800,12 +7800,44 @@ async def keyword_pool_seed_explode(
         raise HTTPException(status_code=400, detail="네이버 광고 계정을 먼저 연동하세요")
     customer_id = int(account.get("customer_id"))
 
+    # ⚠️ app 프로세스(SCHEDULERS_DISABLED=1)에서는 **절대 여기서 실행하지 않는다** —
+    #    keywordstool 수백 콜이 API 이벤트루프를 점유해 로그인 hang 을 재발시킨다.
+    #    예전엔 이걸 막으려고 `_WORKER_OFFLOAD_PATHS` 로 worker 에 HTTP 프록시했는데,
+    #    그 프록시가 8s ReadTimeout 후 httpx 를 닫으면 **worker 요청이 끊겨 핸들러가 아예
+    #    안 돌았다**(2026-07-30 실측: 4회 연속+드라이버 90회 전부 8.1초 실패, run 0건).
+    #    → 제어를 공유 볼륨으로 넘긴다. app 은 큐 파일만 쓰고, worker 워치독이 집어 실행.
+    #    (ceiling-backtest·backfill-creative 가 같은 이유로 쓰는 패턴)
+    # entrypoint.sh: app = `SCHEDULERS_DISABLED=1 ROLE=app` / worker = `SCHEDULERS_DISABLED=0
+    # ROLE=worker`. 로컬 단일 프로세스는 둘 다 미설정이라 direct 로 떨어진다(기존 동작 유지).
+    if _os.getenv("SCHEDULERS_DISABLED") == "1":
+        from services.seed_explode_queue import enqueue
+        q = enqueue(user_id, customer_id, seeds, min_volume, per_seed_cap, min_score)
+        if not q.get("queued"):
+            raise HTTPException(status_code=503,
+                                detail=f"실행 큐 적재 실패: {q.get('reason')}")
+        return {
+            "success": True,
+            # ★ 여기서의 started 는 "잡이 디스크 큐에 **내구성 있게** 들어갔다"는 뜻이다.
+            #   워커 워치독이 20초 내 반드시 집어가므로 드라이버는 커서를 전진시켜도 된다.
+            #   (예전 합성 ack 는 아무 보장이 없어 시드가 허공에 소진됐다 — 그것과 다르다)
+            "started": True,
+            "via": "queue",
+            "job_id": q.get("job_id"),
+            "queue_len": q.get("queue_len"),
+            "customer_id": customer_id,
+            "seeds_used": len(seeds),
+            "min_volume": min_volume,
+            "min_score": min_score,
+        }
+
+    # worker(스케줄러 켜진 프로세스) 또는 로컬 단일 프로세스 → 즉시 실행
     background_tasks.add_task(
         _run_seed_explode, user_id, customer_id, account, seeds, min_volume, per_seed_cap, min_score,
     )
     return {
         "success": True,
         "started": True,
+        "via": "direct",
         "customer_id": customer_id,
         "seeds_used": len(seeds),
         "min_volume": min_volume,

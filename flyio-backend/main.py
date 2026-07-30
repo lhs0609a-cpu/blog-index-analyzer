@@ -391,6 +391,15 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"⚠️ Ceiling backtest resume failed: {e}")
 
+        # seed-explode 큐 워치독 — app 이 남긴 실행요청을 worker 가 집어 실행한다.
+        # HTTP 오프로드는 8s ReadTimeout 으로 신뢰 불가라 이게 유일한 실행 트리거다.
+        try:
+            from services.seed_explode_queue import seed_explode_watchdog_loop
+            asyncio.create_task(seed_explode_watchdog_loop())
+            logger.info("✅ Seed-explode queue watchdog started (every 20s)")
+        except Exception as e:
+            logger.warning(f"⚠️ Seed-explode watchdog failed to start: {e}")
+
     yield
 
     # Shutdown - 빠른 종료 (타임아웃 방지)
@@ -598,9 +607,15 @@ from starlette.responses import Response as _StarletteResponse
 # 불필요) 마이닝 트리거만 대상. 일회성 클릭 + 동기 결과 표시 엔드포인트(rebuild/reconcile/
 # cleanup-by-score 등)는 제외 — 포화 원인이 아니고, 프록시하면 결과 데이터 UX 깨짐.
 _WORKER_OFFLOAD_PATHS = frozenset({
-    "/api/naver-ad/keyword-pool/seed-explode-register",   # 필러 직격 경로(30s마다 ×3)
     "/api/naver-ad/keyword-pool/trigger-now",             # 페이지 '즉시발굴'(fire-and-forget)
     "/api/naver-ad/keyword-pool/admin/run",               # 관리자 즉시발굴(동일 패턴)
+    # NOTE: keyword-pool/seed-explode-register 도 **오프로드에서 제외**(2026-07-30) — 아래
+    # ceiling-backtest 와 완전히 같은 증상을 냈다. 실측: 4회 연속 요청 + 등록 드라이버
+    # 90회 재시도(30분)가 **전부 정확히 8.1~8.2초**에 `{"queued":true}` 만 받고 끝났고
+    # pool 불변·seed_explode run 0건. 워커는 살아있었다(register 크론 45~90초마다 정상).
+    # 핸들러는 add_task 후 즉시 return 이라 정상이면 0.3s 다 → 원인은 워커 uvicorn 루프의
+    # 장시간 블로킹(자동완성 마이닝 틱이 계정당 3~4분 점유). restart 로도 안 고쳐진다.
+    # → app 은 services/seed_explode_queue 에 큐 파일만 쓰고 worker 워치독이 집어 실행한다.
     # NOTE: blogs/debug/ceiling-backtest 는 **오프로드 안 함** — 프록시가 8s ReadTimeout 후
     # httpx 를 닫으면 worker 요청이 끊겨 핸들러가 아예 안 돌았다(2026-07-27 실측, 202 만 받고
     # 무실행). 대신 app 핸들러는 /data 에 요청파일만 쓰고(가벼움) worker 워치독이 claim 해
