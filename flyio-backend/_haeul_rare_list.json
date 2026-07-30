@@ -1,0 +1,8318 @@
+[
+ {
+  "ko": "19번 염색체 단완의 결손 증후군",
+  "en": "19p deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "19번 염색체 장완의 중복 증후군",
+  "en": "19q duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "22번 염색체 장완의 결손 증후군",
+  "en": "22q deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "7장완36 미세중복",
+  "en": "7q 36 microduplication",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "4번 염색체 단완의 중복 증후군",
+  "en": "4p duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "X 염색체장완의 28부분의 중복 증후군",
+  "en": "Chromosome Xq28 duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "17번 염색체 단완 13.1 부분의 미세결손 증후군",
+  "en": "Distal 17p13.1 microdeletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "5번 염색체 장완의 중복 증후군",
+  "en": "5q duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "20번 염색체 단완의 결손 증후군",
+  "en": "20p deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "16번 염색체 단완의 결손 증후군",
+  "en": "16p deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "7번 염색체 단완의 결손 증후군",
+  "en": "7p deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "10번 염색체 장완의 중복 증후군",
+  "en": "10q duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "2번 염색체 장완의 결손 증후군",
+  "en": "2q deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "13번 염색체 장완의 말단부 단일염색체증",
+  "en": "Distal monosomy 13q",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "4번 염색체 장완의 결손 증후군",
+  "en": "4q deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "2번 염색체 장완 33-37 부분의 중복 증후군",
+  "en": "2q33-37 duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "9번 염색체 단완의 중복",
+  "en": "Duplication of 9p",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "5번 염색체 장완 31 부분의 미세결손으로 인한 가족성 만곡족",
+  "en": "Familial clubfoot due to 5q31 microdeletion",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "8번 삼염색체 섞임증",
+  "en": "Mosaic trisomy 8",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "8번 염색체 단완의 중복 증후군",
+  "en": "8p duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "2번 염색체 단완 결손",
+  "en": "2p deletion",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "9번 염색체 단완의 결손 증후군",
+  "en": "9p deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "16번 염색체 단완의 중복 증후군",
+  "en": "16p duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "1번 염색체 장완의 21.1 부분의 미세결손 증후군",
+  "en": "1q21.1 microdeletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "4번 염색체 장완의 34 부분의 미세결손",
+  "en": "4q34 microdeletion",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "12번 염색체 장완의 중복 증후군",
+  "en": "12q duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "2번 염색체 단완의 중복 증후군",
+  "en": "2p duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "6번 염색체 장완 26 부분의 미세결손 증후군",
+  "en": "6q26 microdeletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "12번 염색체 장완 13 부분의 미세중복",
+  "en": "12q13 microduplication",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "20번 염색체 장완의 결손 증후군",
+  "en": "20q deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "X염색체 단완의 결손 증후군",
+  "en": "Xp deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "3번 염색체 장완의 결손 증후군",
+  "en": "3q deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "13번 염색체 장완의 부분 결손",
+  "en": "Partial deletion of the long arm of chromosome 13",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "12번 염색체 장완의 결손 증후군",
+  "en": "12q deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "9번 염색체 단완의 중복 증후군",
+  "en": "9p duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "8번 염색체 단완의 11.2 부분의 미세결손 증후군",
+  "en": "8p11.2 deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "3번 염색체 장완의 13.31 부분의 미세 결손 증후군",
+  "en": "3q13.31 microdeletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "4번 염색체 장완의 21 부분의 미세결손 증후군",
+  "en": "4q21 microdeletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "6번 염색체 장완의 중복 증후군",
+  "en": "6q duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "2번 염색체 장완의 중복 증후군",
+  "en": "2q duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "재조합 8번 염색체 증후군",
+  "en": "Recombinant chromosome 8 syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "10번 염색체 단완의 결손 증후군",
+  "en": "10p deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "11번 염색체 장완의 중복 증후군",
+  "en": "11q duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "8번 염색체 장완의 중복 증후군",
+  "en": "8q duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "17번 염색체 장완 25.1 부분의 중복 증후군",
+  "en": "17q25.1 duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "5번 염색체 장완의 말단부 삼염색체증",
+  "en": "Distal 5q trisomy",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "X염색체 장완의 결손 증후군",
+  "en": "Xq deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "14번 염색체 장완의 결손 증후군",
+  "en": "14q deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "1번 염색체 단완 31-32 부분의 미세결손",
+  "en": "1p31-1p32 microdeletion",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "12번 염색체 단완의 중복 증후군",
+  "en": "12p duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "X염색체 단완의 중복 증후군",
+  "en": "Xp duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "4번 염색체 장완의 중복 증후군",
+  "en": "4q duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "1번 염색체 장완 21.3 부분의 미세결손 증후군",
+  "en": "1q21.3 microdeletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "X염색체 장완의 중복 증후군",
+  "en": "Xq duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "3번 염색체 단완의 결손",
+  "en": "Deletion of short arm of chromosome 3",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "17번 염색체 단완의 결손 증후군",
+  "en": "17p deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "3번 염색체 장완의 결손",
+  "en": "Deletion of long arm of chromosome 3",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "8번 염색체 장완의 21.11 부분의 미세결손 증후군",
+  "en": "8q21.11 microdeletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "6번 염색체 장완의 결손 증후군",
+  "en": "6q deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "3번 염색체 장완 26 부분의 중복",
+  "en": "3q26 duplication",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "14번 염색체 장완의 중복 증후군",
+  "en": "14q duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "16번 염색체 장완의 결손 증후군",
+  "en": "16q deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "5번 염색체 장완의 결손 증후군",
+  "en": "5q deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "5번 염색체 장완 35 부분의 결손",
+  "en": "5q35 deletion",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "1번 염색체 단완의 결손 증후군",
+  "en": "1p deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "16번 염색체 장완의 중복",
+  "en": "16q duplication",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "16번 염색체 단완의 11-12 부분의 미세결손 증후군",
+  "en": "16p11p12 microdeletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "2번 염색체 단완의 결손 증후군",
+  "en": "2p deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "7번 염색체 장완의 결손 증후군",
+  "en": "7q deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "17번 염색체 장완의 결손 증후군",
+  "en": "17q deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "9번 염색체 단완의 사염색체증",
+  "en": "tetrasomy 9p",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "9번 염색체 장완의 결손 증후군",
+  "en": "9q deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "2번 염색체 장완의 24 부분의 미세결손 증후군",
+  "en": "2q24 microdeletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "1번 염색체 장완의 중복 증후군",
+  "en": "1q duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "14번 염색체 장완 24.2-31.1 부분의 미세결손",
+  "en": "14q24.2q31.1 microdeletion",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "8번 염색체 단완의 결손 증후군",
+  "en": "8p deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "8번 염색체 단완의 역중복-결실 증후군",
+  "en": "8p inverted duplication-deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "8번 염색체 장완의 22.1 부분의 미세 결손 증후군",
+  "en": "8q22.1 microdeletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "7장완11.22 미세결손 증후군",
+  "en": "7q 11.22 microdeletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "간뇌 미토콘드리아 DNA 고갈 증후군",
+  "en": "Hepatocerebral mitochondrial DNA depletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "GRM7 관련 발달지연",
+  "en": "GRM7 related developmental delay",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Hijazi-Reis 증후군",
+  "en": "Hijazi-Reis syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "거대세포동맥염",
+  "en": "Giant cell arteritis",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "HK1 관련 장애",
+  "en": "HK1 related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "KCNQ5 관련 지적 장애",
+  "en": "KCNQ5 related intellectual disability",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Opitz-G/BBB 증후군",
+  "en": "Opitz-G/BBB syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "PNKP 관련 발달지연",
+  "en": "PNKP related developmental delay",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "RAFIG 증후군",
+  "en": "RAFIG syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Renpenning 증후군",
+  "en": "Renpenning syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "SCN8A 관련 질환",
+  "en": "SCN8A related disease",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "SECISBP2 관련 장애",
+  "en": "SECISBP2 related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "SLC6A1 관련 근간대성-무긴장성-뇌전증",
+  "en": "SLC6A1 related myoclonic-atonic epilepsy",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Snijders Blok-Campeu 증후군",
+  "en": "Snijders Blok-Campeu syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Stolerman 신경발달 증후군(KDM6B 관련)",
+  "en": "Stolerman neurodevelopmental syndrome(KDM6B related)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Ververi-Brady 증후군",
+  "en": "Ververi-Brady syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "WWOX 관련 장애",
+  "en": "WWOX related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "ZBTB18 관련 장애",
+  "en": "ZBTB18 related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "거대뇌증-다소뇌회증-다지증-수두증 증후군2(AKT3 관련)",
+  "en": "Megalencephaly-polymicrogyria-polydactyly-hydrocephalus[MPPH] syndrome 2(AKT3 related)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "구조적 뇌 이상 및 얼굴이형성증을 동반한 신경발달 장애[RAC3 관련]",
+  "en": "Neurodevelopmental disorder with structural brain anomalies and dysmorphic facies[RAC3 related]",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "몰리브데넘 조효소 결핍",
+  "en": "Molybdenum cofactor deficiency",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "ARX 관련 장애",
+  "en": "ARX related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Birk-Barel 증후군",
+  "en": "Birk-Barel syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "발달지연, 이상형태성 얼굴, 그리고 뇌 이상(U2AF2 관련)",
+  "en": "Developmental delay, dysmorphic facies, and Brain anomalies(U2AF2 related)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "선천성 기능성 단장 증후군",
+  "en": "Congenital functional short bowel syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "소두증, 언어장애,그리고 보행이상을 동반한 신경발달 이상(NARS1 관련)",
+  "en": "Neurodevelopmental disorder with microcephaly, impaired language, and gait abnormalities",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "10번 염색체 장완의 결손 증후군",
+  "en": "10q deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "7번 염색체 장완의 중복 증후군",
+  "en": "7q duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "13번 염색체 장완 21-22 부분의 결손",
+  "en": "13q21-22 deletion",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "10단완 11-12 결손 증후군",
+  "en": "10p11-12 deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "9번 염색체 단완의 결손",
+  "en": "Deletion of short arm of chromosome 9",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "17단완13.3 미세중복",
+  "en": "17p 13.3 microduplication",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "1번 염색체 장완의 결손 증후군",
+  "en": "1q deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "15번 염색체 장완의 중복 증후군",
+  "en": "15q duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "3번 염색체 장완의 중복 증후군",
+  "en": "3q duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "1번 염색체 장완 44부분의 미세결손 증후군",
+  "en": "1q44 microdeletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "2번 염색체 장완의 31-33 부분의 미세결손",
+  "en": "2q31-q33 microdeletion",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "17번 염색체 장완 21.31 부분의 미세중복 증후군",
+  "en": "17q21.31 microduplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "12번 염색체 단완 13 부분의 미세중복",
+  "en": "12p13 microduplication",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "10번 염색체 장완의 22-23 부분의 미세결손 증후군",
+  "en": "10q22q23 microdeletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "3번 염색체 단완의 결손 증후군",
+  "en": "3p deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "17번 염색체 장완의 중복 증후군",
+  "en": "17q duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "8단완단일염색체증",
+  "en": "8p monosomy",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "7번 염색체 장완 36 부분의 미세결손 증후군",
+  "en": "7q36 microdeletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "22번 염색체 장완의 중복 증후군",
+  "en": "22q duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "9번 염색체 장완의 중복 증후군",
+  "en": "9q duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "5번 염색체 장완 14.3 부분의 미세결손 증후군",
+  "en": "5q14.3 microdeletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "19번 염색체 단완 13.3 부분의 중복",
+  "en": "19p13.3 duplication",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "16단완11.2 미세중복",
+  "en": "16p 11.2 microduplication",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "6번 염색체 단완의 결손 증후군",
+  "en": "6p deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "14번 염색체 장완 말단부의 단일염색체증",
+  "en": "Distal monosomy 14q",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "20번 염색체 장완의 말단부 삼염색체증",
+  "en": "Distal trisomy 20q",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "13번 염색체 장완 12.3 부분의 미세결손 증후군",
+  "en": "13q12.3 microdeletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "18번 고리모양 염색체",
+  "en": "Ring chromosome 18",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "17번 염색체 단완 13.3 부분의 미세결손 증후군",
+  "en": "Distal 17p13.3 microdeletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "1번 염색체 장완 21.1 부분의 중복 증후군",
+  "en": "1q21.1 duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "18번 염색체 장완의 중복 증후군",
+  "en": "18q duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "1번 염색체 단완의 중복 증후군",
+  "en": "1p duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "15번 고리모양 염색체",
+  "en": "Ring chromosome 15",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "7번 염색체 단완의 중복 증후군",
+  "en": "7p duplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "15번 염색체 장완의 결손 증후군",
+  "en": "15q deletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "10번 염색체 장완 말단부의 단일염색체증",
+  "en": "Distal monosomy 10q",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "18번 염색체 단완의 사염색체증",
+  "en": "Tetrasomy 18p",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "16번 염색체 단완의 결손",
+  "en": "Deletion of short arm of chromosome 16",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "TMEM106B 유전자 돌연변이",
+  "en": "TMEM106B gene mutation",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "시프림-히츠-바이스 증후군",
+  "en": "Sifrim-Hitz-Weiss syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "여성 한정 X-연관 증후군성 지적발달장애",
+  "en": "Intellectual developmental disorder, X-linked, syndromic, female-restricted",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "오도널-루리아-로단 증후군",
+  "en": "O&#39;Donnell-Luria-Rodan syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "지질단백질 라이페이스 결핍",
+  "en": "Lipoprotein lipase deficiency",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "KIF11 관련 맥락막망막병증, 소두증, 정신지체",
+  "en": "KIF11 related chorioretinopathy, microcephaly, mental retardation",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "망막 디스트로피, 시신경 부종, 비장비대, 무한증, 두통 증후군 [ROSAH 증후군]",
+  "en": "Retinal dystrophy, Optic nerve edema, Splenomegaly, Anhidrosis, Headache syndrome [ROSAH syndrome]",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "다케노우치-코사키 증후군",
+  "en": "Takenouchi-Kosaki syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "NKAP 관련 장애",
+  "en": "NKAP related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "필라롭스키-비욘슨 증후군",
+  "en": "Pilarowski-Bjornsson syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "TRPM3 관련 장애",
+  "en": "TRPM3 reIated disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "RANBP2 관련 급성 뇌병증",
+  "en": "RANBP2 related acute encephalopathy",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "면역결핍, 발달지연, 저호모시스테인혈증",
+  "en": "Immunodeficiency, developmental delay, and hypohomocysteinemia",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "모노아민 산화효소결핍",
+  "en": "Monoamine oxidase deficiency syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "신장병증을 동반하는 다중심 수근골 족근골 골용해 증후군",
+  "en": "Multicentric Carpo-tarsal Osteolysis with nephropathy syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "무루증, 이완불능증, 지적발달장애 증후군",
+  "en": "Alacrima, achalasia, and impaired intellectual development syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "선천성 니코틴아마이드 아데닌 다이뉴클레오타이드 결핍 질환",
+  "en": "Congenital nicotinamide adenien dinucleotide deficiency disease",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "소뇌위축, 시력장애, 정신운동지체",
+  "en": "Cerebellar atrophy, visual impairment, and psychomotor retardation [CAVIPMR]",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "스휘르스-호에이메이커스 증후군",
+  "en": "Schuurs-Hoeijmakers syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "신세뇨관 발생이상",
+  "en": "Renal tubular dysgenesis",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "신장 안결손 증후군",
+  "en": "Renal coloboma syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "영아기 소뇌 망막변성",
+  "en": "Infantile cerebellar retinal degeneration",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "이상형태성 얼굴 및 원위 골 이상을 동반한 신경발달 장애",
+  "en": "Neurodevelopmental disorder with dysmorphic facies and distal skeletal anomalies",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "이상형태성 얼굴 및 자폐증을 동반 또는 동반하지 않는 발달지연",
+  "en": "Developmental delay with or without dysmorphic facies and autism",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "일차성 코엔자임 큐텐 신증",
+  "en": "primary coenzyme Q10 nephropathy",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "트랜스타이레틴 아밀로이드 심근병증",
+  "en": "Transthyretin amyloid cardiomyopathy[ATTR-CM]",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "피어폰트 증후군",
+  "en": "Pierpont syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "홍채각막내피증후군",
+  "en": "Iridocorneal endothelial syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "촙스 증후군",
+  "en": "CHOPS syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "FOXP1 관련 장애",
+  "en": "FOXP1 related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Bryant-Li-Bhoj 신경발달 증후군 1",
+  "en": "Bryant-Li-Bhoj neurodevelopmental syndrome 1",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Chitayat 증후군",
+  "en": "Chitayat syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "YWHAG 관련 장애",
+  "en": "YWHAG related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "자폐증 혹은 경련이 있거나 없는 신경발달장애(CUL3 관련)",
+  "en": "Neurodevelopmental disorder with or without autism or seizures",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "저긴장, 발작, 언어결여를 동반한 신경발달장애(HECW2관련)",
+  "en": "Neurodevelopmental Disorders with hypotonia,seizure and absent language(HECW2)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "청력소실, 귀이상 혹은 발달지연이 동반되거나 동반되지 않는 선천성 신장 이상 및 요로 증후군(PBX1 관련)",
+  "en": "Congenital anomalies of kidney and urinary tract syndrome with or without hearing loss, abnormal ears, or developmental delay(PBX1 related)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "눈 운동 이상과 운동실조를 동반한 신경발달장애(FRMD5 관련)",
+  "en": "Neurodevelopmental disorder with eye movement abnormalities and ataxia(FRMD5 related)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "보통염색체열성 피부이완증 1C형(LTBP4 관련)",
+  "en": "Cutis laxa, autosomal recessive, type1C(LTBP4 related)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "영아기 발병 STING 연관 혈관증",
+  "en": "STING associated vasculopahty with onset in infancy[SAVI]",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "원발성 한랭응집소병",
+  "en": "Primary cold agglutinin disease",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "페닐알라닐 t-RNA 합성효소 결핍증",
+  "en": "Phenylalanyl t-RNA synthetase deficiency",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Hiatt-Neu-Copper 신경발달 증후군",
+  "en": "Hiatt-Neu-Copper neurodevelopmental syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "저긴장, 운동실조 그리고 발달지연 증후군(EBF3 관련)",
+  "en": "Hypotonia, ataxia and delayed development syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "IL12RB1 결핍",
+  "en": "IL12RB1 deficiency",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Jansen-de Vries 증후군",
+  "en": "Jansen-de Vries syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Liang Wang 증후군",
+  "en": "Liang Wang syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "ARHGEF9 관련 장애",
+  "en": "ARHGEF9 related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "ASPM 관련 소두증",
+  "en": "ASPM related microcephaly",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Opitz-Kaveggia 증후군[FG 증후군 1형]",
+  "en": "Opitz-Kaveggia syndrome[FG syndrome type 1]",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "POLR3A 관련 장애",
+  "en": "POLR3A related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "CAD 관련 장애",
+  "en": "CAD related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Den Hoed-de Boer-Voisin 증후군",
+  "en": "Den Hoed-de Boer-Voisin syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Primrose 증후군",
+  "en": "Primrose syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Rauch-Steindl 증후군",
+  "en": "Rauch-Steindl syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "SLCO2A1 관련 만성 장병증",
+  "en": "SLCO2A1 related chronic enteropathy",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Desanto-shinawi 증후군",
+  "en": "Desanto-shinawi syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "FTSJ1 관련 장애",
+  "en": "FTSJ1 related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Snyder-Robinson 증후군",
+  "en": "Snyder-Robinson syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "STAT3 기능 획득 질환",
+  "en": "STAT3 gain of function disease",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "THOC2 관련 장애",
+  "en": "Intellectual developmental disorder, X-linked 12",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "GRIN1 관련 신경발달장애",
+  "en": "GRIN1 related neurodevelopmental disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "GRIN2A 관련 장애",
+  "en": "GRIN2A related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Townes-Brocks 증후군",
+  "en": "Townes-Brocks syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Wieacker-Wolff 증후군",
+  "en": "Wieacker-Wolff syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "TRIP12 관련 질환",
+  "en": "TRIP12 related disease",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "UBTF 관련 신경 변성",
+  "en": "UBTF related neurodegeneration",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "ZSWIM6 관련 신경발달 장애",
+  "en": "ZSWIM6 related neurodevelopmental disorders",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "저신장, 손발톱뼈형성이상, 안면이상형태증, 털감소증 증후군 [SOFT 증후군]",
+  "en": "Short stature, onychodysplasia, facial dysmorphism, hypotrichosis syndrome [SOFT syndrome]",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "다발계통의 평활근 기능이상 증후군",
+  "en": "Multisystemic smooth muscle dysfunction syndrome(MSMDS)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "AUTS2 관련 장애",
+  "en": "AUTS2 related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "말란 증후군",
+  "en": "Malan syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "MED13L 증후군",
+  "en": "MED13L syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "METTL23 관련 발달지연",
+  "en": "METTL23 related developmental delay",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "지적발달장애 보통염색체 우성 23",
+  "en": "Intellectual developmental disorder, autosomal dominant 23",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "LRBA 결핍",
+  "en": "LRBA deficiency",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "메발론산 키나아제 결핍 [고면역글로불린D증후군]",
+  "en": "Mevalonate kinase deficiency [Hyperimmunoglobulin D syndrome]",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "귓바퀴-관절돌기 증후군 2",
+  "en": "Auriculo-condylar syndrome 2",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "램-셰이퍼 증후군",
+  "en": "Lamb-Shaffer Syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "양수과다증, 거대뇌증, 증상성 뇌전증 증후군",
+  "en": "Polyhydramnios, megalencephaly, and symptomatic epilepsy syndrome [PMSE syndrome]",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "AGO1 관련 발달지연",
+  "en": "AGO1 related developmental delay",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "자가면역 림프증식 증후군",
+  "en": "Autoimmune lymphoproliferative syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "칸투증후군",
+  "en": "Cant&uacute; syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "퇴행, 이상 운동, 언어 상실과 발작을 동반한 신경발달장애",
+  "en": "Neurodevevelopmental disorder with regression, abnormal movements, loss of speech, and seizures",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "프레이저 증후군",
+  "en": "Frasier syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "피서르스-보드머 증후군",
+  "en": "Vissers-Bodmer syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "푸아리에-비엥브뉴 신경발달 증후군",
+  "en": "Poirier-Bienvenu neurodevelopmental syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "ASH1L 관련 지적발달장애",
+  "en": "ASH1L related intellectual developmental disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "CYFIP2 유전자 돌연변이",
+  "en": "CYFIP2 gene mutation",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "SYNGAP1 관련 지적장애",
+  "en": "SYNGAP1-related intellectual disability",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "DEAF1 관련 장애",
+  "en": "DEAF1 related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "FBXW7 관련 보통염색체 우성 발달지연, 근긴장저하 및 언어장애",
+  "en": "FBXW7 related autosomal dominant developmental delay, hypotonia, and impaired language",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "CACNA1E 관련 장애",
+  "en": "CACNA1E related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "TAF1 관련 장애",
+  "en": "TAF1 related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "GABRB3 관련 장애",
+  "en": "GABRB3 related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "GJB2 관련 감각신경성 난청",
+  "en": "GJB2 related sensory neural hearing loss",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "GNB2 관련 장애",
+  "en": "GNB2 related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "TRIO 관련 대두증을 동반한 지적장애",
+  "en": "TRIO related intellectual disability with macrocephaly",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "지적 발달 장애, X 연관 증후군 14 (UPF3B 유전자 관련)",
+  "en": "Intellectual developmental disorder, X-linked syndromic 14(UPF3B gene related)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "청-얀선 증후군",
+  "en": "Chung-Jansen syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "HNF1B 유전자 돌연변이",
+  "en": "HNF1B gene mutation",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "MORC2 관련 발달지연, 성장장애, 이상형태성 얼굴 및 축삭신경병증",
+  "en": "MORC2 related developmental delay, impaired growth, dysmorphic facies, and axonal neuropathy",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "MYT1L 관련 장애",
+  "en": "MYT1L related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "후두와, 혈관종, 동맥병변, 심혈관, 눈 증후군[PHACE 증후군]",
+  "en": "Posterior fossa, hemangioma, arterial lesion, cardiovascular, eye syndrome[PHACE syndrome]",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "폐정맥의 부정렬을 동반한 폐포 모세혈관 형성이상",
+  "en": "Alveolar capillary dysplasia with misalignment of pulmonary veins[ACD/MPV]",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "PRR12 관련 신경-눈 증후군",
+  "en": "PRR12 related neuro-ocular syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "SOX2 관련 장애",
+  "en": "SOX2 related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "CAMK2A 관련 질환",
+  "en": "CAMK2A related disease",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "DDX6 관련 장애",
+  "en": "DDX6 related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "EEF1A2 관련 장애",
+  "en": "EEF1A2-related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "TAOK1 관련 지적 장애[지적 장애 또는 행동 이상을 동반하거나 동반하지 않는 발달 지연]",
+  "en": "TAOK1 related intellectual disability[Developmental delay with or without intellectual impairment or behavioral abnormalities]",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "TBR1 관련 자폐증과 언어지연을 동반한 지적 발달 지연",
+  "en": "TBR1 related intellectual developmental delay with autism and speech delay",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "TFE3 연관 신경발달 장애",
+  "en": "TFE3-associated neurodevelopmental disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "레이노-클라스 증후군",
+  "en": "Raynaud-Claes syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "리-프라우메니 증후군",
+  "en": "Li-Fraumeni Syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "발달성 및 뇌전증성 뇌병증 31",
+  "en": "Developmental and epileptic encephalopathy31",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "칠턴-오쿠르-청 신경발달 증후군",
+  "en": "Chilton-Okur-Chung neurodevelopmental syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "페르헤이 증후군",
+  "en": "Verheij syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "HUWE1 관련 장애",
+  "en": "HUWE1 related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "MEIS2 관련 장애",
+  "en": "MEIS2 related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "NSUN2 관련 발달지연",
+  "en": "NSUN2 related developmental delay",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "발달성 및 뇌전증성 뇌병증 76",
+  "en": "Developmental and epileptic encephalopathy 76",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "보리우-보이콧-이네스 증후군",
+  "en": "Beaulieu-Boycott-Innes syndrome[BBIS]",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "POLR2A 관련 장애(저긴장증, 다양한 지적장애, 행동이상을 동반한 신경발달장애)",
+  "en": "POLR2A related disorder (Neurodevelopmental disorder with hypotonia and variable intellectual disability and behavioral abnormality)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "RERE 관련 장애",
+  "en": "RERE-related disorders",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "부라티-하렐 증후군",
+  "en": "Buratti-Harel syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "소아성 폴립증 증후군",
+  "en": "Juvenile polyposis syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "SLC6A5 관련 병적놀람증",
+  "en": "SLC6A5 related hyperekplexia",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "TLK2 관련 지적장애[지적발달장애, 보통염색체 우성 57]",
+  "en": "TLK2 related intellectual disability [Intellectual developmental disorder, autosomal dominant 57]",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "ATP1A3 관련 뇌병증",
+  "en": "ATP1A3-related encephalopathy",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "글라스증후군",
+  "en": "Glass syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "MUTYH-연관 폴립증 (가족성 선종성 폴립증 2형)",
+  "en": "MUTYH-associated polyposis (Familial adenomatous polyposis type2)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "라만 증후군[태튼-브라운-라만 증후군]",
+  "en": "Rahman syndrome [Tatton-Brown-Rahman syndrome]",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "헤임러 증후군",
+  "en": "Heimler syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "난청-뇌병증-유사 리이를 동반한 3-메틸클루타코닉 산뇨 (MEGDEL) 증후군",
+  "en": "3-methylglutaconic aciduria with deafness-encephalopathy-Leigh-like(MEGDEL) syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "COL4A3BP 관련 정신 지체",
+  "en": "COL4A3BP-related mental retardation",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "GNB1 관련 장애",
+  "en": "GNB1-related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "발달지연을 동반한 TRAF7 관련 심장, 안면, 말단 기형",
+  "en": "TRAF7 related cardiac, facial, and digital anomalies with developmental delay",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "확대된 전정수도관 증후군",
+  "en": "Enlarged vestibular aqueduct syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "드뷔쿠아 형성이상",
+  "en": "Desbuquois dysplasia",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "선천성 반척추",
+  "en": "Congenital hemivertebra",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "GATA2 결핍",
+  "en": "GATA2 deficiency",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "치상핵적핵담창구시상하핵 위축증",
+  "en": "Dentatorubropallidoluysian atrophy (DRPLA)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "MEF2C 관련 증후군",
+  "en": "MEF2C-related syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "CASK 관련 장애",
+  "en": "CASK-related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "보제슨-포르스만-레만 증후군",
+  "en": "B&ouml;rjeson-Forssman-Lehmann syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "보통염색체열성 세가와 증후군",
+  "en": "Autosomal recessive Segawa syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "스크라반-디어도르프 증후군",
+  "en": "Skraban-Deardorff syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "신경눈심장비뇨생식계 증후군",
+  "en": "Neurooculocardiogenitourinary syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "아이메-그리프 증후군",
+  "en": "Aym&eacute;-Gripp syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "오그덴 증후군",
+  "en": "Ogden syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "페인골드 증후군 유형 1",
+  "en": "Feingold syndrome type 1",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "팰리스터-홀 증후군",
+  "en": "Pallister-Hall syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "대결절성 부신증식증",
+  "en": "Macronodular adrenal hyperplasia",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "일차성 색소성 결절성 부신피질 질환",
+  "en": "Primary pigmented nodular adrenocortical disease",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "선조성골병증-두개경화증",
+  "en": "Osteopathia striata-cranial sclerosis",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "오쿠르-청 신경발달 증후군",
+  "en": "Okur-Chung neurodevelopmental syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "헤모글로빈 사우샘프턴(헤모글로빈 캐스퍼)",
+  "en": "Hemoglobin Southampton (Hemoglobin Casper)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "HNRNPU-관련 장애",
+  "en": "HNRNPU-related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "피어슨 증후군[Pierson syndrome]",
+  "en": "Pierson syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "CACNA1A 관련 장애",
+  "en": "CACNA1A-related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "DDX3X 관련 장애",
+  "en": "DDX3X-related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "FBXO11 관련 장애",
+  "en": "FBXO11-related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "NACC1 관련 장애",
+  "en": "NACC1-related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "OPHN1 관련 장애",
+  "en": "OPHN1-related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "PPP2R5D 관련 장애",
+  "en": "PPP2R5D-related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "ZTTK 증후군",
+  "en": "Zhu-Tokita-Takenouchi-Kim [ZTTK] syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "니콜라이데스-바라이서 증후군",
+  "en": "Nicolaides-Baraitser syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "다발선천이상-근긴장저하-발작 증후군",
+  "en": "Multiple congenital anomalies-hypotonia-seizures syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "대뇌 크레아틴 결핍 증후군",
+  "en": "Cerebral creatine deficiency syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "다중심성 골용해-결정증-관절병증 [MONA]",
+  "en": "Multicentric osteolysis- nodulosis-arthropathy [MONA]",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "바이스-크루슈카 증후군",
+  "en": "Weiss-Kruszka syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "가브리엘레 드 브리스 증후군",
+  "en": "Gabriele-de Vries syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "GATAD2B와 연관된 신경발달장애",
+  "en": "GATAD2B associated neurodevelopmental disorder[GAND]",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "GRIN2B 관련 발달지연",
+  "en": "GRIN2B related developmental delay",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "ACOX1 관련 장애",
+  "en": "Acox1 related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "초프라-아미엘-고든 증후군",
+  "en": "Chopra-Amiel-Gordon syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "종양 괴사 인자 수용체와 관련된 주기성 증후군",
+  "en": "Tumor necrosis factor receptor- associated periodic syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "가족성 흉부 대동맥동맥류 및 박리",
+  "en": "Familial thoracic aortic aneurysm and dissection",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "아르볼레다-탐 증후군[KAT6A 증후군]",
+  "en": "Arboleda-Tham syndrome[KAT6A syndrome]",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "대뇌-안구-치아-귀-골격 이상 증후군 [CODAS 증후군]",
+  "en": "Cerebral-ocular-dental-auricular-skeletal anomaly syndrome [CODAS syndrome]",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "KMT2B-관련 근긴장이상",
+  "en": "KMT2B-related dystonia",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "CTLA4 결핍",
+  "en": "CTLA4 deficiency",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "CUL4B 관련 지적장애[카베자스형의 X염색체 연관 지적장애]",
+  "en": "CUL4B related intellectual disability[X-linked intellectual disability, Cabezas type]",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "CUX1 유전자 변이",
+  "en": "CUX1 gene mutation",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "DLL1 관련 질환",
+  "en": "DLL1-related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "DOCK8 유전자 변이 또는 결손",
+  "en": "DOCK8 gene mutation or deletion",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Foxp4 관련 발달 장애",
+  "en": "Foxp4 related developmental disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "갈로웨이-모왓 증후군",
+  "en": "Galloway Mowat syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "워버그-시노티 증후군",
+  "en": "Warburg-Cinotti syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "뇌-폐-갑상선 증후군",
+  "en": "Brain-lung-thyroid syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "마이어 증후군",
+  "en": "Myhre syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "심장척추 카포얼굴 증후군",
+  "en": "Cardiospondylocarpofacial syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "바라이서-윈터증후군",
+  "en": "Baraitser-Winter syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "PCDH 19 관련 뇌전증 증후군",
+  "en": "PCDH 19-related epilepsy syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "시니어-로켄 증후군",
+  "en": "Senior-Loken syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "성장지연, 지적발달장애, 근기능저하 및 간병증",
+  "en": "Growth retardations, impaired intellectual development, hypotonia, and hepatopathy (GRIDHH)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "코스텔로 증후군",
+  "en": "Costello syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "ALS 결핍증",
+  "en": "Acid-Labile subunit deficiency (ALSD)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "튜블린병증",
+  "en": "Tubulinopathies",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "레지우스 증후군",
+  "en": "Legius syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "3M 증후군",
+  "en": "3M syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "구축-발달지연-피에르 로빈 증후군(5장완23 미세결손 증후군)",
+  "en": "Contractures-developmental delay-Pierre Robin syndrome (5q23 microdeletion syndrome)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "카사바흐-메리트 증후군",
+  "en": "Kasabach-meritt syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "NALCN 관련 장애",
+  "en": "NALCN-related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "L1 증후군",
+  "en": "L1 syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "푸마라제 결핍(증)",
+  "en": "Fumarase deficiency",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "단일유전자성 홍반성루푸스",
+  "en": "Monogenic lupus erythematosus",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "다논 병",
+  "en": "Danon disease",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "전신성 모세혈관 누출 증후군",
+  "en": "Systemic capillary leak syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "폐의 모세관성 혈관종증",
+  "en": "Pulmonary capillary hemangiomatosis",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "화이트-서튼 증후군",
+  "en": "White-Sutton syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "보쉬-분스트라-샤프 시신경위축 증후군",
+  "en": "Bosch-Boonstra-Schaaf optic atrophy syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "KAT6B 관련 증후군",
+  "en": "KAT6B-related syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "백내장, 성장호르몬 결핍, 감각신경병증, 감각신경성 청력 상실 및 골격 이형성증",
+  "en": "Cataracts, growth hormone deficiency, sensory neuropathy, sensorineural hearing loss, and skeletal dysplasia",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "베인브릿지-로퍼스 증후군",
+  "en": "Bainbridge-Ropers syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "아텔로스테오제네시스",
+  "en": "Atelosteogenesis",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "PTEN 과오종 종양 증후군",
+  "en": "PTEN Hamartoma Tumor Syndrome (PHTS)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "선천성 심장결손, 이상형태성 얼굴 특징 및 지적발달장애",
+  "en": "Congenital heart defects, dysmorphic facial features, and intellectual developmental disorder (CHDFIDD)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "선천성 경상 운동 장애",
+  "en": "Congenital mirror movement (CMM) disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "5번 염색체 장완 31.3 부분의 미세결손으로 인한 PURA 관련 신경발달 장애",
+  "en": "PURA-related neurodevelopmental disorders due to 5q31.3 microdeletion",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "활성화된 PI3K 델타 증후군",
+  "en": "Activated PI3K Delta Syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "노리에병",
+  "en": "Norrie disease",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "거대뇌증-모세혈관 기형-다발미세이랑 증후군",
+  "en": "Megalencephaly-capillary malformation-polymicrogyria syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "KIF1A 유전자 돌연변이에 의한 신경병증",
+  "en": "Neuropathy due to KIF1A gene mutation",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "GNAO1 뇌병증",
+  "en": "GNAO1 encephalopathy",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "X-연관 세포사멸사 억제인자 결핍",
+  "en": "X-linked inhibitor of apoptosis deficiency",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "가족성 칸디다증",
+  "en": "Familial candidiasis",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "면역글로블린 G4 관련 질환",
+  "en": "Immunoglobulin G4-related disease",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "모낭성비늘증-탈모증-눈부심 증후군",
+  "en": "Ichthyosis follicularis-alopecia-photophobia syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "윤활막염-여드름-농포증-골염 증후군",
+  "en": "Synovitis-acne-pustulosis-hyperostosis-osteitis syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "말단이골증",
+  "en": "Acrodysostosis",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "선천성 당화장애",
+  "en": "Congenital disorder of glycosylation",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "소두증 골형성이상 원시성 난쟁이증 유형2",
+  "en": "Microcephalic osteodysplastic primordial dwarfism type II",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "DHDDS 유전자 변이에 의한 운동 이상을 동반하거나 동반하지 않는 발달지연 및 발작",
+  "en": "Developmental delay and seizures with or without movement abnormalities (DEDSM) due to DHDDS gene",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "미세증후군 [와버그 미세증후군]",
+  "en": "Micro syndrome [Warburg micro syndrome]",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "피질하 낭을 동반한 거대뇌성 백질뇌병증",
+  "en": "Megalencephalic leukoencephalopathy with subcortical cysts",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "POU3F3 관련 장애 (Snijders Blok-Fisher 증후군)",
+  "en": "POU3F3-related disorder (Snijders Blok-Fisher syndrome)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "베타-프로펠러 단백질 연관 신경변성",
+  "en": "Beta-Propeller protein-associated neurodegeneration",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "템플 증후군",
+  "en": "Temple syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Hoyeraal-Hreidarsson 증후군",
+  "en": "Hoyeraal-Hreidarsson syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "CTNNB1 관련 장애",
+  "en": "CTNNB1-related disorder",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "부갑상선기능저하증-감각신경성 난청- 신장 질환 (HDR) 증후군",
+  "en": "Hypoparathyroidism-sensorineural deafness-renal disease (HDR) syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "중추신경계통의 원발성 혈관염",
+  "en": "Primary angiitis of central nervous system (PACNS)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "쉬프린첸-골드베르그 증후군",
+  "en": "Shprintzen-Goldberg syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "ADCY5 관련 이상운동증",
+  "en": "ADCY5-related dyskinesia",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "헌터-맥칼파인 증후군",
+  "en": "Hunter-McAlpine syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "보링-오피츠 증후군",
+  "en": "Bohring-Opitz syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "모자이크성 다양한 이수성 증후군1",
+  "en": "Mosaic variegated aneuploidy syndrome 1",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "루스칸-루미쉬 증후군",
+  "en": "Luscan-lumish syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "샤프-양 증후군",
+  "en": "Schaaf-Yang syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "스미스-킹스모어 증후군",
+  "en": "Smith-Kingsmore syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "털손발톱치아형성이상 1,3형",
+  "en": "Trichorhinophalangeal syndrome type I & III",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "FG2 증후군",
+  "en": "FG2 syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "블라우 증후군",
+  "en": "Blau syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Schimke 면역-골 형성이상",
+  "en": "Schimke immunosseous dysplasia (SIOD)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "마이어 로키탄스키 쿠스터 하우저 증후군",
+  "en": "Mayer-Rokitansky-Kuster Hauser (MRKH) syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "15장완11.2 미세결손 증후군",
+  "en": "15q11.2 microdeletion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "2장완11 미세중복 증후군",
+  "en": "2q11 microduplication syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "3MC 증후군",
+  "en": "3MC syndrome (Malpuech-Michels-Mingarelli-Carnevale)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Mesomelia-synostoses 증후군(8번 염색체 장완의 13부분의 미세결손 증후군)",
+  "en": "Mesomelia-synostoses syndrome(8q13 microdeletion syndrome)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "ARC 증후군",
+  "en": "Arthrogryposis, renal tubular dysfunction, and cholestasis (ARC syndrome)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "축삭 회전타원체 및 색소침착된 아교세포를 동반한 성인-발병 백질뇌병증(ALSP)",
+  "en": "Adult-onset leukoencephalopathy with axonal spheroids and pigmented glia (ALSP)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "COL4A1 관련 장애",
+  "en": "Collagen alpha1(Ⅳ) chain related disorders",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "DYRK1A 증후군",
+  "en": "DYRK1A syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Dent 질환",
+  "en": "Dent disease",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "케이비지 증후군",
+  "en": "KBG syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "KID 증후군",
+  "en": "KID syndrome (Keratitis-ichthyosis-deafness)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "클리프스트라 증후군",
+  "en": "Kleefstra syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "단신, 시신경 위축 및 펠거-휴엣 이상 증후군",
+  "en": "Short stature, optic atrophy and Pelger-Huët anomaly syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "Vici 증후군",
+  "en": "Vici syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "유전성 만성 췌장염",
+  "en": "Hereditary chronic pancreatitis",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "고함-스타우트 병",
+  "en": "Gorham-Stout disease (GSD)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "골드베르그-쉬프린첸 증후군",
+  "en": "Goldberg-Shprintzen syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "고린증후군",
+  "en": "Gorlin syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "근긴장이상을 동반한 고망간혈증",
+  "en": "Hypermanganesemia with dystonia",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "데니스-드래쉬 증후군",
+  "en": "Denys-Drash syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "두개골간단형성부전증",
+  "en": "Craniometaphyseal dysplasia",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "10장완 말단 삼염색체 증후군",
+  "en": "Distal 10q trisomy syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "WAGR 증후군(11번 염색체 단완의 13부분 결손)",
+  "en": "WAGR syndrome(Deletion 11p13)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "에드하임-체스터 병",
+  "en": "Erdheim-Chester disease",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "엠마누엘 증후군",
+  "en": "Emanuel syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "장림프관확장증",
+  "en": "Intestinal lymphangiectasia",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "젤레오피직 이형성증",
+  "en": "Geleophysic dysplasia",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "지텔만 증후군",
+  "en": "Gitelman syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "철불응성 철결핍성 빈혈",
+  "en": "Iron-refractory iron deficiency anemia",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "카라실 증후군",
+  "en": "CARASIL syndrome (Cerebral autosomal recessive arteriopathy with subcortical infarcts and leukoencephalopathy)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "코핀-시리스 증후군",
+  "en": "Coffin-Siris syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "코헨 증후군",
+  "en": "Cohen syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "큐라리노 증후군",
+  "en": "Currarino syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "크라이오피린 연관 주기 (발열) 증후군",
+  "en": "Cryopyrin associated periodic (fever) syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "크론카이드-카나다 증후군",
+  "en": "Cronkhite-Canada syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "터프팅장증",
+  "en": "Tufting enteropathy (Intestinal epithelial dysplasia)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "미만성 폐림프관종증",
+  "en": "Diffuse pulmonary lymphangiomatosis",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "플로우팅 하버 증후군",
+  "en": "Floating-Harbor syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "피어슨 증후군",
+  "en": "Pearson syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "피트 홉킨스 증후군",
+  "en": "Pitt-Hopkins syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "하쥬-체니 증후군",
+  "en": "Hadju-Cheney syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "랑거 기드온 증후군",
+  "en": "Langer-Giedion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "로이-디에츠 증후군",
+  "en": "Loeys-Dietz syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "로하드 증후군",
+  "en": "ROHHAD syndrorme",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "메이어-고린 증후군",
+  "en": "Meier-Gorlin syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "무홍채증-소뇌성운동실조-정신박약",
+  "en": "Aniridia-cerebellar ataxia-mental deficiency",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "빌트-호그-두베증후군",
+  "en": "Birt-Hogg-Dube syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "볼프람 증후군",
+  "en": "Wolfram syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "선천성 염화물 설사",
+  "en": "Congenital chloride diarrhea",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "선천성 무거핵구성 혈소판감소증",
+  "en": "Congenital amegakaryocytic thrombocytopenia",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "선천성 중추성 무호흡증",
+  "en": "Congenital central hypoventilation syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "쉰젤 기드온 증후군",
+  "en": "Schinzel Giedion syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "슈바크만-다이아몬드 증후군",
+  "en": "Schwachman-Diamond syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "아이펙스 증후군",
+  "en": "IPEx syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "알란-헌든-더들리 증후군",
+  "en": "Allan-Herndon-Dudley syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "알렉산더 병",
+  "en": "Alexander disease",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "앤틀리-빅슬러 증후군",
+  "en": "Antley-Bixler syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "거대방광-미세결장-장연동저하 증후군(MMIHS)",
+  "en": "Megacystis-microcolon-intestinal hypoperistalsis syndrome (MMIHS)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "비데만-스타이너 증후군",
+  "en": "Wiedemann-Steiner syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "지아-깁스 증후군",
+  "en": "Xia-Gibbs syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "FLNA 관련 뇌실주위 결절성 이소증",
+  "en": "FLNA-related periventricular nodular heterotopia",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "무한증을 동반한 선천성 통증 무감각증",
+  "en": "Congenital insensitivity to pain with anhidrosis (CIPA)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "X연관 정신지체-저긴장성 얼굴증후군",
+  "en": "X-linked mental retardation-hypotonic facies syndrome",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "색소피부건조증 그룹 A",
+  "en": "Xeroderma pigmentosum Group A (XPA)",
+  "kcd": "없음",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "팰리스터-킬리언 증후군",
+  "en": "Pallister-Killian syndrome",
+  "kcd": "Q99.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "취약X증후군",
+  "en": "Fragile X syndrome",
+  "kcd": "Q99.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "클라인펠터증후군, 핵형 46, XX를 가진 남성",
+  "en": "Klinefelter’s syndrome, male with 46,XX karyotype",
+  "kcd": "Q98.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "클라인펠터증후군, 두 개 이상의 X염색체를 가진 남성",
+  "en": "Klinefelter’s syndrome, male with more than two X chromosomes",
+  "kcd": "Q98.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "클라인펠터증후군, 핵형 47, XXY",
+  "en": "Klinefelter’s syndrome karyotype 47, XXY",
+  "kcd": "Q98.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "섞임증, 이상성염색체를 가진 45, X/기타 세포열",
+  "en": "Mosaicism, 45, X/other cell line(s) with abnormal sex chromosome",
+  "kcd": "Q96.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "섞임증, 45, X/46, XX 또는 XY",
+  "en": "Mosaicism, 45, X/46, XX or XY",
+  "kcd": "Q96.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "동인자(Xq)를 제외한 이상 성염색체를 가진 핵형46, X",
+  "en": "Karyotype 46, X with abnormal sex chromosome, except iso(Xq)",
+  "kcd": "Q96.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "핵형46, X동인자(Xq)",
+  "en": "Karyotype 46, X iso(Xq)",
+  "kcd": "Q96.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "핵형45, X",
+  "en": "Karyotype 45, X",
+  "kcd": "Q96.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "18번 염색체 장완의 결손 증후군",
+  "en": "18 long arm deletion syndrome",
+  "kcd": "Q93.5",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "21번 염색체 장완의 결손 증후군",
+  "en": "21 long arm deletion syndrome",
+  "kcd": "Q93.5",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "2번 염색체 장완의 37부분의 미세결손증후군",
+  "en": "2q37 microdeletion syndrome",
+  "kcd": "Q93.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "3 장완29 미세결손 증후군",
+  "en": "3q29 microdeletion syndrome",
+  "kcd": "Q93.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "18 단완 염색체 결손",
+  "en": "18 short arm chromosome deletion",
+  "kcd": "Q93.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "15 장완13.3 미세결손 증후군",
+  "en": "15q13.3 microdeletion syndrome",
+  "kcd": "Q93.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "18장완 말단부 결손 증후군",
+  "en": "18q distal deletion syndrome",
+  "kcd": "Q93.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "캐치22(22염색체 미세결실) 증후군",
+  "en": "CATCH22 syndrome",
+  "kcd": "Q93.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "윌리엄스 증후군",
+  "en": "William’s syndrome",
+  "kcd": "Q93.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "1번 염색체 단완 36부분의 미세결손증후군",
+  "en": "1p36 Microdeletion Syndrome",
+  "kcd": "Q93.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "엔젤만증후군",
+  "en": "Angelman syndrome",
+  "kcd": "Q93.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "18장완단일염색체증",
+  "en": "18q monosomy",
+  "kcd": "Q93.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "스미스-마제니스 증후군",
+  "en": "Smith-Magenis syndrome",
+  "kcd": "Q93.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "5번 염색체 단완의 결손",
+  "en": "Deletion of short arm of chromosome 5",
+  "kcd": "Q93.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "고양이울음증후군",
+  "en": "Cri-du-chat syndrome",
+  "kcd": "Q93.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "월프-허쉬호른증후군",
+  "en": "Wolff-Hirschorn syndrome",
+  "kcd": "Q93.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "4 단완 염색체 부분 결손",
+  "en": "Partial deletion of the short arm of chromosome 4",
+  "kcd": "Q93.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "15장완 사염색체(증)(쌍중심절 15번 염색체 증후군)",
+  "en": "Tetrasomy 15q (isodicentric 15 chromosome syndrome)",
+  "kcd": "Q93.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "20번 염색체 단완의 삼염색체증",
+  "en": "Trisomy 20p",
+  "kcd": "Q92.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "11장완 말단부 삼염색체 증후군",
+  "en": "11q distal trisomy syndrome",
+  "kcd": "Q92.3",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "15번 염색체 장완 11-13 부분의 미세중복 증후군",
+  "en": "15q11q13 microduplication syndrome",
+  "kcd": "Q92.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "7번 염색체 장완 11.23 부분의 미세중복 증후군",
+  "en": "7q11.23 microduplication syndrome",
+  "kcd": "Q92.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "포토키-룹스키 증후군",
+  "en": "Potocki-Lupski syndrome",
+  "kcd": "Q92.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "10번 염색체 단완의 삼염색체증",
+  "en": "Trisomy 10p",
+  "kcd": "Q92.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "13삼염색체증후군",
+  "en": "Trisomy 13 Syndrome",
+  "kcd": "Q91.7",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "13삼염색체증, 전위",
+  "en": "Trisomy 13, translocation",
+  "kcd": "Q91.6",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "13삼염색체증, 섞임증형(유사분열비분리)",
+  "en": "Trisomy 13, mosaicism (mitotic nondisjunction)",
+  "kcd": "Q91.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "13삼염색체증, 감수분열비분리",
+  "en": "Trisomy 13, meiotic nondisjunction",
+  "kcd": "Q91.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "18삼염색체증, 전위",
+  "en": "Trisomy 18, translocation",
+  "kcd": "Q91.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "18삼염색체증, 섞임증형(유사분열비분리)",
+  "en": "Trisomy 18, mosaicism (mitotic nondisjunction)",
+  "kcd": "Q91.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "18삼염색체증, 감수분열비분리",
+  "en": "Trisomy 18, meiotic nondisjunction",
+  "kcd": "Q91.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "21삼염색체증 NOS",
+  "en": "Trisomy 21 NOS",
+  "kcd": "Q90.9",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "21삼염색체증, 전위",
+  "en": "Trisomy 21, translocation",
+  "kcd": "Q90.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "21삼염색체증, 섞임증형(유사분열비분리)",
+  "en": "Trisomy 21, mosaicism (mitotic nondisjunction)",
+  "kcd": "Q90.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "21삼염색체증, 감수분열비분리",
+  "en": "Trisomy 21, meiotic nondisjunction",
+  "kcd": "Q90.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "알포트 증후군",
+  "en": "Alport syndrome",
+  "kcd": "Q87.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "촤지 증후군",
+  "en": "CHARGE syndrome",
+  "kcd": "Q87.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "펠란-맥더미드 증후군(22장완 13.3 결손 증후군)",
+  "en": "Phelan-McDermid syndrome(22q13.3 deletion syndrome)",
+  "kcd": "Q87.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "아가미-귀-신장 증후군",
+  "en": "Branchiootorenal syndrome",
+  "kcd": "Q87.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "로렌스-문(-바르데)-비들 증후군",
+  "en": "Laurence-Moon(-Bardet)-Biedl syndrome",
+  "kcd": "Q87.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "ADNP 증후군(헬스무르텔-반데르아 증후군)",
+  "en": "ADNP syndrome(Helsmoortel-VanDerAa Syndrome)",
+  "kcd": "Q87.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "쿨렌-드 브리스 증후군",
+  "en": "Koolen-de Vries syndrome",
+  "kcd": "Q87.8",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "알스트롬 증후군",
+  "en": "Alstrom syndrome",
+  "kcd": "Q87.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "젤웨거 증후군",
+  "en": "Zellweger syndrome",
+  "kcd": "Q87.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "모왓-윌슨 증후군",
+  "en": "Mowat-Wilson syndrome",
+  "kcd": "Q87.8",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "코핀-로우리 증후군",
+  "en": "Coffin-Lowry syndrome",
+  "kcd": "Q87.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "마르팡증후군",
+  "en": "Marfan’s syndrome",
+  "kcd": "Q87.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "소토스 증후군",
+  "en": "Sotos syndrome",
+  "kcd": "Q87.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "위버 증후군",
+  "en": "Weaver syndrome",
+  "kcd": "Q87.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "벡위드-비데만 증후군",
+  "en": "Beckwith-Wiedemann syndrome",
+  "kcd": "Q87.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "바터 증후군",
+  "en": "VATER syndrome",
+  "kcd": "Q87.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "홀트-오람 증후군",
+  "en": "Holt-Oram syndrome",
+  "kcd": "Q87.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "루빈스타인-테이비 증후군",
+  "en": "Rubinstein-Taybi syndrome",
+  "kcd": "Q87.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "클리펠-트레노우네이-베버 증후군",
+  "en": "Klippel-Trénaunay-Weber syndrome",
+  "kcd": "Q87.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "손발톱무릎뼈 증후군",
+  "en": "Nail patella syndrome",
+  "kcd": "Q87.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "아르스코그 증후군",
+  "en": "Aarskog syndrome",
+  "kcd": "Q87.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "굴지 형성이상",
+  "en": "Campomelic dysplasia",
+  "kcd": "Q87.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "프라더-윌리 증후군",
+  "en": "Prader-Willi syndrome",
+  "kcd": "Q87.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "코케인 증후군",
+  "en": "Cockayne syndrome",
+  "kcd": "Q87.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "쉐그렌-라손 증후군",
+  "en": "Sjogren-Larsson syndrome",
+  "kcd": "Q87.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "시클 증후군",
+  "en": "Seckel syndrome",
+  "kcd": "Q87.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "로비노-실버만-스미스 증후군",
+  "en": "Robinow-Silverman-Smith syndrome",
+  "kcd": "Q87.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "스미스-렘리-오피츠 증후군",
+  "en": "Smith-Lemli-Opitz syndrome",
+  "kcd": "Q87.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "두보위츠 증후군",
+  "en": "Dubowitz syndrome",
+  "kcd": "Q87.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "러셀-실버 증후군",
+  "en": "Russel-Silver syndrome",
+  "kcd": "Q87.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "주로 단신과 관련된 선천기형증후군",
+  "en": "Congenital malformation syndromes predominantly associated with short stature",
+  "kcd": "Q87.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "누난 증후군",
+  "en": "Noonan syndrome",
+  "kcd": "Q87.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "드 랑즈 증후군",
+  "en": "De Lange syndrome",
+  "kcd": "Q87.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "카펜터 증후군",
+  "en": "Carpenter´s syndrome",
+  "kcd": "Q87.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "단안증",
+  "en": "Cyclopia",
+  "kcd": "Q87.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "로빈 증후군",
+  "en": "Robin syndrome",
+  "kcd": "Q87.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "뫼비우스 증후군",
+  "en": "Moebius syndrome",
+  "kcd": "Q87.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "스티클러 증후군",
+  "en": "Sticklers syndrome",
+  "kcd": "Q87.0",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "마르케사니-바일 증후군 [바일-마르케사니 증후군]",
+  "en": "Marchesani-weill-syndrome [Weill-marchesani syndrome]",
+  "kcd": "Q87.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "안치지의 형성이상",
+  "en": "Oculodentodigital dysplasia",
+  "kcd": "Q87.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "휘파람부는 얼굴",
+  "en": "Whistling face",
+  "kcd": "Q87.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "야콥센 증후군(11장완 말단부 결손 증후군)",
+  "en": "Jacobsen syndrome(11q distal deletion syndrome)",
+  "kcd": "Q87.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "가부키 증후군",
+  "en": "Kabuki syndrome",
+  "kcd": "Q87.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "고린-샤우드리-모스 증후군",
+  "en": "Gorlin-Chaudhry-Moss syndrome",
+  "kcd": "Q87.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "골덴하 증후군",
+  "en": "Goldenhar syndrome",
+  "kcd": "Q87.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "입-얼굴-손발 증후군",
+  "en": "Oro-facial-digital syndrome",
+  "kcd": "Q87.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "잠복안구증후군",
+  "en": "Cryptophthalmos syndrome",
+  "kcd": "Q87.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "주로 얼굴형태에 영향을 주는 선천기형증후군",
+  "en": "Congenital malformation syndromes predominantly affecting facial appearance",
+  "kcd": "Q87.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "첨두다지유합증",
+  "en": "Acrocephalopolysyndactyly",
+  "kcd": "Q87.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "첨두유합지증",
+  "en": "Acrocephalosyndactyly(Apert)",
+  "kcd": "Q87.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "(이상형태성) 태아알코올증후군",
+  "en": "Fetal alcohol syndrome (dysmorphic)",
+  "kcd": "Q86.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "폰 히펠-린다우 증후군",
+  "en": "Von Hippel-Lindau syndrome",
+  "kcd": "Q85.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "포이츠-제거스 증후군",
+  "en": "Peutz-Jeghers syndrome",
+  "kcd": "Q85.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "스터지-베버(-디미트리) 증후군",
+  "en": "Sturge-Weber(-Dimitri) syndrome",
+  "kcd": "Q85.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "부르느뷰병",
+  "en": "Bourneville’s disease",
+  "kcd": "Q85.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "에필로이아",
+  "en": "Epiloia",
+  "kcd": "Q85.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "결절성 경화증",
+  "en": "Tuberous sclerosis",
+  "kcd": "Q85.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "신경섬유종증(비악성) 1형, 2형",
+  "en": "Neurofibromatosis(nonmalignant) type 1, type 2",
+  "kcd": "Q85.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "폰렉클링하우젠병",
+  "en": "Von Recklinghausen’s disease",
+  "kcd": "Q85.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "신경섬유종증(비악성)",
+  "en": "Neurofibromatosis (nonmalignant)",
+  "kcd": "Q85.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천성 이상각화증",
+  "en": "Congenital dyskeratosis",
+  "kcd": "Q82.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "블륨 증후군",
+  "en": "Bloom syndrome",
+  "kcd": "Q82.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "로트문드(-톰슨) 증후군",
+  "en": "Rothmund(-Thomson) syndrome",
+  "kcd": "Q82.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "탄력섬유성거짓황색종",
+  "en": "Pseudoxanthoma elasticum",
+  "kcd": "Q82.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "골츠 증후군",
+  "en": "Goltz syndrome",
+  "kcd": "Q82.8",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "(무한성) 외배엽형성이상",
+  "en": "Ectodermal dysplasia (anhidrotic)",
+  "kcd": "Q82.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "헤이-웰스증후군 (안검유착-외배엽 결손)",
+  "en": "Hay-Wells syndrome (Ankyloblepharon-ectodermal defects)",
+  "kcd": "Q82.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "색소실조증",
+  "en": "Incontinentia pigmenti",
+  "kcd": "Q82.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "유전성 림프부종",
+  "en": "Hereditary lymphoedema",
+  "kcd": "Q82.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "디스트로피성 수포성 표피박리증",
+  "en": "Epidermolysis bullosa dystrophica",
+  "kcd": "Q81.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "치사성 수포성 표피박리증",
+  "en": "Epidermolysis bullosa letalis",
+  "kcd": "Q81.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "헤를리츠증후군",
+  "en": "Herlitz’ syndrome",
+  "kcd": "Q81.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "단순 수포성 표피박리증",
+  "en": "Epidermolysis bullosa simplex",
+  "kcd": "Q81.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "할리퀸태아",
+  "en": "Harlequin fetus",
+  "kcd": "Q80.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천성 수포성 비늘모양홍색피부증",
+  "en": "Congenital bullous ichthyosiform erythroderma",
+  "kcd": "Q80.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "층판비늘증",
+  "en": "Lamellar ichthyosis",
+  "kcd": "Q80.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "X-연관비늘증; 스테로이드설파타제결핍",
+  "en": "X-linked ichthyosis; steroid sulfatase deficiency",
+  "kcd": "Q80.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "X-연관비늘증",
+  "en": "X-linked ichthyosis",
+  "kcd": "Q80.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "근골격계통의 상세불명의 선천기형",
+  "en": "Congenital malformation of musculoskeletal system, unspecified",
+  "kcd": "Q79.9",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "근골격계통의 선천변형 NOS",
+  "en": "Congenital deformity of musculoskeletal system NOS",
+  "kcd": "Q79.9",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "근골격계통의 선천이상 NOS",
+  "en": "Congenital anomaly of musculoskeletal system NOS",
+  "kcd": "Q79.9",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "근골격계통의 기타 선천기형",
+  "en": "Other congenital malformations of musculoskeletal system",
+  "kcd": "Q79.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "폴란드증후군",
+  "en": "Poland’s syndrome",
+  "kcd": "Q79.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "힘줄의 결여",
+  "en": "Absence of tendon",
+  "kcd": "Q79.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천성 협착띠",
+  "en": "Congenital constricting bands",
+  "kcd": "Q79.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천성 짧은힘줄",
+  "en": "Congenital shortening of tendon",
+  "kcd": "Q79.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "부근",
+  "en": "Accessory muscle",
+  "kcd": "Q79.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "근육의 결여",
+  "en": "Absence of muscle",
+  "kcd": "Q79.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천성 근위축",
+  "en": "Amyotrophia congenita",
+  "kcd": "Q79.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "엘러스-단로스증후군",
+  "en": "Ehlers-Danlos syndrome",
+  "kcd": "Q79.6",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "복벽의 기타 선천기형",
+  "en": "Other congenital malformations of abdominal wall",
+  "kcd": "Q79.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "말린자두배증후군",
+  "en": "Prune belly syndrome",
+  "kcd": "Q79.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "복벽파열증",
+  "en": "Gastroschisis",
+  "kcd": "Q79.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "배꼽내장탈장",
+  "en": "Exomphalos",
+  "kcd": "Q79.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천복벽탈장",
+  "en": "Omphalocele",
+  "kcd": "Q79.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "횡격막 탈출",
+  "en": "Eventration of diaphragm",
+  "kcd": "Q79.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "횡격막결여",
+  "en": "Absence of diaphragm",
+  "kcd": "Q79.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "횡격막의 기타 선천기형",
+  "en": "Other congenital malformations of diaphragm",
+  "kcd": "Q79.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "횡격막의 선천기형 NOS",
+  "en": "Congenital malformation of diaphragm NOS",
+  "kcd": "Q79.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천성 횡격막탈장",
+  "en": "Congenital diaphragmatic hernia",
+  "kcd": "Q79.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "가성 연골무형성 형성이상",
+  "en": "Pseudoachondroplastic dysplasia",
+  "kcd": "Q78.9",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "유전성 다발외골증",
+  "en": "Hereditary multiple exostoses",
+  "kcd": "Q78.6",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "다발선천외골증",
+  "en": "Multiple congenital exostoses",
+  "kcd": "Q78.6",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "골간병적조직연결",
+  "en": "Diaphyseal aclasis",
+  "kcd": "Q78.6",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "골간단연골형성이상, 슈미드형",
+  "en": "Metaphyseal chondrodysplasia, Schmid type",
+  "kcd": "Q78.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "필레증후군",
+  "en": "Pyle’s syndrome",
+  "kcd": "Q78.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "마푸치증후군",
+  "en": "Maffucci’s syndrome",
+  "kcd": "Q78.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "내연골종증",
+  "en": "Enchondromatosis",
+  "kcd": "Q78.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "올리에르병",
+  "en": "Ollier’s disease",
+  "kcd": "Q78.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "카무라티-엥겔만증후군",
+  "en": "Camurati-Engelmann syndrome",
+  "kcd": "Q78.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "알베르스-쇤베르그증후군",
+  "en": "Albers-Schönberg syndrome",
+  "kcd": "Q78.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "골화석증",
+  "en": "Osteopetrosis",
+  "kcd": "Q78.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "다골성 섬유성 형성이상",
+  "en": "Polyostotic fibrous dysplasia",
+  "kcd": "Q78.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "얼브라이트(-맥쿤)(-스턴버그)증후군",
+  "en": "Albright(-McCune)(-Sternberg) syndrome",
+  "kcd": "Q78.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "골취약증",
+  "en": "Fragilitas ossium",
+  "kcd": "Q78.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "불완전골형성",
+  "en": "Osteogenesis imperfecta",
+  "kcd": "Q78.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "관상골 및 척추의 성장결손을 동반한 상세불명의 골연골형성이상",
+  "en": "Osteochondrodysplasia with defects of growth of tubular bones and spine, unspecified",
+  "kcd": "Q77.9",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "말단왜소 형성이상",
+  "en": "Acromicric dysplasia",
+  "kcd": "Q77.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "관상골 및 척추의 성장결손을 동반한 기타 골연골형성이상",
+  "en": "Other osteochondrodysplasia with defects of growth of tubular bones and spine",
+  "kcd": "Q77.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "레리-웨일 증후군",
+  "en": "Leri-Weill syndrome",
+  "kcd": "Q77.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "척추골단형성이상",
+  "en": "Spondyloepiphyseal dysplasia",
+  "kcd": "Q77.7",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "만발성 척추골단형성이상",
+  "en": "Spondyloepiphyseal dysplasia tarda",
+  "kcd": "Q77.7",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "엘리스-반크레벨트증후군",
+  "en": "Ellis-van Creveld syndrome",
+  "kcd": "Q77.6",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "연골외배엽형성이상",
+  "en": "Chondroectodermal dysplasia",
+  "kcd": "Q77.6",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "디스트로피성 형성이상",
+  "en": "Dystrophic dysplasia",
+  "kcd": "Q77.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천성 골경화증",
+  "en": "Osteosclerosis congenita",
+  "kcd": "Q77.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "연골형성저하증",
+  "en": "Hypochondroplasia",
+  "kcd": "Q77.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "연골무형성증",
+  "en": "Achondroplasia",
+  "kcd": "Q77.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "다발성 골단 형성이상",
+  "en": "Multiple epiphyseal dysplasia",
+  "kcd": "Q77.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "점상 연골형성이상",
+  "en": "Chondrodysplasia punctata",
+  "kcd": "Q77.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "X-연관 우성 연골형성이상",
+  "en": "X-linked dominant chondrodysplasia",
+  "kcd": "Q77.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "어깨고관절 점상 연골형성이상(1형-3형)",
+  "en": "Rhizomelic chondrodysplasia punctata(type 1-3)",
+  "kcd": "Q77.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "짧은늑골증후군",
+  "en": "Short rib syndrome",
+  "kcd": "Q77.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "질식성 흉부형성이상[쥐느]",
+  "en": "Asphyxiating thoracic dysplasia[Jeune]",
+  "kcd": "Q77.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "치사성 단신",
+  "en": "Thanatophoric short stature",
+  "kcd": "Q77.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "연골무발생증",
+  "en": "Achondrogenesis",
+  "kcd": "Q77.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "연골발생저하증",
+  "en": "Hypochondrogenesis",
+  "kcd": "Q77.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "클리펠-파일증후군",
+  "en": "Klippel-Feil syndrome",
+  "kcd": "Q76.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "하악안면골이골증",
+  "en": "Mandibulofacial dysostosis",
+  "kcd": "Q75.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "트레처-콜린스 증후군",
+  "en": "Treacher Collins syndrome",
+  "kcd": "Q75.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "프란체스쉐티 증후군",
+  "en": "Franceschetti syndrome",
+  "kcd": "Q75.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "크루존병",
+  "en": "Crouzon’s disease",
+  "kcd": "Q75.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "두개안면골이골증",
+  "en": "Craniofacial dysostosis",
+  "kcd": "Q75.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "삼각머리증",
+  "en": "Trigonocephaly",
+  "kcd": "Q75.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "뾰족머리증",
+  "en": "Acrocephaly",
+  "kcd": "Q75.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "두개골유합",
+  "en": "Craniosynostosis",
+  "kcd": "Q75.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "두개골의 불완전유합",
+  "en": "Imperfect fusion of skull",
+  "kcd": "Q75.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "라르센 증후군",
+  "en": "Larsen’s syndrome",
+  "kcd": "Q74.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천성 다발관절만곡증",
+  "en": "Arthrogryposis multiplex congenita",
+  "kcd": "Q74.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "쇄골두개골이골증",
+  "en": "Cleidocranial dysostosis",
+  "kcd": "Q74.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "방광외번",
+  "en": "Extroversion of bladder",
+  "kcd": "Q64.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "방광이소증",
+  "en": "Ectopia vesicae",
+  "kcd": "Q64.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "방광외반",
+  "en": "Exstrophy of urinary bladder",
+  "kcd": "Q64.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "메켈증후군",
+  "en": "Meckel syndrome",
+  "kcd": "Q61.9",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "다낭성 신장, 보통염색체우성",
+  "en": "Polycystic kidney, autosomal dominant",
+  "kcd": "Q61.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "다낭성 신장, 보통염색체열성",
+  "en": "Polycystic kidney, autosomal recessive",
+  "kcd": "Q61.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "다낭성 신장, 영아형",
+  "en": "Polycystic kidney, infantile type",
+  "kcd": "Q61.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "알라질증후군",
+  "en": "Alagille’s syndrome",
+  "kcd": "Q44.7",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천성 간 섬유증",
+  "en": "Congenital liver fibrosis",
+  "kcd": "Q44.6",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "담관의 폐쇄",
+  "en": "Atresia of bile ducts",
+  "kcd": "Q44.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천성짧은장증후군",
+  "en": "Congenital Short Bowel Syndrome",
+  "kcd": "Q43.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "무설증(無舌症)",
+  "en": "Aglossia",
+  "kcd": "Q38.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "와이번메이슨증후군",
+  "en": "Wyburn Mason syndrome",
+  "kcd": "Q28.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "문맥-간동맥루",
+  "en": "Portal vein-hepatic artery fistula",
+  "kcd": "Q26.6",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "문맥결합이상",
+  "en": "Anomalous portal venous connection",
+  "kcd": "Q26.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "상세불명의 폐정맥결합이상",
+  "en": "Anomalous pulmonary venous connection, unspecified",
+  "kcd": "Q26.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "부분폐정맥결합이상",
+  "en": "Partial anomalous pulmonary venous connection",
+  "kcd": "Q26.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "전폐정맥결합이상",
+  "en": "Total anomalous pulmonary venous connection",
+  "kcd": "Q26.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "좌상대정맥존속",
+  "en": "Persistent left superior vena cava",
+  "kcd": "Q26.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "(하)(상)대정맥의 선천성 협착",
+  "en": "Congenital stenosis of vena cava (inferior)(superior)",
+  "kcd": "Q26.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "대정맥의 선천성 협착",
+  "en": "Congenital stenosis of vena cava",
+  "kcd": "Q26.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "폐동맥 슬링",
+  "en": "Pulmonary artery sling",
+  "kcd": "Q25.7",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "폐동맥의 폐쇄",
+  "en": "Atresia of pulmonary artery",
+  "kcd": "Q25.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "판막상부 대동맥협착",
+  "en": "Supravalvular aortic stenosis",
+  "kcd": "Q25.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "대동맥의 협착",
+  "en": "Stenosis of aorta",
+  "kcd": "Q25.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "대동맥의 폐쇄",
+  "en": "Atresia of aorta",
+  "kcd": "Q25.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "대동맥의 축착",
+  "en": "Coarctation of aorta",
+  "kcd": "Q25.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "대동맥의 축착(관전, 관후)",
+  "en": "Coarctation of aorta (preductal, postductal)",
+  "kcd": "Q25.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천성 심장차단",
+  "en": "Congenital heart block",
+  "kcd": "Q24.6",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천성 관상동맥류",
+  "en": "Congenital coronary(artery) aneurysm",
+  "kcd": "Q24.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "관상동맥혈관의 기형",
+  "en": "Malformation of coronary vessels",
+  "kcd": "Q24.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천성 대동맥판하협착",
+  "en": "Congenital subaortic stenosis",
+  "kcd": "Q24.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "대동맥판 및 승모판의 상세불명의 선천기형",
+  "en": "Congenital malformation of aortic and mitral valves, unspecified",
+  "kcd": "Q23.9",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "대동맥판 및 승모판의 기타 선천기형",
+  "en": "Other congenital malformations of aortic and mitral valves",
+  "kcd": "Q23.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "형성저하성 좌심증후군",
+  "en": "Hypoplastic left heart syndrome",
+  "kcd": "Q23.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "(승모판 협착 또는 폐쇄와 함께) 상행대동맥의 형성저하와 좌심실의 결손발육을 동반하는 대동맥구멍 및 판막의 폐쇄 또는 현저한 발육부전",
+  "en": "Atresia, or marked hypoplasia of aortic orifice or valve, with hypoplasia of ascending aorta and defective development of left ventricle (with mitral valve stenosis or atresia)",
+  "kcd": "Q23.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천성 승모판기능부전",
+  "en": "Congenital mitral insufficiency",
+  "kcd": "Q23.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천성 승모판협착",
+  "en": "Congenital mitral stenosis",
+  "kcd": "Q23.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천성 승모판폐쇄",
+  "en": "Congenital mitral atresia",
+  "kcd": "Q23.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천성 대동맥판기능부전",
+  "en": "Congenital aortic insufficiency",
+  "kcd": "Q23.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천성 대동맥판역류",
+  "en": "Congenital aortic regurgitation",
+  "kcd": "Q23.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "대동맥판의 선천성 기능부전",
+  "en": "Congenital insufficiency of aortic valve",
+  "kcd": "Q23.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "이첨대동맥판막",
+  "en": "Bicuspid aortic valve",
+  "kcd": "Q23.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천성 대동맥판폐쇄",
+  "en": "Congenital aortic atresia",
+  "kcd": "Q23.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "대동맥판의 선천협착",
+  "en": "Congenital stenosis of aortic valve",
+  "kcd": "Q23.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천성 대동맥판협착",
+  "en": "Congenital aortic stenosis",
+  "kcd": "Q23.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "형성저하성 우심증후군",
+  "en": "Hypoplastic right heart syndrome",
+  "kcd": "Q22.6",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "에브스타인이상",
+  "en": "Ebstein anomaly",
+  "kcd": "Q22.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "삼첨판폐쇄",
+  "en": "Tricuspid atresia",
+  "kcd": "Q22.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "폐동맥판폐쇄",
+  "en": "Pulmonary valve atresia",
+  "kcd": "Q22.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "아이젠멘거결손",
+  "en": "Eisenmenger’s defect",
+  "kcd": "Q21.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "대동맥중격결손",
+  "en": "Aortic septal defect",
+  "kcd": "Q21.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "대동맥폐동맥중격결손",
+  "en": "Aortopulmonary septal defect",
+  "kcd": "Q21.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "대동맥폐동맥창",
+  "en": "Aortopulmonary window",
+  "kcd": "Q21.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "팔로네징후",
+  "en": "Tetralogy of Fallot",
+  "kcd": "Q21.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "폐동맥 협착 또는 폐쇄, 대동맥의 우측위치 및 우심실비대를 동반한 심실중격결손",
+  "en": "Ventricular septal defect with pulmonary stenosis or atresia, dextroposition of aorta and hypertrophy of right ventricle",
+  "kcd": "Q21.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "총방실관",
+  "en": "Common atrioventricular canal",
+  "kcd": "Q21.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "제1공심방중격결손(Ⅰ형)",
+  "en": "Ostium primum atrial septal defect (type Ⅰ)",
+  "kcd": "Q21.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "방실중격결손",
+  "en": "Atrioventricular septal defect",
+  "kcd": "Q21.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "심내막융기결손",
+  "en": "Endocardial cushion defect",
+  "kcd": "Q21.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "무비증 또는 다비증을 동반한 심방 부속물의 이성질현상",
+  "en": "Isomerism of atrial appendages with asplenia or polysplenia",
+  "kcd": "Q20.6",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "심방부속물의 이성질현상",
+  "en": "Isomerism of atrial appendages",
+  "kcd": "Q20.6",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "수정혈관전위",
+  "en": "Corrected transposition",
+  "kcd": "Q20.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "좌측전위",
+  "en": "Laevotransposition",
+  "kcd": "Q20.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "심실내번",
+  "en": "Ventricular inversion",
+  "kcd": "Q20.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "방실연결불일치",
+  "en": "Discordant atrioventricular connection",
+  "kcd": "Q20.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "단일심실",
+  "en": "Single ventricle",
+  "kcd": "Q20.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "대혈관의 (완전)전위",
+  "en": "Transposition of great vessels (complete)",
+  "kcd": "Q20.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "대동맥의 우측전위",
+  "en": "Dextrotransposition of aorta",
+  "kcd": "Q20.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "심실대혈관연결불일치",
+  "en": "Discordant ventriculoarterial connection",
+  "kcd": "Q20.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "이중출구좌심실",
+  "en": "Double outlet left ventricle",
+  "kcd": "Q20.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "타우시그-빙증후군",
+  "en": "Taussig-Bing syndrome",
+  "kcd": "Q20.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "이중출구우심실",
+  "en": "Double outlet right ventricle",
+  "kcd": "Q20.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "동맥간존속",
+  "en": "Persistent truncus arteriosus",
+  "kcd": "Q20.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "총동맥간",
+  "en": "Common arterial trunk",
+  "kcd": "Q20.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "소이증(小耳症)",
+  "en": "Microtia",
+  "kcd": "Q17.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "(외)이도의 선천성 결여, 폐쇄, 협착",
+  "en": "Congenital absence, atresia and stricture of auditory canal(external)",
+  "kcd": "Q16.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천녹내장",
+  "en": "Congenital glaucoma",
+  "kcd": "Q15.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "나팔꽃 증후군",
+  "en": "Morning glory syndrome",
+  "kcd": "Q14.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "X-연관 연소성 망막분리",
+  "en": "X-linked juvenile retinoschisis",
+  "kcd": "Q14.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "악센펠트-리이거 증후군",
+  "en": "Axenfeld-Rieger syndrome",
+  "kcd": "Q13.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "무홍채증",
+  "en": "Aniridia",
+  "kcd": "Q13.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "렌즈소안구증후군",
+  "en": "Lenz microphthalmia syndrome",
+  "kcd": "Q11.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "아놀드-키아리증후군",
+  "en": "Arnold-Chiari syndrome",
+  "kcd": "Q07.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "척수이개증",
+  "en": "Diastematomyelia",
+  "kcd": "Q06.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "상세불명의 이분척추",
+  "en": "Spina bifida, unspecified",
+  "kcd": "Q05.9",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "수두증이 없는 이분천골",
+  "en": "Sacral spina bifida without hydrocephalus",
+  "kcd": "Q05.8",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "수두증이 없는 이분요추",
+  "en": "Lumbar spina bifida without hydrocephalus",
+  "kcd": "Q05.7",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "이분요천추 NOS",
+  "en": "Lumbosacral spina bifida NOS",
+  "kcd": "Q05.7",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "이분흉요추 NOS",
+  "en": "Thoracolumbar spina bifida NOS",
+  "kcd": "Q05.6",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "수두증이 없는 이분흉추",
+  "en": "Thoracic spina bifida without hydrocephalus",
+  "kcd": "Q05.6",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "이분척추 NOS",
+  "en": "Dorsal spina bifida NOS",
+  "kcd": "Q05.6",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "수두증이 없는 이분경추",
+  "en": "Cervical spina bifida without hydrocephalus",
+  "kcd": "Q05.5",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "수두증을 동반한 상세불명의 이분척추",
+  "en": "Unspecified spina bifida with hydrocephalus",
+  "kcd": "Q05.4",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "수두증을 동반한 이분천추",
+  "en": "Sacral spina bifida with hydrocephalus",
+  "kcd": "Q05.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "수두증을 동반한 이분요천추",
+  "en": "Lumbosacral spina bifida with hydrocephalus",
+  "kcd": "Q05.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "수두증을 동반한 이분요추",
+  "en": "Lumbar spina bifida with hydrocephalus",
+  "kcd": "Q05.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "수두증을 동반한 이분흉요추",
+  "en": "Thoracolumbar spina bifida with hydrocephalus",
+  "kcd": "Q05.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "수두증을 동반한 이분흉추",
+  "en": "Thoracic spina bifida with hydrocephalus",
+  "kcd": "Q05.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "수두증을 동반한 이분척추",
+  "en": "Dorsal spina bifida with hydrocephalus",
+  "kcd": "Q05.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "수두증을 동반한 이분경추",
+  "en": "Cervical spina bifida with hydrocephalus",
+  "kcd": "Q05.0",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "분열뇌증",
+  "en": "Schizencephaly",
+  "kcd": "Q04.6",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "무뇌수두증",
+  "en": "Hydranencephaly",
+  "kcd": "Q04.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "소뇌무발생",
+  "en": "Cerebellar agenesis",
+  "kcd": "Q04.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "다발미세이랑증",
+  "en": "Polymicrogyria",
+  "kcd": "Q04.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "무뇌이랑증",
+  "en": "Agyria of brain",
+  "kcd": "Q04.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "큰뇌이랑증",
+  "en": "Pachygyria",
+  "kcd": "Q04.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "활택뇌증",
+  "en": "Lissencephaly",
+  "kcd": "Q04.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "주버트 증후군",
+  "en": "Joubert syndrome",
+  "kcd": "Q04.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "밀러-디커 증후군",
+  "en": "Miller-Dieker syndrome",
+  "kcd": "Q04.3",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "전전뇌증(全前腦症)",
+  "en": "Holoprosencephaly",
+  "kcd": "Q04.2",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "댄디-워커증후군",
+  "en": "Dandy-Walker syndrome",
+  "kcd": "Q03.1",
+  "cls": "선천기형변형"
+ },
+ {
+  "ko": "선천성 지카 바이러스 질환",
+  "en": "Congenital Zika virus disease",
+  "kcd": "P35.4",
+  "cls": "출생전후기"
+ },
+ {
+  "ko": "선천성 풍진증후군",
+  "en": "Congenital rubella syndrome",
+  "kcd": "P35.0",
+  "cls": "출생전후기"
+ },
+ {
+  "ko": "신장성 요붕증",
+  "en": "Nephrogenic diabetes insipidus",
+  "kcd": "N25.1",
+  "cls": "비뇨생식"
+ },
+ {
+  "ko": "모세혈관외 사구체신염을 동반한 신증후군",
+  "en": "Nephrotic syndrome with extracapillary glomerulonephritis",
+  "kcd": "N04.7",
+  "cls": "비뇨생식"
+ },
+ {
+  "ko": "미만성 반월형 사구체신염을 동반한 신증후군",
+  "en": "Nephrotic syndrome with diffuse crescentic glomerulonephritis",
+  "kcd": "N04.7",
+  "cls": "비뇨생식"
+ },
+ {
+  "ko": "고밀도침착병을 동반한 신증후군",
+  "en": "Nephrotic syndrome with dense deposit disease",
+  "kcd": "N04.6",
+  "cls": "비뇨생식"
+ },
+ {
+  "ko": "막증식성 사구체신염, 2형을 동반한 신증후군",
+  "en": "Nephrotic syndrome with membranoproliferative glomerulonephritis, type 2",
+  "kcd": "N04.6",
+  "cls": "비뇨생식"
+ },
+ {
+  "ko": "미만성 메산지음 모세혈관성 사구체신염을 동반한 신증후군",
+  "en": "Nephrotic syndrome with diffuse mesangiocapillary glomerulonephritis",
+  "kcd": "N04.5",
+  "cls": "비뇨생식"
+ },
+ {
+  "ko": "막증식성 사구체신염, 1형, 3형 또는 NOS를 동반한 신증후군",
+  "en": "Nephrotic syndrome with membranoproliferative glomerulonephritis, types 1 and 3, or NOS",
+  "kcd": "N04.5",
+  "cls": "비뇨생식"
+ },
+ {
+  "ko": "미만성 모세혈관내 증식성 사구체신염을 동반한 신증후군",
+  "en": "Nephrotic syndrome with diffuse endocapillary proliferative glomerulonephritis",
+  "kcd": "N04.4",
+  "cls": "비뇨생식"
+ },
+ {
+  "ko": "미만성 메산지음 증식성 사구체신염을 동반한 신증후군",
+  "en": "Nephrotic syndrome with diffuse mesangial proliferative glomerulonephritis",
+  "kcd": "N04.3",
+  "cls": "비뇨생식"
+ },
+ {
+  "ko": "미만성 막성 사구체신염을 동반한 신증후군",
+  "en": "Nephrotic syndrome with diffuse membranous glomerulonephritis",
+  "kcd": "N04.2",
+  "cls": "비뇨생식"
+ },
+ {
+  "ko": "초점성 및 분절성 경화증을 동반한 신증후군",
+  "en": "Nephrotic syndrome with focal and segmental sclerosis",
+  "kcd": "N04.1",
+  "cls": "비뇨생식"
+ },
+ {
+  "ko": "초점성 사구체신염을 동반한 신증후군",
+  "en": "Nephrotic syndrome with focal glomerulonephritis",
+  "kcd": "N04.1",
+  "cls": "비뇨생식"
+ },
+ {
+  "ko": "초점성 및 분절성 유리질증을 동반한 신증후군",
+  "en": "Nephrotic syndrome with focal and segmental hyalinosis",
+  "kcd": "N04.1",
+  "cls": "비뇨생식"
+ },
+ {
+  "ko": "초점성 및 분절성 사구체병변을 동반한 신증후군",
+  "en": "Nephrotic syndrome with focal and segmental glomerular lesions",
+  "kcd": "N04.1",
+  "cls": "비뇨생식"
+ },
+ {
+  "ko": "최소변화병변을 동반한 신증후군",
+  "en": "Nephrotic syndrome with minimal change lesion",
+  "kcd": "N04.0",
+  "cls": "비뇨생식"
+ },
+ {
+  "ko": "소사구체이상을 동반한 신증후군",
+  "en": "Nephrotic syndrome with minor glomerular abnormality",
+  "kcd": "N04.0",
+  "cls": "비뇨생식"
+ },
+ {
+  "ko": "선천성 신증후군(핀란드형)",
+  "en": "Congenital nephrotic syndrome(Finnish type)",
+  "kcd": "N04",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "재발성 다발연골염",
+  "en": "Relapsing polychondritis",
+  "kcd": "M94.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "성인의 킨뵉병",
+  "en": "Kienböck’s disease of adults",
+  "kcd": "M93.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "수근반달뼈의 골연골증(연소성)[킨뵉]",
+  "en": "Osteochondrosis (juvenile) of carpal lunate [Kienbock]",
+  "kcd": "M92.2",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "상세불명의 뼈의 파젯병",
+  "en": "Paget’s disease of bone, unspecified",
+  "kcd": "M88.9",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "기타 뼈의 파젯병",
+  "en": "Paget’s disease of other bones",
+  "kcd": "M88.8",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "두개골의 파젯병",
+  "en": "Paget’s disease of skull",
+  "kcd": "M88.0",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "진행성 골화섬유형성이상",
+  "en": "Fibrodysplasia ossificans progressiva",
+  "kcd": "M61.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "재발성 지방층염[웨버-크리스찬]",
+  "en": "Relapsing panniculitis[Weber-Christian]",
+  "kcd": "M35.6",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "다초점 섬유경화증",
+  "en": "Multifocal fibrosclerosis",
+  "kcd": "M35.5",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "미만성(호산구성) 근막염",
+  "en": "Diffuse(eosinophilic) fasciitis",
+  "kcd": "M35.4",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "류마티스성 다발근통",
+  "en": "Polymyalgia rheumatica",
+  "kcd": "M35.3",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "베체트병",
+  "en": "Behcet’s disease",
+  "kcd": "M35.2",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "혼합결합조직병",
+  "en": "Mixed connective tissue disease",
+  "kcd": "M35.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "건조증후군[쉐그렌]",
+  "en": "Sicca syndrome[Sjögren]",
+  "kcd": "M35.0",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "각막결막염을(를) 동반한 쉐그렌증후군",
+  "en": "Sjogren’s syndrome with keratoconjunctivitis",
+  "kcd": "M35.0",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "신세뇨관-간질성 장애을(를) 동반한 쉐그렌증후군",
+  "en": "Sjogren’s syndrome with renal tubulo-interstitial disorder",
+  "kcd": "M35.0",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "폐침범을(를) 동반한 쉐그렌증후군",
+  "en": "Sjogren’s syndrome with lung involvement",
+  "kcd": "M35.0",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "근병증을(를) 동반한 쉐그렌증후군",
+  "en": "Sjogren’s syndrome with myopathy",
+  "kcd": "M35.0",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "근병증을 동반한 전신경화증",
+  "en": "Systemic sclerosis with myopathy",
+  "kcd": "M34.8",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "폐침범을 동반한 전신경화증",
+  "en": "Systemic sclerosis with lung involvement",
+  "kcd": "M34.8",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "크레스트증후군",
+  "en": "CR(E)ST syndrome",
+  "kcd": "M34.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "석회증, 레이노현상, 식도기능장애, 경지증(硬指症), 모세혈관확장의 조합",
+  "en": "Combination of calcinosis, Raynaud’s phenomenon, (o)esophageal dysfunction, sclerodactyly, telangiectasia",
+  "kcd": "M34.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "진행성 전신경화증",
+  "en": "Progressive systemic sclerosis",
+  "kcd": "M34.0",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "다발근염",
+  "en": "Polymyositis",
+  "kcd": "M33.2",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "기타 피부근염",
+  "en": "Other dermatomyositis",
+  "kcd": "M33.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "연소성 피부근염",
+  "en": "Juvenile dermatomyositis",
+  "kcd": "M33.0",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "기관 또는 계통 침범을 동반한 전신홍반루푸스",
+  "en": "Systemic lupus erythematosus with organ or system involvement",
+  "kcd": "M32.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "전신홍반루푸스에서의 근병증",
+  "en": "Myopathy in systemic lupus erythematosus",
+  "kcd": "M32.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "세뇨관-간질신장병증 동반 전신홍반루푸스",
+  "en": "Systemic lupus erythematosus with tubulo-interstitial nephropathy",
+  "kcd": "M32.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "전신홍반루푸스에서의 뇌염",
+  "en": "Encephalitis in systemic lupus erythematosus",
+  "kcd": "M32.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "사구체질환 동반 전신홍반루푸스",
+  "en": "Systemic lupus erythematosus with glomerular disease",
+  "kcd": "M32.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "폐침범 동반 전신홍반루푸스",
+  "en": "Systemic lupus erythematosus with lung involvement",
+  "kcd": "M32.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "심내막염 동반 전신홍반루푸스",
+  "en": "Systemic lupus erythematosus with endocarditis",
+  "kcd": "M32.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "신장침범 동반 전신홍반루푸스",
+  "en": "Systemic lupus erythematosus with kidney involvement",
+  "kcd": "M32.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "루푸스 심장낭염",
+  "en": "Lupus pericarditis",
+  "kcd": "M32.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "리브만-삭스병",
+  "en": "Libman-Sacks disease",
+  "kcd": "M32.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "전신홍반루푸스에서의 대뇌동맥염",
+  "en": "Cerebral arteritis in systemic lupus erythematosus",
+  "kcd": "M32.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "현미경적 다발동맥염",
+  "en": "Microscopic polyarteritis",
+  "kcd": "M31.7",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "대동맥궁증후군[다카야스]",
+  "en": "Aortic arch syndrome [Takayasu]",
+  "kcd": "M31.4",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "괴사성 호흡기육아종증",
+  "en": "Necrotizing respiratory granulomatosis",
+  "kcd": "M31.3",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "베게너육아종증",
+  "en": "Wegener granulomatosis",
+  "kcd": "M31.3",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "혈전성 혈소판감소성 자반",
+  "en": "Thrombotic thrombocytopenic purpura",
+  "kcd": "M31.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "혈전성 미세혈관병증",
+  "en": "Thrombotic microangiopathy",
+  "kcd": "M31.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "굿패스처증후군",
+  "en": "Goodpasture&rsquo;s syndrome",
+  "kcd": "M31.0",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "연소성 다발동맥염",
+  "en": "Juvenile polyarteritis",
+  "kcd": "M30.2",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "폐침범을 동반한 다발동맥염[처그-스트라우스]",
+  "en": "Polyarteritis with lung involvement [Churg- Strauss]",
+  "kcd": "M30.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "결절성 다발동맥염",
+  "en": "Polyarteritis nodosa",
+  "kcd": "M30.0",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "만성 연소성 다발관절염",
+  "en": "Chronic juvenile polyarthritis",
+  "kcd": "M08.3",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "(혈청검사음성인) 연소성 다발관절염",
+  "en": "Juvenile polyarthritis (seronegative)",
+  "kcd": "M08.3",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "전신적으로 발병된 연소성 관절염",
+  "en": "Juvenile arthritis with systemic onset",
+  "kcd": "M08.2",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "연소성 강직척추염",
+  "en": "Juvenile ankylosing spondylitis",
+  "kcd": "M08.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "류마티스인자가 있거나 없는 연소성 류마티스관절염",
+  "en": "Juvenile rheumatoid arthritis with or without rheumatoid factor",
+  "kcd": "M08.0",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "연소성 류마티스관절염",
+  "en": "Juvenile rheumatoid arthritis",
+  "kcd": "M08.0",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "성인발병 스틸병",
+  "en": "Adult-onset Still’s disease",
+  "kcd": "M06.1",
+  "cls": "근육골격계통"
+ },
+ {
+  "ko": "중증 화농성 한선염",
+  "en": "Hidradenitis suppurativa, severe",
+  "kcd": "L73.22",
+  "cls": "피부및조직"
+ },
+ {
+  "ko": "손발바닥농포증",
+  "en": "Pustulosis palmaris et plantaris",
+  "kcd": "L40.3",
+  "cls": "피부및조직"
+ },
+ {
+  "ko": "전신농포건선",
+  "en": "Generalized pustular psoriasis",
+  "kcd": "L40.1",
+  "cls": "피부및조직"
+ },
+ {
+  "ko": "후천성 수포성 표피박리증",
+  "en": "Acquired epidermolysis bullosa",
+  "kcd": "L12.3",
+  "cls": "피부및조직"
+ },
+ {
+  "ko": "양성 점막유사천포창",
+  "en": "Benign mucous membrane pemphigoid",
+  "kcd": "L12.1",
+  "cls": "피부및조직"
+ },
+ {
+  "ko": "흉터유사천포창",
+  "en": "Cicatricial pemphigoid",
+  "kcd": "L12.1",
+  "cls": "피부및조직"
+ },
+ {
+  "ko": "수포성 유사천포창",
+  "en": "Bullous pemphigoid",
+  "kcd": "L12.0",
+  "cls": "피부및조직"
+ },
+ {
+  "ko": "낙엽천포창",
+  "en": "Pemphigus foliaceus",
+  "kcd": "L10.2",
+  "cls": "피부및조직"
+ },
+ {
+  "ko": "보통천포창",
+  "en": "Pemphigus vulgaris",
+  "kcd": "L10.0",
+  "cls": "피부및조직"
+ },
+ {
+  "ko": "원발성 경화성 담관염",
+  "en": "Primary sclerosing cholangitis",
+  "kcd": "K83.00",
+  "cls": "소화기계통"
+ },
+ {
+  "ko": "자가면역성 간염",
+  "en": "Autoimmune hepatitis",
+  "kcd": "K75.4",
+  "cls": "소화기계통"
+ },
+ {
+  "ko": "원발성 담도 간경변증",
+  "en": "Primary biliary cirrhosis",
+  "kcd": "K74.3",
+  "cls": "소화기계통"
+ },
+ {
+  "ko": "가성 장 폐쇄",
+  "en": "Intestinal pseudo-obstruction",
+  "kcd": "K56.0",
+  "cls": "소화기계통"
+ },
+ {
+  "ko": "소장 및 대장 모두의 크론병",
+  "en": "Crohn’s disease of both small and large intestine",
+  "kcd": "K50.8",
+  "cls": "소화기계통"
+ },
+ {
+  "ko": "대장의 크론병",
+  "en": "Crohn’s disease of large intestine",
+  "kcd": "K50.1",
+  "cls": "소화기계통"
+ },
+ {
+  "ko": "소장의 크론병",
+  "en": "Crohn’s disease of small intestine",
+  "kcd": "K50.0",
+  "cls": "소화기계통"
+ },
+ {
+  "ko": "이완불능증",
+  "en": "Achalasia",
+  "kcd": "K22.0",
+  "cls": "소화기계통"
+ },
+ {
+  "ko": "불완전상아질형성",
+  "en": "Dentinogenesis imperfecta",
+  "kcd": "K00.51",
+  "cls": "소화기계통"
+ },
+ {
+  "ko": "특발성 비특이성 간질성 폐렴",
+  "en": "Idiopathic nonspecific interstitial pneumonia",
+  "kcd": "J84.8",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "특발성 흉막실질 탄력섬유증",
+  "en": "Idiopathic pleuroparenchymal fibroelastosis",
+  "kcd": "J84.18",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "특발성 폐섬유증",
+  "en": "Idiopathic pulmonary fibrosis",
+  "kcd": "J84.11",
+  "cls": "호흡기계통"
+ },
+ {
+  "ko": "폐포단백질증",
+  "en": "Alveolar proteinosis",
+  "kcd": "J84.0",
+  "cls": "호흡기계통"
+ },
+ {
+  "ko": "섬모체, 원발성 이상운동증",
+  "en": "ciliary, primary Dyskinesia",
+  "kcd": "J39.8",
+  "cls": "호흡기계통"
+ },
+ {
+  "ko": "버드-키아리증후군",
+  "en": "Budd-Chiari syndrome",
+  "kcd": "I82.0",
+  "cls": "순환기계통"
+ },
+ {
+  "ko": "랑뒤-오슬러-웨버병",
+  "en": "Rendu-Osler-Weber disease",
+  "kcd": "I78.0",
+  "cls": "순환기계통"
+ },
+ {
+  "ko": "유전성 출혈성 모세혈관확장증",
+  "en": "Hereditary haemorrhagic telangiectasia",
+  "kcd": "I78.0",
+  "cls": "순환기계통"
+ },
+ {
+  "ko": "폐색혈전혈관염[버거병]",
+  "en": "Thromboangiitis obliterans[Buerger]",
+  "kcd": "I73.1",
+  "cls": "순환기계통"
+ },
+ {
+  "ko": "모야모야병",
+  "en": "Moyamoya disease",
+  "kcd": "I67.5",
+  "cls": "순환기계통"
+ },
+ {
+  "ko": "긴 QT증후군",
+  "en": "Long QT syndrome",
+  "kcd": "I49.82",
+  "cls": "순환기계통"
+ },
+ {
+  "ko": "카테콜라민 다형성 심실성 빈맥",
+  "en": "Catecholaminergic polymorphic ventricular tachycardia",
+  "kcd": "I47.2",
+  "cls": "순환기계통"
+ },
+ {
+  "ko": "부정맥유발성 우심실 형성이상",
+  "en": "Arrhythmogenic right ventricular dysplasia",
+  "kcd": "I42.80",
+  "cls": "순환기계통"
+ },
+ {
+  "ko": "선천성 심근병증",
+  "en": "Congenital cardiomyopathy",
+  "kcd": "I42.4",
+  "cls": "순환기계통"
+ },
+ {
+  "ko": "심내막탄력섬유증",
+  "en": "Endocardial fibroelastosis",
+  "kcd": "I42.4",
+  "cls": "순환기계통"
+ },
+ {
+  "ko": "심내막심근(호산구성)병",
+  "en": "Endomyocardial(eosinophilic) disease",
+  "kcd": "I42.3",
+  "cls": "순환기계통"
+ },
+ {
+  "ko": "심내막심근(열대성)섬유증",
+  "en": "Endomyocardial(tropical) fibrosis",
+  "kcd": "I42.3",
+  "cls": "순환기계통"
+ },
+ {
+  "ko": "뢰플러심내막염",
+  "en": "Loffler’s endocarditis",
+  "kcd": "I42.3",
+  "cls": "순환기계통"
+ },
+ {
+  "ko": "비폐색성 비대성 심근병증",
+  "en": "Nonobstructive hypertrophic cardiomyopathy",
+  "kcd": "I42.20",
+  "cls": "순환기계통"
+ },
+ {
+  "ko": "비대성 대동맥판하협착",
+  "en": "Hypertrophic subaortic stenosis",
+  "kcd": "I42.1",
+  "cls": "순환기계통"
+ },
+ {
+  "ko": "폐색성 비대성 심근병증",
+  "en": "Obstructive hypertrophic cardiomyopathy",
+  "kcd": "I42.1",
+  "cls": "순환기계통"
+ },
+ {
+  "ko": "비가역적 확장성 심근병증",
+  "en": "Irreversible dilated cardiomyopathy",
+  "kcd": "I42.0",
+  "cls": "순환기계통"
+ },
+ {
+  "ko": "아이젠멘거증후군",
+  "en": "Eisenmenger’s syndrome",
+  "kcd": "I27.8",
+  "cls": "순환기계통"
+ },
+ {
+  "ko": "아이젠멘거복합",
+  "en": "Eisenmenger’s complex",
+  "kcd": "I27.8",
+  "cls": "순환기계통"
+ },
+ {
+  "ko": "원발성 폐동맥고혈압",
+  "en": "Primary Pulmonary hypertension",
+  "kcd": "I27.0",
+  "cls": "순환기계통"
+ },
+ {
+  "ko": "동안실행증(失行症), 코간형",
+  "en": "Ocular motor apraxia, Cogan type",
+  "kcd": "H51.8",
+  "cls": "눈및부속기관"
+ },
+ {
+  "ko": "컨스-세이어증후군",
+  "en": "Kearns-Sayre syndrome",
+  "kcd": "H49.8",
+  "cls": "눈및부속기관"
+ },
+ {
+  "ko": "만성 진행성 외안근마비",
+  "en": "Chronic progressive external ophthalmoplegia",
+  "kcd": "H49.4",
+  "cls": "눈및부속기관"
+ },
+ {
+  "ko": "레버 유전성 시신경병증",
+  "en": "Leber&rsquo;s hereditary optic neuropathy",
+  "kcd": "H47.2",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "레버 선천성 흑암시",
+  "en": "Leber&rsquo;s congenital amaurosis",
+  "kcd": "H35.59",
+  "cls": "눈및부속기관"
+ },
+ {
+  "ko": "상세불명의 유전성 망막디스트로피",
+  "en": "Unspecified hereditary retinal dystrophy",
+  "kcd": "H35.59",
+  "cls": "눈및부속기관"
+ },
+ {
+  "ko": "스타르가르트병",
+  "en": "Stargardt’s disease",
+  "kcd": "H35.58",
+  "cls": "눈및부속기관"
+ },
+ {
+  "ko": "베스트 병[노른자모양황반변성]",
+  "en": "Best’s disease[Best vitelliform maculardystrophy]",
+  "kcd": "H35.52",
+  "cls": "눈및부속기관"
+ },
+ {
+  "ko": "색소망막염",
+  "en": "Retinitis pigmentosa",
+  "kcd": "H35.51",
+  "cls": "눈및부속기관"
+ },
+ {
+  "ko": "일스 병",
+  "en": "Eales’ disease",
+  "kcd": "H35.0",
+  "cls": "눈및부속기관"
+ },
+ {
+  "ko": "코츠망막병증",
+  "en": "Coats retinopathy",
+  "kcd": "H35.0",
+  "cls": "눈및부속기관"
+ },
+ {
+  "ko": "맥락막결손",
+  "en": "Choroideremia",
+  "kcd": "H31.2",
+  "cls": "눈및부속기관"
+ },
+ {
+  "ko": "원추각막",
+  "en": "Keratoconus",
+  "kcd": "H18.6",
+  "cls": "눈및부속기관"
+ },
+ {
+  "ko": "푹스디스트로피",
+  "en": "Fuchs dystrophy",
+  "kcd": "H18.5",
+  "cls": "눈및부속기관"
+ },
+ {
+  "ko": "아벨리노 각막디스트로피 (동형접합)",
+  "en": "Avellino corneal dystrophy (homozygous)",
+  "kcd": "H18.5",
+  "cls": "눈및부속기관"
+ },
+ {
+  "ko": "코오간증후군",
+  "en": "Cogan’s syndrome",
+  "kcd": "H16.3",
+  "cls": "눈및부속기관"
+ },
+ {
+  "ko": "척수공동증 및 연수공동증",
+  "en": "Syringomyelia and syringobulbia",
+  "kcd": "G95.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "포도당 수송자 1 결핍증",
+  "en": "Glucose transporter type1, GLUT1 deficiency",
+  "kcd": "G93.4",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "복합부위통증증후군 Ⅱ형",
+  "en": "Complex regional pain syndrome type II",
+  "kcd": "G90.6",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "복합부위통증증후군 I형",
+  "en": "Complex regional pain syndrome type I",
+  "kcd": "G90.5",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "람베르트-이튼증후군",
+  "en": "Lambert-Eaton syndrome",
+  "kcd": "G73.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "봉입체 근염",
+  "en": "Inclusion body myositis (IBM)",
+  "kcd": "G72.4",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "주기마비(가족성) 저칼륨혈성",
+  "en": "Hypokalaemic periodic paralysis (familial)",
+  "kcd": "G72.3",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "유전성 근육병증 NOS",
+  "en": "Hereditary myopathy NOS",
+  "kcd": "G71.9",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "달리 분류되지 않은 사립체 근육병증",
+  "en": "Mitochondrial myopathy, NEC",
+  "kcd": "G71.3",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "멜라스증후군",
+  "en": "Melas syndrome",
+  "kcd": "G71.3",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "중심핵 병",
+  "en": "Central core disease",
+  "kcd": "G71.2",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "다발심 병",
+  "en": "Multicore disease",
+  "kcd": "G71.2",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "미세심 병",
+  "en": "Minicore disease",
+  "kcd": "G71.2",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "워커-워버그 증후군",
+  "en": "Walker-Warburg syndrome",
+  "kcd": "G71.2",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "근세관성 (중심핵성) 근육병증",
+  "en": "Myotubular (centronuclear) myopathy",
+  "kcd": "G71.2",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "근섬유의 특정 형태이상을 동반한 선천성 근디스트로피",
+  "en": "Congenital muscular dystrophy with specific morphological abnormalities of the muscle fibre",
+  "kcd": "G71.2",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "선천성 근디스트로피 NOS",
+  "en": "Congenital muscular dystrophy NOS",
+  "kcd": "G71.2",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "선천성 근육병증",
+  "en": "Congenital myopathies",
+  "kcd": "G71.2",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "근섬유형 불균형",
+  "en": "Fibre-type disproportion",
+  "kcd": "G71.2",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "네말린근육병증",
+  "en": "Nemaline myopathy",
+  "kcd": "G71.2",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "근긴장장애",
+  "en": "Myotonic disorders",
+  "kcd": "G71.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "근긴장디스트로피[스타이너트]",
+  "en": "Dystrophia myotonica[Steinert]",
+  "kcd": "G71.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "거짓근긴장증",
+  "en": "Pseudomyotonia",
+  "kcd": "G71.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "신경근육긴장[아이작스]",
+  "en": "Neuromyotonia[Isaacs]",
+  "kcd": "G71.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "선천성 이상근긴장증",
+  "en": "Paramyotonia congenita",
+  "kcd": "G71.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "선천성 근긴장증 NOS",
+  "en": "Myotonia congenita NOS",
+  "kcd": "G71.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "증상성 근긴장증",
+  "en": "Symptomatic myotonia",
+  "kcd": "G71.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "우성[톰슨] 선천성 근긴장증",
+  "en": "Dominant[Thomsen] myotonia congenita",
+  "kcd": "G71.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "열성[베커] 선천성 근긴장증",
+  "en": "Recessive[Becker] myotonia congenita",
+  "kcd": "G71.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "연골형성장애성 근긴장증",
+  "en": "Chondrodystrophic myotonia",
+  "kcd": "G71.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "얼굴어깨팔 근디스트로피",
+  "en": "Facioscapulohumeral muscular dystrophy",
+  "kcd": "G71.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "중증[뒤쉔] 근디스트로피",
+  "en": "Severe[Duchenne] muscular dystrophy",
+  "kcd": "G71.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "조기수축을 동반하는 양성 어깨종아리[에머리-드라이프스] 근디스트로피",
+  "en": "Benign scapuloperoneal with early contractures [Emery-Dreifuss] muscular dystrophy",
+  "kcd": "G71.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "뒤쉔 또는 베커와 유사한 보통염색체열성, 소아형 근디스트로피",
+  "en": "Autosomal recessive, childhood type, resembling Duchenne or Becker muscular dystrophy",
+  "kcd": "G71.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "지대 근디스트로피",
+  "en": "Limb-girdle muscular dystrophy",
+  "kcd": "G71.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "원위성 근디스트로피",
+  "en": "Distal muscular dystrophy",
+  "kcd": "G71.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "눈 근디스트로피",
+  "en": "Ocular muscular dystrophy",
+  "kcd": "G71.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "눈인두성 근디스트로피",
+  "en": "Oculopharyngeal muscular dystrophy",
+  "kcd": "G71.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "근디스트로피",
+  "en": "Muscular dystrophy",
+  "kcd": "G71.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "어깨종아리 근디스트로피",
+  "en": "Scapuloperoneal muscular dystrophy",
+  "kcd": "G71.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "양성[베커] 근디스트로피",
+  "en": "Benign [Becker] muscular dystrophy",
+  "kcd": "G71.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "선천성 및 발달성 근무력증",
+  "en": "Congenital and developmental myasthenia",
+  "kcd": "G70.2",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "중증근무력증",
+  "en": "Myasthenia gravis",
+  "kcd": "G70.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "다초점 운동신경병증",
+  "en": "Multifocal Motor Neuropathy",
+  "kcd": "G61.8",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "만성 염증성 탈수초성 다발신경병증",
+  "en": "Chronic inflammatory demyelinating polyneuropathy",
+  "kcd": "G61.8",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "밀러휘셔증후군",
+  "en": "Miller Fisher Syndrome",
+  "kcd": "G61.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "길랭-바레증후군",
+  "en": "Guillain-Barré syndrome",
+  "kcd": "G61.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "샤르코-마리-투스질환",
+  "en": "Charcot-Marie-Tooth disease",
+  "kcd": "G60.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "유전성 운동 및 감각 신경병증 I-IV형",
+  "en": "Hereditary motor and sensory neuropathy, types I-IV",
+  "kcd": "G60.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "루시-레비증후군",
+  "en": "Roussy-Lévy syndrome",
+  "kcd": "G60.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "데제린-소타스병",
+  "en": "Déjerine-Sottas disease",
+  "kcd": "G60.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "영아기의 비대성 신경병증",
+  "en": "Hypertrophic neuropathy of infancy",
+  "kcd": "G60.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "유전성 운동 및 감각 신경병증",
+  "en": "Hereditary motor and sensory neuropathy",
+  "kcd": "G60.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "비골근위축(축삭형, 비대형)",
+  "en": "Peroneal muscular atrophy(axonal type, hypertrophic type)",
+  "kcd": "G60.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "파리-롬버르그증후군",
+  "en": "Parry-Romberg syndrome",
+  "kcd": "G51.8",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "멜커슨증후군",
+  "en": "Melkersson’s syndrome",
+  "kcd": "G51.2",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "멜케르손-로젠탈증후군",
+  "en": "Melkersson-Rosenthal syndrome",
+  "kcd": "G51.2",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "기면병 및 탈력발작",
+  "en": "Narcolepsy and cataplexy",
+  "kcd": "G47.4",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "하다드 증후군",
+  "en": "Haddad syndrome",
+  "kcd": "G47.31",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "상세불명의 뇌전증지속상태",
+  "en": "Status epilepticus, unspecified",
+  "kcd": "G41.9",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "기타 뇌전증지속상태",
+  "en": "Other status epilepticus",
+  "kcd": "G41.8",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "복합부분뇌전증지속상태",
+  "en": "Complex partial status epilepticus",
+  "kcd": "G41.2",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "소발작뇌전증지속상태",
+  "en": "Petit mal status epilepticus",
+  "kcd": "G41.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "뇌전증 소발작지속상태",
+  "en": "Epileptic absence status",
+  "kcd": "G41.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "긴장-간대성 뇌전증지속상태",
+  "en": "Tonic-clonic status epilepticus",
+  "kcd": "G41.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "대발작 뇌전증지속상태",
+  "en": "Grand mal status epilepticus",
+  "kcd": "G41.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "CDKL5-관련 장애",
+  "en": "CDKL5-related disorder",
+  "kcd": "G40.40",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "웨스트증후군",
+  "en": "West’s syndrome",
+  "kcd": "G40.4",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "레녹스-가스토증후군",
+  "en": "Lennox-Gastaut syndrome",
+  "kcd": "G40.4",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "드라베 증후군",
+  "en": "Dravet syndrome",
+  "kcd": "G40.30",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "수초 희소돌기아교세포 당단백질 항체 관련 질환",
+  "en": "Myelin oligodendrocyte glycoprotein antibody associated diseases [MOGAD]",
+  "kcd": "G37.8",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "시신경척수염[데빅병]",
+  "en": "Neuromyelitis optica[Devic]",
+  "kcd": "G36.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "상세불명의 다발경화증",
+  "en": "Unspecified multiple sclerosis",
+  "kcd": "G35.9",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "기타 명시된 다발경화증",
+  "en": "Other specified multiple sclerosis",
+  "kcd": "G35.8",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "이차 진행형 다발경화증",
+  "en": "Secondary progressive multiple sclerosis",
+  "kcd": "G35.2",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "원발 진행형 다발경화증",
+  "en": "Primary progressive multiple sclerosis",
+  "kcd": "G35.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "재발 완화형 다발경화증",
+  "en": "Relapsing-remitting multiple sclerosis",
+  "kcd": "G35.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "척수(∼의) 다발경화증",
+  "en": "Multiple sclerosis (of) cord",
+  "kcd": "G35",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "뇌간(∼의) 다발경화증",
+  "en": "Multiple sclerosis (of) brain stem",
+  "kcd": "G35",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "다발경화증",
+  "en": "Multiple sclerosis",
+  "kcd": "G35",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "다발경화증 NOS",
+  "en": "Multiple sclerosis (of) NOS",
+  "kcd": "G35",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "전신성(∼의) 다발경화증",
+  "en": "Multiple sclerosis (of) generalized",
+  "kcd": "G35",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "파종성(∼의) 다발경화증",
+  "en": "Multiple sclerosis (of) disseminated",
+  "kcd": "G35",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "아이카디-구티에레스 증후군",
+  "en": "Aicardi-Goutieres Syndrome",
+  "kcd": "G31.88",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "아급성 괴사성 뇌병증[리이]",
+  "en": "Subacute necrotizing encephalopathy[Leigh]",
+  "kcd": "G31.81",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "강직인간증후군",
+  "en": "Stiff-person[man] syndrome",
+  "kcd": "G25.8",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "돌발성 운동유발 이상운동",
+  "en": "Paroxysmal kinesigenic dyskinesia[PKD]",
+  "kcd": "G24.8",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "파르병",
+  "en": "Fahr’s Disease",
+  "kcd": "G23.8",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "진행성 핵상안근마비 [스틸-리차드슨-올스제위스키]",
+  "en": "Progressive supranuclear ophthalmoplegia [Steele-Richardson-Olszewski]",
+  "kcd": "G23.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "할러포르덴-스파츠병",
+  "en": "Hallervorden-Spatz disease",
+  "kcd": "G23.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "색소성 담창구변성",
+  "en": "Pigmentary pallidal degeneration",
+  "kcd": "G23.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "상세불명의 척수성 근위축",
+  "en": "Spinal muscular atrophy, unspecified",
+  "kcd": "G12.9",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "기타 척수성 근위축 및 관련 증후군",
+  "en": "Other spinal muscular atrophies and related syndromes",
+  "kcd": "G12.8",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "케네디 병",
+  "en": "Kennedy disease",
+  "kcd": "G12.28",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "산발형 근위축측삭경화증",
+  "en": "Sporadic amyotrophic lateral sclerosis",
+  "kcd": "G12.21",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "가족성 운동신경세포병",
+  "en": "Familial motor neuron disease",
+  "kcd": "G12.20",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "운동신경세포병(단, 기타 및 상세불명의 운동신경세포병(G12.28)은 제외)",
+  "en": "Motor neuron disease",
+  "kcd": "G12.2",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "원위 척수성 근위축",
+  "en": "Distal spinal muscular atrophy",
+  "kcd": "G12.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "소아형, Ⅱ형 척수성 근위축",
+  "en": "Childhood form, type Ⅱ spinal muscular atrophy",
+  "kcd": "G12.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "어깨종아리형 척수성 근위축",
+  "en": "Scapuloperoneal form spinal muscular atrophy",
+  "kcd": "G12.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "연소형, Ⅲ형[쿠겔베르그-벨란더] 척수성 근위축",
+  "en": "Juvenile form, typeⅢ [Kugelberg-Welander] spinal muscular atrophy",
+  "kcd": "G12.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "기타 유전성 척수성 근위축",
+  "en": "Other inherited spinal muscular atrophy",
+  "kcd": "G12.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "성인형 척수성 근위축",
+  "en": "Adult form spinal muscular atrophy",
+  "kcd": "G12.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "소아기의 진행성 연수마비[파지오-론데]",
+  "en": "Progressive bulbar palsy of childhood [Fazio-Londe]",
+  "kcd": "G12.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "영아척수성 근위축, I형[베르드니히-호프만]",
+  "en": "Infantile spinal muscular atrophy, type Ⅰ[Werdnig-Hoffman]",
+  "kcd": "G12.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "상세불명의 유전성 운동실조",
+  "en": "Hereditary ataxia, unspecified",
+  "kcd": "G11.9",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "유전성 소뇌의 증후군",
+  "en": "Hereditary cerebellar syndrome",
+  "kcd": "G11.9",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "유전성 소뇌의 운동실조 NOS",
+  "en": "Hereditary cerebellar ataxia NOS",
+  "kcd": "G11.9",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "유전성 소뇌의 병",
+  "en": "Hereditary cerebellar disease",
+  "kcd": "G11.9",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "유전성 소뇌의 변성",
+  "en": "Hereditary cerebellar degeneration",
+  "kcd": "G11.9",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "기타 유전성 운동실조",
+  "en": "Other hereditary ataxias",
+  "kcd": "G11.8",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "유전성 강직성 하반신마비",
+  "en": "Hereditary spastic paraplegia",
+  "kcd": "G11.4",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "DNA복구결손을 수반한 소뇌성 운동실조",
+  "en": "Cerebellar ataxia with defective DNA repair",
+  "kcd": "G11.3",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "모세혈관확장성 운동실조[루이-바]",
+  "en": "Ataxia telangiectasia[Louis-bar]",
+  "kcd": "G11.3",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "만기발병 소뇌성 운동실조(발병은 보통 20세 이후)",
+  "en": "Late-onset cerebellar ataxia(Onset usually after the age of 20)",
+  "kcd": "G11.2",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "조기발병 소뇌성 운동실조(발병은 보통 20세 이전)",
+  "en": "Early-onset cerebellar ataxia(Onset usually before the age of 20)",
+  "kcd": "G11.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "프리드라이히운동실조(보통염색체열성)",
+  "en": "Friedreich’s ataxia(autosomal recessive)",
+  "kcd": "G11.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "본태성 떨림을(를) 동반한 조기발병 소뇌성 운동실조",
+  "en": "Early-onset cerebellar ataxia with essential tremor",
+  "kcd": "G11.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "간헐 운동실조 2형",
+  "en": "Episodic ataxia type 2",
+  "kcd": "G11.1",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "보류된 힘줄반사을(를) 동반한 조기발병 소뇌성 운동실조",
+  "en": "Early-onset cerebellar ataxia with retained tendon reflexes",
+  "kcd": "G11.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "X-연관 열성 척수소뇌성 운동실조",
+  "en": "X-linked recessive spinocerebellar ataxia",
+  "kcd": "G11.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "근간대경련[헌트운동실조]을(를) 동반한 조기발병 소뇌성 운동실조",
+  "en": "Early-onset cerebellar ataxia with myoclonus[Hunt&rsquo;s ataxia]",
+  "kcd": "G11.1",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "선천성 비진행성 운동실조",
+  "en": "Congenital nonprogressive ataxia",
+  "kcd": "G11.0",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "헌팅톤병",
+  "en": "Huntington’s disease",
+  "kcd": "G10",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "헌팅톤무도병",
+  "en": "Huntington’s chorea",
+  "kcd": "G10",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "자가면역 뇌염",
+  "en": "Autoimmune encephalitis",
+  "kcd": "G04.8",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "라스무센 뇌염",
+  "en": "Rasmussen encephalitis",
+  "kcd": "G04.8",
+  "cls": "신경계통질환"
+ },
+ {
+  "ko": "레트증후군",
+  "en": "Rett’s syndrome",
+  "kcd": "F84.2",
+  "cls": "정신및행동"
+ },
+ {
+  "ko": "뇌전증에 동반된 후천성 실어증(失語症)[란다우-클레프너]",
+  "en": "Acquired aphasia with epilepsy [Landau-Kleffner]",
+  "kcd": "F80.3",
+  "cls": "정신및행동"
+ },
+ {
+  "ko": "카다실",
+  "en": "CADASIL, Cerebral autosomal dominant arteriopathy with subcortical infarcts and leukoencephalopathy",
+  "kcd": "F01.1",
+  "cls": "정신및행동"
+ },
+ {
+  "ko": "선천성 전신지방이상증",
+  "en": "Congenital systemic lipodystrophy",
+  "kcd": "E88.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "알파-1-항트립신결핍",
+  "en": "α-1-Antitrypsin deficiency",
+  "kcd": "E88.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "기관한정아밀로이드증",
+  "en": "Organ-limited amyloidosis",
+  "kcd": "E85.4",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "국소적 아밀로이드증",
+  "en": "Localized amyloidosis",
+  "kcd": "E85.4",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "상세불명의 유전가족성 아밀로이드증",
+  "en": "Heredofamilial amyloidosis, unspecified",
+  "kcd": "E85.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "신경병성 유전가족성 아밀로이드증",
+  "en": "Neuropathic heredofamilial amyloidosis",
+  "kcd": "E85.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "아밀로이드다발신경병증(포르투갈)",
+  "en": "Amyloid polyneuropathy(Portuguese)",
+  "kcd": "E85.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "비신경병성 유전가족성 아밀로이드증",
+  "en": "Non-neuropathic heredofamilial amyloidosis",
+  "kcd": "E85.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "유전성 아밀로이드 신장병증",
+  "en": "Hereditary amyloid nephropathy",
+  "kcd": "E85.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "가족성 지중해열",
+  "en": "Familial Mediterranean fever",
+  "kcd": "E85.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "원위장폐쇄증후군",
+  "en": "Distal intestinal obstruction syndrome",
+  "kcd": "E84.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "낭성 섬유증에서의 태변장폐색",
+  "en": "Meconium ileus in cystic fibrosis",
+  "kcd": "E84.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "장증상을 동반한 낭성 섬유증",
+  "en": "Cystic fibrosis with intestinal manifestations",
+  "kcd": "E84.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "폐증상을 동반한 낭성 섬유증",
+  "en": "Cystic fibrosis with pulmonary manifestations",
+  "kcd": "E84.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "비타민D저항골연화증",
+  "en": "Vitamin-D-resistant osteomalacia",
+  "kcd": "E83.3",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "비타민D저항구루병",
+  "en": "Vitamin-D-resistant rickets",
+  "kcd": "E83.3",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "인대사 및 인산분해효소 장애",
+  "en": "Disorders of phosphorus metabolism and phosphatases",
+  "kcd": "E83.3",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "산성인산분해효소결핍",
+  "en": "Acid phosphatase deficiency",
+  "kcd": "E83.3",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "가족성 저인산혈증",
+  "en": "Familial hypophosphataemia",
+  "kcd": "E83.3",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "저인산효소증",
+  "en": "Hypophosphatasia",
+  "kcd": "E83.3",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "장병성 말단피부염",
+  "en": "Acrodermatitis enteropathica",
+  "kcd": "E83.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "혈색소증",
+  "en": "Haemochromatosis",
+  "kcd": "E83.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "특발성 폐 헤모시데린증",
+  "en": "Idiopathic pulmonary hemosiderosis",
+  "kcd": "E83.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "멘케스(꼬인모발)( 강모)병",
+  "en": "Menkes (kinky hair)(steely hair) disease",
+  "kcd": "E83.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "윌슨병",
+  "en": "Wilson’s disease",
+  "kcd": "E83.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "구리대사장애",
+  "en": "Disorders of copper metabolism",
+  "kcd": "E83.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "진행성 가족성 간내 담즙정체",
+  "en": "Progressive familial intrahepatic cholestasis",
+  "kcd": "E80.6",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "유전성 코프로포르피린증",
+  "en": "Hereditary coproporphyria",
+  "kcd": "E80.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "포르피린증 NOS",
+  "en": "Porphyria NOS",
+  "kcd": "E80.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "급성 간헐성 (간성) 포르피린증",
+  "en": "Acute intermittent(hepatic) porphyria",
+  "kcd": "E80.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "레쉬-니한증후군",
+  "en": "Lesch-Nyhan syndrome",
+  "kcd": "E79.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "동형접합성 가족성 고콜레스테롤혈증",
+  "en": "Homozygous familial hypercholesterolemia",
+  "kcd": "E78.00",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "시알산증[뮤코지질증Ⅰ]",
+  "en": "Sialidosis[mucolipidosisⅠ]",
+  "kcd": "E77.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "푸고스축적증",
+  "en": "Fucosidosis",
+  "kcd": "E77.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "마노스축적증",
+  "en": "Mannosidosis",
+  "kcd": "E77.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "아스파르틸글루코사민뇨",
+  "en": "Aspartylglucosaminuria",
+  "kcd": "E77.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "당단백질분해의 결손",
+  "en": "Defects in glycoprotein degradation",
+  "kcd": "E77.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "뮤코지질증Ⅲ[거짓헐러다발이상증]",
+  "en": "Mucolipidosis Ⅲ [Pseudo-Hurler polydystrophy]",
+  "kcd": "E77.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "라이소솜효소의 번역후 수정의 결손",
+  "en": "Defects in post-translational modification of lysosomal enzymes",
+  "kcd": "E77.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "뮤코지질증Ⅱ[Ⅰ-세포병]",
+  "en": "Mucolipidosis Ⅱ[Ⅰ-cell disease]",
+  "kcd": "E77.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "베타-글루쿠론산분해효소결핍",
+  "en": "β-Glucuronidase deficiency",
+  "kcd": "E76.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "산필립포 (B형)(C형)(D형) 증후군",
+  "en": "Sanfilippo (types B)(type C)(type D) syndrome",
+  "kcd": "E76.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "모르키오 (-유사)(고전적) 증후군",
+  "en": "Morquio(-like)(classic) syndrome",
+  "kcd": "E76.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "마로토-라미 (경도)(중증) 증후군",
+  "en": "Maroteaux-Lamy (mild)(severe) syndrome",
+  "kcd": "E76.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "Ⅲ, Ⅳ, Ⅵ, Ⅶ형 점액다당류증",
+  "en": "Mucopolysaccharidosis, types Ⅲ, Ⅳ, Ⅵ, Ⅶ",
+  "kcd": "E76.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "헌터증후군",
+  "en": "Hunter’s syndrome",
+  "kcd": "E76.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "Ⅱ형 점액다당류증",
+  "en": "Mucopolysaccharidosis, type Ⅱ",
+  "kcd": "E76.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "헐러증후군",
+  "en": "Hurler syndrome",
+  "kcd": "E76.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "샤이에증후군",
+  "en": "Scheie syndrome",
+  "kcd": "E76.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "헐러-샤이에증후군",
+  "en": "Hurler-Scheie syndrome",
+  "kcd": "E76.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "Ⅰ형 점액다당류증",
+  "en": "Mucopolysaccharidosis, type Ⅰ",
+  "kcd": "E76.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "월만병",
+  "en": "Wolman’s disease",
+  "kcd": "E75.5",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "대뇌건의 콜레스테롤증[밴보게르트-쉐러-엡스타인]",
+  "en": "Cerebrotendinous cholesterosis [van Bogaert-Scherer-Epstein]",
+  "kcd": "E75.5",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "쿠프스병",
+  "en": "Kufs’ disease",
+  "kcd": "E75.4",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "스필마이어-보그트병",
+  "en": "Spielmeyer-Vogt’s disease",
+  "kcd": "E75.4",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "신경세포세로이드라이포푸스신증",
+  "en": "Neuronal ceroid lipofuscinosis",
+  "kcd": "E75.4",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "얀스키-빌쇼스키병",
+  "en": "Jansky-Bielschowsky’s disease",
+  "kcd": "E75.4",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "바텐병",
+  "en": "Batten’s disease",
+  "kcd": "E75.4",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "중추신경계통 저수초를 동반한 소아기 운동실조",
+  "en": "Childhood ataxia with central nervous system hypomyelination",
+  "kcd": "E75.2",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "화버증후군",
+  "en": "Farber’s syndrome",
+  "kcd": "E75.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "크라베병",
+  "en": "Krabbe’s disease",
+  "kcd": "E75.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "고쉐병",
+  "en": "Gaucher’s disease",
+  "kcd": "E75.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "파브리(-앤더슨)병",
+  "en": "Fabry’s(-Anderson) disease",
+  "kcd": "E75.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "펠리제우스-메르츠바하병",
+  "en": "Pelizaeus-Merzbacher disease",
+  "kcd": "E75.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "설파테이스결핍",
+  "en": "Sulfatase deficiency",
+  "kcd": "E75.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "이염성 백질디스트로피",
+  "en": "Metachromatic leukodystrophy",
+  "kcd": "E75.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "니만-피크병",
+  "en": "Niemann-Pick&rsquo;s disease",
+  "kcd": "E75.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "카나반 병",
+  "en": "Canavan’s disease",
+  "kcd": "E75.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "뮤코지질증 Ⅳ",
+  "en": "Mucolipidosis Ⅳ",
+  "kcd": "E75.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "GM₃-강글리오시드증",
+  "en": "GM₃-gangliosidosis",
+  "kcd": "E75.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "GM₁-강글리오시드증",
+  "en": "GM₁-gangliosidosis",
+  "kcd": "E75.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "강글리오시드증 NOS",
+  "en": "Gangliosidosis NOS",
+  "kcd": "E75.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "성인형 GM₂-강글리오시드증",
+  "en": "Adult GM₂gangliosidosis",
+  "kcd": "E75.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "샌드호프병",
+  "en": "Sandhoff’s disease",
+  "kcd": "E75.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "GM₂-강글리오시드증 NOS",
+  "en": "GM₂gangliosidosis NOS",
+  "kcd": "E75.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "GM₂-강글리오시드증",
+  "en": "GM₂-gangliosidosis",
+  "kcd": "E75.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "테이-삭스병",
+  "en": "Tay-Sachs’ disease",
+  "kcd": "E75.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "연소형 GM₂-강글리오시드증",
+  "en": "Juvenile GM₂gangliosidosis",
+  "kcd": "E75.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "옥살산뇨",
+  "en": "Oxaluria",
+  "kcd": "E74.8",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "탈수소효소피루브산염의 결핍",
+  "en": "Deficiency of dehydrogenase pyruvate",
+  "kcd": "E74.4",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "피루브산염대사 및 포도당신합성 장애",
+  "en": "Disorders of pyruvate metabolism and gluco- neogenesis",
+  "kcd": "E74.4",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "카복실레이스피루브산염의 결핍",
+  "en": "Deficiency of carboxylase pyruvate",
+  "kcd": "E74.4",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "포스포에놀피루브산염카르복시카이네이스의 결핍",
+  "en": "Deficiency of phosphoenolpyruvate carboxykinase",
+  "kcd": "E74.4",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "갈락토스혈증",
+  "en": "Galactosaemia",
+  "kcd": "E74.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "갈락토스대사장애",
+  "en": "Disorders of galactose metabolism",
+  "kcd": "E74.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "갈락토카이네이스결핍",
+  "en": "Galactokinase deficiency",
+  "kcd": "E74.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "폰기에르케병",
+  "en": "von Gierke’s disease",
+  "kcd": "E74.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "폼페병",
+  "en": "Pompe’s disease",
+  "kcd": "E74.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "허스병",
+  "en": "Hers’ disease",
+  "kcd": "E74.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "안데르센병",
+  "en": "Andersen’s disease",
+  "kcd": "E74.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "포르브스병",
+  "en": "Forbes’ disease",
+  "kcd": "E74.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "맥아들병",
+  "en": "McArdle’s disease",
+  "kcd": "E74.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "간인산화효소결핍",
+  "en": "Liver phosphorylase deficiency",
+  "kcd": "E74.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "타루이병",
+  "en": "Tarui’s disease",
+  "kcd": "E74.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "코리병",
+  "en": "Cori’s disease",
+  "kcd": "E74.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "글리코젠합성효소결핍",
+  "en": "Glycogen synthase deficiency",
+  "kcd": "E74.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "심장글리코젠증",
+  "en": "Cardiac glycogenosis",
+  "kcd": "E74.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "글리코젠축적병",
+  "en": "Glycogen storage disease",
+  "kcd": "E74.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "글리코젠축적병 1b형 A",
+  "en": "Glycogen storage disease 1b type A",
+  "kcd": "E74.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "선천성 젖당분해효소결핍",
+  "en": "Congenital lactase deficiency",
+  "kcd": "E73.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "감마글루타밀회로의 장애",
+  "en": "Disorders of γ-glutamyl cycle",
+  "kcd": "E72.8",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "베타아미노산대사장애",
+  "en": "Disorders of β-amino-acid metabolism",
+  "kcd": "E72.8",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "숙신알데히드 탈수소효소 결핍(증)",
+  "en": "Succinic semialdehyde dehydrogenase deficiency (SSADHD)",
+  "kcd": "E72.8",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "고하이드록시프롤린혈증",
+  "en": "Hyperhydroxyprolinaemia",
+  "kcd": "E72.5",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "비케톤고글라이신혈증",
+  "en": "Non-ketotic hyperglycinaemia",
+  "kcd": "E72.5",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "글라이신대사장애",
+  "en": "Disorders of glycine metabolism",
+  "kcd": "E72.5",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "고프롤린혈증(Ⅰ, Ⅱ형)",
+  "en": "Hyperprolinaemia (typesⅠ, Ⅱ)",
+  "kcd": "E72.5",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "사르코신혈증",
+  "en": "Sarcosinaemia",
+  "kcd": "E72.5",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "오르니틴대사장애",
+  "en": "Disorders of ornithine metabolism",
+  "kcd": "E72.4",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "오르니틴혈증(Ⅰ, Ⅱ형)",
+  "en": "Ornithinaemia (typesⅠ, Ⅱ)",
+  "kcd": "E72.4",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "오르니틴트랜스카바미라제결핍",
+  "en": "Ornithine transcarbamylase deficiency",
+  "kcd": "E72.4",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "글루타르산뇨",
+  "en": "Glutaric aciduria",
+  "kcd": "E72.3",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "고라이신혈증",
+  "en": "Hyperlysinaemia",
+  "kcd": "E72.3",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "라이신 및 하이드록시라이신 대사장애",
+  "en": "Disorders of lysine and hydroxylysine metabolism",
+  "kcd": "E72.3",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "하이드록시라이신혈증",
+  "en": "Hydroxylysinaemia",
+  "kcd": "E72.3",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "아르지닌혈증",
+  "en": "Argininaemia",
+  "kcd": "E72.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "시트룰린혈증",
+  "en": "Citrullinaemia",
+  "kcd": "E72.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "아르지닌숙신산뇨",
+  "en": "Argininosuccinic aciduria",
+  "kcd": "E72.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "요소회로대사장애",
+  "en": "Disorders of urea cycle metabolism",
+  "kcd": "E72.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "고암모니아혈증",
+  "en": "Hyperammonaemia",
+  "kcd": "E72.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "호모시스틴뇨",
+  "en": "Homocystinuria",
+  "kcd": "E72.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "유황함유아미노산대사장애",
+  "en": "Disorders of sulfur-bearing amino-acid metabolism",
+  "kcd": "E72.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "고호모시스테인혈증",
+  "en": "Hyperhomocysteinemia",
+  "kcd": "E72.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "아황산염산화효소결핍",
+  "en": "Sulfite oxidase deficiency",
+  "kcd": "E72.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "시스타타이오닌뇨증",
+  "en": "Cystathioninuria",
+  "kcd": "E72.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "메타이오닌혈증",
+  "en": "Methioninaemia",
+  "kcd": "E72.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "하트넙병",
+  "en": "Hartnup&rsquo;s disease",
+  "kcd": "E72.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "시스틴축적병",
+  "en": "Cystine storage disease",
+  "kcd": "E72.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "시스틴뇨증",
+  "en": "Cystinuria",
+  "kcd": "E72.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "로베증후군",
+  "en": "Lowe’s syndrome",
+  "kcd": "E72.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "시스틴증",
+  "en": "Cystinosis",
+  "kcd": "E72.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "아미노산운반장애",
+  "en": "Disorders of amino-acid transport",
+  "kcd": "E72.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "판코니(-드토니)(-드브레)증후군",
+  "en": "Fanconi(-de Toni)(-Debré)syndrome",
+  "kcd": "E72.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "장쇄수산화아실코에이탈수소효소결핍증(VLCAD)",
+  "en": "Very long chain acyl-CoA dehydrogenase(VLCAD) deficiency",
+  "kcd": "E71.3",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "근육카르니틴팔미틸트란스퍼레이스결핍",
+  "en": "Muscle carnitine palmityltransferase deficiency",
+  "kcd": "E71.3",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "지방산대사장애",
+  "en": "Disorders of fatty-acid metabolism",
+  "kcd": "E71.3",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "부신백질형성장애[애디슨-쉴더]",
+  "en": "Adrenoleukodystrophy[Addison-Schilder]",
+  "kcd": "E71.3",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "프로피온산혈증",
+  "en": "Propionic acidaemia",
+  "kcd": "E71.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "메틸말론산혈증",
+  "en": "Methylmalonic acidaemia",
+  "kcd": "E71.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "고발린혈증",
+  "en": "Hypervalinaemia",
+  "kcd": "E71.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "고류신-이소류신혈증",
+  "en": "Hyperleucine-isoleucinaemia",
+  "kcd": "E71.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "아이소발레린산혈증",
+  "en": "Isovaleric acidaemia",
+  "kcd": "E71.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "단풍시럽뇨병",
+  "en": "Maple-syrup-urine disease",
+  "kcd": "E71.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "히스티딘대사장애",
+  "en": "Disorder of histidine metabolism",
+  "kcd": "E70.8",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "트립토판대사장애",
+  "en": "Disorder of tryptophan metabolism",
+  "kcd": "E70.8",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "헤르만스키-푸들라크증후군",
+  "en": "Hermansky-Pudlak syndrome",
+  "kcd": "E70.3",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "바르덴브르그 증후군 (백색증을 동반한)",
+  "en": "Waardenburg’s syndrome (with albinism)",
+  "kcd": "E70.3",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "체디아크(-스타인브링크)-히가시증후군",
+  "en": "Chediak(-Steinbrinck)-Higashi syndrome",
+  "kcd": "E70.3",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "눈피부백색증",
+  "en": "Oculocutaneous albinism",
+  "kcd": "E70.3",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "눈백색증",
+  "en": "Ocular albinism",
+  "kcd": "E70.3",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "교차증후군",
+  "en": "Cross syndrome",
+  "kcd": "E70.3",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "타이로신혈증",
+  "en": "Tyrosinaemia",
+  "kcd": "E70.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "타이로신증",
+  "en": "Tyrosinosis",
+  "kcd": "E70.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "타이로신대사장애",
+  "en": "Disorders of tyrosine metabolism",
+  "kcd": "E70.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "조직흑갈병",
+  "en": "Ochronosis",
+  "kcd": "E70.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "알캅톤뇨증",
+  "en": "Alkaptonuria",
+  "kcd": "E70.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "기타 고페닐알라닌혈증",
+  "en": "Other hyperphenylalaninaemias",
+  "kcd": "E70.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "고전적 페닐케톤뇨증",
+  "en": "Classical phenylketonuria",
+  "kcd": "E70.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "활동성 구루병",
+  "en": "Rickets, active",
+  "kcd": "E55.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "영아골연화증",
+  "en": "Infantile osteomalacia",
+  "kcd": "E55.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "연소성 골연화증",
+  "en": "Juvenile osteomalacia",
+  "kcd": "E55.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "요정증[랍슨-멘덴홀 증후군]",
+  "en": "Leprechaunism [Rabson-Mendenhall syndrome]",
+  "kcd": "E34.8",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "조로증",
+  "en": "Progeria",
+  "kcd": "E34.8",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "송과선 기능이상",
+  "en": "Pineal gland dysfunction",
+  "kcd": "E34.8",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "안드로젠저항증후군",
+  "en": "Androgen resistance syndrome",
+  "kcd": "E34.5",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "부신피질부전 NOS",
+  "en": "Adrenocortical insufficiency NOS",
+  "kcd": "E27.4",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "저알도스테론증",
+  "en": "Hypoaldosteronism",
+  "kcd": "E27.4",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "부신출혈",
+  "en": "Adrenal haemorrhage",
+  "kcd": "E27.4",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "부신경색증",
+  "en": "Adrenal infarction",
+  "kcd": "E27.4",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "부신발증",
+  "en": "Adrenal crisis",
+  "kcd": "E27.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "부신피질발증",
+  "en": "Adrenocortical crisis",
+  "kcd": "E27.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "애디슨발증",
+  "en": "Addisonian crisis",
+  "kcd": "E27.2",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "자가면역성 부신염",
+  "en": "Autoimmune adrenalitis",
+  "kcd": "E27.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "원발성 부신피질부전",
+  "en": "Primary adrenocortical insufficiency",
+  "kcd": "E27.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "가족성 부신코티코이드결핍",
+  "en": "Familial glucocorticoid deficiency",
+  "kcd": "E27.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "애디슨병",
+  "en": "Addison’s disease",
+  "kcd": "E27.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "바터증후군",
+  "en": "Bartter’s syndrome",
+  "kcd": "E26.8",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "부신생식기증후군 NOS",
+  "en": "Adrenogenital syndrome NOS",
+  "kcd": "E25.9",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "염류소실 선천성 부신증식증",
+  "en": "Salt-losing congenital adrenal hyperplasia",
+  "kcd": "E25.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "효소결핍과 관련된 선천성 부신생식기장애",
+  "en": "Congenital adrenogenital disorders associated with enzyme deficiency",
+  "kcd": "E25.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "선천성 부신증식증",
+  "en": "Congenital adrenal hyperplasia",
+  "kcd": "E25.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "21-수산화효소결핍",
+  "en": "21-Hydroxylase deficiency",
+  "kcd": "E25.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "이소성 부신피질자극호르몬증후군",
+  "en": "Ectopic ACTH syndrome",
+  "kcd": "E24.3",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "넬슨증후군",
+  "en": "Nelson’s syndrome",
+  "kcd": "E24.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "뇌하수체-의존 부신피질기능항진증",
+  "en": "Pituitary-dependent hyperadrenocorticism",
+  "kcd": "E24.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "뇌하수체-의존 쿠싱병",
+  "en": "Pituitary-dependent Cushing’s disease",
+  "kcd": "E24.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "뇌하수체 부신피질자극호르몬의 과다생산",
+  "en": "Overproduction of pituitary ACTH",
+  "kcd": "E24.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "쉬한증후군",
+  "en": "Sheehan syndrome",
+  "kcd": "E23.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "콜만증후군",
+  "en": "Kallmann’s syndrome",
+  "kcd": "E23.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "선천성 뇌하수체기능저하증",
+  "en": "Congenital hypopituitarism",
+  "kcd": "E23.0",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "성장호르몬의 과잉생산",
+  "en": "Overproduction of growth hormone",
+  "kcd": "E22.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "말단비대증 및 뇌하수체거인증",
+  "en": "Acromegaly and pituitary gigantism",
+  "kcd": "E22.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "말단비대증과 관련된 관절병증",
+  "en": "Arthropathy associated with acromegaly",
+  "kcd": "E22.0",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "거짓 부갑상선기능저하증",
+  "en": "Pseudohypoparathyroidism",
+  "kcd": "E20.1",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "선천성 고인슐린혈증",
+  "en": "Congenital hyperinsulinaemia",
+  "kcd": "E16.10",
+  "cls": "내분비,영양"
+ },
+ {
+  "ko": "한랭글로불린혈증성 혈관염",
+  "en": "Cryoglobulinaemic vasculitis",
+  "kcd": "D89.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "사르코이드증에서의 홍채섬모체염",
+  "en": "Iridocyclitis in sarcoidosis",
+  "kcd": "D86.8",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "포도막귀밑샘열",
+  "en": "Uveoparotid fever[Heerfordt]",
+  "kcd": "D86.8",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "사르코이드심근염",
+  "en": "Sarcoid myocarditis",
+  "kcd": "D86.8",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "사르코이드관절병증",
+  "en": "Sarcoid arthropathy",
+  "kcd": "D86.8",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "기타 및 복합부위의 사르코이드증",
+  "en": "Sarcoidosis of other and combined sites",
+  "kcd": "D86.8",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "사르코이드증에서의 다발성 뇌신경마비",
+  "en": "Multiple cranial nerve palsies in sarcoidosis",
+  "kcd": "D86.8",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "사르코이드근염",
+  "en": "Sarcoid myositis",
+  "kcd": "D86.8",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "피부의 사르코이드증",
+  "en": "Sarcoidosis of skin",
+  "kcd": "D86.3",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "림프절의 사르코이드증을 동반한 폐의 사르코이드증",
+  "en": "Sarcoidosis of lung with sarcoidosis of lymph nodes",
+  "kcd": "D86.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "림프절의 사르코이드증",
+  "en": "Sarcoidosis of lymph nodes",
+  "kcd": "D86.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "폐의 사르코이드증",
+  "en": "Sarcoidosis of lung",
+  "kcd": "D86.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "C1에스터레이스억제인자결핍",
+  "en": "C1 esterase inhibitor[C1-INH] deficiency",
+  "kcd": "D84.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "보체계통의 결손",
+  "en": "Defects in the complement system",
+  "kcd": "D84.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "림프구기능항원-1결손",
+  "en": "Lymphocyte function antigen-1[LFA-1] defect",
+  "kcd": "D84.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "상세불명의 공통 가변성 면역결핍",
+  "en": "Common variable immunodeficiency, unspecified",
+  "kcd": "D83.9",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "B- 또는 T-세포에 대한 자가항체를 동반한 공통 가변성 면역결핍",
+  "en": "Common variable immunodeficiency with autoantibodies to B-or T-cells",
+  "kcd": "D83.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "현저한 면역조절T-세포장애에 의한 공통 가변성 면역결핍",
+  "en": "Common variable immunodeficiency with predominant immunoregulatory T-cell disorders",
+  "kcd": "D83.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "B-세포 수 및 기능의 현저한 이상에 의한 공통 가변성 면역결핍",
+  "en": "Common variable immunodeficiency with predominant abnormalities of B-cell numbers and function",
+  "kcd": "D83.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "고면역글로불린E증후군",
+  "en": "Hyperimmunoglobulin E [IgE] syndrome",
+  "kcd": "D82.4",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "엡스타인-바르바이러스에 대한 유전성 결손반응에 따른 면역결핍",
+  "en": "Immunodeficiency following hereditary defective response to Epstein-Barr virus",
+  "kcd": "D82.3",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "X-연관 림프증식성 질환",
+  "en": "X-linked lymphoproliferative disease",
+  "kcd": "D82.3",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "짧은사지체구를 동반한 면역결핍",
+  "en": "Immunodeficiency with short-limbed stature",
+  "kcd": "D82.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "디죠지증후군",
+  "en": "Di George’s syndrome",
+  "kcd": "D82.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "흉선성 림프조직무형성",
+  "en": "Thymic alymphoplasia",
+  "kcd": "D82.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "인두낭증후군",
+  "en": "Pharyngeal pouch syndrome",
+  "kcd": "D82.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "면역결핍을 동반한 흉선무형성 또는 형성저하",
+  "en": "Thymic aplasia or hypoplasia with immunodeficiency",
+  "kcd": "D82.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "혈소판감소 및 습진을 동반한 면역결핍",
+  "en": "Immunodeficiency with thrombocytopenia and eczema",
+  "kcd": "D82.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "비스코트-얼드리치증후군",
+  "en": "Wiskott-Aldrich syndrome",
+  "kcd": "D82.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "중증복합면역결핍장애 NOS",
+  "en": "Severe combined immunodeficiency disorder [SCID]) NOS",
+  "kcd": "D81.9",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "오멘증후군",
+  "en": "Omenn syndrome",
+  "kcd": "D81.8",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "바이오틴-의존카복실레이스결핍",
+  "en": "Biotin-dependent carboxylase deficiency",
+  "kcd": "D81.8",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "주조직적합성복합체Ⅱ형결핍",
+  "en": "Major histocompatibility complex class Ⅱ deficiency",
+  "kcd": "D81.7",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "노출림프구증후군",
+  "en": "Bare lymphocyte syndrome",
+  "kcd": "D81.6",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "주조직적합성복합체I형결핍",
+  "en": "Major histocompatibility complex class I deficiency",
+  "kcd": "D81.6",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "퓨린뉴클레오사이드인산화효소결핍",
+  "en": "Purine nucleoside phosphorylase[PNP] deficiency",
+  "kcd": "D81.5",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "네젤로프증후군",
+  "en": "Nezelof’s syndrome",
+  "kcd": "D81.4",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "아데노신탈아미노효소결핍",
+  "en": "Adenosine deaminase[ADA] deficiency",
+  "kcd": "D81.3",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "B-세포수가 정상이거나 감소된 중증복합면역결핍",
+  "en": "Severe combined immunodeficiency [SCID] with low or normal B-cell numbers",
+  "kcd": "D81.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "T- 및 B-세포수가 감소된 중증복합면역결핍",
+  "en": "Severe combined immunodeficiency [SCID] with low T-and B-cell numbers",
+  "kcd": "D81.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "세망세포발생이상을 동반한 중증복합면역결핍",
+  "en": "Severe combined immunodeficiency [SCID] with reticular dysgenesis",
+  "kcd": "D81.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "항체결손이 현저한 기타 면역결핍",
+  "en": "Other immunodeficiencies with predominantly antibody defects",
+  "kcd": "D80.8",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "카파경쇄결핍",
+  "en": "Kappa light chain deficiency",
+  "kcd": "D80.8",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "거의 정상의 면역글로불린 또는 고면역글로불린혈증을 동반한 항체결핍",
+  "en": "Antibody deficiency with near-normal immunoglobulins or with hyperimmunoglobulinaemia",
+  "kcd": "D80.6",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "면역글로불린M의 증가를 동반한 면역결핍",
+  "en": "Immunodeficiency with increased immunoglobulin M[IgM]",
+  "kcd": "D80.5",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "면역글로불린M의 선택적 결핍",
+  "en": "Selective deficiency of immunoglobulin M[IgM]",
+  "kcd": "D80.4",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "면역글로불린G 서브클래스의 선택적 결핍",
+  "en": "Selective deficiency of immunoglobulin G [IgG] subclasses",
+  "kcd": "D80.3",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "면역글로불린A의 선택적 결핍",
+  "en": "Selective deficiency of immunoglobulin A[IgA]",
+  "kcd": "D80.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "비가족성 저감마글로불린혈증",
+  "en": "Nonfamilial hypogammaglobulinaemia",
+  "kcd": "D80.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "면역글로불린을 지닌 B-림프구가 있는 무감마글로불린혈증",
+  "en": "Agammaglobulinaemia with immunoglobulin-bearing B-lymphocytes",
+  "kcd": "D80.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "저감마글로불린혈증 NOS",
+  "en": "Hypogammaglobulinaemia NOS",
+  "kcd": "D80.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "공통가변성 무감마글로불린혈증",
+  "en": "Common variable agammaglobulinaemia [CVAgamma]",
+  "kcd": "D80.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "원발성 무감마글로불린혈증",
+  "en": "Agammaglobulinemia, primary",
+  "kcd": "D80.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "유전성 저감마글로불린혈증",
+  "en": "Hereditary hypogammaglobulinaemia",
+  "kcd": "D80.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "X-연관무감마글로불린혈증[브루톤](성장호르몬결핍을 동반)",
+  "en": "X-linked agammaglobulinaemia [Bruton] (with growth hormone deficiency)",
+  "kcd": "D80.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "보통염색체열성 무감마글로불린혈증(스위스형)",
+  "en": "Autosomal recessive agammaglobulinaemia (Swiss type)",
+  "kcd": "D80.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "세망조직구종(거대세포)",
+  "en": "Reticulohistiocytoma(giant-cell)",
+  "kcd": "D76.3",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "심한 림프선병증을 동반한 동조직구증",
+  "en": "Sinus histiocytosis with massive lymph- adenopathy",
+  "kcd": "D76.3",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "단핵탐식세포의 조직구증",
+  "en": "Histiocytoses of mononuclear phagocytes",
+  "kcd": "D76.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "혈구탐식성 림프조직구증",
+  "en": "Haemophagocytic lymphohistiocytosis",
+  "kcd": "D76.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "가족성 혈구탐식세망증",
+  "en": "Familial haemophagocytic reticulosis",
+  "kcd": "D76.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "다형핵호중구의 기능장애",
+  "en": "Functional disorders of polymorphonuclear neutrophils",
+  "kcd": "D71",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "만성 (소아기) 육아종성 질환",
+  "en": "Chronic (childhood) granulomatous disease",
+  "kcd": "D71",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "선천성 이상식작용증",
+  "en": "Congenital dysphagocytosis",
+  "kcd": "D71",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "세포막수용체복합체[CR3]결손",
+  "en": "Cell membrane receptor complex [CR3] defect",
+  "kcd": "D71",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "진행성 패혈성 육아종증",
+  "en": "Progressive septic granulomatosis",
+  "kcd": "D71",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "순환성 호중구감소",
+  "en": "Cyclic neutropenia",
+  "kcd": "D70",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "선천성 호중구감소",
+  "en": "Congenital neutropenia",
+  "kcd": "D70",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "선천성 무과립구증",
+  "en": "Congenital agranulocytosis",
+  "kcd": "D70",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "베르너-슐츠병",
+  "en": "Werner-Schultz disease",
+  "kcd": "D70",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "무과립구증",
+  "en": "Agranulocytosis",
+  "kcd": "D70",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "무과립구성 안지나",
+  "en": "Agranulocytic angina",
+  "kcd": "D70",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "코스트만병",
+  "en": "Kostmann’s disease",
+  "kcd": "D70",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "주기성 호중구감소",
+  "en": "Periodic neutropenia",
+  "kcd": "D70",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "호중구감소성 비장비대",
+  "en": "Neutropenic splenomegaly",
+  "kcd": "D70",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "영아 유전성 무과립구증",
+  "en": "Infantile genetic agranulocytosis",
+  "kcd": "D70",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "호중구감소 NOS",
+  "en": "Neutropenia NOS",
+  "kcd": "D70",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "유전성 혈소판감소증",
+  "en": "Hereditary thrombocytopenia",
+  "kcd": "D69.4",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "에반스증후군",
+  "en": "Evans’ syndrome",
+  "kcd": "D69.3",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "정성적 혈소판결손",
+  "en": "Qualitative platelet defects",
+  "kcd": "D69.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "베르나르-술리에[거대혈소판]증후군",
+  "en": "Bernard-Soulier[giant platelet] syndrome",
+  "kcd": "D69.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "혈소판무력증(출혈성)(유전성)",
+  "en": "Thromboasthenia (haemorrhagic)(hereditary)",
+  "kcd": "D69.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "혈소판병증",
+  "en": "Thrombocytopathy",
+  "kcd": "D69.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "글란즈만병",
+  "en": "Glanzmann’s disease",
+  "kcd": "D69.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "그레이혈소판증후군",
+  "en": "Grey platelet syndrome",
+  "kcd": "D69.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "항인지질증후군",
+  "en": "Antiphospholipid syndrome",
+  "kcd": "D68.6",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "단백질C결핍",
+  "en": "Protein C deficiency",
+  "kcd": "D68.5",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "항트롬빈결핍",
+  "en": "Antithrombin deficiency",
+  "kcd": "D68.5",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "단백질S결핍",
+  "en": "Protein S deficiency",
+  "kcd": "D68.5",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "제1인자[피브리노젠]의 결핍",
+  "en": "Ⅰ[Fibrinogen] deficiency of factor",
+  "kcd": "D68.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "기타 응고인자의 유전성 결핍",
+  "en": "Hereditary deficiency of other clotting factors",
+  "kcd": "D68.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "AC글로불린결핍",
+  "en": "AC globulin deficiency",
+  "kcd": "D68.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "제2인자[프로트롬빈]의 결핍",
+  "en": "Ⅱ[Prothrombin] deficiency of factor",
+  "kcd": "D68.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "제5인자[불안정]의 결핍",
+  "en": "Ⅴ[Labile] deficiency of factor",
+  "kcd": "D68.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "제7인자[안정]의 결핍",
+  "en": "Ⅶ[Stable] deficiency of factor",
+  "kcd": "D68.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "제12인자[하게만]의 결핍",
+  "en": "ⅩⅡ[Hageman] deficiency of factor",
+  "kcd": "D68.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "제10인자[스튜어트-프라워]의 결핍",
+  "en": "Ⅹ[Stuart-Prower] deficiency of factor",
+  "kcd": "D68.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "선천성 무피브리노젠혈증",
+  "en": "Congenital afibrinogenaemia",
+  "kcd": "D68.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "제13인자[피브린안정화]의 결핍",
+  "en": "ⅩⅢ[Fibrin-stabilizing] deficiency of factor",
+  "kcd": "D68.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "오우렌병",
+  "en": "Owren’s disease",
+  "kcd": "D68.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "이상피브리노젠혈증(선천성)",
+  "en": "Dysfibrinogenaemia (congenital)",
+  "kcd": "D68.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "저프로콘버틴혈증",
+  "en": "Hypoproconvertinaemia",
+  "kcd": "D68.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "프로악셀레린결핍",
+  "en": "Proaccelerin deficiency",
+  "kcd": "D68.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "유전성 제11인자결핍",
+  "en": "Hereditary factor ⅩⅠ deficiency",
+  "kcd": "D68.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "C형혈우병",
+  "en": "Haemophilia C",
+  "kcd": "D68.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "혈장트롬보플라스틴전구물질결핍",
+  "en": "Plasma thromboplastin antecedent [PTA] deficiency",
+  "kcd": "D68.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "폰빌레브란트병",
+  "en": "Von Willebrand’s disease",
+  "kcd": "D68.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "혈관결손이 있는 제8인자결핍",
+  "en": "Factor Ⅷ deficiency with vascular defect",
+  "kcd": "D68.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "혈관혈우병(Angiohaemophilia)",
+  "en": "Angiohaemophilia",
+  "kcd": "D68.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "혈관혈우병(Vascular haemophilia)",
+  "en": "Vascular haemophilia",
+  "kcd": "D68.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "B형혈우병",
+  "en": "Haemophilia B",
+  "kcd": "D67",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "혈장트롬보플라스틴성분결핍",
+  "en": "Plasma thromboplastin component[PTC] deficiency",
+  "kcd": "D67",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "크리스마스병",
+  "en": "Christmas disease",
+  "kcd": "D67",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "제9인자결핍(기능적 결함을 동반)",
+  "en": "Factor Ⅸ deficiency (with functional defect)",
+  "kcd": "D67",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "유전성 제9인자결핍",
+  "en": "Hereditary factor Ⅸ deficiency",
+  "kcd": "D67",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "제8인자결핍(기능적 결함을 동반)",
+  "en": "Deficiency factor Ⅷ (with functional defect)",
+  "kcd": "D66",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "A형혈우병",
+  "en": "Haemophilia A",
+  "kcd": "D66",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "혈우병 NOS",
+  "en": "Haemophilia NOS",
+  "kcd": "D66",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "유전성 제8인자결핍",
+  "en": "Hereditary factor Ⅷ deficiency",
+  "kcd": "D66",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "고전적 혈우병",
+  "en": "Classical haemophilia",
+  "kcd": "D66",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "선천성 적혈구조혈이상빈혈",
+  "en": "Congenital dyserythropoietic anaemia",
+  "kcd": "D64.4",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "이상조혈성 빈혈(선천성)",
+  "en": "Dyshaematopoietic anaemia(congenital)",
+  "kcd": "D64.4",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "범골수황폐",
+  "en": "Panmyelophthisis",
+  "kcd": "D61.9",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "골수형성저하",
+  "en": "Medullary hypoplasia",
+  "kcd": "D61.9",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "저형성빈혈 NOS",
+  "en": "Hypoplastic anaemia NOS",
+  "kcd": "D61.9",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "특발성 무형성빈혈",
+  "en": "Idiopathic aplastic anaemia",
+  "kcd": "D61.3",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "기형을 동반한 범혈구감소증",
+  "en": "Pancytopenia with malformations",
+  "kcd": "D61.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "가족성 저형성빈혈",
+  "en": "Familial hypoplastic anaemia",
+  "kcd": "D61.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "선천성 무형성(순수)적혈구",
+  "en": "Aplasia, (pure) red cell (of) congenital",
+  "kcd": "D61.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "영아 무형성(순수)적혈구",
+  "en": "Aplasia, (pure) red cell (of) infants",
+  "kcd": "D61.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "블랙판-다이아몬드증후군",
+  "en": "Blackfan-Diamond syndrome",
+  "kcd": "D61.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "원발성 무형성(순수)적혈구",
+  "en": "Aplasia, (pure) red cell (of) primary",
+  "kcd": "D61.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "판코니빈혈",
+  "en": "Fanconi’s anaemia",
+  "kcd": "D61.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "체질성 무형성빈혈",
+  "en": "Constitutional aplastic anaemia",
+  "kcd": "D61.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "만성 후천성 순수적혈구무형성",
+  "en": "Chronic acquired pure red cell aplasia",
+  "kcd": "D60.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "발작성 야간헤모글로빈뇨",
+  "en": "Paroxysmal nocturnal haemoglobinuria [Marchiafava-Micheli]",
+  "kcd": "D59.5",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "비정형 용혈-요독증후군",
+  "en": "Atypical haemolytic-uraemic syndrome",
+  "kcd": "D59.3",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "태아헤모글로빈의 유전적 존속",
+  "en": "Hereditary persistence of fetal haemoglobin [HPFH]",
+  "kcd": "D56.4",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "지중해빈혈 소질",
+  "en": "Thalassaemia trait",
+  "kcd": "D56.3",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "델타-베타지중해빈혈",
+  "en": "Delta-beta thalassaemia",
+  "kcd": "D56.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "베타지중해빈혈",
+  "en": "Beta thalassaemia",
+  "kcd": "D56.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "쿠울리빈혈",
+  "en": "Cooley’s anaemia",
+  "kcd": "D56.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "중증 베타지중해빈혈",
+  "en": "Severe beta thalassaemia",
+  "kcd": "D56.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "중증 지중해빈혈",
+  "en": "Major thalassaemia",
+  "kcd": "D56.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "중간형 지중해빈혈",
+  "en": "Intermedia thalassaemia",
+  "kcd": "D56.1",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "알파지중해빈혈",
+  "en": "Alpha thalassaemia",
+  "kcd": "D56.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "용혈성 비구상적혈구성 (유전성) Ⅱ형 빈혈",
+  "en": "Haemolytic nonspherocytic (hereditary), type Ⅱ anaemia",
+  "kcd": "D55.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "삼탄당인산염이성화효소결핍빈혈",
+  "en": "Triose-phosphate isomerase deficiency anaemia",
+  "kcd": "D55.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "헥소카이네이스결핍빈혈",
+  "en": "Hexokinase deficiency anaemia",
+  "kcd": "D55.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "피루브산염카이네이스결핍빈혈",
+  "en": "Pyruvate kinase[PK] deficiency anaemia",
+  "kcd": "D55.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "해당효소의 장애에 의한 빈혈",
+  "en": "Anaemia due to disorders of glycolytic enzymes",
+  "kcd": "D55.2",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "포도당-6-인산탈수소효소결핍에 의한 빈혈",
+  "en": "Anaemia due to glucose-6- phosphate dehydrogenase [G6PD] deficiency",
+  "kcd": "D55.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "G6PD결핍빈혈",
+  "en": "G6PD deficiency anaemia",
+  "kcd": "D55.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "잠두중독",
+  "en": "Favism",
+  "kcd": "D55.0",
+  "cls": "혈액조혈기관"
+ },
+ {
+  "ko": "안와의 림프관종",
+  "en": "Orbit lymphangioma",
+  "kcd": "D18.1",
+  "cls": "코드 없음"
+ },
+ {
+  "ko": "가족성 선종성 용종증",
+  "en": "Familial adenomatous polyposis",
+  "kcd": "D12.6",
+  "cls": "신생물"
+ },
+ {
+  "ko": "아급성 해면모양뇌병증",
+  "en": "Subacute spongiform encephalopathy",
+  "kcd": "A81.0",
+  "cls": "특정감염성"
+ },
+ {
+  "ko": "크로이츠펠트-야콥병",
+  "en": "Creutzfeldt-Jakob disease",
+  "kcd": "A81.0",
+  "cls": "특정감염성"
+ },
+ {
+  "ko": "비정형마이코박테륨증, 가족형, X연관",
+  "en": "Atypical mycobacteriosis, familial, X-linked",
+  "kcd": "A31.9",
+  "cls": "특정감염성"
+ }
+]
