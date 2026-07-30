@@ -8903,6 +8903,304 @@ async def keyword_pool_clicked_census_bg_status(
             "status": mem or {"state": "none"}}
 
 
+# ── 임의 기간 키워드 실적 전수 (batch multi-id /stats) ──────────────────────────
+# 왜 census 와 별도인가: clicked-census 는 **키워드 1개당 /stats 1콜**이라 소잠(등록 12만)
+# 전수에 1~3시간 걸리고 days 기준이라 "지난달" 같은 구간을 못 본다.
+# ★2026-07-30 실측: /stats 는 `ids` 를 **반복 쿼리파라미터**로 넘기면 다건을 한 콜에 준다.
+#   repeated(ids=a&ids=b) → 200 / comma → 200 / **JSON 배열 → 400 code 11001**.
+#   기존 코드 주석의 "multi-id 11001" 은 JSON 배열로 보낸 탓이었다. 100개씩 묶으면 콜수 1/100.
+# 키워드 ID 유니버스는 **계정에서 직접 열거**(campaign→adgroup→keyword). registered_keywords
+# DB 에서 뽑으면 풀 자동등록분만 나와 '파워링크-대표키워드' 같은 수동 레거시 캠페인이 통째로
+# 누락된다 — 문의를 실제로 만드는 머리어가 거기 있어서 치명적.
+_KWWIN_STATUS: Dict[int, dict] = {}
+_KWWIN_ID_BATCH = 100        # /stats 한 콜에 넣는 ID 수
+_KWWIN_SEM = 4               # 네이버 동시 호출 — breaker OPEN 을 유발하지 않는 실측 상한
+
+
+def _kwwin_path(cid: int) -> str:
+    return f"/data/_kw_window_{cid}.json"
+
+
+def _kwwin_map_path(cid: int) -> str:
+    return f"/data/_kw_window_{cid}_map.json"
+
+
+def _kwwin_load(cid: int) -> Optional[dict]:
+    import json as _json
+    try:
+        with open(_kwwin_path(cid), "r", encoding="utf-8") as f:
+            return _json.load(f)
+    except Exception:
+        return None
+
+
+def _kwwin_save(cid: int, doc: dict) -> None:
+    """원자적 저장 — 재시작/재배포 중 부분쓰기로 파일이 깨지지 않게."""
+    import json as _json
+    import os as _os
+    p = _kwwin_path(cid)
+    tmp = f"{p}.tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            _json.dump(doc, f, ensure_ascii=False)
+        _os.replace(tmp, p)
+    except Exception as e:
+        logger.warning(f"[kwwin] 저장 실패 cid={cid}: {str(e)[:120]}")
+
+
+@router.post("/keyword-pool/diagnostics/keyword-window-stats")
+async def keyword_window_stats(
+    background_tasks: BackgroundTasks,
+    start: str = Query(..., description="시작일 YYYY-MM-DD"),
+    end: str = Query(..., description="종료일 YYYY-MM-DD"),
+    min_clicks: int = 1,
+    force: bool = False,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """지정 기간의 **키워드 단위 노출/클릭/광고비 전수**를 백그라운드로 수집.
+
+    · phase enumerate: 캠페인 → 광고그룹 → 키워드 ID·텍스트 전수 열거 (계정 기준)
+    · phase daily: 일자별 캠페인 합계 → '클릭 일어난 일수' 시계열
+    · phase keywords: ID 100개씩 묶어 /stats → clicks ≥ min_clicks 만 적재
+    진행/결과: GET .../keyword-window-stats/status?customer_id=&limit=
+    """
+    from services.naver_ad_service import NaverAdApiClient, _stats_breaker, NaverApiCircuitOpenError
+    import json as _json
+
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+
+    prev = _KWWIN_STATUS.get(cid)
+    if prev and prev.get("state") == "running" and not force:
+        return {"success": True, "already_running": True, "customer_id": cid,
+                "status": {k: prev.get(k) for k in ("state", "phase", "ids_total",
+                           "batches_done", "batches_total", "clicked_total")},
+                "message": "이미 수집 중 — status 로 확인"}
+
+    st: dict = {
+        "state": "running", "phase": "enumerate", "start": start, "end": end,
+        "min_clicks": min_clicks, "started_at": datetime.now().isoformat(),
+        "campaigns_total": 0, "groups_total": 0, "ids_total": 0,
+        "batches_done": 0, "batches_total": 0, "clicked_total": 0,
+        "total_clicks": 0, "total_cost": 0, "total_impressions": 0,
+        "daily": [], "items": [], "error": None,
+    }
+    _KWWIN_STATUS[cid] = st
+
+    def _as_list(x):
+        if isinstance(x, list):
+            return x
+        if isinstance(x, dict):
+            return x.get("data") or x.get("list") or []
+        return []
+
+    def _num(v) -> int:
+        try:
+            return int(float(v or 0))
+        except Exception:
+            return 0
+
+    async def _run():
+        client = NaverAdApiClient()
+        client.customer_id = account["customer_id"]
+        client.api_key = account["api_key"]
+        client.secret_key = account["secret_key"]
+        sem = asyncio.Semaphore(_KWWIN_SEM)
+        fields = _json.dumps(["impCnt", "clkCnt", "salesAmt", "ctr", "cpc", "avgRnk"])
+
+        async def _stats(ids: List[str], since: str, until: str) -> List[dict]:
+            """ids 를 반복 파라미터로 — httpx 가 list 값을 ids=a&ids=b 로 직렬화."""
+            params = {
+                "ids": list(ids),
+                "fields": fields,
+                "timeRange": _json.dumps({"since": since, "until": until}),
+            }
+            for _ in range(3):
+                if _stats_breaker.is_open():
+                    # breaker 열렸다고 skip 하면 그 ID 들이 clicks=0 으로 조용히 누락된다
+                    # (census 1차본이 클릭 16% 만 포착한 원인). 닫힐 때까지 기다린다.
+                    await asyncio.sleep(10)
+                    continue
+                async with sem:
+                    try:
+                        resp = await client._request("GET", "/stats", params)
+                        return _as_list(resp)
+                    except NaverApiCircuitOpenError:
+                        await asyncio.sleep(10)
+                    except Exception as e:
+                        logger.warning(f"[kwwin] stats 실패 n={len(ids)}: {str(e)[:120]}")
+                        return []
+            return []
+
+        try:
+            # ── 1. 캠페인 → 그룹 → 키워드 열거 ────────────────────────────────
+            camps = _as_list(await client._request("GET", "/ncc/campaigns", None))
+            camp_name = {c.get("nccCampaignId"): c.get("name") for c in camps}
+            camp_budget = {c.get("nccCampaignId"): _num(c.get("dailyBudget")) for c in camps}
+            st["campaigns_total"] = len(camps)
+
+            async def _groups(camp_id: str) -> List[dict]:
+                async with sem:
+                    try:
+                        return _as_list(await client._request(
+                            "GET", "/ncc/adgroups", {"nccCampaignId": camp_id}))
+                    except Exception:
+                        return []
+
+            gres = await asyncio.gather(*[_groups(c.get("nccCampaignId")) for c in camps])
+            groups = [g for batch in gres for g in batch]
+            gid_to_camp = {g.get("nccAdgroupId"): g.get("nccCampaignId") for g in groups}
+            st["groups_total"] = len(groups)
+            st["phase"] = "enumerate_keywords"
+
+            async def _kws(gid: str) -> List[dict]:
+                async with sem:
+                    try:
+                        return _as_list(await client._request(
+                            "GET", "/ncc/keywords", {"nccAdgroupId": gid}))
+                    except Exception:
+                        return []
+
+            kw_map: Dict[str, dict] = {}
+            CH = 200
+            gids = list(gid_to_camp.keys())
+            for i in range(0, len(gids), CH):
+                chunk = gids[i:i + CH]
+                res = await asyncio.gather(*[_kws(g) for g in chunk])
+                for g, kws in zip(chunk, res):
+                    for k in kws:
+                        kid = k.get("nccKeywordId")
+                        if not kid:
+                            continue
+                        kw_map[kid] = {
+                            "keyword": k.get("keyword"),
+                            "group_id": g,
+                            "campaign_id": gid_to_camp.get(g),
+                            "bid": _num(k.get("bidAmt")),
+                            "user_lock": bool(k.get("userLock")),
+                        }
+                st["ids_total"] = len(kw_map)
+                await asyncio.sleep(0)  # 이벤트 루프 양보 — login 등 다른 요청 보호
+            try:
+                with open(_kwwin_map_path(cid), "w", encoding="utf-8") as f:
+                    _json.dump(kw_map, f, ensure_ascii=False)
+            except Exception:
+                pass
+
+            # ── 2. 일자별 캠페인 합계 → '클릭 일어난 일수' ──────────────────────
+            st["phase"] = "daily"
+            camp_ids = [c.get("nccCampaignId") for c in camps if c.get("nccCampaignId")]
+            d0 = datetime.strptime(start, "%Y-%m-%d")
+            d1 = datetime.strptime(end, "%Y-%m-%d")
+            daily = []
+            cur = d0
+            while cur <= d1:
+                ds = cur.strftime("%Y-%m-%d")
+                rows: List[dict] = []
+                for i in range(0, len(camp_ids), _KWWIN_ID_BATCH):
+                    rows += await _stats(camp_ids[i:i + _KWWIN_ID_BATCH], ds, ds)
+                daily.append({
+                    "date": ds,
+                    "clicks": sum(_num(r.get("clkCnt")) for r in rows),
+                    "cost": sum(_num(r.get("salesAmt")) for r in rows),
+                    "impressions": sum(_num(r.get("impCnt")) for r in rows),
+                })
+                st["daily"] = daily
+                cur += timedelta(days=1)
+            _kwwin_save(cid, dict(st))
+
+            # ── 3. 키워드 전수 stat (100개 배치) ──────────────────────────────
+            st["phase"] = "keywords"
+            all_ids = list(kw_map.keys())
+            batches = [all_ids[i:i + _KWWIN_ID_BATCH]
+                       for i in range(0, len(all_ids), _KWWIN_ID_BATCH)]
+            st["batches_total"] = len(batches)
+            items: List[dict] = []
+            tot_c = tot_cost = tot_imp = 0
+            for bi, batch in enumerate(batches):
+                rows = await _stats(batch, start, end)
+                for r in rows:
+                    kid = r.get("id")
+                    clk = _num(r.get("clkCnt"))
+                    tot_c += clk
+                    tot_cost += _num(r.get("salesAmt"))
+                    tot_imp += _num(r.get("impCnt"))
+                    if clk < min_clicks or not kid:
+                        continue
+                    meta = kw_map.get(kid) or {}
+                    items.append({
+                        "keyword_id": kid,
+                        "keyword": meta.get("keyword"),
+                        "campaign": camp_name.get(meta.get("campaign_id")),
+                        "campaign_id": meta.get("campaign_id"),
+                        "group_id": meta.get("group_id"),
+                        "daily_budget": camp_budget.get(meta.get("campaign_id")),
+                        "bid": meta.get("bid"),
+                        "impressions": _num(r.get("impCnt")),
+                        "clicks": clk,
+                        "cost": _num(r.get("salesAmt")),
+                        "ctr": float(r.get("ctr") or 0),
+                        "cpc": _num(r.get("cpc")),
+                        "avg_rank": float(r.get("avgRnk") or 0),
+                    })
+                st["batches_done"] = bi + 1
+                st["clicked_total"] = len(items)
+                st["total_clicks"], st["total_cost"], st["total_impressions"] = tot_c, tot_cost, tot_imp
+                st["items"] = items
+                if (bi + 1) % 20 == 0:
+                    _kwwin_save(cid, dict(st))
+                await asyncio.sleep(0)
+
+            st["state"] = "done"
+            st["phase"] = "done"
+            st["finished_at"] = datetime.now().isoformat()
+            _kwwin_save(cid, dict(st))
+        except Exception as e:
+            import traceback
+            logger.error(f"[kwwin] 실패: {traceback.format_exc()}")
+            st["state"] = "error"
+            st["error"] = f"{type(e).__name__}: {str(e)[:300]}"
+            _kwwin_save(cid, dict(st))
+        finally:
+            try:
+                await client.close()
+            except Exception:
+                pass
+
+    background_tasks.add_task(_run)
+    return {"success": True, "customer_id": cid, "started": True,
+            "start": start, "end": end,
+            "message": "수집 시작 — GET .../keyword-window-stats/status 로 확인"}
+
+
+@router.get("/keyword-pool/diagnostics/keyword-window-stats/status")
+async def keyword_window_stats_status(
+    customer_id: Optional[str] = None,
+    limit: int = 5000,
+    offset: int = 0,
+    sort: str = Query("cost", description="cost|clicks"),
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """진행/결과. 인메모리 없으면(재시작) /data 파일에서 복구."""
+    account = _resolve_account(user_id, customer_id)
+    if not account:
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+    doc = _KWWIN_STATUS.get(cid) or _kwwin_load(cid)
+    if not doc:
+        return {"success": True, "customer_id": cid, "status": {"state": "none"}}
+    items = list(doc.get("items") or [])
+    key = "clicks" if sort == "clicks" else "cost"
+    items.sort(key=lambda x: -int(x.get(key) or 0))
+    summary = {k: v for k, v in doc.items() if k != "items"}
+    summary["items_returned"] = len(items[offset:offset + limit])
+    return {"success": True, "customer_id": cid, "status": summary,
+            "items": items[offset:offset + limit]}
+
+
 class BulkDeleteKeywordsRequest(BaseModel):
     keyword_ids: List[str]
 
