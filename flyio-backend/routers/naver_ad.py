@@ -8955,12 +8955,14 @@ async def keyword_window_stats(
     end: str = Query(..., description="종료일 YYYY-MM-DD"),
     min_clicks: int = 1,
     force: bool = False,
+    enum_group_cap: int = Query(1500, description="레거시(수동) 캠페인 그룹 열거 상한"),
     customer_id: Optional[str] = None,
     user_id: int = Depends(get_user_id_with_fallback),
 ):
     """지정 기간의 **키워드 단위 노출/클릭/광고비 전수**를 백그라운드로 수집.
 
-    · phase enumerate: 캠페인 → 광고그룹 → 키워드 ID·텍스트 전수 열거 (계정 기준)
+    · phase enumerate: 캠페인·광고그룹 열거 → 키워드는 registered_keywords DB 로드(API 0콜)
+      + DB 미커버(수동 레거시) 캠페인의 그룹만 API 보충
     · phase daily: 일자별 캠페인 합계 → '클릭 일어난 일수' 시계열
     · phase keywords: ID 100개씩 묶어 /stats → clicks ≥ min_clicks 만 적재
     진행/결과: GET .../keyword-window-stats/status?customer_id=&limit=
@@ -9056,19 +9058,66 @@ async def keyword_window_stats(
             st["groups_total"] = len(groups)
             st["phase"] = "enumerate_keywords"
 
-            async def _kws(gid: str) -> List[dict]:
-                async with sem:
-                    try:
-                        return _as_list(await client._request(
-                            "GET", "/ncc/keywords", {"nccAdgroupId": gid}))
-                    except Exception:
-                        return []
-
+            # ★키워드 열거는 DB 우선. 그룹당 1콜(/ncc/keywords)로 5,948그룹을 훑으면
+            #  Fly→네이버 outbound 가 ConnectTimeout 을 맞으면서 사실상 멈춘다
+            #  (2026-07-31 실측: 10분간 29,334개에서 진행 정지). registered_keywords 는
+            #  풀 자동등록분 전체를 텍스트까지 들고 있으므로 API 0콜로 대체한다.
+            #  DB 에 없는 캠페인(수동 레거시: 파워링크-대표키워드 등)의 그룹만 API 로 보충 —
+            #  이쪽이 광고비의 다수라 빠뜨리면 분석이 무의미하다.
             kw_map: Dict[str, dict] = {}
-            CH = 200
-            gids = list(gid_to_camp.keys())
-            for i in range(0, len(gids), CH):
-                chunk = gids[i:i + CH]
+            db_campaigns: Set[str] = set()
+            try:
+                import sqlite3 as _sq
+                from database.registered_keywords_db import get_registered_keywords_db
+                _reg = get_registered_keywords_db()
+                with _sq.connect(_reg.db_path, timeout=30.0) as _conn:
+                    for kw, kid, gid, cmpid in _conn.execute(
+                        "SELECT keyword, ncc_keyword_id, ad_group_id, campaign_id "
+                        "FROM registered_keywords WHERE account_customer_id=? "
+                        "AND ncc_keyword_id IS NOT NULL AND removed_at IS NULL",
+                        (cid,),
+                    ):
+                        if not kid:
+                            continue
+                        kw_map[kid] = {"keyword": kw, "group_id": gid,
+                                       "campaign_id": cmpid, "bid": None, "user_lock": None}
+                        if cmpid:
+                            db_campaigns.add(cmpid)
+            except Exception as e:
+                logger.warning(f"[kwwin] registered_keywords 로드 실패: {str(e)[:150]}")
+            st["ids_from_db"] = len(kw_map)
+            st["phase"] = "enumerate_legacy"
+
+            # DB 가 커버 못 하는 캠페인의 그룹만 API 열거
+            legacy_gids = [g for g, c in gid_to_camp.items() if c not in db_campaigns]
+            st["legacy_groups"] = len(legacy_gids)
+            if len(legacy_gids) > enum_group_cap:
+                logger.warning(f"[kwwin] legacy 그룹 {len(legacy_gids)} > cap {enum_group_cap} — 초과분 미열거")
+                st["legacy_groups_skipped"] = len(legacy_gids) - enum_group_cap
+                legacy_gids = legacy_gids[:enum_group_cap]
+
+            enum_fail = 0
+
+            async def _kws(gid: str) -> List[dict]:
+                nonlocal enum_fail
+                for _ in range(3):
+                    async with sem:
+                        try:
+                            return _as_list(await client._request(
+                                "GET", "/ncc/keywords", {"nccAdgroupId": gid}))
+                        except NaverApiCircuitOpenError:
+                            pass
+                        except Exception as e:
+                            logger.warning(f"[kwwin] 그룹 {gid} 열거 실패: {str(e)[:100]}")
+                            enum_fail += 1
+                            return []
+                    await asyncio.sleep(5)   # breaker 대기 — skip 하면 조용히 누락된다
+                enum_fail += 1
+                return []
+
+            CH = 100
+            for i in range(0, len(legacy_gids), CH):
+                chunk = legacy_gids[i:i + CH]
                 res = await asyncio.gather(*[_kws(g) for g in chunk])
                 for g, kws in zip(chunk, res):
                     for k in kws:
@@ -9083,6 +9132,7 @@ async def keyword_window_stats(
                             "user_lock": bool(k.get("userLock")),
                         }
                 st["ids_total"] = len(kw_map)
+                st["enum_failed_groups"] = enum_fail
                 await asyncio.sleep(0)  # 이벤트 루프 양보 — login 등 다른 요청 보호
             try:
                 with open(_kwwin_map_path(cid), "w", encoding="utf-8") as f:
