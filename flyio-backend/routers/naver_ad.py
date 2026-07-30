@@ -9056,50 +9056,37 @@ async def keyword_window_stats(
             groups = [g for batch in gres for g in batch]
             gid_to_camp = {g.get("nccAdgroupId"): g.get("nccCampaignId") for g in groups}
             st["groups_total"] = len(groups)
+            st["phase"] = "group_stats"
+
+            # ★키워드 열거 범위는 '이 기간에 돈을 쓴 그룹'으로 정한다.
+            #  그룹당 1콜로 전체(5,948)를 훑으면 Fly→네이버 outbound 타임아웃으로 멈추고
+            #  (2026-07-31 실측: 10분간 29,334개에서 정지), registered_keywords DB 로
+            #  대체하면 **수동 등록 키워드가 통째로 빠진다**. DB 커버리지를 캠페인 단위로
+            #  판정했을 때 광고비의 52.6%, 그룹 단위로 고쳐도 38.0% 가 미포착이었다
+            #  (풀 키워드가 1개라도 섞인 그룹의 수동 키워드는 여전히 누락).
+            #  → 그룹 stat 을 100개씩 배치로 먼저 받아(5,948그룹 = 60콜) 비용>0 인 그룹만
+            #    API 로 전수 열거한다. 돈 안 쓴 그룹은 분석에 기여하지 않으므로 생략해도
+            #    합계가 어긋나지 않는다.
+            gids_all = [g for g in gid_to_camp if g]
+            group_cost: Dict[str, int] = {}
+            for i in range(0, len(gids_all), _KWWIN_ID_BATCH):
+                for r in await _stats(gids_all[i:i + _KWWIN_ID_BATCH], start, end):
+                    gid = r.get("id")
+                    if gid:
+                        group_cost[gid] = _num(r.get("salesAmt")) + _num(r.get("clkCnt"))
+                st["groups_statted"] = len(group_cost)
+                await asyncio.sleep(0)
+
+            active_gids = [g for g, v in group_cost.items() if v > 0]
+            st["active_groups"] = len(active_gids)
             st["phase"] = "enumerate_keywords"
+            if len(active_gids) > enum_group_cap:
+                logger.warning(f"[kwwin] 활성 그룹 {len(active_gids)} > cap {enum_group_cap} — 초과분 미열거")
+                st["groups_skipped"] = len(active_gids) - enum_group_cap
+                active_gids = active_gids[:enum_group_cap]
+            legacy_gids = active_gids
 
-            # ★키워드 열거는 DB 우선. 그룹당 1콜(/ncc/keywords)로 5,948그룹을 훑으면
-            #  Fly→네이버 outbound 가 ConnectTimeout 을 맞으면서 사실상 멈춘다
-            #  (2026-07-31 실측: 10분간 29,334개에서 진행 정지). registered_keywords 는
-            #  풀 자동등록분 전체를 텍스트까지 들고 있으므로 API 0콜로 대체한다.
-            #  DB 에 없는 캠페인(수동 레거시: 파워링크-대표키워드 등)의 그룹만 API 로 보충 —
-            #  이쪽이 광고비의 다수라 빠뜨리면 분석이 무의미하다.
             kw_map: Dict[str, dict] = {}
-            # ★커버리지는 **그룹 단위**로 판정한다. 캠페인 단위로 하면 풀 키워드가 일부만
-            #  섞인 레거시 캠페인의 그룹이 전부 '커버됨'으로 처리돼 수동 키워드가 통째로
-            #  빠진다(2026-07-31 실측: 최대지출 캠페인 1,265,092원에서 1개만 포착, 전체
-            #  광고비의 52.6%·클릭 3,451회 미포착).
-            db_groups: Set[str] = set()
-            try:
-                import sqlite3 as _sq
-                from database.registered_keywords_db import get_registered_keywords_db
-                _reg = get_registered_keywords_db()
-                with _sq.connect(_reg.db_path, timeout=30.0) as _conn:
-                    for kw, kid, gid, cmpid in _conn.execute(
-                        "SELECT keyword, ncc_keyword_id, ad_group_id, campaign_id "
-                        "FROM registered_keywords WHERE account_customer_id=? "
-                        "AND ncc_keyword_id IS NOT NULL AND removed_at IS NULL",
-                        (cid,),
-                    ):
-                        if not kid:
-                            continue
-                        kw_map[kid] = {"keyword": kw, "group_id": gid,
-                                       "campaign_id": cmpid, "bid": None, "user_lock": None}
-                        if gid:
-                            db_groups.add(gid)
-            except Exception as e:
-                logger.warning(f"[kwwin] registered_keywords 로드 실패: {str(e)[:150]}")
-            st["ids_from_db"] = len(kw_map)
-            st["phase"] = "enumerate_legacy"
-
-            # DB 에 키워드가 한 건도 없는 그룹만 API 열거 (= 수동 등록 그룹)
-            legacy_gids = [g for g in gid_to_camp if g not in db_groups]
-            st["legacy_groups"] = len(legacy_gids)
-            if len(legacy_gids) > enum_group_cap:
-                logger.warning(f"[kwwin] legacy 그룹 {len(legacy_gids)} > cap {enum_group_cap} — 초과분 미열거")
-                st["legacy_groups_skipped"] = len(legacy_gids) - enum_group_cap
-                legacy_gids = legacy_gids[:enum_group_cap]
-
             enum_fail = 0
 
             async def _kws(gid: str) -> List[dict]:
