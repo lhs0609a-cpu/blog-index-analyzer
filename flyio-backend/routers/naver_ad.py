@@ -9065,7 +9065,11 @@ async def keyword_window_stats(
             #  DB 에 없는 캠페인(수동 레거시: 파워링크-대표키워드 등)의 그룹만 API 로 보충 —
             #  이쪽이 광고비의 다수라 빠뜨리면 분석이 무의미하다.
             kw_map: Dict[str, dict] = {}
-            db_campaigns: Set[str] = set()
+            # ★커버리지는 **그룹 단위**로 판정한다. 캠페인 단위로 하면 풀 키워드가 일부만
+            #  섞인 레거시 캠페인의 그룹이 전부 '커버됨'으로 처리돼 수동 키워드가 통째로
+            #  빠진다(2026-07-31 실측: 최대지출 캠페인 1,265,092원에서 1개만 포착, 전체
+            #  광고비의 52.6%·클릭 3,451회 미포착).
+            db_groups: Set[str] = set()
             try:
                 import sqlite3 as _sq
                 from database.registered_keywords_db import get_registered_keywords_db
@@ -9081,15 +9085,15 @@ async def keyword_window_stats(
                             continue
                         kw_map[kid] = {"keyword": kw, "group_id": gid,
                                        "campaign_id": cmpid, "bid": None, "user_lock": None}
-                        if cmpid:
-                            db_campaigns.add(cmpid)
+                        if gid:
+                            db_groups.add(gid)
             except Exception as e:
                 logger.warning(f"[kwwin] registered_keywords 로드 실패: {str(e)[:150]}")
             st["ids_from_db"] = len(kw_map)
             st["phase"] = "enumerate_legacy"
 
-            # DB 가 커버 못 하는 캠페인의 그룹만 API 열거
-            legacy_gids = [g for g, c in gid_to_camp.items() if c not in db_campaigns]
+            # DB 에 키워드가 한 건도 없는 그룹만 API 열거 (= 수동 등록 그룹)
+            legacy_gids = [g for g in gid_to_camp if g not in db_groups]
             st["legacy_groups"] = len(legacy_gids)
             if len(legacy_gids) > enum_group_cap:
                 logger.warning(f"[kwwin] legacy 그룹 {len(legacy_gids)} > cap {enum_group_cap} — 초과분 미열거")
