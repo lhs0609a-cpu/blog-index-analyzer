@@ -12975,6 +12975,7 @@ class CampaignBudgetBulkRequest(BaseModel):
     scope: str = Field("all", description="'all' 전체 캠페인, 'pool' auto_ 캠페인만")
     name_prefix: Optional[str] = Field(None, description="캠페인명 접두어 필터(예 '의료대출') — 지정 시 그 접두어로 시작하는 캠페인만 대상")
     name_contains: Optional[str] = Field(None, description="캠페인명 포함 필터 — 지정 시 그 문자열을 포함하는 캠페인만 대상")
+    campaign_ids: Optional[List[str]] = Field(None, description="캠페인 ID 직접 지정 — 이름 규칙이 제각각인 소수 캠페인만 정밀 변경할 때. 지정 시 다른 필터보다 우선")
     dry_run: bool = Field(False)
 
 
@@ -13003,7 +13004,13 @@ async def keyword_pool_campaign_budget_bulk(
         return []
 
     campaigns = _as_list(await client.get_campaigns() or [])
-    if request.scope == "pool":
+    # ID 직접 지정 — 이름 규칙이 제각각인 소수 캠페인만 올릴 때(입찰 상향으로 예산이
+    # 부족해진 캠페인 등). name_prefix 로 '소잠_' 를 잡으면 125개가 통째로 걸려
+    # 예산 안전망이 사라진다.
+    if request.campaign_ids:
+        want = {c for c in request.campaign_ids if c}
+        campaigns = [c for c in campaigns if c.get("nccCampaignId") in want]
+    elif request.scope == "pool":
         campaigns = [c for c in campaigns if (c.get("name") or "").startswith("auto_")]
     else:
         # 'all' = 파워링크(WEB_SITE) 키워드 캠페인만 — 파워컨텐츠/플레이스/브랜드검색 제외
