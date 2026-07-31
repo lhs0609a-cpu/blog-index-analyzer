@@ -6037,6 +6037,70 @@ async def keyword_pool_bulk_pause_offdomain(
             "message": f"{len(sel)}개 {verb} 백그라운드 시작 (bulk userLock 100/콜, 로그 확인)"}
 
 
+class SetUserLockByIdsRequest(BaseModel):
+    """ncc ID 를 직접 지정해 userLock 변경. registered_keywords DB 에 없는
+    **수동 등록 키워드**를 다루기 위한 경로 — bulk-pause-offdomain 은 DB 기반이라
+    레거시 캠페인(소잠 기준 광고비의 다수)에 닿지 않는다."""
+    items: List[Dict[str, str]] = Field(..., description="[{keyword_id, group_id}, ...]")
+    lock: bool = Field(True, description="true=일시정지(userLock), false=재개")
+    dry_run: bool = Field(True)
+
+
+@router.post("/keyword-pool/registered/set-userlock-by-ids")
+async def keyword_pool_set_userlock_by_ids(
+    request: SetUserLockByIdsRequest,
+    background_tasks: BackgroundTasks,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """지정한 ncc 키워드 ID 들을 일시정지/재개. 삭제 아님 — lock=false 로 되돌린다."""
+    from services.naver_ad_service import NaverAdApiClient
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+
+    pairs = [(it.get("keyword_id"), it.get("group_id")) for it in (request.items or [])]
+    pairs = [(k, g) for k, g in pairs if k and g]
+    if not pairs:
+        raise HTTPException(status_code=400, detail="keyword_id/group_id 쌍이 필요")
+
+    verb = "일시정지(userLock=true)" if request.lock else "재개(userLock=false)"
+    if request.dry_run:
+        return {"success": True, "dry_run": True, "customer_id": cid,
+                "mode": verb, "targets": len(pairs),
+                "samples": [p[0] for p in pairs[:10]]}
+
+    async def _run():
+        client = NaverAdApiClient()
+        client.customer_id = account["customer_id"]
+        client.api_key = account["api_key"]
+        client.secret_key = account["secret_key"]
+        done = failed = 0
+        logger.warning(f"[set-userlock-by-ids] {verb} 시작 — {len(pairs)}개 (cid={cid})")
+        for i in range(0, len(pairs), 100):
+            batch = pairs[i:i + 100]
+            items = [{"nccKeywordId": k, "nccAdgroupId": g, "userLock": request.lock}
+                     for k, g in batch]
+            try:
+                await client.set_keywords_userlock_bulk(items)
+                done += len(items)
+            except Exception as e:
+                failed += len(items)
+                logger.warning(f"[set-userlock-by-ids] batch 실패: {str(e)[:120]}")
+            await asyncio.sleep(0.1)
+        logger.warning(f"[set-userlock-by-ids] 완료 — {verb} {done} / 실패 {failed}")
+        try:
+            await client.close()
+        except Exception:
+            pass
+
+    background_tasks.add_task(_run)
+    return {"success": True, "started": True, "customer_id": cid,
+            "mode": verb, "targets": len(pairs),
+            "message": f"{len(pairs)}개 {verb} 백그라운드 시작"}
+
+
 class KeepVolumeAuditRequest(BaseModel):
     loan_tokens: List[str] = Field(..., description="금융/대출 토큰. keep=이 중 1+ 포함")
     domain_tokens: List[str] = Field(..., description="도메인(의료 등) 토큰. keep=이 중 1+ 포함")
