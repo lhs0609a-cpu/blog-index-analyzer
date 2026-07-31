@@ -6101,6 +6101,44 @@ async def keyword_pool_set_userlock_by_ids(
             "message": f"{len(pairs)}개 {verb} 백그라운드 시작"}
 
 
+@router.get("/keyword-pool/diagnostics/keyword-inspect")
+async def keyword_pool_keyword_inspect(
+    group_ids: str = Query(..., description="광고그룹 ID 쉼표구분 (최대 20)"),
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """광고그룹의 키워드 원본(bidAmt/useGroupBidAmt/userLock)을 그대로 조회 — 변경 검증용.
+    기존 /api/naver-ad/keywords 는 get_optimizer() 의 전역 자격증명을 써서 광고주 계정에
+    접근하지 못한다(500). 여기서는 _resolve_account 로 해당 광고주 키를 쓴다."""
+    from services.naver_ad_service import NaverAdApiClient
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    gids = [g.strip() for g in (group_ids or "").split(",") if g.strip()][:20]
+    if not gids:
+        raise HTTPException(status_code=400, detail="group_ids 필요")
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+    out: Dict[str, Any] = {}
+    for gid in gids:
+        try:
+            res = await client._request("GET", "/ncc/keywords", {"nccAdgroupId": gid})
+            rows = res if isinstance(res, list) else (res.get("data") or [])
+            out[gid] = [{"keyword": k.get("keyword"), "bidAmt": k.get("bidAmt"),
+                         "useGroupBidAmt": k.get("useGroupBidAmt"),
+                         "userLock": k.get("userLock"),
+                         "status": k.get("status")} for k in rows]
+        except Exception as e:
+            out[gid] = {"error": f"{type(e).__name__}: {str(e)[:150]}"}
+    try:
+        await client.close()
+    except Exception:
+        pass
+    return {"success": True, "customer_id": int(account.get("customer_id")), "groups": out}
+
+
 class SetBidByIdsRequest(BaseModel):
     """ncc ID 직접 지정 입찰 변경 — registered_keywords DB 에 없는 **수동 등록 키워드**용.
     bulk-bid-by-tokens 는 DB 기반이라 레거시 캠페인에 닿지 않는다."""
