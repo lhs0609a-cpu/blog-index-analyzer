@@ -6101,6 +6101,69 @@ async def keyword_pool_set_userlock_by_ids(
             "message": f"{len(pairs)}개 {verb} 백그라운드 시작"}
 
 
+class SetBidByIdsRequest(BaseModel):
+    """ncc ID 직접 지정 입찰 변경 — registered_keywords DB 에 없는 **수동 등록 키워드**용.
+    bulk-bid-by-tokens 는 DB 기반이라 레거시 캠페인에 닿지 않는다."""
+    items: List[Dict[str, str]] = Field(..., description="[{keyword_id, group_id}, ...]")
+    bid: int = Field(..., ge=70, le=100000, description="설정할 입찰가(원)")
+    dry_run: bool = Field(True)
+
+
+@router.post("/keyword-pool/registered/set-bid-by-ids")
+async def keyword_pool_set_bid_by_ids(
+    request: SetBidByIdsRequest,
+    background_tasks: BackgroundTasks,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """지정한 ncc 키워드 ID 들의 입찰가를 설정. useGroupBidAmt=False 를 함께 걸어
+    그룹 기본입찰 대신 키워드 입찰이 실제로 적용되게 한다."""
+    from services.naver_ad_service import NaverAdApiClient
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+    pairs = [(it.get("keyword_id"), it.get("group_id")) for it in (request.items or [])]
+    pairs = [(k, g) for k, g in pairs if k and g]
+    if not pairs:
+        raise HTTPException(status_code=400, detail="keyword_id/group_id 쌍이 필요")
+    new_bid = max(70, int(round(request.bid / 10.0)) * 10)
+
+    if request.dry_run:
+        return {"success": True, "dry_run": True, "customer_id": cid,
+                "bid": new_bid, "targets": len(pairs),
+                "samples": [p[0] for p in pairs[:10]]}
+
+    async def _run():
+        client = NaverAdApiClient()
+        client.customer_id = account["customer_id"]
+        client.api_key = account["api_key"]
+        client.secret_key = account["secret_key"]
+        done = failed = 0
+        logger.warning(f"[set-bid-by-ids] bid={new_bid} 시작 — {len(pairs)}개 (cid={cid})")
+        for i in range(0, len(pairs), 100):
+            batch = pairs[i:i + 100]
+            items = [{"nccKeywordId": k, "nccAdgroupId": g,
+                      "bidAmt": new_bid, "useGroupBidAmt": False} for k, g in batch]
+            try:
+                await client.update_keywords_bid_bulk(items)
+                done += len(items)
+            except Exception as e:
+                failed += len(items)
+                logger.warning(f"[set-bid-by-ids] batch 실패: {str(e)[:120]}")
+            await asyncio.sleep(0.1)
+        logger.warning(f"[set-bid-by-ids] 완료 — bid={new_bid} {done} / 실패 {failed}")
+        try:
+            await client.close()
+        except Exception:
+            pass
+
+    background_tasks.add_task(_run)
+    return {"success": True, "started": True, "customer_id": cid,
+            "bid": new_bid, "targets": len(pairs),
+            "message": f"{len(pairs)}개 입찰가 {new_bid}원 설정 백그라운드 시작"}
+
+
 class KeepVolumeAuditRequest(BaseModel):
     loan_tokens: List[str] = Field(..., description="금융/대출 토큰. keep=이 중 1+ 포함")
     domain_tokens: List[str] = Field(..., description="도메인(의료 등) 토큰. keep=이 중 1+ 포함")
