@@ -446,6 +446,126 @@ def _blend_weights(manual: Dict, learned: Dict, learned_ratio: float = 0.7) -> D
     return blended
 
 
+# ===== 주요 3축 가중치 하한/상한 =====
+#
+# 왜 필요한가: 학습기(instant_adjust_weights)는 정규화도 하한도 없는 경사하강이라
+# 신호가 약한 차원을 0 근처까지 밀어버린다. 실제로 2026-01-25 학습 결과가
+# c_rank 0.054 / dia 0.483 / content 0.463 이었고, 이 값이 6개월간 그대로
+# 총점을 지배했다. C-Rank가 총점의 5%가 되는 건 학습 결과가 아니라 붕괴다.
+#
+# 근거: 측정된 상관은 c_rank ρ≈+0.032, dia ρ≈+0.015 로 셋 다 노이즈 수준이라
+# 어느 차원도 사전값(prior) 대비 한 자릿수로 눌릴 만한 증거가 없다.
+# 따라서 학습값은 '사전값을 조정하는 힘'까지만 허용하고, 축을 없애지는 못하게 한다.
+_MAIN_DIMENSIONS = ("c_rank", "dia", "content_factors")
+_WEIGHT_FLOOR = 0.15
+_WEIGHT_CEIL = 0.55
+
+
+def _clamp_and_normalize_main(weights: Dict) -> Dict:
+    """주요 3축 가중치를 [floor, ceil]로 자르고 합이 1.0이 되게 재정규화."""
+    raw = {}
+    for dim in _MAIN_DIMENSIONS:
+        node = weights.get(dim)
+        if isinstance(node, dict):
+            raw[dim] = node.get("weight")
+        elif isinstance(node, (int, float)):
+            raw[dim] = float(node)
+        else:
+            raw[dim] = None
+
+    defaults = {"c_rank": 0.30, "dia": 0.20, "content_factors": 0.50}
+    clamped = {}
+    for dim in _MAIN_DIMENSIONS:
+        v = raw[dim] if raw[dim] is not None else defaults[dim]
+        clamped[dim] = min(max(float(v), _WEIGHT_FLOOR), _WEIGHT_CEIL)
+
+    total = sum(clamped.values()) or 1.0
+    for dim in _MAIN_DIMENSIONS:
+        w = round(clamped[dim] / total, 4)
+        node = weights.get(dim)
+        if isinstance(node, dict):
+            node["weight"] = w
+        else:
+            weights[dim] = {"weight": w}
+    return weights
+
+
+def resolve_scoring_weights(
+    keyword: Optional[str],
+    learned_weights: Optional[Dict],
+    scoring_version: int,
+) -> Dict:
+    """총점 계산에 쓸 가중치를 **한 곳에서** 결정한다.
+
+    이 함수가 생기기 전에는 경로가 둘로 갈라져 있었다.
+      - 키워드 있음 : 카테고리 사전값과 학습값을 70/30 blend
+      - 키워드 없음 : DB 학습값을 **그대로** 사용 (blend도 하한도 없음)
+    블로그 단위 분석은 항상 후자라, 붕괴한 학습값이 여과 없이 적용됐다.
+
+    규칙:
+      1) 카테고리 사전값(수동 추정)에서 출발한다.
+      2) 학습값은 **현재 스코어링 버전에서 학습된 것만** 반영한다.
+         버전 스탬프가 없거나 다르면 = 다른 채점식에 맞춰진 값이므로 버린다.
+      3) 반영하더라도 70/30 blend 후 하한/상한으로 자르고 재정규화한다.
+      4) _learned 는 실제 반영 여부를 그대로 적는다 (배지가 거짓말하지 않게).
+    """
+    category = detect_keyword_category(keyword) if keyword else "default"
+    manual = CATEGORY_WEIGHTS.get(category, CATEGORY_WEIGHTS["default"])
+    weights = json.loads(json.dumps(manual))  # deep copy
+
+    learned_version = (learned_weights or {}).get("_scoring_version")
+    compatible = bool(learned_weights) and learned_version == scoring_version
+
+    if compatible:
+        weights = _blend_weights(weights, learned_weights, learned_ratio=0.7)
+        weights["_learned"] = True
+        weights["_learned_meta"] = {
+            "source": "learning_db",
+            "scoring_version": learned_version,
+        }
+    else:
+        weights["_learned"] = False
+        weights["_learned_meta"] = {
+            "source": "category_prior",
+            "reason": (
+                "no_learned_weights" if not learned_weights
+                else f"stale_scoring_version({learned_version} != {scoring_version})"
+            ),
+        }
+
+    # 카테고리 학습 JSON(learned_category_weights.json)은 키워드가 있을 때만 의미가 있다
+    if keyword:
+        learned_for_cat = _load_learned_weights().get(category)
+        if learned_for_cat:
+            weights = _blend_weights(weights, learned_for_cat, learned_ratio=0.7)
+            weights["_learned"] = True
+            meta = weights.get("_learned_meta") or {}
+            # DB 학습값이 스테일해서 버려졌더라도, 카테고리 학습은 별도로 반영됐다.
+            # 버려진 쪽의 사유가 남아 배지를 오해하게 만들지 않도록 분리해 적는다.
+            if meta.get("reason"):
+                meta["learning_db_skipped"] = meta.pop("reason")
+            meta["source"] = "category_learned"
+            meta["category_learned"] = learned_for_cat.get("_meta", {})
+            weights["_learned_meta"] = meta
+
+    weights = _clamp_and_normalize_main(weights)
+
+    # sub_weights / extra_factors 기본값 보정
+    if "sub_weights" not in weights.get("c_rank", {}):
+        weights["c_rank"]["sub_weights"] = {"context": 0.35, "content": 0.40, "chain": 0.25}
+    if "sub_weights" not in weights.get("dia", {}):
+        weights["dia"]["sub_weights"] = {"depth": 0.33, "information": 0.34, "accuracy": 0.33}
+    if not isinstance(weights.get("extra_factors"), dict) or not weights["extra_factors"]:
+        weights["extra_factors"] = {
+            "post_count": 0.05,
+            "neighbor_count": 0.03,
+            "visitor_count": 0.02,
+        }
+
+    weights["_category"] = category
+    return weights
+
+
 def get_category_weights(keyword: str) -> Dict:
     """
     키워드에 맞는 카테고리별 가중치 반환.

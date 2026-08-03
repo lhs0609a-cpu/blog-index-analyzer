@@ -18,7 +18,7 @@ from bs4 import BeautifulSoup
 
 from config import settings
 from database.learning_db import add_learning_sample, get_current_weights, save_current_weights, get_learning_samples
-from services.category_weights import detect_keyword_category, get_category_weights, merge_weights_with_category, get_category_optimization_tips
+from services.category_weights import detect_keyword_category, get_category_weights, merge_weights_with_category, get_category_optimization_tips, resolve_scoring_weights
 from database.keyword_analysis_db import get_cached_related_keywords, cache_related_keywords
 from services.learning_engine import train_model, calculate_blog_score
 from database.blog_percentile_db import get_blog_percentile_db
@@ -553,8 +553,32 @@ class BlogStatsResponse(BaseModel):
 
 
 class SimpleScoreBreakdown(BaseModel):
+    """총점을 사용자가 직접 검산할 수 있게 모든 항을 내보낸다.
+
+        total_score == round((c_rank + dia + content_factors + extra_bonus) * vitality, 1)
+
+    예전에는 c_rank/dia 두 항만 내보냈는데, 정작 가장 큰 기여 항목인
+    content_factors 가 빠져 있어 "3.1 + 25.9 인데 총점 92.1" 처럼
+    합이 맞지 않는 화면이 나갔다.
+    """
     c_rank: float = 0
     dia: float = 0
+    # 측정 불가일 수 있다 (None = 이 축을 못 쟀다는 뜻, 0점이 아니다)
+    content_factors: Optional[float] = None
+    # 누적 지표 보너스 (글수·이웃수·방문자)
+    extra_bonus: float = 0
+    # 활동성 계수 — 곱셈으로 적용된다
+    vitality: float = 1.0
+    vitality_state: Optional[str] = None
+    # 적용된 가중치 (학습 반영 여부 포함)
+    weights_used: Optional[Dict[str, Any]] = None
+    # ===== 실측 세부 지표 =====
+    # UI가 c_rank/dia 에 임의 상수를 곱해 '지표'를 만들어내지 않도록,
+    # 실제로 계산한 하위 점수와 원시 신호를 그대로 내보낸다.
+    c_rank_detail: Optional[Dict[str, Any]] = None
+    dia_detail: Optional[Dict[str, Any]] = None
+    content_detail: Optional[Dict[str, Any]] = None
+    raw_signals: Optional[Dict[str, Any]] = None
 
 
 class BlogIndexResponse(BaseModel):
@@ -3061,13 +3085,25 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
         # Get learned weights from database
         try:
             learned_weights = get_current_weights()
-        except:
+        except Exception:
             learned_weights = None
 
-        # 키워드 카테고리 감지 및 가중치 병합
-        keyword_category = detect_keyword_category(keyword) if keyword else "default"
-        category_weights = merge_weights_with_category(learned_weights, keyword) if keyword else (learned_weights or {})
-        logger.debug(f"Using category weights for '{keyword}': category={keyword_category}")
+        # 가중치 결정은 resolve_scoring_weights 한 곳에서만 한다.
+        # (예전에는 키워드 유무로 경로가 갈려, 블로그 단위 분석에서는 붕괴한
+        #  학습값이 blend·하한 없이 그대로 적용됐다)
+        from database.blog_percentile_db import SCORING_VERSION as _SCORING_VERSION
+
+        category_weights = resolve_scoring_weights(
+            keyword, learned_weights, _SCORING_VERSION
+        )
+        keyword_category = category_weights.get("_category", "default")
+        logger.debug(
+            f"weights for '{keyword}': category={keyword_category} "
+            f"learned={category_weights.get('_learned')} "
+            f"c_rank={category_weights.get('c_rank', {}).get('weight')} "
+            f"dia={category_weights.get('dia', {}).get('weight')} "
+            f"content={category_weights.get('content_factors', {}).get('weight')}"
+        )
 
         # ===== C-RANK SCORE CALCULATION =====
         # C-Rank: Context(주제집중도) + Content(콘텐츠품질) + Chain(연결성)
@@ -3353,6 +3389,9 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
         # 분석에서는 측정할 수 없다. 측정 가능한 항목만 쓰고 그 하위 가중치로 재정규화한다.
         cf_sub = (category_weights or {}).get('content_factors', {}).get('sub_weights', {}) or {}
         content_factor_parts = []   # (측정값 0~100, 하위 가중치)
+        # 어떤 항목을 실제로 쟀는지 이름과 함께 남긴다.
+        # UI가 '지표'를 지어내지 않고 실측값만 보여줄 수 있어야 한다.
+        content_factor_detail = {}
 
         cf_len = analysis_data.get("fullparse_avg_content_length") or avg_len
         if cf_len:
@@ -3369,20 +3408,24 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
             else:
                 s = 35
             content_factor_parts.append((s, cf_sub.get('content_length', 0.32)))
+            content_factor_detail['content_length'] = {'score': s, 'raw': round(cf_len)}
 
         cf_headings = analysis_data.get("fullparse_avg_headings")
         if cf_headings is not None:
             content_factor_parts.append((min(95, 30 + cf_headings * 15), cf_sub.get('heading_count', 0.05)))
+            content_factor_detail['heading_count'] = {'score': round(min(95, 30 + cf_headings * 15), 1), 'raw': round(cf_headings, 1)}
 
         cf_paragraphs = analysis_data.get("fullparse_avg_paragraphs")
         if cf_paragraphs is not None:
             content_factor_parts.append((min(95, 25 + cf_paragraphs * 7), cf_sub.get('paragraph_count', 0.05)))
+            content_factor_detail['paragraph_count'] = {'score': round(min(95, 25 + cf_paragraphs * 7), 1), 'raw': round(cf_paragraphs, 1)}
 
         cf_images = analysis_data.get("fullparse_avg_images")
         if cf_images is None:
             cf_images = analysis_data.get("avg_image_count")
         if cf_images is not None:
             content_factor_parts.append((min(95, 30 + cf_images * 8), cf_sub.get('image_count', 0.05)))
+            content_factor_detail['image_count'] = {'score': round(min(95, 30 + cf_images * 8), 1), 'raw': round(cf_images, 1)}
 
         # freshness — 마지막 발행 경과일 (recency_score와 같은 신호지만 차원이 다르다)
         if analysis_data.get("recent_activity") is not None:
@@ -3400,6 +3443,7 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
             else:
                 s = 15
             content_factor_parts.append((s, cf_sub.get('freshness', 0.16)))
+            content_factor_detail['freshness'] = {'score': s, 'raw': days}
 
         if content_factor_parts:
             cf_weight_sum = sum(w for _, w in content_factor_parts)
@@ -3444,6 +3488,8 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
             extra_bonus += visitor_bonus
 
         total_score = base_score + extra_bonus
+        # 검산용으로 보존 (응답 breakdown 에 그대로 실린다)
+        index["extra_bonus"] = round(extra_bonus, 1)
 
         # 데이터 소스에 따른 신뢰도 보정
         # - scrape 있음: 실제 데이터 → 패널티 없음
@@ -3657,13 +3703,18 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
                 "information": round(info_score, 1),
                 "accuracy": round(accuracy_score, 1)
             },
+            # 실제로 측정한 콘텐츠 항목만 (측정 못 한 항목은 아예 키가 없다)
+            "content_detail": content_factor_detail,
             "weights_used": {
                 "c_rank": round(c_rank_weight, 2),
                 "dia": round(dia_weight, 2),
                 "content": round(content_weight, 2),
-                # 자동 학습 시스템 적용 여부 — UI 배지용
+                # 자동 학습 시스템 적용 여부 — UI 배지용.
+                # resolve_scoring_weights 가 '실제로 반영했는지'를 그대로 적으므로
+                # 학습값이 스테일해서 버려진 경우 여기도 false 로 나간다.
                 "is_learned": bool(category_weights.get("_learned")) if category_weights else False,
                 "learned_meta": (category_weights or {}).get("_learned_meta") if category_weights else None,
+                "scoring_version": _SCORING_VERSION,
             },
             "keyword_category": keyword_category if keyword else "default",
             # A-2 raw 신호 — 정직성 표기용. UI에서 추정치 옆에 실제 측정한 raw 값을 노출
@@ -4119,10 +4170,12 @@ async def analyze_blog_endpoint(request: BlogAnalysisRequest):
         stats = result.get("stats", {})
         index = result.get("index", {})
 
-        # Get score breakdown
+        # Get score breakdown — 총점을 검산할 수 있는 모든 항을 그대로 통과시킨다
         score_breakdown = index.get("score_breakdown", {})
         c_rank = score_breakdown.get("c_rank", 0)
         dia = score_breakdown.get("dia", 0)
+        content_factors = score_breakdown.get("content_factors")
+        weights_used = score_breakdown.get("weights_used")
 
         # Build response
         blog_info = BlogInfoResponse(
@@ -4152,7 +4205,16 @@ async def analyze_blog_endpoint(request: BlogAnalysisRequest):
             unmeasurable_reason=index.get("unmeasurable_reason"),
             score_breakdown=SimpleScoreBreakdown(
                 c_rank=c_rank,
-                dia=dia
+                dia=dia,
+                content_factors=content_factors,
+                extra_bonus=index.get("extra_bonus", 0) or 0,
+                vitality=index.get("vitality", 1.0) or 1.0,
+                vitality_state=index.get("vitality_state"),
+                weights_used=weights_used,
+                c_rank_detail=score_breakdown.get("c_rank_detail"),
+                dia_detail=score_breakdown.get("dia_detail"),
+                content_detail=score_breakdown.get("content_detail"),
+                raw_signals=score_breakdown.get("raw_signals"),
             )
         )
 
@@ -4976,15 +5038,21 @@ async def get_score_breakdown(blog_id: str):
         stats = analysis["stats"]
         index = analysis["index"]
 
-        # C-Rank 세부 점수 (프론트엔드 기대 구조에 맞춤)
-        c_rank_total = index.get("score_breakdown", {}).get("c_rank", 35)
-        total_posts = stats.get("total_posts") or 100
-        neighbor_count = stats.get("neighbor_count") or 50
+        # C-Rank 세부 점수 — **실제로 계산된 하위 점수를 쓴다**
+        #
+        # 예전에는 여기서 total_posts/neighbor_count 로 점수를 지어냈다
+        #   context = 40 + total_posts/10 …
+        # 스코어러가 이미 context/content/chain 을 계산해 두는데도 그 값을 안 쓰고
+        # 글 수에 비례하는 가짜 곡선을 만들어 "주제 집중도"라고 표시했다.
+        sb_real = index.get("score_breakdown", {}) or {}
+        c_rank_total = sb_real.get("c_rank", 0)
+        total_posts = stats.get("total_posts") or 0
+        neighbor_count = stats.get("neighbor_count") or 0
 
-        # 실제 분석 기반 세부 점수 계산
-        context_score = min(100, 40 + (total_posts / 10))  # 주제 집중도
-        content_score = min(100, 35 + (total_posts / 8))   # 콘텐츠 품질
-        chain_score = min(100, 30 + (neighbor_count / 5))  # 연결성
+        _cd = sb_real.get("c_rank_detail") or {}
+        context_score = _cd.get("context") or 0
+        content_score = _cd.get("content") or 0
+        chain_score = _cd.get("chain") or 0
 
         c_rank_breakdown = {
             "score": c_rank_total,
@@ -5074,9 +5142,11 @@ async def get_score_breakdown(blog_id: str):
         # D.I.A. 세부 점수
         dia_total = index.get("score_breakdown", {}).get("dia", 35)
 
-        depth_score = min(100, 35 + (total_posts / 12))
-        information_score = min(100, 40 + (total_posts / 10))
-        accuracy_score = min(100, 38 + (neighbor_count / 8))
+        # D.I.A. 도 마찬가지 — 스코어러가 계산한 실측 하위 점수를 쓴다
+        _dd = sb_real.get("dia_detail") or {}
+        depth_score = _dd.get("depth") or 0
+        information_score = _dd.get("information") or 0
+        accuracy_score = _dd.get("accuracy") or 0
 
         dia_breakdown = {
             "score": dia_total,

@@ -191,12 +191,24 @@ def get_current_weights() -> Dict:
         return {}
 
 def save_current_weights(weights: Dict):
-    """Save current weights to database"""
+    """Save current weights to database
+
+    저장 시 **어느 채점식으로 학습됐는지** 스탬프를 남긴다.
+    스탬프가 없거나 현재 버전과 다른 가중치는 총점 계산에서 무시된다
+    (services/category_weights.resolve_scoring_weights).
+
+    이 스탬프가 없던 시절, 2026-01-25에 학습된 가중치가 그 뒤 채점식이
+    바뀐 뒤에도 6개월간 그대로 적용되면서 c_rank 비중이 0.054까지 붕괴했다.
+    """
+    from database.blog_percentile_db import SCORING_VERSION
+
+    stamped = dict(weights or {})
+    stamped["_scoring_version"] = SCORING_VERSION
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute(
             "UPDATE current_weights SET weights = ?, updated_at = ? WHERE id = 1",
-            (json.dumps(weights), datetime.now().isoformat())
+            (json.dumps(stamped), datetime.now().isoformat())
         )
 
 def add_learning_sample(

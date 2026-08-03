@@ -1,0 +1,2606 @@
+{
+ "meta": {
+  "measured_at": "2026-08-03T14:01:18.915282",
+  "scoring_version": 5,
+  "n": 420,
+  "keywords": 32,
+  "min": 6.4,
+  "median": 76.2,
+  "max": 90.2,
+  "mean": 62.8
+ },
+ "cuts": [
+  {
+   "cut": 89.9,
+   "level": 15,
+   "grade": "최적4+"
+  },
+  {
+   "cut": 89.3,
+   "level": 14,
+   "grade": "최적3+"
+  },
+  {
+   "cut": 87.9,
+   "level": 13,
+   "grade": "최적2+"
+  },
+  {
+   "cut": 86.3,
+   "level": 12,
+   "grade": "최적1+"
+  },
+  {
+   "cut": 85.3,
+   "level": 11,
+   "grade": "최적3"
+  },
+  {
+   "cut": 84.4,
+   "level": 10,
+   "grade": "최적2"
+  },
+  {
+   "cut": 83.6,
+   "level": 9,
+   "grade": "최적1"
+  },
+  {
+   "cut": 82.2,
+   "level": 8,
+   "grade": "준최7"
+  },
+  {
+   "cut": 80.4,
+   "level": 7,
+   "grade": "준최6"
+  },
+  {
+   "cut": 76.2,
+   "level": 6,
+   "grade": "준최5"
+  },
+  {
+   "cut": 72.7,
+   "level": 5,
+   "grade": "준최4"
+  },
+  {
+   "cut": 46.3,
+   "level": 4,
+   "grade": "준최3"
+  },
+  {
+   "cut": 13.9,
+   "level": 3,
+   "grade": "준최2"
+  },
+  {
+   "cut": 7.6,
+   "level": 2,
+   "grade": "준최1"
+  }
+ ],
+ "samples": [
+  {
+   "blog_id": "pa18xacz",
+   "seed_keyword": "일상",
+   "score": 11.3,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "everythingandmore_",
+   "seed_keyword": "일상",
+   "score": 80.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "aijinet",
+   "seed_keyword": "일상",
+   "score": 83.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "mixsun",
+   "seed_keyword": "일상",
+   "score": 86.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "sar_m",
+   "seed_keyword": "일상",
+   "score": 61.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "hsk09_s83_dd1",
+   "seed_keyword": "일상",
+   "score": 35.3,
+   "vitality_state": "dormant_entering"
+  },
+  {
+   "blog_id": "sim6163",
+   "seed_keyword": "일상",
+   "score": 74.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "likelife_page1002",
+   "seed_keyword": "일상",
+   "score": 13.1,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "hye_010520",
+   "seed_keyword": "일상",
+   "score": 42.5,
+   "vitality_state": "slowing"
+  },
+  {
+   "blog_id": "charishe",
+   "seed_keyword": "일상",
+   "score": 33.0,
+   "vitality_state": "dormant_entering"
+  },
+  {
+   "blog_id": "utknow",
+   "seed_keyword": "일상",
+   "score": 51.3,
+   "vitality_state": "slowing"
+  },
+  {
+   "blog_id": "jn301200",
+   "seed_keyword": "일상",
+   "score": 73.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "happyday4918",
+   "seed_keyword": "육아",
+   "score": 84.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "chu__ring",
+   "seed_keyword": "일상",
+   "score": 86.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "serrri",
+   "seed_keyword": "일상",
+   "score": 85.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "chung7777777",
+   "seed_keyword": "육아",
+   "score": 76.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "vitamin2230",
+   "seed_keyword": "육아",
+   "score": 80.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "gnas3115",
+   "seed_keyword": "육아",
+   "score": 64.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ymympick",
+   "seed_keyword": "육아",
+   "score": 77.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ccm3018",
+   "seed_keyword": "육아",
+   "score": 84.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "attractw",
+   "seed_keyword": "육아",
+   "score": 74.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "dadaleum777",
+   "seed_keyword": "육아",
+   "score": 77.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "selee_453",
+   "seed_keyword": "육아",
+   "score": 83.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "cpla-yi",
+   "seed_keyword": "육아",
+   "score": 58.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "snow_young",
+   "seed_keyword": "육아",
+   "score": 79.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "aldi1325",
+   "seed_keyword": "육아",
+   "score": 78.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "gyeki",
+   "seed_keyword": "육아",
+   "score": 77.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "fassionfollow",
+   "seed_keyword": "육아",
+   "score": 85.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "orang-1004",
+   "seed_keyword": "육아",
+   "score": 13.9,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "kjs0807_",
+   "seed_keyword": "육아",
+   "score": 76.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "doit_moment",
+   "seed_keyword": "육아",
+   "score": 23.7,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "dawonsystem-ac04",
+   "seed_keyword": "육아",
+   "score": 35.6,
+   "vitality_state": "dormant_entering"
+  },
+  {
+   "blog_id": "byuldalkids",
+   "seed_keyword": "육아",
+   "score": 73.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "paustr12",
+   "seed_keyword": "육아",
+   "score": 23.9,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "pulire",
+   "seed_keyword": "육아",
+   "score": 84.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "seo_a926",
+   "seed_keyword": "육아",
+   "score": 83.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ut0073",
+   "seed_keyword": "육아",
+   "score": 78.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "pagoda_chailang",
+   "seed_keyword": "반려동물",
+   "score": 83.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "dhrkfl88",
+   "seed_keyword": "반려동물",
+   "score": 86.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "yongcho2023",
+   "seed_keyword": "반려동물",
+   "score": 73.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "teaumgroup",
+   "seed_keyword": "반려동물",
+   "score": 79.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "jpark423",
+   "seed_keyword": "반려동물",
+   "score": 7.8,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "roh_and_choi_petfood",
+   "seed_keyword": "반려동물",
+   "score": 6.8,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "kma_131",
+   "seed_keyword": "반려동물",
+   "score": 82.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "dl1004dlcom",
+   "seed_keyword": "반려동물",
+   "score": 8.6,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "mungyeongsi",
+   "seed_keyword": "반려동물",
+   "score": 80.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "cho7900",
+   "seed_keyword": "반려동물",
+   "score": 60.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "sdupr",
+   "seed_keyword": "반려동물",
+   "score": 79.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "sqh7272j",
+   "seed_keyword": "반려동물",
+   "score": 8.8,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "soyonmin",
+   "seed_keyword": "반려동물",
+   "score": 15.9,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "jhshin00",
+   "seed_keyword": "반려동물",
+   "score": 7.3,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "kpeicokr3550",
+   "seed_keyword": "반려동물",
+   "score": 78.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "chestnuts_zip",
+   "seed_keyword": "반려동물",
+   "score": 82.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "skidrow5041",
+   "seed_keyword": "반려동물",
+   "score": 76.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ink2777",
+   "seed_keyword": "반려동물",
+   "score": 79.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "wlgh113",
+   "seed_keyword": "반려동물",
+   "score": 83.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "sleep_doctor",
+   "seed_keyword": "반려동물",
+   "score": 86.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ysr4787",
+   "seed_keyword": "여행",
+   "score": 83.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "lsr_0962",
+   "seed_keyword": "반려동물",
+   "score": 76.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "rsrs0930",
+   "seed_keyword": "여행",
+   "score": 81.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ehdwehdw1",
+   "seed_keyword": "여행",
+   "score": 84.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "tnqkr4023",
+   "seed_keyword": "여행",
+   "score": 13.4,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "breelysea",
+   "seed_keyword": "여행",
+   "score": 70.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "haha4403",
+   "seed_keyword": "여행",
+   "score": 71.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ashi8888",
+   "seed_keyword": "여행",
+   "score": 84.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "cheremon1102",
+   "seed_keyword": "여행",
+   "score": 81.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "seoatemview",
+   "seed_keyword": "여행",
+   "score": 63.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "75click",
+   "seed_keyword": "여행",
+   "score": 70.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "the2nd_life",
+   "seed_keyword": "여행",
+   "score": 75.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ldhlsk",
+   "seed_keyword": "여행",
+   "score": 79.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "rapatrip",
+   "seed_keyword": "여행",
+   "score": 83.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "gh20002000",
+   "seed_keyword": "여행",
+   "score": 89.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "everything91",
+   "seed_keyword": "여행",
+   "score": 84.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "jinju300life",
+   "seed_keyword": "여행",
+   "score": 83.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "wingbest",
+   "seed_keyword": "여행",
+   "score": 14.3,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "yoon1z",
+   "seed_keyword": "여행",
+   "score": 22.3,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "daniel_pro",
+   "seed_keyword": "여행",
+   "score": 16.5,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "storm0218",
+   "seed_keyword": "여행",
+   "score": 39.0,
+   "vitality_state": "dormant_entering"
+  },
+  {
+   "blog_id": "yaaanilog",
+   "seed_keyword": "여행",
+   "score": 22.4,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "hohoj1",
+   "seed_keyword": "여행",
+   "score": 83.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "eunjihello",
+   "seed_keyword": "여행",
+   "score": 84.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "jayclife",
+   "seed_keyword": "여행",
+   "score": 79.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "hin1530",
+   "seed_keyword": "여행",
+   "score": 81.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "hi081712",
+   "seed_keyword": "맛집",
+   "score": 83.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ghc7788",
+   "seed_keyword": "카페",
+   "score": 82.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "hadayunine",
+   "seed_keyword": "카페",
+   "score": 75.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "sw22ety",
+   "seed_keyword": "화장품 추천",
+   "score": 80.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "tjfl7890",
+   "seed_keyword": "화장품 추천",
+   "score": 77.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "kuroinu92",
+   "seed_keyword": "패션 코디",
+   "score": 86.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "sunnyjumma",
+   "seed_keyword": "화장품 추천",
+   "score": 82.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "berronica1000",
+   "seed_keyword": "패션 코디",
+   "score": 87.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "onj0808",
+   "seed_keyword": "패션 코디",
+   "score": 83.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "under123123",
+   "seed_keyword": "패션 코디",
+   "score": 85.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "younlee317",
+   "seed_keyword": "패션 코디",
+   "score": 75.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "beauty_yethree",
+   "seed_keyword": "패션 코디",
+   "score": 83.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "spirit5",
+   "seed_keyword": "패션 코디",
+   "score": 7.1,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "skinbook2",
+   "seed_keyword": "패션 코디",
+   "score": 6.9,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "snazzy_up",
+   "seed_keyword": "패션 코디",
+   "score": 7.1,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "dlatngusdla",
+   "seed_keyword": "패션 코디",
+   "score": 7.8,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "richsunny11",
+   "seed_keyword": "패션 코디",
+   "score": 61.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "56789tlq",
+   "seed_keyword": "패션 코디",
+   "score": 7.3,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "foot183",
+   "seed_keyword": "패션 코디",
+   "score": 79.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "fallinbrows",
+   "seed_keyword": "패션 코디",
+   "score": 7.9,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "openthedoa",
+   "seed_keyword": "패션 코디",
+   "score": 81.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ckdtjd4534",
+   "seed_keyword": "패션 코디",
+   "score": 8.4,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "helpinfo8282",
+   "seed_keyword": "패션 코디",
+   "score": 13.9,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "benny0109",
+   "seed_keyword": "패션 코디",
+   "score": 8.0,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "uuuuxnnnn",
+   "seed_keyword": "패션 코디",
+   "score": 74.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "dnflwlq1001",
+   "seed_keyword": "패션 코디",
+   "score": 8.1,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "dto1060",
+   "seed_keyword": "패션 코디",
+   "score": 6.6,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "ehlolo",
+   "seed_keyword": "패션 코디",
+   "score": 38.4,
+   "vitality_state": "slowing"
+  },
+  {
+   "blog_id": "reborn152",
+   "seed_keyword": "패션 코디",
+   "score": 7.5,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "0o_eee",
+   "seed_keyword": "패션 코디",
+   "score": 85.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "annales_",
+   "seed_keyword": "패션 코디",
+   "score": 71.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "bodyngym9",
+   "seed_keyword": "다이어트",
+   "score": 81.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "xsangraalx",
+   "seed_keyword": "다이어트",
+   "score": 84.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ssukdeokssukdeoklee",
+   "seed_keyword": "다이어트",
+   "score": 37.6,
+   "vitality_state": "slowing"
+  },
+  {
+   "blog_id": "ouryoul",
+   "seed_keyword": "다이어트",
+   "score": 65.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "suyako",
+   "seed_keyword": "다이어트",
+   "score": 82.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "juvismok2024",
+   "seed_keyword": "다이어트",
+   "score": 79.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "magic101291",
+   "seed_keyword": "다이어트",
+   "score": 86.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "juvis-gs",
+   "seed_keyword": "다이어트",
+   "score": 81.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "sun197875",
+   "seed_keyword": "다이어트",
+   "score": 78.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "jjfitness_2025",
+   "seed_keyword": "다이어트",
+   "score": 77.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "dojuny75",
+   "seed_keyword": "다이어트",
+   "score": 72.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "jglem1319",
+   "seed_keyword": "다이어트",
+   "score": 79.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "xkdnjgnlxmsltm",
+   "seed_keyword": "다이어트",
+   "score": 78.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "juvisdtan2",
+   "seed_keyword": "다이어트",
+   "score": 81.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "casawooyu",
+   "seed_keyword": "다이어트",
+   "score": 70.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "btlplus_",
+   "seed_keyword": "다이어트",
+   "score": 69.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "khjnb",
+   "seed_keyword": "다이어트",
+   "score": 80.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "lalafitnesmj",
+   "seed_keyword": "다이어트",
+   "score": 84.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "diet9199",
+   "seed_keyword": "다이어트",
+   "score": 23.6,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "healthboy40",
+   "seed_keyword": "다이어트",
+   "score": 85.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "rlawkdrn85",
+   "seed_keyword": "다이어트",
+   "score": 83.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "bknms2007",
+   "seed_keyword": "다이어트",
+   "score": 76.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "kjsw444",
+   "seed_keyword": "다이어트",
+   "score": 89.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ksj720508",
+   "seed_keyword": "다이어트",
+   "score": 80.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "svke22",
+   "seed_keyword": "아이폰",
+   "score": 85.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "baby0817",
+   "seed_keyword": "다이어트",
+   "score": 85.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "nana1004kim",
+   "seed_keyword": "노트북 추천",
+   "score": 83.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "architect14213",
+   "seed_keyword": "다이어트",
+   "score": 82.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ant2001e",
+   "seed_keyword": "코딩",
+   "score": 83.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "saevom22",
+   "seed_keyword": "코딩",
+   "score": 84.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "albatross_01",
+   "seed_keyword": "코딩",
+   "score": 80.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "namiri_ai",
+   "seed_keyword": "코딩",
+   "score": 82.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "jnanna89",
+   "seed_keyword": "코딩",
+   "score": 80.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "lovedaegun2",
+   "seed_keyword": "코딩",
+   "score": 84.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "chaec_264",
+   "seed_keyword": "코딩",
+   "score": 20.9,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "fifa3sm",
+   "seed_keyword": "코딩",
+   "score": 81.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ka6199",
+   "seed_keyword": "코딩",
+   "score": 41.4,
+   "vitality_state": "slowing"
+  },
+  {
+   "blog_id": "dcland2",
+   "seed_keyword": "코딩",
+   "score": 24.5,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "fighting557",
+   "seed_keyword": "코딩",
+   "score": 13.9,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "happydog99-",
+   "seed_keyword": "코딩",
+   "score": 40.4,
+   "vitality_state": "dormant_entering"
+  },
+  {
+   "blog_id": "vibe2666",
+   "seed_keyword": "코딩",
+   "score": 22.0,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "gitbs06",
+   "seed_keyword": "코딩",
+   "score": 76.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "sbsssam",
+   "seed_keyword": "코딩",
+   "score": 25.0,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "add-on_ai",
+   "seed_keyword": "코딩",
+   "score": 83.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "happysseongs",
+   "seed_keyword": "코딩",
+   "score": 24.2,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "anytingint",
+   "seed_keyword": "코딩",
+   "score": 49.6,
+   "vitality_state": "slowing"
+  },
+  {
+   "blog_id": "deepika312",
+   "seed_keyword": "코딩",
+   "score": 68.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "b413sungkim",
+   "seed_keyword": "코딩",
+   "score": 14.4,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "blueweekend",
+   "seed_keyword": "코딩",
+   "score": 32.0,
+   "vitality_state": "dormant_entering"
+  },
+  {
+   "blog_id": "why_tarzan",
+   "seed_keyword": "한의원",
+   "score": 56.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "hynsulee1004",
+   "seed_keyword": "한의원",
+   "score": 76.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "allinfo01",
+   "seed_keyword": "한의원",
+   "score": 81.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "estauce",
+   "seed_keyword": "피부과",
+   "score": 85.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "soominigy",
+   "seed_keyword": "한의원",
+   "score": 81.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "stevenlove",
+   "seed_keyword": "피부과",
+   "score": 78.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "halosoy",
+   "seed_keyword": "피부과",
+   "score": 85.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "gpcpvs06",
+   "seed_keyword": "피부과",
+   "score": 80.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "inutdgkmue",
+   "seed_keyword": "피부과",
+   "score": 83.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "chorori_s",
+   "seed_keyword": "피부과",
+   "score": 84.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "dent_park",
+   "seed_keyword": "치과",
+   "score": 62.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "toothfairy_",
+   "seed_keyword": "치과",
+   "score": 73.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "dentalseouldaon",
+   "seed_keyword": "치과",
+   "score": 72.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "hakim_m",
+   "seed_keyword": "치과",
+   "score": 74.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "barorrong",
+   "seed_keyword": "치과",
+   "score": 82.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "gurwn1725",
+   "seed_keyword": "영어 공부",
+   "score": 78.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "slow-happiness",
+   "seed_keyword": "치과",
+   "score": 79.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "dinnernin",
+   "seed_keyword": "영어 공부",
+   "score": 83.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "siwonschool0",
+   "seed_keyword": "영어 공부",
+   "score": 80.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "patriceaumiller",
+   "seed_keyword": "영어 공부",
+   "score": 8.1,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "jlsguri123",
+   "seed_keyword": "영어 공부",
+   "score": 73.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "njk137",
+   "seed_keyword": "영어 공부",
+   "score": 7.2,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "leecwok275",
+   "seed_keyword": "영어 공부",
+   "score": 6.4,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "eduplex_namsung",
+   "seed_keyword": "영어 공부",
+   "score": 72.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "dls0097",
+   "seed_keyword": "영어 공부",
+   "score": 79.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "todaywindy",
+   "seed_keyword": "영어 공부",
+   "score": 7.0,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "younjink",
+   "seed_keyword": "영어 공부",
+   "score": 71.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "self_heal",
+   "seed_keyword": "영어 공부",
+   "score": 78.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "skymiya7",
+   "seed_keyword": "영어 공부",
+   "score": 45.3,
+   "vitality_state": "slowing"
+  },
+  {
+   "blog_id": "dkssk1998_",
+   "seed_keyword": "영어 공부",
+   "score": 8.7,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "hackersgroup",
+   "seed_keyword": "영어 공부",
+   "score": 14.6,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "eng1588",
+   "seed_keyword": "영어 공부",
+   "score": 81.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "mkid123",
+   "seed_keyword": "영어 공부",
+   "score": 6.7,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "annaenglish12",
+   "seed_keyword": "영어 공부",
+   "score": 57.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "eromi2288",
+   "seed_keyword": "영어 공부",
+   "score": 49.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "hackersingang",
+   "seed_keyword": "영어 공부",
+   "score": 83.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ksj2572",
+   "seed_keyword": "영어 공부",
+   "score": 86.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "t23632",
+   "seed_keyword": "자격증",
+   "score": 83.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "daily1359",
+   "seed_keyword": "자격증",
+   "score": 68.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "jaeil_beauty",
+   "seed_keyword": "자격증",
+   "score": 76.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "pqiedu",
+   "seed_keyword": "자격증",
+   "score": 81.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "turntp44",
+   "seed_keyword": "자격증",
+   "score": 13.9,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "a7070244",
+   "seed_keyword": "자격증",
+   "score": 57.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "shdrn4674",
+   "seed_keyword": "자격증",
+   "score": 53.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "qquollpe3bb",
+   "seed_keyword": "자격증",
+   "score": 14.6,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "parkseonwoo8468",
+   "seed_keyword": "자격증",
+   "score": 23.5,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "shsh41900",
+   "seed_keyword": "자격증",
+   "score": 33.5,
+   "vitality_state": "slowing"
+  },
+  {
+   "blog_id": "gashwoon",
+   "seed_keyword": "자격증",
+   "score": 85.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "kss33033",
+   "seed_keyword": "자격증",
+   "score": 83.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "crayonparkchan",
+   "seed_keyword": "자격증",
+   "score": 74.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "candi456",
+   "seed_keyword": "자격증",
+   "score": 81.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "hyesung5682",
+   "seed_keyword": "자격증",
+   "score": 53.6,
+   "vitality_state": "slowing"
+  },
+  {
+   "blog_id": "qkrgustmd981227",
+   "seed_keyword": "자격증",
+   "score": 72.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "desirehs",
+   "seed_keyword": "자격증",
+   "score": 11.6,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "bkadxie",
+   "seed_keyword": "자격증",
+   "score": 14.6,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "newjin14",
+   "seed_keyword": "자격증",
+   "score": 76.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "blackhole_chinese",
+   "seed_keyword": "자격증",
+   "score": 83.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "iamlydiaa",
+   "seed_keyword": "독서",
+   "score": 75.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "cpapcare",
+   "seed_keyword": "자격증",
+   "score": 88.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "hapdongz",
+   "seed_keyword": "자격증",
+   "score": 85.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "habitus_6207",
+   "seed_keyword": "독서",
+   "score": 73.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "exmined4203",
+   "seed_keyword": "독서",
+   "score": 76.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "fjqmcpzm",
+   "seed_keyword": "독서",
+   "score": 8.1,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "mjyjkjy",
+   "seed_keyword": "독서",
+   "score": 77.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "skyonsei",
+   "seed_keyword": "독서",
+   "score": 46.2,
+   "vitality_state": "slowing"
+  },
+  {
+   "blog_id": "bookbook2022",
+   "seed_keyword": "독서",
+   "score": 13.2,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "ysxfog4983",
+   "seed_keyword": "독서",
+   "score": 15.3,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "sundaycat318",
+   "seed_keyword": "독서",
+   "score": 74.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "blingbling4me",
+   "seed_keyword": "독서",
+   "score": 60.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "kjhost2002",
+   "seed_keyword": "독서",
+   "score": 13.8,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "wyddl6",
+   "seed_keyword": "독서",
+   "score": 84.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "readin4039",
+   "seed_keyword": "독서",
+   "score": 51.3,
+   "vitality_state": "slowing"
+  },
+  {
+   "blog_id": "jjin_1990",
+   "seed_keyword": "독서",
+   "score": 88.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "designhi2749",
+   "seed_keyword": "독서",
+   "score": 8.0,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "subject1977",
+   "seed_keyword": "독서",
+   "score": 82.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "math_heo",
+   "seed_keyword": "독서",
+   "score": 81.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ulsune",
+   "seed_keyword": "청소",
+   "score": 86.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "lovable_moments",
+   "seed_keyword": "독서",
+   "score": 76.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "luvdoyeon",
+   "seed_keyword": "인테리어",
+   "score": 80.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "huenga",
+   "seed_keyword": "청소",
+   "score": 84.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "xxcastlexx",
+   "seed_keyword": "청소",
+   "score": 76.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "clean-king-",
+   "seed_keyword": "청소",
+   "score": 24.8,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "dhdyj7",
+   "seed_keyword": "청소",
+   "score": 73.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "jay0517",
+   "seed_keyword": "청소",
+   "score": 80.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "carwan",
+   "seed_keyword": "청소",
+   "score": 6.9,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "gdqueen",
+   "seed_keyword": "청소",
+   "score": 66.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "uqtwqyxechn",
+   "seed_keyword": "청소",
+   "score": 14.0,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "dasom0599",
+   "seed_keyword": "청소",
+   "score": 78.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "irocare",
+   "seed_keyword": "청소",
+   "score": 76.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "liny0328",
+   "seed_keyword": "청소",
+   "score": 41.5,
+   "vitality_state": "dormant_entering"
+  },
+  {
+   "blog_id": "whhjt",
+   "seed_keyword": "청소",
+   "score": 8.5,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "jigang10004",
+   "seed_keyword": "청소",
+   "score": 23.3,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "wnm5911",
+   "seed_keyword": "청소",
+   "score": 22.5,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "jang34271",
+   "seed_keyword": "청소",
+   "score": 74.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "clean_doc_",
+   "seed_keyword": "청소",
+   "score": 77.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "besidew56",
+   "seed_keyword": "청소",
+   "score": 55.7,
+   "vitality_state": "slowing"
+  },
+  {
+   "blog_id": "tonginexp_kd",
+   "seed_keyword": "청소",
+   "score": 76.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "kyj149",
+   "seed_keyword": "청소",
+   "score": 73.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "neulclean365",
+   "seed_keyword": "청소",
+   "score": 24.5,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "qjustmineu",
+   "seed_keyword": "청소",
+   "score": 82.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "upwriter",
+   "seed_keyword": "청소",
+   "score": 13.9,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "hsresistance",
+   "seed_keyword": "청소",
+   "score": 46.4,
+   "vitality_state": "slowing"
+  },
+  {
+   "blog_id": "gaeul_lovee",
+   "seed_keyword": "등산",
+   "score": 86.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "lqvo4728",
+   "seed_keyword": "등산",
+   "score": 40.3,
+   "vitality_state": "dormant_entering"
+  },
+  {
+   "blog_id": "milujuteone",
+   "seed_keyword": "등산",
+   "score": 81.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "data_insight_viewer",
+   "seed_keyword": "등산",
+   "score": 78.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "kimyg7007",
+   "seed_keyword": "등산",
+   "score": 58.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "tlstldk1206",
+   "seed_keyword": "등산",
+   "score": 69.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "syyy012",
+   "seed_keyword": "등산",
+   "score": 77.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "littlepig1515",
+   "seed_keyword": "등산",
+   "score": 80.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "coco_day",
+   "seed_keyword": "등산",
+   "score": 82.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "o_o_911",
+   "seed_keyword": "등산",
+   "score": 50.9,
+   "vitality_state": "slowing"
+  },
+  {
+   "blog_id": "parkjina0603",
+   "seed_keyword": "등산",
+   "score": 23.9,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "sjhsjj0823",
+   "seed_keyword": "등산",
+   "score": 39.5,
+   "vitality_state": "dormant_entering"
+  },
+  {
+   "blog_id": "ehfelf",
+   "seed_keyword": "등산",
+   "score": 74.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "yoooniii",
+   "seed_keyword": "등산",
+   "score": 39.9,
+   "vitality_state": "slowing"
+  },
+  {
+   "blog_id": "mssuny777",
+   "seed_keyword": "등산",
+   "score": 71.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "su_meee_",
+   "seed_keyword": "등산",
+   "score": 37.8,
+   "vitality_state": "dormant_entering"
+  },
+  {
+   "blog_id": "cyb9938",
+   "seed_keyword": "등산",
+   "score": 63.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "climb_light",
+   "seed_keyword": "등산",
+   "score": 50.2,
+   "vitality_state": "slowing"
+  },
+  {
+   "blog_id": "leelee-bubu",
+   "seed_keyword": "등산",
+   "score": 81.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ojh2208",
+   "seed_keyword": "등산",
+   "score": 73.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "yeonlog7",
+   "seed_keyword": "등산",
+   "score": 76.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "chasd3679",
+   "seed_keyword": "등산",
+   "score": 78.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "alema98",
+   "seed_keyword": "등산",
+   "score": 73.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "chef_and_baker",
+   "seed_keyword": "요리",
+   "score": 73.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "kh7677",
+   "seed_keyword": "캠핑",
+   "score": 57.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "cmb7819",
+   "seed_keyword": "요리",
+   "score": 66.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "adamiimo",
+   "seed_keyword": "요리",
+   "score": 90.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "antsoldier_",
+   "seed_keyword": "요리",
+   "score": 49.9,
+   "vitality_state": "slowing"
+  },
+  {
+   "blog_id": "saeragem",
+   "seed_keyword": "요리",
+   "score": 82.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "jkcho0126",
+   "seed_keyword": "요리",
+   "score": 83.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "jin5194",
+   "seed_keyword": "요리",
+   "score": 85.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "pyask0702",
+   "seed_keyword": "요리",
+   "score": 83.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "bijounana",
+   "seed_keyword": "요리",
+   "score": 83.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "chef_cooking_",
+   "seed_keyword": "요리",
+   "score": 78.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "zadoo09",
+   "seed_keyword": "요리",
+   "score": 89.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "pyoun0181",
+   "seed_keyword": "요리",
+   "score": 80.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "limeshampoo",
+   "seed_keyword": "요리",
+   "score": 89.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "yes10230",
+   "seed_keyword": "요리",
+   "score": 80.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "cnd4u",
+   "seed_keyword": "요리",
+   "score": 84.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "noonhi_",
+   "seed_keyword": "요리",
+   "score": 84.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "psslwj",
+   "seed_keyword": "요리",
+   "score": 84.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "bichon_bok",
+   "seed_keyword": "요리",
+   "score": 82.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "cs1487",
+   "seed_keyword": "주식",
+   "score": 84.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "foodielucy",
+   "seed_keyword": "베이킹",
+   "score": 78.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "hermebook",
+   "seed_keyword": "주식",
+   "score": 82.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "pisak001",
+   "seed_keyword": "주식",
+   "score": 81.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "big_son",
+   "seed_keyword": "주식",
+   "score": 83.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "gyujin0917",
+   "seed_keyword": "주식",
+   "score": 86.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "hayth0121",
+   "seed_keyword": "주식",
+   "score": 89.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "jaso_",
+   "seed_keyword": "주식",
+   "score": 85.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ppaneu",
+   "seed_keyword": "주식",
+   "score": 80.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "9djaaj",
+   "seed_keyword": "주식",
+   "score": 82.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "dkdlvkr3",
+   "seed_keyword": "주식",
+   "score": 72.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "salrimzip",
+   "seed_keyword": "주식",
+   "score": 66.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "samsingfund_kids",
+   "seed_keyword": "주식",
+   "score": 76.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "kis6574",
+   "seed_keyword": "주식",
+   "score": 83.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "onehouse79",
+   "seed_keyword": "주식",
+   "score": 70.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "bujafamily_22",
+   "seed_keyword": "주식",
+   "score": 60.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "tsl035035",
+   "seed_keyword": "주식",
+   "score": 11.4,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "normal_tips",
+   "seed_keyword": "주식",
+   "score": 81.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "g7vmnjyxf",
+   "seed_keyword": "주식",
+   "score": 82.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "mosukll1",
+   "seed_keyword": "주식",
+   "score": 81.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ycnpark",
+   "seed_keyword": "주식",
+   "score": 73.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "loopway",
+   "seed_keyword": "주식",
+   "score": 75.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "nosnews1124",
+   "seed_keyword": "주식",
+   "score": 80.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ncrazyois85",
+   "seed_keyword": "주식",
+   "score": 69.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "sonicjw",
+   "seed_keyword": "주식",
+   "score": 59.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "deux6159",
+   "seed_keyword": "주식",
+   "score": 67.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "mcgonzo",
+   "seed_keyword": "주식",
+   "score": 84.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "jongy0644",
+   "seed_keyword": "주식",
+   "score": 82.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "r114korea",
+   "seed_keyword": "부동산",
+   "score": 77.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "bizzcare",
+   "seed_keyword": "부동산",
+   "score": 88.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ksj44378",
+   "seed_keyword": "부동산",
+   "score": 87.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "iklee318",
+   "seed_keyword": "부동산",
+   "score": 49.0,
+   "vitality_state": "slowing"
+  },
+  {
+   "blog_id": "ory0326",
+   "seed_keyword": "부동산",
+   "score": 85.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "best221",
+   "seed_keyword": "부동산",
+   "score": 72.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "previous1781",
+   "seed_keyword": "부동산",
+   "score": 72.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "lumina1234",
+   "seed_keyword": "부동산",
+   "score": 51.1,
+   "vitality_state": "slowing"
+  },
+  {
+   "blog_id": "kumhosolar777",
+   "seed_keyword": "부동산",
+   "score": 78.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "kimjiho88886",
+   "seed_keyword": "부동산",
+   "score": 74.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "chogunhoon",
+   "seed_keyword": "부동산",
+   "score": 55.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "qgyuohinf6hn",
+   "seed_keyword": "부동산",
+   "score": 14.1,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "palsyeng87738",
+   "seed_keyword": "부동산",
+   "score": 69.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "cha2026_",
+   "seed_keyword": "부동산",
+   "score": 21.9,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "iammarketer",
+   "seed_keyword": "부동산",
+   "score": 72.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "kkongs012",
+   "seed_keyword": "부동산",
+   "score": 12.3,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "kokim2753",
+   "seed_keyword": "적금",
+   "score": 75.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "local_value_creator",
+   "seed_keyword": "부동산",
+   "score": 65.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "corocococo",
+   "seed_keyword": "적금",
+   "score": 82.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "skyjm1649",
+   "seed_keyword": "적금",
+   "score": 40.2,
+   "vitality_state": "dormant_entering"
+  },
+  {
+   "blog_id": "bloom_by_plan",
+   "seed_keyword": "적금",
+   "score": 73.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "gusrb7152",
+   "seed_keyword": "적금",
+   "score": 77.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "jachoi195",
+   "seed_keyword": "적금",
+   "score": 79.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "dmsp408",
+   "seed_keyword": "적금",
+   "score": 81.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "lohom",
+   "seed_keyword": "적금",
+   "score": 74.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "64370859",
+   "seed_keyword": "적금",
+   "score": 13.4,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "yokang12",
+   "seed_keyword": "적금",
+   "score": 80.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "kensan21",
+   "seed_keyword": "적금",
+   "score": 73.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "current_1733",
+   "seed_keyword": "적금",
+   "score": 8.5,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "gaye0522",
+   "seed_keyword": "적금",
+   "score": 79.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "scs690900",
+   "seed_keyword": "적금",
+   "score": 81.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "emojoemo",
+   "seed_keyword": "적금",
+   "score": 10.7,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "yukyung1964",
+   "seed_keyword": "적금",
+   "score": 67.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "8starstarstar8",
+   "seed_keyword": "적금",
+   "score": 87.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "wodus8606",
+   "seed_keyword": "적금",
+   "score": 41.2,
+   "vitality_state": "dormant_entering"
+  },
+  {
+   "blog_id": "cool-review",
+   "seed_keyword": "적금",
+   "score": 19.9,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "hwre7774",
+   "seed_keyword": "적금",
+   "score": 81.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "editor_mumu",
+   "seed_keyword": "적금",
+   "score": 90.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "hyunhe4690",
+   "seed_keyword": "적금",
+   "score": 83.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "sorhaty",
+   "seed_keyword": "적금",
+   "score": 80.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "100vs100328",
+   "seed_keyword": "적금",
+   "score": 82.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "dlrjsdnspdlqj",
+   "seed_keyword": "리뷰",
+   "score": 8.3,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "hysk1666",
+   "seed_keyword": "리뷰",
+   "score": 85.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "cmath_sejong",
+   "seed_keyword": "리뷰",
+   "score": 77.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "juligo_design",
+   "seed_keyword": "리뷰",
+   "score": 74.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "1llpro_gym",
+   "seed_keyword": "리뷰",
+   "score": 70.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ichiryu_gojan",
+   "seed_keyword": "리뷰",
+   "score": 22.5,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "cjdeka0122",
+   "seed_keyword": "리뷰",
+   "score": 72.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ohooblog",
+   "seed_keyword": "리뷰",
+   "score": 75.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "printrobo",
+   "seed_keyword": "리뷰",
+   "score": 36.7,
+   "vitality_state": "slowing"
+  },
+  {
+   "blog_id": "lifesdh",
+   "seed_keyword": "리뷰",
+   "score": 64.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "kimjaetech",
+   "seed_keyword": "리뷰",
+   "score": 80.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "iborivory",
+   "seed_keyword": "리뷰",
+   "score": 77.8,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "lulu_kim_",
+   "seed_keyword": "추천",
+   "score": 82.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ramrami__",
+   "seed_keyword": "추천",
+   "score": 89.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "nikki5419",
+   "seed_keyword": "리뷰",
+   "score": 14.4,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "minigoldroom",
+   "seed_keyword": "추천",
+   "score": 79.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "yoblogyo",
+   "seed_keyword": "추천",
+   "score": 83.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "fast-info",
+   "seed_keyword": "추천",
+   "score": 7.7,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "payment1116",
+   "seed_keyword": "추천",
+   "score": 15.3,
+   "vitality_state": "stopped"
+  },
+  {
+   "blog_id": "jwj9411",
+   "seed_keyword": "추천",
+   "score": 8.0,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "ggulddanging",
+   "seed_keyword": "추천",
+   "score": 45.9,
+   "vitality_state": "slowing"
+  },
+  {
+   "blog_id": "mytoptips",
+   "seed_keyword": "추천",
+   "score": 77.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "kang6902",
+   "seed_keyword": "추천",
+   "score": 80.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "tigertail02",
+   "seed_keyword": "추천",
+   "score": 68.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "thekimlawfirm_",
+   "seed_keyword": "추천",
+   "score": 23.3,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "bookdowell",
+   "seed_keyword": "추천",
+   "score": 21.9,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "kwonssam_",
+   "seed_keyword": "추천",
+   "score": 71.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "cosmos_rich",
+   "seed_keyword": "추천",
+   "score": 73.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "theoptic",
+   "seed_keyword": "추천",
+   "score": 80.5,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ve1357243",
+   "seed_keyword": "추천",
+   "score": 88.9,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "laviolelala",
+   "seed_keyword": "추천",
+   "score": 22.3,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "ok7106",
+   "seed_keyword": "추천",
+   "score": 84.2,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "d0ecj6mpiw2g6",
+   "seed_keyword": "추천",
+   "score": 25.2,
+   "vitality_state": "dormant"
+  },
+  {
+   "blog_id": "dalhee1000",
+   "seed_keyword": "추천",
+   "score": 60.1,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "sun0799dh",
+   "seed_keyword": "추천",
+   "score": 80.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "jincosmetics",
+   "seed_keyword": "추천",
+   "score": 31.0,
+   "vitality_state": "slowing"
+  },
+  {
+   "blog_id": "charlene77",
+   "seed_keyword": "추천",
+   "score": 84.4,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "andyou2",
+   "seed_keyword": "후기",
+   "score": 73.6,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "mii__ya",
+   "seed_keyword": "추천",
+   "score": 84.7,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "o3okiki",
+   "seed_keyword": "후기",
+   "score": 80.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "wowndehdghk",
+   "seed_keyword": "후기",
+   "score": 8.0,
+   "vitality_state": "abandoned"
+  },
+  {
+   "blog_id": "celinalim_",
+   "seed_keyword": "후기",
+   "score": 68.3,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "kyangyang-",
+   "seed_keyword": "후기",
+   "score": 61.0,
+   "vitality_state": "active"
+  },
+  {
+   "blog_id": "ggb6666",
+   "seed_keyword": "후기",
+   "score": 8.4,
+   "vitality_state": "abandoned"
+  }
+ ]
+}
