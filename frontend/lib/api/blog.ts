@@ -146,15 +146,12 @@ export async function getUserBlogs(userId?: number | string): Promise<BlogListIt
     try {
       const { getSavedBlogs } = await import('./userBlogs')
       const response = await getSavedBlogs(userId)
-      return response.blogs.map(blog => ({
-        blog_id: blog.blog_id,
+      // 예전에는 여기서 last_analyzed 를 lastUpdated 로 내보내는 바람에
+      // 대시보드의 '이번 주 분석' 집계가 항상 0이었고, id/grade 는 아예 빠져 있었다.
+      // 정규화 함수 한 곳을 거치게 해서 화면이 기대하는 모양을 보장한다.
+      return (response?.blogs ?? []).map(blog => normalizeBlogListItem({
+        ...blog,
         name: blog.blog_name || blog.blog_id,
-        avatar: blog.avatar || '📝',
-        level: blog.level,
-        score: blog.score,
-        change: blog.change,
-        stats: blog.stats,
-        lastUpdated: blog.last_analyzed || new Date().toISOString()
       }))
     } catch (error) {
       console.error('Failed to fetch saved blogs:', error)
@@ -168,10 +165,44 @@ export async function getUserBlogs(userId?: number | string): Promise<BlogListIt
     : null
 
   if (cachedBlogs) {
-    return JSON.parse(cachedBlogs)
+    // 예전 스키마로 저장된 캐시가 남아 있으면 stats 같은 필드가 없다.
+    // 검증 없이 그대로 돌려주면 대시보드가 b.stats.visitors 에서 터져
+    // 페이지 전체가 에러 화면으로 바뀐다(실제 발생). 반드시 정규화한다.
+    try {
+      const parsed = JSON.parse(cachedBlogs)
+      if (!Array.isArray(parsed)) {
+        localStorage.removeItem('cached_blogs')
+        return []
+      }
+      return parsed.filter(Boolean).map(normalizeBlogListItem)
+    } catch {
+      localStorage.removeItem('cached_blogs')
+      return []
+    }
   }
 
   return []
+}
+
+/** 어떤 출처에서 왔든 화면이 기대하는 모양을 보장한다 (없는 값은 0/기본값). */
+function normalizeBlogListItem(raw: any): BlogListItem {
+  const stats = raw?.stats ?? {}
+  return {
+    id: raw?.id ?? raw?.blog_id ?? '',
+    blog_id: raw?.blog_id ?? '',
+    name: raw?.name ?? raw?.blog_name ?? raw?.blog_id ?? '',
+    avatar: raw?.avatar ?? undefined,
+    level: Number.isFinite(raw?.level) ? raw.level : 0,
+    grade: raw?.grade ?? '',
+    score: Number.isFinite(raw?.score) ? raw.score : 0,
+    change: Number.isFinite(raw?.change) ? raw.change : 0,
+    stats: {
+      posts: Number.isFinite(stats?.posts) ? stats.posts : 0,
+      visitors: Number.isFinite(stats?.visitors) ? stats.visitors : 0,
+      engagement: Number.isFinite(stats?.engagement) ? stats.engagement : 0,
+    },
+    last_analyzed: raw?.last_analyzed ?? raw?.lastUpdated ?? undefined,
+  }
 }
 
 /**

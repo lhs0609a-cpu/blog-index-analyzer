@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { TrendingUp, TrendingDown, Heart, MessageCircle, Eye, Sparkles, Plus, Search, Brain, Target, RefreshCw, Trash2, Zap, BarChart3, Wallet, Globe, HelpCircle, MoreHorizontal, ChevronDown } from 'lucide-react'
+import { TrendingUp, TrendingDown, Heart, MessageCircle, Eye, Sparkles, Plus, Search, Brain, Target, RefreshCw, Trash2, Zap, BarChart3, Wallet, Globe, HelpCircle, MoreHorizontal, ChevronDown , BookOpen, Star, Users} from 'lucide-react'
 import Link from 'next/link'
 import { getUserBlogs, deleteBlogFromList } from '@/lib/api/blog'
 import { refreshBlogAnalysis } from '@/lib/api/userBlogs'
@@ -390,7 +390,7 @@ export default function Dashboard() {
                   <div className="w-24 h-24 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-[#0064FF]/20">
                     <Sparkles className="w-12 h-12 text-white" />
                   </div>
-                  <h3 className="text-3xl font-bold mb-3">블랭크에 오신 것을 환영합니다! 👋</h3>
+                  <h3 className="text-3xl font-bold mb-3">블랭크에 오신 것을 환영합니다!</h3>
                   <p className="text-gray-600 text-lg">
                     3단계만 따라하면 블로그 성장 전략을 세울 수 있어요
                   </p>
@@ -523,7 +523,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-center mb-1">
                     <Eye className="w-4 h-4 text-gray-400" />
                   </div>
-                  <div className="font-bold">{blog.stats.visitors.toLocaleString()}</div>
+                  <div className="font-bold">{(blog?.stats?.visitors ?? 0).toLocaleString()}</div>
                   <div className="text-xs text-gray-500">방문자</div>
                 </div>
 
@@ -531,7 +531,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-center mb-1">
                     <MessageCircle className="w-4 h-4 text-gray-400" />
                   </div>
-                  <div className="font-bold">{blog.stats.posts}</div>
+                  <div className="font-bold">{blog?.stats?.posts ?? 0}</div>
                   <div className="text-xs text-gray-500">포스트</div>
                 </div>
 
@@ -539,7 +539,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-center mb-1">
                     <Heart className="w-4 h-4 text-gray-400" />
                   </div>
-                  <div className="font-bold">{blog.stats.engagement}</div>
+                  <div className="font-bold">{blog?.stats?.engagement ?? 0}</div>
                   <div className="text-xs text-gray-500">참여도</div>
                 </div>
               </div>
@@ -604,11 +604,12 @@ export default function Dashboard() {
           className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4"
         >
           {(() => {
+            // 값이 하나라도 비면 페이지 전체가 에러 화면으로 떨어지므로 방어적으로 읽는다
             const totalBlogs = displayBlogs.length
             const avgLevel = displayBlogs.length > 0
-              ? Math.round(displayBlogs.reduce((sum, b) => sum + b.level, 0) / displayBlogs.length)
+              ? Math.round(displayBlogs.reduce((sum, b) => sum + (b?.level ?? 0), 0) / displayBlogs.length)
               : 0
-            const totalVisitors = displayBlogs.reduce((sum, b) => sum + b.stats.visitors, 0)
+            const totalVisitors = displayBlogs.reduce((sum, b) => sum + (b?.stats?.visitors ?? 0), 0)
             const formattedVisitors = totalVisitors >= 1000
               ? `${(totalVisitors / 1000).toFixed(1)}K`
               : totalVisitors.toString()
@@ -618,10 +619,10 @@ export default function Dashboard() {
             ).length
 
             return [
-              { label: '총 블로그', value: totalBlogs, icon: '📚' },
-              { label: '평균 레벨', value: avgLevel, icon: '⭐' },
-              { label: '총 방문자', value: formattedVisitors, icon: '👥' },
-              { label: '이번 주 분석', value: recentAnalyses, icon: '📊' },
+              { label: '총 블로그', value: totalBlogs, icon: BookOpen },
+              { label: '평균 레벨', value: avgLevel, icon: Star },
+              { label: '총 방문자', value: formattedVisitors, icon: Users },
+              { label: '이번 주 분석', value: recentAnalyses, icon: BarChart3 },
             ]
           })().map((stat, index) => (
             <motion.div
@@ -631,7 +632,7 @@ export default function Dashboard() {
               transition={{ delay: 0.5 + index * 0.1 }}
               className="rounded-xl p-4 text-center bg-white border border-gray-200 shadow-sm"
             >
-              <div className="text-2xl mb-1">{stat.icon}</div>
+              <stat.icon className="w-6 h-6 mb-1 mx-auto text-gray-400" strokeWidth={1.75} />
               <div className="text-xl font-bold text-gray-900">{stat.value}</div>
               <div className="text-xs text-gray-500">{stat.label}</div>
             </motion.div>

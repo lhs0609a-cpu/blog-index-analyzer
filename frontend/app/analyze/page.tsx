@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, Loader2, Sparkles, TrendingUp, Award, Zap, AlertCircle, BarChart3, ArrowLeft, Target, PenTool, Lightbulb, ChevronRight, Lock, HelpCircle, Clock, CheckCircle, Gauge, XCircle, MinusCircle } from 'lucide-react'
+import { Search, Loader2, TrendingUp, Award, AlertCircle, BarChart3, ArrowLeft, Target, PenTool, Lightbulb, ChevronRight, Lock, HelpCircle, Clock, CheckCircle, Gauge, XCircle, MinusCircle,
+  PenLine, Users, FileCheck2, MessageSquare, CheckCircle2, Gem, Heart, FileText, Activity, Check, ArrowUpRight } from 'lucide-react'
 import Confetti from 'react-confetti'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -21,11 +22,32 @@ import UpgradeModal from '@/components/UpgradeModal'
 import TrialExpiryBanner from '@/components/TrialExpiryBanner'
 import { AnimatedScore, AnimatedLevel, CircularProgress } from '@/components/AnimatedScore'
 import ShareResult from '@/components/ShareResult'
-import { LiveToastNotifications } from '@/components/SocialProofSystem'
 import { getLevelGrade, getGradeBadgeStyle, getLevelsToNextGrade, getPointsToNextLevel } from '@/lib/utils/levelGrade'
 import TermTooltip from '@/components/TermTooltip'
 
 // P0-1: "그래서 뭐?" 문제 해결 - 점수 해석 & 예상 효과 컴포넌트
+// 자세한 지표는 기본으로 접어둔다.
+// 화면에 6개 점수 체계(총점·등급·C-Rank·D.I.A.·신호평균·티어)가 한꺼번에 보이면
+// 사용자는 "그래서 내 점수가 뭔데?"를 판단하지 못한다.
+function DetailsAccordion({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden mb-8">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition-colors text-left"
+      >
+        <div>
+          <div className="font-bold text-gray-900">{title}</div>
+          {subtitle && <div className="text-sm text-gray-500 mt-0.5">{subtitle}</div>}
+        </div>
+        <ChevronRight className={`w-5 h-5 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`} />
+      </button>
+      {open && <div className="p-5 pt-0 border-t border-gray-100">{children}</div>}
+    </div>
+  )
+}
+
 function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywordSearch: () => void }) {
   const level = result.index.level
   const totalScore = result.index.total_score
@@ -70,11 +92,6 @@ function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywo
   const percentileText = percentile === null ? interpretation.tier : getPercentileText(percentile)
 
   // 1레벨 올랐을 때 예상 효과
-  const nextLevelEffect = {
-    visitors: Math.round((result.stats.total_visitors || 100) * 0.3),
-    viewChance: level < 11 ? '+10%' : '최대',
-  }
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -141,7 +158,7 @@ function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywo
                 <span className="font-semibold text-gray-800">C-Rank (블로그 신뢰도)</span>
               </TermTooltip>
               <div className="text-gray-600">
-                {cRank >= 70 ? '네이버가 당신의 블로그를 신뢰합니다 ✓' :
+                {cRank >= 70 ? '네이버가 당신의 블로그를 신뢰합니다' :
                  cRank >= 50 ? '보통 수준입니다. 꾸준한 활동으로 올릴 수 있어요' :
                  '신뢰도를 높이면 상위 노출 경쟁력이 크게 올라갑니다'}
               </div>
@@ -156,7 +173,7 @@ function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywo
                 <span className="font-semibold text-gray-800">D.I.A. (글 품질 점수)</span>
               </TermTooltip>
               <div className="text-gray-600">
-                {dia >= 70 ? '글 품질이 우수합니다 ✓' :
+                {dia >= 70 ? '글 품질이 우수합니다' :
                  dia >= 50 ? '이미지 추가, 글 길이를 늘리면 +15점 이상 가능' :
                  '글 품질 개선이 가장 시급합니다'}
               </div>
@@ -165,28 +182,15 @@ function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywo
         </div>
       </div>
 
-      {/* 레벨업 시 예상 효과 */}
-      {level < 11 && (
-        <div className="bg-gradient-to-r from-blue-500 to-indigo-500 rounded-xl p-5 text-white">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div>
-              <div className="font-bold text-lg mb-1">
-                🎯 Lv.{level} → Lv.{level + 1} 달성 시 예상 효과
-              </div>
-              <div className="text-blue-100 text-sm">
-                일 방문자 <span className="text-yellow-300 font-bold">+{nextLevelEffect.visitors}명</span> |
-                VIEW탭 노출 경쟁력 <span className="text-yellow-300 font-bold">{nextLevelEffect.viewChance}</span>
-              </div>
-            </div>
-            <button
-              onClick={onKeywordSearch}
-              className="px-5 py-2.5 bg-white text-blue-600 rounded-xl font-bold hover:shadow-lg transition-all text-sm"
-            >
-              지금 경쟁 가능한 키워드 찾기 →
-            </button>
-          </div>
-        </div>
-      )}
+      {/* 레벨업 효과는 근거 있는 수치를 만들 수 없어 표시하지 않는다.
+          (예전에는 '누적 방문자 × 0.3'을 '일 방문자 증가'로 보여줬다 — 79,437명인
+           블로그에 +23,831명/일 이라는 말이 안 되는 숫자가 나갔다) */}
+      <button
+        onClick={onKeywordSearch}
+        className="w-full px-5 py-3 bg-[#0064FF] text-white rounded-xl font-bold hover:shadow-lg transition-all text-sm"
+      >
+        지금 경쟁 가능한 키워드 찾기
+      </button>
     </motion.div>
   )
 }
@@ -547,7 +551,7 @@ function ConcreteRecommendations({ result, isFreeUser }: { result: any; isFreeUs
     if (postingFreq < 3) {
       recs.push({
         priority: 'high',
-        icon: '📝',
+        icon: PenLine,
         title: '포스팅 빈도 높이기',
         message: `현재 월 ${postingFreq}회 → 목표 월 8회`,
         actions: [
@@ -566,7 +570,7 @@ function ConcreteRecommendations({ result, isFreeUser }: { result: any; isFreeUs
       const targetNeighbors = Math.min(500, neighbors + 100)
       recs.push({
         priority: 'high',
-        icon: '👥',
+        icon: Users,
         title: '이웃 네트워크 확장',
         message: `현재 ${neighbors}명 → 목표 ${targetNeighbors}명`,
         actions: [
@@ -584,7 +588,7 @@ function ConcreteRecommendations({ result, isFreeUser }: { result: any; isFreeUs
     if (diaScore < 70) {
       recs.push({
         priority: 'high',
-        icon: '✨',
+        icon: FileCheck2,
         title: '콘텐츠 품질 개선',
         message: `현재 ${Math.round(diaScore)}점 → 목표 75점`,
         actions: [
@@ -603,7 +607,7 @@ function ConcreteRecommendations({ result, isFreeUser }: { result: any; isFreeUs
     if (visitors < 500) {
       recs.push({
         priority: 'medium',
-        icon: '🔍',
+        icon: Search,
         title: '검색 유입 늘리기',
         message: `현재 일 ${visitors}명 → 목표 일 ${Math.min(1000, visitors * 2)}명`,
         actions: [
@@ -621,7 +625,7 @@ function ConcreteRecommendations({ result, isFreeUser }: { result: any; isFreeUs
     if (index.level < 5) {
       recs.push({
         priority: 'medium',
-        icon: '🎯',
+        icon: Target,
         title: '블로그 주제 집중',
         message: '상위 3개 카테고리에 집중하기',
         actions: [
@@ -642,7 +646,7 @@ function ConcreteRecommendations({ result, isFreeUser }: { result: any; isFreeUs
     if (avgLikes < 10 || avgComments < 5) {
       recs.push({
         priority: 'low',
-        icon: '💬',
+        icon: MessageSquare,
         title: '독자 참여 유도',
         message: `좋아요 ${avgLikes}→15개, 댓글 ${avgComments}→10개`,
         actions: [
@@ -658,7 +662,7 @@ function ConcreteRecommendations({ result, isFreeUser }: { result: any; isFreeUs
 
     return recs.length > 0 ? recs : [{
       priority: 'low',
-      icon: '🌟',
+      icon: CheckCircle2,
       title: '현재 상태 유지',
       message: '이미 잘 운영되고 있습니다!',
       actions: [
@@ -671,18 +675,21 @@ function ConcreteRecommendations({ result, isFreeUser }: { result: any; isFreeUs
     }]
   }
 
+  // 할 일은 3개까지만 보여준다. 여덟 개를 늘어놓으면 아무것도 안 하게 된다.
+  const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 }
   const recommendations = generateConcreteRecommendations()
-  // P1: 무료 사용자에게 3개 공개 + 4번째부터 블러 처리
-  const displayRecs = isFreeUser ? recommendations.slice(0, 3) : recommendations
+    .slice()
+    .sort((a: any, b: any) => (PRIORITY_ORDER[a.priority] ?? 3) - (PRIORITY_ORDER[b.priority] ?? 3))
+  const displayRecs = recommendations.slice(0, 3)
   const blurredRecs = isFreeUser && recommendations.length > 3 ? recommendations.slice(3, 4) : []
 
   return (
     <div className="glass-3d p-8 ">
       <h3 className="text-2xl font-bold mb-2 flex items-center gap-2">
-        <Sparkles className="w-6 h-6 text-[#0064FF]" />
-        맞춤 개선 가이드
+        <Target className="w-6 h-6 text-[#0064FF]" />
+        지금 할 일
       </h3>
-      <p className="text-sm text-gray-500 mb-6">분석 결과 기반 구체적인 실행 가이드입니다</p>
+      <p className="text-sm text-gray-500 mb-6">측정 결과에서 가장 효과가 큰 순서입니다</p>
 
       <div className="space-y-4">
         {displayRecs.map((rec, index) => (
@@ -698,7 +705,7 @@ function ConcreteRecommendations({ result, isFreeUser }: { result: any; isFreeUs
             }`}
           >
             <div className="flex items-start gap-4">
-              <div className="text-3xl">{rec.icon}</div>
+              <rec.icon className="w-7 h-7 text-[#0064FF] shrink-0" strokeWidth={1.75} />
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <h4 className="font-bold text-gray-900">{rec.title}</h4>
@@ -717,7 +724,7 @@ function ConcreteRecommendations({ result, isFreeUser }: { result: any; isFreeUs
                 <ul className="space-y-2 mb-3">
                   {rec.actions.map((action, i) => (
                     <li key={i} className="flex items-start gap-2 text-gray-700 text-sm">
-                      <span className="text-green-500 mt-0.5">✓</span>
+                      <Check className="w-4 h-4 text-green-500 mt-0.5 shrink-0" strokeWidth={2.5} />
                       <span>{action}</span>
                     </li>
                   ))}
@@ -742,7 +749,7 @@ function ConcreteRecommendations({ result, isFreeUser }: { result: any; isFreeUs
                   'bg-blue-50 border-[#0064FF]'
                 }`}>
                   <div className="flex items-start gap-4">
-                    <div className="text-3xl">{rec.icon}</div>
+                    <rec.icon className="w-7 h-7 text-[#0064FF] shrink-0" strokeWidth={1.75} />
                     <div className="flex-1">
                       <h4 className="font-bold text-gray-900">{rec.title}</h4>
                       <div className="text-lg font-semibold text-[#0064FF]">{rec.message}</div>
@@ -754,7 +761,7 @@ function ConcreteRecommendations({ result, isFreeUser }: { result: any; isFreeUs
             <div className="absolute inset-0 flex items-center justify-center">
               <Link href="/pricing">
                 <div className="bg-white/95 rounded-xl px-6 py-4 shadow-lg text-center cursor-pointer hover:shadow-xl transition-all border-2 border-amber-300">
-                  <div className="text-2xl mb-2">🔥</div>
+                  <TrendingUp className="w-6 h-6 mb-2 mx-auto text-amber-500" strokeWidth={1.75} />
                   <p className="text-sm font-bold text-amber-900 mb-1">
                     상위노출 핵심 가이드 {recommendations.length - 3}개가 숨겨져 있습니다
                   </p>
@@ -784,224 +791,79 @@ function ConcreteRecommendations({ result, isFreeUser }: { result: any; isFreeUs
   )
 }
 
-// P1-4: 즉시 실행 가능한 액션 플랜 컴포넌트
-function NextStepActionPlan({ result }: { result: any }) {
-  const level = result.index.level
-  const cRank = result.index.score_breakdown?.c_rank || 50
-  const dia = result.index.score_breakdown?.dia || 50
-
-  // 레벨과 점수에 따른 맞춤 다음 단계
-  const getNextActions = () => {
-    const actions = []
-
-    // 1. 키워드 관련 액션 (항상 첫 번째)
-    if (level <= 5) {
-      actions.push({
-        icon: '🎯',
-        title: '경쟁 가능한 키워드 찾기',
-        description: `현재 레벨에서는 월 검색량 ${level * 500} 이하 키워드를 공략하세요`,
-        link: '/keyword-search',
-        linkText: '키워드 분석하기',
-        priority: 'high'
-      })
-    } else {
-      actions.push({
-        icon: '👑',
-        title: '블루오션 키워드 발굴',
-        description: '경쟁이 낮고 진입 가능성 높은 황금 키워드를 찾아보세요',
-        link: '/blue-ocean',
-        linkText: '블루오션 찾기',
-        priority: 'high'
-      })
-    }
-
-    // 2. 콘텐츠 품질 관련 (DIA 점수 기반)
-    if (dia < 60) {
-      actions.push({
-        icon: '✍️',
-        title: '다음 포스팅 가이드',
-        description: '글 2,000자 이상 + 이미지 5장 + 소제목 3개로 작성해보세요',
-        link: '/tools',
-        linkText: 'AI 글쓰기 도구',
-        priority: 'medium'
-      })
-    } else {
-      actions.push({
-        icon: '📈',
-        title: '순위 추적 시작',
-        description: '작성한 글이 검색 몇 위에 노출되는지 확인하세요',
-        link: '/dashboard/rank-tracker',
-        linkText: '순위 추적하기',
-        priority: 'medium'
-      })
-    }
-
-    // 3. 네트워크 관련 (C-Rank 기반)
-    if (cRank < 60) {
-      actions.push({
-        icon: '🤝',
-        title: '이웃 네트워크 확장',
-        description: '같은 주제 블로거 10명에게 이웃 신청하고 댓글로 소통하세요',
-        link: null,
-        linkText: null,
-        priority: 'low'
-      })
-    } else {
-      actions.push({
-        icon: '🏆',
-        title: '30일 챌린지 도전',
-        description: '체계적인 미션으로 한 달 만에 레벨업 하세요',
-        link: '/challenge',
-        linkText: '챌린지 시작',
-        priority: 'low'
-      })
-    }
-
-    return actions
-  }
-
-  const actions = getNextActions()
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.3 }}
-      className="rounded-3xl p-8 bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200/50 shadow-xl mb-8"
-    >
-      <h3 className="text-2xl font-bold mb-2 flex items-center gap-2">
-        <Zap className="w-6 h-6 text-orange-500" />
-        지금 바로 실행하세요
-      </h3>
-      <p className="text-sm text-gray-600 mb-6">분석 결과 기반 맞춤 다음 단계 3가지</p>
-
-      <div className="space-y-4">
-        {actions.map((action, idx) => (
-          <div
-            key={idx}
-            className={`bg-white rounded-xl p-5 border ${
-              action.priority === 'high' ? 'border-orange-300 shadow-md' :
-              action.priority === 'medium' ? 'border-orange-200' :
-              'border-gray-200'
-            }`}
-          >
-            <div className="flex items-start gap-4">
-              <div className="text-3xl">{action.icon}</div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-bold text-gray-900">{idx + 1}. {action.title}</span>
-                  {action.priority === 'high' && (
-                    <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs font-bold rounded-full">추천</span>
-                  )}
-                </div>
-                <p className="text-sm text-gray-600 mb-3">{action.description}</p>
-                {action.link && (
-                  <Link
-                    href={action.link}
-                    className="inline-flex items-center gap-1 text-sm font-semibold text-orange-600 hover:text-orange-700"
-                  >
-                    {action.linkText}
-                    <ChevronRight className="w-4 h-4" />
-                  </Link>
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* 빠른 액션 버튼 */}
-      <div className="mt-6 flex flex-wrap gap-3">
-        <Link
-          href="/keyword-search"
-          className="flex-1 min-w-[140px] py-3 px-4 bg-orange-500 text-white rounded-xl font-bold text-center hover:bg-orange-600 transition-colors"
-        >
-          키워드 분석 →
-        </Link>
-        <Link
-          href="/dashboard"
-          className="flex-1 min-w-[140px] py-3 px-4 bg-white border border-orange-300 text-orange-600 rounded-xl font-bold text-center hover:bg-orange-50 transition-colors"
-        >
-          대시보드로 이동
-        </Link>
-      </div>
-    </motion.div>
-  )
-}
-
-// 40+ 지표 상세 분석 섹션
+// 실측 지표 상세 섹션
 function DetailedMetricsSection({ result, isFreeUser }: { result: any; isFreeUser: boolean }) {
   const [activeTab, setActiveTab] = useState<'core' | 'content' | 'activity' | 'growth'>('core')
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
 
-  // 일관된 점수 계산을 위한 해시 함수 (블로그 ID 기반)
-  const getConsistentScore = (base: number, factor: number, min: number, max: number) => {
-    const blogIdHash = result.blog.blog_id.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0)
-    const variation = ((blogIdHash * factor) % 20) - 10 // -10 ~ +10 범위
-    return Math.min(max, Math.max(min, base + variation))
+  // ===== 실측 지표만 표시한다 =====
+  // 예전에는 blog_id 해시로 만든 값(getConsistentScore)과 c_rank/dia 에 임의 상수를
+  // 곱한 파생값으로 40개 '지표'를 채웠다. 재방문율·체류시간·이탈률·공유지수 같은 건
+  // 애초에 외부에서 측정할 수 없는 값이라(블로그 주인만 보는 통계) 전부 걷어냈다.
+  // 여기 있는 값은 전부 백엔드가 실제로 잰 것이고, 못 잰 항목은 '측정 안 됨'으로 나간다.
+  const sb: any = result.index.score_breakdown || {}
+  const cd: any = sb.c_rank_detail || {}
+  const dd: any = sb.dia_detail || {}
+  const cf: any = sb.content_detail || {}
+  const rs: any = sb.raw_signals || {}
+
+  // 값이 없으면 지어내지 않고 '측정 안 됨'으로 표시
+  const measured = (name: string, value: any, description: string, opts: any = {}) => {
+    if (value === null || value === undefined || (typeof value === 'number' && isNaN(value))) {
+      return { name, value: '측정 안 됨', description, raw: true, isStatus: true }
+    }
+    return { name, value, description, ...opts }
   }
+  const num = (v: any, digits = 0) =>
+    (v === null || v === undefined) ? null : Number(Number(v).toFixed(digits))
 
-  // 블로그 신뢰도 세부 지표 (10개) - 네이버가 블로그를 얼마나 신뢰하는지
+  // 블로그 신뢰도 (C-Rank) — 백엔드가 계산한 하위 점수 그대로
   const cRankMetrics = [
-    { name: '주제 일관성', value: Math.min(100, result.index.score_breakdown.c_rank * 1.1), description: '블로그가 특정 주제에 얼마나 집중하는지' },
-    { name: '콘텐츠 품질', value: Math.min(100, result.index.score_breakdown.c_rank * 0.95), description: '글의 전반적인 퀄리티 수준' },
-    { name: '활동 이력', value: Math.min(100, result.stats.total_posts > 100 ? 90 : result.stats.total_posts * 0.9), description: '블로그 운영 기간과 누적 활동량' },
-    { name: '운영자 신뢰도', value: Math.min(100, result.index.score_breakdown.c_rank * 1.05), description: '스팸/광고성 콘텐츠 비율' },
-    { name: '이웃 관계', value: Math.min(100, result.stats.neighbor_count > 500 ? 95 : result.stats.neighbor_count * 0.19), description: '이웃 수와 소통 활발도' },
-    { name: '검색 노출력', value: Math.min(100, result.index.score_breakdown.c_rank * 0.9), description: '네이버 검색에서의 노출 빈도' },
-    { name: '정보 정확도', value: Math.min(100, result.index.score_breakdown.dia * 0.85), description: '제공하는 정보의 신뢰성' },
-    { name: '저품질 비율', value: Math.max(0, 100 - result.index.score_breakdown.c_rank * 0.3), description: '저품질로 판정된 글 비율 (낮을수록 좋음)', inverse: true },
-    { name: '광고 적정성', value: getConsistentScore(85, 7, 70, 98), description: '광고성 콘텐츠가 적절한 수준인지' },
-    { name: '카테고리 전문성', value: Math.min(100, result.index.score_breakdown.c_rank * 1.02), description: '주력 카테고리에서의 전문성' },
+    measured('주제 집중도', num(cd.context, 1), '한 주제에 얼마나 집중해 쓰는지 (C-Rank Context)'),
+    measured('콘텐츠 품질', num(cd.content, 1), '글의 전반적 퀄리티 (C-Rank Content)'),
+    measured('연결성', num(cd.chain, 1), '이웃·인용 등 연결 관계 (C-Rank Chain)'),
+    measured('카테고리 수', rs.category_count, '운영 중인 카테고리 개수', { raw: true, unit: '개' }),
+    measured('카테고리 분산도', num(rs.category_entropy, 2), '주제가 흩어진 정도 (낮을수록 집중)', { raw: true }),
   ]
 
-  // 글 품질 세부 지표 (10개) - 개별 글의 퀄리티 평가
+  // 글 품질 (D.I.A.) + 콘텐츠 요소 — 전부 실측
   const diaMetrics = [
-    { name: '주제 적합도', value: Math.min(100, result.index.score_breakdown.dia * 1.05), description: '제목과 내용의 일치도' },
-    { name: '정보 풍부함', value: Math.min(100, result.index.score_breakdown.dia * 0.98), description: '글에 담긴 정보의 양과 깊이' },
-    { name: '경험 기반 작성', value: Math.min(100, result.index.score_breakdown.dia * 1.02), description: '직접 경험을 바탕으로 작성했는지' },
-    { name: '독창성', value: Math.min(100, result.index.score_breakdown.dia * 0.92), description: '다른 글과 차별화되는 정도' },
-    { name: '최신성', value: getConsistentScore(90, 3, 80, 98), description: '콘텐츠가 최신 정보를 반영하는지' },
-    { name: '가독성', value: Math.min(100, result.index.score_breakdown.dia * 1.08), description: '글이 읽기 쉽게 구성되었는지' },
-    { name: '미디어 활용', value: getConsistentScore(80, 5, 65, 95), description: '이미지, 동영상 등 활용도' },
-    { name: '글 길이 적정성', value: getConsistentScore(82, 11, 70, 95), description: '글 분량이 적절한지' },
-    { name: '문단 구조', value: Math.min(100, result.index.score_breakdown.dia * 0.95), description: '소제목, 문단 나눔 등 구조화' },
-    { name: '키워드 최적화', value: Math.min(100, result.index.score_breakdown.dia * 0.88), description: '검색 키워드 활용도' },
+    measured('깊이', num(dd.depth, 1), '주제를 얼마나 깊이 다루는지 (D.I.A. Depth)'),
+    measured('정보성', num(dd.information, 1), '담긴 정보의 양 (D.I.A. Information)'),
+    measured('정확성', num(dd.accuracy, 1), '정보의 신뢰도 (D.I.A. Accuracy)'),
+    measured('글 길이', num(cf.content_length?.score, 1),
+      cf.content_length ? `평균 ${cf.content_length.raw}자` : '평균 글자 수 기준'),
+    measured('소제목 활용', num(cf.heading_count?.score, 1),
+      cf.heading_count ? `글당 평균 ${cf.heading_count.raw}개` : '소제목 개수 기준'),
+    measured('문단 구조', num(cf.paragraph_count?.score, 1),
+      cf.paragraph_count ? `글당 평균 ${cf.paragraph_count.raw}개` : '문단 개수 기준'),
+    measured('이미지 활용', num(cf.image_count?.score, 1),
+      cf.image_count ? `글당 평균 ${cf.image_count.raw}장` : '이미지 개수 기준'),
+    measured('최신성', num(cf.freshness?.score, 1),
+      cf.freshness ? `마지막 발행 ${cf.freshness.raw}일 전` : '마지막 발행 시점 기준'),
   ]
 
-  // 활동성 지표 (10개)
+  // 활동성 — 원시 신호 그대로
   const activityMetrics = [
-    { name: '총 포스트 수', value: result.stats.total_posts, unit: '개', raw: true },
-    { name: '평균 좋아요', value: result.stats.avg_likes || Math.round(result.stats.total_visitors * 0.02), unit: '개', raw: true },
-    { name: '평균 댓글', value: result.stats.avg_comments || Math.round(result.stats.neighbor_count * 0.05), unit: '개', raw: true },
-    { name: '포스팅 빈도', value: result.stats.posting_frequency || Math.round(result.stats.total_posts / 30), unit: '회/월', raw: true },
-    { name: '이웃 수', value: result.stats.neighbor_count, unit: '명', raw: true },
-    { name: '인플루언서 여부', value: result.stats.is_influencer ? '인플루언서' : '일반', raw: true, isStatus: true },
-    { name: '댓글 응답률', value: getConsistentScore(75, 13, 55, 95), description: '받은 댓글에 답변하는 비율' },
-    { name: '이웃 소통 점수', value: Math.min(100, result.stats.neighbor_count > 300 ? 85 : result.stats.neighbor_count * 0.28), description: '이웃과의 상호작용 활발도' },
-    { name: '정기 포스팅', value: Math.min(100, (result.stats.posting_frequency || 3) > 4 ? 90 : (result.stats.posting_frequency || 3) * 22), description: '꾸준히 포스팅하는 정도' },
-    { name: '최근 활동', value: getConsistentScore(82, 17, 70, 95), description: '최근 30일 내 활동량' },
+    measured('총 포스트 수', result.stats.total_posts, '누적 발행 글 수', { raw: true, unit: '개' }),
+    measured('이웃 수', result.stats.neighbor_count, '서로이웃 포함 이웃 수', { raw: true, unit: '명' }),
+    measured('누적 방문자', result.stats.total_visitors, '블로그 개설 이후 누적', { raw: true, unit: '명' }),
+    measured('평균 글자 수', num(rs.avg_post_length), '글 하나당 평균 글자 수', { raw: true, unit: '자' }),
+    measured('평균 이미지 수', num(rs.avg_image_count, 1), '글 하나당 평균 이미지', { raw: true, unit: '장' }),
+    measured('발행 간격', num(rs.posting_interval_days, 1), '글과 글 사이 평균 간격', { raw: true, unit: '일' }),
+    measured('마지막 발행', num(rs.recent_activity_days), '가장 최근 글로부터 지난 날짜', { raw: true, unit: '일 전' }),
+    measured('활동성 계수', num(sb.vitality, 2),
+      `총점에 곱해지는 계수 (${sb.vitality_state || '판정 불가'})`, { raw: true }),
+    measured('누적 지표 보너스', num(sb.extra_bonus, 1), '글수·이웃·방문자로 더해진 점수', { raw: true, unit: '점' }),
   ]
 
-  // 성장성 지표 (10개)
-  const growthMetrics = [
-    { name: '일일 방문자', value: result.stats.total_visitors, unit: '명', raw: true },
-    { name: '방문자 추세', value: getConsistentScore(70, 19, 55, 95), description: '방문자 수 증가 추세' },
-    { name: '검색 유입률', value: getConsistentScore(65, 23, 45, 90), description: '검색을 통한 유입 비율' },
-    { name: '재방문율', value: getConsistentScore(50, 29, 30, 70), description: '재방문하는 사용자 비율' },
-    { name: '체류 시간', value: getConsistentScore(70, 31, 50, 90), description: '평균 체류 시간' },
-    { name: '이탈률', value: getConsistentScore(35, 37, 20, 50), description: '바로 이탈하는 비율 (낮을수록 좋음)', inverse: true },
-    { name: '공유 지수', value: getConsistentScore(55, 41, 35, 85), description: 'SNS 공유 빈도' },
-    { name: '구독 전환율', value: getConsistentScore(60, 43, 40, 80), description: '방문자가 이웃이 되는 비율' },
-    { name: '성장 잠재력', value: Math.min(100, result.index.level * 6 + 20), description: '앞으로의 성장 가능성' },
-    { name: '상위 노출 키워드', value: Math.round(result.index.level * 1.5), unit: '개', raw: true },
-  ]
 
+  // '성장성' 탭은 제거했다. 재방문율·체류시간·이탈률·검색유입률은 블로그 소유자만
+  // 볼 수 있는 통계라 외부에서 측정할 방법이 없고, 예전에는 전부 지어낸 값이었다.
   const tabs = [
-    { id: 'core', label: '핵심 지표', count: 2, icon: '🎯' },
-    { id: 'content', label: '콘텐츠 품질', count: 20, icon: '📝' },
-    { id: 'activity', label: '활동성', count: 10, icon: '💪' },
-    { id: 'growth', label: '성장성', count: 10, icon: '📈' },
+    { id: 'core', label: '핵심 지표', count: 2, icon: Target },
+    { id: 'content', label: '콘텐츠 품질', count: cRankMetrics.length + diaMetrics.length, icon: FileText },
+    { id: 'activity', label: '활동성', count: activityMetrics.length, icon: Activity },
   ]
 
   const renderMetricCard = (metric: any, index: number, locked: boolean = false) => {
@@ -1058,12 +920,14 @@ function DetailedMetricsSection({ result, isFreeUser }: { result: any; isFreeUse
         <div>
           <h3 className="text-2xl font-bold flex items-center gap-2">
             <TrendingUp className="w-6 h-6 text-[#0064FF]" />
-            40+ 지표 상세 분석
+            측정 지표
           </h3>
-          <p className="text-sm text-gray-500 mt-1">블로그 품질을 42개 지표로 세밀하게 분석했습니다</p>
+          <p className="text-sm text-gray-500 mt-1">실제로 측정한 값만 표시합니다</p>
         </div>
         <div className="flex items-center gap-2 px-3 py-1.5 bg-[#0064FF]/10 rounded-full">
-          <span className="text-sm font-medium text-[#0064FF]">42개 지표</span>
+          <span className="text-sm font-medium text-[#0064FF]">
+            {cRankMetrics.length + diaMetrics.length + activityMetrics.length}개
+          </span>
         </div>
       </div>
 
@@ -1079,7 +943,7 @@ function DetailedMetricsSection({ result, isFreeUser }: { result: any; isFreeUse
                 : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
             }`}
           >
-            <span>{tab.icon}</span>
+            <tab.icon className="w-4 h-4" strokeWidth={1.75} />
             <span>{tab.label}</span>
             <span className={`text-xs px-1.5 py-0.5 rounded-full ${
               activeTab === tab.id ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
@@ -1126,7 +990,7 @@ function DetailedMetricsSection({ result, isFreeUser }: { result: any; isFreeUse
             group: 'C-Rank',
             name: '이웃 규모',
             simple: 'Chain 추정 · 이웃 수 기반',
-            tooltip: '실제 측정값: 블로그 이웃 수. (5000+=95점, 2000+=85, 1000+=75, 500+=65)\n\n네이버 진짜 신호: 공감·댓글·스크랩·체류시간. 외부에서는 측정 불가능하므로 이웃 수로 근사. ⚠️ 이웃은 매수 가능해 노이즈 큼.',
+            tooltip: '실제 측정값: 블로그 이웃 수. (5000+=95점, 2000+=85, 1000+=75, 500+=65)\n\n네이버 진짜 신호: 공감·댓글·스크랩·체류시간. 외부에서는 측정 불가능하므로 이웃 수로 근사. 이웃은 매수 가능해 노이즈 큼.',
             score: cDetail?.chain ?? sb.c_rank ?? 0,
           },
           {
@@ -1334,8 +1198,8 @@ function DetailedMetricsSection({ result, isFreeUser }: { result: any; isFreeUse
                     { label: '누적 방문자', value: sb.raw_signals.total_visitors, unit: '명' },
                     // 풀파싱 신호 (있을 때만 의미있음)
                     { label: '풀파싱 표본 수', value: sb.raw_signals.fullparse_n, unit: '개', help: '최근 N개 포스트 풀파싱' },
-                    { label: '평균 공감수 ⭐', value: sb.raw_signals.fullparse_avg_likes, unit: '개', help: '진짜 Chain 신호' },
-                    { label: '평균 댓글수 ⭐', value: sb.raw_signals.fullparse_avg_comments, unit: '개', help: '진짜 Chain 신호' },
+                    { label: '평균 공감수', value: sb.raw_signals.fullparse_avg_likes, unit: '개', help: '진짜 Chain 신호' },
+                    { label: '평균 댓글수', value: sb.raw_signals.fullparse_avg_comments, unit: '개', help: '진짜 Chain 신호' },
                     { label: '평균 이미지 (풀)', value: sb.raw_signals.fullparse_avg_images, unit: '개', help: '본문 실측' },
                     { label: '평균 동영상', value: sb.raw_signals.fullparse_avg_videos, unit: '개' },
                     { label: '평균 본문 길이', value: sb.raw_signals.fullparse_avg_content_length, unit: '자', help: 'HTML 제거 후' },
@@ -1356,7 +1220,7 @@ function DetailedMetricsSection({ result, isFreeUser }: { result: any; isFreeUse
                   <div className="mt-3 text-[11px] text-gray-500">
                     데이터 소스: {sb.raw_signals.data_sources.join(', ')}
                     {sb.raw_signals.data_sources.includes('estimated') && (
-                      <span className="ml-2 text-amber-600 font-medium">⚠️ 일부 값은 RSS 실패 시 blog_id 시드 기반 추정값</span>
+                      <span className="ml-2 text-amber-600 font-medium">일부 값은 RSS 실패 시 blog_id 시드 기반 추정값</span>
                     )}
                   </div>
                 )}
@@ -1410,13 +1274,6 @@ function DetailedMetricsSection({ result, isFreeUser }: { result: any; isFreeUse
       {activeTab === 'activity' && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {activityMetrics.map((metric, i) => renderMetricCard(metric, i, isFreeUser && i >= 6))}
-        </div>
-      )}
-
-      {/* 성장성 탭 */}
-      {activeTab === 'growth' && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-          {growthMetrics.map((metric, i) => renderMetricCard(metric, i, isFreeUser && i >= 6))}
         </div>
       )}
 
@@ -1738,7 +1595,6 @@ export default function AnalyzePage() {
 
       <div className="container mx-auto px-4">
         {/* P2-4: 소셜 프루프 토스트 */}
-        <LiveToastNotifications />
 
         {/* P1-4: 체험 만료 알림 배너 */}
         <div className="max-w-4xl mx-auto mb-6">
@@ -1817,7 +1673,7 @@ export default function AnalyzePage() {
             </div>
 
             <div className="mt-4 text-sm text-gray-500">
-              💡 <strong>예시:</strong> blog.naver.com/<span className="text-[#0064FF] font-semibold">example_blog</span> → example_blog 입력
+              <strong>예시:</strong> blog.naver.com/<span className="text-[#0064FF] font-semibold">example_blog</span> → example_blog 입력
             </div>
           </motion.div>
 
@@ -1835,7 +1691,7 @@ export default function AnalyzePage() {
                 </div>
 
                 <h3 className="text-2xl font-bold mb-2">AI가 분석중입니다</h3>
-                <p className="text-gray-600">40+ 지표를 종합 분석하고 있어요...</p>
+                <p className="text-gray-600">블로그 지표를 측정하고 있어요...</p>
 
                 {progress > 0 && (
                   <div className="mt-6 w-full max-w-md mx-auto">
@@ -1878,7 +1734,7 @@ export default function AnalyzePage() {
                 animate={{ opacity: 1, y: 0 }}
                 className="glass-3d p-8 text-center"
               >
-                <div className="text-5xl mb-4">🔍</div>
+                <Search className="w-12 h-12 mb-4 mx-auto text-gray-300" strokeWidth={1.5} />
                 <h2 className="text-2xl font-bold mb-2">측정할 수 없습니다</h2>
                 <p className="text-gray-600 mb-1">
                   {result.index.unmeasurable_reason || '네이버에서 블로그 지표를 가져오지 못했습니다.'}
@@ -1943,119 +1799,34 @@ export default function AnalyzePage() {
                           <AnimatedLevel level={result.index.level} />
                         </div>
 
-                        {/* 레벨 프로그레스 시각화 - 확대 버전 */}
-                        <div className="mt-10 px-4">
-                          {/* 레벨 구간 설명 - 대형 티어 카드 */}
-                          <div className="grid grid-cols-4 gap-4 mb-10">
-                            {[
-                              { range: '1', label: '일반', color: 'bg-gray-400', textColor: 'text-gray-700', bgActive: 'bg-gray-50' },
-                              { range: '2-8', label: '준최1~7', color: 'bg-blue-500', textColor: 'text-blue-600', bgActive: 'bg-blue-50' },
-                              { range: '9-11', label: '최적1~3', color: 'bg-[#0064FF]', textColor: 'text-[#0064FF]', bgActive: 'bg-blue-50' },
-                              { range: '12-15', label: '최적1+~4+', color: 'bg-gradient-to-r from-[#0064FF] to-[#3182F6]', textColor: 'text-[#0064FF]', bgActive: 'bg-blue-50' },
-                            ].map((tier) => {
-                              const currentLevel = result.index.level
-                              const isActive = (tier.range === '1' && currentLevel === 1) ||
-                                (tier.range === '2-8' && currentLevel >= 2 && currentLevel <= 8) ||
-                                (tier.range === '9-11' && currentLevel >= 9 && currentLevel <= 11) ||
-                                (tier.range === '12-15' && currentLevel >= 12 && currentLevel <= 15)
-
-                              return (
-                                <div
-                                  key={tier.range}
-                                  className={`text-center py-6 px-3 rounded-3xl transition-all duration-300 ${
-                                    isActive
-                                      ? `${tier.bgActive} shadow-2xl scale-110 ring-3 ring-[#0064FF] border-2 border-blue-200`
-                                      : 'bg-gray-100/60 opacity-60'
-                                  }`}
-                                >
-                                  <div className={`w-8 h-8 rounded-full ${tier.color} mx-auto mb-3 ${isActive ? 'shadow-lg' : ''}`} />
-                                  <div className={`text-xl font-bold ${isActive ? tier.textColor : 'text-gray-400'}`}>
-                                    {tier.label}
-                                  </div>
-
-                                  {isActive && (
-                                    <div className="mt-3">
-                                      <span className="text-xs font-bold text-white bg-[#0064FF] px-3 py-1 rounded-full">
-                                        현재 티어
-                                      </span>
-                                    </div>
-                                  )}
-                                </div>
-                              )
-                            })}
+                        {/* 등급 요약 한 줄.
+                            예전에는 티어 카드 4개 + 프로그레스 바 + 눈금 + 다음 티어 배지가
+                            차례로 쌓여서, 정작 "내가 어디쯤인가"가 더 안 보였다. */}
+                        <div className="mt-6 flex flex-col items-center gap-3">
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-4xl font-black text-gray-900">
+                              {result.index.total_score.toFixed(1)}
+                            </span>
+                            <span className="text-lg text-gray-400">/ 100점</span>
                           </div>
-
-                          {/* 프로그레스 바 - 크게 */}
-                          <div className="relative py-6">
-                            {/* 배경 바 */}
-                            <div className="h-5 bg-gray-200 rounded-full overflow-hidden flex shadow-inner">
-                              <div className="w-[6.67%] bg-gray-400" /> {/* Lv.1 */}
-                              <div className="w-[46.67%] bg-gradient-to-r from-blue-400 to-blue-500" /> {/* Lv.2-8 */}
-                              <div className="w-[20%] bg-gradient-to-r from-[#0064FF] to-[#3182F6]" /> {/* Lv.9-11 */}
-                              <div className="w-[26.67%] bg-gradient-to-r from-[#0064FF] via-[#3182F6] to-[#4A9AF8]" /> {/* Lv.12-15 */}
-                            </div>
-
-                            {/* 현재 레벨 마커 */}
-                            <div
-                              className="absolute top-1/2 -translate-y-1/2 transition-all duration-500"
-                              style={{ left: `${((result.index.level - 1) / 14) * 100}%` }}
-                            >
-                              <div className="relative">
-                                {/* 마커 - 더 크게 */}
-                                <div className="w-12 h-12 -ml-6 bg-white rounded-full shadow-2xl border-4 border-yellow-400 flex items-center justify-center ring-4 ring-yellow-200">
-                                  <span className="text-lg font-bold text-gray-800">{result.index.level}</span>
-                                </div>
-                                {/* 라벨 */}
-                                <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 text-center">
-                                  <div className="text-sm font-bold text-yellow-600 whitespace-nowrap bg-yellow-100 px-4 py-1.5 rounded-full shadow-md border border-yellow-200">
-                                    현재 레벨
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* 레벨 눈금 - 더 크게 */}
-                          <div className="flex justify-between mt-12 px-2">
-                            <span className="text-sm text-gray-500 font-semibold">1</span>
-                            <span className="text-sm text-gray-500 font-semibold">5</span>
-                            <span className="text-sm text-gray-500 font-semibold">8</span>
-                            <span className="text-sm text-gray-500 font-semibold">11</span>
-                            <span className="text-sm text-gray-500 font-semibold">15</span>
-                          </div>
-
-                          {/* 다음 티어 안내 - 롤 스타일 */}
-                          {result.index.level !== null && result.index.level < 15 && (
-                            <div className="mt-8 text-center">
-                              {(() => {
-                                const level = result.index.level as number
-                                const nextTierInfo =
-                                  level <= 2 ? { nextTier: 'Bronze', color: 'text-amber-700', bg: 'bg-amber-100' } :
-                                  level <= 4 ? { nextTier: 'Silver', color: 'text-slate-700', bg: 'bg-slate-100' } :
-                                  level <= 6 ? { nextTier: 'Gold', color: 'text-yellow-700', bg: 'bg-yellow-100' } :
-                                  level <= 9 ? { nextTier: 'Platinum', color: 'text-teal-700', bg: 'bg-teal-100' } :
-                                  level <= 11 ? { nextTier: 'Diamond', color: 'text-blue-700', bg: 'bg-blue-100' } :
-                                  level <= 13 ? { nextTier: 'Challenger', color: 'text-orange-700', bg: 'bg-orange-100' } :
-                                  { nextTier: 'MAX', color: 'text-[#0064FF]', bg: 'bg-blue-100' }
-
-                                // 실제 레벨 컷 테이블 기준 (예전 level*6.67 공식은 음수가 나왔다)
-                                const nextStep = getPointsToNextLevel(level, result.index.total_score)
-                                const pointsNeeded = nextStep?.pointsNeeded ?? 0
-
-                                return (
-                                  <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-[#0064FF]/5 to-[#3182F6]/10 rounded-2xl border border-blue-100 shadow-sm">
-                                    <span className="text-base text-[#0064FF]">
-                                      다음 티어까지 <span className="font-bold text-lg">{pointsNeeded}점</span> 필요
-                                    </span>
-                                    <span className="text-[#3182F6] text-xl">→</span>
-                                    <span className={`text-lg font-bold ${nextTierInfo.color} ${nextTierInfo.bg} px-3 py-1 rounded-lg`}>
-                                      {nextTierInfo.nextTier}
-                                    </span>
-                                  </div>
-                                )
-                              })()}
-                            </div>
+                          {result.index.percentile != null && (
+                            <p className="text-sm text-gray-500">
+                              검색에 노출되는 블로그 중 상위{' '}
+                              <span className="font-bold text-gray-700">
+                                {Math.max(1, Math.round(100 - result.index.percentile))}%
+                              </span>
+                            </p>
                           )}
+                          {result.index.level !== null && result.index.level < 15 && (() => {
+                            const nextStep = getPointsToNextLevel(result.index.level as number, result.index.total_score)
+                            if (!nextStep) return null
+                            return (
+                              <p className="text-sm text-gray-500">
+                                다음 등급까지{' '}
+                                <span className="font-bold text-[#0064FF]">{nextStep.pointsNeeded}점</span>
+                              </p>
+                            )
+                          })()}
                         </div>
                       </div>
                     </motion.div>
@@ -2112,13 +1883,13 @@ export default function AnalyzePage() {
 
                   <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
                     {[
-                      { label: '운영 건강도', value: `${result.index.total_score.toFixed(1)}/100`, icon: '🎯', isScore: true },
+                      { label: '운영 건강도', value: `${result.index.total_score.toFixed(1)}/100`, icon: Target, isScore: true },
                       {
                         label: '포스트',
                         value: result.stats.total_posts != null
                           ? result.stats.total_posts.toLocaleString()
                           : (result.stats.total_posts_min != null ? `${result.stats.total_posts_min}+` : '측정 불가'),
-                        icon: '📝', isScore: false,
+                        icon: FileText, isScore: false,
                       },
                       {
                         // 누적 방문자는 죽어도 줄지 않아 현재 상태를 못 보여준다.
@@ -2127,14 +1898,14 @@ export default function AnalyzePage() {
                         value: result.stats.recent_avg_visitors != null
                           ? result.stats.recent_avg_visitors.toLocaleString()
                           : (result.stats.total_visitors != null ? result.stats.total_visitors.toLocaleString() : '측정 불가'),
-                        icon: '👥', isScore: false,
+                        icon: Users, isScore: false,
                       },
                       {
                         label: '이웃',
                         value: result.stats.neighbor_count != null
                           ? result.stats.neighbor_count.toLocaleString()
                           : '측정 불가',
-                        icon: '❤️', isScore: false,
+                        icon: Heart, isScore: false,
                       },
                     ].map((stat, index) => (
                       <motion.div
@@ -2144,7 +1915,7 @@ export default function AnalyzePage() {
                         transition={{ delay: 0.4 + index * 0.1 }}
                         className="text-center p-4 rounded-2xl bg-white/50 relative"
                       >
-                        <div className="text-3xl mb-2">{stat.icon}</div>
+                        <stat.icon className="w-6 h-6 mb-2 mx-auto text-gray-400" strokeWidth={1.75} />
                         <div className="text-2xl font-bold">{stat.value}</div>
                         <div className="text-sm text-gray-600 flex items-center justify-center gap-1">
                           {stat.label}
@@ -2152,7 +1923,7 @@ export default function AnalyzePage() {
                             <div className="group relative">
                               <HelpCircle className="w-3.5 h-3.5 text-gray-400 cursor-help" />
                               <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-72 p-3 bg-gray-900 text-white text-xs rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-20 shadow-xl text-left whitespace-pre-line font-normal leading-relaxed">
-                                {`외부 수집 가능한 raw 신호로 추정한 블로그 운영 건강도입니다.\n\n⚠️ 이 점수와 실제 네이버 SERP 순위 사이의 상관관계는 자체 검증(n=67) 결과 ρ=0.04로 거의 무관했습니다. \"이 점수가 높으면 검색 상위에 노출된다\"는 보장이 아닙니다.\n\n순위 예측 목적이라면 SERP 순위 추적 도구(판다랭크 등)를 병행하세요.`}
+                                {`외부 수집 가능한 raw 신호로 추정한 블로그 운영 건강도입니다.\n\n주의: 이 점수와 실제 네이버 SERP 순위 사이의 상관관계는 자체 검증(n=67) 결과 ρ=0.04로 거의 무관했습니다. \"이 점수가 높으면 검색 상위에 노출된다\"는 보장이 아닙니다.\n\n순위 예측 목적이라면 SERP 순위 추적 도구(판다랭크 등)를 병행하세요.`}
                                 <div className="absolute left-1/2 -translate-x-1/2 top-full border-8 border-transparent border-t-gray-900" />
                               </div>
                             </div>
@@ -2163,10 +1934,29 @@ export default function AnalyzePage() {
                   </div>
                 </div>
 
-                {/* 40+ 지표 상세 분석 탭 */}
-                <DetailedMetricsSection result={result} isFreeUser={isFreeUser} />
+                {/* 할 일 — 화면에서 가장 먼저 보여야 하는 것 */}
+                <ConcreteRecommendations result={result} isFreeUser={isFreeUser} />
 
-                {/* Daily Visitors Chart - 무료 플랜은 3일 미리보기 */}
+                {/* 나머지는 전부 접어둔다 */}
+                <DetailsAccordion title="지표 자세히 보기" subtitle="실제로 측정한 값과 항목별 점수">
+                  <DetailedMetricsSection result={result} isFreeUser={isFreeUser} />
+                </DetailsAccordion>
+
+                <DetailsAccordion title="이 점수가 무슨 뜻인가요?" subtitle="등급의 의미와 노출 경쟁력">
+                  <ScoreInterpretation
+                    result={result}
+                    onKeywordSearch={() => router.push('/keyword-search')}
+                  />
+                </DetailsAccordion>
+
+                <DetailsAccordion title="실제 검색 노출 측정" subtitle="색인 검증 · 노출 천장 · 키워드 판정">
+                  <IndexVerificationCard blogId={result.blog.blog_id} />
+                  <ExposureCeilingCard blogId={result.blog.blog_id} />
+                  <KeywordJudgeWidget blogId={result.blog.blog_id} isFreeUser={isFreeUser} />
+                </DetailsAccordion>
+
+                {/* 방문자 추이도 기본은 접어둔다 */}
+                <DetailsAccordion title="방문자 추이" subtitle="최근 일별 방문자 변화">
                 {result.daily_visitors && result.daily_visitors.length > 0 && (
                   <div className="glass-3d p-8  relative overflow-hidden">
                     <h3 className="text-2xl font-bold mb-6 flex items-center gap-2">
@@ -2316,27 +2106,7 @@ export default function AnalyzePage() {
                     )}
                   </div>
                 )}
-
-                {/* P0-1: 점수 해석 - "그래서 뭐?" 문제 해결 */}
-                <ScoreInterpretation
-                  result={result}
-                  onKeywordSearch={() => router.push('/keyword-search')}
-                />
-
-                {/* 실제 네이버 인덱스 검증 (일반/준최/최적/최적+) */}
-                <IndexVerificationCard blogId={result.blog.blog_id} />
-
-                {/* 노출 천장 — 실제 상위노출 실적 기반 */}
-                <ExposureCeilingCard blogId={result.blog.blog_id} />
-
-                {/* 키워드 상위노출 판정 (내 천장 + 경쟁자 체력) */}
-                <KeywordJudgeWidget blogId={result.blog.blog_id} isFreeUser={isFreeUser} />
-
-                {/* Recommendations - 구체적 수치 포함 */}
-                <ConcreteRecommendations result={result} isFreeUser={isFreeUser} />
-
-                {/* P1-4: 즉시 실행 가능한 액션 플랜 */}
-                <NextStepActionPlan result={result} />
+                </DetailsAccordion>
 
                 {/* Warnings */}
                 {result.warnings.length > 0 && (
@@ -2361,109 +2131,6 @@ export default function AnalyzePage() {
                     </div>
                   </div>
                 )}
-
-                {/* 다음 액션 - P0 핵심 기능 */}
-                <div className="rounded-3xl p-8 bg-gradient-to-br from-[#0064FF]/5 to-blue-50 border-2 border-[#0064FF]/20 shadow-xl">
-                  <h3 className="text-2xl font-bold mb-2 flex items-center gap-2">
-                    <Target className="w-6 h-6 text-[#0064FF]" />
-                    지금 바로 할 수 있는 액션
-                  </h3>
-                  <p className="text-gray-600 mb-6">분석 결과를 바탕으로 추천드리는 다음 단계입니다</p>
-
-                  <div className="grid md:grid-cols-3 gap-4">
-                    {/* 액션 1: 키워드 검색 */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 1.0 }}
-                      whileHover={{ scale: 1.02 }}
-                      className="bg-white rounded-2xl p-6 border border-gray-100 hover:border-[#0064FF]/30 hover:shadow-lg transition-all cursor-pointer"
-                    >
-                      <Link href="/keyword-search" className="block">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#0064FF] to-[#3182F6] flex items-center justify-center mb-4">
-                          <Search className="w-6 h-6 text-white" />
-                        </div>
-                        <h4 className="font-bold text-lg mb-2">키워드 경쟁력 분석</h4>
-                        <p className="text-sm text-gray-600 mb-4">
-                          {result.index.level >= 5
-                            ? '현재 레벨에서 상위 노출 가능한 키워드를 찾아보세요'
-                            : '경쟁이 낮은 블루오션 키워드부터 공략하세요'
-                          }
-                        </p>
-                        <div className="flex items-center text-[#0064FF] font-medium text-sm">
-                          키워드 검색하기 <ChevronRight className="w-4 h-4 ml-1" />
-                        </div>
-                      </Link>
-                    </motion.div>
-
-                    {/* 액션 2: AI 글쓰기 */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 1.1 }}
-                      whileHover={{ scale: 1.02 }}
-                      className="bg-white rounded-2xl p-6 border border-gray-100 hover:border-[#0064FF]/30 hover:shadow-lg transition-all cursor-pointer"
-                    >
-                      <Link href="/tools" className="block">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-4">
-                          <PenTool className="w-6 h-6 text-white" />
-                        </div>
-                        <h4 className="font-bold text-lg mb-2">AI 글쓰기 도움</h4>
-                        <p className="text-sm text-gray-600 mb-4">
-                          {result.index.score_breakdown.dia < 60
-                            ? '문서 품질을 높이는 글쓰기 가이드를 받아보세요'
-                            : 'AI로 더 빠르게 고품질 콘텐츠를 작성하세요'
-                          }
-                        </p>
-                        <div className="flex items-center text-purple-600 font-medium text-sm">
-                          AI 도구 보기 <ChevronRight className="w-4 h-4 ml-1" />
-                        </div>
-                      </Link>
-                    </motion.div>
-
-                    {/* 액션 3: 상세 분석 */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 1.2 }}
-                      whileHover={{ scale: 1.02 }}
-                      className="bg-white rounded-2xl p-6 border border-gray-100 hover:border-[#0064FF]/30 hover:shadow-lg transition-all cursor-pointer"
-                    >
-                      <Link href={`/blog/${result.blog.blog_id}?tab=breakdown`} className="block">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center mb-4">
-                          <Lightbulb className="w-6 h-6 text-white" />
-                        </div>
-                        <h4 className="font-bold text-lg mb-2">상세 점수 분석</h4>
-                        <p className="text-sm text-gray-600 mb-4">
-                          어떤 부분에서 점수를 잃고 있는지 구체적으로 확인하세요
-                        </p>
-                        <div className="flex items-center text-amber-600 font-medium text-sm">
-                          상세 분석 보기 <ChevronRight className="w-4 h-4 ml-1" />
-                        </div>
-                      </Link>
-                    </motion.div>
-                  </div>
-
-                  {/* 레벨별 맞춤 팁 */}
-                  <div className="mt-6 p-4 bg-white/80 rounded-xl border border-blue-100">
-                    <div className="flex items-start gap-3">
-                      <div className="p-2 rounded-lg bg-[#0064FF]/10">
-                        <Sparkles className="w-5 h-5 text-[#0064FF]" />
-                      </div>
-                      <div>
-                        <h5 className="font-bold text-gray-900 mb-1">
-                          Lv.{result.index.level} 맞춤 성장 전략
-                        </h5>
-                        <p className="text-sm text-gray-600">
-                          {result.index.level <= 3 && '기초 다지기 단계입니다. 꾸준한 포스팅과 이웃 활동으로 블로그 신뢰도를 쌓아보세요. 주 2-3회 포스팅을 목표로 해보세요.'}
-                          {result.index.level >= 4 && result.index.level <= 6 && '성장 가속 단계입니다. 특정 주제에 집중하여 전문성을 높이고, 검색 유입을 늘려보세요. 키워드 분석 도구를 적극 활용하세요.'}
-                          {result.index.level >= 7 && result.index.level <= 9 && '경쟁력 확보 단계입니다. 상위 노출 키워드를 공략하고, 콘텐츠 품질을 더욱 높여보세요. 방문자 유입 분석도 중요합니다.'}
-                          {result.index.level >= 10 && '전문가 단계입니다. 브랜딩과 수익화를 고민해보세요. 다양한 채널 연동으로 영향력을 확장할 수 있습니다.'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
 
                 {/* 플라톤마케팅 CTA */}
                 <motion.div
