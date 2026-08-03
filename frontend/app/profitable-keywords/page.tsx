@@ -180,7 +180,7 @@ export default function ProfitableKeywordsPage() {
           <div>
             <h1 className="text-2xl md:text-3xl font-bold">
               <span className="bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
-                💰 돈되는 키워드
+                돈되는 키워드
               </span>
             </h1>
             <p className="text-gray-600 text-sm mt-1">

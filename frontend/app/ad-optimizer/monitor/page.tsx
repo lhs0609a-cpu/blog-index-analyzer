@@ -213,9 +213,9 @@ export default function OptimizationMonitorPage() {
   }
 
   const platformIcons: Record<string, string> = {
-    naver_searchad: '🟢',
-    google_ads: '🔵',
-    meta_ads: '🔷'
+    naver_searchad: '#03C75A',
+    google_ads: '#4285F4',
+    meta_ads: '#0866FF'
   }
 
   if (!userId) {
@@ -394,7 +394,7 @@ export default function OptimizationMonitorPage() {
                       >
                         <div className="flex items-start gap-3">
                           <span className="text-2xl">
-                            {platformIcons[action.platform] || '📊'}
+                            <span className="w-2.5 h-2.5 rounded-full inline-block ring-1 ring-black/5" style={{ backgroundColor: platformIcons[action.platform] || '#9CA3AF' }} />
                           </span>
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">

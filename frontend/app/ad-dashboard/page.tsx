@@ -327,7 +327,7 @@ export default function AdDashboardPage() {
             ))}
           </div>
           <p className="mt-4 text-sm text-gray-400">
-            💡 자동 최적화를 ON하면 1분마다 AI가 자동으로 입찰가와 예산을 조정합니다.
+            자동 최적화를 ON하면 1분마다 AI가 자동으로 입찰가와 예산을 조정합니다.
           </p>
         </div>
       )}
@@ -604,7 +604,7 @@ export default function AdDashboardPage() {
 
       {/* How it works */}
       <div className="mt-8 bg-gray-900/50 border border-gray-800 rounded-xl p-6">
-        <h2 className="text-xl font-semibold mb-6">💡 AI 최적화 작동 방식</h2>
+        <h2 className="text-xl font-semibold mb-6">AI 최적화 작동 방식</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="text-center">

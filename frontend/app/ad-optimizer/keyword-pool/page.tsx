@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Loader2, Plus, RefreshCw, Database, Activity, AlertCircle, CheckCircle2, XCircle, Clock, Zap, Trash2 } from 'lucide-react'
+import { ArrowLeft, Loader2, Plus, RefreshCw, Database, Activity, AlertCircle, CheckCircle2, XCircle, Clock, Zap, Trash2, AlertTriangle} from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/lib/stores/auth'
 import { adGet, adPost, adDelete, adPatch } from '@/lib/api'
@@ -581,12 +581,12 @@ export default function KeywordPoolPage() {
     setTimeout(() => loadAutoCleanup(), 300)
   }
 
-  // 🚨 긴급 일괄 삭제 — 네이버 광고주 가이드 (저품질 처분 회피) 용.
+  // 긴급 일괄 삭제 — 네이버 광고주 가이드 (저품질 처분 회피) 용.
   // dry_run 단계 건너뛰고 점수 ≤ threshold 모든 등록 KW 즉시 background DELETE.
   const [emergencyRunning, setEmergencyRunning] = useState(false)
   const handleEmergencyBulkDelete = async () => {
     const thrStr = window.prompt(
-      '⚠️ 긴급 일괄 삭제\n\n점수 ≤ N 인 모든 등록 KW 를 네이버에서 즉시 DELETE 합니다 (최대 50,000개).\n\n임계값 (1~95, 기본 50):',
+      '긴급 일괄 삭제\n\n점수 ≤ N 인 모든 등록 KW 를 네이버에서 즉시 DELETE 합니다 (최대 50,000개).\n\n임계값 (1~95, 기본 50):',
       '50'
     )
     if (!thrStr) return
@@ -1364,7 +1364,7 @@ export default function KeywordPoolPage() {
               title="네이버 광고주 가이드 (저품질 처분 회피) — 점수 ≤ N 등록 KW 최대 50,000개 즉시 백그라운드 삭제"
             >
               {emergencyRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <AlertCircle className="w-3.5 h-3.5" />}
-              🚨 긴급 일괄 삭제 (네이버 가이드)
+              긴급 일괄 삭제 (네이버 가이드)
             </button>
           </div>
 
@@ -2107,7 +2107,7 @@ export default function KeywordPoolPage() {
           <div className="bg-red-50 border-2 border-red-300 rounded-2xl p-5 mb-6">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                <span className="text-2xl">⚠️</span>
+                <AlertTriangle className="w-6 h-6" strokeWidth={1.75} />
               </div>
               <div className="flex-1">
                 <h3 className="font-bold text-red-900 mb-1">

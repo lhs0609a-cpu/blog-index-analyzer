@@ -41,7 +41,6 @@ export default function CompetitionGauge({
       {/* 진입 난이도 배지 */}
       <div className="mb-4">
         <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${difficultyColors.bg}`}>
-          <span className="text-xl">{difficultyColors.emoji}</span>
           <span className={`font-semibold ${difficultyColors.text}`}>
             진입 난이도: {entry_difficulty}
           </span>

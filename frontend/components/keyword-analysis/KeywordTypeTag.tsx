@@ -1,6 +1,8 @@
 'use client'
 
 import { KeywordType, KEYWORD_TYPE_COLORS } from '@/lib/types/keyword-analysis'
+import { Info, Stethoscope, Building2, Wallet, MapPin, Map, HelpCircle } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 
 interface KeywordTypeTagProps {
   type: KeywordType
@@ -26,14 +28,14 @@ export default function KeywordTypeTag({
   }
 
   // 아이콘 매핑
-  const icons: Record<KeywordType, string> = {
-    '정보형': 'ℹ️',
-    '증상형': '🩺',
-    '병원탐색형': '🏥',
-    '비용검사형': '💰',
-    '지역형': '📍',
-    '광역형': '🗺️',
-    '미분류': '❓'
+  const icons: Record<KeywordType, LucideIcon> = {
+    '정보형': Info,
+    '증상형': Stethoscope,
+    '병원탐색형': Building2,
+    '비용검사형': Wallet,
+    '지역형': MapPin,
+    '광역형': Map,
+    '미분류': HelpCircle
   }
 
   return (
@@ -46,7 +48,7 @@ export default function KeywordTypeTag({
       `}
       title={showConfidence && confidence ? `신뢰도: ${(confidence * 100).toFixed(0)}%` : undefined}
     >
-      <span>{icons[type]}</span>
+      {(() => { const Ico = icons[type]; return <Ico className="w-3.5 h-3.5" strokeWidth={2} /> })()}
       <span>{type}</span>
       {showConfidence && confidence !== undefined && confidence > 0 && (
         <span className="opacity-60 text-[0.85em]">

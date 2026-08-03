@@ -8,7 +8,7 @@ import {
   Loader2, AlertTriangle, HelpCircle,
   ExternalLink, Eye, EyeOff, Zap, Star, Trophy, Target,
   Search, Settings, Copy, Shield
-} from 'lucide-react'
+, CheckCircle2, ClipboardList, FileText, KeyRound, MousePointerClick, UserRound} from 'lucide-react'
 import confetti from 'canvas-confetti'
 import toast from 'react-hot-toast'
 import { useXPStore } from '@/lib/stores/xp'
@@ -35,22 +35,22 @@ interface Phase {
 }
 
 const PHASES: Phase[] = [
-  { id: 'login', icon: '🌐', label: '로그인' },
-  { id: 'find', icon: '🔍', label: '메뉴 찾기' },
-  { id: 'api', icon: '🔑', label: 'API 발급' },
-  { id: 'connect', icon: '✅', label: '연동' },
-  { id: 'complete', icon: '🚀', label: '완료' },
+  { id: 'login', icon: Globe, label: '로그인' },
+  { id: 'find', icon: Search, label: '메뉴 찾기' },
+  { id: 'api', icon: KeyRound, label: 'API 발급' },
+  { id: 'connect', icon: CheckCircle2, label: '연동' },
+  { id: 'complete', icon: Rocket, label: '완료' },
 ]
 
 const STEPS: Step[] = [
-  { id: 1, title: '네이버 광고 사이트 접속', icon: '🌐', xp: 10, description: 'searchad.naver.com에 접속하세요', estimatedTime: '~1분', phaseIndex: 0 },
-  { id: 2, title: '광고 계정 확인하기', icon: '👤', xp: 10, description: '광고 계정이 있는지 확인하세요', estimatedTime: '~2분', phaseIndex: 0 },
-  { id: 3, title: '"광고시스템" 버튼 클릭', icon: '🖱️', xp: 10, description: '광고시스템 버튼을 찾아 클릭하세요', estimatedTime: '~30초', phaseIndex: 1 },
-  { id: 4, title: '"도구 > API 사용 관리" 클릭', icon: '📋', xp: 15, description: '도구 메뉴에서 API 관리를 찾으세요', estimatedTime: '~30초', phaseIndex: 1 },
-  { id: 5, title: 'API 서비스 신청하기', icon: '📝', xp: 20, description: 'API 라이선스를 신청하세요', estimatedTime: '~1분', phaseIndex: 2 },
-  { id: 6, title: '3가지 키 복사하기', icon: '🔑', xp: 30, description: '고객ID, API키, 비밀키를 복사하세요', estimatedTime: '~2분', phaseIndex: 2 },
-  { id: 7, title: '키 입력하고 연동하기', icon: '✅', xp: 40, description: 'API 키를 입력하고 연동하세요', estimatedTime: '~1분', phaseIndex: 3 },
-  { id: 8, title: '자동 최적화 시작', icon: '🚀', xp: 50, description: '자동 최적화를 시작하세요', estimatedTime: '~30초', phaseIndex: 4 },
+  { id: 1, title: '네이버 광고 사이트 접속', icon: Globe, xp: 10, description: 'searchad.naver.com에 접속하세요', estimatedTime: '~1분', phaseIndex: 0 },
+  { id: 2, title: '광고 계정 확인하기', icon: UserRound, xp: 10, description: '광고 계정이 있는지 확인하세요', estimatedTime: '~2분', phaseIndex: 0 },
+  { id: 3, title: '"광고시스템" 버튼 클릭', icon: MousePointerClick, xp: 10, description: '광고시스템 버튼을 찾아 클릭하세요', estimatedTime: '~30초', phaseIndex: 1 },
+  { id: 4, title: '"도구 > API 사용 관리" 클릭', icon: ClipboardList, xp: 15, description: '도구 메뉴에서 API 관리를 찾으세요', estimatedTime: '~30초', phaseIndex: 1 },
+  { id: 5, title: 'API 서비스 신청하기', icon: FileText, xp: 20, description: 'API 라이선스를 신청하세요', estimatedTime: '~1분', phaseIndex: 2 },
+  { id: 6, title: '3가지 키 복사하기', icon: KeyRound, xp: 30, description: '고객ID, API키, 비밀키를 복사하세요', estimatedTime: '~2분', phaseIndex: 2 },
+  { id: 7, title: '키 입력하고 연동하기', icon: CheckCircle2, xp: 40, description: 'API 키를 입력하고 연동하세요', estimatedTime: '~1분', phaseIndex: 3 },
+  { id: 8, title: '자동 최적화 시작', icon: Rocket, xp: 50, description: '자동 최적화를 시작하세요', estimatedTime: '~30초', phaseIndex: 4 },
 ]
 
 const COMPLETION_BONUS = 100
@@ -168,7 +168,7 @@ function ClickIndicator({
           transition={{ duration: 1.5, repeat: Infinity }}
           className="absolute -bottom-7 left-1/2 -translate-x-1/2 text-xs font-bold text-red-500 whitespace-nowrap flex items-center gap-1"
         >
-          <span className="text-sm">👆</span> {label}
+          {label}
         </motion.div>
       )}
     </div>
@@ -202,7 +202,7 @@ function TroubleshootingPanel({ stepId }: { stepId: number }) {
         className="flex items-center gap-2 text-sm text-gray-500 hover:text-red-500 transition-colors group"
       >
         <HelpCircle className="w-4 h-4 group-hover:text-red-500" />
-        {isOpen ? '도움말 닫기' : '막혔어요 😢'}
+        {isOpen ? '도움말 닫기' : '막혔어요'}
       </button>
 
       <AnimatePresence>
@@ -289,7 +289,7 @@ function PhaseProgressBar({
                 {status === 'completed' ? (
                   <CheckCircle className="w-5 h-5" />
                 ) : (
-                  <span>{phase.icon}</span>
+                  <phase.icon className="w-4 h-4" strokeWidth={1.75} />
                 )}
               </div>
               <span className={`text-[10px] font-medium ${
@@ -349,7 +349,7 @@ function StepCard({
               </button>
             )}
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-xl">
-              {completed ? <CheckCircle className="w-6 h-6" /> : step.icon}
+              {completed ? <CheckCircle className="w-6 h-6" /> : <step.icon className="w-5 h-5" strokeWidth={1.75} />}
             </div>
             <div>
               <div className="text-white/80 text-xs font-medium flex items-center gap-2">
@@ -535,7 +535,7 @@ export default function AccountSetupWizard({ userId, onComplete, onStartAutoOpti
     const pasted = e.clipboardData.getData('text').replace(/\s/g, '')
     const value = field === 'customer_id' ? pasted.replace(/\D/g, '').slice(0, 10) : pasted
     setConnectForm(prev => ({ ...prev, [field]: value }))
-    toast.success('붙여넣기 완료! (공백 자동 제거됨)', { duration: 2000, icon: '📋' })
+    toast.success('붙여넣기 완료! (공백 자동 제거됨)', { duration: 2000, icon: ClipboardList })
   }
 
   const progressPercentage = (completedSteps.size / STEPS.length) * 100
@@ -551,7 +551,7 @@ export default function AccountSetupWizard({ userId, onComplete, onStartAutoOpti
             exit={{ opacity: 0, y: -60 }}
             className="fixed top-20 left-1/2 -translate-x-1/2 z-[150] bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-6 py-3 rounded-full font-bold shadow-lg text-lg"
           >
-            +{lastXPGain} XP ⚡
+            +{lastXPGain} XP
           </motion.div>
         )}
       </AnimatePresence>
@@ -577,7 +577,7 @@ export default function AccountSetupWizard({ userId, onComplete, onStartAutoOpti
                   transition={{ duration: 0.5, repeat: 2 }}
                   className="text-6xl mb-4"
                 >
-                  🎉
+
                 </motion.div>
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">미션 올클리어!</h2>
                 <p className="text-gray-600 mb-4">네이버 광고 연동이 완료되었습니다!</p>
@@ -592,7 +592,7 @@ export default function AccountSetupWizard({ userId, onComplete, onStartAutoOpti
                   </div>
                   <p className="text-sm text-gray-500">총 획득 경험치</p>
                   <p className="text-xs text-purple-600 mt-1">
-                    {currentRank.icon} 총 {totalXP.toLocaleString()} XP ({currentRank.name})
+                    <currentRank.icon className="w-4 h-4 inline-block mr-1 align-text-bottom" strokeWidth={1.75} /> 총 {totalXP.toLocaleString()} XP ({currentRank.name})
                   </p>
                 </div>
 
@@ -628,7 +628,7 @@ export default function AccountSetupWizard({ userId, onComplete, onStartAutoOpti
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1 rounded-full text-sm font-medium">
-              <span className="text-base">{currentRank.icon}</span>
+              <currentRank.icon className="w-4 h-4" strokeWidth={1.75} />
               {currentRank.name}
             </div>
             <div className="flex items-center gap-1 text-yellow-600 font-medium text-sm">

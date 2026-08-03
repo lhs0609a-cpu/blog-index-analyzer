@@ -34,7 +34,7 @@ export default function QuickConnectForm({ userId, onComplete, onShowTutorial }:
     const pasted = e.clipboardData.getData('text').replace(/\s/g, '')
     const value = field === 'customer_id' ? pasted.replace(/\D/g, '').slice(0, 10) : pasted
     setForm(prev => ({ ...prev, [field]: value }))
-    toast.success('붙여넣기 완료! (공백 자동 제거됨)', { duration: 1500, icon: '📋' })
+    toast.success('붙여넣기 완료! (공백 자동 제거됨)', { duration: 1500 })
   }
 
   const connect = async () => {

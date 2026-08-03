@@ -18,8 +18,8 @@ import {
   Bookmark,
   ExternalLink,
   Loader2,
-  FileText
-} from 'lucide-react'
+  FileText, MessageSquare, Target, Wand2, BookOpen, Lightbulb, Clock, AlertTriangle, Trophy, Search, XCircle} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { getBlogDetails, analyzeBlog, pollJobStatus } from '@/lib/api/blog'
@@ -129,7 +129,7 @@ export default function BlogDetailPage() {
     return (
       <div className="min-h-screen bg-[#fafafa] pt-24 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-6xl mb-4">😢</div>
+          <XCircle className="w-14 h-14 mb-4 mx-auto text-gray-300" strokeWidth={1.5} />
           <h2 className="text-2xl font-bold mb-2">블로그를 찾을 수 없습니다</h2>
           <p className="text-gray-600 mb-6">블로그 ID를 확인해주세요</p>
           <Link href="/analyze">
@@ -246,7 +246,7 @@ export default function BlogDetailPage() {
                 transition={{ type: "spring", delay: 0.2 }}
                 className="w-32 h-32 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] flex items-center justify-center text-6xl shadow-xl shadow-[#0064FF]/25"
               >
-                {displayData.blog.blog_name[0] || '📝'}
+                {displayData.blog.blog_name[0] || 'B'}
               </motion.div>
 
               {/* Stats */}
@@ -369,12 +369,12 @@ export default function BlogDetailPage() {
                 traffic: 10
               }
 
-              const icons: Record<string, string> = {
-                trust: '🏆',
-                content: '📝',
-                engagement: '❤️',
-                seo: '🔍',
-                traffic: '📈'
+              const icons: Record<string, LucideIcon> = {
+                trust: Trophy,
+                content: FileText,
+                engagement: Heart,
+                seo: Search,
+                traffic: TrendingUp
               }
 
               const percentage = (value / maxScores[key]) * 100
@@ -387,7 +387,7 @@ export default function BlogDetailPage() {
                   transition={{ delay: 0.3 + index * 0.1 }}
                   className="text-center p-6 rounded-2xl bg-gradient-to-br from-white/80 to-blue-50/50 border border-blue-100"
                 >
-                  <div className="text-4xl mb-3">{icons[key]}</div>
+                  {(() => { const Ico = icons[key]; return Ico ? <Ico className="w-9 h-9 mb-3 mx-auto text-[#0064FF]" strokeWidth={1.5} /> : null })()}
                   <div className="text-2xl font-bold gradient-text mb-1">
                     {value}<span className="text-lg text-gray-500">/{maxScores[key]}</span>
                   </div>
@@ -497,17 +497,17 @@ export default function BlogDetailPage() {
             >
               <div className="grid md:grid-cols-3 gap-6 mb-8">
                 <div className="text-center p-6 rounded-2xl bg-gradient-to-br from-[#0064FF]/5 to-[#3182F6]/5">
-                  <div className="text-3xl mb-2">❤️</div>
+                  <Heart className="w-7 h-7 mb-2" strokeWidth={1.75} />
                   <div className="text-2xl font-bold gradient-text mb-1">{displayData.stats.avg_likes}</div>
                   <div className="text-sm text-gray-600">평균 좋아요</div>
                 </div>
                 <div className="text-center p-6 rounded-2xl bg-gradient-to-br from-[#3182F6]/5 to-[#4A9DFF]/5">
-                  <div className="text-3xl mb-2">💬</div>
+                  <MessageSquare className="w-7 h-7 mb-2" strokeWidth={1.75} />
                   <div className="text-2xl font-bold gradient-text mb-1">{displayData.stats.avg_comments}</div>
                   <div className="text-sm text-gray-600">평균 댓글</div>
                 </div>
                 <div className="text-center p-6 rounded-2xl bg-gradient-to-br from-[#4A9DFF]/5 to-[#6BB3FF]/5">
-                  <div className="text-3xl mb-2">📊</div>
+                  <BarChart3 className="w-7 h-7 mb-2" strokeWidth={1.75} />
                   <div className="text-2xl font-bold gradient-text mb-1">{displayData.index.percentile}%</div>
                   <div className="text-sm text-gray-600">상위 백분율</div>
                 </div>
@@ -657,7 +657,7 @@ export default function BlogDetailPage() {
                       {breakdownData.breakdown.c_rank.breakdown?.context && (
                         <div className="bg-white rounded-2xl p-6">
                           <h6 className="font-semibold text-lg mb-4 flex items-center gap-2">
-                            📊 Context (주제 집중도) - {breakdownData.breakdown.c_rank.breakdown.context.score}/100
+                            Context (주제 집중도) - {breakdownData.breakdown.c_rank.breakdown.context.score}/100
                           </h6>
                           <div className="space-y-4">
                             {Object.entries(breakdownData.breakdown.c_rank.breakdown.context.details).map(([key, detail]: [string, any]) => (
@@ -736,20 +736,20 @@ export default function BlogDetailPage() {
                             abuse_penalty: '어뷰징 감점'
                           }
 
-                          const icons: Record<string, string> = {
-                            topic_relevance: '🎯',
-                            experience: '✨',
-                            information_richness: '📚',
-                            originality: '💡',
-                            timeliness: '⏰',
-                            abuse_penalty: '⚠️'
+                          const icons: Record<string, LucideIcon> = {
+                            topic_relevance: Target,
+                            experience: Wand2,
+                            information_richness: BookOpen,
+                            originality: Lightbulb,
+                            timeliness: Clock,
+                            abuse_penalty: AlertTriangle
                           }
 
                           return (
                             <div key={key} className="bg-white rounded-2xl p-6">
                               <div className="flex items-center justify-between mb-3">
                                 <h6 className="font-semibold flex items-center gap-2">
-                                  <span className="text-2xl">{icons[key]}</span>
+                                  {(() => { const Ico = icons[key]; return Ico ? <Ico className="w-6 h-6 text-gray-500" strokeWidth={1.75} /> : null })()}
                                   {labels[key]}
                                 </h6>
                                 <span className={`font-bold ${section.weight < 0 ? 'text-red-600' : 'text-green-600'}`}>

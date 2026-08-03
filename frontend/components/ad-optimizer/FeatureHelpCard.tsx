@@ -423,7 +423,7 @@ function FeatureHelpModal({ help, isOpen, onClose }: FeatureHelpModalProps) {
                         key={idx}
                         className="flex items-start gap-2 p-3 bg-yellow-50 rounded-lg"
                       >
-                        <span className="text-yellow-600">💡</span>
+                        <Lightbulb className="w-4 h-4 text-yellow-600" strokeWidth={1.75} />
                         <span className="text-gray-700">{tip}</span>
                       </div>
                     ))}

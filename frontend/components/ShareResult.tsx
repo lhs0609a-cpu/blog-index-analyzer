@@ -53,7 +53,7 @@ export default function ShareResult({
     ? `${window.location.origin}/analyze?blogId=${blogId}`
     : ''
 
-  const shareText = `[블랭크 블로그 분석 결과]\n\n${blogName} 블로그\n레벨: Lv.${level} (${grade})\n티어: ${getTierName(level)}\n전체 블로거 중 상위 ${100 - percentile}%\n\n나도 분석하기 👉`
+  const shareText = `[블랭크 블로그 분석 결과]\n\n${blogName} 블로그\n레벨: Lv.${level} (${grade})\n티어: ${getTierName(level)}\n전체 블로거 중 상위 ${100 - percentile}%\n\n나도 분석하기`
 
   // 클립보드에 링크 복사
   const copyLink = async () => {

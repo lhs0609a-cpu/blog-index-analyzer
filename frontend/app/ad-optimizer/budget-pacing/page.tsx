@@ -30,17 +30,17 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; icon: any }> = {
 
 // 심각도별 스타일
 const SEVERITY_STYLES: Record<string, { bg: string; border: string; icon: string }> = {
-  critical: { bg: 'bg-red-50', border: 'border-red-300', icon: '🚨' },
-  warning: { bg: 'bg-yellow-50', border: 'border-yellow-300', icon: '⚠️' },
+  critical: { bg: 'bg-red-50', border: 'border-red-300' },
+  warning: { bg: 'bg-yellow-50', border: 'border-yellow-300' },
   info: { bg: 'bg-blue-50', border: 'border-blue-300', icon: 'ℹ️' }
 }
 
 // 플랫폼 아이콘
 const PLATFORM_ICONS: Record<string, string> = {
-  naver: '🟢',
-  google: '🔵',
-  meta: '🔷',
-  kakao: '🟡'
+  naver: '#03C75A',
+  google: '#4285F4',
+  meta: '#0866FF',
+  kakao: '#FEE500'
 }
 
 interface Campaign {
@@ -587,7 +587,7 @@ export default function BudgetPacingPage() {
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <span className="text-2xl">{PLATFORM_ICONS[campaign.platform] || '📊'}</span>
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-black/5" style={{ backgroundColor: PLATFORM_ICONS[campaign.platform] || '#9CA3AF' }} />
                         <div>
                           <h3 className="font-semibold">{campaign.campaign_name}</h3>
                           <p className="text-sm text-gray-500">{campaign.platform}</p>
@@ -722,7 +722,7 @@ export default function BudgetPacingPage() {
                               </div>
                               <p className="text-sm text-gray-700">{alert.message}</p>
                               <p className="text-sm text-blue-600 mt-1">
-                                💡 {alert.recommended_action}
+                                {alert.recommended_action}
                               </p>
                             </div>
                           </div>
@@ -769,7 +769,7 @@ export default function BudgetPacingPage() {
                           <h4 className="font-medium">{rec.title}</h4>
                           <p className="text-sm text-gray-600 mt-1">{rec.description}</p>
                           <p className="text-sm text-green-600 mt-1">
-                            ✨ {rec.expected_improvement}
+                            {rec.expected_improvement}
                           </p>
                         </div>
                         <button

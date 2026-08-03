@@ -29,7 +29,7 @@ export interface BlogIndexResult {
     description?: string
   }
   stats: {
-    // ⚠️ 측정 실패 시 null. 예전에는 추정값을 생성해 항상 값이 있었으나,
+    // 측정 실패 시 null. 예전에는 추정값을 생성해 항상 값이 있었으나,
     //    실측값처럼 표시되어 사용자를 오도하므로 null 을 그대로 내보낸다.
     total_posts: number | null
     total_visitors: number | null

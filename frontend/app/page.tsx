@@ -559,17 +559,13 @@ export default function Home() {
                 <BarChart3 className="w-4 h-4" />
                 대시보드
               </Link>
-              <Link href="/community" className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-[#0064FF] transition-colors">
-                <Users className="w-4 h-4" />
-                커뮤니티
-              </Link>
               <Link href="/ad-optimizer" className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-[#0064FF] transition-colors">
                 <Target className="w-4 h-4" />
                 광고 최적화
               </Link>
-              <Link href="/threads" className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-[#0064FF] transition-colors">
-                <Globe className="w-4 h-4" />
-                SNS 자동화
+              <Link href="/analyze" className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-[#0064FF] transition-colors">
+                <Zap className="w-4 h-4" />
+                블로그 분석
               </Link>
             </div>
           </motion.div>
@@ -651,70 +647,6 @@ export default function Home() {
               </motion.div>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* 30일 챌린지 배너 */}
-      <section className="py-12 relative">
-        <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
-            <Link href="/challenge" className="group block">
-              <div className="relative overflow-hidden rounded-3xl p-1 bg-gradient-to-r from-[#0064FF] to-[#3182F6] shadow-2xl shadow-violet-500/20">
-                <div className="relative bg-white rounded-[1.4rem] p-8 md:p-10">
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50 rounded-full blur-[100px]" />
-                  <div className="absolute bottom-0 left-0 w-48 h-48 bg-pink-100 rounded-full blur-[80px]" />
-
-                  <div className="relative flex flex-col md:flex-row items-center justify-between gap-8">
-                    <div className="text-center md:text-left">
-                      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 mb-4">
-                        <Rocket className="w-4 h-4 text-[#0064FF]" />
-                        <span className="text-sm font-semibold text-[#0064FF]">무료 회원도 참여 가능</span>
-                      </div>
-
-                      <h3 className="text-3xl md:text-4xl font-black text-gray-900 mb-3">
-                        30일 블로그 챌린지
-                      </h3>
-
-                      <p className="text-gray-600 text-lg mb-4 max-w-lg">
-                        매일 10분! 블로그 초보자도 30일 후에는 전문가가 됩니다.
-                      </p>
-
-                      <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
-                        {['30일 커리큘럼', '배지 & XP', '연속 기록'].map((item, i) => (
-                          <div key={i} className="flex items-center gap-2 text-sm text-gray-600">
-                            <Check className="w-4 h-4 text-[#0064FF]" />
-                            <span>{item}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="grid grid-cols-3 gap-2">
-                        {['🌱', '📝', '⭐', '🔥', '🏆', '👑'].map((emoji, i) => (
-                          <motion.div
-                            key={i}
-                            whileHover={{ scale: 1.2, rotate: 10 }}
-                            className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-2xl"
-                          >
-                            {emoji}
-                          </motion.div>
-                        ))}
-                      </div>
-                      <div className="px-8 py-4 rounded-2xl bg-[#0064FF] text-white font-bold text-lg group-hover:scale-105 transition-transform flex items-center gap-2 shadow-lg shadow-[#0064FF]/15">
-                        지금 시작하기
-                        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Link>
-          </motion.div>
         </div>
       </section>
 
@@ -999,17 +931,17 @@ export default function Home() {
             <div className="grid md:grid-cols-3 gap-6">
               {[
                 {
-                  icon: '📊',
+                  icon: BarChart3,
                   title: '정확한 지수 분석',
                   description: '40개 이상의 지표를 분석하여 11단계 레벨로 블로그 품질을 객관적으로 평가합니다.'
                 },
                 {
-                  icon: '🔍',
+                  icon: Search,
                   title: '키워드 경쟁 분석',
                   description: '네이버 VIEW 탭 상위 블로그들의 지수를 비교 분석하여 경쟁력을 파악할 수 있습니다.'
                 },
                 {
-                  icon: '📈',
+                  icon: TrendingUp,
                   title: '성장 가이드 제공',
                   description: 'AI 기반 맞춤 개선 권장사항으로 블로그 성장 전략을 제안받을 수 있습니다.'
                 },
@@ -1023,7 +955,7 @@ export default function Home() {
                   whileHover={{ y: -5 }}
                   className="p-6 rounded-3xl bg-white border border-gray-200 shadow-xl shadow-gray-100/50"
                 >
-                  <div className="text-5xl mb-4">{feature.icon}</div>
+                  <feature.icon className="w-12 h-12 mb-4 mx-auto text-[#0064FF]" strokeWidth={1.5} />
                   <h3 className="font-bold text-lg mb-2 text-gray-900">{feature.title}</h3>
                   <p className="text-gray-500 text-sm leading-relaxed">{feature.description}</p>
                 </motion.div>

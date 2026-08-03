@@ -49,7 +49,7 @@ const STAGE_STYLES: Record<string, { bg: string; text: string; border: string; i
 // 플랫폼 아이콘 - PLATFORM_STYLES에서 가져옴
 const getPlatformIcon = (platform: string) => {
   const style = PLATFORM_STYLES[platform];
-  return style?.icon || '📊';
+  return style?.icon || '';
 };
 
 interface Campaign {
@@ -555,7 +555,7 @@ export default function FunnelBiddingPage() {
                                 <span className="text-sm font-medium">{rec.campaign_name}</span>
                               </div>
                               <p className="text-sm text-gray-600">{rec.reason}</p>
-                              <p className="text-xs text-green-600 mt-1">✨ {rec.expected_improvement}</p>
+                              <p className="text-xs text-green-600 mt-1">{rec.expected_improvement}</p>
                             </div>
                             <button
                               onClick={() => applyRecommendation(rec.id)}

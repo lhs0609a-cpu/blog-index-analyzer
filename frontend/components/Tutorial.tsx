@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, ChevronRight, ChevronLeft, Sparkles, Check, HelpCircle, Lightbulb, SkipForward, Trophy, Star, Zap, Gift, Target, Flame } from 'lucide-react'
+import { X, ChevronRight, ChevronLeft, Sparkles, Check, HelpCircle, Lightbulb, SkipForward, Trophy, Star, Zap, Gift, Target, Flame , BarChart3, BookOpen, FileText, Gem, GraduationCap, Rocket, Search, TrendingUp, Wallet, Waves, ScanSearch, Link2, Bot} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import { useXPStore } from '@/lib/stores/xp'
 
@@ -15,7 +16,7 @@ export interface TutorialStep {
   tip?: string
   image?: string
   xp?: number // XP points for completing this step
-  badge?: string // Badge emoji to show
+  badge?: LucideIcon
 }
 
 interface TutorialProps {
@@ -259,7 +260,7 @@ export default function Tutorial({ steps, tutorialKey, onComplete, onSkip, autoS
                     transition={{ duration: 0.5, repeat: 2 }}
                     className="text-6xl mb-4"
                   >
-                    🎉
+
                   </motion.div>
                   <h2 className="text-2xl font-bold text-gray-900 mb-2">축하합니다!</h2>
                   <p className="text-gray-600 mb-4">튜토리얼을 완료했습니다!</p>
@@ -274,7 +275,7 @@ export default function Tutorial({ steps, tutorialKey, onComplete, onSkip, autoS
                     </div>
                     <p className="text-sm text-gray-500">획득한 경험치</p>
                     <p className="text-xs text-purple-600 mt-1">
-                      {currentRank.icon} 총 {totalXP.toLocaleString()} XP ({currentRank.name})
+                      <currentRank.icon className="w-4 h-4 inline-block mr-1 align-text-bottom" strokeWidth={1.75} /> 총 {totalXP.toLocaleString()} XP ({currentRank.name})
                     </p>
                   </div>
 
@@ -302,7 +303,7 @@ export default function Tutorial({ steps, tutorialKey, onComplete, onSkip, autoS
                 exit={{ opacity: 0, y: -60 }}
                 className="fixed top-20 left-1/2 z-[150] bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-4 py-2 rounded-full font-bold shadow-lg"
               >
-                +{steps[currentStep - 1]?.xp || 10} XP ⚡
+                +{steps[currentStep - 1]?.xp || 10} XP
               </motion.div>
             )}
           </AnimatePresence>
@@ -318,7 +319,7 @@ export default function Tutorial({ steps, tutorialKey, onComplete, onSkip, autoS
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1 rounded-full text-sm font-medium">
-                      <span className="text-base">{currentRank.icon}</span>
+                      <currentRank.icon className="w-4 h-4" strokeWidth={1.75} />
                       {currentRank.name}
                     </div>
                     <div className="flex items-center gap-1 text-yellow-600 font-medium">
@@ -361,7 +362,7 @@ export default function Tutorial({ steps, tutorialKey, onComplete, onSkip, autoS
                         {completedSteps.has(index) ? <Check className="w-3 h-3" /> : index + 1}
                       </div>
                       {step.badge && completedSteps.has(index) && (
-                        <span className="text-xs mt-0.5">{step.badge}</span>
+                        <step.badge className="w-3 h-3 mt-0.5" strokeWidth={2} />
                       )}
                     </div>
                   ))}
@@ -439,7 +440,7 @@ export default function Tutorial({ steps, tutorialKey, onComplete, onSkip, autoS
                       transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 2 }}
                       className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center"
                     >
-                      <span className="text-xl">{currentStepData.badge || '📚'}</span>
+                      {currentStepData.badge ? <currentStepData.badge className="w-5 h-5" strokeWidth={1.75} /> : <BookOpen className="w-5 h-5" strokeWidth={1.75} />}
                     </motion.div>
                   )}
                   <div>
@@ -476,7 +477,7 @@ export default function Tutorial({ steps, tutorialKey, onComplete, onSkip, autoS
                       <Lightbulb className="w-4 h-4 text-amber-600" />
                     </div>
                     <div>
-                      <p className="text-xs font-semibold text-amber-700 mb-1">💡 Pro Tip</p>
+                      <p className="text-xs font-semibold text-amber-700 mb-1">Pro Tip</p>
                       <p className="text-sm text-amber-800">{currentStepData.tip}</p>
                     </div>
                   </div>
@@ -549,7 +550,7 @@ export const toolsTutorialSteps: TutorialStep[] = [
     description: 'AI 기반 분석 도구로 블로그를 효과적으로 성장시킬 수 있습니다. 각 기능을 하나씩 알아볼까요?',
     position: 'center',
     xp: 10,
-    badge: '🚀'
+    badge: Rocket
   },
   {
     id: 'content-creation',
@@ -569,7 +570,7 @@ export const toolsTutorialSteps: TutorialStep[] = [
     position: 'bottom',
     tip: '저품질 위험 감지 기능으로 블로그가 저품질에 걸리기 전에 미리 예방하세요!',
     xp: 15,
-    badge: '📊'
+    badge: BarChart3
   },
   {
     id: 'growth',
@@ -579,7 +580,7 @@ export const toolsTutorialSteps: TutorialStep[] = [
     position: 'bottom',
     tip: '트렌드 스나이퍼로 실시간 인기 키워드를 선점하면 방문자가 폭발적으로 늘어납니다!',
     xp: 20,
-    badge: '📈'
+    badge: TrendingUp
   },
   {
     id: 'naver-ecosystem',
@@ -589,7 +590,7 @@ export const toolsTutorialSteps: TutorialStep[] = [
     position: 'top',
     tip: '네이버 데이터랩 분석으로 키워드의 연령/성별/지역 분포를 파악해 타겟 독자층을 정확히 겨냥하세요!',
     xp: 25,
-    badge: '💎'
+    badge: Gem
   },
   {
     id: 'how-to-use',
@@ -598,7 +599,7 @@ export const toolsTutorialSteps: TutorialStep[] = [
     position: 'center',
     tip: '자주 사용하는 도구는 즐겨찾기 기능을 이용해보세요!',
     xp: 15,
-    badge: '🎓'
+    badge: GraduationCap
   }
 ]
 
@@ -611,7 +612,7 @@ export const aiTitleTutorialSteps: TutorialStep[] = [
     targetId: 'title-input-field',
     position: 'bottom',
     xp: 10,
-    badge: '🎯'
+    badge: Target
   },
   {
     id: 'title-generate',
@@ -621,7 +622,7 @@ export const aiTitleTutorialSteps: TutorialStep[] = [
     position: 'left',
     tip: '감정형, 질문형, 숫자형 등 다양한 스타일의 제목이 생성됩니다.',
     xp: 15,
-    badge: '⚡'
+    badge: Zap
   },
   {
     id: 'title-result',
@@ -631,7 +632,7 @@ export const aiTitleTutorialSteps: TutorialStep[] = [
     position: 'top',
     tip: 'CTR 점수가 높은 제목일수록 클릭률이 높을 가능성이 큽니다!',
     xp: 20,
-    badge: '📝'
+    badge: FileText
   }
 ]
 
@@ -643,7 +644,7 @@ export const blueOceanTutorialSteps: TutorialStep[] = [
     description: '경쟁은 낮고 검색량은 높은 "블루오션" 키워드를 AI가 찾아드립니다.',
     position: 'center',
     xp: 10,
-    badge: '🌊'
+    badge: Waves
   },
   {
     id: 'blue-input',
@@ -653,7 +654,7 @@ export const blueOceanTutorialSteps: TutorialStep[] = [
     position: 'bottom',
     tip: '구체적인 키워드보다는 넓은 주제를 입력하면 더 많은 키워드를 찾을 수 있어요!',
     xp: 15,
-    badge: '🔍'
+    badge: Search
   },
   {
     id: 'blue-results',
@@ -663,7 +664,7 @@ export const blueOceanTutorialSteps: TutorialStep[] = [
     position: 'top',
     tip: '기회점수 70점 이상인 키워드는 꼭 공략해보세요!',
     xp: 25,
-    badge: '💎'
+    badge: Gem
   }
 ]
 
@@ -675,7 +676,7 @@ export const keywordAnalysisTutorialSteps: TutorialStep[] = [
     description: '키워드의 검색량, 경쟁도, 상위노출 난이도를 종합적으로 분석합니다.',
     position: 'center',
     xp: 10,
-    badge: '🔎'
+    badge: ScanSearch
   },
   {
     id: 'kw-input',
@@ -694,7 +695,7 @@ export const keywordAnalysisTutorialSteps: TutorialStep[] = [
     position: 'bottom',
     tip: '검색량이 높고 블로그 포화도가 낮은 키워드가 공략하기 좋은 키워드입니다!',
     xp: 25,
-    badge: '📊'
+    badge: BarChart3
   }
 ]
 
@@ -706,7 +707,7 @@ export const adOptimizerTutorialSteps: TutorialStep[] = [
     description: '네이버 검색광고 입찰가를 AI가 실시간으로 자동 최적화합니다. 광고비를 절감하면서 효율을 높일 수 있습니다.',
     position: 'center',
     xp: 10,
-    badge: '🎯'
+    badge: Target
   },
   {
     id: 'ad-connect',
@@ -716,7 +717,7 @@ export const adOptimizerTutorialSteps: TutorialStep[] = [
     position: 'bottom',
     tip: 'API 키는 네이버 검색광고 센터 > 도구 > API 관리에서 발급받을 수 있습니다.',
     xp: 20,
-    badge: '🔗'
+    badge: Link2
   },
   {
     id: 'ad-dashboard',
@@ -725,7 +726,7 @@ export const adOptimizerTutorialSteps: TutorialStep[] = [
     targetId: 'ad-dashboard-tab',
     position: 'bottom',
     xp: 15,
-    badge: '📊'
+    badge: BarChart3
   },
   {
     id: 'ad-efficiency',
@@ -735,7 +736,7 @@ export const adOptimizerTutorialSteps: TutorialStep[] = [
     position: 'bottom',
     tip: '최적화 전후 비교 데이터로 실제 효과를 확인할 수 있습니다!',
     xp: 20,
-    badge: '💰'
+    badge: Wallet
   },
   {
     id: 'ad-trending',
@@ -745,7 +746,7 @@ export const adOptimizerTutorialSteps: TutorialStep[] = [
     position: 'bottom',
     tip: '기회점수가 높은 키워드를 빠르게 선점하면 낮은 입찰가로 좋은 효과를 볼 수 있어요!',
     xp: 25,
-    badge: '🔥'
+    badge: Flame
   },
   {
     id: 'ad-auto',
@@ -755,6 +756,6 @@ export const adOptimizerTutorialSteps: TutorialStep[] = [
     position: 'bottom',
     tip: '목표 ROAS나 목표 CPA를 설정하면 해당 목표에 맞춰 자동 최적화됩니다.',
     xp: 30,
-    badge: '🤖'
+    badge: Bot
   }
 ]

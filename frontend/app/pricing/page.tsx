@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Check, X, Sparkles, Zap, Crown, Building2, ArrowLeft, Loader2, AlertCircle, Shield, Trophy, TrendingUp, Clock, Target, Star, Users } from 'lucide-react'
+import { Check, X, Sparkles, Zap, Crown, Building2, ArrowLeft, Loader2, AlertCircle, Shield, Trophy, TrendingUp, Clock, Target, Star, Users, BarChart3, Search, Swords} from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/stores/auth'
@@ -541,7 +541,7 @@ export default function PricingPage() {
           transition={{ delay: 0.45 }}
           className="rounded-3xl p-8 bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200/50 shadow-xl mb-12"
         >
-          <h2 className="text-2xl font-bold text-center mb-2">🎯 Pro 플랜으로 할 수 있는 것</h2>
+          <h2 className="text-2xl font-bold text-center mb-2">Pro 플랜으로 할 수 있는 것</h2>
           <p className="text-center text-gray-600 mb-8">데이터 기반 블로그 성장 전략을 세워보세요</p>
 
           {/* 핵심 기능 카드 */}
@@ -549,7 +549,7 @@ export default function PricingPage() {
             {/* 기능 1: 키워드 경쟁도 분석 */}
             <div className="bg-white rounded-2xl p-6 border border-emerald-100 shadow-sm">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-2xl">🔍</div>
+                <Search className="w-6 h-6 w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center" strokeWidth={1.75} />
                 <div>
                   <div className="font-bold text-gray-900">경쟁도 분석</div>
                   <div className="text-xs text-gray-500">일 200회 검색</div>
@@ -577,7 +577,7 @@ export default function PricingPage() {
             {/* 기능 2: 순위 추적 */}
             <div className="bg-white rounded-2xl p-6 border border-emerald-100 shadow-sm">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center text-2xl">📊</div>
+                <BarChart3 className="w-6 h-6 w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center" strokeWidth={1.75} />
                 <div>
                   <div className="font-bold text-gray-900">순위 추적</div>
                   <div className="text-xs text-gray-500">실시간 모니터링</div>
@@ -605,7 +605,7 @@ export default function PricingPage() {
             {/* 기능 3: 경쟁사 비교 */}
             <div className="bg-white rounded-2xl p-6 border border-emerald-100 shadow-sm">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center text-2xl">⚔️</div>
+                <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center"><Swords className="w-6 h-6 text-purple-600" strokeWidth={1.75} /></div>
                 <div>
                   <div className="font-bold text-gray-900">경쟁사 비교</div>
                   <div className="text-xs text-gray-500">최대 10개 블로그</div>
@@ -633,7 +633,7 @@ export default function PricingPage() {
 
           {/* 기능 요약 */}
           <div className="bg-white rounded-2xl p-6 border border-emerald-200">
-            <h3 className="font-bold text-center mb-4">💡 Pro 플랜 핵심 가치</h3>
+            <h3 className="font-bold text-center mb-4">Pro 플랜 핵심 가치</h3>
             <div className="grid md:grid-cols-4 gap-4 text-center">
               <div className="p-4 bg-gray-50 rounded-xl">
                 <div className="text-2xl font-bold text-gray-900">42개</div>

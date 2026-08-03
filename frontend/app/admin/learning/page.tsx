@@ -170,7 +170,7 @@ export default function AdminLearningPage() {
                   <div key={f.name} className="flex justify-between bg-gray-50 px-3 py-1.5 rounded">
                     <span>{f.name}</span>
                     <span className="text-gray-500">
-                      {f.error ? `❌ ${f.error}` : `n=${f.n} · ${f.created_at}`}
+                      {f.error ? `${f.error}` : `n=${f.n} · ${f.created_at}`}
                     </span>
                   </div>
                 ))}
@@ -290,7 +290,7 @@ function HealthCard({ title, ok, detail }: { title: string; ok: boolean; detail:
       </div>
       <div className="text-sm text-gray-600">{detail}</div>
       <div className={`text-xs mt-2 font-medium ${ok ? 'text-green-700' : 'text-amber-700'}`}>
-        {ok ? '✓ 정상 추정' : '⚠ 점검 필요'}
+        {ok ? '✓ 정상 추정' : '점검 필요'}
       </div>
     </div>
   )

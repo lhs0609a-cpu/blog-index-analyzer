@@ -212,7 +212,7 @@ function PostResultView({ data }: { data: PostAnalysisResult }) {
         <div className="bg-gradient-to-br from-purple-50 to-blue-50 border border-purple-200 rounded-2xl p-5">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div>
-              <div className="text-sm font-bold text-purple-900">📊 시계열 lifecycle (이 포스트)</div>
+              <div className="text-sm font-bold text-purple-900">시계열 lifecycle (이 포스트)</div>
               <div className="text-xs text-gray-500 mt-0.5">
                 {data.lifecycle.tracked_days}일간 측정 / {data.lifecycle.samples}회 측정
               </div>
@@ -255,7 +255,7 @@ function PostResultView({ data }: { data: PostAnalysisResult }) {
           </div>
           {data.lifecycle.first_indexed_at === null && (
             <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800">
-              ⚠️ 한 번도 SERP에 노출된 적 없음. 저품질 또는 색인 누락 의심.
+              한 번도 SERP에 노출된 적 없음. 저품질 또는 색인 누락 의심.
             </div>
           )}
         </div>
@@ -265,7 +265,7 @@ function PostResultView({ data }: { data: PostAnalysisResult }) {
       {data.validated_signals_for_category && data.validated_signals_for_category.length > 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5">
           <div className="text-sm font-bold text-blue-900 mb-2">
-            🎯 「{data.category}」 카테고리에서 SERP와 통계적으로 검증된 신호
+            「{data.category}」 카테고리에서 SERP와 통계적으로 검증된 신호
           </div>
           <div className="space-y-2">
             {data.validated_signals_for_category.map((s) => (

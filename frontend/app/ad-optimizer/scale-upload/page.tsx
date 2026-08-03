@@ -117,7 +117,7 @@ export default function ScaleUploadPage() {
           if (res.job.status === 'completed') {
             toast.success(`등록 완료: ${res.job.succeeded_count}개 성공`)
           } else if (res.job.status === 'completed_with_errors') {
-            toast(`등록 완료 (일부 실패): ${res.job.succeeded_count} 성공 / ${res.job.failed_count} 실패`, { icon: '⚠️' })
+            toast(`등록 완료 (일부 실패): ${res.job.succeeded_count} 성공 / ${res.job.failed_count} 실패`)
           } else {
             toast.error(`작업 실패: ${res.job.error_message || '알 수 없는 오류'}`)
           }

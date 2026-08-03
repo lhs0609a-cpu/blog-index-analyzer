@@ -14,6 +14,7 @@ import {
   PlatformBadge,
 } from "@/components/ad-optimizer/PlatformSupportBanner";
 import { ValuePropositionCompact } from "@/components/ad-optimizer/ValueProposition";
+import { AlertTriangle, BarChart3 , Lightbulb, ScrollText} from 'lucide-react'
 
 interface PlatformHealth {
   platform_id: string;
@@ -345,7 +346,7 @@ export default function BudgetReallocationPage() {
               <div className="text-center py-12 text-gray-400">로딩 중...</div>
             ) : healthData?.status === "no_data" ? (
               <div className="text-center py-12 bg-gray-800 rounded-lg">
-                <div className="text-4xl mb-3">📊</div>
+                <BarChart3 className="w-10 h-10 mb-3" strokeWidth={1.75} />
                 <div className="text-gray-400">성과 데이터가 없습니다.</div>
                 <p className="text-sm text-gray-500 mt-2">
                   광고 플랫폼을 연동하고 성과 데이터를 수집하세요.
@@ -387,7 +388,7 @@ export default function BudgetReallocationPage() {
                 {healthData?.is_imbalanced && (
                   <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-4 mb-6">
                     <div className="flex items-center gap-2 text-yellow-400">
-                      <span className="text-xl">⚠️</span>
+                      <AlertTriangle className="w-5 h-5" strokeWidth={1.75} />
                       <span className="font-semibold">예산 불균형 감지</span>
                     </div>
                     <p className="text-gray-300 mt-1">
@@ -406,7 +407,7 @@ export default function BudgetReallocationPage() {
                       textColor: "text-white",
                       accentColor: "#6B7280",
                       iconBg: "bg-gray-700",
-                      icon: "📊",
+                      icon: BarChart3,
                     };
                     const platformStyle = style || defaultStyle;
 
@@ -419,7 +420,7 @@ export default function BudgetReallocationPage() {
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-3">
                             <div className={`${style?.iconBg || 'bg-gray-700'} p-2.5 rounded-xl`}>
-                              <span className="text-2xl">{style?.icon || '📊'}</span>
+                              {(() => { const Ico = style?.icon ?? BarChart3; return <Ico className="w-6 h-6 text-gray-600" strokeWidth={1.75} /> })()}
                             </div>
                             <div>
                               <h3 className={`font-bold text-lg ${platformStyle.textColor}`}>
@@ -479,7 +480,7 @@ export default function BudgetReallocationPage() {
 
                         {/* Recommendation - 플랫폼 색상 테두리 적용 */}
                         <div className={`text-sm border-t border-gray-600/50 pt-3`}>
-                          <span className={`${platformStyle.textColor} font-medium`}>💡 </span>
+                          <Lightbulb className={`w-4 h-4 inline-block mr-1 ${platformStyle.textColor}`} strokeWidth={1.75} />
                           <span className="text-gray-300">{platform.recommendation}</span>
                         </div>
                       </div>
@@ -550,7 +551,7 @@ export default function BudgetReallocationPage() {
                           <div className="flex items-center gap-4">
                             {/* Platform Icon */}
                             <div className={`${style?.iconBg || 'bg-gray-600'} p-2 rounded-xl`}>
-                              <span className="text-xl">{style?.icon || '📊'}</span>
+                              {(() => { const Ico = style?.icon ?? BarChart3; return <Ico className="w-5 h-5 text-gray-600" strokeWidth={1.75} /> })()}
                             </div>
 
                             {/* Priority Badge */}
@@ -558,11 +559,11 @@ export default function BudgetReallocationPage() {
                               className={`px-2.5 py-1 rounded-lg text-xs font-medium ${getPriorityColor(realloc.priority)}`}
                             >
                               {realloc.priority === "high"
-                                ? "🔥 우선"
+                                ? "우선"
                                 : realloc.priority === "medium"
-                                ? "📈 보통"
+                                ? "보통"
                                 : realloc.priority === "low"
-                                ? "📉 낮음"
+                                ? "낮음"
                                 : "⏸️ 제외"}
                             </span>
 
@@ -642,7 +643,7 @@ export default function BudgetReallocationPage() {
           <div>
             {history.length === 0 ? (
               <div className="text-center py-12 bg-gray-800 rounded-lg">
-                <div className="text-4xl mb-3">📜</div>
+                <ScrollText className="w-10 h-10 mb-3 mx-auto text-gray-300" strokeWidth={1.5} />
                 <div className="text-gray-400">재분배 이력이 없습니다.</div>
               </div>
             ) : (

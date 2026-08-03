@@ -183,10 +183,10 @@ export const COMPETITION_LEVEL_COLORS: Record<CompetitionLevel, { bg: string; te
 
 // 진입 난이도별 색상
 export const ENTRY_DIFFICULTY_COLORS: Record<EntryDifficulty, { bg: string; text: string; emoji: string }> = {
-  '쉬움': { bg: 'bg-green-100', text: 'text-green-700', emoji: '😊' },
-  '도전가능': { bg: 'bg-blue-100', text: 'text-blue-700', emoji: '💪' },
-  '어려움': { bg: 'bg-orange-100', text: 'text-orange-700', emoji: '😓' },
-  '매우어려움': { bg: 'bg-red-100', text: 'text-red-700', emoji: '🔥' }
+  '쉬움': { bg: 'bg-green-100', text: 'text-green-700' },
+  '도전가능': { bg: 'bg-blue-100', text: 'text-blue-700' },
+  '어려움': { bg: 'bg-orange-100', text: 'text-orange-700' },
+  '매우어려움': { bg: 'bg-red-100', text: 'text-red-700' }
 }
 
 // 검색량 포맷팅

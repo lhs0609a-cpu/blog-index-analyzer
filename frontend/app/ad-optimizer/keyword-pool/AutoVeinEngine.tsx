@@ -122,7 +122,7 @@ export default function AutoVeinEngine({ customerId }: { customerId: string }) {
       )
       setProfile(res?.profile || null)
       setDraft(null)
-      toast.success(enable ? '저장 + 자동화 ON ✅' : '저장 완료')
+      toast.success(enable ? '저장 + 자동화 ON' : '저장 완료')
     } catch (e) {
       toast.error('저장 실패: ' + String(e).slice(0, 80))
     } finally {
@@ -217,7 +217,7 @@ export default function AutoVeinEngine({ customerId }: { customerId: string }) {
           {view && (atomAxes.length > 0 || (view.relevance_keywords || []).length > 0) && (
             <div className="mt-4 space-y-3 rounded-xl border border-gray-200 bg-white p-4">
               {draft && (
-                <div className="text-xs font-semibold text-amber-600">⚠ 생성됨 — 검수 후 저장하세요</div>
+                <div className="text-xs font-semibold text-amber-600">생성됨 — 검수 후 저장하세요</div>
               )}
               {atomAxes.length > 0 && (
                 <div>

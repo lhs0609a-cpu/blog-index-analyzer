@@ -12,6 +12,7 @@ import {
   PlatformTabs,
 } from "@/components/ad-optimizer/PlatformSupportBanner";
 import { ValuePropositionCompact } from "@/components/ad-optimizer/ValueProposition";
+import { BarChart3, CheckCircle2 } from 'lucide-react'
 
 interface AnomalyAlert {
   id: number;
@@ -214,7 +215,7 @@ export default function AnomalyDetectionPage() {
 
   const getAnomalyTypeIcon = (type: string) => {
     const found = anomalyTypes.find((t) => t.type === type);
-    return found?.icon || "🔔";
+    return found?.icon || "";
   };
 
   const formatDate = (dateStr: string) => {
@@ -391,7 +392,7 @@ export default function AnomalyDetectionPage() {
               <div className="text-center py-12 text-gray-400">로딩 중...</div>
             ) : alerts.length === 0 ? (
               <div className="text-center py-12 bg-gray-800 rounded-lg">
-                <div className="text-4xl mb-3">✅</div>
+                <CheckCircle2 className="w-10 h-10 mb-3" strokeWidth={1.75} />
                 <div className="text-gray-400">
                   {showResolved
                     ? "알림 내역이 없습니다."
@@ -604,7 +605,7 @@ export default function AnomalyDetectionPage() {
               if (!showResolved) {
                 return (
                   <div className="text-center py-12 bg-gray-800 rounded-lg">
-                    <div className="text-4xl mb-3">📊</div>
+                    <BarChart3 className="w-10 h-10 mb-3" strokeWidth={1.75} />
                     <div className="text-gray-400 mb-4">
                       해결된 알림 히스토리를 보려면 아래 버튼을 클릭하세요.
                     </div>

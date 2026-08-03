@@ -174,7 +174,7 @@ export default function ValueProposition({ type }: ValuePropositionProps) {
               className="inline-block mb-4"
             >
               <span className="bg-gradient-to-r from-[#0064FF] to-blue-400 text-white text-sm font-bold px-4 py-2 rounded-full">
-                💰 {data.highlight}
+                {data.highlight}
               </span>
             </motion.div>
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-2">
@@ -234,7 +234,7 @@ export default function ValueProposition({ type }: ValuePropositionProps) {
           {/* Trust Badge */}
           <div className="mt-6 text-center">
             <p className="text-gray-500 text-sm">
-              🔒 광고 계정 연동만 하면 자동으로 작동 · 설정 변경 언제든 가능 · 수수료 0%
+              광고 계정 연동만 하면 자동으로 작동 · 설정 변경 언제든 가능 · 수수료 0%
             </p>
           </div>
         </div>
@@ -257,7 +257,7 @@ export function ValuePropositionCompact({ type }: ValuePropositionProps) {
         <div>
           <div className="flex items-center gap-3 mb-2">
             <span className="bg-[#0064FF] text-white text-xs font-bold px-3 py-1 rounded-full">
-              💰 {data.highlight}
+              {data.highlight}
             </span>
           </div>
           <h3 className="text-xl font-bold text-white">

@@ -244,7 +244,7 @@ export default function VolumeFilterPage() {
       setAiTopNPerLevel(s.top_n_per_level)
       setAiMaxApiCalls(s.suggested_max_api_calls)
       setAiMaxKept(Math.max(aiTargetCount, 1000))
-      setAiSuggestionNote(`📊 예상 수집: ${s.estimated_keywords}\n💡 ${s.rationale}`)
+      setAiSuggestionNote(`예상 수집: ${s.estimated_keywords}\n${s.rationale}`)
       toast.success('AI 제안 완료. 아래에서 수정 후 실행하세요.')
     } catch (e: any) {
       toast.error(`AI 제안 실패: ${e?.message || 'OpenAI 키 설정 확인'}`)
@@ -279,9 +279,9 @@ export default function VolumeFilterPage() {
         .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.slice(0, 5).join(', ') + (v.length > 5 ? '…' : '') : ''}`)
         .join('\n')
       setAiAmplifyNote(
-        `✨ ${res.input_count}개 → ${res.output_count}개 증폭 완료\n` +
-        `📐 패턴: ${res.detected_pattern || '(미감지)'}\n` +
-        (axesStr ? `🔀 축:\n${axesStr}` : '')
+        `${res.input_count}개 → ${res.output_count}개 증폭 완료\n` +
+        `패턴: ${res.detected_pattern || '(미감지)'}\n` +
+        (axesStr ? `축:\n${axesStr}` : '')
       )
       toast.success(`씨앗 ${res.input_count}→${res.output_count}개로 증폭됨`)
     } catch (e: any) {
@@ -294,7 +294,7 @@ export default function VolumeFilterPage() {
           { duration: 8000 }
         )
         setAiAmplifyNote(
-          `⚠️ 타임아웃/502: GPT 응답이 Fly.io 프록시 한도 초과.\n` +
+          `타임아웃/502: GPT 응답이 Fly.io 프록시 한도 초과.\n` +
           `해결: 목표 씨앗을 100~150개로 낮춰 여러 번 증폭 → 매번 결과 누적`
         )
       } else {
@@ -331,7 +331,7 @@ export default function VolumeFilterPage() {
       ? `수동 앵커 ${coreTerms.length}개 (${coreTerms.slice(0, 3).join(', ')}${coreTerms.length > 3 ? '…' : ''})`
       : `씨앗 자동 추출 (드리프트 방지)`
     const streamLine = aiStreamRegister
-      ? `\n\n🚀 실시간 캠페인 등록 ON:\n· prefix: ${aiCampaignPrefix}\n· 입찰가: ${aiBid.toLocaleString()}원\n· 일예산: ${aiDailyBudget.toLocaleString()}원/캠페인\n· 배치: ${aiStreamBatch}개 찰 때마다 즉시 등록\n⚠️ 실제 네이버 광고가 바로 생성됨. 비즈머니 확인 필수.`
+      ? `\n\n실시간 캠페인 등록 ON:\n· prefix: ${aiCampaignPrefix}\n· 입찰가: ${aiBid.toLocaleString()}원\n· 일예산: ${aiDailyBudget.toLocaleString()}원/캠페인\n· 배치: ${aiStreamBatch}개 찰 때마다 즉시 등록\n실제 네이버 광고가 바로 생성됨. 비즈머니 확인 필수.`
       : ''
     const msg = `AI 키워드 자동 확장 시작:\n\n· 씨앗: ${seeds.length}개 (${seeds.slice(0, 3).join(', ')}${seeds.length > 3 ? '…' : ''})\n· 필수 앵커: ${anchorPreview}\n· 제외 단어: ${blacklist.length}개\n· 임계치: 월 ${aiMinVolume} 이상\n· BFS 깊이: ${aiMaxDepth}\n· API 상한: ${aiMaxApiCalls}회 (예상 ${estMin}분)\n· 최대 확보: ${aiMaxKept}개${streamLine}\n\n계속?`
     if (!confirm(msg)) return
@@ -439,7 +439,7 @@ export default function VolumeFilterPage() {
       )
       toast.success(`등록 작업 시작 (#${res.register_job_id}) — 같은 페이지에서 진행 상황을 확인하세요`)
       setRegisterJobId(res.register_job_id)
-      // ❌ redirect 제거 — 사용자가 같은 페이지에서 진행 + 에러 raw 로그 확인하도록
+      // redirect 제거 — 사용자가 같은 페이지에서 진행 + 에러 raw 로그 확인하도록
     } catch (err: any) {
       const msg = err?.response?.data?.detail || err?.message || '등록 시작 실패'
       toast.error(msg)
@@ -515,7 +515,7 @@ export default function VolumeFilterPage() {
           <div className="flex gap-3">
             <BeakerIcon className="w-5 h-5 text-emerald-700 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-emerald-900">
-              <p className="font-semibold mb-1">🧪 캐너리 테스트 + 자동 계속 실행</p>
+              <p className="font-semibold mb-1">캐너리 테스트 + 자동 계속 실행</p>
               <p className="text-emerald-800">
                 업로드된 키워드 중 <b>첫 1만개</b>로 먼저 통과율을 측정합니다.
                 통과율이 <b>2%</b> 이상이면 나머지도 <b>자동으로 진행</b>,
@@ -617,7 +617,7 @@ export default function VolumeFilterPage() {
                 const warn = seedCount > 0 && seedCount < 100 && aiMaxKept >= 30000
                 return (
                   <div className={`mt-1 text-xs ${warn ? 'text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1.5' : 'text-gray-500'}`}>
-                    {warn && '⚠️ '}
+                    
                     씨앗 {seedCount}개 × depth {aiMaxDepth} × 레벨당 {aiTopNPerLevel} → BFS 자연 상한 <b>~{ceiling.toLocaleString()}회 API</b> 호출.
                     실제 수집 키워드는 그 1.5~2배 수준.
                     {warn && ` 목표 ${aiMaxKept.toLocaleString()}개에 비해 씨앗이 부족합니다. AI 증폭 또는 씨앗 200개+ 권장.`}
@@ -658,7 +658,7 @@ export default function VolumeFilterPage() {
                   </div>
                 )}
                 <p className="text-[11px] text-pink-700 mt-2">
-                  💡 예: "의사대출, 약사대출, 한의사대출" 3개 → "치과의사대출, 수의사대출, 개원자금, 닥터론, 의사마이너스통장…" 등 {aiAmplifyTarget}개로 확장.
+                  예: "의사대출, 약사대출, 한의사대출" 3개 → "치과의사대출, 수의사대출, 개원자금, 닥터론, 의사마이너스통장…" 등 {aiAmplifyTarget}개로 확장.
                   원본 씨앗은 반드시 포함됨.
                 </p>
               </div>
@@ -676,7 +676,7 @@ export default function VolumeFilterPage() {
                   rows={3}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"
                 />
-                <p className="text-xs text-gray-500 mt-1">💡 키워드에 이 중 <b>하나라도</b> 포함돼야 채택됨. 드리프트(예: 대출 → 마케팅대행) 방지.</p>
+                <p className="text-xs text-gray-500 mt-1">키워드에 이 중 <b>하나라도</b> 포함돼야 채택됨. 드리프트(예: 대출 → 마케팅대행) 방지.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -689,7 +689,7 @@ export default function VolumeFilterPage() {
                   rows={3}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"
                 />
-                <p className="text-xs text-gray-500 mt-1">⚠️ 키워드에 이 중 <b>하나라도</b> 들어가면 버림.</p>
+                <p className="text-xs text-gray-500 mt-1">키워드에 이 중 <b>하나라도</b> 들어가면 버림.</p>
               </div>
             </div>
 
@@ -743,7 +743,7 @@ export default function VolumeFilterPage() {
             </div>
 
             <div className="text-xs text-gray-600 mb-3">
-              💡 예상 소요: API 상한 × 0.35초 ≈ <b>{Math.round(aiMaxApiCalls * 0.35 / 60 * 10) / 10}분</b>.
+              예상 소요: API 상한 × 0.35초 ≈ <b>{Math.round(aiMaxApiCalls * 0.35 / 60 * 10) / 10}분</b>.
               각 레벨에서 검색량 상위 50개만 다음 depth 확장 대상으로 선택.
             </div>
 
@@ -757,13 +757,13 @@ export default function VolumeFilterPage() {
                   className="w-4 h-4"
                 />
                 <span className="text-sm font-semibold text-purple-900">
-                  🚀 실시간 캠페인 등록 (수집하면서 동시에 네이버에 등록)
+                  실시간 캠페인 등록 (수집하면서 동시에 네이버에 등록)
                 </span>
               </label>
               {aiStreamRegister && (
                 <>
                   <p className="text-xs text-purple-800 mb-3 pl-6">
-                    ⚠️ 배치 크기만큼 찰 때마다 <b>즉시 네이버 캠페인/광고그룹/키워드가 생성</b>됩니다. 비즈머니 잔액/일 예산 확인 필수.
+                    배치 크기만큼 찰 때마다 <b>즉시 네이버 캠페인/광고그룹/키워드가 생성</b>됩니다. 비즈머니 잔액/일 예산 확인 필수.
                   </p>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pl-6">
                     <div>
@@ -1003,7 +1003,7 @@ export default function VolumeFilterPage() {
                 <BeakerIcon className={`w-5 h-5 ${currentJob.canary_passed ? 'text-green-700' : 'text-orange-700'}`} />
                 <div className="text-sm">
                   <span className="font-semibold">
-                    캐너리 {currentJob.canary_passed ? '통과 ✅' : '미달 ⚠️'}:
+                    캐너리 {currentJob.canary_passed ? '통과' : '미달'}:
                   </span>{' '}
                   <span>
                     {currentJob.test_size?.toLocaleString()}개 중 {' '}
@@ -1130,7 +1130,7 @@ export default function VolumeFilterPage() {
                         {/* job 자체의 error_message */}
                         {registerStatus?.error_message && (
                           <div className="bg-red-50 border border-red-200 rounded p-3 text-xs text-red-800 font-mono whitespace-pre-wrap break-all">
-                            <div className="font-bold mb-1">📋 작업 에러</div>
+                            <div className="font-bold mb-1">작업 에러</div>
                             {registerStatus.error_message}
                           </div>
                         )}

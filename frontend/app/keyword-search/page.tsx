@@ -6,7 +6,8 @@ import { ConnectionIndicator } from '@/components/ConnectionIndicator'
 import { getApiUrl } from '@/lib/api/apiConfig'
 import * as Tabs from '@radix-ui/react-tabs'
 import { motion } from 'framer-motion'
-import { Check, Loader2, X, TrendingUp, TrendingDown, ArrowLeft, Filter, Star, Lock, PenTool, Clock, Trash2 } from 'lucide-react'
+import { Check, Loader2, X, TrendingUp, TrendingDown, ArrowLeft, Filter, Star, Lock, PenTool, Clock, Trash2, BarChart3, Brain, Camera, FileText, Lightbulb, Network, Search, Target, Trophy, Wand2, BookOpen, AlertTriangle, Ban, CheckCircle2} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import { useBlogContextStore } from '@/lib/stores/blogContext'
@@ -1566,7 +1567,7 @@ function KeywordSearchContent() {
                         {status.result.insights && (
                           <div className="mb-6 p-6 bg-gradient-to-br from-[#0064FF]/5 to-[#3182F6]/5 rounded-xl border border-blue-200">
                             <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                              <span className="text-2xl">📊</span>
+                              <BarChart3 className="w-6 h-6" strokeWidth={1.75} />
                               키워드 인사이트
                             </h4>
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-9 gap-4">
@@ -1658,7 +1659,7 @@ function KeywordSearchContent() {
                         {status.result.learning && (
                           <div className="mb-6 p-6 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-amber-200">
                             <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                              <span className="text-2xl">🧠</span>
+                              <Brain className="w-6 h-6" strokeWidth={1.75} />
                               AI 순위 학습 엔진
                               <span className="ml-2 px-2 py-0.5 bg-amber-200 text-amber-800 text-xs rounded-full font-semibold">
                                 실시간 학습 중
@@ -1816,7 +1817,7 @@ function KeywordSearchContent() {
                                           </div>
                                           {blog.is_influencer && (
                                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-yellow-400 to-orange-500 text-white whitespace-nowrap">
-                                              ⭐ 인플루언서
+                                              인플루언서
                                             </span>
                                           )}
                                         </div>
@@ -2008,7 +2009,7 @@ function KeywordSearchContent() {
                     {/* Recommendation */}
                     <div className="mt-6 p-6 bg-gradient-to-r from-green-50 to-teal-50 rounded-xl border-2 border-green-200">
                       <h4 className="font-bold text-lg text-gray-800 mb-3 flex items-center gap-2">
-                        <span>💡</span>
+                        <Lightbulb className="w-4 h-4" strokeWidth={1.75} />
                         추천 키워드
                       </h4>
                       {(() => {
@@ -2141,7 +2142,7 @@ function KeywordSearchContent() {
             <div className="bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white rounded-xl shadow-lg border border-blue-300 p-4 mb-6">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-2xl">📊</span>
+                  <BarChart3 className="w-6 h-6" strokeWidth={1.75} />
                   <span className="font-bold text-lg">분석 결과</span>
                   <span className="text-sm bg-white/20 px-3 py-1 rounded-full">
                     총 {results.results.length}개 블로그
@@ -2181,7 +2182,7 @@ function KeywordSearchContent() {
             {results.insights && results.successful_count > 0 && (
               <div className="bg-gradient-to-br from-[#0064FF]/5 to-[#3182F6]/5 rounded-lg border border-blue-200 p-6 mb-6">
                 <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                  <span className="text-2xl">📊</span>
+                  <BarChart3 className="w-6 h-6" strokeWidth={1.75} />
                   키워드 분석 인사이트
                 </h3>
 
@@ -2197,7 +2198,7 @@ function KeywordSearchContent() {
                   </div>
                   <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 text-center border-2 border-blue-300 shadow-lg transform hover:scale-105 transition-transform">
                     <div className="flex items-center justify-center gap-2 mb-1">
-                      <span className="text-2xl">📝</span>
+                      <FileText className="w-6 h-6" strokeWidth={1.75} />
                       <div className="text-3xl font-extrabold text-blue-600">
                         {results.insights.average_content_length
                           ? results.insights.average_content_length >= 1000
@@ -2211,7 +2212,7 @@ function KeywordSearchContent() {
                   </div>
                   <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 text-center border-2 border-green-300 shadow-lg transform hover:scale-105 transition-transform">
                     <div className="flex items-center justify-center gap-2 mb-1">
-                      <span className="text-2xl">📷</span>
+                      <Camera className="w-6 h-6" strokeWidth={1.75} />
                       <div className="text-3xl font-extrabold text-green-600">
                         {results.insights.average_image_count?.toFixed(1) || '-'}
                       </div>
@@ -2225,7 +2226,7 @@ function KeywordSearchContent() {
                 {results.insights.common_patterns.length > 0 && (
                   <div className="bg-white rounded-lg p-4">
                     <h4 className="font-bold text-gray-700 mb-2 flex items-center gap-2">
-                      <span>💡</span>
+                      <Lightbulb className="w-4 h-4" strokeWidth={1.75} />
                       상위 노출 패턴
                     </h4>
                     <ul className="space-y-1">
@@ -2268,13 +2269,13 @@ function KeywordSearchContent() {
                       </th>
                       <th className="px-3 py-3 text-center text-xs font-bold text-blue-700 uppercase tracking-wider w-24 bg-blue-50">
                         <div className="flex items-center justify-center gap-1">
-                          <span>📝</span>
+                          <FileText className="w-4 h-4" strokeWidth={1.75} />
                           <span>글자수</span>
                         </div>
                       </th>
                       <th className="px-3 py-3 text-center text-xs font-bold text-green-700 uppercase tracking-wider w-24 bg-green-50">
                         <div className="flex items-center justify-center gap-1">
-                          <span>📷</span>
+                          <Camera className="w-4 h-4" strokeWidth={1.75} />
                           <span>사진수</span>
                         </div>
                       </th>
@@ -2311,7 +2312,7 @@ function KeywordSearchContent() {
                               </div>
                               {blog.is_influencer && (
                                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-yellow-400 to-orange-500 text-white whitespace-nowrap">
-                                  ⭐ 인플루언서
+                                  인플루언서
                                 </span>
                               )}
                             </div>
@@ -2482,7 +2483,7 @@ function KeywordSearchContent() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                <span>🔍</span>
+                <Search className="w-4 h-4" strokeWidth={1.75} />
                 연관 키워드 & 검색량
                 {relatedKeywords && relatedKeywords.keywords.length > 0 && (
                   <span className="text-sm font-normal text-gray-500">
@@ -2515,8 +2516,8 @@ function KeywordSearchContent() {
                       </span>
                     ) : (
                       <span className="flex items-center gap-1">
-                        🌳 2단계 확장
-                        {!canUseTreeExpansion && <span className="ml-1">🔒</span>}
+                        2단계 확장
+                        {!canUseTreeExpansion && <Lock className="w-4 h-4 ml-1" strokeWidth={1.75} />}
                       </span>
                     )}
                   </button>
@@ -2554,7 +2555,7 @@ function KeywordSearchContent() {
                                 <>
                                   <th className="text-right py-3 px-4 font-semibold text-gray-700">PC</th>
                                   <th className="text-right py-3 px-4 font-semibold text-gray-700">
-                                    <span className="text-blue-600">📱 모바일</span>
+                                    <span className="text-blue-600">모바일</span>
                                   </th>
                                   <th className="text-right py-3 px-4 font-semibold text-gray-700">총 검색량</th>
                                   <th className="text-center py-3 px-4 font-semibold text-gray-700">경쟁도</th>
@@ -2698,7 +2699,7 @@ function KeywordSearchContent() {
               <div className="text-center py-8">
                 {relatedKeywords?.message ? (
                   <div className="text-orange-600">
-                    ⚠️ {relatedKeywords.message}
+                    {relatedKeywords.message}
                   </div>
                 ) : (
                   <div className="text-gray-500">
@@ -2713,7 +2714,7 @@ function KeywordSearchContent() {
               <div className="mt-6 border-t pt-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-md font-bold text-gray-800 flex items-center gap-2">
-                    <span>🌳</span>
+                    <Network className="w-4 h-4" strokeWidth={1.75} />
                     2단계 연관 키워드 트리
                     <span className="text-sm font-normal text-gray-500">
                       (총 {keywordTree.total_keywords}개)
@@ -2858,7 +2859,7 @@ function KeywordSearchContent() {
                     <div className="space-y-6">
                       <div className="flex items-center gap-3 mb-4">
                         <div className="p-3 rounded-xl bg-gradient-to-r from-[#0064FF]/10 to-[#3182F6]/10">
-                          <span className="text-2xl">🏆</span>
+                          <Trophy className="w-6 h-6" strokeWidth={1.75} />
                         </div>
                         <div>
                           <h3 className="text-xl font-bold">C-Rank (출처 신뢰도)</h3>
@@ -2872,7 +2873,7 @@ function KeywordSearchContent() {
                       {breakdownData.breakdown.c_rank.breakdown?.context && (
                         <div className="bg-gray-50 rounded-xl p-6">
                           <h4 className="font-semibold text-lg mb-4 flex items-center gap-2">
-                            📊 Context (주제 집중도) - {breakdownData.breakdown.c_rank.breakdown.context.score}/100
+                            Context (주제 집중도) - {breakdownData.breakdown.c_rank.breakdown.context.score}/100
                           </h4>
                           <div className="space-y-4">
                             {breakdownData.breakdown.c_rank.breakdown.context.details && Object.entries(breakdownData.breakdown.c_rank.breakdown.context.details).map(([key, detail]: [string, any]) => (
@@ -2887,21 +2888,21 @@ function KeywordSearchContent() {
                                 {/* Reasoning - 왜 이 점수를 받았는지 */}
                                 {detail.reasoning && (
                                   <div className="mt-2 p-2 bg-[#0064FF]/5 rounded text-sm text-gray-700">
-                                    <span className="font-medium">💡 이유: </span>{detail.reasoning}
+                                    <span className="font-medium">이유: </span>{detail.reasoning}
                                   </div>
                                 )}
 
                                 {/* How to improve */}
                                 {detail.how_to_improve && (
                                   <div className="mt-2 p-2 bg-blue-50 rounded text-sm text-blue-700">
-                                    <span className="font-medium">📈 개선 방법: </span>{detail.how_to_improve}
+                                    <span className="font-medium">개선 방법: </span>{detail.how_to_improve}
                                   </div>
                                 )}
 
                                 {/* 키워드 예시 */}
                                 {detail.keyword_examples && detail.keyword_examples.length > 0 && (
                                   <div className="mt-3 space-y-2">
-                                    <p className="text-sm font-medium text-gray-600">🔑 주요 키워드 예시:</p>
+                                    <p className="text-sm font-medium text-gray-600">주요 키워드 예시:</p>
                                     {detail.keyword_examples.map((kwEx: any, idx: number) => (
                                       <div key={idx} className="ml-4 p-2 bg-gray-50 rounded text-sm">
                                         <div className="font-medium text-[#0064FF]">
@@ -2956,21 +2957,21 @@ function KeywordSearchContent() {
                                 {/* Reasoning */}
                                 {detail.reasoning && (
                                   <div className="mt-2 p-2 bg-[#3182F6]/5 rounded text-sm text-gray-700">
-                                    <span className="font-medium">💡 이유: </span>{detail.reasoning}
+                                    <span className="font-medium">이유: </span>{detail.reasoning}
                                   </div>
                                 )}
 
                                 {/* How to improve */}
                                 {detail.how_to_improve && (
                                   <div className="mt-2 p-2 bg-blue-50 rounded text-sm text-blue-700">
-                                    <span className="font-medium">📈 개선 방법: </span>{detail.how_to_improve}
+                                    <span className="font-medium">개선 방법: </span>{detail.how_to_improve}
                                   </div>
                                 )}
 
                                 {/* 포스트 길이 예시 */}
                                 {detail.post_examples && detail.post_examples.length > 0 && (
                                   <div className="mt-3 space-y-2">
-                                    <p className="text-sm font-medium text-gray-600">📝 개별 포스트 점수:</p>
+                                    <p className="text-sm font-medium text-gray-600">개별 포스트 점수:</p>
                                     {detail.post_examples.map((post: any, idx: number) => (
                                       <div key={idx} className="ml-4 p-2 bg-gray-50 rounded text-sm border-l-2 border-[#3182F6]/20">
                                         <div className="flex items-center justify-between mb-1">
@@ -2993,7 +2994,7 @@ function KeywordSearchContent() {
                                 {/* 제목 예시 */}
                                 {detail.title_examples && detail.title_examples.length > 0 && (
                                   <div className="mt-3 space-y-2">
-                                    <p className="text-sm font-medium text-gray-600">📌 개별 제목 점수:</p>
+                                    <p className="text-sm font-medium text-gray-600">개별 제목 점수:</p>
                                     {detail.title_examples.map((title: any, idx: number) => (
                                       <div key={idx} className="ml-4 p-2 bg-gray-50 rounded text-sm border-l-2 border-[#3182F6]/20">
                                         <div className="flex items-center justify-between mb-1">
@@ -3024,7 +3025,7 @@ function KeywordSearchContent() {
                     <div className="space-y-6 mt-8">
                       <div className="flex items-center gap-3 mb-4">
                         <div className="p-3 rounded-xl bg-gradient-to-r from-orange-100 to-yellow-100">
-                          <span className="text-2xl">✨</span>
+                          <Wand2 className="w-6 h-6" strokeWidth={1.75} />
                         </div>
                         <div>
                           <h3 className="text-xl font-bold">D.I.A. (문서 품질)</h3>
@@ -3045,20 +3046,20 @@ function KeywordSearchContent() {
                             abuse_penalty: '어뷰징 감점'
                           }
 
-                          const icons: Record<string, string> = {
-                            topic_relevance: '🎯',
-                            experience: '✨',
-                            information_richness: '📚',
-                            originality: '💡',
-                            timeliness: '⏰',
-                            abuse_penalty: '⚠️'
+                          const icons: Record<string, LucideIcon> = {
+                            topic_relevance: Target,
+                            experience: Wand2,
+                            information_richness: BookOpen,
+                            originality: Lightbulb,
+                            timeliness: Clock,
+                            abuse_penalty: AlertTriangle
                           }
 
                           return (
                             <div key={key} className="bg-gray-50 rounded-xl p-4">
                               <div className="flex items-center justify-between mb-3">
                                 <h4 className="font-semibold flex items-center gap-2">
-                                  <span className="text-xl">{icons[key]}</span>
+                                  {(() => { const Ico = icons[key]; return Ico ? <Ico className="w-5 h-5 text-gray-500" strokeWidth={1.75} /> : null })()}
                                   {labels[key]}
                                 </h4>
                                 <span className={`font-bold ${section.weight < 0 ? 'text-red-600' : 'text-green-600'}`}>
@@ -3074,14 +3075,14 @@ function KeywordSearchContent() {
                                   {/* Reasoning */}
                                   {section.details.reasoning && (
                                     <div className="mt-2 p-2 bg-yellow-50 rounded text-sm text-gray-700">
-                                      <span className="font-medium">💡 이유: </span>{section.details.reasoning}
+                                      <span className="font-medium">이유: </span>{section.details.reasoning}
                                     </div>
                                   )}
 
                                   {/* How to improve */}
                                   {section.details.how_to_improve && (
                                     <div className="mt-2 p-2 bg-blue-50 rounded text-sm text-blue-700">
-                                      <span className="font-medium">📈 개선 방법: </span>{section.details.how_to_improve}
+                                      <span className="font-medium">개선 방법: </span>{section.details.how_to_improve}
                                     </div>
                                   )}
 
@@ -3116,10 +3117,11 @@ function KeywordSearchContent() {
                                       'bg-green-50 border border-green-300'
                                     }`}>
                                       <div className="flex items-center gap-2 mb-2">
-                                        <span className="text-lg font-bold">
-                                          {section.details.quality_level.includes('심각') || section.details.quality_level.includes('위험') ? '⛔' :
-                                           section.details.quality_level.includes('주의') || section.details.quality_level.includes('개선') ? '⚠️' : '✅'}
-                                        </span>
+                                        {section.details.quality_level.includes('심각') || section.details.quality_level.includes('위험')
+                                          ? <Ban className="w-5 h-5 text-red-600" strokeWidth={2} />
+                                          : section.details.quality_level.includes('주의') || section.details.quality_level.includes('개선')
+                                            ? <AlertTriangle className="w-5 h-5 text-yellow-600" strokeWidth={2} />
+                                            : <CheckCircle2 className="w-5 h-5 text-green-600" strokeWidth={2} />}
                                         <span className={`font-bold text-sm ${
                                           section.details.quality_level.includes('심각') || section.details.quality_level.includes('위험') ? 'text-red-700' :
                                           section.details.quality_level.includes('주의') || section.details.quality_level.includes('개선') ? 'text-yellow-700' :
@@ -3144,7 +3146,7 @@ function KeywordSearchContent() {
                                           <li key={idx} className={`text-xs flex items-start gap-2 ${
                                             issue.includes('심각') ? 'text-red-700 font-bold' : 'text-red-600'
                                           }`}>
-                                            <span>{issue.includes('심각') ? '⚠️' : '•'}</span>
+                                            {issue.includes('심각') ? <AlertTriangle className="w-3.5 h-3.5 text-yellow-600 shrink-0 mt-0.5" strokeWidth={2} /> : <span>&bull;</span>}
                                             <span>{issue}</span>
                                           </li>
                                         ))}
@@ -3165,7 +3167,7 @@ function KeywordSearchContent() {
                     <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-xl p-6 mt-8">
                       <div className="flex items-center gap-3 mb-6">
                         <div className="p-3 rounded-xl bg-gradient-to-r from-green-100 to-blue-100">
-                          <span className="text-2xl">🎯</span>
+                          <Target className="w-6 h-6" strokeWidth={1.75} />
                         </div>
                         <div>
                           <h3 className="text-xl font-bold">점수 구성 - 왜 이 점수가 나왔을까요?</h3>
@@ -3213,7 +3215,7 @@ function KeywordSearchContent() {
                       </div>
 
                       <div className="mt-6 p-4 bg-blue-100 rounded-lg">
-                        <h4 className="font-semibold mb-2 text-blue-900">💡 계산 방식</h4>
+                        <h4 className="font-semibold mb-2 text-blue-900">계산 방식</h4>
                         <p className="text-sm text-blue-800">
                           {breakdownData.breakdown.score_composition.calculation_method}
                         </p>

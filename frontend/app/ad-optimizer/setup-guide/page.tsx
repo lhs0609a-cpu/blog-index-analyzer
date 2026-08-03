@@ -14,7 +14,7 @@ const PLATFORM_GUIDES = {
   naver_searchad: {
     id: 'naver_searchad',
     name: '네이버 검색광고',
-    icon: '🟢',
+    color: PLATFORM_COLORS.naver,
     color: 'from-green-500 to-green-600',
     difficulty: '쉬움',
     timeRequired: '5-10분',
@@ -77,7 +77,7 @@ const PLATFORM_GUIDES = {
   google_ads: {
     id: 'google_ads',
     name: 'Google Ads',
-    icon: '🔵',
+    color: PLATFORM_COLORS.google,
     color: 'from-blue-500 to-blue-600',
     difficulty: '보통',
     timeRequired: '15-20분',
@@ -159,7 +159,7 @@ https://developers.google.com/google-ads/api/docs/oauth/playground`,
   meta_ads: {
     id: 'meta_ads',
     name: 'Meta 광고 (Facebook/Instagram)',
-    icon: '🔷',
+    color: PLATFORM_COLORS.meta,
     color: 'from-indigo-500 to-indigo-600',
     difficulty: '쉬움',
     timeRequired: '10-15분',
@@ -245,7 +245,7 @@ https://www.facebook.com/adsmanager/manage/campaigns?act=123456789`,
   kakao_moment: {
     id: 'kakao_moment',
     name: '카카오모먼트',
-    icon: '💛',
+    color: PLATFORM_COLORS.kakao,
     color: 'from-yellow-400 to-yellow-500',
     difficulty: '보통',
     timeRequired: '10-15분',
@@ -327,7 +327,7 @@ https://www.facebook.com/adsmanager/manage/campaigns?act=123456789`,
   tiktok_ads: {
     id: 'tiktok_ads',
     name: 'TikTok Ads',
-    icon: '🎵',
+    color: PLATFORM_COLORS.tiktok,
     color: 'from-pink-500 to-pink-600',
     difficulty: '보통',
     timeRequired: '15-20분',
@@ -409,7 +409,7 @@ https://www.facebook.com/adsmanager/manage/campaigns?act=123456789`,
   coupang_ads: {
     id: 'coupang_ads',
     name: '쿠팡 광고',
-    icon: '🛒',
+    color: PLATFORM_COLORS.coupang,
     color: 'from-orange-500 to-orange-600',
     difficulty: '쉬움',
     timeRequired: '5-10분',
@@ -477,7 +477,7 @@ https://www.facebook.com/adsmanager/manage/campaigns?act=123456789`,
   criteo: {
     id: 'criteo',
     name: '크리테오',
-    icon: '🔴',
+    color: PLATFORM_COLORS.criteo,
     color: 'from-red-500 to-red-600',
     difficulty: '어려움',
     timeRequired: '20-30분',
@@ -563,6 +563,21 @@ client_id={CLIENT_ID}
 }
 
 type PlatformId = keyof typeof PLATFORM_GUIDES
+
+// 플랫폼 브랜드 색 (이모지 원 대신)
+const PLATFORM_COLORS: Record<string, string> = {
+  naver: '#03C75A', naver_searchad: '#03C75A',
+  google: '#4285F4', google_ads: '#4285F4',
+  meta: '#0866FF', meta_ads: '#0866FF',
+  kakao: '#FEE500', kakao_moment: '#FEE500',
+  tiktok: '#111111', tiktok_ads: '#111111',
+  coupang: '#E8442E', coupang_ads: '#E8442E',
+  criteo: '#F26522',
+}
+
+function PlatformDot({ color }: { color?: string }) {
+  return <span className="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-black/5" style={{ backgroundColor: color || '#9CA3AF' }} />
+}
 
 export default function SetupGuidePage() {
   const [selectedPlatform, setSelectedPlatform] = useState<PlatformId | null>(null)
@@ -663,7 +678,7 @@ export default function SetupGuidePage() {
 
               <div className={`bg-gradient-to-r ${guide.color} rounded-2xl p-6 text-white`}>
                 <div className="flex items-center gap-4">
-                  <span className="text-5xl">{guide.icon}</span>
+                  <span className="w-5 h-5 rounded-full ring-1 ring-black/5" style={{ backgroundColor: guide.color || '#9CA3AF' }} />
                   <div>
                     <h2 className="text-2xl font-bold">{guide.name}</h2>
                     <p className="text-white/80">{guide.description}</p>
@@ -740,7 +755,7 @@ export default function SetupGuidePage() {
                             </div>
                             {step.tips && step.tips.length > 0 && (
                               <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                                <p className="text-xs font-medium text-yellow-800 mb-2">💡 팁</p>
+                                <p className="text-xs font-medium text-yellow-800 mb-2">팁</p>
                                 <ul className="space-y-1">
                                   {step.tips.map((tip, tipIdx) => (
                                     <li key={tipIdx} className="text-sm text-yellow-700">• {tip}</li>

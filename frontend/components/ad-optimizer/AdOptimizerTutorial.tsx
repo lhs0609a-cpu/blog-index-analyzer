@@ -41,7 +41,7 @@ interface TutorialProgress {
 const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 1,
-    title: '환영합니다! 🎉',
+    title: '환영합니다!',
     subtitle: '광고 최적화 시작하기',
     description: '이 튜토리얼을 따라하면 5분 안에 광고 자동 최적화를 설정할 수 있어요. 어렵지 않으니 천천히 따라오세요!',
     tips: [
@@ -70,7 +70,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     helpContent: `
 ## 어떤 플랫폼을 선택해야 할까요?
 
-### 네이버 검색광고 (추천 🌟)
+### 네이버 검색광고 (추천)
 - 국내 검색광고의 70% 이상 점유
 - 연동이 가장 간단해요
 - API 키만 있으면 바로 연동 가능
@@ -129,7 +129,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
 - **Secret Key**: 발급받은 시크릿 키
 - **Customer ID**: 광고 계정 번호 (숫자만)
 
-💡 모르겠으면 [네이버 광고 고객센터](https://saedu.naver.com)를 참고하세요!
+모르겠으면 [네이버 광고 고객센터](https://saedu.naver.com)를 참고하세요!
     `,
     estimatedTime: '3분',
     category: 'connect',
@@ -155,18 +155,18 @@ const TUTORIAL_STEPS: TutorialStep[] = [
 
 ### 최적화 모드 선택
 
-#### 🛡️ 안전 모드 (추천!)
+#### 안전 모드 (추천!)
 - 입찰가 변동: ±10% 이내
 - 하루 최대 5회 조정
 - 급격한 변화 없이 안정적
 - **처음 사용하시는 분께 추천**
 
-#### ⚡ 균형 모드
+#### 균형 모드
 - 입찰가 변동: ±20% 이내
 - 하루 최대 10회 조정
 - 적당한 최적화 속도
 
-#### 🚀 적극 모드
+#### 적극 모드
 - 입찰가 변동: ±30% 이내
 - 하루 최대 20회 조정
 - 빠른 최적화, 변동성 높음
@@ -176,7 +176,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
 2. 성과 확인 후: **균형 모드**로 변경
 3. 익숙해지면: **적극 모드** 시도
 
-💡 언제든 모드를 변경할 수 있어요!
+언제든 모드를 변경할 수 있어요!
     `,
     estimatedTime: '2분',
     category: 'optimize',
@@ -201,17 +201,17 @@ const TUTORIAL_STEPS: TutorialStep[] = [
 
 ### 알림 종류
 
-#### 🔴 긴급 알림 (필수 권장)
+#### 긴급 알림 (필수 권장)
 - 광고비 급증 (일일 예산 80% 초과)
 - ROAS 급락 (30% 이상 감소)
 - 광고 중지/오류 발생
 
-#### 🟡 중요 알림 (권장)
+#### 중요 알림 (권장)
 - 입찰가 자동 조정 완료
 - 일일 성과 리포트
 - 새로운 기회 발견
 
-#### 🟢 일반 알림 (선택)
+#### 일반 알림 (선택)
 - 시간대별 성과 변화
 - AI 분석 완료
 - 팁 및 추천
@@ -221,7 +221,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
 - **카카오 알림톡**: 즉시 확인 필요한 알림
 - **앱 내 알림**: 로그인 시 확인
 
-💡 처음에는 긴급 알림만 받고, 필요에 따라 추가하세요!
+처음에는 긴급 알림만 받고, 필요에 따라 추가하세요!
     `,
     estimatedTime: '1분',
     category: 'monitor',
@@ -246,20 +246,20 @@ const TUTORIAL_STEPS: TutorialStep[] = [
 
 ### 핵심 지표 이해하기
 
-#### 💰 총 광고비
+#### 총 광고비
 - 연동된 모든 플랫폼의 광고비 합계
 - 일일/주간/월간으로 확인 가능
 
-#### 📈 ROAS (광고 수익률)
+#### ROAS (광고 수익률)
 - 광고비 대비 매출 비율
 - **200% 이상**이면 좋은 성과!
 - 예: ROAS 300% = 1만원 투자 → 3만원 수익
 
-#### 🎯 전환수
+#### 전환수
 - 구매, 회원가입 등 목표 달성 횟수
 - 전환당 비용(CPA)도 확인하세요
 
-#### ⚡ 최적화 횟수
+#### 최적화 횟수
 - AI가 자동으로 조정한 횟수
 - 많을수록 활발하게 최적화 중
 
@@ -278,7 +278,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
   },
   {
     id: 7,
-    title: '설정 완료! 🎊',
+    title: '설정 완료!',
     subtitle: '이제 AI가 광고를 최적화합니다',
     description: '축하합니다! 모든 기본 설정이 완료되었어요. AI가 24시간 광고를 분석하고 최적화합니다.',
     tips: [
@@ -650,9 +650,6 @@ export default function AdOptimizerTutorial({
                       }
                       if (line.startsWith('- ')) {
                         return <li key={idx} className="ml-4 text-gray-600">{line.replace('- ', '')}</li>
-                      }
-                      if (line.startsWith('💡') || line.startsWith('🛡️') || line.startsWith('⚡') || line.startsWith('🚀')) {
-                        return <p key={idx} className="bg-yellow-50 p-3 rounded-lg text-gray-700 my-2">{line}</p>
                       }
                       if (line.trim() === '') {
                         return <br key={idx} />

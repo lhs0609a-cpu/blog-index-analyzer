@@ -445,12 +445,12 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
             </div>
             {indexingStats.validation_note && (
               <div className="mt-4 text-xs text-gray-600 italic">
-                💡 {indexingStats.validation_note}
+                {indexingStats.validation_note}
               </div>
             )}
             {indexingStats.never_indexed_rate > 0.5 && (
               <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
-                <strong>⚠️ 미노출 비율이 50% 이상</strong>입니다. 저품질 또는 색인 누락이 의심됩니다. 본문 길이·이미지·구조화를 점검하세요.
+                <strong>미노출 비율이 50% 이상</strong>입니다. 저품질 또는 색인 누락이 의심됩니다. 본문 길이·이미지·구조화를 점검하세요.
               </div>
             )}
           </motion.div>

@@ -46,7 +46,7 @@ interface AIInsight {
 interface BudgetAllocation {
   platformId: string
   name: string
-  icon: string
+  color?: string
   currentBudget: number
   suggestedBudget: number
   performance: number
@@ -57,7 +57,7 @@ interface BudgetAllocation {
 interface OptimizationLog {
   id: string
   platform: string
-  icon: string
+  color?: string
   action: string
   result: string
   savedAmount?: number
@@ -77,6 +77,27 @@ interface ConnectedPlatform {
     roas: number
     optimizations_today: number
   }
+}
+
+// 플랫폼 브랜드 색 — 이모지 원 대신 실제 브랜드 컬러 점으로 표시한다
+const PLATFORM_COLORS: Record<string, string> = {
+  naver_searchad: '#03C75A',
+  google_ads: '#4285F4',
+  meta_ads: '#0866FF',
+  kakao_moment: '#FEE500',
+  tiktok_ads: '#111111',
+  coupang_ads: '#E8442E',
+  criteo: '#F26522',
+}
+
+function PlatformDot({ color, size = 'md' }: { color?: string; size?: 'sm' | 'md' | 'lg' }) {
+  const px = size === 'lg' ? 'w-3.5 h-3.5' : size === 'sm' ? 'w-2 h-2' : 'w-2.5 h-2.5'
+  return (
+    <span
+      className={`${px} rounded-full shrink-0 ring-1 ring-black/5`}
+      style={{ backgroundColor: color || '#9CA3AF' }}
+    />
+  )
 }
 
 export default function UnifiedAdOptimizerPage() {
@@ -201,16 +222,6 @@ export default function UnifiedAdOptimizerPage() {
         return
       }
 
-      const platformIcons: Record<string, string> = {
-        'naver_searchad': '🟢',
-        'google_ads': '🔵',
-        'meta_ads': '🔷',
-        'kakao_moment': '💛',
-        'tiktok_ads': '🎵',
-        'coupang_ads': '🛒',
-        'criteo': '🔴'
-      }
-
       const platformNames: Record<string, string> = {
         'naver_searchad': '네이버 검색광고',
         'google_ads': 'Google Ads',
@@ -229,7 +240,7 @@ export default function UnifiedAdOptimizerPage() {
             return {
               platformId,
               name: platformNames[platformId] || platformId,
-              icon: platformIcons[platformId] || '📊',
+              color: PLATFORM_COLORS[platformId],
               currentBudget: perf.cost || 0,
               suggestedBudget: perf.roas > 300 ? perf.cost * 1.3 : perf.cost * 0.8,
               performance: perf.roas || 0,
@@ -241,7 +252,7 @@ export default function UnifiedAdOptimizerPage() {
           return {
             platformId,
             name: platformNames[platformId] || platformId,
-            icon: platformIcons[platformId] || '📊',
+            color: PLATFORM_COLORS[platformId],
             currentBudget: 0,
             suggestedBudget: 0,
             performance: 0,
@@ -270,10 +281,7 @@ export default function UnifiedAdOptimizerPage() {
       const logs: OptimizationLog[] = (report.recommendations || []).map((rec: any, idx: number) => ({
         id: String(idx + 1),
         platform: rec.platform || '전체',
-        icon: rec.platform === 'naver_searchad' ? '🟢' :
-              rec.platform === 'google_ads' ? '🔵' :
-              rec.platform === 'meta_ads' ? '🔷' :
-              rec.platform === 'kakao_moment' ? '💛' : '📊',
+        color: PLATFORM_COLORS[rec.platform],
         action: rec.action || rec.type || '최적화',
         result: rec.description || rec.message,
         savedAmount: rec.expected_savings,
@@ -438,18 +446,18 @@ export default function UnifiedAdOptimizerPage() {
             className="flex justify-center items-center gap-4 mb-16"
           >
             {[
-              { icon: "🟢", name: "네이버" },
-              { icon: "🔵", name: "구글" },
-              { icon: "🔷", name: "메타" },
-              { icon: "💛", name: "카카오" },
-              { icon: "🎵", name: "틱톡" },
+              { color: PLATFORM_COLORS.naver_searchad, name: "네이버" },
+              { color: PLATFORM_COLORS.google_ads, name: "구글" },
+              { color: PLATFORM_COLORS.meta_ads, name: "메타" },
+              { color: PLATFORM_COLORS.kakao_moment, name: "카카오" },
+              { color: PLATFORM_COLORS.tiktok_ads, name: "틱톡" },
             ].map((platform, idx) => (
               <motion.div
                 key={idx}
                 whileHover={{ y: -2 }}
                 className="flex flex-col items-center gap-1"
               >
-                <span className="text-2xl">{platform.icon}</span>
+                <PlatformDot color={platform.color} size="lg" />
                 <span className="text-xs text-gray-400">{platform.name}</span>
               </motion.div>
             ))}
@@ -851,7 +859,7 @@ export default function UnifiedAdOptimizerPage() {
                           key={platform.platformId}
                           className="flex items-center gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors"
                         >
-                          <span className="text-xl">{platform.icon}</span>
+                          <platform.icon className="w-5 h-5 text-gray-600" strokeWidth={1.75} />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between mb-1">
                               <span className="text-sm font-medium text-gray-900">{platform.name}</span>
@@ -903,7 +911,7 @@ export default function UnifiedAdOptimizerPage() {
                           className="px-4 py-3 hover:bg-gray-50 transition-colors"
                         >
                           <div className="flex items-start gap-3">
-                            <span className="text-lg">{log.icon}</span>
+                            <PlatformDot color={log.color} />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-0.5">
                                 <span className="text-sm font-medium text-gray-900">{log.platform}</span>
@@ -1153,7 +1161,7 @@ export default function UnifiedAdOptimizerPage() {
                   {/* 플랫폼 헤더 */}
                   <div className={`bg-gradient-to-r ${platform.color} p-4 ${viewMode === 'list' ? 'w-48' : ''}`}>
                     <div className="flex items-center gap-3">
-                      <span className="text-2xl">{platform.icon}</span>
+                      <platform.icon className="w-6 h-6 text-gray-600" strokeWidth={1.75} />
                       <div>
                         <h3 className="font-bold text-white">{platform.nameKo}</h3>
                         <p className="text-xs text-white/70">{platform.name}</p>
@@ -1352,7 +1360,7 @@ export default function UnifiedAdOptimizerPage() {
                       >
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-3">
-                            <span className="text-2xl">{platform.icon}</span>
+                            <platform.icon className="w-6 h-6 text-gray-600" strokeWidth={1.75} />
                             <div>
                               <h4 className="font-medium text-gray-900">{platform.name}</h4>
                               <span className={`text-xs ${platform.performance >= 400 ? 'text-green-600' : 'text-gray-500'}`}>
@@ -1444,7 +1452,7 @@ export default function UnifiedAdOptimizerPage() {
                       return (
                         <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                           <div>
-                            <span className="text-lg mr-2">{p.icon}</span>
+                            <p.icon className="w-5 h-5 mr-2 text-gray-600" strokeWidth={1.75} />
                             <span className="text-sm font-medium text-gray-900">{p.name}</span>
                           </div>
                           <div className="text-right">
@@ -1614,7 +1622,7 @@ export default function UnifiedAdOptimizerPage() {
               <div className={`bg-gradient-to-r ${selectedPlatform.color} p-6`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <span className="text-3xl">{selectedPlatform.icon}</span>
+                    <selectedPlatform.icon className="w-7 h-7 text-gray-600" strokeWidth={1.75} />
                     <div>
                       <h2 className="text-xl font-bold text-white">{selectedPlatform.nameKo}</h2>
                       <p className="text-sm text-white/70">{selectedPlatform.name} 연동</p>

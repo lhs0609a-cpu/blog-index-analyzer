@@ -1,7 +1,7 @@
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { Crown, Zap, TrendingUp, Check, X, Sparkles } from 'lucide-react'
+import { Crown, Zap, TrendingUp, Check, X, Sparkles , Search, KeyRound, Wand2} from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
@@ -16,21 +16,21 @@ interface UpgradeModalProps {
 const featureInfo = {
   blog_analysis: {
     title: '블로그 분석',
-    icon: '🔍',
+    icon: Search,
     freeLimit: 2,
     proLimit: 50,
     benefit: '무제한 블로그 분석으로 경쟁사 분석까지!'
   },
   keyword_search: {
     title: '키워드 검색',
-    icon: '🔑',
+    icon: KeyRound,
     freeLimit: 8,
     proLimit: 100,
     benefit: '100회 검색으로 블루오션 키워드 발굴!'
   },
   general: {
     title: '프리미엄 기능',
-    icon: '✨',
+    icon: Wand2,
     freeLimit: 0,
     proLimit: -1,
     benefit: '모든 프리미엄 기능을 제한 없이!'
@@ -116,7 +116,7 @@ export default function UpgradeModal({ isOpen, onClose, feature, currentUsage, m
                 transition={{ delay: 0.2, type: 'spring' }}
                 className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center shadow-lg"
               >
-                <span className="text-4xl">{info.icon}</span>
+                <info.icon className="w-10 h-10 text-[#0064FF]" strokeWidth={1.5} />
               </motion.div>
 
               <motion.div
@@ -125,7 +125,7 @@ export default function UpgradeModal({ isOpen, onClose, feature, currentUsage, m
                 transition={{ delay: 0.3 }}
               >
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                  오늘의 {info.title} 완료! 🎉
+                  오늘의 {info.title} 완료!
                 </h2>
                 <p className="text-gray-600">
                   {currentUsage !== undefined && maxUsage !== undefined ? (
@@ -200,7 +200,7 @@ export default function UpgradeModal({ isOpen, onClose, feature, currentUsage, m
                   className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 text-center"
                 >
                   <span className="text-amber-700 text-sm font-medium">
-                    🔥 지금 시작하면 <span className="font-bold">첫 달 20% 할인</span> · 7일 내 전액 환불 보장!
+                    지금 시작하면 <span className="font-bold">첫 달 20% 할인</span> · 7일 내 전액 환불 보장!
                   </span>
                 </motion.div>
               )}

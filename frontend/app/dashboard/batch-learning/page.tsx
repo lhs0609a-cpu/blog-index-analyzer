@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/stores/auth';
 import toast from 'react-hot-toast';
+import { Target , Lock, RefreshCw} from 'lucide-react'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.blrank.co.kr';
 
@@ -249,7 +250,7 @@ export default function BatchLearningPage() {
   useEffect(() => {
     if (!isAuthenticated) {
       toast('로그인이 필요한 기능입니다', {
-        icon: '🔐',
+        icon: Lock,
         duration: 3000,
       });
       router.push('/login?redirect=/dashboard/batch-learning');
@@ -342,7 +343,7 @@ export default function BatchLearningPage() {
         <Link href="/dashboard" className="text-gray-600 hover:text-gray-800 mb-4 inline-flex items-center">
           <span className="mr-2">←</span> 뒤로
         </Link>
-        <h1 className="text-3xl font-bold text-gray-800 mt-4">🤖 대량 키워드 자동 학습</h1>
+        <h1 className="text-3xl font-bold text-gray-800 mt-4">대량 키워드 자동 학습</h1>
         <p className="text-gray-600 mt-2">
           다양한 키워드를 자동으로 검색하고 분석하여 AI 학습 데이터를 축적합니다
         </p>
@@ -356,7 +357,7 @@ export default function BatchLearningPage() {
               {/* 왼쪽: 상태 및 토글 */}
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">🔄</span>
+                  <RefreshCw className="w-6 h-6 text-gray-500" strokeWidth={1.75} />
                   <div>
                     <h2 className="font-bold text-gray-800">자동 학습 스케줄러</h2>
                     <p className="text-sm text-gray-500">백그라운드에서 자동으로 학습 진행</p>
@@ -410,17 +411,17 @@ export default function BatchLearningPage() {
                   {/* 통계 */}
                   <div className="flex items-center gap-1 px-3 py-1 bg-purple-100 rounded-full">
                     <span className="text-purple-700 font-medium">
-                      📊 {autoLearningStatus.state.total_keywords_learned}개 키워드
+                      {autoLearningStatus.state.total_keywords_learned}개 키워드
                     </span>
                   </div>
                   <div className="flex items-center gap-1 px-3 py-1 bg-blue-100 rounded-full">
                     <span className="text-blue-700 font-medium">
-                      📝 {autoLearningStatus.state.total_blogs_analyzed}개 블로그
+                      {autoLearningStatus.state.total_blogs_analyzed}개 블로그
                     </span>
                   </div>
                   <div className="flex items-center gap-1 px-3 py-1 bg-green-100 rounded-full">
                     <span className="text-green-700 font-medium">
-                      🔁 {autoLearningStatus.state.total_cycles}회 사이클
+                      {autoLearningStatus.state.total_cycles}회 사이클
                     </span>
                   </div>
                 </div>
@@ -492,7 +493,7 @@ export default function BatchLearningPage() {
                 {autoLearningStatus.state.errors_count > 0 && (
                   <div className="mt-3 p-3 bg-red-50 rounded-lg">
                     <p className="text-sm text-red-700">
-                      ⚠️ 최근 에러 {autoLearningStatus.state.errors_count}건
+                      최근 에러 {autoLearningStatus.state.errors_count}건
                     </p>
                   </div>
                 )}
@@ -507,7 +508,7 @@ export default function BatchLearningPage() {
         <div className="lg:col-span-1 space-y-6">
           {/* 학습 설정 카드 */}
           <div className="bg-white rounded-2xl shadow-lg p-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">⚙️ 학습 설정</h2>
+            <h2 className="text-xl font-bold text-gray-800 mb-4">학습 설정</h2>
 
             {/* 키워드 개수 */}
             <div className="mb-4">
@@ -586,7 +587,7 @@ export default function BatchLearningPage() {
                 disabled={isLoading}
                 className="w-full py-4 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold rounded-xl transition-all disabled:opacity-50"
               >
-                {isLoading ? '시작 중...' : `🚀 ${keywordCount}개 키워드 학습 시작`}
+                {isLoading ? '시작 중...' : `${keywordCount}개 키워드 학습 시작`}
               </button>
             )}
 
@@ -599,7 +600,7 @@ export default function BatchLearningPage() {
 
           {/* 키워드 미리보기 */}
           <div className="bg-white rounded-2xl shadow-lg p-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">📋 키워드 미리보기</h2>
+            <h2 className="text-xl font-bold text-gray-800 mb-4">키워드 미리보기</h2>
             <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
               {previewKeywords.slice(0, 30).map((kw, idx) => (
                 <span
@@ -622,7 +623,7 @@ export default function BatchLearningPage() {
         <div className="lg:col-span-2 space-y-6">
           {/* 진행 상황 카드 */}
           <div className="bg-white rounded-2xl shadow-lg p-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">📊 학습 진행 상황</h2>
+            <h2 className="text-xl font-bold text-gray-800 mb-4">학습 진행 상황</h2>
 
             {status?.is_running ? (
               <>
@@ -705,7 +706,7 @@ export default function BatchLearningPage() {
               </>
             ) : (
               <div className="text-center py-12 text-gray-500">
-                <div className="text-6xl mb-4">🎯</div>
+                <Target className="w-14 h-14 mb-4" strokeWidth={1.75} />
                 <p className="text-lg">학습이 시작되지 않았습니다</p>
                 <p className="text-sm mt-2">왼쪽에서 설정 후 학습을 시작하세요</p>
               </div>
@@ -715,7 +716,7 @@ export default function BatchLearningPage() {
           {/* 분석 로그 */}
           <div className="bg-white rounded-2xl shadow-lg p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-800">📜 분석 로그</h2>
+              <h2 className="text-xl font-bold text-gray-800">분석 로그</h2>
               <button
                 onClick={() => setShowLogs(!showLogs)}
                 className="px-4 py-2 text-sm bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg transition-colors"
@@ -820,7 +821,7 @@ export default function BatchLearningPage() {
                               rel="noopener noreferrer"
                               className="text-sm text-blue-600 hover:text-blue-800 hover:underline truncate block mb-2"
                             >
-                              📄 {blog.post_title || '(제목 없음)'}
+                              {blog.post_title || '(제목 없음)'}
                             </a>
 
                             {/* 블로그 점수 */}
@@ -842,7 +843,7 @@ export default function BatchLearningPage() {
                             {/* 글 분석 결과 */}
                             {blog.post_analysis && (
                               <div className="mt-2 pt-2 border-t border-gray-200">
-                                <p className="text-xs text-gray-500 mb-1.5 font-medium">📊 글 분석</p>
+                                <p className="text-xs text-gray-500 mb-1.5 font-medium">글 분석</p>
                                 <div className="flex flex-wrap gap-1.5 text-xs">
                                   {blog.post_analysis.title_has_keyword && (
                                     <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full">
@@ -850,27 +851,27 @@ export default function BatchLearningPage() {
                                     </span>
                                   )}
                                   <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full">
-                                    📝 {blog.post_analysis.content_length.toLocaleString()}자
+                                    {blog.post_analysis.content_length.toLocaleString()}자
                                   </span>
                                   <span className="px-2 py-0.5 bg-pink-100 text-pink-700 rounded-full">
-                                    🖼️ {blog.post_analysis.image_count}장
+                                    {blog.post_analysis.image_count}장
                                   </span>
                                   {blog.post_analysis.video_count > 0 && (
                                     <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full">
-                                      🎬 {blog.post_analysis.video_count}개
+                                      {blog.post_analysis.video_count}개
                                     </span>
                                   )}
                                   <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full">
-                                    🔑 키워드 {blog.post_analysis.keyword_count}회
+                                    키워드 {blog.post_analysis.keyword_count}회
                                   </span>
                                   {blog.post_analysis.heading_count > 0 && (
                                     <span className="px-2 py-0.5 bg-cyan-100 text-cyan-700 rounded-full">
-                                      📑 소제목 {blog.post_analysis.heading_count}개
+                                      소제목 {blog.post_analysis.heading_count}개
                                     </span>
                                   )}
                                   {blog.post_analysis.has_map && (
                                     <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full">
-                                      🗺️ 지도
+                                      지도
                                     </span>
                                   )}
                                 </div>
@@ -901,7 +902,7 @@ export default function BatchLearningPage() {
 
           {/* 학습 효과 안내 */}
           <div className="bg-gradient-to-r from-purple-100 to-blue-100 rounded-2xl p-6">
-            <h3 className="font-bold text-purple-800 mb-3">💡 대량 학습의 효과</h3>
+            <h3 className="font-bold text-purple-800 mb-3">대량 학습의 효과</h3>
             <ul className="space-y-2 text-sm text-purple-700">
               <li className="flex items-start gap-2">
                 <span>•</span>

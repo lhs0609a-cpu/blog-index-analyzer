@@ -3426,7 +3426,7 @@ export default function ToolsPage() {
                             }`}
                             onClick={() => {
                               if (isLocked) {
-                                toast('CTR 8% 이상 고성과 제목이 숨겨져 있어요', { icon: '🔥' })
+                                toast('CTR 8% 이상 고성과 제목이 숨겨져 있어요')
                                 return
                               }
                               navigator.clipboard.writeText(item.title)
@@ -3437,7 +3437,7 @@ export default function ToolsPage() {
                             {isLocked && (
                               <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center z-10">
                                 <div className="text-center">
-                                  <div className="text-lg mb-1">🔥</div>
+                                  <Flame className="w-5 h-5 mb-1" strokeWidth={1.75} />
                                   <Link href="/pricing" className="text-sm text-amber-700 font-bold hover:underline">
                                     CTR 8% 이상 제목 확인하기
                                   </Link>
@@ -3478,7 +3478,7 @@ export default function ToolsPage() {
                       <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="font-bold text-gray-800">🎯 {titleResult.titles.length - 2}개의 추가 제목이 있습니다</div>
+                            <div className="font-bold text-gray-800">{titleResult.titles.length - 2}개의 추가 제목이 있습니다</div>
                             <div className="text-sm text-gray-600">Pro 플랜으로 모든 AI 추천 제목을 확인하세요</div>
                           </div>
                           <Link
@@ -3627,7 +3627,7 @@ export default function ToolsPage() {
                       <div className="mt-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border-2 border-amber-300">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <div className="text-2xl">🔥</div>
+                            <Flame className="w-6 h-6" strokeWidth={1.75} />
                             <div>
                               <div className="font-bold text-amber-900">
                                 경쟁도 10% 미만 '꿀통 키워드' {Math.min(blueOceanResult.keywords.length - 4, 3)}개가 숨겨져 있습니다
@@ -3809,7 +3809,7 @@ export default function ToolsPage() {
                         <div className="mt-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border-2 border-amber-300">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <div className="text-2xl">📈</div>
+                              <TrendingUp className="w-6 h-6" strokeWidth={1.75} />
                               <div>
                                 <div className="font-bold text-amber-900">
                                   상위노출에 결정적인 SEO 포인트 {writingResult.checks.length - 3}개가 숨겨져 있습니다
@@ -3907,7 +3907,7 @@ export default function ToolsPage() {
                             }`}
                             onClick={() => {
                               if (isLocked) {
-                                toast('상위노출 핵심 해시태그가 숨겨져 있어요', { icon: '🔥' })
+                                toast('상위노출 핵심 해시태그가 숨겨져 있어요')
                                 return
                               }
                               navigator.clipboard.writeText(hashtag.tag)
@@ -3938,7 +3938,7 @@ export default function ToolsPage() {
                       <div className="mt-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border-2 border-amber-300">
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="font-bold text-amber-900">🏷️ 상위노출 핵심 해시태그 {hashtagResult.hashtags.length - 4}개가 숨겨져 있습니다</div>
+                            <div className="font-bold text-amber-900">상위노출 핵심 해시태그 {hashtagResult.hashtags.length - 4}개가 숨겨져 있습니다</div>
                             <div className="text-sm text-amber-700">이 태그를 추가하면 검색 노출이 평균 40% 증가합니다</div>
                           </div>
                           <Link

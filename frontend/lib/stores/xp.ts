@@ -1,12 +1,14 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { BookOpen, Crown, Flame, Gem, GraduationCap, Hand, KeyRound, Medal, ScanSearch, Search, Sparkle, Star, Zap } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 
 // 업적/뱃지 정의
 export interface Achievement {
   id: string
   name: string
   description: string
-  icon: string
+  icon: LucideIcon
   requiredXP: number
   unlockedAt?: string
 }
@@ -16,7 +18,7 @@ export interface Reward {
   id: string
   name: string
   description: string
-  icon: string
+  icon: LucideIcon
   cost: number
   type: 'analysis' | 'premium_trial' | 'badge'
   value: number // 분석 횟수 또는 체험 일수
@@ -26,7 +28,7 @@ export interface Reward {
 export interface Rank {
   id: string
   name: string
-  icon: string
+  icon: LucideIcon
   minXP: number
   maxXP: number
   color: string
@@ -39,7 +41,7 @@ export const REWARDS: Reward[] = [
     id: 'analysis_1',
     name: '추가 분석 1회',
     description: '키워드 분석을 1회 추가로 사용할 수 있습니다.',
-    icon: '🔍',
+    icon: Search,
     cost: 100,
     type: 'analysis',
     value: 1
@@ -48,7 +50,7 @@ export const REWARDS: Reward[] = [
     id: 'analysis_5',
     name: '추가 분석 5회',
     description: '키워드 분석을 5회 추가로 사용할 수 있습니다.',
-    icon: '🔎',
+    icon: ScanSearch,
     cost: 450,
     type: 'analysis',
     value: 5
@@ -57,7 +59,7 @@ export const REWARDS: Reward[] = [
     id: 'premium_1day',
     name: '프로 기능 1일 체험',
     description: '프로 플랜의 모든 기능을 1일간 무료로 체험합니다.',
-    icon: '⭐',
+    icon: Star,
     cost: 500,
     type: 'premium_trial',
     value: 1
@@ -66,7 +68,7 @@ export const REWARDS: Reward[] = [
     id: 'premium_3day',
     name: '프로 기능 3일 체험',
     description: '프로 플랜의 모든 기능을 3일간 무료로 체험합니다.',
-    icon: '🌟',
+    icon: Sparkle,
     cost: 1200,
     type: 'premium_trial',
     value: 3
@@ -75,7 +77,7 @@ export const REWARDS: Reward[] = [
     id: 'premium_7day',
     name: '프로 기능 7일 체험',
     description: '프로 플랜의 모든 기능을 7일간 무료로 체험합니다.',
-    icon: '💫',
+    icon: Sparkle,
     cost: 2500,
     type: 'premium_trial',
     value: 7
@@ -87,7 +89,7 @@ export const RANKS: Rank[] = [
   {
     id: 'bronze',
     name: '브론즈',
-    icon: '🥉',
+    icon: Medal,
     minXP: 0,
     maxXP: 299,
     color: 'from-amber-600 to-amber-800',
@@ -96,7 +98,7 @@ export const RANKS: Rank[] = [
   {
     id: 'silver',
     name: '실버',
-    icon: '🥈',
+    icon: Medal,
     minXP: 300,
     maxXP: 999,
     color: 'from-gray-400 to-gray-600',
@@ -105,7 +107,7 @@ export const RANKS: Rank[] = [
   {
     id: 'gold',
     name: '골드',
-    icon: '🥇',
+    icon: Medal,
     minXP: 1000,
     maxXP: 2999,
     color: 'from-yellow-400 to-yellow-600',
@@ -114,7 +116,7 @@ export const RANKS: Rank[] = [
   {
     id: 'platinum',
     name: '플래티넘',
-    icon: '💎',
+    icon: Gem,
     minXP: 3000,
     maxXP: 9999,
     color: 'from-cyan-400 to-blue-600',
@@ -123,7 +125,7 @@ export const RANKS: Rank[] = [
   {
     id: 'diamond',
     name: '다이아몬드',
-    icon: '👑',
+    icon: Crown,
     minXP: 10000,
     maxXP: Infinity,
     color: 'from-purple-400 to-pink-600',
@@ -137,70 +139,70 @@ export const ACHIEVEMENTS: Achievement[] = [
     id: 'first_tutorial',
     name: '첫 발걸음',
     description: '첫 번째 튜토리얼을 완료했습니다.',
-    icon: '🎓',
+    icon: GraduationCap,
     requiredXP: 50
   },
   {
     id: 'tutorial_master',
     name: '튜토리얼 마스터',
     description: '모든 튜토리얼을 완료했습니다.',
-    icon: '📚',
+    icon: BookOpen,
     requiredXP: 300
   },
   {
     id: 'bronze_rank',
     name: '브론즈 달성',
     description: '브론즈 등급에 도달했습니다.',
-    icon: '🥉',
+    icon: Medal,
     requiredXP: 100
   },
   {
     id: 'silver_rank',
     name: '실버 달성',
     description: '실버 등급에 도달했습니다.',
-    icon: '🥈',
+    icon: Medal,
     requiredXP: 300
   },
   {
     id: 'gold_rank',
     name: '골드 달성',
     description: '골드 등급에 도달했습니다.',
-    icon: '🥇',
+    icon: Medal,
     requiredXP: 1000
   },
   {
     id: 'platinum_rank',
     name: '플래티넘 달성',
     description: '플래티넘 등급에 도달했습니다.',
-    icon: '💎',
+    icon: Gem,
     requiredXP: 3000
   },
   {
     id: 'diamond_rank',
     name: '다이아몬드 달성',
     description: '최고 등급에 도달했습니다!',
-    icon: '👑',
+    icon: Crown,
     requiredXP: 10000
   },
   {
     id: 'first_analysis',
     name: '첫 분석',
     description: '첫 키워드 분석을 수행했습니다.',
-    icon: '🔍',
+    icon: Search,
     requiredXP: 10
   },
   {
     id: 'power_user',
     name: '파워 유저',
     description: '50회 이상 분석을 수행했습니다.',
-    icon: '⚡',
+    icon: Zap,
     requiredXP: 500
   },
   {
     id: 'streak_7',
     name: '7일 연속 접속',
     description: '7일 연속으로 서비스를 이용했습니다.',
-    icon: '🔥',
+    icon: Flame,
     requiredXP: 200
   }
 ]
@@ -217,15 +219,15 @@ export interface DailyMission {
   id: string
   name: string
   description: string
-  icon: string
+  icon: LucideIcon
   xpReward: number
   type: 'login' | 'analyze' | 'keyword' | 'post_read'
 }
 
 export const DAILY_MISSIONS: DailyMission[] = [
-  { id: 'login', name: '오늘 접속하기', description: '서비스에 로그인하면 완료!', icon: '👋', xpReward: 10, type: 'login' },
-  { id: 'analyze', name: '블로그 1회 분석', description: '블로그 분석을 1회 실행하세요', icon: '🔍', xpReward: 20, type: 'analyze' },
-  { id: 'keyword', name: '키워드 검색 1회', description: '키워드 검색을 1회 실행하세요', icon: '🔑', xpReward: 15, type: 'keyword' },
+  { id: 'login', name: '오늘 접속하기', description: '서비스에 로그인하면 완료!', icon: Hand, xpReward: 10, type: 'login' },
+  { id: 'analyze', name: '블로그 1회 분석', description: '블로그 분석을 1회 실행하세요', icon: Search, xpReward: 20, type: 'analyze' },
+  { id: 'keyword', name: '키워드 검색 1회', description: '키워드 검색을 1회 실행하세요', icon: KeyRound, xpReward: 15, type: 'keyword' },
 ]
 
 interface DailyMissionState {

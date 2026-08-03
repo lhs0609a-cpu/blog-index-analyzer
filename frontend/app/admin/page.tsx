@@ -810,7 +810,7 @@ export default function AdminPage() {
           <nav className="flex gap-8">
             {[
               { id: 'overview', label: '개요' },
-              { id: 'payments', label: '💳 결제 내역' },
+              { id: 'payments', label: '결제 내역' },
               { id: 'users', label: '전체 사용자' },
               { id: 'premium', label: '프리미엄 사용자' },
               { id: 'expiring', label: `만료 임박 (${expiringUsers.length})`, highlight: expiringUsers.length > 0 },
@@ -1106,9 +1106,9 @@ export default function AdminPage() {
                               {user.plan === 'free' ? (
                                 <span className="text-gray-400">-</span>
                               ) : user.is_premium_granted ? (
-                                <span className="text-[#0064FF]">🎁 부여</span>
+                                <span className="text-[#0064FF]">부여</span>
                               ) : (
-                                <span className="text-green-600">💳 결제</span>
+                                <span className="text-green-600">결제</span>
                               )}
                             </td>
                             <td className="px-4 py-3 text-sm">

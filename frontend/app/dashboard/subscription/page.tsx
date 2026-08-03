@@ -6,7 +6,7 @@ import {
   CreditCard, Calendar, Zap, Crown, AlertCircle,
   ArrowLeft, Loader2, CheckCircle, XCircle, Receipt,
   TrendingUp, Search, BarChart3, Clock, Check, X
-} from 'lucide-react'
+, Lock} from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/stores/auth'
@@ -103,7 +103,7 @@ export default function SubscriptionPage() {
   useEffect(() => {
     if (!isAuthenticated) {
       toast('로그인이 필요한 기능입니다', {
-        icon: '🔐',
+        icon: Lock,
         duration: 3000,
       })
       router.push('/login?redirect=/dashboard/subscription')

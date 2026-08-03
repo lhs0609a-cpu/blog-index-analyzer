@@ -578,7 +578,7 @@ export default function AdOptimizerPage() {
             </div>
             <div className="max-w-3xl">
               <p className="text-orange-600 text-xs leading-relaxed">
-                ⚠️ <strong>면책 조항:</strong> 이 기능은 현재 베타 테스트 중이며, 실제 광고 API 연동은 준비 중입니다.
+                <strong>면책 조항:</strong> 이 기능은 현재 베타 테스트 중이며, 실제 광고 API 연동은 준비 중입니다.
                 표시되는 데이터는 시뮬레이션이며, <strong>실제 광고 성과를 보장하지 않습니다.</strong>
                 본 기능 사용으로 인한 광고비 손실, 성과 저하 등 어떠한 결과에 대해서도 서비스 제공자는 책임지지 않습니다.
                 실제 광고 운영은 전문가와 상담하시기 바랍니다.
@@ -1180,14 +1180,14 @@ export default function AdOptimizerPage() {
                     <option value="balanced">균형 (Balanced)</option>
                     <option value="target_roas">목표 ROAS</option>
                     <option value="target_position">목표 순위</option>
-                    <option value="target_cpa">🎯 목표 CPA (전환 최적화)</option>
-                    <option value="maximize_conversions">🔥 전환수 최대화</option>
+                    <option value="target_cpa">목표 CPA (전환 최적화)</option>
+                    <option value="maximize_conversions">전환수 최대화</option>
                     <option value="maximize_clicks">클릭 최대화</option>
                     <option value="minimize_cpc">CPC 최소화</option>
                   </select>
                   <p className="mt-1 text-xs text-gray-500">
-                    {settings.strategy === 'target_cpa' && '💡 전환당 비용(CPA) 기준으로 입찰가를 자동 조정합니다. 전환 데이터가 있는 키워드에 효과적입니다.'}
-                    {settings.strategy === 'maximize_conversions' && '💡 전환 발생 키워드에 예산을 집중 투자합니다. 전환 없는 키워드는 최소 입찰로 전환합니다.'}
+                    {settings.strategy === 'target_cpa' && '전환당 비용(CPA) 기준으로 입찰가를 자동 조정합니다. 전환 데이터가 있는 키워드에 효과적입니다.'}
+                    {settings.strategy === 'maximize_conversions' && '전환 발생 키워드에 예산을 집중 투자합니다. 전환 없는 키워드는 최소 입찰로 전환합니다.'}
                   </p>
                 </div>
 

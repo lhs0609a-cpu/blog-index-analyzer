@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { TrendingUp, Zap, Target, Activity, Award, ArrowUp, ArrowDown, ArrowLeft, AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
+import { TrendingUp, Zap, Target, Activity, Award, ArrowUp, ArrowDown, ArrowLeft, AlertTriangle, CheckCircle, XCircle , Lock} from 'lucide-react'
 import { getApiUrl } from '@/lib/api/apiConfig'
 import { useAuthStore } from '@/lib/stores/auth'
 import toast from 'react-hot-toast'
@@ -202,7 +202,7 @@ export default function LearningEnginePage() {
   useEffect(() => {
     if (!isAuthenticated) {
       toast('로그인이 필요한 기능입니다', {
-        icon: '🔐',
+        icon: Lock,
         duration: 3000,
       })
       router.push('/login?redirect=/dashboard/learning')
