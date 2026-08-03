@@ -131,3 +131,24 @@ screenshots/
 
 # 개인 Claude Code 설정
 .claude/settings.local.json
+
+# 운영 임시파일 아카이브 (2026-08-03 정리)
+_archive/
+
+# 광고 운영 중 생기는 일회성 스크립트·상태·덤프
+# (레포에 커밋하지 않는다. 보관이 필요하면 _archive/ 로 옮길 것)
+_*.json
+_*.log
+_*.txt
+_*.md
+_*.py
+_*_out/
+_pw_*/
+.harvest_bag.json
+openapi*.json
+*.pptx
+*.xlsx
+
+# 브라우저 자동화 세션 (로그인 쿠키 포함 — 절대 커밋 금지)
+_pw_naver_profile/
+_pw_naver_p2/

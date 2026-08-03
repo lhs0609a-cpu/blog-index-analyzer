@@ -50,28 +50,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.7,
     },
     {
-      url: `${BASE_URL}/x`,
-      lastModified: now,
-      changeFrequency: 'daily',
-      priority: 0.8,
-    },
-    {
-      url: `${BASE_URL}/threads`,
-      lastModified: now,
-      changeFrequency: 'daily',
-      priority: 0.8,
-    },
-    {
       url: `${BASE_URL}/pricing`,
       lastModified: now,
       changeFrequency: 'weekly',
       priority: 0.8,
-    },
-    {
-      url: `${BASE_URL}/challenge`,
-      lastModified: now,
-      changeFrequency: 'daily',
-      priority: 0.7,
     },
     {
       url: `${BASE_URL}/login`,

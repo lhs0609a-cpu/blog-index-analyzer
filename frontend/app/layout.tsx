@@ -3,7 +3,6 @@ import { Inter } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
 import BackendStatus from '../components/BackendStatus'
 import Footer from '../components/Footer'
-import XPWidget from '../components/XPWidget'
 import GlobalNav from '../components/GlobalNav'
 import ClientProviders from '../components/ClientProviders'
 import './globals.css'
@@ -165,7 +164,6 @@ export default function RootLayout({
             {children}
           </main>
           <Footer />
-          <XPWidget />
         </ClientProviders>
         <Toaster
           position="top-right"

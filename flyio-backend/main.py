@@ -221,40 +221,6 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"⚠️ Keyword pool scheduler failed to start: {e}")
 
-    # Threads DB 초기화
-    try:
-        from database.threads_db import init_threads_db
-        init_threads_db()
-        logger.info("✅ Threads tables initialized")
-    except Exception as e:
-        logger.warning(f"⚠️ Threads tables initialization failed: {e}")
-
-    # Threads 자동 게시 스케줄러 시작
-    if RUN_SCHEDULERS:
-        try:
-            from services.threads_auto_poster import threads_auto_poster
-            threads_auto_poster.start(interval_seconds=900)  # 15분마다 실행 (메모리 절약)
-            logger.info("✅ Threads auto poster started (every 15 min)")
-        except Exception as e:
-            logger.warning(f"⚠️ Threads auto poster failed to start: {e}")
-
-    # X (Twitter) DB 초기화
-    try:
-        from database.x_db import init_x_tables
-        init_x_tables()
-        logger.info("✅ X (Twitter) tables initialized")
-    except Exception as e:
-        logger.warning(f"⚠️ X tables initialization failed: {e}")
-
-    # X 자동 게시 스케줄러 시작
-    if RUN_SCHEDULERS:
-        try:
-            from services.x_auto_poster import start_auto_poster
-            start_auto_poster()
-            logger.info("✅ X auto poster started (every 5 min)")
-        except Exception as e:
-            logger.warning(f"⚠️ X auto poster failed to start: {e}")
-
     # Ad Optimization DB 초기화
     try:
         from database.ad_optimization_db import init_ad_optimization_tables
@@ -262,40 +228,6 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Ad optimization tables initialized")
     except Exception as e:
         logger.warning(f"⚠️ Ad optimization tables initialization failed: {e}")
-
-    # Community DB 초기화
-    try:
-        from database.community_db import init_community_tables
-        init_community_tables()
-        logger.info("✅ Community tables initialized")
-    except Exception as e:
-        logger.warning(f"⚠️ Community tables initialization failed: {e}")
-
-    # 커뮤니티 콘텐츠 자동 생성 스케줄러 시작
-    if RUN_SCHEDULERS:
-        try:
-            from services.content_scheduler import get_scheduler
-            content_scheduler = get_scheduler()
-            content_scheduler.start()
-            logger.info("✅ Community content scheduler started")
-        except Exception as e:
-            logger.warning(f"⚠️ Community content scheduler failed to start: {e}")
-
-    # A/B Test DB 초기화
-    try:
-        from database.ab_test_db import get_ab_test_db
-        get_ab_test_db()
-        logger.info("✅ A/B test tables initialized")
-    except Exception as e:
-        logger.warning(f"⚠️ A/B test tables initialization failed: {e}")
-
-    # Recommendation DB 초기화
-    try:
-        from database.recommendation_db import get_recommendation_db
-        get_recommendation_db()
-        logger.info("✅ Recommendation tables initialized")
-    except Exception as e:
-        logger.warning(f"⚠️ Recommendation tables initialization failed: {e}")
 
     # Notification DB 초기화
     try:
@@ -321,61 +253,6 @@ async def lifespan(app: FastAPI):
             logger.info("✅ Sentry initialized")
         except Exception as e:
             logger.warning(f"⚠️ Sentry initialization failed (optional): {e}")
-
-    # 커뮤니티 자동 글 생성 시작 (시간당 12개 = 5분마다 1개)
-    if RUN_SCHEDULERS:
-        try:
-            import asyncio
-            from routers.admin import auto_generate_content_task
-            import routers.admin as admin_module
-
-            admin_module._auto_gen_running = True
-            asyncio.create_task(auto_generate_content_task(posts_per_hour=12, include_comments=True))
-            logger.info("✅ Community auto-generation started (12 posts/hour)")
-        except Exception as e:
-            logger.warning(f"⚠️ Community auto-generation failed: {e}")
-
-    # 퍼널 디자이너 DB 초기화
-    try:
-        from database.funnel_designer_db import init_funnel_designer_tables
-        init_funnel_designer_tables()
-        logger.info("✅ Funnel Designer DB initialized")
-    except Exception as e:
-        logger.warning(f"⚠️ Funnel Designer DB init failed: {e}")
-
-    # 인플루언서 발굴 DB 초기화
-    try:
-        from database.influencer_db import init_influencer_tables
-        init_influencer_tables()
-        logger.info("✅ Influencer discovery DB initialized")
-    except Exception as e:
-        logger.warning(f"⚠️ Influencer DB init failed: {e}")
-
-    # 인플루언서 자동 수집 스케줄러 시작
-    if RUN_SCHEDULERS:
-        try:
-            from services.influencer_auto_collector import get_auto_collector
-            auto_collector = get_auto_collector()
-            auto_collector.start()
-            logger.info("✅ Influencer auto collector started (daily 03:10 KST)")
-        except Exception as e:
-            logger.warning(f"⚠️ Influencer auto collector failed to start: {e}")
-
-    # 평판 모니터링 DB 초기화 + 백그라운드 스케줄러
-    try:
-        from database.reputation_db import init_reputation_tables
-        init_reputation_tables()
-        logger.info("✅ Reputation DB initialized")
-    except Exception as e:
-        logger.warning(f"⚠️ Reputation DB init failed: {e}")
-
-    if RUN_SCHEDULERS:
-        try:
-            from routers.reputation import reputation_monitor_loop
-            asyncio.create_task(reputation_monitor_loop())
-            logger.info("✅ Reputation monitor started (every 5 min)")
-        except Exception as e:
-            logger.warning(f"⚠️ Reputation monitor failed to start: {e}")
 
     # 천장 백테스트 이어받기 — 수시간~수십시간 run 이 재배포/재시작을 만나도 완주하게.
     # RUN_SCHEDULERS(=worker 프로세스)에서만: API 프로세스에서 돌리면 스크래핑이 이벤트루프 점유.
@@ -409,16 +286,8 @@ async def lifespan(app: FastAPI):
     schedulers_to_stop = [
         ("auto_learning_scheduler", "services.auto_learning_service"),
         ("ad_auto_optimizer", "services.ad_auto_optimizer"),
-        ("threads_auto_poster", "services.threads_auto_poster"),
         ("backup_scheduler", "services.backup_service"),
     ]
-
-    # 인플루언서 자동 수집 스케줄러 중지
-    try:
-        from services.influencer_auto_collector import get_auto_collector
-        get_auto_collector().stop()
-    except Exception:
-        pass
 
     for scheduler_name, module_name in schedulers_to_stop:
         try:
@@ -428,13 +297,6 @@ async def lifespan(app: FastAPI):
                 scheduler.stop()
         except Exception as e:
             logger.warning(f"⚠️ {scheduler_name} stop issue: {e}")
-
-    # X 자동 게시 스케줄러 중지
-    try:
-        from services.x_auto_poster import stop_auto_poster
-        stop_auto_poster()
-    except Exception:
-        pass
 
     logger.info("✅ All schedulers stopped")
 
@@ -797,7 +659,6 @@ async def health_check():
 from routers import auth, blogs, comprehensive_analysis, system
 from routers import learning, backup, supabase_sync, batch_learning, top_posts
 from routers import subscription, payment, naver_ad, content_lifespan, admin, compliance
-from routers import challenge
 from routers import rank_tracker
 from routers import user_blogs
 from routers import keyword_analysis
@@ -806,9 +667,6 @@ from routers import revenue
 from routers import unified_ads
 from routers import ad_dashboard
 from routers import blue_ocean
-from routers import xp
-from routers import threads
-from routers import x as x_router
 from routers import optimization_monitor
 from routers import hourly_bidding
 from routers import anomaly_detection
@@ -817,18 +675,10 @@ from routers import creative_fatigue
 from routers import naver_quality
 from routers import budget_pacing
 from routers import funnel_bidding
-from routers import community
-from routers import social_proof
-from routers import ab_test
-from routers import recommendation
 from routers import notification
 from routers import winner_keywords
 from routers import profitable_keywords
-from routers import marketplace
-from routers import reputation
-from routers import funnel_designer
 from routers import competitive_analysis
-from routers import influencer_discovery
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
@@ -845,7 +695,6 @@ app.include_router(subscription.router, prefix="/api/subscription", tags=["구�
 app.include_router(payment.router, prefix="/api/payment", tags=["결제"])
 app.include_router(naver_ad.router, prefix="/api/naver-ad", tags=["네이버광고최적화"])
 app.include_router(content_lifespan.router, prefix="/api/content-lifespan", tags=["콘텐츠수명분석"])
-app.include_router(challenge.router, prefix="/api/challenge", tags=["블로그챌린지"])
 app.include_router(rank_tracker.router, prefix="/api/rank-tracker", tags=["순위추적"])
 app.include_router(user_blogs.router, prefix="/api/user-blogs", tags=["사용자블로그"])
 app.include_router(keyword_analysis.router, prefix="/api/keyword-analysis", tags=["키워드분석"])
@@ -854,9 +703,6 @@ app.include_router(revenue.router, prefix="/api/revenue", tags=["수익관리"])
 app.include_router(unified_ads.router)  # prefix already set in router
 app.include_router(ad_dashboard.router)  # prefix already set in router
 app.include_router(blue_ocean.router, prefix="/api/blue-ocean", tags=["블루오션키워드"])
-app.include_router(xp.router, tags=["XP시스템"])
-app.include_router(threads.router, tags=["쓰레드자동화"])
-app.include_router(x_router.router, tags=["X자동화"])
 app.include_router(optimization_monitor.router, tags=["최적화모니터링"])
 app.include_router(hourly_bidding.router, tags=["시간대별입찰"])
 app.include_router(anomaly_detection.router, tags=["이상징후감지"])
@@ -865,18 +711,10 @@ app.include_router(creative_fatigue.router, tags=["크리에이티브피로도"]
 app.include_router(naver_quality.router, tags=["네이버품질지수"])
 app.include_router(budget_pacing.router, tags=["예산페이싱"])
 app.include_router(funnel_bidding.router, tags=["퍼널입찰"])
-app.include_router(community.router, tags=["커뮤니티"])
-app.include_router(social_proof.router, tags=["소셜프루프"])
-app.include_router(ab_test.router, tags=["A/B테스트"])
-app.include_router(recommendation.router, tags=["추천시스템"])
 app.include_router(notification.router, tags=["알림시스템"])
 app.include_router(winner_keywords.router, prefix="/api/winner-keywords", tags=["1위보장키워드"])
 app.include_router(profitable_keywords.router, prefix="/api", tags=["수익성키워드"])
-app.include_router(marketplace.router, prefix="/api", tags=["마켓플레이스"])
-app.include_router(reputation.router, tags=["평판모니터링"])
-app.include_router(funnel_designer.router, tags=["퍼널디자이너"])
 app.include_router(competitive_analysis.router, tags=["경쟁력분석"])
-app.include_router(influencer_discovery.router, tags=["인플루언서발굴"])
 
 
 if __name__ == "__main__":
