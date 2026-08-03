@@ -10,6 +10,17 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 
 // 플랫폼별 세팅 가이드 데이터
+// 플랫폼 브랜드 색 (이모지 원 대신)
+const PLATFORM_COLORS: Record<string, string> = {
+  naver: '#03C75A', naver_searchad: '#03C75A',
+  google: '#4285F4', google_ads: '#4285F4',
+  meta: '#0866FF', meta_ads: '#0866FF',
+  kakao: '#FEE500', kakao_moment: '#FEE500',
+  tiktok: '#111111', tiktok_ads: '#111111',
+  coupang: '#E8442E', coupang_ads: '#E8442E',
+  criteo: '#F26522',
+}
+
 const PLATFORM_GUIDES = {
   naver_searchad: {
     id: 'naver_searchad',
@@ -564,16 +575,6 @@ client_id={CLIENT_ID}
 
 type PlatformId = keyof typeof PLATFORM_GUIDES
 
-// 플랫폼 브랜드 색 (이모지 원 대신)
-const PLATFORM_COLORS: Record<string, string> = {
-  naver: '#03C75A', naver_searchad: '#03C75A',
-  google: '#4285F4', google_ads: '#4285F4',
-  meta: '#0866FF', meta_ads: '#0866FF',
-  kakao: '#FEE500', kakao_moment: '#FEE500',
-  tiktok: '#111111', tiktok_ads: '#111111',
-  coupang: '#E8442E', coupang_ads: '#E8442E',
-  criteo: '#F26522',
-}
 
 function PlatformDot({ color }: { color?: string }) {
   return <span className="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-black/5" style={{ backgroundColor: color || '#9CA3AF' }} />

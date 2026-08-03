@@ -1,5 +1,6 @@
-import { AlertTriangle } from 'lucide-react'
 'use client'
+
+import { AlertTriangle } from 'lucide-react'
 
 /**
  * 데모/샘플 데이터임을 표시하는 배지 컴포넌트
