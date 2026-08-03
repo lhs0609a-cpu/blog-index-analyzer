@@ -160,14 +160,6 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Legal compliance tables initialization failed: {e}")
 
-    # Challenge DB 초기화
-    try:
-        from database.challenge_db import init_challenge_tables
-        init_challenge_tables()
-        logger.info("✅ Challenge tables initialized")
-    except Exception as e:
-        logger.warning(f"⚠️ Challenge tables initialization failed: {e}")
-
     # User Blogs DB 초기화
     try:
         from database.user_blogs_db import init_user_blogs_tables
