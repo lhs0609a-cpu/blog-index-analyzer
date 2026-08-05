@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Search, Loader2, TrendingUp, Award, AlertCircle, BarChart3, ArrowLeft, Target, PenTool, Lightbulb, ChevronRight, Lock, HelpCircle, Clock, CheckCircle, Gauge, XCircle, MinusCircle,
-  PenLine, Users, FileCheck2, MessageSquare, CheckCircle2, Gem, Heart, FileText, Activity, Check, ArrowUpRight } from 'lucide-react'
+  PenLine, Users, FileCheck2, MessageSquare, CheckCircle2, Gem, Heart, FileText, Activity, Check, ArrowUpRight,
+  Sparkles, Zap } from 'lucide-react'
 import Confetti from 'react-confetti'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'

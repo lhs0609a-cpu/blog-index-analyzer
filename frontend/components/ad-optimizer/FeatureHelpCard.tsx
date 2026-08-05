@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   HelpCircle, X, ChevronRight, Lightbulb, CheckCircle,
   AlertCircle, Info, PlayCircle, BookOpen, ArrowRight,
-  Clock, Target, Zap, Shield, Settings, BarChart3
+  Clock, Target, Zap, Shield, Settings, BarChart3, Link2
 } from 'lucide-react'
 
 // 기능별 도움말 데이터
