@@ -8,12 +8,13 @@
 부하 원칙:
 - worker 프로세스에서만 돈다. API 프로세스에서 돌리면 이벤트루프가 굶어
   /health 조차 30초로 밀린다 (2026-08-05 장애의 원인).
-- 한 번에 카테고리 2개만. 오래 방치된 것부터 돌아가며 갱신한다.
+- 한 번에 카테고리 1개만. 오래 방치된 것부터 돌아가며 갱신한다.
 - 카테고리 사이에 간격을 둔다.
 """
 import asyncio
 import logging
 import os
+import sys
 from typing import List
 
 logger = logging.getLogger(__name__)
@@ -25,10 +26,14 @@ SEED_CATEGORIES: List[str] = [
     "반려동물", "패션", "캠핑", "독서", "건강",
 ]
 
-CATEGORIES_PER_RUN = int(os.environ.get("WINNER_PRECOMPUTE_CATEGORIES", "2"))
+# 한 카테고리 = 키워드 30개 × 상위 10블로그 측정. 로컬에서도 5분을 넘고
+# Fly IP 는 네이버 응답이 훨씬 느리다. 주기당 1개씩만 확실히 끝내는 편이 낫다.
+CATEGORIES_PER_RUN = int(os.environ.get("WINNER_PRECOMPUTE_CATEGORIES", "1"))
 SPACING_SECONDS = int(os.environ.get("WINNER_PRECOMPUTE_SPACING", "45"))
 MAX_KEYWORDS_PER_CATEGORY = int(os.environ.get("WINNER_PRECOMPUTE_MAX_KW", "30"))
 MIN_SEARCH_VOLUME = int(os.environ.get("WINNER_PRECOMPUTE_MIN_VOL", "300"))
+# 한 번 도는 데 이보다 오래 걸리면 뭔가 잘못된 것이다 — 죽이고 다음 주기를 기다린다
+SUBPROCESS_TIMEOUT = int(os.environ.get("WINNER_PRECOMPUTE_TIMEOUT", "2700"))
 
 
 async def precompute_category(category: str) -> int:
@@ -124,12 +129,44 @@ class WinnerPrecomputeScheduler:
         await asyncio.sleep(240)
         while self._running:
             try:
-                await run_once()
+                await self._run_in_subprocess()
             except asyncio.CancelledError:
                 raise
             except Exception as e:
                 logger.warning(f"[winner-precompute] tick 실패: {e}")
             await asyncio.sleep(interval_seconds)
+
+    async def _run_in_subprocess(self) -> None:
+        """측정을 별도 프로세스에서 돌린다.
+
+        이 앱은 fly.toml 에 [processes] 가 없어 단일 머신으로 뜬다. 즉 스케줄러가
+        API 와 같은 프로세스에 있다. SERP 파싱은 CPU 를 길게 잡아 이벤트루프를
+        굶기므로, 같은 프로세스에서 돌리면 3시간마다 장애가 재현된다.
+        프로세스를 나누면 OS 가 CPU 를 나눠 주고 API 는 계속 응답한다.
+        """
+        cmd = [sys.executable, "-m", "scripts.precompute_winner_keywords"]
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        logger.info(f"[winner-precompute] 별도 프로세스 시작: {' '.join(cmd)}")
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            cwd=root,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            env={**os.environ, "SCHEDULERS_DISABLED": "1"},
+        )
+        try:
+            out, _ = await asyncio.wait_for(proc.communicate(), timeout=SUBPROCESS_TIMEOUT)
+        except asyncio.TimeoutError:
+            logger.warning("[winner-precompute] 시간 초과 — 프로세스 종료")
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            return
+
+        tail = (out or b"").decode("utf-8", "ignore").strip().splitlines()[-3:]
+        logger.info(f"[winner-precompute] 종료(code={proc.returncode}): {' | '.join(tail)}")
 
 
 winner_precompute_scheduler = WinnerPrecomputeScheduler()
