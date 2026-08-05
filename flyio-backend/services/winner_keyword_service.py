@@ -12,7 +12,7 @@ Winner Keyword Service - 1위 보장 키워드 자동 발굴
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Tuple
+from typing import Any, List, Optional, Dict, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -310,6 +310,121 @@ class WinnerKeywordService:
             tips.append("소제목 3개 이상 구성 권장")
 
         return tips
+
+    # ===== 캐시 기반 경로 (2026-08-05 재작업) =====
+    # 아래 find_winner_keywords 는 요청 때마다 SERP 를 긁어 API 를 마비시켰다.
+    # 이제 SERP 측정은 worker(winner_keyword_precompute)가 미리 해 두고,
+    # 여기서는 '내 레벨로 저길 이길 수 있나'만 계산한다 — 네트워크 호출 0회.
+
+    async def _lookup_my_blog(self, my_blog_id: str) -> Optional[Dict[str, Any]]:
+        """블로그 레벨·점수를 로컬 DB 에서만 찾는다 (재분석 금지 — 그게 장애의 원인이었다)"""
+        # 1순위: 지수 시계열의 최신 스냅샷 (분석한 적 있으면 여기 있다)
+        try:
+            from database.blog_index_history_db import get_snapshots
+            snaps = await asyncio.to_thread(get_snapshots, my_blog_id, 120, 400)
+            if snaps:
+                last = snaps[-1]
+                return {"level": last.get("level") or 0,
+                        "total_score": last.get("total_score") or 0.0,
+                        "source": "index_snapshot", "measured_at": last.get("day_kst")}
+        except Exception as e:
+            logger.debug(f"snapshot lookup failed for {my_blog_id}: {e}")
+
+        # 2순위: 사용자가 저장해 둔 블로그 정보
+        try:
+            blog = await get_blog_by_id(my_blog_id)
+            if blog:
+                return {"level": blog.get("level") or 0,
+                        "total_score": blog.get("total_score") or 0.0,
+                        "source": "saved_blog", "measured_at": blog.get("last_analyzed_at")}
+        except Exception as e:
+            logger.debug(f"saved blog lookup failed for {my_blog_id}: {e}")
+
+        return None
+
+    async def match_from_cache(
+        self,
+        my_blog_id: str,
+        limit: int = 5,
+        min_win_probability: int = 50,
+        min_search_volume: int = 300,
+    ) -> Dict[str, Any]:
+        """캐시된 SERP 통계에 내 블로그를 대입해 1위 가능 키워드를 뽑는다.
+
+        Returns: {status, my_level, my_score, keywords, cache}
+          status: ok | no_blog | cache_empty
+        """
+        from database.winner_keyword_cache_db import get_fresh_stats, cache_summary
+
+        my_blog = await self._lookup_my_blog(my_blog_id)
+        if not my_blog:
+            return {"status": "no_blog", "keywords": []}
+
+        my_level = int(my_blog.get("level") or 0)
+        my_score = float(my_blog.get("total_score") or 0.0)
+
+        stats = await asyncio.to_thread(get_fresh_stats, 500, 7, min_search_volume)
+        if not stats:
+            summary = await asyncio.to_thread(cache_summary)
+            return {"status": "cache_empty", "keywords": [], "cache": summary,
+                    "my_level": my_level, "my_score": my_score}
+
+        winners: List[WinnerKeyword] = []
+        for s in stats:
+            top10_avg = float(s.get("top10_avg_score") or 0)
+            top10_min = float(s.get("top10_min_score") or 0)
+            if top10_avg <= 0:
+                continue
+
+            current_rank1_level = self._estimate_rank1_level(top10_avg)
+            win_prob, win_grade = self._calculate_win_probability(
+                my_level=my_level,
+                my_score=my_score,
+                current_rank1_level=current_rank1_level,
+                top10_avg_score=top10_avg,
+                top10_min_score=top10_min,
+                influencer_count=int(s.get("influencer_count") or 0),
+                high_scorer_count=int(s.get("high_scorer_count") or 0),
+                safety_score=float(s.get("safety_score") or 50),
+            )
+            if win_prob < min_win_probability:
+                continue
+
+            golden_time = self._get_golden_time(s["keyword"])
+            winners.append(WinnerKeyword(
+                keyword=s["keyword"],
+                win_probability=win_prob,
+                win_grade=win_grade,
+                search_volume=int(s.get("search_volume") or 0),
+                current_rank1_level=current_rank1_level,
+                my_level=my_level,
+                level_gap=my_level - current_rank1_level,
+                top10_avg_score=top10_avg,
+                top10_min_score=top10_min,
+                influencer_count=int(s.get("influencer_count") or 0),
+                high_scorer_count=int(s.get("high_scorer_count") or 0),
+                golden_time=golden_time,
+                bos_score=float(s.get("bos_score") or 0),
+                safety_score=float(s.get("safety_score") or 0),
+                tips=self._generate_tips(s["keyword"], win_prob, golden_time),
+                why_winnable=self._generate_why_winnable(
+                    my_level=my_level,
+                    current_rank1_level=current_rank1_level,
+                    score_gap=my_score - top10_min,
+                    influencer_count=int(s.get("influencer_count") or 0),
+                    high_scorer_count=int(s.get("high_scorer_count") or 0),
+                ),
+            ))
+
+        winners.sort(key=lambda w: (w.win_probability, w.search_volume), reverse=True)
+        return {
+            "status": "ok",
+            "my_level": my_level,
+            "my_score": my_score,
+            "blog_source": my_blog.get("source"),
+            "keywords": winners[:limit],
+            "analyzed": len(stats),
+        }
 
     async def find_winner_keywords(
         self,

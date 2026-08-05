@@ -213,6 +213,24 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"⚠️ Keyword pool scheduler failed to start: {e}")
 
+    # 1위 가능 키워드 캐시 DB (모든 프로세스 — API 는 읽고, worker 는 채운다)
+    try:
+        from database.winner_keyword_cache_db import init_winner_cache_db
+        init_winner_cache_db()
+        logger.info("✅ Winner keyword cache initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ Winner keyword cache init failed: {e}")
+
+    # SERP 측정 사전계산 — worker 전용.
+    # 예전에는 이 작업을 사용자 요청 경로에서 돌려 API 전체가 몇 분씩 멈췄다.
+    if RUN_SCHEDULERS:
+        try:
+            from services.winner_keyword_precompute import winner_precompute_scheduler
+            winner_precompute_scheduler.start(interval_seconds=3 * 3600)
+            logger.info("✅ Winner keyword precompute started (every 3h, 2 categories)")
+        except Exception as e:
+            logger.warning(f"⚠️ Winner keyword precompute failed to start: {e}")
+
     # 블로그 지수 시계열 DB 초기화 (모든 프로세스 — 분석 응답이 여기 적재한다)
     try:
         from database.blog_index_history_db import init_index_history_db
@@ -298,6 +316,7 @@ async def lifespan(app: FastAPI):
         ("ad_auto_optimizer", "services.ad_auto_optimizer"),
         ("backup_scheduler", "services.backup_service"),
         ("index_snapshot_scheduler", "services.index_snapshot_scheduler"),
+        ("winner_precompute_scheduler", "services.winner_keyword_precompute"),
     ]
 
     for scheduler_name, module_name in schedulers_to_stop:

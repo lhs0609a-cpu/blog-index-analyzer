@@ -25,13 +25,15 @@ export default function WinnerKeywordsWidget({ blogId, className = '' }: WinnerK
   const [error, setError] = useState<string | null>(null)
   const [selectedKeyword, setSelectedKeyword] = useState<WinnerKeyword | null>(null)
 
-  // ⚠️ 자동 호출 금지 (2026-08-05).
-  // 이 위젯이 부르는 quick-winners 는 5개 카테고리 blue-ocean 확장 분석을
-  // 실시간으로 돌린다. 프로덕션 실측: 7분 넘게 응답 없음 + 그동안 /health 조차
-  // 28~30초로 밀림. 대시보드에 들어오기만 해도 서비스 전체가 멈추므로,
-  // 서버에서 사전계산 구조로 바뀌기 전까지는 사용자가 직접 누를 때만 호출한다.
+  // 자동 호출 복구 (2026-08-05). 서버가 worker 사전계산 캐시를 읽기만 하므로
+  // 응답이 즉시 온다. 예전에는 이 호출이 SERP 를 실시간으로 긁어 서비스 전체를
+  // 몇 분씩 멈춰 세웠다 — 그 구조가 사라졌기 때문에 다시 켤 수 있다.
   useEffect(() => {
-    setIsLoading(false)
+    if (blogId) {
+      loadKeywords()
+    } else {
+      setIsLoading(false)
+    }
   }, [blogId])
 
   const loadKeywords = async () => {

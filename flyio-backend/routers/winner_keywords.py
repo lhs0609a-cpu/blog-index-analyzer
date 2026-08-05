@@ -24,11 +24,10 @@ from database.subscription_db import check_feature_access
 
 router = APIRouter(tags=["Winner Keywords"])
 
-# 실시간 분석 경로 잠금 스위치.
-# 켜려면 WINNER_KEYWORDS_ENABLED=1 — 단, worker 사전계산 구조로 바꾸기 전에는
-# 켜는 순간 요청 한 건이 API 전체를 몇 분간 마비시킨다(2026-08-05 실측).
-import os as _os
-_WINNER_KEYWORDS_ENABLED = _os.environ.get("WINNER_KEYWORDS_ENABLED") == "1"
+# 2026-08-05 재작업: 실시간 SERP 수집 경로를 걷어내고 worker 사전계산 캐시를 읽는다.
+# (이전 구조는 요청 1건이 /health 조차 30초로 밀어 서비스를 마비시켰다)
+import logging
+logger = logging.getLogger(__name__)
 
 
 # ========== Response Models ==========
@@ -164,13 +163,6 @@ async def get_daily_winners(
         - moderate_keywords: 50-69% 확률 키워드
     """
 
-    # 같은 실시간 분석 경로를 타므로 함께 잠근다 (위 quick-winners 주석 참조)
-    if not _WINNER_KEYWORDS_ENABLED:
-        raise HTTPException(
-            status_code=503,
-            detail="1위 가능 키워드 추천은 재작업 중입니다. (실시간 분석이 서비스 전체를 지연시켜 잠금)",
-        )
-
     # 플랜 확인 (Pro 이상)
     if user_id:
         access = await check_feature_access(user_id, "winner_keywords")
@@ -187,34 +179,64 @@ async def get_daily_winners(
         category_list = ["맛집", "카페", "여행", "리뷰", "뷰티"]
 
     try:
+        # quick-winners 와 같은 캐시 경로를 쓴다. 확률 구간으로만 나눠 담는다.
         service = get_winner_keyword_service()
-        result = await service.find_winner_keywords(
+        result = await service.match_from_cache(
             my_blog_id=my_blog_id,
-            category_keywords=category_list,
+            limit=max_keywords * 3,
+            min_win_probability=50,
             min_search_volume=min_search_volume,
-            max_keywords=max_keywords,
-            min_win_probability=50
         )
 
-        # 응답 변환
+        if result["status"] == "no_blog":
+            raise HTTPException(
+                status_code=404,
+                detail="먼저 블로그를 분석해 주세요. 내 레벨을 알아야 1위 가능 여부를 계산할 수 있습니다.",
+            )
+
+        winners = result.get("keywords", [])
+        guaranteed = [k for k in winners if k.win_probability >= 95][:max_keywords]
+        high = [k for k in winners if 70 <= k.win_probability < 95][:max_keywords]
+        moderate = [k for k in winners if 50 <= k.win_probability < 70][:max_keywords]
+
+        if result["status"] == "cache_empty":
+            message = "키워드 경쟁 데이터를 수집하는 중입니다. 잠시 후 다시 확인해 주세요."
+        else:
+            message = f"총 {result.get('analyzed', 0)}개 키워드 분석, {len(winners)}개 1위 가능"
+
         return DailyWinnersResponse(
-            my_blog_id=result.my_blog_id,
-            my_level=result.my_level,
-            my_score=result.my_score,
-            analysis_date=result.analysis_date,
-            guaranteed_keywords=[WinnerKeywordResponse.from_winner_keyword(k) for k in result.guaranteed_keywords],
-            high_chance_keywords=[WinnerKeywordResponse.from_winner_keyword(k) for k in result.high_chance_keywords],
-            moderate_keywords=[WinnerKeywordResponse.from_winner_keyword(k) for k in result.moderate_keywords],
-            total_analyzed=result.total_analyzed,
-            total_winnable=result.total_winnable,
-            best_keyword=WinnerKeywordResponse.from_winner_keyword(result.best_keyword) if result.best_keyword else None,
-            message=f"총 {result.total_analyzed}개 키워드 분석, {result.total_winnable}개 1위 가능"
+            my_blog_id=my_blog_id,
+            my_level=result.get("my_level", 0),
+            my_score=result.get("my_score", 0.0),
+            analysis_date=datetime.now(),
+            guaranteed_keywords=[WinnerKeywordResponse.from_winner_keyword(k) for k in guaranteed],
+            high_chance_keywords=[WinnerKeywordResponse.from_winner_keyword(k) for k in high],
+            moderate_keywords=[WinnerKeywordResponse.from_winner_keyword(k) for k in moderate],
+            total_analyzed=result.get("analyzed", 0),
+            total_winnable=len(winners),
+            best_keyword=WinnerKeywordResponse.from_winner_keyword(winners[0]) if winners else None,
+            message=message,
         )
 
+    except HTTPException:
+        # 위에서 낸 404 를 아래 광범위 except 가 삼키면 500 으로 둔갑한다
+        raise
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
+        logger.exception("daily-winners 실패")
         raise HTTPException(status_code=500, detail=f"분석 중 오류 발생: {str(e)}")
+
+
+@router.get("/cache-status")
+async def get_cache_status():
+    """추천 캐시 상태 — '준비 중'과 '결과 없음'을 구분하는 근거"""
+    import asyncio as _asyncio
+    from database.winner_keyword_cache_db import cache_summary
+    try:
+        return await _asyncio.to_thread(cache_summary)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/quick-winners", response_model=QuickWinnersResponse)
@@ -231,39 +253,45 @@ async def get_quick_winners(
     - **my_blog_id**: 분석 대상 블로그 ID
     - **limit**: 반환할 키워드 수 (기본: 5)
     """
-    # ⚠️ 2026-08-05 실측으로 잠금.
-    # '빠른 응답용' 이라고 적혀 있지만 실제로는 5개 카테고리에 대해 blue-ocean
-    # 확장 분석(expand=True)을 돌린다. 프로덕션에서 7분을 넘겨도 응답이 없었고,
-    # 그동안 /health 조차 28~30초로 밀렸다 — 요청 한 건이 API 전체를 마비시킨다.
-    # (1 CPU 머신에서 SERP 파싱이 이벤트루프를 굶긴다 — 로그인 hang 과 같은 원인)
-    # 대시보드 위젯이 자동 호출하므로 사용자가 접속만 해도 장애가 난다.
-    # 제대로 고치려면 worker 에서 미리 계산해 두고 여기서는 읽기만 해야 한다.
-    if not _WINNER_KEYWORDS_ENABLED:
-        raise HTTPException(
-            status_code=503,
-            detail="1위 가능 키워드 추천은 재작업 중입니다. (실시간 분석이 서비스 전체를 지연시켜 잠금)",
-        )
-
+    # 2026-08-05 재작업: SERP 측정은 worker 가 미리 해 둔 캐시에서 읽고,
+    # 여기서는 '내 레벨로 이길 수 있나'만 계산한다. 네트워크 호출 0회.
+    # (이전 구조는 요청 때마다 5개 카테고리를 실시간으로 긁어 API 전체를 마비시켰다)
     try:
         service = get_winner_keyword_service()
-        keywords = await service.get_quick_winners(
-            my_blog_id=my_blog_id,
-            limit=limit
-        )
+        result = await service.match_from_cache(my_blog_id=my_blog_id, limit=limit)
 
-        # 블로그 레벨 (첫 번째 키워드에서 추출)
-        my_level = keywords[0].my_level if keywords else 0
+        if result["status"] == "no_blog":
+            raise HTTPException(
+                status_code=404,
+                detail="먼저 블로그를 분석해 주세요. 내 레벨을 알아야 1위 가능 여부를 계산할 수 있습니다.",
+            )
 
+        if result["status"] == "cache_empty":
+            # '못 찾았다'가 아니라 '아직 재는 중'이다. 두 가지를 같은 문장으로
+            # 말하면 사용자는 자기 블로그가 가망 없다고 오해한다.
+            return QuickWinnersResponse(
+                my_blog_id=my_blog_id,
+                my_level=result.get("my_level", 0),
+                keywords=[],
+                message="키워드 경쟁 데이터를 수집하는 중입니다. 잠시 후 다시 확인해 주세요.",
+            )
+
+        keywords = result["keywords"]
         return QuickWinnersResponse(
             my_blog_id=my_blog_id,
-            my_level=my_level,
+            my_level=result.get("my_level", 0),
             keywords=[WinnerKeywordResponse.from_winner_keyword(k) for k in keywords],
-            message=f"{len(keywords)}개 1위 가능 키워드 발견" if keywords else "1위 가능 키워드를 찾지 못했습니다"
+            message=(
+                f"{len(keywords)}개 1위 가능 키워드 발견"
+                if keywords
+                else f"분석한 {result.get('analyzed', 0)}개 키워드 중 지금 1위가 가능한 것은 없었습니다"
+            ),
         )
 
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.exception("quick-winners 실패")
         raise HTTPException(status_code=500, detail=f"분석 중 오류 발생: {str(e)}")
 
 

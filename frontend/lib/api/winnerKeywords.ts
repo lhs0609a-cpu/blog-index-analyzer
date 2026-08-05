@@ -88,7 +88,10 @@ export async function getQuickWinners(
       params: {
         my_blog_id: myBlogId,
         limit
-      }
+      },
+      // 타임아웃이 없으면 서버가 늦을 때 위젯이 영원히 스피너로 남는다.
+      // 이 경로는 캐시 읽기라 정상 응답은 1초 안쪽이다.
+      timeout: 15000
     }
   )
   return response.data
