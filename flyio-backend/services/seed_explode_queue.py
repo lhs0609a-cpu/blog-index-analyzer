@@ -29,6 +29,50 @@ _DATA_DIR = os.environ.get("DATA_DIR", "/data")
 MAX_QUEUE = int(os.environ.get("SEED_EXPLODE_MAX_QUEUE", "200"))
 WATCHDOG_EVERY = float(os.environ.get("SEED_EXPLODE_WATCHDOG_EVERY", "20"))
 
+# ⛔ **좀비 job 이 큐를 영구히 막는 결함 수정 (2026-08-04 실측)**
+#
+# 증상: `POST /keyword-pool/seed-explode-register` 가 3회 연속 0.2초 만에
+#       `503 {"detail":"실행 큐 적재 실패: queue_full"}`. 시간이 지나도 안 풀린다.
+#
+# 원인: `claim()` 은 `claimed_at` 이 찍힌 job 을 건너뛰고, `done_at` 은 `finish()` 만 찍는다.
+#       그래서 **claim 직후 워커가 죽으면(재배포·OOM·머신 재시작) 그 job 은 영원히
+#       claim 도 finish 도 안 되면서 큐 자리를 차지한다.** `enqueue()` 는 `done_at` 이
+#       없는 job 을 전부 세므로, 이런 좀비가 200개 쌓이면 큐는 **영구 포화**가 된다.
+#       (워커·스케줄러 자체는 정상이었다 — 큐 '회계'가 막힌 것이다.)
+#
+# 수정: ① claim 후 STALE_AFTER 가 지나면 미claim 으로 되돌려 재실행 대상으로 삼는다.
+#       ② 그래도 MAX_ATTEMPTS 를 넘기면 죽은 job 으로 확정(done)해 자리를 비운다.
+#       ③ enqueue 의 큐 길이 계산에서 좀비/노후 job 을 제외한다.
+STALE_AFTER = float(os.environ.get("SEED_EXPLODE_STALE_AFTER", "1800"))   # 30분
+MAX_ATTEMPTS = int(os.environ.get("SEED_EXPLODE_MAX_ATTEMPTS", "3"))
+MAX_AGE = float(os.environ.get("SEED_EXPLODE_MAX_AGE", "86400"))          # 24시간
+
+
+def _is_zombie(job: Dict, now: float) -> bool:
+    """claim 된 채 STALE_AFTER 를 넘겼거나, 아예 MAX_AGE 를 넘긴 job."""
+    if job.get("done_at"):
+        return False
+    if now - float(job.get("requested_at") or now) > MAX_AGE:
+        return True
+    ca = job.get("claimed_at")
+    return bool(ca and now - float(ca) > STALE_AFTER)
+
+
+def _reap(q: List[Dict], now: float) -> List[Dict]:
+    """좀비 회수 — 재시도 여력이 있으면 미claim 으로 되돌리고, 없으면 done 처리."""
+    for job in q:
+        if not _is_zombie(job, now):
+            continue
+        att = int(job.get("attempts") or 0)
+        aged = now - float(job.get("requested_at") or now) > MAX_AGE
+        if aged or att >= MAX_ATTEMPTS:
+            job["done_at"] = now
+            job.setdefault("error", "stale_reaped" if not aged else "expired")
+        else:
+            job["claimed_at"] = None          # 다시 집어갈 수 있게
+    # done 이 오래된 것은 청소
+    return [j for j in q if not (j.get("done_at") and now - j["done_at"] > 3600)]
+
 
 def _q_path() -> str:
     return os.path.join(_DATA_DIR, "_seed_explode_queue.json")
@@ -60,17 +104,20 @@ def _save(q: List[Dict]) -> bool:
 def enqueue(user_id: int, customer_id: int, seeds: List[str],
             min_volume: int, per_seed_cap: int, min_score: int) -> Dict:
     """실행요청을 디스크 큐에 남긴다. 워커 워치독이 집어간다."""
-    q = [j for j in _load() if not j.get("done_at")]
-    if len(q) >= MAX_QUEUE:
-        return {"queued": False, "reason": "queue_full", "queue_len": len(q)}
+    now = time.time()
+    # ⚠️ 좀비를 먼저 회수해야 한다 — 안 그러면 죽은 job 200개가 큐를 영구히 막는다.
+    q = _reap(_load(), now)
+    live = [j for j in q if not j.get("done_at")]
+    if len(live) >= MAX_QUEUE:
+        return {"queued": False, "reason": "queue_full", "queue_len": len(live)}
     job = {
-        "id": f"{int(time.time()*1000)}_{customer_id}",
+        "id": f"{int(now*1000)}_{customer_id}",
         "user_id": int(user_id), "customer_id": int(customer_id),
         "seeds": list(seeds), "min_volume": int(min_volume),
         "per_seed_cap": int(per_seed_cap), "min_score": int(min_score),
-        "requested_at": time.time(),
+        "requested_at": now,
         "requested_at_str": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "claimed_at": None, "done_at": None,
+        "claimed_at": None, "done_at": None, "attempts": 0,
     }
     q.append(job)
     if not _save(q):
@@ -83,15 +130,21 @@ def claim() -> Optional[Dict]:
     """미처리 job 하나를 원자적으로 claim. 없으면 None.
 
     ⚠️ 단일 워커 전제(현재 배포 구조). 여러 워커가 붙으면 파일락이 필요하다.
+    ⚠️ 매번 좀비를 먼저 회수한다 — 워커가 죽어 claim 상태로 남은 job 을 되살리는
+       유일한 경로다(워치독이 20초마다 부르므로 사실상 상시 회수기 역할을 한다).
     """
-    q = _load()
+    now = time.time()
+    q = _reap(_load(), now)
+    picked = None
     for job in q:
         if not job.get("claimed_at") and not job.get("done_at"):
-            job["claimed_at"] = time.time()
-            if not _save(q):
-                return None
-            return dict(job)
-    return None
+            job["claimed_at"] = now
+            job["attempts"] = int(job.get("attempts") or 0) + 1
+            picked = dict(job)
+            break
+    if not _save(q):
+        return None
+    return picked
 
 
 def finish(job_id: str, added: Optional[int] = None, error: Optional[str] = None) -> None:
@@ -111,16 +164,42 @@ def finish(job_id: str, added: Optional[int] = None, error: Optional[str] = None
 
 
 def status() -> Dict:
+    """큐 관측. ⚠️ 이게 없어서 `queue_full` 의 원인을 코드로 역추적해야 했다(2026-08-04)."""
+    now = time.time()
     q = _load()
     return {
         "queue_len": len(q),
+        "max_queue": MAX_QUEUE,
         "pending": sum(1 for j in q if not j.get("claimed_at") and not j.get("done_at")),
         "running": sum(1 for j in q if j.get("claimed_at") and not j.get("done_at")),
+        "zombie": sum(1 for j in q if _is_zombie(j, now)),
+        "done": sum(1 for j in q if j.get("done_at")),
+        "oldest_age_sec": int(now - min(
+            (float(j.get("requested_at") or now) for j in q if not j.get("done_at")),
+            default=now)),
         "recent_done": [
-            {k: j.get(k) for k in ("id", "added", "error", "requested_at_str")}
+            {k: j.get(k) for k in ("id", "added", "error", "attempts", "requested_at_str")}
             for j in q if j.get("done_at")
         ][-5:],
     }
+
+
+def reap_now() -> Dict:
+    """좀비 즉시 회수(수동). 배포 없이 막힌 큐를 푸는 탈출구."""
+    now = time.time()
+    before = _load()
+    n_zombie = sum(1 for j in before if _is_zombie(j, now))
+    q = _reap(before, now)
+    _save(q)
+    return {"reaped": n_zombie, "queue_len": len(q),
+            "live": sum(1 for j in q if not j.get("done_at"))}
+
+
+def purge_all() -> Dict:
+    """큐 전체 비우기 — 최후 수단. 대기 중이던 배치는 사라지므로 드라이버로 재발사해야 한다."""
+    n = len(_load())
+    _save([])
+    return {"purged": n}
 
 
 async def seed_explode_watchdog_loop():

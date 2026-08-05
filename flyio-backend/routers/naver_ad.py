@@ -8015,6 +8015,31 @@ async def keyword_pool_seed_explode(
     }
 
 
+@router.get("/keyword-pool/seed-explode-queue/status")
+def seed_explode_queue_status():
+    """seed-explode 디스크 큐 관측.
+
+    ⚠️ 이 엔드포인트가 없어서 2026-08-04 에 `503 queue_full` 의 원인을 코드로 역추적해야
+       했다(좀비 job 200개가 큐를 영구 점유). 큐가 막히면 여기부터 볼 것 —
+       `zombie` 가 크면 회수가 안 된 것이고, `pending` 이 크면 워커가 안 도는 것이다.
+    """
+    from services.seed_explode_queue import status
+    return {"success": True, **status()}
+
+
+@router.post("/keyword-pool/seed-explode-queue/reap")
+def seed_explode_queue_reap(purge: bool = False,
+                            authorization: Optional[str] = Header(None)):
+    """좀비 job 즉시 회수. `purge=true` 면 큐 전체를 비운다(최후 수단).
+
+    배포 없이 막힌 큐를 푸는 탈출구다 — 이번처럼 회수 로직이 없어 영구 포화가 되면
+    재배포 말고는 방법이 없었다.
+    """
+    _verify_cron_token(authorization)
+    from services.seed_explode_queue import purge_all, reap_now
+    return {"success": True, **(purge_all() if purge else reap_now())}
+
+
 class AdminInspectRequest(BaseModel):
     user_id: int
 
@@ -15185,6 +15210,16 @@ class PromoteCoreRequest(BaseModel):
     display_url: str = Field("https://sojam.co.kr")
     final_url: str = Field("https://sojam.co.kr")
     medical_no: str = Field("한42606", description="의료광고 심의필 번호")
+    # ── 명시 목록 모드 (2026-08-05) ────────────────────────────────────────
+    # 신규 발굴분은 registered_keywords 에 아직 없어서 점수 경로가 닿지 않는다.
+    # 이 필드를 주면 DB 스코어링을 건너뛰고 **목록 그대로 신규 생성**한다.
+    # 풀 캠페인(일예산 300원)에 떨어져 소진 못 하는 문제를 처음부터 피하는 경로.
+    explicit_keywords: Optional[List[str]] = Field(
+        None, description="명시 키워드 목록. 주면 DB 점수 선별을 건너뛰고 이 목록을 신규 생성한다.")
+    bids: Optional[Dict[str, int]] = Field(
+        None, description="키워드별 입찰가 {키워드: 원}. 목록에 없으면 init_bid 를 쓴다.")
+    skip_existing: bool = Field(
+        True, description="explicit_keywords 중 이미 등록된 키워드는 제외(중복 등록 방지)")
     dry_run: bool = Field(True)
 
 
@@ -15240,21 +15275,36 @@ async def keyword_pool_promote_core(
         return s
 
     reg = get_registered_keywords_db()
-    with _sq.connect(reg.db_path, timeout=30.0) as conn:
-        rows = conn.execute(
-            "SELECT keyword, ncc_keyword_id, ad_group_id FROM registered_keywords "
-            "WHERE account_customer_id=? AND ncc_keyword_id IS NOT NULL AND ad_group_id IS NOT NULL AND removed_at IS NULL",
-            (cid,),
-        ).fetchall()
-    # 핵심 선별 + keyword 중복 제거(UNIQUE(account,keyword) — 최고점 1건 유지)
-    best: Dict[str, Tuple[int, str, str]] = {}  # keyword -> (score, old_ncc_id, old_gid)
-    for kw, nid, gid in rows:
-        sc = _score(kw)
-        if sc < request.score_min:
-            continue
-        if kw not in best or sc > best[kw][0]:
-            best[kw] = (sc, nid, gid)
-    core = [(kw, v[1], v[2], v[0]) for kw, v in best.items()][: request.max_keywords]  # (kw, old_ncc, old_gid, score)
+    explicit_mode = bool(request.explicit_keywords)
+    if explicit_mode:
+        # 신규 발굴분 — DB 에 없으므로 점수 선별을 건너뛴다. old_ncc/old_gid 는 None 이라
+        # delete_pool_copies 단계가 자연히 건너뛴다(삭제할 풀 복사본이 없다).
+        seen_kw: Set[str] = set()
+        uniq: List[str] = []
+        for k in request.explicit_keywords:
+            kk = (k or "").strip()
+            if kk and kk not in seen_kw:
+                seen_kw.add(kk)
+                uniq.append(kk)
+        if request.skip_existing:
+            uniq = reg.filter_new(cid, uniq)
+        core = [(kw, None, None, _score(kw)) for kw in uniq][: request.max_keywords]
+    else:
+        with _sq.connect(reg.db_path, timeout=30.0) as conn:
+            rows = conn.execute(
+                "SELECT keyword, ncc_keyword_id, ad_group_id FROM registered_keywords "
+                "WHERE account_customer_id=? AND ncc_keyword_id IS NOT NULL AND ad_group_id IS NOT NULL AND removed_at IS NULL",
+                (cid,),
+            ).fetchall()
+        # 핵심 선별 + keyword 중복 제거(UNIQUE(account,keyword) — 최고점 1건 유지)
+        best: Dict[str, Tuple[int, str, str]] = {}  # keyword -> (score, old_ncc_id, old_gid)
+        for kw, nid, gid in rows:
+            sc = _score(kw)
+            if sc < request.score_min:
+                continue
+            if kw not in best or sc > best[kw][0]:
+                best[kw] = (sc, nid, gid)
+        core = [(kw, v[1], v[2], v[0]) for kw, v in best.items()][: request.max_keywords]  # (kw, old_ncc, old_gid, score)
 
     from collections import Counter as _Counter
     band = _Counter()
@@ -15266,7 +15316,12 @@ async def keyword_pool_promote_core(
     if request.dry_run:
         return {
             "success": True, "dry_run": True, "customer_id": cid,
+            "mode": "explicit" if explicit_mode else "score",
             "core_selected": len(core), "score_min": request.score_min,
+            "requested": len(request.explicit_keywords or []) or None,
+            "skipped_already_registered": (
+                len(set(k.strip() for k in request.explicit_keywords if k and k.strip())) - len(core)
+                if explicit_mode and request.skip_existing else None),
             "band_distribution": dict(band),
             "plan": {
                 "new_campaign": request.campaign_name, "daily_budget": request.daily_budget,
@@ -15336,7 +15391,12 @@ async def keyword_pool_promote_core(
             # 키워드 100개씩
             for j in range(0, len(chunk), 100):
                 sub = chunk[j:j + 100]
-                body = [{"nccAdgroupId": gid, "keyword": c[0], "bidAmt": request.init_bid, "useGroupBidAmt": False}
+                # 키워드별 입찰가 — 실측 estimate 를 그대로 밀어넣는 경로.
+                # (set-bid-by-ids 는 호출당 단일 가격이라 생성 시점에 거는 편이 호출 수가 훨씬 적다)
+                _bm = request.bids or {}
+                body = [{"nccAdgroupId": gid, "keyword": c[0],
+                         "bidAmt": max(70, min(100000, int(_bm.get(c[0], request.init_bid)))),
+                         "useGroupBidAmt": False}
                         for c in sub]
                 try:
                     res = await client.create_keywords(body, ad_group_id=gid) or []
@@ -15358,18 +15418,26 @@ async def keyword_pool_promote_core(
                 logger.warning(f"[promote-core] 소재 생성 실패 grp{grp_idx}: {str(e)[:120]}")
             await asyncio.sleep(0.2)
         logger.warning(f"[promote-core] 이동 생성 완료 — {len(moved)}개 (그룹 {grp_idx})")
-        # 4) DB 이동 반영 (keyword 기준 UPDATE → 코어 캠페인 지시)
+        # 4) DB 반영 — 명시 모드는 신규 INSERT, 승격 모드는 기존 행 UPDATE
+        _bm = request.bids or {}
         try:
-            with _sq.connect(reg.db_path, timeout=30.0) as conn:
-                for kt, knid, gid in moved:
-                    conn.execute(
-                        "UPDATE registered_keywords SET campaign_id=?, ad_group_id=?, ncc_keyword_id=?, bid_amt=? "
-                        "WHERE account_customer_id=? AND keyword=?",
-                        (new_cid, gid, knid, request.init_bid, cid, kt),
-                    )
-                conn.commit()
+            if explicit_mode:
+                reg.insert_batch(user_id, cid, [
+                    {"keyword": kt, "ad_group_id": gid, "campaign_id": new_cid,
+                     "bid_amt": max(70, int(_bm.get(kt, request.init_bid))),
+                     "ncc_keyword_id": knid}
+                    for kt, knid, gid in moved])
+            else:
+                with _sq.connect(reg.db_path, timeout=30.0) as conn:
+                    for kt, knid, gid in moved:
+                        conn.execute(
+                            "UPDATE registered_keywords SET campaign_id=?, ad_group_id=?, ncc_keyword_id=?, bid_amt=? "
+                            "WHERE account_customer_id=? AND keyword=?",
+                            (new_cid, gid, knid, max(70, int(_bm.get(kt, request.init_bid))), cid, kt),
+                        )
+                    conn.commit()
         except Exception as e:
-            logger.warning(f"[promote-core] DB 업데이트 실패: {str(e)[:120]}")
+            logger.warning(f"[promote-core] DB 반영 실패: {str(e)[:120]}")
         # 5) 풀 복사본 삭제 (성공 이동분의 옛 ncc_id — 실패해도 무해)
         if request.delete_pool_copies:
             old_ids = [old_ncc_by_kw[kt] for kt, _, _ in moved if kt in old_ncc_by_kw and old_ncc_by_kw[kt]]
