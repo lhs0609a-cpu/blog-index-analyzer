@@ -85,12 +85,17 @@ function IndexTooltip({ active, payload }: any) {
 function PostingTooltip({ active, payload, monthly }: any) {
   if (!active || !payload?.length) return null
   const row: Bucket = payload[0].payload
+  // 이번 달은 아직 안 끝났다. 그 말을 안 하면 마지막 막대가 '급감'으로 읽힌다.
+  const now = new Date()
+  const d = new Date(row.ts)
+  const partial = monthly && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
   return (
     <div className="rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-lg text-sm">
       <div className="text-xs text-gray-500 mb-0.5">{row.label}</div>
       <div className="font-bold text-gray-900">
         {row.count}건 <span className="font-normal text-gray-500">{monthly ? '발행 (월)' : '발행'}</span>
       </div>
+      {partial && <div className="mt-1 text-xs text-gray-400">이번 달은 아직 진행 중</div>}
     </div>
   )
 }
@@ -99,10 +104,14 @@ function EventDot(props: any) {
   const { cx, cy, payload, index, dataLength } = props
   // recharts 는 dot 렌더러가 SVG 엘리먼트를 돌려주길 기대한다 (null 이면 경고)
   if (cx == null || cy == null) return <g />
+  // 등급이 바뀐 날만 색 마커. ruler_change 는 세로 점선이 이미 말하므로 여기서
+  // 회색으로 칠하면 '이전 기준 점'(회색)과 구분이 사라진다.
   const ev = payload.event
-  if (ev) {
-    const color = ev === 'level_up' ? UP : ev === 'level_down' ? DOWN : NEUTRAL
-    return <circle cx={cx} cy={cy} r={6} fill={color} stroke={SURFACE} strokeWidth={2} />
+  if (ev === 'level_up' || ev === 'level_down') {
+    return (
+      <circle cx={cx} cy={cy} r={6} fill={ev === 'level_up' ? UP : DOWN}
+              stroke={SURFACE} strokeWidth={2} />
+    )
   }
   const r = index === dataLength - 1 ? 5 : 3
   return <circle cx={cx} cy={cy} r={r} fill={LINE} stroke={SURFACE} strokeWidth={2} />
