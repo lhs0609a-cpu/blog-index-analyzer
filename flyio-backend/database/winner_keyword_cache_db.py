@@ -35,6 +35,11 @@ KST = timezone(timedelta(hours=9))
 # 오래된 값으로 "1위 가능"이라 말하면 그건 추천이 아니라 추측이다.
 FRESH_DAYS = 7
 
+# 0개를 물어온 주제를 다시 재기까지 기다리는 시간.
+# 0 이 "정말 없다"인지 "그때 뭔가 잘못됐다"인지 밖에서는 구분이 안 되므로,
+# 영구 제외하지 않고 한 번 더 기회를 준다.
+RETRY_ZERO_AFTER_HOURS = 6
+
 
 def _connect() -> sqlite3.Connection:
     d = os.path.dirname(WINNER_CACHE_DB_PATH)
@@ -135,13 +140,18 @@ def get_requested_topics(limit: int = 10) -> List[str]:
     """많이 요청된 주제어부터. 아직 측정 안 된 것만 돌려준다."""
     conn = _connect()
     try:
+        # 한 번 돌았지만 0개를 물어온 주제는 '측정 완료'가 아니다.
+        # 실측: '한도'·'대출'이 버그로 0개를 저장했는데, 버그를 고친 뒤에도
+        # 영구 제외돼 다시 재지 않았다. 0개였던 주제는 시간이 지나면 재시도한다.
+        retry_after = (datetime.now(KST) - timedelta(hours=RETRY_ZERO_AFTER_HOURS)).isoformat()
         rows = conn.execute("""
             SELECT r.term FROM requested_topics r
             LEFT JOIN category_runs c ON c.category = r.term
             WHERE c.category IS NULL
+               OR (COALESCE(c.keywords_stored, 0) = 0 AND c.last_run_at < ?)
             ORDER BY r.times DESC, r.rank ASC, r.last_requested_at DESC
             LIMIT ?
-        """, (limit,)).fetchall()
+        """, (retry_after, limit)).fetchall()
         return [r["term"] for r in rows]
     except Exception:
         return []
