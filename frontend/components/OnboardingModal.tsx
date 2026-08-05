@@ -37,7 +37,7 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
                 onClick={onClose}
                 className="p-2 rounded-full hover:bg-gray-100 transition-colors"
               >
-                <X className="w-5 h-5 text-gray-500" />
+                <X className="w-5 h-5 text-gray-500 gi3d" />
               </button>
             </div>
 
@@ -47,7 +47,7 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
               <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-50 to-white border border-purple-100">
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 rounded-xl bg-purple-500 flex items-center justify-center flex-shrink-0">
-                    <Zap className="w-6 h-6 text-white" />
+                    <Zap className="w-6 h-6 text-white gi3d" />
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
@@ -63,7 +63,7 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
                       className="inline-flex items-center gap-2 text-sm font-medium text-purple-600 hover:text-purple-700"
                     >
                       무료로 분석하기
-                      <ArrowRight className="w-4 h-4" />
+                      <ArrowRight className="w-4 h-4 gi3d" />
                     </Link>
                   </div>
                 </div>
@@ -73,7 +73,7 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
               <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-50 to-white border border-blue-100">
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 rounded-xl bg-[#0064FF] flex items-center justify-center flex-shrink-0">
-                    <Search className="w-6 h-6 text-white" />
+                    <Search className="w-6 h-6 text-white gi3d" />
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
@@ -89,7 +89,7 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
                       className="inline-flex items-center gap-2 text-sm font-medium text-[#0064FF] hover:text-[#0050CC]"
                     >
                       키워드 검색하기
-                      <ArrowRight className="w-4 h-4" />
+                      <ArrowRight className="w-4 h-4 gi3d" />
                     </Link>
                   </div>
                 </div>
@@ -99,7 +99,7 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
               <div className="p-4 rounded-2xl bg-gradient-to-br from-yellow-50 to-white border-2 border-yellow-200">
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-yellow-400 to-amber-500 flex items-center justify-center flex-shrink-0">
-                    <Crown className="w-6 h-6 text-white" />
+                    <Crown className="w-6 h-6 text-white gi3d" />
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
@@ -116,7 +116,7 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
                       className="inline-flex items-center gap-2 text-sm font-bold text-yellow-600 hover:text-yellow-700"
                     >
                       7일 내 전액 환불
-                      <ArrowRight className="w-4 h-4" />
+                      <ArrowRight className="w-4 h-4 gi3d" />
                     </Link>
                   </div>
                 </div>
@@ -125,7 +125,7 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
               {/* 유용한 팁 */}
               <div className="p-4 rounded-2xl bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200">
                 <div className="flex items-start gap-3">
-                  <Check className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                  <Check className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5 gi3d" />
                   <div>
                     <h4 className="font-semibold text-green-900 mb-2">팁</h4>
                     <ul className="text-sm text-green-800 space-y-1">

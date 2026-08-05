@@ -2,6 +2,7 @@
 
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion'
 import { Sparkles, TrendingUp, Zap, Award, BarChart3, Search, BookOpen, ArrowRight, Building2, Mic, X, PenTool, Target, Star, Flame, Crown, ChevronRight, Play, Rocket, Heart, MousePointer, ArrowUpRight, Layers, Globe, Check, Users } from 'lucide-react'
+import GlassIcon from '@/components/GlassIcon'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import TrialExpiryBanner from '@/components/TrialExpiryBanner'
@@ -268,7 +269,7 @@ export default function Home() {
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
-                    <Sparkles className="w-4 h-4" />
+                    <Sparkles className="w-4 h-4 gi3d" />
                     블로그 분석
                   </button>
                   <button
@@ -279,7 +280,7 @@ export default function Home() {
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
-                    <Search className="w-4 h-4" />
+                    <Search className="w-4 h-4 gi3d" />
                     키워드 검색
                   </button>
                 </div>
@@ -295,7 +296,7 @@ export default function Home() {
                       <div className="absolute -inset-1 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-2xl blur-xl opacity-20 group-hover:opacity-40 transition-opacity" />
                       <div className="relative flex items-center bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-xl shadow-gray-200/50">
                         <div className="absolute left-5 text-gray-400">
-                          <Sparkles className="w-5 h-5" />
+                          <Sparkles className="w-5 h-5 gi3d" />
                         </div>
                         <input
                           type="text"
@@ -318,7 +319,7 @@ export default function Home() {
                             </>
                           ) : (
                             <>
-                              <Zap className="w-4 h-4" />
+                              <Zap className="w-4 h-4 gi3d" />
                               무료 분석
                             </>
                           )}
@@ -342,7 +343,7 @@ export default function Home() {
                       <div className="absolute -inset-1 bg-gradient-to-r from-[#0064FF] to-purple-500 rounded-2xl blur-xl opacity-20 group-hover:opacity-40 transition-opacity" />
                       <div className="relative flex items-center bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-xl shadow-gray-200/50">
                         <div className="absolute left-5 text-gray-400">
-                          <Search className="w-5 h-5" />
+                          <Search className="w-5 h-5 gi3d" />
                         </div>
                         <input
                           type="text"
@@ -365,7 +366,7 @@ export default function Home() {
                             </>
                           ) : (
                             <>
-                              <Search className="w-4 h-4" />
+                              <Search className="w-4 h-4 gi3d" />
                               검색하기
                             </>
                           )}
@@ -384,18 +385,18 @@ export default function Home() {
                     href="/blue-ocean"
                     className="text-gray-500 hover:text-amber-500 transition-colors inline-flex items-center gap-1"
                   >
-                    <Crown className="w-4 h-4" />
+                    <Crown className="w-4 h-4 gi3d" />
                     블루오션 키워드 발굴
-                    <ArrowRight className="w-3 h-3" />
+                    <ArrowRight className="w-3 h-3 gi3d" />
                   </Link>
                   <span className="text-gray-300">|</span>
                   <Link
                     href="/tools"
                     className="text-gray-500 hover:text-[#0064FF] transition-colors inline-flex items-center gap-1"
                   >
-                    <Sparkles className="w-4 h-4" />
+                    <Sparkles className="w-4 h-4 gi3d" />
                     AI 도구 모음
-                    <ArrowRight className="w-3 h-3" />
+                    <ArrowRight className="w-3 h-3 gi3d" />
                   </Link>
                 </div>
               </motion.div>
@@ -451,7 +452,7 @@ export default function Home() {
             className="text-center mb-12"
           >
             <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 border border-blue-100 text-sm font-medium text-[#0064FF] mb-4">
-              <Sparkles className="w-4 h-4" />
+              <Sparkles className="w-4 h-4 gi3d" />
               시작하기
             </span>
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">무엇을 도와드릴까요?</h2>
@@ -475,7 +476,7 @@ export default function Home() {
                   <div className="absolute top-0 right-0 w-32 h-32 bg-blue-100/30 rounded-full blur-[60px]" />
                   <div className="relative">
                     <div className="w-16 h-16 rounded-2xl bg-[#0064FF] flex items-center justify-center mb-6 group-hover:scale-110 group-hover:rotate-3 transition-all shadow-lg shadow-[#0064FF]/25">
-                      <Search className="w-8 h-8 text-white" />
+                      <Search className="w-8 h-8 text-white gi3d" />
                     </div>
                     <div className="flex items-center gap-2 mb-3">
                       <span className="px-2 py-1 text-xs font-bold bg-[#0064FF] text-white rounded-full">무료 (일 8회)</span>
@@ -485,7 +486,7 @@ export default function Home() {
                     <p className="text-gray-600 mb-4">상위 노출 블로그를 분석하고 진입 가능성을 확인합니다</p>
                     <div className="flex items-center gap-2 text-[#0064FF] font-medium group-hover:gap-3 transition-all">
                       <span>키워드 검색하기</span>
-                      <ArrowRight className="w-4 h-4" />
+                      <ArrowRight className="w-4 h-4 gi3d" />
                     </div>
                   </div>
                 </motion.div>
@@ -502,7 +503,7 @@ export default function Home() {
                   <div className="absolute top-0 right-0 w-32 h-32 bg-purple-100/30 rounded-full blur-[60px]" />
                   <div className="relative">
                     <div className="w-16 h-16 rounded-2xl bg-purple-500 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:rotate-3 transition-all shadow-lg shadow-purple-500/25">
-                      <Zap className="w-8 h-8 text-white" />
+                      <Zap className="w-8 h-8 text-white gi3d" />
                     </div>
                     <div className="flex items-center gap-2 mb-3">
                       <span className="px-2 py-1 text-xs font-bold bg-purple-500 text-white rounded-full">무료 (일 2회)</span>
@@ -512,7 +513,7 @@ export default function Home() {
                     <p className="text-gray-600 mb-4">블로그 ID만 입력하면 42개 지표를 즉시 분석합니다</p>
                     <div className="flex items-center gap-2 text-purple-600 font-medium group-hover:gap-3 transition-all">
                       <span>분석하러 가기</span>
-                      <ArrowRight className="w-4 h-4" />
+                      <ArrowRight className="w-4 h-4 gi3d" />
                     </div>
                   </div>
                 </motion.div>
@@ -529,7 +530,7 @@ export default function Home() {
                   <div className="absolute top-0 right-0 w-32 h-32 bg-amber-100/30 rounded-full blur-[60px]" />
                   <div className="relative">
                     <div className="w-16 h-16 rounded-2xl bg-amber-500 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:rotate-3 transition-all shadow-lg shadow-amber-500/25">
-                      <Sparkles className="w-8 h-8 text-white" />
+                      <Sparkles className="w-8 h-8 text-white gi3d" />
                     </div>
                     <div className="flex items-center gap-2 mb-3">
                       <span className="px-2 py-1 text-xs font-bold bg-amber-500 text-white rounded-full">AI (일 5회)</span>
@@ -539,7 +540,7 @@ export default function Home() {
                     <p className="text-gray-600 mb-4">제목 생성, 글쓰기 가이드, 해시태그 추천 등</p>
                     <div className="flex items-center gap-2 text-amber-600 font-medium group-hover:gap-3 transition-all">
                       <span>도구 살펴보기</span>
-                      <ArrowRight className="w-4 h-4" />
+                      <ArrowRight className="w-4 h-4 gi3d" />
                     </div>
                   </div>
                 </motion.div>
@@ -556,15 +557,15 @@ export default function Home() {
           >
             <div className="inline-flex items-center gap-4 flex-wrap justify-center">
               <Link href="/dashboard" className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-[#0064FF] transition-colors">
-                <BarChart3 className="w-4 h-4" />
+                <BarChart3 className="w-4 h-4 gi3d" />
                 대시보드
               </Link>
               <Link href="/ad-optimizer" className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-[#0064FF] transition-colors">
-                <Target className="w-4 h-4" />
+                <Target className="w-4 h-4 gi3d" />
                 광고 최적화
               </Link>
               <Link href="/analyze" className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-[#0064FF] transition-colors">
-                <Zap className="w-4 h-4" />
+                <Zap className="w-4 h-4 gi3d" />
                 블로그 분석
               </Link>
             </div>
@@ -582,7 +583,7 @@ export default function Home() {
             className="text-center mb-16"
           >
             <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gray-100 border border-gray-200 text-sm font-medium text-gray-600 mb-6">
-              <Layers className="w-4 h-4" />
+              <Layers className="w-4 h-4 gi3d" />
               FEATURES
             </span>
             <h2 className="text-4xl md:text-5xl font-black mb-4">
@@ -661,7 +662,7 @@ export default function Home() {
           >
             <div className="text-center mb-12">
               <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-100 border border-yellow-200 text-sm font-bold text-yellow-700 mb-4">
-                <Crown className="w-4 h-4" />
+                <Crown className="w-4 h-4 gi3d" />
                 Pro 전용 킬러 기능
               </span>
               <h2 className="text-4xl md:text-5xl font-black mb-4">
@@ -736,9 +737,9 @@ export default function Home() {
                 href="/pricing"
                 className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-yellow-400 to-amber-500 text-white font-bold text-lg rounded-2xl hover:shadow-xl transition-all"
               >
-                <Crown className="w-5 h-5" />
+                <Crown className="w-5 h-5 gi3d" />
                 Pro 7일 무료로 체험하기
-                <ArrowRight className="w-5 h-5" />
+                <ArrowRight className="w-5 h-5 gi3d" />
               </Link>
               <p className="text-sm text-gray-500 mt-3">7일 내 해지 시 0원 · 클릭 한 번으로 해지</p>
             </div>
@@ -756,7 +757,7 @@ export default function Home() {
             className="text-center mb-12"
           >
             <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 border border-blue-100 text-sm font-medium text-[#0064FF] mb-4">
-              <Heart className="w-4 h-4" />
+              <Heart className="w-4 h-4 gi3d" />
               REVIEWS
             </span>
             <h2 className="text-4xl md:text-5xl font-black mb-4 text-gray-900">
@@ -847,7 +848,7 @@ export default function Home() {
                     '기본 분석 리포트'
                   ].map((item, i) => (
                     <li key={i} className="flex items-center gap-2 text-gray-600">
-                      <Check className="w-4 h-4 text-gray-400" />
+                      <Check className="w-4 h-4 text-gray-400 gi3d" />
                       {item}
                     </li>
                   ))}
@@ -858,7 +859,7 @@ export default function Home() {
                     '엑셀 내보내기'
                   ].map((item, i) => (
                     <li key={i} className="flex items-center gap-2 text-gray-400">
-                      <X className="w-4 h-4" />
+                      <X className="w-4 h-4 gi3d" />
                       {item}
                     </li>
                   ))}
@@ -893,7 +894,7 @@ export default function Home() {
                     '엑셀 내보내기'
                   ].map((item, i) => (
                     <li key={i} className="flex items-center gap-2">
-                      <Check className="w-4 h-4" />
+                      <Check className="w-4 h-4 gi3d" />
                       {item}
                     </li>
                   ))}
@@ -921,7 +922,7 @@ export default function Home() {
             className="max-w-4xl mx-auto text-center"
           >
             <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gray-100 border border-gray-200 text-sm font-medium text-gray-600 mb-6">
-              <Star className="w-4 h-4" />
+              <Star className="w-4 h-4 gi3d" />
               WHY BLANK
             </span>
             <h2 className="text-4xl md:text-5xl font-black mb-12">
@@ -982,7 +983,7 @@ export default function Home() {
               transition={{ duration: 2, repeat: Infinity }}
               className="inline-flex mb-6"
             >
-              <Sparkles className="w-12 h-12 text-white/80" />
+              <GlassIcon icon={Sparkles} size={86} />
             </motion.div>
 
             <h2 className="text-4xl md:text-5xl font-black mb-6">
@@ -998,20 +999,20 @@ export default function Home() {
                 href="/pricing"
                 className="group inline-flex items-center gap-3 px-10 py-5 bg-white text-[#0064FF] rounded-2xl font-bold text-lg hover:scale-105 transition-all shadow-2xl"
               >
-                <Crown className="w-6 h-6" />
+                <Crown className="w-6 h-6 gi3d" />
                 7일 환불 보장으로 시작
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform gi3d" />
               </Link>
 
               {/* 신뢰 신호 강화 */}
               <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-white/80">
                 <div className="flex items-center gap-1.5">
-                  <Check className="w-4 h-4 text-green-400" />
+                  <Check className="w-4 h-4 text-green-400 gi3d" />
                   <span>7일 내 해지 시 0원</span>
                 </div>
                 <span className="text-white/40">|</span>
                 <div className="flex items-center gap-1.5">
-                  <Check className="w-4 h-4 text-green-400" />
+                  <Check className="w-4 h-4 text-green-400 gi3d" />
                   <span>클릭 한 번으로 해지</span>
                 </div>
               </div>
@@ -1022,7 +1023,7 @@ export default function Home() {
                 className="text-white/70 hover:text-white transition-colors text-sm font-medium flex items-center gap-1 mt-2"
               >
                 또는 무료로 먼저 분석해보기
-                <ArrowRight className="w-3 h-3" />
+                <ArrowRight className="w-3 h-3 gi3d" />
               </Link>
             </div>
           </motion.div>
@@ -1043,7 +1044,7 @@ export default function Home() {
             className="text-center"
           >
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#0064FF]/20 border border-[#0064FF]/30 mb-8">
-              <TrendingUp className="w-4 h-4 text-[#3182F6]" />
+              <TrendingUp className="w-4 h-4 text-[#3182F6] gi3d" />
               <span className="text-sm text-blue-300 font-medium">블로거들이 신뢰하는 분석 플랫폼</span>
             </div>
 
@@ -1077,7 +1078,7 @@ export default function Home() {
                 className="group inline-flex items-center gap-3 px-8 py-4 bg-[#0064FF] text-white rounded-2xl font-bold text-lg hover:shadow-lg hover:shadow-[#0064FF]/20 transition-all"
               >
                 7일 환불 보장으로 시작
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform gi3d" />
               </Link>
               <p className="text-xs text-gray-400 mt-3">클릭 한 번으로 언제든 해지 가능</p>
             </div>
@@ -1103,7 +1104,7 @@ export default function Home() {
                 onClick={() => setShowAdPopup(false)}
                 className="absolute top-3 right-3 p-1.5 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors z-10"
               >
-                <X className="w-4 h-4 text-gray-500" />
+                <X className="w-4 h-4 text-gray-500 gi3d" />
               </button>
 
               <Link
@@ -1112,7 +1113,7 @@ export default function Home() {
               >
                 <div className="flex items-center gap-4">
                   <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-[#0064FF] to-[#3182F6] flex items-center justify-center flex-shrink-0 shadow-lg shadow-[#0064FF]/15">
-                    <Crown className="w-7 h-7 text-white" />
+                    <Crown className="w-7 h-7 text-white gi3d" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
@@ -1123,7 +1124,7 @@ export default function Home() {
                   </div>
                   <div className="hidden sm:flex items-center gap-1 px-4 py-2 rounded-xl bg-[#0064FF] text-white text-xs font-bold flex-shrink-0">
                     <span>체험</span>
-                    <ChevronRight className="w-3 h-3" />
+                    <ChevronRight className="w-3 h-3 gi3d" />
                   </div>
                 </div>
               </Link>

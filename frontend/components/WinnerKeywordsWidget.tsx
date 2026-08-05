@@ -57,7 +57,7 @@ export default function WinnerKeywordsWidget({ blogId, className = '' }: WinnerK
       <div className={`rounded-2xl p-6 bg-gradient-to-br from-yellow-50 to-amber-50 border border-yellow-200/50 ${className}`}>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-full bg-gradient-to-r from-yellow-400 to-amber-500 flex items-center justify-center">
-            <Trophy className="w-5 h-5 text-white" />
+            <Trophy className="w-5 h-5 text-white gi3d" />
           </div>
           <div>
             <h3 className="font-bold text-gray-900">1위 가능 키워드</h3>
@@ -80,7 +80,7 @@ export default function WinnerKeywordsWidget({ blogId, className = '' }: WinnerK
       <div className={`rounded-2xl p-6 bg-gradient-to-br from-yellow-50 to-amber-50 border border-yellow-200/50 ${className}`}>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-full bg-gradient-to-r from-yellow-400 to-amber-500 flex items-center justify-center animate-pulse">
-            <Trophy className="w-5 h-5 text-white" />
+            <Trophy className="w-5 h-5 text-white gi3d" />
           </div>
           <div>
             <h3 className="font-bold text-gray-900">1위 가능 키워드</h3>
@@ -102,7 +102,7 @@ export default function WinnerKeywordsWidget({ blogId, className = '' }: WinnerK
       <div className={`rounded-2xl p-6 bg-gradient-to-br from-yellow-50 to-amber-50 border border-yellow-200/50 ${className}`}>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-full bg-gradient-to-r from-yellow-400 to-amber-500 flex items-center justify-center">
-            <Trophy className="w-5 h-5 text-white" />
+            <Trophy className="w-5 h-5 text-white gi3d" />
           </div>
           <div>
             <h3 className="font-bold text-gray-900">1위 가능 키워드</h3>
@@ -113,7 +113,7 @@ export default function WinnerKeywordsWidget({ blogId, className = '' }: WinnerK
           onClick={loadKeywords}
           className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-white border border-yellow-200 text-yellow-600 font-medium hover:bg-yellow-50 transition-colors"
         >
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw className="w-4 h-4 gi3d" />
           다시 시도
         </button>
       </div>
@@ -126,7 +126,7 @@ export default function WinnerKeywordsWidget({ blogId, className = '' }: WinnerK
       <div className={`rounded-2xl p-6 bg-gradient-to-br from-yellow-50 to-amber-50 border border-yellow-200/50 ${className}`}>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-full bg-gradient-to-r from-yellow-400 to-amber-500 flex items-center justify-center">
-            <Trophy className="w-5 h-5 text-white" />
+            <Trophy className="w-5 h-5 text-white gi3d" />
           </div>
           <div>
             <h3 className="font-bold text-gray-900">1위 가능 키워드</h3>
@@ -157,7 +157,7 @@ export default function WinnerKeywordsWidget({ blogId, className = '' }: WinnerK
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-gradient-to-r from-yellow-400 to-amber-500 flex items-center justify-center shadow-lg shadow-yellow-500/30">
-              <Trophy className="w-5 h-5 text-white" />
+              <Trophy className="w-5 h-5 text-white gi3d" />
             </div>
             <div>
               <h3 className="font-bold text-gray-900 flex items-center gap-2">
@@ -174,7 +174,7 @@ export default function WinnerKeywordsWidget({ blogId, className = '' }: WinnerK
             className="p-2 rounded-lg hover:bg-white/50 transition-colors"
             title="새로고침"
           >
-            <RefreshCw className="w-4 h-4 text-gray-500" />
+            <RefreshCw className="w-4 h-4 text-gray-500 gi3d" />
           </button>
         </div>
       </div>
@@ -217,7 +217,7 @@ export default function WinnerKeywordsWidget({ blogId, className = '' }: WinnerK
                     </span>
                     {keyword.golden_time && (
                       <span className="flex items-center gap-1 text-xs text-amber-600">
-                        <Clock className="w-3 h-3" />
+                        <Clock className="w-3 h-3 gi3d" />
                         {formatGoldenTime(keyword.golden_time)}
                       </span>
                     )}
@@ -259,7 +259,7 @@ export default function WinnerKeywordsWidget({ blogId, className = '' }: WinnerK
               {/* 왜 1위 가능한지 */}
               <div className="mb-4">
                 <h4 className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-yellow-500" />
+                  <Sparkles className="w-3 h-3 text-yellow-500 gi3d" />
                   왜 1위가 가능한가요?
                 </h4>
                 <ul className="space-y-1">
@@ -309,9 +309,9 @@ export default function WinnerKeywordsWidget({ blogId, className = '' }: WinnerK
                 href={`/keyword-search?keyword=${encodeURIComponent(selectedKeyword.keyword)}`}
                 className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-gradient-to-r from-yellow-400 to-amber-500 text-white font-semibold hover:shadow-lg transition-all"
               >
-                <Target className="w-4 h-4" />
+                <Target className="w-4 h-4 gi3d" />
                 이 키워드로 글쓰기
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="w-4 h-4 gi3d" />
               </Link>
             </div>
           </motion.div>
@@ -323,7 +323,7 @@ export default function WinnerKeywordsWidget({ blogId, className = '' }: WinnerK
         <div className="p-4 bg-gradient-to-r from-purple-500 to-indigo-500 text-white">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Crown className="w-5 h-5" />
+              <Crown className="w-5 h-5 gi3d" />
               <div>
                 <div className="font-semibold text-sm">Pro로 매일 5개 추천받기</div>
                 <div className="text-xs opacity-80">7일 무료 · 클릭 한 번 해지</div>

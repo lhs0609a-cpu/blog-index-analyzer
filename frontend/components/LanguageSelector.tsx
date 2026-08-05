@@ -60,9 +60,9 @@ export default function LanguageSelector({ className = '', variant = 'dropdown' 
           onClick={() => setIsOpen(!isOpen)}
           className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 transition-colors"
         >
-          <Globe className="w-4 h-4" />
+          <Globe className="w-4 h-4 gi3d" />
           <span>{currentLang?.code.toUpperCase()}</span>
-          <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`gi3d w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
         </button>
 
         <AnimatePresence>
@@ -85,7 +85,7 @@ export default function LanguageSelector({ className = '', variant = 'dropdown' 
                   }`}
                 >
                   <span>{lang.nativeName}</span>
-                  {language === lang.code && <Check className="w-4 h-4" />}
+                  {language === lang.code && <Check className="w-4 h-4 gi3d" />}
                 </button>
               ))}
             </motion.div>
@@ -102,9 +102,9 @@ export default function LanguageSelector({ className = '', variant = 'dropdown' 
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
       >
-        <Globe className="w-5 h-5 text-gray-500" />
+        <Globe className="w-5 h-5 text-gray-500 gi3d" />
         <span className="text-sm font-medium text-gray-700">{currentLang?.nativeName}</span>
-        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`gi3d w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       <AnimatePresence>
@@ -132,7 +132,7 @@ export default function LanguageSelector({ className = '', variant = 'dropdown' 
                   </span>
                   <span className="text-xs text-gray-400">{lang.name}</span>
                 </div>
-                {language === lang.code && <Check className="w-5 h-5 text-[#0064FF]" />}
+                {language === lang.code && <Check className="w-5 h-5 text-[#0064FF] gi3d" />}
               </button>
             ))}
           </motion.div>
@@ -152,7 +152,7 @@ export function LanguageSettings({ className = '' }: { className?: string }) {
     <div className={`bg-white rounded-2xl border border-gray-200 ${className}`}>
       <div className="p-6 border-b border-gray-100">
         <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-          <Globe className="w-5 h-5 text-[#0064FF]" />
+          <Globe className="w-5 h-5 text-[#0064FF] gi3d" />
           언어 설정
         </h2>
         <p className="text-sm text-gray-500 mt-1">사용할 언어를 선택하세요</p>
@@ -178,7 +178,7 @@ export function LanguageSettings({ className = '' }: { className?: string }) {
               </div>
               {language === lang.code && (
                 <div className="flex justify-center mt-2">
-                  <Check className="w-5 h-5 text-[#0064FF]" />
+                  <Check className="w-5 h-5 text-[#0064FF] gi3d" />
                 </div>
               )}
             </button>

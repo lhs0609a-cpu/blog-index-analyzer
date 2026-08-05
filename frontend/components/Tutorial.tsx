@@ -226,7 +226,7 @@ export default function Tutorial({ steps, tutorialKey, onComplete, onSkip, autoS
         whileTap={{ scale: 0.95 }}
         className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full shadow-lg hover:shadow-xl transition-all"
       >
-        <HelpCircle className="w-5 h-5" />
+        <HelpCircle className="w-5 h-5 gi3d" />
         <span className="font-medium">튜토리얼</span>
         {showGameElements && (
           <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">시작하기</span>
@@ -267,11 +267,11 @@ export default function Tutorial({ steps, tutorialKey, onComplete, onSkip, autoS
 
                   <div className="bg-gradient-to-r from-purple-100 to-pink-100 rounded-2xl p-4 mb-4">
                     <div className="flex items-center justify-center gap-2 mb-2">
-                      <Star className="w-6 h-6 text-yellow-500 fill-yellow-500" />
+                      <Star className="w-6 h-6 text-yellow-500 fill-yellow-500 gi3d" />
                       <span className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
                         +{sessionXP} XP
                       </span>
-                      <Star className="w-6 h-6 text-yellow-500 fill-yellow-500" />
+                      <Star className="w-6 h-6 text-yellow-500 fill-yellow-500 gi3d" />
                     </div>
                     <p className="text-sm text-gray-500">획득한 경험치</p>
                     <p className="text-xs text-purple-600 mt-1">
@@ -281,11 +281,11 @@ export default function Tutorial({ steps, tutorialKey, onComplete, onSkip, autoS
 
                   <div className="flex justify-center gap-2">
                     <div className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm flex items-center gap-1">
-                      <Trophy className="w-4 h-4" />
+                      <Trophy className="w-4 h-4 gi3d" />
                       튜토리얼 완료
                     </div>
                     <div className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm flex items-center gap-1">
-                      <Target className="w-4 h-4" />
+                      <Target className="w-4 h-4 gi3d" />
                       전문가 도전
                     </div>
                   </div>
@@ -323,7 +323,7 @@ export default function Tutorial({ steps, tutorialKey, onComplete, onSkip, autoS
                       {currentRank.name}
                     </div>
                     <div className="flex items-center gap-1 text-yellow-600 font-medium">
-                      <Star className="w-4 h-4 fill-yellow-500" />
+                      <Star className="w-4 h-4 fill-yellow-500 gi3d" />
                       {totalXP.toLocaleString()} XP
                       {sessionXP > 0 && (
                         <span className="text-green-500 text-sm">(+{sessionXP})</span>
@@ -359,7 +359,7 @@ export default function Tutorial({ steps, tutorialKey, onComplete, onSkip, autoS
                           ? 'bg-purple-500 text-white ring-4 ring-purple-200'
                           : 'bg-gray-200 text-gray-500'
                       }`}>
-                        {completedSteps.has(index) ? <Check className="w-3 h-3" /> : index + 1}
+                        {completedSteps.has(index) ? <Check className="w-3 h-3 gi3d" /> : index + 1}
                       </div>
                       {step.badge && completedSteps.has(index) && (
                         <step.badge className="w-3 h-3 mt-0.5" strokeWidth={2} />
@@ -440,7 +440,7 @@ export default function Tutorial({ steps, tutorialKey, onComplete, onSkip, autoS
                       transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 2 }}
                       className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center"
                     >
-                      {currentStepData.badge ? <currentStepData.badge className="w-5 h-5" strokeWidth={1.75} /> : <BookOpen className="w-5 h-5" strokeWidth={1.75} />}
+                      {currentStepData.badge ? <currentStepData.badge className="w-5 h-5" strokeWidth={1.75} /> : <BookOpen className="w-5 h-5 gi3d" strokeWidth={1.75} />}
                     </motion.div>
                   )}
                   <div>
@@ -454,7 +454,7 @@ export default function Tutorial({ steps, tutorialKey, onComplete, onSkip, autoS
                   onClick={handleSkip}
                   className="text-white/70 hover:text-white transition-colors p-1 hover:bg-white/10 rounded-lg"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-5 h-5 gi3d" />
                 </button>
               </div>
             </div>
@@ -474,7 +474,7 @@ export default function Tutorial({ steps, tutorialKey, onComplete, onSkip, autoS
                 >
                   <div className="flex items-start gap-3">
                     <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Lightbulb className="w-4 h-4 text-amber-600" />
+                      <Lightbulb className="w-4 h-4 text-amber-600 gi3d" />
                     </div>
                     <div>
                       <p className="text-xs font-semibold text-amber-700 mb-1">Pro Tip</p>
@@ -487,7 +487,7 @@ export default function Tutorial({ steps, tutorialKey, onComplete, onSkip, autoS
               {/* XP reward preview */}
               {showGameElements && (
                 <div className="mt-4 flex items-center justify-center gap-2 text-sm text-gray-500">
-                  <Zap className="w-4 h-4 text-yellow-500" />
+                  <Zap className="w-4 h-4 text-yellow-500 gi3d" />
                   이 단계 완료 시 <span className="font-bold text-yellow-600">+{currentStepData.xp || 10} XP</span>
                 </div>
               )}
@@ -499,7 +499,7 @@ export default function Tutorial({ steps, tutorialKey, onComplete, onSkip, autoS
                 onClick={handleSkip}
                 className="flex items-center gap-1 text-gray-400 hover:text-gray-600 transition-colors text-sm"
               >
-                <SkipForward className="w-4 h-4" />
+                <SkipForward className="w-4 h-4 gi3d" />
                 건너뛰기
               </button>
 
@@ -511,7 +511,7 @@ export default function Tutorial({ steps, tutorialKey, onComplete, onSkip, autoS
                     onClick={handlePrev}
                     className="flex items-center gap-1 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                   >
-                    <ChevronLeft className="w-4 h-4" />
+                    <ChevronLeft className="w-4 h-4 gi3d" />
                     이전
                   </motion.button>
                 )}
@@ -523,13 +523,13 @@ export default function Tutorial({ steps, tutorialKey, onComplete, onSkip, autoS
                 >
                   {currentStep === steps.length - 1 ? (
                     <>
-                      <Gift className="w-4 h-4" />
+                      <Gift className="w-4 h-4 gi3d" />
                       완료하고 보상받기
                     </>
                   ) : (
                     <>
                       다음 단계
-                      <ChevronRight className="w-4 h-4" />
+                      <ChevronRight className="w-4 h-4 gi3d" />
                     </>
                   )}
                 </motion.button>

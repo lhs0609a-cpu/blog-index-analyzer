@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, Loader2, Trash2, Play, Info } from 'lucide-react'
+import GlassIcon from '@/components/GlassIcon'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/lib/stores/auth'
 import { adGet, adUpload, adPost } from '@/lib/api/adFetch'
@@ -173,7 +174,7 @@ export default function KeywordUploadPage() {
         {/* 가이드 */}
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
           <div className="flex gap-3">
-            <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5 gi3d" />
             <div className="text-sm text-blue-900">
               <p className="font-semibold mb-1">엑셀 포맷</p>
               <ul className="space-y-1 text-blue-800">
@@ -281,7 +282,7 @@ export default function KeywordUploadPage() {
             />
             {file ? (
               <div className="flex items-center justify-center gap-3">
-                <FileSpreadsheet className="w-8 h-8 text-green-600" />
+                <FileSpreadsheet className="w-8 h-8 text-green-600 gi3d" />
                 <div className="text-left">
                   <div className="font-medium text-gray-900">{file.name}</div>
                   <div className="text-sm text-gray-500">
@@ -296,12 +297,12 @@ export default function KeywordUploadPage() {
                   className="ml-4 p-2 text-gray-400 hover:text-red-600"
                   title="파일 제거"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-4 h-4 gi3d" />
                 </button>
               </div>
             ) : (
               <>
-                <Upload className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                <GlassIcon icon={Upload} size={72} className="mx-auto mb-3" />
                 <p className="text-gray-700 font-medium">파일을 끌어놓거나 클릭해서 선택</p>
                 <p className="text-sm text-gray-500 mt-1">.xlsx, .xls, .csv (최대 10MB)</p>
               </>
@@ -321,7 +322,7 @@ export default function KeywordUploadPage() {
                 </>
               ) : (
                 <>
-                  <FileSpreadsheet className="w-4 h-4" />
+                  <FileSpreadsheet className="w-4 h-4 gi3d" />
                   미리보기 (파싱)
                 </>
               )}
@@ -336,12 +337,12 @@ export default function KeywordUploadPage() {
               <h2 className="font-semibold text-gray-900">파싱 결과</h2>
               <div className="flex gap-2">
                 <div className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium flex items-center gap-1">
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 className="w-4 h-4 gi3d" />
                   유효: {parseResult.total}개
                 </div>
                 {parseResult.errors_count > 0 && (
                   <div className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-medium flex items-center gap-1">
-                    <AlertTriangle className="w-4 h-4" />
+                    <AlertTriangle className="w-4 h-4 gi3d" />
                     경고/오류: {parseResult.errors_count}개
                   </div>
                 )}
@@ -409,7 +410,7 @@ export default function KeywordUploadPage() {
                   </>
                 ) : (
                   <>
-                    <Play className="w-4 h-4" />
+                    <Play className="w-4 h-4 gi3d" />
                     네이버 광고에 {parseResult.items_count}개 등록하기
                   </>
                 )}
@@ -418,7 +419,7 @@ export default function KeywordUploadPage() {
 
             {parseResult.registered > 0 && (
               <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-                <CheckCircle2 className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                <CheckCircle2 className="w-8 h-8 text-green-600 mx-auto mb-2 gi3d" />
                 <p className="font-semibold text-green-900">
                   {parseResult.registered}개 키워드가 성공적으로 등록되었습니다
                 </p>

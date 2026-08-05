@@ -168,7 +168,7 @@ export function InlineEmptyState({
   return (
     <div className={`text-center py-6 text-gray-500 ${className}`}>
       <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-2">
-        <Bookmark className="w-5 h-5 text-gray-400" />
+        <Bookmark className="w-5 h-5 text-gray-400 gi3d" />
       </div>
       <p className="text-sm">{message}</p>
     </div>

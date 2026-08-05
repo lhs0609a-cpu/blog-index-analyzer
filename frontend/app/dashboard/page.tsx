@@ -139,9 +139,9 @@ function DropdownMenu({ user }: DropdownMenuProps) {
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-1 px-4 py-2.5 rounded-full bg-white border border-gray-200 text-gray-700 font-medium hover:bg-gray-50 transition-all text-sm"
       >
-        <MoreHorizontal className="w-4 h-4" />
+        <MoreHorizontal className="w-4 h-4 gi3d" />
         <span className="hidden sm:inline">더보기</span>
-        <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`gi3d w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       <AnimatePresence>
@@ -290,7 +290,7 @@ export default function Dashboard() {
               href="/analyze"
               className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#0064FF] text-white font-semibold hover:shadow-lg shadow-lg shadow-[#0064FF]/15 transition-all text-sm"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4 gi3d" />
               <span className="hidden sm:inline">블로그 추가</span>
               <span className="sm:hidden">추가</span>
             </Link>
@@ -307,7 +307,7 @@ export default function Dashboard() {
           className="rounded-2xl p-4 mb-8 bg-white border border-gray-200 shadow-lg shadow-gray-100/50"
         >
           <div className="relative">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 gi3d" />
             <input
               type="text"
               value={searchQuery}
@@ -344,7 +344,7 @@ export default function Dashboard() {
                 transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                 className="inline-flex p-4 rounded-full bg-[#0064FF] mb-3 shadow-lg shadow-[#0064FF]/15"
               >
-                <Sparkles className="w-6 h-6 text-white" />
+                <Sparkles className="w-6 h-6 text-white gi3d" />
               </motion.div>
               <p className="text-gray-600 text-sm">블로그 목록을 불러오는 중...</p>
             </div>
@@ -388,7 +388,7 @@ export default function Dashboard() {
               <>
                 <div className="text-center mb-10">
                   <div className="w-24 h-24 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-[#0064FF]/20">
-                    <Sparkles className="w-12 h-12 text-white" />
+                    <Sparkles className="w-12 h-12 text-white gi3d" />
                   </div>
                   <h3 className="text-3xl font-bold mb-3">블랭크에 오신 것을 환영합니다!</h3>
                   <p className="text-gray-600 text-lg">
@@ -438,7 +438,7 @@ export default function Dashboard() {
                     href="/analyze"
                     className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-[#0064FF] text-white font-semibold hover:shadow-lg shadow-lg shadow-[#0064FF]/15 transition-all text-lg"
                   >
-                    <Plus className="w-5 h-5" />
+                    <Plus className="w-5 h-5 gi3d" />
                     첫 번째 블로그 분석하기
                   </Link>
                   <p className="text-gray-500 text-sm mt-4">무료로 바로 시작할 수 있어요</p>
@@ -472,7 +472,7 @@ export default function Dashboard() {
                   whileHover={{ scale: 1.1 }}
                   className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center cursor-pointer"
                 >
-                  <Sparkles className="w-5 h-5 text-[#0064FF]" />
+                  <Sparkles className="w-5 h-5 text-[#0064FF] gi3d" />
                 </motion.div>
               </div>
 
@@ -507,9 +507,9 @@ export default function Dashboard() {
 
                 <div className={`flex items-center gap-1 ${blog.change > 0 ? 'text-green-500' : 'text-red-500'}`}>
                   {blog.change > 0 ? (
-                    <TrendingUp className="w-5 h-5" />
+                    <TrendingUp className="w-5 h-5 gi3d" />
                   ) : (
-                    <TrendingDown className="w-5 h-5" />
+                    <TrendingDown className="w-5 h-5 gi3d" />
                   )}
                   <span className="font-semibold">
                     {blog.change > 0 ? '+' : ''}{blog.change}
@@ -521,7 +521,7 @@ export default function Dashboard() {
               <div className="grid grid-cols-3 gap-4 py-4 border-t border-gray-200">
                 <div className="text-center">
                   <div className="flex items-center justify-center mb-1">
-                    <Eye className="w-4 h-4 text-gray-400" />
+                    <Eye className="w-4 h-4 text-gray-400 gi3d" />
                   </div>
                   <div className="font-bold">{(blog?.stats?.visitors ?? 0).toLocaleString()}</div>
                   <div className="text-xs text-gray-500">방문자</div>
@@ -529,7 +529,7 @@ export default function Dashboard() {
 
                 <div className="text-center">
                   <div className="flex items-center justify-center mb-1">
-                    <MessageCircle className="w-4 h-4 text-gray-400" />
+                    <MessageCircle className="w-4 h-4 text-gray-400 gi3d" />
                   </div>
                   <div className="font-bold">{blog?.stats?.posts ?? 0}</div>
                   <div className="text-xs text-gray-500">포스트</div>
@@ -537,7 +537,7 @@ export default function Dashboard() {
 
                 <div className="text-center">
                   <div className="flex items-center justify-center mb-1">
-                    <Heart className="w-4 h-4 text-gray-400" />
+                    <Heart className="w-4 h-4 text-gray-400 gi3d" />
                   </div>
                   <div className="font-bold">{blog?.stats?.engagement ?? 0}</div>
                   <div className="text-xs text-gray-500">참여도</div>
@@ -555,7 +555,7 @@ export default function Dashboard() {
                     <RefreshCw className="w-4 h-4 animate-spin" />
                   ) : (
                     <>
-                      <RefreshCw className="w-3 h-3" />
+                      <RefreshCw className="w-3 h-3 gi3d" />
                       재분석
                     </>
                   )}
@@ -564,7 +564,7 @@ export default function Dashboard() {
                   onClick={(e) => handleDeleteBlog(blog.blog_id, e)}
                   className="py-2 px-3 rounded-xl bg-red-100 text-red-600 font-semibold hover:bg-red-200 transition-colors text-sm flex items-center justify-center gap-1"
                 >
-                  <Trash2 className="w-3 h-3" />
+                  <Trash2 className="w-3 h-3 gi3d" />
                   삭제
                 </button>
               </div>
@@ -582,7 +582,7 @@ export default function Dashboard() {
               className="rounded-3xl p-6 flex flex-col items-center justify-center bg-white hover:shadow-2xl transition-all duration-300 cursor-pointer border-2 border-dashed border-blue-300"
             >
               <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mb-4">
-                <Plus className="w-8 h-8 text-[#0064FF]" />
+                <Plus className="w-8 h-8 text-[#0064FF] gi3d" />
               </div>
               <h3 className="font-bold text-lg mb-2">새 블로그 추가</h3>
               <p className="text-sm text-gray-500 text-center">
@@ -648,7 +648,7 @@ export default function Dashboard() {
           <CollapsibleSection
             title="키워드 지수분석"
             subtitle="경쟁 키워드의 상위 블로그들을 분석"
-            icon={<TrendingUp className="w-5 h-5 text-white" />}
+            icon={<TrendingUp className="w-5 h-5 text-white gi3d" />}
             iconBgColor="bg-gradient-to-r from-[#0064FF] to-[#3182F6]"
             actionButton={
               <Link href="/keyword-search" className="px-4 py-1.5 rounded-full bg-[#0064FF] text-white text-sm font-medium hover:bg-[#0050CC] transition-colors">
@@ -659,21 +659,21 @@ export default function Dashboard() {
             <div className="grid md:grid-cols-3 gap-3">
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-1">
-                  <Eye className="w-4 h-4 text-[#0064FF]" />
+                  <Eye className="w-4 h-4 text-[#0064FF] gi3d" />
                   <span className="font-medium text-sm">상위 노출 분석</span>
                 </div>
                 <p className="text-xs text-gray-500">상위 블로그들의 지수를 파악</p>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-1">
-                  <TrendingUp className="w-4 h-4 text-[#3182F6]" />
+                  <TrendingUp className="w-4 h-4 text-[#3182F6] gi3d" />
                   <span className="font-medium text-sm">경쟁 인사이트</span>
                 </div>
                 <p className="text-xs text-gray-500">상위 블로그의 공통 패턴 확인</p>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-1">
-                  <Sparkles className="w-4 h-4 text-orange-600" />
+                  <Sparkles className="w-4 h-4 text-orange-600 gi3d" />
                   <span className="font-medium text-sm">노출 로직 파악</span>
                 </div>
                 <p className="text-xs text-gray-500">전략 수립을 위한 분석</p>
@@ -685,7 +685,7 @@ export default function Dashboard() {
           <CollapsibleSection
             title="순위 추적"
             subtitle="내 블로그 포스팅의 검색 순위 실시간 추적"
-            icon={<Target className="w-5 h-5 text-white" />}
+            icon={<Target className="w-5 h-5 text-white gi3d" />}
             iconBgColor="bg-gradient-to-r from-[#0064FF] to-[#3182F6]"
             actionButton={
               <Link href="/dashboard/rank-tracker" className="px-4 py-1.5 rounded-full bg-[#0064FF] text-white text-sm font-medium hover:bg-[#0050CC] transition-colors">
@@ -696,21 +696,21 @@ export default function Dashboard() {
             <div className="grid md:grid-cols-3 gap-3">
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-1">
-                  <Search className="w-4 h-4 text-[#0064FF]" />
+                  <Search className="w-4 h-4 text-[#0064FF] gi3d" />
                   <span className="font-medium text-sm">키워드 자동 추출</span>
                 </div>
                 <p className="text-xs text-gray-500">포스트 제목에서 핵심 키워드 추출</p>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-1">
-                  <TrendingUp className="w-4 h-4 text-[#3182F6]" />
+                  <TrendingUp className="w-4 h-4 text-[#3182F6] gi3d" />
                   <span className="font-medium text-sm">블로그탭 & VIEW탭</span>
                 </div>
                 <p className="text-xs text-gray-500">두 탭 모두 순위 확인</p>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-1">
-                  <Eye className="w-4 h-4 text-orange-600" />
+                  <Eye className="w-4 h-4 text-orange-600 gi3d" />
                   <span className="font-medium text-sm">히스토리 분석</span>
                 </div>
                 <p className="text-xs text-gray-500">순위 변동 추이 그래프</p>
@@ -723,7 +723,7 @@ export default function Dashboard() {
             <CollapsibleSection
               title="AI 학습 엔진"
               subtitle="순위 학습 현황 실시간 모니터링"
-              icon={<Brain className="w-5 h-5 text-white" />}
+              icon={<Brain className="w-5 h-5 text-white gi3d" />}
               iconBgColor="bg-gradient-to-r from-green-500 to-emerald-500"
               actionButton={
                 <Link href="/dashboard/learning" className="px-4 py-1.5 rounded-full bg-green-500 text-white text-sm font-medium hover:bg-green-600 transition-colors">
@@ -734,21 +734,21 @@ export default function Dashboard() {
               <div className="grid md:grid-cols-3 gap-3">
                 <div className="bg-gray-50 rounded-lg p-3">
                   <div className="flex items-center gap-2 mb-1">
-                    <TrendingUp className="w-4 h-4 text-green-600" />
+                    <TrendingUp className="w-4 h-4 text-green-600 gi3d" />
                     <span className="font-medium text-sm">실시간 학습</span>
                   </div>
                   <p className="text-xs text-gray-500">검색 시 자동 순위 데이터 학습</p>
                 </div>
                 <div className="bg-gray-50 rounded-lg p-3">
                   <div className="flex items-center gap-2 mb-1">
-                    <Eye className="w-4 h-4 text-emerald-600" />
+                    <Eye className="w-4 h-4 text-emerald-600 gi3d" />
                     <span className="font-medium text-sm">가중치 모니터링</span>
                   </div>
                   <p className="text-xs text-gray-500">C-Rank, D.I.A. 가중치 변화 확인</p>
                 </div>
                 <div className="bg-gray-50 rounded-lg p-3">
                   <div className="flex items-center gap-2 mb-1">
-                    <Sparkles className="w-4 h-4 text-teal-600" />
+                    <Sparkles className="w-4 h-4 text-teal-600 gi3d" />
                     <span className="font-medium text-sm">예측 정확도</span>
                   </div>
                   <p className="text-xs text-gray-500">학습에 따른 정확도 향상</p>
@@ -761,7 +761,7 @@ export default function Dashboard() {
           <CollapsibleSection
             title="통합 광고 최적화"
             subtitle="모든 광고 플랫폼 AI 자동 최적화 (BETA)"
-            icon={<Zap className="w-5 h-5 text-white" />}
+            icon={<Zap className="w-5 h-5 text-white gi3d" />}
             iconBgColor="bg-gradient-to-r from-orange-400 to-orange-500"
             actionButton={
               <Link href="/ad-optimizer/unified" className="px-4 py-1.5 rounded-full bg-orange-500 text-white text-sm font-medium hover:bg-orange-600 transition-colors">
@@ -772,28 +772,28 @@ export default function Dashboard() {
             <div className="grid md:grid-cols-4 gap-3">
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-1">
-                  <Globe className="w-4 h-4 text-green-600" />
+                  <Globe className="w-4 h-4 text-green-600 gi3d" />
                   <span className="font-medium text-sm">멀티 플랫폼</span>
                 </div>
                 <p className="text-xs text-gray-500">네이버, 구글, 메타, 카카오</p>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-1">
-                  <Brain className="w-4 h-4 text-[#0064FF]" />
+                  <Brain className="w-4 h-4 text-[#0064FF] gi3d" />
                   <span className="font-medium text-sm">AI 자동 최적화</span>
                 </div>
                 <p className="text-xs text-gray-500">입찰가, 예산 실시간 조정</p>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-1">
-                  <Wallet className="w-4 h-4 text-orange-600" />
+                  <Wallet className="w-4 h-4 text-orange-600 gi3d" />
                   <span className="font-medium text-sm">예산 최적화</span>
                 </div>
                 <p className="text-xs text-gray-500">성과 기반 자동 배분</p>
               </div>
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-1">
-                  <BarChart3 className="w-4 h-4 text-[#0064FF]" />
+                  <BarChart3 className="w-4 h-4 text-[#0064FF] gi3d" />
                   <span className="font-medium text-sm">통합 리포트</span>
                 </div>
                 <p className="text-xs text-gray-500">모든 플랫폼 성과 비교</p>
@@ -811,7 +811,7 @@ export default function Dashboard() {
             <div className="relative flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center flex-shrink-0">
-                  <Sparkles className="w-5 h-5 text-white" />
+                  <Sparkles className="w-5 h-5 text-white gi3d" />
                 </div>
                 <div>
                   <h4 className="text-white font-bold text-sm">플라톤마케팅</h4>

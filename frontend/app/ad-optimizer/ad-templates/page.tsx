@@ -183,7 +183,7 @@ export default function AdTemplatesPage() {
           href="/ad-optimizer"
           className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-4"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-4 h-4 gi3d" />
           광고 최적화
         </Link>
 
@@ -214,7 +214,7 @@ export default function AdTemplatesPage() {
               </>
             ) : (
               <>
-                <Download className="w-4 h-4" />
+                <Download className="w-4 h-4 gi3d" />
                 기존 광고 가져오기
               </>
             )}
@@ -225,7 +225,7 @@ export default function AdTemplatesPage() {
         <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-[#0064FF]" />
+              <FileText className="w-5 h-5 text-[#0064FF] gi3d" />
               <h2 className="text-lg font-bold text-gray-900">
                 일반 소재 (T&D) — {data?.templates?.length ?? 0}개
               </h2>
@@ -234,7 +234,7 @@ export default function AdTemplatesPage() {
               onClick={() => setShowForm(!showForm)}
               className="inline-flex items-center gap-1 px-3 py-1.5 text-sm bg-[#0064FF] text-white rounded-lg hover:shadow-md"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4 gi3d" />
               {showForm ? '취소' : '템플릿 추가'}
             </button>
           </div>
@@ -314,7 +314,7 @@ export default function AdTemplatesPage() {
                       onClick={() => handleDelete(t.id)}
                       className="p-1 text-red-500 hover:bg-red-50 rounded"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4 gi3d" />
                     </button>
                   </div>
                 </div>
@@ -333,7 +333,7 @@ export default function AdTemplatesPage() {
         <div className="bg-white rounded-2xl border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Phone className="w-5 h-5 text-purple-600" />
+              <Phone className="w-5 h-5 text-purple-600 gi3d" />
               <h2 className="text-lg font-bold text-gray-900">
                 확장소재 — {data?.extensions?.length ?? 0}개
               </h2>
@@ -342,7 +342,7 @@ export default function AdTemplatesPage() {
               onClick={() => setShowExtForm(!showExtForm)}
               className="inline-flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:shadow-md"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4 gi3d" />
               {showExtForm ? '취소' : '확장소재 추가'}
             </button>
           </div>
@@ -391,7 +391,7 @@ export default function AdTemplatesPage() {
                   onClick={() => handleDeleteExt(e.id)}
                   className="p-1 text-red-500 hover:bg-red-50 rounded"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-4 h-4 gi3d" />
                 </button>
               </div>
             ))}

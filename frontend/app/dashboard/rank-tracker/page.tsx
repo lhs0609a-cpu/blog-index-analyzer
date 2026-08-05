@@ -22,6 +22,7 @@ import {
   Zap,
   Bell
 } from 'lucide-react'
+import GlassIcon from '@/components/GlassIcon'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
@@ -171,7 +172,7 @@ export default function RankTrackerPage() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <GlassIcon icon={AlertCircle} size={115} className="mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-700 mb-2">로그인이 필요합니다</h2>
           <button
             onClick={() => router.push('/login')}
@@ -194,7 +195,7 @@ export default function RankTrackerPage() {
           className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-gray-100 p-8 text-center"
         >
           <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-            <Lock className="w-8 h-8 text-white" />
+            <Lock className="w-8 h-8 text-white gi3d" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-3">
             순위 추적은 유료 기능입니다
@@ -206,7 +207,7 @@ export default function RankTrackerPage() {
           </p>
           <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 mb-6 text-left">
             <h3 className="font-semibold text-purple-800 mb-2 flex items-center gap-2">
-              <Target className="w-4 h-4" />
+              <Target className="w-4 h-4 gi3d" />
               순위 추적 기능 혜택
             </h3>
             <ul className="text-sm text-purple-700 space-y-1">
@@ -218,7 +219,7 @@ export default function RankTrackerPage() {
           </div>
           <Link href="/pricing">
             <button className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2">
-              <Zap className="w-5 h-5" />
+              <Zap className="w-5 h-5 gi3d" />
               업그레이드하고 순위 추적하기
             </button>
           </Link>
@@ -240,11 +241,11 @@ export default function RankTrackerPage() {
               onClick={() => router.push('/dashboard')}
               className="p-2 hover:bg-white/50 rounded-lg transition-colors"
             >
-              <ArrowLeft className="w-5 h-5 text-gray-600" />
+              <ArrowLeft className="w-5 h-5 text-gray-600 gi3d" />
             </button>
             <div>
               <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-                <Target className="w-8 h-8 text-purple-600" />
+                <Target className="w-8 h-8 text-purple-600 gi3d" />
                 순위 추적
               </h1>
               <p className="text-gray-600 mt-1">내 블로그 포스팅의 검색 순위를 추적하세요</p>
@@ -255,7 +256,7 @@ export default function RankTrackerPage() {
             onClick={() => setShowAddModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors shadow-lg"
           >
-            <Plus className="w-5 h-5" />
+            <Plus className="w-5 h-5 gi3d" />
             블로그 추가
           </button>
         </div>
@@ -330,7 +331,7 @@ export default function RankTrackerPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
-                      <TrendingUp className="w-6 h-6 text-white" />
+                      <TrendingUp className="w-6 h-6 text-white gi3d" />
                     </div>
                     <div>
                       <h3 className="font-semibold text-gray-900 text-lg">
@@ -338,12 +339,12 @@ export default function RankTrackerPage() {
                       </h3>
                       <div className="flex items-center gap-3 text-sm text-gray-500">
                         <span className="flex items-center gap-1">
-                          <BarChart3 className="w-4 h-4" />
+                          <BarChart3 className="w-4 h-4 gi3d" />
                           {blog.posts_count}개 포스팅
                         </span>
                         {blog.last_checked_at && (
                           <span className="flex items-center gap-1">
-                            <Clock className="w-4 h-4" />
+                            <Clock className="w-4 h-4 gi3d" />
                             {new Date(blog.last_checked_at).toLocaleDateString('ko-KR')}
                           </span>
                         )}
@@ -358,7 +359,7 @@ export default function RankTrackerPage() {
                       rel="noopener noreferrer"
                       className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                     >
-                      <ExternalLink className="w-5 h-5" />
+                      <ExternalLink className="w-5 h-5 gi3d" />
                     </a>
 
                     <button
@@ -369,7 +370,7 @@ export default function RankTrackerPage() {
                       {checkingBlogId === blog.blog_id ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
                       ) : (
-                        <RefreshCw className="w-4 h-4" />
+                        <RefreshCw className="w-4 h-4 gi3d" />
                       )}
                       순위 확인
                     </button>
@@ -378,7 +379,7 @@ export default function RankTrackerPage() {
                       onClick={() => router.push(`/dashboard/rank-tracker/${blog.blog_id}`)}
                       className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
                     >
-                      <BarChart3 className="w-4 h-4" />
+                      <BarChart3 className="w-4 h-4 gi3d" />
                       상세 보기
                     </button>
 
@@ -386,7 +387,7 @@ export default function RankTrackerPage() {
                       onClick={() => handleDeleteBlog(blog.blog_id)}
                       className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     >
-                      <Trash2 className="w-5 h-5" />
+                      <Trash2 className="w-5 h-5 gi3d" />
                     </button>
                   </div>
                 </div>
@@ -446,7 +447,7 @@ export default function RankTrackerPage() {
                     {isAdding ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
                     ) : (
-                      <Plus className="w-5 h-5" />
+                      <Plus className="w-5 h-5 gi3d" />
                     )}
                     추가
                   </button>

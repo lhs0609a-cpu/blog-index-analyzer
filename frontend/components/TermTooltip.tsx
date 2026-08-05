@@ -84,7 +84,7 @@ export default function TermTooltip({ term, children, className = '', iconSize =
         className="inline-flex items-center justify-center text-gray-400 hover:text-[#0064FF] transition-colors"
         aria-label={`${definition.title} 설명 보기`}
       >
-        <HelpCircle style={{ width: iconSize, height: iconSize }} />
+        <HelpCircle style={{ width: iconSize, height: iconSize }} className="gi3d" />
       </button>
 
       <AnimatePresence>
@@ -113,7 +113,7 @@ export default function TermTooltip({ term, children, className = '', iconSize =
                     onClick={() => setIsOpen(false)}
                     className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
                   >
-                    <X className="w-4 h-4 text-gray-500" />
+                    <X className="w-4 h-4 text-gray-500 gi3d" />
                   </button>
                 </div>
                 <p className="text-gray-700 text-sm mb-2">{definition.description}</p>
@@ -145,7 +145,7 @@ export function InlineTermTooltip({ term, children, className = '' }: Omit<TermT
       onMouseLeave={() => setIsHovered(false)}
     >
       {children}
-      <HelpCircle className="w-3.5 h-3.5 text-gray-400" />
+      <HelpCircle className="w-3.5 h-3.5 text-gray-400 gi3d" />
 
       <AnimatePresence>
         {isHovered && (

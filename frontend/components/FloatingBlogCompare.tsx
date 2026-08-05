@@ -124,7 +124,7 @@ export default function FloatingBlogCompare({
         className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white shadow-lg hover:shadow-xl flex items-center justify-center transition-shadow"
         title="내 블로그 비교"
       >
-        <Target className="w-6 h-6" />
+        <Target className="w-6 h-6 gi3d" />
       </motion.button>
     )
   }
@@ -147,7 +147,7 @@ export default function FloatingBlogCompare({
           {/* Header */}
           <div className="bg-gradient-to-r from-[#0064FF] to-[#3182F6] px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2 text-white">
-              <Target className="w-4 h-4" />
+              <Target className="w-4 h-4 gi3d" />
               <span className="font-bold text-sm">
                 {myBlogResult ? `${myBlogResult.blog_name}` : '내 블로그 비교'}
               </span>
@@ -164,7 +164,7 @@ export default function FloatingBlogCompare({
                   className="p-1 text-white/80 hover:text-white transition-colors"
                   title={mode === 'expanded' ? '축소' : '확장'}
                 >
-                  {mode === 'expanded' ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+                  {mode === 'expanded' ? <ChevronDown className="w-4 h-4 gi3d" /> : <ChevronUp className="w-4 h-4 gi3d" />}
                 </button>
               )}
               <button
@@ -172,14 +172,14 @@ export default function FloatingBlogCompare({
                 className="p-1 text-white/80 hover:text-white transition-colors"
                 title={mode === 'minimized' ? '열기' : '최소화'}
               >
-                {mode === 'minimized' ? <Maximize2 className="w-4 h-4" /> : <Minimize2 className="w-4 h-4" />}
+                {mode === 'minimized' ? <Maximize2 className="w-4 h-4 gi3d" /> : <Minimize2 className="w-4 h-4 gi3d" />}
               </button>
               <button
                 onClick={() => setIsVisible(false)}
                 className="p-1 text-white/80 hover:text-white transition-colors"
                 title="닫기"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4 h-4 gi3d" />
               </button>
             </div>
           </div>

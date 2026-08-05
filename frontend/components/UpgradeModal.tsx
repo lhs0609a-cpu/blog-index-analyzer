@@ -105,7 +105,7 @@ export default function UpgradeModal({ isOpen, onClose, feature, currentUsage, m
               onClick={onClose}
               className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 transition-colors"
             >
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5 gi3d" />
             </button>
 
             {/* 헤더 */}
@@ -183,7 +183,7 @@ export default function UpgradeModal({ isOpen, onClose, feature, currentUsage, m
                   '엑셀 내보내기'
                 ].map((benefit, i) => (
                   <div key={i} className="flex items-center gap-2 text-sm text-emerald-700">
-                    <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                    <Check className="w-4 h-4 text-emerald-500 flex-shrink-0 gi3d" />
                     <span>{benefit}</span>
                   </div>
                 ))}
@@ -214,7 +214,7 @@ export default function UpgradeModal({ isOpen, onClose, feature, currentUsage, m
                   whileTap={{ scale: 0.98 }}
                   className="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-xl hover:shadow-lg shadow-lg shadow-blue-500/25 transition-all flex items-center justify-center gap-2"
                 >
-                  <Crown className="w-5 h-5" />
+                  <Crown className="w-5 h-5 gi3d" />
                   7일 환불 보장으로 시작
                 </motion.button>
               </Link>

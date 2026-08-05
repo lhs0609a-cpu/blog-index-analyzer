@@ -51,7 +51,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     ],
     estimatedTime: '1분',
     category: 'setup',
-    icon: <Sparkles className="w-6 h-6" />,
+    icon: <Sparkles className="w-6 h-6 gi3d" />,
     action: {
       type: 'button',
       label: '시작하기'
@@ -89,7 +89,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     `,
     estimatedTime: '1분',
     category: 'connect',
-    icon: <Target className="w-6 h-6" />,
+    icon: <Target className="w-6 h-6 gi3d" />,
     action: {
       type: 'link',
       label: '플랫폼 연동하러 가기',
@@ -133,7 +133,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     `,
     estimatedTime: '3분',
     category: 'connect',
-    icon: <Link2 className="w-6 h-6" />,
+    icon: <Link2 className="w-6 h-6 gi3d" />,
     action: {
       type: 'link',
       label: '계정 연동 미션 시작하기',
@@ -180,7 +180,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     `,
     estimatedTime: '2분',
     category: 'optimize',
-    icon: <Zap className="w-6 h-6" />,
+    icon: <Zap className="w-6 h-6 gi3d" />,
     action: {
       type: 'button',
       label: '자동 최적화 켜기'
@@ -225,7 +225,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     `,
     estimatedTime: '1분',
     category: 'monitor',
-    icon: <Bell className="w-6 h-6" />,
+    icon: <Bell className="w-6 h-6 gi3d" />,
     action: {
       type: 'button',
       label: '알림 설정하기'
@@ -270,7 +270,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     `,
     estimatedTime: '1분',
     category: 'monitor',
-    icon: <BarChart3 className="w-6 h-6" />,
+    icon: <BarChart3 className="w-6 h-6 gi3d" />,
     action: {
       type: 'button',
       label: '대시보드 보기'
@@ -288,7 +288,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     ],
     estimatedTime: '완료!',
     category: 'setup',
-    icon: <CheckCircle className="w-6 h-6" />,
+    icon: <CheckCircle className="w-6 h-6 gi3d" />,
     action: {
       type: 'button',
       label: '튜토리얼 종료'
@@ -434,7 +434,7 @@ export default function AdOptimizerTutorial({
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                  <BookOpen className="w-5 h-5" />
+                  <BookOpen className="w-5 h-5 gi3d" />
                 </div>
                 <div>
                   <h2 className="text-xl font-bold">광고 최적화 설정 가이드</h2>
@@ -447,13 +447,13 @@ export default function AdOptimizerTutorial({
                   className="p-2 hover:bg-white/20 rounded-lg transition-colors"
                   title="처음부터 다시 시작"
                 >
-                  <RotateCcw className="w-5 h-5" />
+                  <RotateCcw className="w-5 h-5 gi3d" />
                 </button>
                 <button
                   onClick={onClose}
                   className="p-2 hover:bg-white/20 rounded-lg transition-colors"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-5 h-5 gi3d" />
                 </button>
               </div>
             </div>
@@ -488,7 +488,7 @@ export default function AdOptimizerTutorial({
                   }`}
                 >
                   {completedSteps.includes(step.id) ? (
-                    <Check className="w-4 h-4" />
+                    <Check className="w-4 h-4 gi3d" />
                   ) : (
                     step.id
                   )}
@@ -513,7 +513,7 @@ export default function AdOptimizerTutorial({
                     {CATEGORY_LABELS[currentStepData.category]}
                   </span>
                   <span className="text-sm text-gray-400 flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
+                    <Clock className="w-3 h-3 gi3d" />
                     예상 시간: {currentStepData.estimatedTime}
                   </span>
                 </div>
@@ -541,7 +541,7 @@ export default function AdOptimizerTutorial({
                 {/* 팁 */}
                 <div className="space-y-3 mb-6">
                   <h4 className="font-semibold text-gray-900 flex items-center gap-2">
-                    <Lightbulb className="w-5 h-5 text-yellow-500" />
+                    <Lightbulb className="w-5 h-5 text-yellow-500 gi3d" />
                     알아두면 좋은 팁
                   </h4>
                   <div className="space-y-2">
@@ -560,7 +560,7 @@ export default function AdOptimizerTutorial({
                     onClick={() => setShowHelp(true)}
                     className="w-full flex items-center justify-center gap-2 p-4 border-2 border-dashed border-indigo-200 rounded-xl text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300 transition-colors"
                   >
-                    <HelpCircle className="w-5 h-5" />
+                    <HelpCircle className="w-5 h-5 gi3d" />
                     <span className="font-medium">자세한 설정 방법 보기</span>
                   </button>
                 )}
@@ -575,7 +575,7 @@ export default function AdOptimizerTutorial({
               disabled={currentStep === 1}
               className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <ChevronLeft className="w-5 h-5" />
+              <ChevronLeft className="w-5 h-5 gi3d" />
               이전
             </button>
 
@@ -593,12 +593,12 @@ export default function AdOptimizerTutorial({
                 {currentStep === TUTORIAL_STEPS.length ? (
                   <>
                     완료하기
-                    <Check className="w-5 h-5" />
+                    <Check className="w-5 h-5 gi3d" />
                   </>
                 ) : (
                   <>
                     다음
-                    <ChevronRight className="w-5 h-5" />
+                    <ChevronRight className="w-5 h-5 gi3d" />
                   </>
                 )}
               </button>
@@ -625,14 +625,14 @@ export default function AdOptimizerTutorial({
               >
                 <div className="bg-indigo-600 text-white p-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <HelpCircle className="w-5 h-5" />
+                    <HelpCircle className="w-5 h-5 gi3d" />
                     <span className="font-semibold">상세 가이드</span>
                   </div>
                   <button
                     onClick={() => setShowHelp(false)}
                     className="p-1 hover:bg-white/20 rounded-lg"
                   >
-                    <X className="w-5 h-5" />
+                    <X className="w-5 h-5 gi3d" />
                   </button>
                 </div>
                 <div className="p-6 overflow-y-auto max-h-[60vh] prose prose-indigo">
@@ -701,7 +701,7 @@ export function HelpTooltip({ content, title, children, position = 'top' }: Help
         onMouseLeave={() => setIsOpen(false)}
         className="w-5 h-5 rounded-full bg-gray-200 hover:bg-indigo-100 flex items-center justify-center text-gray-500 hover:text-indigo-600 transition-colors"
       >
-        <HelpCircle className="w-3.5 h-3.5" />
+        <HelpCircle className="w-3.5 h-3.5 gi3d" />
       </button>
 
       <AnimatePresence>
@@ -748,7 +748,7 @@ export function TutorialStartButton({ onClick, variant = 'default' }: TutorialSt
         onClick={onClick}
         className="flex items-center gap-2 px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-200 transition-colors"
       >
-        <BookOpen className="w-4 h-4" />
+        <BookOpen className="w-4 h-4 gi3d" />
         {hasCompleted ? '튜토리얼 다시 보기' : hasProgress ? '튜토리얼 이어하기' : '설정 가이드'}
       </button>
     )
@@ -766,7 +766,7 @@ export function TutorialStartButton({ onClick, variant = 'default' }: TutorialSt
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-              <PlayCircle className="w-6 h-6" />
+              <PlayCircle className="w-6 h-6 gi3d" />
             </div>
             <div>
               <h3 className="font-bold">
@@ -782,7 +782,7 @@ export function TutorialStartButton({ onClick, variant = 'default' }: TutorialSt
             className="flex items-center gap-2 px-4 py-2 bg-white text-indigo-600 rounded-lg font-medium hover:bg-gray-100 transition-colors"
           >
             {hasProgress ? '이어하기' : '시작하기'}
-            <ArrowRight className="w-4 h-4" />
+            <ArrowRight className="w-4 h-4 gi3d" />
           </button>
         </div>
       </motion.div>
@@ -795,7 +795,7 @@ export function TutorialStartButton({ onClick, variant = 'default' }: TutorialSt
       onClick={onClick}
       className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-indigo-500/25 transition-all"
     >
-      <BookOpen className="w-5 h-5" />
+      <BookOpen className="w-5 h-5 gi3d" />
       {hasCompleted ? '튜토리얼 다시 보기' : hasProgress ? '설정 이어하기' : '설정 가이드 시작'}
     </button>
   )

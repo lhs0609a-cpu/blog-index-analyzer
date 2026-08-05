@@ -122,7 +122,7 @@ export default function RegisterPage() {
           whileTap={{ scale: 0.95 }}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/70 border border-gray-200/50 backdrop-blur-xl hover:bg-white/90 transition-all text-sm font-medium shadow-lg shadow-gray-200/50"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-4 h-4 gi3d" />
           홈으로
         </motion.button>
       </Link>
@@ -140,7 +140,7 @@ export default function RegisterPage() {
             transition={{ type: "spring", delay: 0.1 }}
             className="inline-flex p-4 rounded-2xl bg-gradient-to-br from-[#0064FF] to-[#3182F6] mb-6 shadow-lg shadow-blue-100/50"
           >
-            <Sparkles className="w-8 h-8 text-white" />
+            <Sparkles className="w-8 h-8 text-white gi3d" />
           </motion.div>
           <h1 className="text-4xl font-black mb-3">
             <span className="bg-gradient-to-r from-[#0064FF] to-[#3182F6] bg-clip-text text-transparent">회원가입</span>
@@ -168,7 +168,7 @@ export default function RegisterPage() {
                   이름
                 </label>
                 <div className="relative group">
-                  <User className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-[#0064FF] transition-colors" />
+                  <User className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-[#0064FF] transition-colors gi3d" />
                   <input
                     type="text"
                     value={name}
@@ -188,7 +188,7 @@ export default function RegisterPage() {
                   이메일
                 </label>
                 <div className="relative group">
-                  <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-[#0064FF] transition-colors" />
+                  <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-[#0064FF] transition-colors gi3d" />
                   <input
                     type="email"
                     value={email}
@@ -208,7 +208,7 @@ export default function RegisterPage() {
                   비밀번호
                 </label>
                 <div className="relative group">
-                  <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-[#0064FF] transition-colors" />
+                  <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-[#0064FF] transition-colors gi3d" />
                   <input
                     type={showPassword ? "text" : "password"}
                     value={password}
@@ -226,7 +226,7 @@ export default function RegisterPage() {
                     aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
                     className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                   >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {showPassword ? <EyeOff className="w-5 h-5 gi3d" /> : <Eye className="w-5 h-5 gi3d" />}
                   </button>
                 </div>
 
@@ -244,7 +244,7 @@ export default function RegisterPage() {
                             req.met ? 'bg-emerald-500' : 'bg-gray-300'
                           }`}
                         >
-                          {req.met && <Check className="w-3 h-3 text-white" />}
+                          {req.met && <Check className="w-3 h-3 text-white gi3d" />}
                         </div>
                         <span className={req.met ? 'text-emerald-600' : 'text-gray-400'}>
                           {req.label}
@@ -261,7 +261,7 @@ export default function RegisterPage() {
                   비밀번호 확인
                 </label>
                 <div className="relative group">
-                  <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-[#0064FF] transition-colors" />
+                  <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-[#0064FF] transition-colors gi3d" />
                   <input
                     type={showConfirmPassword ? "text" : "password"}
                     value={confirmPassword}
@@ -279,7 +279,7 @@ export default function RegisterPage() {
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                   >
-                    {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {showConfirmPassword ? <EyeOff className="w-5 h-5 gi3d" /> : <Eye className="w-5 h-5 gi3d" />}
                   </button>
                 </div>
                 {confirmPassword && password !== confirmPassword && (
@@ -287,7 +287,7 @@ export default function RegisterPage() {
                 )}
                 {confirmPassword && password === confirmPassword && confirmPassword.length > 0 && (
                   <p className="text-sm text-emerald-600 mt-2 flex items-center gap-1">
-                    <Check className="w-4 h-4" />
+                    <Check className="w-4 h-4 gi3d" />
                     비밀번호가 일치합니다
                   </p>
                 )}

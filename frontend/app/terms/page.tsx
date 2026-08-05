@@ -25,10 +25,10 @@ export default function TermsPage() {
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             <Link href="/" className="text-gray-500 hover:text-gray-700">
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-5 h-5 gi3d" />
             </Link>
             <div className="flex items-center gap-2">
-              <Scale className="w-6 h-6 text-blue-600" />
+              <Scale className="w-6 h-6 text-blue-600 gi3d" />
               <h1 className="text-xl font-bold">이용약관 및 법적 고지</h1>
             </div>
           </div>
@@ -39,7 +39,7 @@ export default function TermsPage() {
         {/* Important Notice */}
         <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 mb-8">
           <div className="flex items-start gap-3">
-            <AlertTriangle className="w-6 h-6 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <AlertTriangle className="w-6 h-6 text-yellow-600 flex-shrink-0 mt-0.5 gi3d" />
             <div>
               <h3 className="font-bold text-yellow-800 mb-2">중요 안내</h3>
               <p className="text-sm text-yellow-700">
@@ -73,9 +73,9 @@ export default function TermsPage() {
                     <span className="font-semibold text-gray-900">{section.title}</span>
                   </div>
                   {isExpanded ? (
-                    <ChevronDown className="w-5 h-5 text-gray-400" />
+                    <ChevronDown className="w-5 h-5 text-gray-400 gi3d" />
                   ) : (
-                    <ChevronRight className="w-5 h-5 text-gray-400" />
+                    <ChevronRight className="w-5 h-5 text-gray-400 gi3d" />
                   )}
                 </button>
 

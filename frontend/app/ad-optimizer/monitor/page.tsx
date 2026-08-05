@@ -8,6 +8,7 @@ import {
   RefreshCw, Eye, BarChart3, DollarSign, Target, Gauge,
   ArrowUpRight, ArrowDownRight, Minus, Filter, Play, Pause
 } from 'lucide-react'
+import GlassIcon from '@/components/GlassIcon'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import { adGet } from '@/lib/api/adFetch'
@@ -201,9 +202,9 @@ export default function OptimizationMonitorPage() {
   }
 
   const getChangeIcon = (change: number) => {
-    if (change > 0) return <ArrowUpRight className="w-4 h-4 text-green-500" />
-    if (change < 0) return <ArrowDownRight className="w-4 h-4 text-red-500" />
-    return <Minus className="w-4 h-4 text-gray-400" />
+    if (change > 0) return <ArrowUpRight className="w-4 h-4 text-green-500 gi3d" />
+    if (change < 0) return <ArrowDownRight className="w-4 h-4 text-red-500 gi3d" />
+    return <Minus className="w-4 h-4 text-gray-400 gi3d" />
   }
 
   const platformNames: Record<string, string> = {
@@ -242,7 +243,7 @@ export default function OptimizationMonitorPage() {
               <div className="w-px h-6 bg-gray-300" />
               <div className="flex items-center gap-2">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
-                  <Activity className="w-6 h-6 text-white" />
+                  <Activity className="w-6 h-6 text-white gi3d" />
                 </div>
                 <div>
                   <h1 className="text-xl font-bold text-gray-900">최적화 모니터</h1>
@@ -260,7 +261,7 @@ export default function OptimizationMonitorPage() {
                     : 'bg-gray-100 text-gray-600'
                 }`}
               >
-                {isAutoRefresh ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+                {isAutoRefresh ? <Play className="w-4 h-4 gi3d" /> : <Pause className="w-4 h-4 gi3d" />}
                 자동 새로고침 {isAutoRefresh ? 'ON' : 'OFF'}
               </button>
               <button
@@ -283,7 +284,7 @@ export default function OptimizationMonitorPage() {
           <div className="bg-white rounded-2xl shadow-sm p-5">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
-                <Zap className="w-6 h-6 text-blue-600" />
+                <Zap className="w-6 h-6 text-blue-600 gi3d" />
               </div>
               <div>
                 <p className="text-sm text-gray-500">총 최적화 액션</p>
@@ -296,7 +297,7 @@ export default function OptimizationMonitorPage() {
           <div className="bg-white rounded-2xl shadow-sm p-5">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
-                <Activity className="w-6 h-6 text-green-600" />
+                <Activity className="w-6 h-6 text-green-600 gi3d" />
               </div>
               <div>
                 <p className="text-sm text-gray-500">활성 일수</p>
@@ -309,7 +310,7 @@ export default function OptimizationMonitorPage() {
           <div className="bg-white rounded-2xl shadow-sm p-5">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center">
-                <Brain className="w-6 h-6 text-purple-600" />
+                <Brain className="w-6 h-6 text-purple-600 gi3d" />
               </div>
               <div>
                 <p className="text-sm text-gray-500">연동 플랫폼</p>
@@ -322,7 +323,7 @@ export default function OptimizationMonitorPage() {
           <div className="bg-white rounded-2xl shadow-sm p-5">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center">
-                <Target className="w-6 h-6 text-orange-600" />
+                <Target className="w-6 h-6 text-orange-600 gi3d" />
               </div>
               <div>
                 <p className="text-sm text-gray-500">사용 가능 전략</p>
@@ -371,7 +372,7 @@ export default function OptimizationMonitorPage() {
               <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm">
                 <div className="p-4 border-b border-gray-100 flex items-center justify-between">
                   <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                    <Activity className="w-5 h-5 text-green-500" />
+                    <Activity className="w-5 h-5 text-green-500 gi3d" />
                     실시간 최적화 피드
                     <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                   </h3>
@@ -380,7 +381,7 @@ export default function OptimizationMonitorPage() {
                 <div className="divide-y divide-gray-50 max-h-[600px] overflow-y-auto">
                   {liveActions.length === 0 ? (
                     <div className="p-8 text-center">
-                      <Activity className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                      <GlassIcon icon={Activity} size={86} className="mx-auto mb-3" />
                       <p className="text-gray-500">최근 최적화 액션이 없습니다</p>
                       <p className="text-sm text-gray-400 mt-1">
                         자동 최적화가 활성화되면 여기에 표시됩니다
@@ -426,7 +427,7 @@ export default function OptimizationMonitorPage() {
               <div className="space-y-6">
                 <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl p-5 text-white">
                   <div className="flex items-center gap-3 mb-4">
-                    <Brain className="w-8 h-8" />
+                    <Brain className="w-8 h-8 gi3d" />
                     <div>
                       <h3 className="font-bold">현재 활성 전략</h3>
                       <p className="text-sm text-white/70">자동 최적화 규칙</p>
@@ -435,21 +436,21 @@ export default function OptimizationMonitorPage() {
                   <div className="space-y-3">
                     <div className="bg-white/10 rounded-xl p-3">
                       <div className="flex items-center gap-2 mb-1">
-                        <Target className="w-4 h-4" />
+                        <Target className="w-4 h-4 gi3d" />
                         <span className="font-medium text-sm">목표 ROAS</span>
                       </div>
                       <p className="text-2xl font-bold">300%</p>
                     </div>
                     <div className="bg-white/10 rounded-xl p-3">
                       <div className="flex items-center gap-2 mb-1">
-                        <DollarSign className="w-4 h-4" />
+                        <DollarSign className="w-4 h-4 gi3d" />
                         <span className="font-medium text-sm">목표 CPA</span>
                       </div>
                       <p className="text-2xl font-bold">₩20,000</p>
                     </div>
                     <div className="bg-white/10 rounded-xl p-3">
                       <div className="flex items-center gap-2 mb-1">
-                        <Gauge className="w-4 h-4" />
+                        <Gauge className="w-4 h-4 gi3d" />
                         <span className="font-medium text-sm">최대 변경폭</span>
                       </div>
                       <p className="text-2xl font-bold">±20%</p>
@@ -507,7 +508,7 @@ export default function OptimizationMonitorPage() {
                       <div className="flex items-center justify-between mb-3">
                         <h3 className="font-bold text-gray-900">{strategy.name}</h3>
                         <ChevronDown
-                          className={`w-5 h-5 text-gray-400 transition-transform ${
+                          className={`gi3d w-5 h-5 text-gray-400 transition-transform ${
                             selectedStrategy === id ? 'rotate-180' : ''
                           }`}
                         />
@@ -527,7 +528,7 @@ export default function OptimizationMonitorPage() {
                         >
                           <div className="p-5 bg-gray-50">
                             <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
-                              <Info className="w-4 h-4 text-blue-500" />
+                              <Info className="w-4 h-4 text-blue-500 gi3d" />
                               작동 방식
                             </h4>
                             <ul className="space-y-2">
@@ -570,7 +571,7 @@ export default function OptimizationMonitorPage() {
                   {Object.entries(exclusionRules).map(([id, rule]: [string, any]) => (
                     <div key={id} className="bg-white rounded-2xl shadow-sm p-5">
                       <div className="flex items-center gap-2 mb-3">
-                        <AlertCircle className="w-5 h-5 text-orange-500" />
+                        <AlertCircle className="w-5 h-5 text-orange-500 gi3d" />
                         <h3 className="font-bold text-gray-900">{rule.name}</h3>
                       </div>
                       <div className="space-y-2 text-sm">
@@ -598,7 +599,7 @@ export default function OptimizationMonitorPage() {
             >
               {Object.keys(performanceChanges).length === 0 ? (
                 <div className="bg-white rounded-2xl shadow-sm p-8 text-center">
-                  <BarChart3 className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                  <GlassIcon icon={BarChart3} size={86} className="mx-auto mb-3" />
                   <p className="text-gray-500">연동된 플랫폼이 없습니다</p>
                   <Link
                     href="/ad-optimizer/unified"
@@ -685,7 +686,7 @@ export default function OptimizationMonitorPage() {
                   </div>
                 ) : (
                   <div className="text-center py-8">
-                    <Clock className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                    <GlassIcon icon={Clock} size={86} className="mx-auto mb-3" />
                     <p className="text-gray-500">아직 최적화 액션이 없습니다</p>
                   </div>
                 )}

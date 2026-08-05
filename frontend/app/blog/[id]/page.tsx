@@ -20,6 +20,7 @@ import {
   Loader2,
   FileText, MessageSquare, Target, Wand2, BookOpen, Lightbulb, Clock, AlertTriangle, Trophy, Search, XCircle} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import GlassIcon from '@/components/GlassIcon'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { getBlogDetails, analyzeBlog, pollJobStatus } from '@/lib/api/blog'
@@ -117,7 +118,7 @@ export default function BlogDetailPage() {
             transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
             className="inline-flex p-6 rounded-full bg-[#0064FF] mb-4 shadow-lg shadow-[#0064FF]/15"
           >
-            <Sparkles className="w-12 h-12 text-white" />
+            <GlassIcon icon={Sparkles} size={86} />
           </motion.div>
           <p className="text-gray-600 text-lg">블로그 정보를 불러오는 중...</p>
         </div>
@@ -129,7 +130,7 @@ export default function BlogDetailPage() {
     return (
       <div className="min-h-screen bg-[#fafafa] pt-24 flex items-center justify-center">
         <div className="text-center">
-          <XCircle className="w-14 h-14 mb-4 mx-auto text-gray-300" strokeWidth={1.5} />
+          <XCircle className="w-14 h-14 mb-4 mx-auto text-gray-300 gi3d" strokeWidth={1.5} />
           <h2 className="text-2xl font-bold mb-2">블로그를 찾을 수 없습니다</h2>
           <p className="text-gray-600 mb-6">블로그 ID를 확인해주세요</p>
           <Link href="/analyze">
@@ -259,7 +260,7 @@ export default function BlogDetailPage() {
                     rel="noopener noreferrer"
                     className="p-2 rounded-full hover:bg-blue-100 transition-colors"
                   >
-                    <ExternalLink className="w-5 h-5 text-[#0064FF]" />
+                    <ExternalLink className="w-5 h-5 text-[#0064FF] gi3d" />
                   </a>
                 </div>
                 <p className="text-gray-600 mb-1">@{displayData.blog.blog_id}</p>
@@ -293,7 +294,7 @@ export default function BlogDetailPage() {
                 className="text-center"
               >
                 <div className="inline-flex p-6 rounded-full bg-[#0064FF] mb-3 shadow-lg shadow-[#0064FF]/15">
-                  <Award className="w-12 h-12 text-white" />
+                  <Award className="w-12 h-12 text-white gi3d" />
                 </div>
                 <div className="text-4xl font-bold gradient-text mb-1">
                   {displayData.index.level === null ? '측정 불가' : `Level ${displayData.index.level}`}
@@ -321,17 +322,17 @@ export default function BlogDetailPage() {
                   </>
                 ) : (
                   <>
-                    <RefreshCw className="w-5 h-5" />
+                    <RefreshCw className="w-5 h-5 gi3d" />
                     재분석
                   </>
                 )}
               </button>
               <button className="py-3 px-6 rounded-xl bg-blue-100 text-[#0064FF] font-semibold hover:bg-blue-200 transition-colors flex items-center gap-2">
-                <Share2 className="w-5 h-5" />
+                <Share2 className="w-5 h-5 gi3d" />
                 공유
               </button>
               <button className="py-3 px-6 rounded-xl bg-blue-100 text-[#0064FF] font-semibold hover:bg-blue-200 transition-colors">
-                <Bookmark className="w-5 h-5" />
+                <Bookmark className="w-5 h-5 gi3d" />
               </button>
             </div>
           </div>
@@ -345,7 +346,7 @@ export default function BlogDetailPage() {
           className="glass rounded-3xl p-8 mb-6"
         >
           <h3 className="text-2xl font-bold mb-6 flex items-center gap-2">
-            <BarChart3 className="w-6 h-6 text-[#0064FF]" />
+            <BarChart3 className="w-6 h-6 text-[#0064FF] gi3d" />
             점수 상세
           </h3>
 
@@ -461,21 +462,21 @@ export default function BlogDetailPage() {
                     <div className="p-4">
                       <h4 className="font-bold text-lg mb-2 line-clamp-2">{post.title}</h4>
                       <div className="flex items-center gap-2 text-sm text-gray-500 mb-3">
-                        <Calendar className="w-4 h-4" />
+                        <Calendar className="w-4 h-4 gi3d" />
                         {post.date}
                       </div>
 
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-1 text-gray-600">
-                          <Eye className="w-4 h-4" />
+                          <Eye className="w-4 h-4 gi3d" />
                           {post.views.toLocaleString()}
                         </div>
                         <div className="flex items-center gap-1 text-gray-600">
-                          <Heart className="w-4 h-4" />
+                          <Heart className="w-4 h-4 gi3d" />
                           {post.likes}
                         </div>
                         <div className="flex items-center gap-1 text-gray-600">
-                          <MessageCircle className="w-4 h-4" />
+                          <MessageCircle className="w-4 h-4 gi3d" />
                           {post.comments}
                         </div>
                       </div>
@@ -497,17 +498,17 @@ export default function BlogDetailPage() {
             >
               <div className="grid md:grid-cols-3 gap-6 mb-8">
                 <div className="text-center p-6 rounded-2xl bg-gradient-to-br from-[#0064FF]/5 to-[#3182F6]/5">
-                  <Heart className="w-7 h-7 mb-2" strokeWidth={1.75} />
+                  <Heart className="w-7 h-7 mb-2 gi3d" strokeWidth={1.75} />
                   <div className="text-2xl font-bold gradient-text mb-1">{displayData.stats.avg_likes}</div>
                   <div className="text-sm text-gray-600">평균 좋아요</div>
                 </div>
                 <div className="text-center p-6 rounded-2xl bg-gradient-to-br from-[#3182F6]/5 to-[#4A9DFF]/5">
-                  <MessageSquare className="w-7 h-7 mb-2" strokeWidth={1.75} />
+                  <MessageSquare className="w-7 h-7 mb-2 gi3d" strokeWidth={1.75} />
                   <div className="text-2xl font-bold gradient-text mb-1">{displayData.stats.avg_comments}</div>
                   <div className="text-sm text-gray-600">평균 댓글</div>
                 </div>
                 <div className="text-center p-6 rounded-2xl bg-gradient-to-br from-[#4A9DFF]/5 to-[#6BB3FF]/5">
-                  <BarChart3 className="w-7 h-7 mb-2" strokeWidth={1.75} />
+                  <BarChart3 className="w-7 h-7 mb-2 gi3d" strokeWidth={1.75} />
                   <div className="text-2xl font-bold gradient-text mb-1">{displayData.index.percentile}%</div>
                   <div className="text-sm text-gray-600">상위 백분율</div>
                 </div>
@@ -589,9 +590,9 @@ export default function BlogDetailPage() {
                           {change !== 0 && (
                             <div className={`flex items-center gap-1 ${change > 0 ? 'text-green-500' : 'text-red-500'}`}>
                               {change > 0 ? (
-                                <TrendingUp className="w-4 h-4" />
+                                <TrendingUp className="w-4 h-4 gi3d" />
                               ) : (
-                                <TrendingDown className="w-4 h-4" />
+                                <TrendingDown className="w-4 h-4 gi3d" />
                               )}
                               <span className="text-sm font-semibold">
                                 {change > 0 ? '+' : ''}{change.toFixed(1)}
@@ -643,7 +644,7 @@ export default function BlogDetailPage() {
                     <div className="space-y-6">
                       <div className="flex items-center gap-3 mb-4">
                         <div className="p-3 rounded-xl bg-gradient-to-r from-[#0064FF]/10 to-[#3182F6]/10">
-                          <Award className="w-6 h-6 text-[#0064FF]" />
+                          <Award className="w-6 h-6 text-[#0064FF] gi3d" />
                         </div>
                         <div>
                           <h5 className="text-xl font-bold">C-Rank (출처 신뢰도)</h5>
@@ -715,7 +716,7 @@ export default function BlogDetailPage() {
                     <div className="space-y-6 mt-8">
                       <div className="flex items-center gap-3 mb-4">
                         <div className="p-3 rounded-xl bg-gradient-to-r from-[#0064FF]/20 to-[#3182F6]/20">
-                          <Sparkles className="w-6 h-6 text-[#0064FF]" />
+                          <Sparkles className="w-6 h-6 text-[#0064FF] gi3d" />
                         </div>
                         <div>
                           <h5 className="text-xl font-bold">D.I.A. (문서 품질)</h5>

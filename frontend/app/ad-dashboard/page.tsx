@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/lib/stores/auth';
 import { toast } from 'react-hot-toast';
+import GlassIcon from '@/components/GlassIcon'
 
 interface DashboardSummary {
   summary: {
@@ -196,7 +197,7 @@ export default function AdDashboardPage() {
             href="/ad-dashboard/performance"
             className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 text-sm mt-1"
           >
-            <BarChart2 className="w-4 h-4" />
+            <BarChart2 className="w-4 h-4 gi3d" />
             실시간 성과 상세 보기 →
           </a>
         </div>
@@ -210,7 +211,7 @@ export default function AdDashboardPage() {
             {optimizing ? (
               <RefreshCw className="w-5 h-5 animate-spin" />
             ) : (
-              <Zap className="w-5 h-5" />
+              <Zap className="w-5 h-5 gi3d" />
             )}
             {optimizing ? '최적화 중...' : '즉시 최적화'}
           </button>
@@ -222,12 +223,12 @@ export default function AdDashboardPage() {
           }`}>
             {summary?.optimizer_status?.is_running ? (
               <>
-                <Activity className="w-5 h-5" />
+                <Activity className="w-5 h-5 gi3d" />
                 <span>자동 최적화 활성</span>
               </>
             ) : (
               <>
-                <Pause className="w-5 h-5" />
+                <Pause className="w-5 h-5 gi3d" />
                 <span>자동 최적화 비활성</span>
               </>
             )}
@@ -239,7 +240,7 @@ export default function AdDashboardPage() {
       {accounts.length === 0 ? (
         <div className="bg-gradient-to-r from-[#0064FF]/20 to-[#3182F6]/20 border border-blue-700/30 rounded-xl p-8 mb-8 text-center">
           <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Zap className="w-8 h-8 text-blue-400" />
+            <Zap className="w-8 h-8 text-blue-400 gi3d" />
           </div>
           <h2 className="text-2xl font-bold mb-2">광고 계정을 연동하세요</h2>
           <p className="text-gray-400 mb-6 max-w-md mx-auto">
@@ -250,7 +251,7 @@ export default function AdDashboardPage() {
             href="/ad-optimizer/unified"
             className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-lg hover:opacity-90 font-medium"
           >
-            <Settings className="w-5 h-5" />
+            <Settings className="w-5 h-5 gi3d" />
             광고 계정 연동하기
           </a>
           <div className="mt-6 flex justify-center gap-4 text-sm text-gray-400">
@@ -263,7 +264,7 @@ export default function AdDashboardPage() {
       ) : (
         <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 mb-8">
           <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-            <Settings className="w-5 h-5 text-[#0064FF]" />
+            <Settings className="w-5 h-5 text-[#0064FF] gi3d" />
             연동된 광고 계정
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -307,12 +308,12 @@ export default function AdDashboardPage() {
                 <div className="flex items-center gap-2 text-sm">
                   {account.settings?.is_auto_enabled ? (
                     <>
-                      <Play className="w-4 h-4 text-green-400" />
+                      <Play className="w-4 h-4 text-green-400 gi3d" />
                       <span className="text-green-400">자동 최적화 ON</span>
                     </>
                   ) : (
                     <>
-                      <Pause className="w-4 h-4 text-gray-400" />
+                      <Pause className="w-4 h-4 text-gray-400 gi3d" />
                       <span className="text-gray-400">자동 최적화 OFF</span>
                     </>
                   )}
@@ -339,7 +340,7 @@ export default function AdDashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <span className="text-green-400 text-sm font-medium">절감된 광고비</span>
             <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
-              <Wallet className="w-5 h-5 text-green-400" />
+              <Wallet className="w-5 h-5 text-green-400 gi3d" />
             </div>
           </div>
           <div className="text-3xl font-bold text-green-300">
@@ -355,7 +356,7 @@ export default function AdDashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <span className="text-blue-400 text-sm font-medium">증가한 매출</span>
             <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-blue-400" />
+              <TrendingUp className="w-5 h-5 text-blue-400 gi3d" />
             </div>
           </div>
           <div className="text-3xl font-bold text-blue-300">
@@ -371,7 +372,7 @@ export default function AdDashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <span className="text-[#0064FF] text-sm font-medium">ROAS 개선</span>
             <div className="w-10 h-10 bg-[#0064FF]/15 rounded-lg flex items-center justify-center">
-              <Target className="w-5 h-5 text-[#0064FF]" />
+              <Target className="w-5 h-5 text-[#0064FF] gi3d" />
             </div>
           </div>
           <div className="text-3xl font-bold text-[#3182F6]">
@@ -387,7 +388,7 @@ export default function AdDashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <span className="text-orange-400 text-sm font-medium">총 최적화</span>
             <div className="w-10 h-10 bg-orange-500/20 rounded-lg flex items-center justify-center">
-              <Zap className="w-5 h-5 text-orange-400" />
+              <Zap className="w-5 h-5 text-orange-400 gi3d" />
             </div>
           </div>
           <div className="text-3xl font-bold text-orange-300">
@@ -404,7 +405,7 @@ export default function AdDashboardPage() {
         {/* 플랫폼별 성과 */}
         <div className="lg:col-span-2 bg-gray-900/50 border border-gray-800 rounded-xl p-6">
           <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
-            <BarChart2 className="w-5 h-5 text-blue-400" />
+            <BarChart2 className="w-5 h-5 text-blue-400 gi3d" />
             플랫폼별 성과
           </h2>
 
@@ -463,7 +464,7 @@ export default function AdDashboardPage() {
             </div>
           ) : (
             <div className="text-center py-12 text-gray-400">
-              <PieChart className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <GlassIcon icon={PieChart} size={86} className="mx-auto mb-4" />
               <p>연동된 광고 플랫폼이 없습니다</p>
               <a href="/ad-optimizer/unified" className="text-blue-400 hover:underline mt-2 inline-block">
                 플랫폼 연동하기 →
@@ -477,7 +478,7 @@ export default function AdDashboardPage() {
           {/* 알림 */}
           <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
             <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <Bell className="w-5 h-5 text-yellow-400" />
+              <Bell className="w-5 h-5 text-yellow-400 gi3d" />
               알림
               {(summary?.unread_notifications ?? 0) > 0 && (
                 <span className="px-2 py-0.5 bg-red-500 text-xs rounded-full">
@@ -501,9 +502,9 @@ export default function AdDashboardPage() {
                   >
                     <div className="flex items-start gap-2">
                       {notif.severity === 'high' ? (
-                        <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5" />
+                        <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 gi3d" />
                       ) : (
-                        <CheckCircle className="w-4 h-4 text-green-400 mt-0.5" />
+                        <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 gi3d" />
                       )}
                       <div>
                         <p className="text-sm font-medium">{notif.title}</p>
@@ -523,7 +524,7 @@ export default function AdDashboardPage() {
           {/* 최근 입찰가 변경 */}
           <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
             <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <Activity className="w-5 h-5 text-green-400" />
+              <Activity className="w-5 h-5 text-green-400 gi3d" />
               최근 입찰가 변경
             </h2>
 
@@ -542,7 +543,7 @@ export default function AdDashboardPage() {
                       <span className="text-gray-400 text-sm">
                         {formatCurrency(change.old_bid)}
                       </span>
-                      <ChevronRight className="w-4 h-4 text-gray-500" />
+                      <ChevronRight className="w-4 h-4 text-gray-500 gi3d" />
                       <span className={`text-sm font-medium ${
                         change.new_bid > change.old_bid ? 'text-green-400' : 'text-red-400'
                       }`}>
@@ -609,7 +610,7 @@ export default function AdDashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="text-center">
             <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Clock className="w-6 h-6 text-blue-400" />
+              <Clock className="w-6 h-6 text-blue-400 gi3d" />
             </div>
             <h3 className="font-medium mb-2">1분마다 모니터링</h3>
             <p className="text-sm text-gray-400">
@@ -619,7 +620,7 @@ export default function AdDashboardPage() {
 
           <div className="text-center">
             <div className="w-12 h-12 bg-[#0064FF]/15 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Target className="w-6 h-6 text-[#0064FF]" />
+              <Target className="w-6 h-6 text-[#0064FF] gi3d" />
             </div>
             <h3 className="font-medium mb-2">성과 분석</h3>
             <p className="text-sm text-gray-400">
@@ -629,7 +630,7 @@ export default function AdDashboardPage() {
 
           <div className="text-center">
             <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Zap className="w-6 h-6 text-green-400" />
+              <Zap className="w-6 h-6 text-green-400 gi3d" />
             </div>
             <h3 className="font-medium mb-2">자동 최적화</h3>
             <p className="text-sm text-gray-400">
@@ -639,7 +640,7 @@ export default function AdDashboardPage() {
 
           <div className="text-center">
             <div className="w-12 h-12 bg-orange-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-              <TrendingUp className="w-6 h-6 text-orange-400" />
+              <TrendingUp className="w-6 h-6 text-orange-400 gi3d" />
             </div>
             <h3 className="font-medium mb-2">수익 증가</h3>
             <p className="text-sm text-gray-400">

@@ -21,6 +21,7 @@ import {
   XCircle,
   Minus
 } from 'lucide-react'
+import GlassIcon from '@/components/GlassIcon'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/lib/stores/auth'
 import {
@@ -237,7 +238,7 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
               onClick={() => router.push('/dashboard/rank-tracker')}
               className="p-2 hover:bg-white/50 rounded-lg transition-colors"
             >
-              <ArrowLeft className="w-5 h-5 text-gray-600" />
+              <ArrowLeft className="w-5 h-5 text-gray-600 gi3d" />
             </button>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
@@ -251,11 +252,11 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
                   className="flex items-center gap-1 hover:text-purple-600"
                 >
                   blog.naver.com/{blogId}
-                  <ExternalLink className="w-3 h-3" />
+                  <ExternalLink className="w-3 h-3 gi3d" />
                 </a>
                 {lastCheckedAt && (
                   <span className="flex items-center gap-1">
-                    <Clock className="w-4 h-4" />
+                    <Clock className="w-4 h-4 gi3d" />
                     마지막 확인: {new Date(lastCheckedAt).toLocaleString('ko-KR')}
                   </span>
                 )}
@@ -268,7 +269,7 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
               onClick={handleExportExcel}
               className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 rounded-xl hover:bg-gray-50 transition-colors border border-gray-200"
             >
-              <Download className="w-4 h-4" />
+              <Download className="w-4 h-4 gi3d" />
               Excel
             </button>
             <button
@@ -279,7 +280,7 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
               {isChecking ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                <RefreshCw className="w-4 h-4" />
+                <RefreshCw className="w-4 h-4 gi3d" />
               )}
               순위 확인
             </button>
@@ -324,7 +325,7 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
             >
               <div className="flex items-center gap-3 mb-3">
                 <div className="p-2 bg-purple-100 rounded-lg">
-                  <Search className="w-5 h-5 text-purple-600" />
+                  <Search className="w-5 h-5 text-purple-600 gi3d" />
                 </div>
                 <span className="text-gray-600">총 키워드</span>
               </div>
@@ -341,7 +342,7 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
             >
               <div className="flex items-center gap-3 mb-3">
                 <div className="p-2 bg-green-100 rounded-lg">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <CheckCircle className="w-5 h-5 text-green-600 gi3d" />
                 </div>
                 <span className="text-gray-600">노출률</span>
               </div>
@@ -358,7 +359,7 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
             >
               <div className="flex items-center gap-3 mb-3">
                 <div className="p-2 bg-blue-100 rounded-lg">
-                  <BarChart3 className="w-5 h-5 text-blue-600" />
+                  <BarChart3 className="w-5 h-5 text-blue-600 gi3d" />
                 </div>
                 <span className="text-gray-600">평균 순위</span>
               </div>
@@ -375,7 +376,7 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
             >
               <div className="flex items-center gap-3 mb-3">
                 <div className="p-2 bg-yellow-100 rounded-lg">
-                  <Award className="w-5 h-5 text-yellow-600" />
+                  <Award className="w-5 h-5 text-yellow-600 gi3d" />
                 </div>
                 <span className="text-gray-600">상위권 (1-3위)</span>
               </div>
@@ -491,7 +492,7 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
               <h3 className="text-lg font-semibold text-gray-900 mb-4">노출 현황</h3>
               <div className="h-64 flex items-center justify-center">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
+                  <PieChart className="gi3d">
                     <Pie
                       data={exposureData}
                       cx="50%"
@@ -524,7 +525,7 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
             <h3 className="text-lg font-semibold text-gray-900 mb-4">순위 추이 (최근 30일)</h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={historyChartData}>
+                <LineChart data={historyChartData} className="gi3d">
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis dataKey="date" tick={{ fontSize: 12 }} />
                   <YAxis reversed domain={[1, 10]} />
@@ -564,7 +565,7 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
 
           {results.length === 0 ? (
             <div className="p-12 text-center">
-              <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <GlassIcon icon={AlertCircle} size={86} className="mx-auto mb-4" />
               <p className="text-gray-600">순위 데이터가 없습니다. 순위 확인을 실행해주세요.</p>
             </div>
           ) : (
@@ -597,7 +598,7 @@ export default function RankTrackerDetailPage({ params }: PageProps) {
                           {result.post_title.length > 40
                             ? result.post_title.substring(0, 40) + '...'
                             : result.post_title}
-                          <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                          <ExternalLink className="w-3 h-3 flex-shrink-0 gi3d" />
                         </a>
                       </td>
                       <td className="px-6 py-4 text-center">

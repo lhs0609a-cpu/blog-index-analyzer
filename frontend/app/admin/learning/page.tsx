@@ -116,7 +116,7 @@ export default function AdminLearningPage() {
           href="/admin"
           className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-4"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-4 h-4 gi3d" />
           관리자 대시보드
         </Link>
 
@@ -153,7 +153,7 @@ export default function AdminLearningPage() {
         {status && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
             <div className="flex items-center gap-2 mb-4">
-              <Database className="w-5 h-5 text-[#0064FF]" />
+              <Database className="w-5 h-5 text-[#0064FF] gi3d" />
               <h2 className="text-xl font-bold text-gray-900">검증 archive</h2>
             </div>
             <div className="grid grid-cols-3 gap-4 mb-4">
@@ -183,7 +183,7 @@ export default function AdminLearningPage() {
         {status?.learned?.exists && status.learned.categories && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
             <div className="flex items-center gap-2 mb-4">
-              <Activity className="w-5 h-5 text-purple-600" />
+              <Activity className="w-5 h-5 text-purple-600 gi3d" />
               <h2 className="text-xl font-bold text-gray-900">카테고리별 학습 가중치</h2>
               <span className="text-xs text-gray-500">
                 ({status.learned.total_samples} samples, min n={status.learned.min_n})
@@ -282,9 +282,9 @@ function HealthCard({ title, ok, detail }: { title: string; ok: boolean; detail:
     <div className={`rounded-2xl p-5 border ${ok ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
       <div className="flex items-center gap-2 mb-2">
         {ok ? (
-          <CheckCircle className="w-5 h-5 text-green-600" />
+          <CheckCircle className="w-5 h-5 text-green-600 gi3d" />
         ) : (
-          <AlertTriangle className="w-5 h-5 text-amber-600" />
+          <AlertTriangle className="w-5 h-5 text-amber-600 gi3d" />
         )}
         <span className="font-bold text-gray-900">{title}</span>
       </div>

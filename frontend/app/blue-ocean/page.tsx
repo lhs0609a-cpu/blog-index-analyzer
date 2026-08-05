@@ -116,7 +116,7 @@ export default function BlueOceanPage() {
           className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-gray-100 p-8 text-center"
         >
           <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center">
-            <Lock className="w-8 h-8 text-white" />
+            <Lock className="w-8 h-8 text-white gi3d" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-3">
             블루오션 키워드는 유료 기능입니다
@@ -128,7 +128,7 @@ export default function BlueOceanPage() {
           </p>
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 text-left">
             <h3 className="font-semibold text-amber-800 mb-2 flex items-center gap-2">
-              <Crown className="w-4 h-4" />
+              <Crown className="w-4 h-4 gi3d" />
               블루오션 기능 혜택
             </h3>
             <ul className="text-sm text-amber-700 space-y-1">
@@ -140,7 +140,7 @@ export default function BlueOceanPage() {
           </div>
           <Link href="/pricing">
             <button className="w-full py-3 rounded-xl bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2">
-              <Zap className="w-5 h-5" />
+              <Zap className="w-5 h-5 gi3d" />
               업그레이드하고 블루오션 발굴하기
             </button>
           </Link>
@@ -240,7 +240,7 @@ export default function BlueOceanPage() {
                 분석할 키워드 (카테고리)
               </label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 gi3d" />
                 <input
                   id="blueocean-input"
                   type="text"
@@ -281,7 +281,7 @@ export default function BlueOceanPage() {
               </>
             ) : (
               <>
-                <Sparkles className="w-5 h-5" />
+                <Sparkles className="w-5 h-5 gi3d" />
                 블루오션 키워드 발굴하기
               </>
             )}
@@ -315,7 +315,7 @@ export default function BlueOceanPage() {
             >
               {result.error ? (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
-                  <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
+                  <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3 gi3d" />
                   <p className="text-red-700">{result.error}</p>
                 </div>
               ) : (
@@ -324,7 +324,7 @@ export default function BlueOceanPage() {
                   {result.analysis_summary && (
                     <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
                       <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                        <BarChart3 className="w-5 h-5 text-blue-500" />
+                        <BarChart3 className="w-5 h-5 text-blue-500 gi3d" />
                         분석 결과 요약
                       </h3>
 
@@ -446,7 +446,7 @@ export default function BlueOceanPage() {
                             {/* 탭하여 상세보기 힌트 */}
                             <div className="mt-3 flex items-center justify-end text-xs text-gray-500">
                               <span>탭하여 상세보기</span>
-                              <ChevronRight className="w-3 h-3 ml-0.5" />
+                              <ChevronRight className="w-3 h-3 ml-0.5 gi3d" />
                             </div>
                           </motion.div>
                         )
@@ -518,7 +518,7 @@ export default function BlueOceanPage() {
                                     onClick={() => setSelectedKeyword(kw)}
                                     className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                                   >
-                                    <ChevronRight className="w-4 h-4 text-gray-500" />
+                                    <ChevronRight className="w-4 h-4 text-gray-500 gi3d" />
                                   </button>
                                 </td>
                               </tr>
@@ -587,9 +587,9 @@ export default function BlueOceanPage() {
                       <div className={`rounded-xl p-4 ${selectedKeyword.my_score_gap >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
                         <div className="flex items-center gap-2">
                           {selectedKeyword.my_score_gap >= 0 ? (
-                            <TrendingUp className="w-5 h-5 text-green-600" />
+                            <TrendingUp className="w-5 h-5 text-green-600 gi3d" />
                           ) : (
-                            <AlertCircle className="w-5 h-5 text-red-600" />
+                            <AlertCircle className="w-5 h-5 text-red-600 gi3d" />
                           )}
                           <span className={`font-medium ${selectedKeyword.my_score_gap >= 0 ? 'text-green-700' : 'text-red-700'}`}>
                             {selectedKeyword.my_score_gap >= 0
@@ -604,17 +604,17 @@ export default function BlueOceanPage() {
                     {/* Recommendations */}
                     <div className="bg-gray-50 rounded-xl p-4">
                       <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-                        <FileText className="w-4 h-4" />
+                        <FileText className="w-4 h-4 gi3d" />
                         권장 콘텐츠 스펙
                       </h4>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-blue-500" />
+                          <FileText className="w-4 h-4 text-blue-500 gi3d" />
                           <span className="text-sm text-gray-600">글자수:</span>
                           <span className="font-bold text-gray-800">{selectedKeyword.recommended_content_length.toLocaleString()}자+</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <ImagePlus className="w-4 h-4 text-green-500" />
+                          <ImagePlus className="w-4 h-4 text-green-500 gi3d" />
                           <span className="text-sm text-gray-600">사진:</span>
                           <span className="font-bold text-gray-800">{selectedKeyword.recommended_image_count}장+</span>
                         </div>
@@ -625,7 +625,7 @@ export default function BlueOceanPage() {
                     {selectedKeyword.tips.length > 0 && (
                       <div className="bg-blue-50 rounded-xl p-4">
                         <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-                          <Info className="w-4 h-4" />
+                          <Info className="w-4 h-4 gi3d" />
                           공략 팁
                         </h4>
                         <ul className="space-y-2">

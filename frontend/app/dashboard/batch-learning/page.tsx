@@ -357,7 +357,7 @@ export default function BatchLearningPage() {
               {/* 왼쪽: 상태 및 토글 */}
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-3">
-                  <RefreshCw className="w-6 h-6 text-gray-500" strokeWidth={1.75} />
+                  <RefreshCw className="w-6 h-6 text-gray-500 gi3d" strokeWidth={1.75} />
                   <div>
                     <h2 className="font-bold text-gray-800">자동 학습 스케줄러</h2>
                     <p className="text-sm text-gray-500">백그라운드에서 자동으로 학습 진행</p>
@@ -706,7 +706,7 @@ export default function BatchLearningPage() {
               </>
             ) : (
               <div className="text-center py-12 text-gray-500">
-                <Target className="w-14 h-14 mb-4" strokeWidth={1.75} />
+                <Target className="w-14 h-14 mb-4 gi3d" strokeWidth={1.75} />
                 <p className="text-lg">학습이 시작되지 않았습니다</p>
                 <p className="text-sm mt-2">왼쪽에서 설정 후 학습을 시작하세요</p>
               </div>

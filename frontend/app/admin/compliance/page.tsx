@@ -8,6 +8,7 @@ import {
   ArrowLeft, RefreshCw, FileText, Eye, AlertCircle,
   ChevronDown, ChevronRight, Filter, Download, Search
 } from 'lucide-react'
+import GlassIcon from '@/components/GlassIcon'
 import { useAuthStore } from '@/lib/stores/auth'
 import toast from 'react-hot-toast'
 
@@ -182,10 +183,10 @@ export default function CompliancePage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link href="/admin" className="text-gray-500 hover:text-gray-700">
-                <ArrowLeft className="w-5 h-5" />
+                <ArrowLeft className="w-5 h-5 gi3d" />
               </Link>
               <div className="flex items-center gap-2">
-                <Shield className="w-6 h-6 text-blue-600" />
+                <Shield className="w-6 h-6 text-blue-600 gi3d" />
                 <h1 className="text-xl font-bold">법적 준수 관리</h1>
               </div>
             </div>
@@ -193,7 +194,7 @@ export default function CompliancePage() {
               onClick={fetchData}
               className="flex items-center gap-2 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
             >
-              <RefreshCw className="w-4 h-4" />
+              <RefreshCw className="w-4 h-4 gi3d" />
               새로고침
             </button>
           </div>
@@ -207,7 +208,7 @@ export default function CompliancePage() {
             <div className="bg-white rounded-xl p-4 shadow-sm border">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-red-100 rounded-lg">
-                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                  <AlertTriangle className="w-5 h-5 text-red-600 gi3d" />
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">미해결 알림</p>
@@ -218,7 +219,7 @@ export default function CompliancePage() {
             <div className="bg-white rounded-xl p-4 shadow-sm border">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-yellow-100 rounded-lg">
-                  <AlertCircle className="w-5 h-5 text-yellow-600" />
+                  <AlertCircle className="w-5 h-5 text-yellow-600 gi3d" />
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">오늘 고위험 사용</p>
@@ -229,7 +230,7 @@ export default function CompliancePage() {
             <div className="bg-white rounded-xl p-4 shadow-sm border">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-100 rounded-lg">
-                  <Eye className="w-5 h-5 text-blue-600" />
+                  <Eye className="w-5 h-5 text-blue-600 gi3d" />
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">7일 고위험</p>
@@ -240,7 +241,7 @@ export default function CompliancePage() {
             <div className="bg-white rounded-xl p-4 shadow-sm border">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-green-100 rounded-lg">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <CheckCircle className="w-5 h-5 text-green-600 gi3d" />
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">7일 저위험</p>
@@ -264,7 +265,7 @@ export default function CompliancePage() {
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
+                  <FileText className="w-4 h-4 gi3d" />
                   가이드라인
                 </div>
               </button>
@@ -277,7 +278,7 @@ export default function CompliancePage() {
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <Eye className="w-4 h-4" />
+                  <Eye className="w-4 h-4 gi3d" />
                   사용 로그
                 </div>
               </button>
@@ -290,7 +291,7 @@ export default function CompliancePage() {
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4" />
+                  <AlertTriangle className="w-4 h-4 gi3d" />
                   알림
                   {stats && stats.unresolved_alerts > 0 && (
                     <span className="px-2 py-0.5 text-xs bg-red-500 text-white rounded-full">
@@ -309,7 +310,7 @@ export default function CompliancePage() {
                 {/* High Risk */}
                 <div>
                   <h3 className="text-lg font-bold text-red-600 mb-4 flex items-center gap-2">
-                    <AlertTriangle className="w-5 h-5" />
+                    <AlertTriangle className="w-5 h-5 gi3d" />
                     높은 위험 ({guidelines.high.length}개)
                   </h3>
                   <div className="space-y-3">
@@ -327,9 +328,9 @@ export default function CompliancePage() {
                             <span className="text-xs text-gray-500">({feature.feature_name})</span>
                           </div>
                           {expandedFeature === feature.feature_name ? (
-                            <ChevronDown className="w-5 h-5 text-gray-400" />
+                            <ChevronDown className="w-5 h-5 text-gray-400 gi3d" />
                           ) : (
-                            <ChevronRight className="w-5 h-5 text-gray-400" />
+                            <ChevronRight className="w-5 h-5 text-gray-400 gi3d" />
                           )}
                         </button>
                         {expandedFeature === feature.feature_name && (
@@ -378,7 +379,7 @@ export default function CompliancePage() {
                 {/* Medium Risk */}
                 <div>
                   <h3 className="text-lg font-bold text-yellow-600 mb-4 flex items-center gap-2">
-                    <AlertCircle className="w-5 h-5" />
+                    <AlertCircle className="w-5 h-5 gi3d" />
                     중간 위험 ({guidelines.medium.length}개)
                   </h3>
                   <div className="space-y-3">
@@ -396,9 +397,9 @@ export default function CompliancePage() {
                             <span className="text-xs text-gray-500">({feature.feature_name})</span>
                           </div>
                           {expandedFeature === feature.feature_name ? (
-                            <ChevronDown className="w-5 h-5 text-gray-400" />
+                            <ChevronDown className="w-5 h-5 text-gray-400 gi3d" />
                           ) : (
-                            <ChevronRight className="w-5 h-5 text-gray-400" />
+                            <ChevronRight className="w-5 h-5 text-gray-400 gi3d" />
                           )}
                         </button>
                         {expandedFeature === feature.feature_name && (
@@ -439,7 +440,7 @@ export default function CompliancePage() {
                 {/* Low Risk */}
                 <div>
                   <h3 className="text-lg font-bold text-green-600 mb-4 flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5" />
+                    <CheckCircle className="w-5 h-5 gi3d" />
                     낮은 위험 ({guidelines.low.length}개)
                   </h3>
                   <div className="space-y-3">
@@ -457,9 +458,9 @@ export default function CompliancePage() {
                             <span className="text-xs text-gray-500">({feature.feature_name})</span>
                           </div>
                           {expandedFeature === feature.feature_name ? (
-                            <ChevronDown className="w-5 h-5 text-gray-400" />
+                            <ChevronDown className="w-5 h-5 text-gray-400 gi3d" />
                           ) : (
-                            <ChevronRight className="w-5 h-5 text-gray-400" />
+                            <ChevronRight className="w-5 h-5 text-gray-400 gi3d" />
                           )}
                         </button>
                         {expandedFeature === feature.feature_name && (
@@ -486,7 +487,7 @@ export default function CompliancePage() {
               <div>
                 <div className="flex items-center gap-4 mb-4">
                   <div className="flex items-center gap-2">
-                    <Filter className="w-4 h-4 text-gray-400" />
+                    <Filter className="w-4 h-4 text-gray-400 gi3d" />
                     <select
                       value={logFilter}
                       onChange={(e) => setLogFilter(e.target.value)}
@@ -528,9 +529,9 @@ export default function CompliancePage() {
                           </td>
                           <td className="p-3">
                             {log.consent_given ? (
-                              <CheckCircle className="w-4 h-4 text-green-500" />
+                              <CheckCircle className="w-4 h-4 text-green-500 gi3d" />
                             ) : (
-                              <XCircle className="w-4 h-4 text-gray-300" />
+                              <XCircle className="w-4 h-4 text-gray-300 gi3d" />
                             )}
                           </td>
                         </tr>
@@ -551,7 +552,7 @@ export default function CompliancePage() {
               <div className="space-y-4">
                 {alerts.length === 0 ? (
                   <div className="text-center py-12 text-gray-500">
-                    <CheckCircle className="w-12 h-12 mx-auto mb-4 text-green-400" />
+                    <GlassIcon icon={CheckCircle} size={86} className="mx-auto mb-4" />
                     <p>알림이 없습니다</p>
                   </div>
                 ) : (
@@ -569,9 +570,9 @@ export default function CompliancePage() {
                       <div className="flex items-start justify-between">
                         <div className="flex items-start gap-3">
                           {alert.resolved ? (
-                            <CheckCircle className="w-5 h-5 text-gray-400 mt-0.5" />
+                            <CheckCircle className="w-5 h-5 text-gray-400 mt-0.5 gi3d" />
                           ) : (
-                            <AlertTriangle className={`w-5 h-5 mt-0.5 ${
+                            <AlertTriangle className={`gi3d w-5 h-5 mt-0.5 ${
                               alert.severity === 'warning' ? 'text-yellow-500' : 'text-red-500'
                             }`} />
                           )}

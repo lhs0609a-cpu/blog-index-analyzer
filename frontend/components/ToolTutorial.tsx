@@ -780,7 +780,7 @@ export default function ToolTutorial({ toolId, isOpen, onClose }: ToolTutorialPr
           <div className="bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-white" />
+                <Sparkles className="w-5 h-5 text-white gi3d" />
                 <span className="text-white/80 text-sm">
                   {currentStep + 1} / {steps.length}
                 </span>
@@ -789,7 +789,7 @@ export default function ToolTutorial({ toolId, isOpen, onClose }: ToolTutorialPr
                 onClick={handleSkip}
                 className="text-white/80 hover:text-white transition-colors"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5 gi3d" />
               </button>
             </div>
             <h3 className="text-xl font-bold text-white mt-2">{currentStepData.title}</h3>
@@ -804,7 +804,7 @@ export default function ToolTutorial({ toolId, isOpen, onClose }: ToolTutorialPr
             {currentStepData.tip && (
               <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
                 <div className="flex items-start gap-2">
-                  <Lightbulb className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <Lightbulb className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5 gi3d" />
                   <p className="text-sm text-amber-800">{currentStepData.tip}</p>
                 </div>
               </div>
@@ -834,7 +834,7 @@ export default function ToolTutorial({ toolId, isOpen, onClose }: ToolTutorialPr
               onClick={handleSkip}
               className="flex items-center gap-1 text-gray-500 hover:text-gray-700 transition-colors text-sm"
             >
-              <SkipForward className="w-4 h-4" />
+              <SkipForward className="w-4 h-4 gi3d" />
               건너뛰기
             </button>
 
@@ -844,7 +844,7 @@ export default function ToolTutorial({ toolId, isOpen, onClose }: ToolTutorialPr
                   onClick={handlePrev}
                   className="flex items-center gap-1 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="w-4 h-4 gi3d" />
                   이전
                 </button>
               )}
@@ -854,13 +854,13 @@ export default function ToolTutorial({ toolId, isOpen, onClose }: ToolTutorialPr
               >
                 {currentStep === steps.length - 1 ? (
                   <>
-                    <Check className="w-4 h-4" />
+                    <Check className="w-4 h-4 gi3d" />
                     완료
                   </>
                 ) : (
                   <>
                     다음
-                    <ChevronRight className="w-4 h-4" />
+                    <ChevronRight className="w-4 h-4 gi3d" />
                   </>
                 )}
               </button>

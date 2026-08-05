@@ -8,6 +8,7 @@ import {
   ChevronDown, ChevronRight, Play, Pause, Target, Activity,
   ArrowUpRight, ArrowDownRight, Minus, Info, Bell, Lightbulb
 } from 'lucide-react'
+import GlassIcon from '@/components/GlassIcon'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
@@ -272,7 +273,7 @@ export default function BudgetPacingPage() {
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <Clock className="w-8 h-8" />
+                <Clock className="w-8 h-8 gi3d" />
                 <h1 className="text-3xl font-bold">예산 페이싱</h1>
               </div>
               <p className="text-cyan-100">
@@ -294,7 +295,7 @@ export default function BudgetPacingPage() {
                 {analyzing ? (
                   <RefreshCw className="w-4 h-4 animate-spin" />
                 ) : (
-                  <Zap className="w-4 h-4" />
+                  <Zap className="w-4 h-4 gi3d" />
                 )}
                 {analyzing ? '분석 중...' : '분석 실행'}
               </button>
@@ -379,7 +380,7 @@ export default function BudgetPacingPage() {
               >
                 <div className="flex items-center gap-3 mb-3">
                   <div className="p-2 bg-cyan-100 rounded-lg">
-                    <Target className="w-5 h-5 text-cyan-600" />
+                    <Target className="w-5 h-5 text-cyan-600 gi3d" />
                   </div>
                   <span className="text-gray-500 text-sm">총 캠페인</span>
                 </div>
@@ -394,7 +395,7 @@ export default function BudgetPacingPage() {
               >
                 <div className="flex items-center gap-3 mb-3">
                   <div className="p-2 bg-green-100 rounded-lg">
-                    <DollarSign className="w-5 h-5 text-green-600" />
+                    <DollarSign className="w-5 h-5 text-green-600 gi3d" />
                   </div>
                   <span className="text-gray-500 text-sm">일일 예산</span>
                 </div>
@@ -411,7 +412,7 @@ export default function BudgetPacingPage() {
               >
                 <div className="flex items-center gap-3 mb-3">
                   <div className="p-2 bg-blue-100 rounded-lg">
-                    <Activity className="w-5 h-5 text-blue-600" />
+                    <Activity className="w-5 h-5 text-blue-600 gi3d" />
                   </div>
                   <span className="text-gray-500 text-sm">오늘 지출</span>
                 </div>
@@ -431,7 +432,7 @@ export default function BudgetPacingPage() {
               >
                 <div className="flex items-center gap-3 mb-3">
                   <div className="p-2 bg-purple-100 rounded-lg">
-                    <CheckCircle className="w-5 h-5 text-purple-600" />
+                    <CheckCircle className="w-5 h-5 text-purple-600 gi3d" />
                   </div>
                   <span className="text-gray-500 text-sm">정상 비율</span>
                 </div>
@@ -604,7 +605,7 @@ export default function BudgetPacingPage() {
                              campaign.pacing_status === 'depleted' ? '소진완료' : '일시중지'}
                           </span>
                         </div>
-                        {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                        {isExpanded ? <ChevronDown className="w-5 h-5 gi3d" /> : <ChevronRight className="w-5 h-5 gi3d" />}
                       </div>
                     </div>
 
@@ -698,7 +699,7 @@ export default function BudgetPacingPage() {
               <div className="divide-y">
                 {alerts.length === 0 ? (
                   <div className="p-8 text-center text-gray-500">
-                    <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-3" />
+                    <GlassIcon icon={CheckCircle} size={86} className="mx-auto mb-3" />
                     <p>활성 알림이 없습니다</p>
                   </div>
                 ) : (
@@ -748,7 +749,7 @@ export default function BudgetPacingPage() {
               <div className="divide-y">
                 {recommendations.length === 0 ? (
                   <div className="p-8 text-center text-gray-500">
-                    <Lightbulb className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <GlassIcon icon={Lightbulb} size={86} className="mx-auto mb-3" />
                     <p>권장사항이 없습니다</p>
                   </div>
                 ) : (
@@ -806,12 +807,12 @@ export default function BudgetPacingPage() {
                     strategy.id === 'performance' ? 'bg-green-100' :
                     'bg-gray-100'
                   }`}>
-                    {strategy.id === 'standard' ? <Minus className="w-6 h-6 text-blue-600" /> :
-                     strategy.id === 'accelerated' ? <Zap className="w-6 h-6 text-orange-600" /> :
-                     strategy.id === 'front_loaded' ? <ArrowUpRight className="w-6 h-6 text-yellow-600" /> :
-                     strategy.id === 'back_loaded' ? <ArrowDownRight className="w-6 h-6 text-purple-600" /> :
-                     strategy.id === 'performance' ? <TrendingUp className="w-6 h-6 text-green-600" /> :
-                     <Settings className="w-6 h-6 text-gray-600" />}
+                    {strategy.id === 'standard' ? <Minus className="w-6 h-6 text-blue-600 gi3d" /> :
+                     strategy.id === 'accelerated' ? <Zap className="w-6 h-6 text-orange-600 gi3d" /> :
+                     strategy.id === 'front_loaded' ? <ArrowUpRight className="w-6 h-6 text-yellow-600 gi3d" /> :
+                     strategy.id === 'back_loaded' ? <ArrowDownRight className="w-6 h-6 text-purple-600 gi3d" /> :
+                     strategy.id === 'performance' ? <TrendingUp className="w-6 h-6 text-green-600 gi3d" /> :
+                     <Settings className="w-6 h-6 text-gray-600 gi3d" />}
                   </div>
                   <div className="flex-1">
                     <h3 className="font-semibold text-lg">{strategy.name}</h3>

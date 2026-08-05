@@ -37,10 +37,10 @@ import { adGet, adPost } from "@/lib/api/adFetch";
 
 // 시간대별 기본 아이콘
 const getTimeIcon = (hour: number) => {
-  if (hour >= 6 && hour < 12) return <Sunrise className="w-4 h-4 text-orange-400" />;
-  if (hour >= 12 && hour < 18) return <Sun className="w-4 h-4 text-yellow-400" />;
-  if (hour >= 18 && hour < 22) return <Sunset className="w-4 h-4 text-purple-400" />;
-  return <Moon className="w-4 h-4 text-blue-400" />;
+  if (hour >= 6 && hour < 12) return <Sunrise className="w-4 h-4 text-orange-400 gi3d" />;
+  if (hour >= 12 && hour < 18) return <Sun className="w-4 h-4 text-yellow-400 gi3d" />;
+  if (hour >= 18 && hour < 22) return <Sunset className="w-4 h-4 text-purple-400 gi3d" />;
+  return <Moon className="w-4 h-4 text-blue-400 gi3d" />;
 };
 
 // 가중치에 따른 색상
@@ -292,11 +292,11 @@ export default function HourlyBiddingPage() {
               onClick={() => router.push("/ad-optimizer/unified")}
               className="p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
             >
-              <ChevronLeft className="w-5 h-5" />
+              <ChevronLeft className="w-5 h-5 gi3d" />
             </button>
             <div>
               <h1 className="text-2xl font-bold flex items-center gap-2">
-                <Clock className="w-7 h-7 text-blue-400" />
+                <Clock className="w-7 h-7 text-blue-400 gi3d" />
                 시간대별 입찰 최적화
               </h1>
               <p className="text-gray-400 text-sm mt-1">
@@ -336,7 +336,7 @@ export default function HourlyBiddingPage() {
               onClick={autoOptimize}
               className="flex items-center gap-2 px-4 py-2 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors"
             >
-              <Sparkles className="w-4 h-4" />
+              <Sparkles className="w-4 h-4 gi3d" />
               자동 최적화
             </button>
             <button
@@ -347,7 +347,7 @@ export default function HourlyBiddingPage() {
               {saving ? (
                 <RefreshCw className="w-4 h-4 animate-spin" />
               ) : (
-                <Save className="w-4 h-4" />
+                <Save className="w-4 h-4 gi3d" />
               )}
               저장
             </button>
@@ -374,7 +374,7 @@ export default function HourlyBiddingPage() {
               className="bg-green-500/10 border border-green-500/30 rounded-xl p-4"
             >
               <div className="flex items-center gap-2 text-green-400 mb-2">
-                <TrendingUp className="w-5 h-5" />
+                <TrendingUp className="w-5 h-5 gi3d" />
                 <span className="font-medium">고효율 시간대</span>
               </div>
               <p className="text-2xl font-bold text-white">
@@ -392,7 +392,7 @@ export default function HourlyBiddingPage() {
               className="bg-red-500/10 border border-red-500/30 rounded-xl p-4"
             >
               <div className="flex items-center gap-2 text-red-400 mb-2">
-                <TrendingDown className="w-5 h-5" />
+                <TrendingDown className="w-5 h-5 gi3d" />
                 <span className="font-medium">저효율 시간대</span>
               </div>
               <p className="text-2xl font-bold text-white">
@@ -410,7 +410,7 @@ export default function HourlyBiddingPage() {
               className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4"
             >
               <div className="flex items-center gap-2 text-blue-400 mb-2">
-                <Target className="w-5 h-5" />
+                <Target className="w-5 h-5 gi3d" />
                 <span className="font-medium">예상 비용 절감</span>
               </div>
               <p className="text-2xl font-bold text-white">
@@ -428,7 +428,7 @@ export default function HourlyBiddingPage() {
               className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4"
             >
               <div className="flex items-center gap-2 text-purple-400 mb-2">
-                <Zap className="w-5 h-5" />
+                <Zap className="w-5 h-5 gi3d" />
                 <span className="font-medium">최적화 상태</span>
               </div>
               <p className="text-lg font-bold text-white">
@@ -475,7 +475,7 @@ export default function HourlyBiddingPage() {
               className="bg-white/5 backdrop-blur-lg rounded-2xl border border-white/10 p-6"
             >
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-blue-400" />
+                <Clock className="w-5 h-5 text-blue-400 gi3d" />
                 시간대별 입찰 가중치
               </h2>
               <p className="text-sm text-gray-400 mb-6">
@@ -542,7 +542,7 @@ export default function HourlyBiddingPage() {
               className="bg-white/5 backdrop-blur-lg rounded-2xl border border-white/10 p-6"
             >
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-blue-400" />
+                <Calendar className="w-5 h-5 text-blue-400 gi3d" />
                 요일별 입찰 가중치
               </h2>
               <p className="text-sm text-gray-400 mb-6">
@@ -591,7 +591,7 @@ export default function HourlyBiddingPage() {
             >
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5 text-blue-400" />
+                  <BarChart3 className="w-5 h-5 text-blue-400 gi3d" />
                   주간 입찰 히트맵
                 </h2>
                 <div className="flex items-center gap-2">
@@ -661,7 +661,7 @@ export default function HourlyBiddingPage() {
               className="bg-white/5 backdrop-blur-lg rounded-2xl border border-white/10 p-6"
             >
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Settings className="w-5 h-5 text-blue-400" />
+                <Settings className="w-5 h-5 text-blue-400 gi3d" />
                 프리셋 템플릿
               </h2>
               <p className="text-sm text-gray-400 mb-6">
@@ -680,7 +680,7 @@ export default function HourlyBiddingPage() {
                       onClick={() => applyPreset(key)}
                       className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors"
                     >
-                      <Check className="w-4 h-4" />
+                      <Check className="w-4 h-4 gi3d" />
                       적용하기
                     </button>
                   </div>
@@ -698,7 +698,7 @@ export default function HourlyBiddingPage() {
           className="mt-8 bg-blue-500/10 border border-blue-500/30 rounded-xl p-4"
         >
           <div className="flex items-start gap-3">
-            <Info className="w-5 h-5 text-blue-400 mt-0.5" />
+            <Info className="w-5 h-5 text-blue-400 mt-0.5 gi3d" />
             <div>
               <h3 className="font-medium text-blue-400 mb-1">시간대별 입찰 최적화 TIP</h3>
               <ul className="text-sm text-gray-400 space-y-1">

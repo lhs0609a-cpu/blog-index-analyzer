@@ -139,7 +139,7 @@ export default function AutoVeinEngine({ customerId }: { customerId: string }) {
     <div className="rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-white p-5 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-indigo-600" />
+          <Sparkles className="h-5 w-5 text-indigo-600 gi3d" />
           <h3 className="text-lg font-bold text-gray-900">전자동 광맥 발굴 엔진</h3>
         </div>
         <span
@@ -176,7 +176,7 @@ export default function AutoVeinEngine({ customerId }: { customerId: string }) {
               disabled={generating}
               className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
             >
-              {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 gi3d" />}
               AI 프로파일 생성
             </button>
             <label className="text-xs text-gray-500">
@@ -234,13 +234,13 @@ export default function AutoVeinEngine({ customerId }: { customerId: string }) {
                 </div>
               )}
               <div className="flex items-center gap-1.5 text-xs text-gray-600">
-                <ShieldCheck className="h-3.5 w-3.5 text-green-600" />
+                <ShieldCheck className="h-3.5 w-3.5 text-green-600 gi3d" />
                 관련성 기준 <b>{(view.relevance_keywords || []).length}</b>개
               </div>
               {(view.negative_keywords || []).length > 0 && (
                 <div>
                   <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-gray-700">
-                    <Ban className="h-3.5 w-3.5 text-red-500" /> 제외 키워드 (drift 차단) {(view.negative_keywords || []).length}개
+                    <Ban className="h-3.5 w-3.5 text-red-500 gi3d" /> 제외 키워드 (drift 차단) {(view.negative_keywords || []).length}개
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {(view.negative_keywords || []).slice(0, 24).map((n) => (
@@ -262,7 +262,7 @@ export default function AutoVeinEngine({ customerId }: { customerId: string }) {
                 disabled={saving || !view}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
               >
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />}
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4 gi3d" />}
                 저장 + 자동화 켜기
               </button>
             ) : (
@@ -271,7 +271,7 @@ export default function AutoVeinEngine({ customerId }: { customerId: string }) {
                 disabled={saving}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
               >
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />}
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4 gi3d" />}
                 자동화 끄기
               </button>
             )}
@@ -289,7 +289,7 @@ export default function AutoVeinEngine({ customerId }: { customerId: string }) {
               className="inline-flex items-center gap-1 rounded-lg px-2 py-2 text-sm text-gray-400 hover:text-gray-600"
               title="새로고침"
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className="h-4 w-4 gi3d" />
             </button>
           </div>
 

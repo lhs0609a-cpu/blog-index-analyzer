@@ -43,7 +43,7 @@ function DetailsAccordion({ title, subtitle, children }: { title: string; subtit
           <div className="font-bold text-gray-900">{title}</div>
           {subtitle && <div className="text-sm text-gray-500 mt-0.5">{subtitle}</div>}
         </div>
-        <ChevronRight className={`w-5 h-5 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`} />
+        <ChevronRight className={`gi3d w-5 h-5 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`} />
       </button>
       {open && <div className="p-5 pt-0 border-t border-gray-100">{children}</div>}
     </div>
@@ -101,7 +101,7 @@ function ScoreInterpretation({ result, onKeywordSearch }: { result: any; onKeywo
       className="rounded-3xl p-8 bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200/50 shadow-xl mb-8"
     >
       <h3 className="text-2xl font-bold mb-2 flex items-center gap-2">
-        <Target className="w-6 h-6 text-emerald-600" />
+        <Target className="w-6 h-6 text-emerald-600 gi3d" />
         당신의 블로그 위치
       </h3>
       <p className="text-sm text-gray-600 mb-6">이 점수가 실제로 의미하는 것</p>
@@ -264,7 +264,7 @@ function IndexVerificationCard({ blogId }: { blogId: string }) {
       <div className="flex items-start justify-between gap-4 mb-4">
         <div>
           <h3 className="text-2xl font-bold flex items-center gap-2">
-            <CheckCircle className="w-6 h-6 text-indigo-600" />
+            <CheckCircle className="w-6 h-6 text-indigo-600 gi3d" />
             실측 인덱스 검증 (NSIDE 방법론 기반)
           </h3>
           <p className="text-sm text-gray-600 mt-1">
@@ -326,7 +326,7 @@ function IndexVerificationCard({ blogId }: { blogId: string }) {
                 onClick={() => setShowPosts(s => !s)}
                 className="text-sm text-indigo-600 hover:text-indigo-700 font-semibold flex items-center gap-1"
               >
-                <ChevronRight className={`w-4 h-4 transition-transform ${showPosts ? 'rotate-90' : ''}`} />
+                <ChevronRight className={`gi3d w-4 h-4 transition-transform ${showPosts ? 'rotate-90' : ''}`} />
                 포스팅별 색인 결과 ({data.post_results.length}건)
               </button>
               {showPosts && (
@@ -385,10 +385,10 @@ function ExposureCeilingCard({ blogId }: { blogId: string }) {
     >
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <Gauge className="w-6 h-6 text-[#0064FF]" />
+          <Gauge className="w-6 h-6 text-[#0064FF] gi3d" />
           <h3 className="text-xl font-bold">노출 천장 측정</h3>
           <div className="group relative">
-            <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+            <HelpCircle className="w-4 h-4 text-gray-400 cursor-help gi3d" />
             <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-72 p-3 bg-gray-900 text-white text-xs rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-20 shadow-xl text-left font-normal leading-relaxed">
               이 블로그가 최근 글 제목의 키워드로 네이버 블로그 검색에서 실제로 상위노출된 결과만으로 낸 실적 기반 수치입니다. 추정 지수가 아닙니다.
             </div>
@@ -489,14 +489,14 @@ function KeywordJudgeWidget({ blogId, isFreeUser }: { blogId: string; isFreeUser
       className="glass-3d p-8 mb-8"
     >
       <div className="flex items-center gap-2 mb-1">
-        <Target className="w-6 h-6 text-[#0064FF]" />
+        <Target className="w-6 h-6 text-[#0064FF] gi3d" />
         <h3 className="text-xl font-bold">이 키워드, 상위노출 될까?</h3>
       </div>
       <p className="text-sm text-gray-500 mb-5">내 블로그의 노출 천장과 경쟁자 체력을 실제로 재서 판정합니다.</p>
 
       <div className="flex gap-2">
         <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 gi3d" />
           <input
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
@@ -514,7 +514,7 @@ function KeywordJudgeWidget({ blogId, isFreeUser }: { blogId: string; isFreeUser
 
       {locked && (
         <div className="mt-4 flex items-center justify-between gap-3 p-4 rounded-xl bg-gray-50 border border-gray-200">
-          <span className="flex items-center gap-2 text-sm text-gray-600"><Lock className="w-4 h-4" />무료 1회를 사용했습니다. Pro에서 무제한 판정하세요.</span>
+          <span className="flex items-center gap-2 text-sm text-gray-600"><Lock className="w-4 h-4 gi3d" />무료 1회를 사용했습니다. Pro에서 무제한 판정하세요.</span>
           <Link href="/pricing" className="toss-btn-primary px-4 py-2 text-sm whitespace-nowrap">Pro 보기</Link>
         </div>
       )}
@@ -688,7 +688,7 @@ function ConcreteRecommendations({ result, isFreeUser }: { result: any; isFreeUs
   return (
     <div className="glass-3d p-8 ">
       <h3 className="text-2xl font-bold mb-2 flex items-center gap-2">
-        <Target className="w-6 h-6 text-[#0064FF]" />
+        <Target className="w-6 h-6 text-[#0064FF] gi3d" />
         지금 할 일
       </h3>
       <p className="text-sm text-gray-500 mb-6">측정 결과에서 가장 효과가 큰 순서입니다</p>
@@ -726,7 +726,7 @@ function ConcreteRecommendations({ result, isFreeUser }: { result: any; isFreeUs
                 <ul className="space-y-2 mb-3">
                   {rec.actions.map((action, i) => (
                     <li key={i} className="flex items-start gap-2 text-gray-700 text-sm">
-                      <Check className="w-4 h-4 text-green-500 mt-0.5 shrink-0" strokeWidth={2.5} />
+                      <Check className="w-4 h-4 text-green-500 mt-0.5 shrink-0 gi3d" strokeWidth={2.5} />
                       <span>{action}</span>
                     </li>
                   ))}
@@ -763,7 +763,7 @@ function ConcreteRecommendations({ result, isFreeUser }: { result: any; isFreeUs
             <div className="absolute inset-0 flex items-center justify-center">
               <Link href="/pricing">
                 <div className="bg-white/95 rounded-xl px-6 py-4 shadow-lg text-center cursor-pointer hover:shadow-xl transition-all border-2 border-amber-300">
-                  <TrendingUp className="w-6 h-6 mb-2 mx-auto text-amber-500" strokeWidth={1.75} />
+                  <TrendingUp className="w-6 h-6 mb-2 mx-auto text-amber-500 gi3d" strokeWidth={1.75} />
                   <p className="text-sm font-bold text-amber-900 mb-1">
                     상위노출 핵심 가이드 {recommendations.length - 3}개가 숨겨져 있습니다
                   </p>
@@ -884,7 +884,7 @@ function DetailedMetricsSection({ result, isFreeUser }: { result: any; isFreeUse
         <div className="flex items-start justify-between mb-2">
           <span className="text-sm font-medium text-gray-700">{metric.name}</span>
           {locked ? (
-            <Lock className="w-4 h-4 text-gray-400" />
+            <Lock className="w-4 h-4 text-gray-400 gi3d" />
           ) : metric.raw ? (
             <span className={`text-lg font-bold ${metric.isStatus ? (metric.value === '인플루언서' ? 'text-purple-600' : 'text-gray-600') : 'text-[#0064FF]'}`}>
               {metric.value}{metric.unit || ''}
@@ -921,7 +921,7 @@ function DetailedMetricsSection({ result, isFreeUser }: { result: any; isFreeUse
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="text-2xl font-bold flex items-center gap-2">
-            <TrendingUp className="w-6 h-6 text-[#0064FF]" />
+            <TrendingUp className="w-6 h-6 text-[#0064FF] gi3d" />
             측정 지표
           </h3>
           <p className="text-sm text-gray-500 mt-1">실제로 측정한 값만 표시합니다</p>
@@ -1030,7 +1030,7 @@ function DetailedMetricsSection({ result, isFreeUser }: { result: any; isFreeUse
             {/* 알고리즘 컨텍스트 배너 — 정직성 패치 */}
             <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
               <div className="flex items-start gap-2">
-                <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5 gi3d" />
                 <div className="text-sm text-gray-700">
                   <strong className="text-amber-900">아래 점수는 추정치입니다.</strong>{' '}
                   네이버 공식 '블로그 지수'는 존재하지 않고, C-Rank·D.I.A.+ 내부 점수도 비공개입니다.
@@ -1068,7 +1068,7 @@ function DetailedMetricsSection({ result, isFreeUser }: { result: any; isFreeUse
                           <div className="flex items-center gap-2 mb-1">
                             <span className="font-bold text-lg text-gray-900">{signal.name}</span>
                             <div className="group relative">
-                              <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                              <HelpCircle className="w-4 h-4 text-gray-400 cursor-help gi3d" />
                               <div className="absolute left-0 bottom-full mb-2 w-80 p-3 bg-gray-900 text-white text-sm rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 shadow-xl whitespace-pre-line">
                                 {signal.tooltip}
                                 <div className="absolute left-4 top-full border-8 border-transparent border-t-gray-900" />
@@ -1126,7 +1126,7 @@ function DetailedMetricsSection({ result, isFreeUser }: { result: any; isFreeUse
                           <div className="flex items-center gap-2 mb-1">
                             <span className="font-bold text-lg text-gray-900">{signal.name}</span>
                             <div className="group relative">
-                              <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
+                              <HelpCircle className="w-4 h-4 text-gray-400 cursor-help gi3d" />
                               <div className="absolute left-0 bottom-full mb-2 w-80 p-3 bg-gray-900 text-white text-sm rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 shadow-xl whitespace-pre-line">
                                 {signal.tooltip}
                                 <div className="absolute left-4 top-full border-8 border-transparent border-t-gray-900" />
@@ -1162,7 +1162,7 @@ function DetailedMetricsSection({ result, isFreeUser }: { result: any; isFreeUse
             {/* 신호 기반 진단 요약 */}
             <div className="mt-4 p-4 bg-gradient-to-r from-[#0064FF]/5 to-purple-500/5 rounded-xl border border-blue-100">
               <div className="flex items-center gap-2 mb-2">
-                <Sparkles className="w-5 h-5 text-[#0064FF]" />
+                <Sparkles className="w-5 h-5 text-[#0064FF] gi3d" />
                 <span className="font-bold text-gray-900">신호 기반 진단</span>
               </div>
               <div className="space-y-1.5 text-sm text-gray-700">
@@ -1298,7 +1298,7 @@ function DetailedMetricsSection({ result, isFreeUser }: { result: any; isFreeUse
             >
               <div className="text-center">
                 <div className="w-16 h-16 rounded-full bg-[#0064FF]/10 flex items-center justify-center mx-auto mb-4">
-                  <Lock className="w-8 h-8 text-[#0064FF]" />
+                  <Lock className="w-8 h-8 text-[#0064FF] gi3d" />
                 </div>
                 <h3 className="text-2xl font-bold text-gray-900 mb-2">Pro 기능입니다</h3>
                 <p className="text-gray-600 mb-6">
@@ -1395,7 +1395,7 @@ function StartTrackingButton({
         onClick={() => router.push(`/dashboard/rank-tracker/${blogId}`)}
         className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-purple-600 text-white font-semibold hover:shadow-xl shadow-md hover:bg-purple-700 transition-all"
       >
-        <CheckCircle className="w-5 h-5" />
+        <CheckCircle className="w-5 h-5 gi3d" />
         시계열 추적 중 — 대시보드 보기
       </button>
     )
@@ -1419,7 +1419,7 @@ function StartTrackingButton({
         onClick={handleStart}
         className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold hover:shadow-xl shadow-md transition-all"
       >
-        <Clock className="w-5 h-5" />
+        <Clock className="w-5 h-5 gi3d" />
         시계열 추적 시작
       </button>
       <div className="text-xs text-gray-500 mt-2 max-w-md mx-auto">
@@ -1642,7 +1642,7 @@ export default function AnalyzePage() {
           >
             <div className="flex gap-4">
               <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 gi3d" />
                 <input
                   type="text"
                   value={blogId}
@@ -1667,7 +1667,7 @@ export default function AnalyzePage() {
                   </>
                 ) : (
                   <>
-                    <Zap className="w-5 h-5" />
+                    <Zap className="w-5 h-5 gi3d" />
                     분석하기
                   </>
                 )}
@@ -1736,7 +1736,7 @@ export default function AnalyzePage() {
                 animate={{ opacity: 1, y: 0 }}
                 className="glass-3d p-8 text-center"
               >
-                <Search className="w-12 h-12 mb-4 mx-auto text-gray-300" strokeWidth={1.5} />
+                <Search className="w-12 h-12 mb-4 mx-auto text-gray-300 gi3d" strokeWidth={1.5} />
                 <h2 className="text-2xl font-bold mb-2">측정할 수 없습니다</h2>
                 <p className="text-gray-600 mb-1">
                   {result.index.unmeasurable_reason || '네이버에서 블로그 지표를 가져오지 못했습니다.'}
@@ -1837,7 +1837,7 @@ export default function AnalyzePage() {
                   {/* 자동 학습 배지 */}
                   {result.index.score_breakdown?.weights_used?.is_learned && (
                     <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 bg-purple-50 border border-purple-200 rounded-full text-sm">
-                      <CheckCircle className="w-4 h-4 text-purple-600" />
+                      <CheckCircle className="w-4 h-4 text-purple-600 gi3d" />
                       <span className="text-purple-700 font-medium">데이터 학습된 가중치 적용</span>
                       {result.index.score_breakdown.weights_used.learned_meta?.n && (
                         <span className="text-xs text-purple-500">
@@ -1923,7 +1923,7 @@ export default function AnalyzePage() {
                           {stat.label}
                           {stat.isScore && (
                             <div className="group relative">
-                              <HelpCircle className="w-3.5 h-3.5 text-gray-400 cursor-help" />
+                              <HelpCircle className="w-3.5 h-3.5 text-gray-400 cursor-help gi3d" />
                               <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-72 p-3 bg-gray-900 text-white text-xs rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-20 shadow-xl text-left whitespace-pre-line font-normal leading-relaxed">
                                 {`외부 수집 가능한 raw 신호로 추정한 블로그 운영 건강도입니다.\n\n주의: 이 점수와 실제 네이버 SERP 순위 사이의 상관관계는 자체 검증(n=67) 결과 ρ=0.04로 거의 무관했습니다. \"이 점수가 높으면 검색 상위에 노출된다\"는 보장이 아닙니다.\n\n순위 예측 목적이라면 SERP 순위 추적 도구(판다랭크 등)를 병행하세요.`}
                                 <div className="absolute left-1/2 -translate-x-1/2 top-full border-8 border-transparent border-t-gray-900" />
@@ -1965,7 +1965,7 @@ export default function AnalyzePage() {
                 {result.daily_visitors && result.daily_visitors.length > 0 && (
                   <div className="glass-3d p-8  relative overflow-hidden">
                     <h3 className="text-2xl font-bold mb-6 flex items-center gap-2">
-                      <BarChart3 className="w-6 h-6 text-[#0064FF]" />
+                      <BarChart3 className="w-6 h-6 text-[#0064FF] gi3d" />
                       일일 방문자 추이
                       {isFreeUser && (
                         <span className="ml-2 px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">
@@ -1980,7 +1980,7 @@ export default function AnalyzePage() {
                         {/* 3일 미리보기 차트 */}
                         <div className="h-64">
                           <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={result.daily_visitors.slice(-3)}>
+                            <LineChart data={result.daily_visitors.slice(-3)} className="gi3d">
                               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                               <XAxis
                                 dataKey="date"
@@ -2065,7 +2065,7 @@ export default function AnalyzePage() {
                       /* Pro 플랜: 전체 15일 차트 */
                       <div className="h-80">
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={result.daily_visitors}>
+                          <LineChart data={result.daily_visitors} className="gi3d">
                             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                             <XAxis
                               dataKey="date"
@@ -2117,7 +2117,7 @@ export default function AnalyzePage() {
                 {result.warnings.length > 0 && (
                   <div className="glass-3d p-8 ">
                     <h3 className="text-2xl font-bold mb-6 flex items-center gap-2">
-                      <AlertCircle className="w-6 h-6 text-orange-600" />
+                      <AlertCircle className="w-6 h-6 text-orange-600 gi3d" />
                       주의사항
                     </h3>
 
@@ -2148,7 +2148,7 @@ export default function AnalyzePage() {
                   <div className="relative flex flex-col md:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center flex-shrink-0">
-                        <Sparkles className="w-6 h-6 text-white" />
+                        <Sparkles className="w-6 h-6 text-white gi3d" />
                       </div>
                       <div>
                         <h4 className="text-white font-bold text-lg mb-1">전문가의 도움이 필요하신가요?</h4>
@@ -2164,7 +2164,7 @@ export default function AnalyzePage() {
                       className="px-6 py-3 bg-gradient-to-r from-violet-500 to-pink-500 text-white font-semibold rounded-xl hover:opacity-90 transition-opacity whitespace-nowrap flex items-center gap-2"
                     >
                       무료 상담 신청
-                      <ChevronRight className="w-4 h-4" />
+                      <ChevronRight className="w-4 h-4 gi3d" />
                     </a>
                   </div>
                 </motion.div>

@@ -5,6 +5,7 @@ import {
   Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, Loader2,
   Trash2, Play, Info, Layers, Target, Download, RefreshCw, X
 } from 'lucide-react'
+import GlassIcon from '@/components/GlassIcon'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/lib/stores/auth'
 import { adGet, adUpload, getApiBaseUrl } from '@/lib/api'
@@ -211,7 +212,7 @@ export default function ScaleUploadPage() {
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            <Layers className="inline w-8 h-8 mr-2 text-indigo-600" />
+            <Layers className="inline w-8 h-8 mr-2 text-indigo-600 gi3d" />
             키워드 대량 등록 (10만 규모)
           </h1>
           <p className="text-gray-600">
@@ -222,7 +223,7 @@ export default function ScaleUploadPage() {
         {/* 경고 카드 */}
         <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 mb-6">
           <div className="flex gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-700 flex-shrink-0 mt-0.5" />
+            <AlertTriangle className="w-5 h-5 text-amber-700 flex-shrink-0 mt-0.5 gi3d" />
             <div className="text-sm text-amber-900">
               <p className="font-semibold mb-1">중요 안내</p>
               <ul className="space-y-1 text-amber-800">
@@ -306,7 +307,7 @@ export default function ScaleUploadPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
           <h2 className="font-semibold text-gray-900 mb-4">엑셀 파일</h2>
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-sm text-blue-900 flex gap-2">
-            <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <Info className="w-4 h-4 flex-shrink-0 mt-0.5 gi3d" />
             <span>A열에 키워드만 넣으세요. 입찰가는 위에서 설정한 값으로 모든 키워드에 일괄 적용됩니다.</span>
           </div>
           <div
@@ -335,7 +336,7 @@ export default function ScaleUploadPage() {
             />
             {file ? (
               <div className="flex items-center justify-center gap-3">
-                <FileSpreadsheet className="w-8 h-8 text-green-600" />
+                <FileSpreadsheet className="w-8 h-8 text-green-600 gi3d" />
                 <div className="text-left">
                   <div className="font-medium">{file.name}</div>
                   <div className="text-sm text-gray-500">{(file.size / 1024).toFixed(1)} KB</div>
@@ -344,12 +345,12 @@ export default function ScaleUploadPage() {
                   onClick={(e) => { e.stopPropagation(); setFile(null); if (fileInputRef.current) fileInputRef.current.value = '' }}
                   className="ml-4 p-2 text-gray-400 hover:text-red-600"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-4 h-4 gi3d" />
                 </button>
               </div>
             ) : (
               <>
-                <Upload className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                <GlassIcon icon={Upload} size={72} className="mx-auto mb-2" />
                 <p className="text-gray-700 font-medium">엑셀 파일을 끌어놓거나 클릭해서 선택</p>
                 <p className="text-sm text-gray-500 mt-1">.xlsx, .xls, .csv (최대 50MB)</p>
               </>
@@ -366,7 +367,7 @@ export default function ScaleUploadPage() {
               </>
             ) : (
               <>
-                <Play className="w-4 h-4" /> 대량 등록 시작
+                <Play className="w-4 h-4 gi3d" /> 대량 등록 시작
               </>
             )}
           </button>
@@ -386,7 +387,7 @@ export default function ScaleUploadPage() {
                 onClick={() => { setCurrentJobId(null); setCurrentJob(null) }}
                 className="text-gray-400 hover:text-gray-600"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4 h-4 gi3d" />
               </button>
             </div>
 
@@ -431,7 +432,7 @@ export default function ScaleUploadPage() {
                 onClick={() => downloadFailuresCsv(selected.id)}
                 className="mt-4 flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
               >
-                <Download className="w-4 h-4" /> 실패 키워드 CSV 다운로드 ({selected.failed_count}개)
+                <Download className="w-4 h-4 gi3d" /> 실패 키워드 CSV 다운로드 ({selected.failed_count}개)
               </button>
             )}
 
@@ -451,7 +452,7 @@ export default function ScaleUploadPage() {
               onClick={refreshJobs}
               className="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1"
             >
-              <RefreshCw className="w-3 h-3" /> 새로고침
+              <RefreshCw className="w-3 h-3 gi3d" /> 새로고침
             </button>
           </div>
           {jobs.length === 0 ? (

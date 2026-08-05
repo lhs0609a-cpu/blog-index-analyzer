@@ -346,7 +346,7 @@ export default function BudgetReallocationPage() {
               <div className="text-center py-12 text-gray-400">로딩 중...</div>
             ) : healthData?.status === "no_data" ? (
               <div className="text-center py-12 bg-gray-800 rounded-lg">
-                <BarChart3 className="w-10 h-10 mb-3" strokeWidth={1.75} />
+                <BarChart3 className="w-10 h-10 mb-3 gi3d" strokeWidth={1.75} />
                 <div className="text-gray-400">성과 데이터가 없습니다.</div>
                 <p className="text-sm text-gray-500 mt-2">
                   광고 플랫폼을 연동하고 성과 데이터를 수집하세요.
@@ -388,7 +388,7 @@ export default function BudgetReallocationPage() {
                 {healthData?.is_imbalanced && (
                   <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-4 mb-6">
                     <div className="flex items-center gap-2 text-yellow-400">
-                      <AlertTriangle className="w-5 h-5" strokeWidth={1.75} />
+                      <AlertTriangle className="w-5 h-5 gi3d" strokeWidth={1.75} />
                       <span className="font-semibold">예산 불균형 감지</span>
                     </div>
                     <p className="text-gray-300 mt-1">
@@ -480,7 +480,7 @@ export default function BudgetReallocationPage() {
 
                         {/* Recommendation - 플랫폼 색상 테두리 적용 */}
                         <div className={`text-sm border-t border-gray-600/50 pt-3`}>
-                          <Lightbulb className={`w-4 h-4 inline-block mr-1 ${platformStyle.textColor}`} strokeWidth={1.75} />
+                          <Lightbulb className={`gi3d w-4 h-4 inline-block mr-1 ${platformStyle.textColor}`} strokeWidth={1.75} />
                           <span className="text-gray-300">{platform.recommendation}</span>
                         </div>
                       </div>
@@ -643,7 +643,7 @@ export default function BudgetReallocationPage() {
           <div>
             {history.length === 0 ? (
               <div className="text-center py-12 bg-gray-800 rounded-lg">
-                <ScrollText className="w-10 h-10 mb-3 mx-auto text-gray-300" strokeWidth={1.5} />
+                <ScrollText className="w-10 h-10 mb-3 mx-auto text-gray-300 gi3d" strokeWidth={1.5} />
                 <div className="text-gray-400">재분배 이력이 없습니다.</div>
               </div>
             ) : (

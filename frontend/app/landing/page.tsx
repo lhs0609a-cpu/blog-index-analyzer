@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
+import GlassIcon from '@/components/GlassIcon'
 import {
   Zap, TrendingUp, Target, Clock, DollarSign, Users,
   CheckCircle, XCircle, ArrowRight, Star, Play, Shield,
@@ -66,7 +67,7 @@ function HeroSection() {
           className="flex justify-center mb-8"
         >
           <div className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-500/20 to-red-500/20 border border-orange-500/30 rounded-full px-4 py-2">
-            <Timer className="w-4 h-4 text-orange-400" />
+            <Timer className="w-4 h-4 text-orange-400 gi3d" />
             <span className="text-orange-300 text-sm font-medium">
               얼리버드 특가 마감까지 <span className="font-bold text-orange-400">D-3</span> |
               <span className="text-white font-bold ml-1">50% 할인</span>
@@ -135,7 +136,7 @@ function HeroSection() {
             <div className="text-left">
               <div className="flex items-center gap-1">
                 {[1, 2, 3, 4, 5].map((i) => (
-                  <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                  <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400 gi3d" />
                 ))}
                 <span className="text-white font-bold ml-1">4.9</span>
               </div>
@@ -155,16 +156,16 @@ function HeroSection() {
               className="group relative px-10 py-5 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-2xl text-white font-bold text-xl shadow-2xl shadow-blue-500/30 hover:shadow-blue-500/50 transition-all duration-300 hover:scale-105"
             >
               <span className="flex items-center gap-2">
-                <Zap className="w-6 h-6" />
+                <Zap className="w-6 h-6 gi3d" />
                 내 블로그 무료 진단받기
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform gi3d" />
               </span>
               <span className="absolute -top-3 -right-3 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full animate-bounce">
                 무료
               </span>
             </Link>
             <button className="flex items-center gap-2 px-8 py-5 text-gray-300 hover:text-white transition-colors">
-              <Play className="w-5 h-5" />
+              <Play className="w-5 h-5 gi3d" />
               2분 데모 영상 보기
             </button>
           </motion.div>
@@ -177,15 +178,15 @@ function HeroSection() {
             className="mt-10 flex items-center justify-center gap-6 text-gray-500 text-sm"
           >
             <span className="flex items-center gap-1">
-              <Shield className="w-4 h-4" />
+              <Shield className="w-4 h-4 gi3d" />
               카드 정보 필요 없음
             </span>
             <span className="flex items-center gap-1">
-              <Clock className="w-4 h-4" />
+              <Clock className="w-4 h-4 gi3d" />
               3분 만에 결과 확인
             </span>
             <span className="flex items-center gap-1">
-              <CheckCircle className="w-4 h-4" />
+              <CheckCircle className="w-4 h-4 gi3d" />
               가입 없이 바로 시작
             </span>
           </motion.div>
@@ -198,7 +199,7 @@ function HeroSection() {
           transition={{ delay: 1.5 }}
           className="absolute bottom-10 left-1/2 -translate-x-1/2"
         >
-          <ChevronDown className="w-8 h-8 text-gray-500 animate-bounce" />
+          <ChevronDown className="w-8 h-8 text-gray-500 animate-bounce gi3d" />
         </motion.div>
       </div>
     </section>
@@ -209,25 +210,25 @@ function HeroSection() {
 function ProblemSection() {
   const problems = [
     {
-      icon: <Clock className="w-8 h-8" />,
+      icon: <Clock className="w-8 h-8 gi3d" />,
       title: "매일 3시간씩 키워드 리서치",
       desc: "검색량 높은 키워드 찾느라 밤새 네이버 뒤지고 계시죠?",
       loss: "연간 1,095시간 낭비"
     },
     {
-      icon: <TrendingUp className="w-8 h-8" />,
+      icon: <TrendingUp className="w-8 h-8 gi3d" />,
       title: "노출 순위가 왜 떨어지는지 모름",
       desc: "어제까지 1페이지였는데 갑자기 10페이지로... 이유를 모르겠다고요?",
       loss: "월 방문자 -87% 급감"
     },
     {
-      icon: <Target className="w-8 h-8" />,
+      icon: <Target className="w-8 h-8 gi3d" />,
       title: "경쟁 블로그 분석? 감으로 하는 중",
       desc: "상위 노출 블로그가 뭘 잘하는지 알면 따라할 텐데...",
       loss: "수익 기회 매달 놓침"
     },
     {
-      icon: <AlertTriangle className="w-8 h-8" />,
+      icon: <AlertTriangle className="w-8 h-8 gi3d" />,
       title: "저품질 블로그 낙인 공포",
       desc: "열심히 썼는데 갑자기 저품질? 복구 방법도 모르겠고...",
       loss: "6개월 노력 물거품"
@@ -275,7 +276,7 @@ function ProblemSection() {
                   <h3 className="text-xl font-bold text-white mb-2">{problem.title}</h3>
                   <p className="text-gray-400 mb-3">{problem.desc}</p>
                   <div className="inline-flex items-center gap-2 bg-red-500/10 text-red-400 px-3 py-1 rounded-full text-sm">
-                    <XCircle className="w-4 h-4" />
+                    <XCircle className="w-4 h-4 gi3d" />
                     {problem.loss}
                   </div>
                 </div>
@@ -311,28 +312,28 @@ function ProblemSection() {
 function SolutionSection() {
   const features = [
     {
-      icon: <Brain className="w-10 h-10" />,
+      icon: <GlassIcon icon={Brain} size={72} />,
       title: "AI 블로그 지수 분석",
       desc: "C-Rank, D.I.A 등 숨겨진 블로그 지수를 AI가 실시간 분석. 내 블로그가 왜 노출이 안 되는지 원인을 콕 집어드립니다.",
       metric: "정확도 94.7%",
       color: "blue"
     },
     {
-      icon: <Search className="w-10 h-10" />,
+      icon: <GlassIcon icon={Search} size={72} />,
       title: "황금 키워드 발굴",
       desc: "검색량은 높고 경쟁은 낮은 '블루오션 키워드'를 자동으로 찾아드립니다. 더 이상 감으로 키워드 찾지 마세요.",
       metric: "월 50개+ 추천",
       color: "cyan"
     },
     {
-      icon: <BarChart3 className="w-10 h-10" />,
+      icon: <GlassIcon icon={BarChart3} size={72} />,
       title: "경쟁 블로그 역분석",
       desc: "상위 노출 블로그가 어떤 전략을 쓰는지 낱낱이 분석해드립니다. 그대로 따라만 하세요.",
       metric: "상위 20개 분석",
       color: "green"
     },
     {
-      icon: <Zap className="w-10 h-10" />,
+      icon: <GlassIcon icon={Zap} size={72} />,
       title: "AI 광고 자동 최적화",
       desc: "1분마다 입찰가를 자동 조정. 잠자는 동안에도 ROAS 342% 달성. 광고비 38% 절감.",
       metric: "평균 ROAS 342%",
@@ -386,7 +387,7 @@ function SolutionSection() {
               <h3 className="text-2xl font-bold text-white mb-3">{feature.title}</h3>
               <p className="text-gray-300 mb-4 leading-relaxed">{feature.desc}</p>
               <div className="inline-flex items-center gap-2 bg-white/10 px-4 py-2 rounded-full">
-                <CheckCircle className="w-4 h-4 text-green-400" />
+                <CheckCircle className="w-4 h-4 text-green-400 gi3d" />
                 <span className="text-white font-medium">{feature.metric}</span>
               </div>
             </motion.div>
@@ -422,7 +423,7 @@ function ComparisonSection() {
           {/* Before */}
           <div className="bg-gradient-to-br from-red-950/30 to-slate-900 border border-red-900/30 rounded-2xl p-8">
             <div className="flex items-center gap-2 text-red-400 mb-6">
-              <XCircle className="w-6 h-6" />
+              <XCircle className="w-6 h-6 gi3d" />
               <span className="font-bold text-xl">기존 방식</span>
             </div>
             <ul className="space-y-4">
@@ -435,7 +436,7 @@ function ComparisonSection() {
                 "월 100만원+ 마케팅 대행료"
               ].map((item, idx) => (
                 <li key={idx} className="flex items-center gap-3 text-gray-400">
-                  <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                  <XCircle className="w-5 h-5 text-red-500 flex-shrink-0 gi3d" />
                   {item}
                 </li>
               ))}
@@ -448,7 +449,7 @@ function ComparisonSection() {
               추천
             </div>
             <div className="flex items-center gap-2 text-green-400 mb-6">
-              <CheckCircle className="w-6 h-6" />
+              <CheckCircle className="w-6 h-6 gi3d" />
               <span className="font-bold text-xl">블랭크 사용 시</span>
             </div>
             <ul className="space-y-4">
@@ -461,7 +462,7 @@ function ComparisonSection() {
                 "월 9,900원으로 전부 해결"
               ].map((item, idx) => (
                 <li key={idx} className="flex items-center gap-3 text-white">
-                  <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                  <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 gi3d" />
                   {item}
                 </li>
               ))}
@@ -530,7 +531,7 @@ function TestimonialsSection() {
             >
               <div className="flex items-center gap-1 mb-4">
                 {[1, 2, 3, 4, 5].map((i) => (
-                  <Star key={i} className="w-5 h-5 fill-yellow-400 text-yellow-400" />
+                  <Star key={i} className="w-5 h-5 fill-yellow-400 text-yellow-400 gi3d" />
                 ))}
               </div>
               <p className="text-gray-300 mb-6 leading-relaxed">"{testimonial.content}"</p>
@@ -612,7 +613,7 @@ function PricingSection() {
                   "24시간 실시간 모니터링"
                 ].map((item, idx) => (
                   <div key={idx} className="flex items-center gap-2 text-gray-300">
-                    <CheckCircle className="w-5 h-5 text-green-400" />
+                    <CheckCircle className="w-5 h-5 text-green-400 gi3d" />
                     {item}
                   </div>
                 ))}
@@ -622,16 +623,16 @@ function PricingSection() {
                 href="/pricing"
                 className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl text-white font-bold text-lg hover:scale-105 transition-transform"
               >
-                <Rocket className="w-5 h-5" />
+                <Rocket className="w-5 h-5 gi3d" />
                 지금 시작하기
-                <ArrowRight className="w-5 h-5" />
+                <ArrowRight className="w-5 h-5 gi3d" />
               </Link>
             </div>
 
             {/* Right - ROI Calculator */}
             <div className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700">
               <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-green-400" />
+                <DollarSign className="w-5 h-5 text-green-400 gi3d" />
                 ROI 계산기
               </h3>
               <div className="space-y-4">
@@ -669,7 +670,7 @@ function PricingSection() {
           className="mt-8 text-center"
         >
           <div className="inline-flex items-center gap-3 bg-slate-800/50 border border-slate-700 rounded-xl px-6 py-4">
-            <Shield className="w-8 h-8 text-green-400" />
+            <Shield className="w-8 h-8 text-green-400 gi3d" />
             <div className="text-left">
               <p className="text-white font-bold">7일 이내 100% 환불 보장</p>
               <p className="text-gray-400 text-sm">효과 없으면 100% 환불해 드립니다</p>
@@ -711,7 +712,7 @@ function FinalCTASection() {
             >
               <span className="flex items-center gap-2">
                 지금 바로 무료 분석 시작
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform gi3d" />
               </span>
             </Link>
           </div>

@@ -296,7 +296,7 @@ export default function FunnelBiddingPage() {
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <Target className="w-8 h-8" />
+                <Target className="w-8 h-8 gi3d" />
                 <h1 className="text-3xl font-bold">퍼널 기반 입찰</h1>
               </div>
               <p className="text-indigo-100">
@@ -318,7 +318,7 @@ export default function FunnelBiddingPage() {
                 {analyzing ? (
                   <RefreshCw className="w-4 h-4 animate-spin" />
                 ) : (
-                  <Zap className="w-4 h-4" />
+                  <Zap className="w-4 h-4 gi3d" />
                 )}
                 {analyzing ? '분석 중...' : '분석 실행'}
               </button>
@@ -333,7 +333,7 @@ export default function FunnelBiddingPage() {
                 <div className="flex-1 text-center">
                   <div className="w-32 h-20 mx-auto bg-blue-500/30 rounded-t-full flex items-center justify-center">
                     <div>
-                      <Eye className="w-6 h-6 mx-auto mb-1" />
+                      <Eye className="w-6 h-6 mx-auto mb-1 gi3d" />
                       <p className="text-sm font-medium">TOFU</p>
                     </div>
                   </div>
@@ -343,7 +343,7 @@ export default function FunnelBiddingPage() {
 
                 {/* Arrow 1 */}
                 <div className="flex flex-col items-center px-4">
-                  <ArrowRight className="w-8 h-8 text-white/60" />
+                  <ArrowRight className="w-8 h-8 text-white/60 gi3d" />
                   <p className="text-sm mt-1">{funnelFlow.tofu_to_mofu_rate.toFixed(1)}%</p>
                 </div>
 
@@ -351,7 +351,7 @@ export default function FunnelBiddingPage() {
                 <div className="flex-1 text-center">
                   <div className="w-24 h-16 mx-auto bg-yellow-500/30 rounded-t-lg flex items-center justify-center">
                     <div>
-                      <MousePointer className="w-5 h-5 mx-auto mb-1" />
+                      <MousePointer className="w-5 h-5 mx-auto mb-1 gi3d" />
                       <p className="text-sm font-medium">MOFU</p>
                     </div>
                   </div>
@@ -361,7 +361,7 @@ export default function FunnelBiddingPage() {
 
                 {/* Arrow 2 */}
                 <div className="flex flex-col items-center px-4">
-                  <ArrowRight className="w-8 h-8 text-white/60" />
+                  <ArrowRight className="w-8 h-8 text-white/60 gi3d" />
                   <p className="text-sm mt-1">{funnelFlow.mofu_to_bofu_rate.toFixed(1)}%</p>
                 </div>
 
@@ -369,7 +369,7 @@ export default function FunnelBiddingPage() {
                 <div className="flex-1 text-center">
                   <div className="w-16 h-12 mx-auto bg-green-500/30 rounded flex items-center justify-center">
                     <div>
-                      <ShoppingCart className="w-4 h-4 mx-auto mb-1" />
+                      <ShoppingCart className="w-4 h-4 mx-auto mb-1 gi3d" />
                       <p className="text-xs font-medium">BOFU</p>
                     </div>
                   </div>
@@ -495,7 +495,7 @@ export default function FunnelBiddingPage() {
               {/* 전체 성과 */}
               <div className="bg-white rounded-xl p-6 shadow-sm">
                 <h3 className="font-semibold mb-4 flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-indigo-500" />
+                  <Activity className="w-5 h-5 text-indigo-500 gi3d" />
                   전체 성과
                 </h3>
                 {summary && (
@@ -531,7 +531,7 @@ export default function FunnelBiddingPage() {
               {/* 권장사항 */}
               <div className="bg-white rounded-xl p-6 shadow-sm">
                 <h3 className="font-semibold mb-4 flex items-center gap-2">
-                  <Lightbulb className="w-5 h-5 text-yellow-500" />
+                  <Lightbulb className="w-5 h-5 text-yellow-500 gi3d" />
                   입찰 최적화 권장사항
                 </h3>
                 <div className="space-y-3 max-h-80 overflow-y-auto">
@@ -580,7 +580,7 @@ export default function FunnelBiddingPage() {
             {/* 필터 */}
             <div className="flex items-center gap-4 mb-4">
               <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-gray-500" />
+                <Filter className="w-4 h-4 text-gray-500 gi3d" />
                 <span className="text-sm text-gray-500">단계:</span>
                 <select
                   value={selectedStage || ''}
@@ -647,7 +647,7 @@ export default function FunnelBiddingPage() {
                             <p className="text-sm text-gray-500">지출</p>
                             <p className="font-semibold">₩{campaign.spend.toLocaleString()}</p>
                           </div>
-                          {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                          {isExpanded ? <ChevronDown className="w-5 h-5 gi3d" /> : <ChevronRight className="w-5 h-5 gi3d" />}
                         </div>
                       </div>
                     </div>
@@ -790,7 +790,7 @@ export default function FunnelBiddingPage() {
               {allocation.adjustment_needed && (
                 <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                   <div className="flex items-start gap-3">
-                    <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5" />
+                    <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 gi3d" />
                     <div>
                       <p className="font-medium text-yellow-800">조정이 필요합니다</p>
                       <p className="text-sm text-yellow-700 mt-1">{allocation.recommendation}</p>

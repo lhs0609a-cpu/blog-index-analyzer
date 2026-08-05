@@ -210,7 +210,7 @@ export default function ValueProposition({ type }: ValuePropositionProps) {
           {/* Benefits Grid */}
           <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
             <h4 className="text-white font-semibold mb-4 flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-yellow-400" />
+              <Sparkles className="w-5 h-5 text-yellow-400 gi3d" />
               이렇게 돈을 벌어다 줍니다
             </h4>
             <div className="grid md:grid-cols-2 gap-3">

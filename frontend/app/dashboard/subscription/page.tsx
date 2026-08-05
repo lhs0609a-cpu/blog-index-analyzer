@@ -7,6 +7,7 @@ import {
   ArrowLeft, Loader2, CheckCircle, XCircle, Receipt,
   TrendingUp, Search, BarChart3, Clock, Check, X
 , Lock} from 'lucide-react'
+import GlassIcon from '@/components/GlassIcon'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/stores/auth'
@@ -173,12 +174,12 @@ export default function SubscriptionPage() {
 
   const renderFeatureValue = (value: boolean | string, isCurrentPlan: boolean) => {
     if (value === false) {
-      return <X className="w-5 h-5 text-gray-300 mx-auto" />
+      return <X className="w-5 h-5 text-gray-300 mx-auto gi3d" />
     }
     if (value === true) {
       return (
         <div className={`inline-flex items-center justify-center w-6 h-6 rounded-full ${isCurrentPlan ? 'bg-purple-500' : 'bg-green-500'}`}>
-          <Check className="w-4 h-4 text-white" />
+          <Check className="w-4 h-4 text-white gi3d" />
         </div>
       )
     }
@@ -210,7 +211,7 @@ export default function SubscriptionPage() {
             animate={{ opacity: 1, x: 0 }}
             className="mb-6 flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-white/50 rounded-lg transition-all"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-5 h-5 gi3d" />
             <span className="font-medium">대시보드로</span>
           </motion.button>
         </Link>
@@ -238,9 +239,9 @@ export default function SubscriptionPage() {
             <div className="flex items-center gap-4">
               <div className={`p-4 rounded-2xl bg-gradient-to-br ${planColors[subscription?.plan_type || 'free']} text-white`}>
                 {subscription?.plan_type === 'pro' ? (
-                  <Crown className="w-8 h-8" />
+                  <Crown className="w-8 h-8 gi3d" />
                 ) : (
-                  <Zap className="w-8 h-8" />
+                  <Zap className="w-8 h-8 gi3d" />
                 )}
               </div>
               <div>
@@ -248,17 +249,17 @@ export default function SubscriptionPage() {
                 <div className="flex items-center gap-2 mt-1">
                   {subscription?.status === 'active' ? (
                     <>
-                      <CheckCircle className="w-4 h-4 text-green-500" />
+                      <CheckCircle className="w-4 h-4 text-green-500 gi3d" />
                       <span className="text-green-600 text-sm font-medium">활성</span>
                     </>
                   ) : subscription?.status === 'cancelled' ? (
                     <>
-                      <Clock className="w-4 h-4 text-yellow-500" />
+                      <Clock className="w-4 h-4 text-yellow-500 gi3d" />
                       <span className="text-yellow-600 text-sm font-medium">취소됨 (만료 전)</span>
                     </>
                   ) : (
                     <>
-                      <XCircle className="w-4 h-4 text-red-500" />
+                      <XCircle className="w-4 h-4 text-red-500 gi3d" />
                       <span className="text-red-600 text-sm font-medium">만료됨</span>
                     </>
                   )}
@@ -311,7 +312,7 @@ export default function SubscriptionPage() {
           {subscription?.plan_type !== 'free' && subscription?.status === 'active' && (
             <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-xl">
               <div className="flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 gi3d" />
                 <div className="text-sm">
                   <span className="font-semibold text-green-800">언제든 한 클릭으로 해지 가능</span>
                   <span className="text-green-700 ml-2">위의 &apos;구독 취소&apos; 버튼으로 즉시 해지 · 위약금 0원</span>
@@ -329,7 +330,7 @@ export default function SubscriptionPage() {
           className="glass rounded-3xl p-8 mb-6"
         >
           <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-            <BarChart3 className="w-6 h-6 text-purple-600" />
+            <BarChart3 className="w-6 h-6 text-purple-600 gi3d" />
             오늘의 사용량
           </h3>
 
@@ -338,7 +339,7 @@ export default function SubscriptionPage() {
             <div className="p-4 bg-gray-50 rounded-2xl">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <Search className="w-5 h-5 text-blue-600" />
+                  <Search className="w-5 h-5 text-blue-600 gi3d" />
                   <span className="font-semibold">키워드 검색</span>
                 </div>
                 <span className="text-sm text-gray-500">
@@ -361,7 +362,7 @@ export default function SubscriptionPage() {
               )}
               {usage?.keyword_searches.remaining !== undefined && usage.keyword_searches.remaining !== -1 && usage.keyword_searches.remaining <= 3 && (
                 <div className="mt-2 text-sm text-orange-600 flex items-center gap-1">
-                  <AlertCircle className="w-4 h-4" />
+                  <AlertCircle className="w-4 h-4 gi3d" />
                   남은 횟수가 적습니다
                 </div>
               )}
@@ -371,7 +372,7 @@ export default function SubscriptionPage() {
             <div className="p-4 bg-gray-50 rounded-2xl">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-purple-600" />
+                  <TrendingUp className="w-5 h-5 text-purple-600 gi3d" />
                   <span className="font-semibold">블로그 분석</span>
                 </div>
                 <span className="text-sm text-gray-500">
@@ -394,7 +395,7 @@ export default function SubscriptionPage() {
               )}
               {usage?.blog_analyses.remaining !== undefined && usage.blog_analyses.remaining !== -1 && usage.blog_analyses.remaining <= 1 && (
                 <div className="mt-2 text-sm text-orange-600 flex items-center gap-1">
-                  <AlertCircle className="w-4 h-4" />
+                  <AlertCircle className="w-4 h-4 gi3d" />
                   남은 횟수가 적습니다
                 </div>
               )}
@@ -425,7 +426,7 @@ export default function SubscriptionPage() {
           className="glass rounded-3xl p-8 mb-6"
         >
           <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-            <Zap className="w-6 h-6 text-purple-600" />
+            <Zap className="w-6 h-6 text-purple-600 gi3d" />
             플랜별 기능 비교
           </h3>
 
@@ -499,13 +500,13 @@ export default function SubscriptionPage() {
           className="glass rounded-3xl p-8"
         >
           <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-            <Receipt className="w-6 h-6 text-purple-600" />
+            <Receipt className="w-6 h-6 text-purple-600 gi3d" />
             결제 내역
           </h3>
 
           {payments.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              <CreditCard className="w-12 h-12 mx-auto mb-3 opacity-30" />
+              <GlassIcon icon={CreditCard} size={86} className="mx-auto mb-3" />
               <p>결제 내역이 없습니다</p>
             </div>
           ) : (
@@ -519,7 +520,7 @@ export default function SubscriptionPage() {
                     <div className={`p-2 rounded-lg ${
                       payment.status === 'completed' ? 'bg-green-100' : 'bg-gray-100'
                     }`}>
-                      <CreditCard className={`w-5 h-5 ${
+                      <CreditCard className={`gi3d w-5 h-5 ${
                         payment.status === 'completed' ? 'text-green-600' : 'text-gray-400'
                       }`} />
                     </div>
@@ -556,7 +557,7 @@ export default function SubscriptionPage() {
           >
             <div className="text-center mb-6">
               <div className="inline-flex p-4 rounded-full bg-red-100 mb-4">
-                <AlertCircle className="w-8 h-8 text-red-500" />
+                <AlertCircle className="w-8 h-8 text-red-500 gi3d" />
               </div>
               <h3 className="text-2xl font-bold mb-2">구독을 취소하시겠습니까?</h3>
               <p className="text-gray-600">

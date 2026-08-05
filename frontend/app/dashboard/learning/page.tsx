@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { TrendingUp, Zap, Target, Activity, Award, ArrowUp, ArrowDown, ArrowLeft, AlertTriangle, CheckCircle, XCircle , Lock} from 'lucide-react'
+import GlassIcon from '@/components/GlassIcon'
 import { getApiUrl } from '@/lib/api/apiConfig'
 import { useAuthStore } from '@/lib/stores/auth'
 import toast from 'react-hot-toast'
@@ -223,8 +224,8 @@ export default function LearningEnginePage() {
   }, [isAuthenticated, router])
 
   const getTrendIcon = (trend: string) => {
-    if (trend === 'up') return <ArrowUp className="w-4 h-4 text-green-500" />
-    if (trend === 'down') return <ArrowDown className="w-4 h-4 text-red-500" />
+    if (trend === 'up') return <ArrowUp className="w-4 h-4 text-green-500 gi3d" />
+    if (trend === 'down') return <ArrowDown className="w-4 h-4 text-red-500 gi3d" />
     return <div className="w-4 h-4" />
   }
 
@@ -243,7 +244,7 @@ export default function LearningEnginePage() {
           onClick={() => router.back()}
           className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-white/50 rounded-lg transition-all"
         >
-          <ArrowLeft className="w-5 h-5" />
+          <ArrowLeft className="w-5 h-5 gi3d" />
           <span className="font-medium">뒤로가기</span>
         </button>
 
@@ -252,7 +253,7 @@ export default function LearningEnginePage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-800 mb-2 flex items-center gap-3">
-                <Zap className="w-8 h-8 text-purple-500" />
+                <Zap className="w-8 h-8 text-purple-500 gi3d" />
                 AI 순위 예측 학습 엔진
               </h1>
               <p className="text-gray-600">
@@ -310,25 +311,25 @@ export default function LearningEnginePage() {
         {/* 실시간 통계 카드 - 항상 표시 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
-            icon={<Target className="w-6 h-6" />}
+            icon={<Target className="w-6 h-6 gi3d" />}
             label="총 학습 샘플"
             value={stats.total_samples.toLocaleString()}
             color="from-purple-500 to-pink-500"
           />
           <StatCard
-            icon={<Award className="w-6 h-6" />}
+            icon={<Award className="w-6 h-6 gi3d" />}
             label="현재 정확도"
             value={`${stats.current_accuracy.toFixed(1)}%`}
             color="from-blue-500 to-cyan-500"
           />
           <StatCard
-            icon={<Activity className="w-6 h-6" />}
+            icon={<Activity className="w-6 h-6 gi3d" />}
             label="평균 괴리"
             value={deviationAnalysis?.overall_deviation ? `±${deviationAnalysis.overall_deviation.toFixed(1)}순위` : '-'}
             color="from-green-500 to-teal-500"
           />
           <StatCard
-            icon={<TrendingUp className="w-6 h-6" />}
+            icon={<TrendingUp className="w-6 h-6 gi3d" />}
             label="순위 상관계수"
             value={deviationAnalysis?.spearman_correlation ? `${(deviationAnalysis.spearman_correlation * 100).toFixed(1)}%` : '-'}
             color="from-orange-500 to-red-500"
@@ -341,12 +342,12 @@ export default function LearningEnginePage() {
             {/* 정확도 향상 그래프 */}
             <div className="bg-white rounded-2xl shadow-lg p-6">
               <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <TrendingUp className="w-6 h-6 text-purple-500" />
+                <TrendingUp className="w-6 h-6 text-purple-500 gi3d" />
                 정확도 향상 추이
               </h2>
               {accuracyHistory.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={accuracyHistory}>
+                  <LineChart data={accuracyHistory} className="gi3d">
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis dataKey="timestamp" stroke="#6b7280" />
                     <YAxis domain={[0, 100]} stroke="#6b7280" />
@@ -370,7 +371,7 @@ export default function LearningEnginePage() {
                 </ResponsiveContainer>
               ) : (
                 <div className="flex flex-col items-center justify-center h-[300px] text-gray-400">
-                  <TrendingUp className="w-12 h-12 mb-3" />
+                  <GlassIcon icon={TrendingUp} size={86} className="mb-3" />
                   <p className="text-lg font-medium">아직 학습 데이터가 없습니다</p>
                   <p className="text-sm mt-1">키워드 검색을 통해 데이터가 수집되면 그래프가 표시됩니다</p>
                 </div>
@@ -385,7 +386,7 @@ export default function LearningEnginePage() {
             {/* 순위 예측 정확도 */}
             <div className="bg-white rounded-2xl shadow-lg p-6">
               <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Target className="w-6 h-6 text-purple-500" />
+                <Target className="w-6 h-6 text-purple-500 gi3d" />
                 순위 예측 정확도
               </h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -438,7 +439,7 @@ export default function LearningEnginePage() {
             {/* 가중치 영향 분석 */}
             <div className="bg-white rounded-2xl shadow-lg p-6">
               <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Activity className="w-6 h-6 text-purple-500" />
+                <Activity className="w-6 h-6 text-purple-500 gi3d" />
                 가중치 영향 분석 (상위권 vs 하위권)
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -466,12 +467,12 @@ export default function LearningEnginePage() {
                     </div>
                     {data.top_avg > data.bottom_avg * 1.2 && (
                       <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
-                        <CheckCircle className="w-3 h-3" /> 상위권에서 높음 - 정상
+                        <CheckCircle className="w-3 h-3 gi3d" /> 상위권에서 높음 - 정상
                       </p>
                     )}
                     {data.bottom_avg > data.top_avg * 1.2 && (
                       <p className="text-xs text-red-600 mt-2 flex items-center gap-1">
-                        <AlertTriangle className="w-3 h-3" /> 하위권에서 더 높음 - 가중치 조정 필요
+                        <AlertTriangle className="w-3 h-3 gi3d" /> 하위권에서 더 높음 - 가중치 조정 필요
                       </p>
                     )}
                   </div>
@@ -483,7 +484,7 @@ export default function LearningEnginePage() {
             {deviationAnalysis.worst_predictions && deviationAnalysis.worst_predictions.length > 0 && (
               <div className="bg-white rounded-2xl shadow-lg p-6">
                 <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                  <AlertTriangle className="w-6 h-6 text-orange-500" />
+                  <AlertTriangle className="w-6 h-6 text-orange-500 gi3d" />
                   가장 큰 괴리 예측 (개선 필요)
                 </h2>
                 <div className="overflow-x-auto">
@@ -521,13 +522,13 @@ export default function LearningEnginePage() {
             {deviationAnalysis.recommendations && deviationAnalysis.recommendations.length > 0 && (
               <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl shadow-lg p-6 text-white">
                 <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <Zap className="w-6 h-6" />
+                  <Zap className="w-6 h-6 gi3d" />
                   AI 학습 권장사항
                 </h2>
                 <ul className="space-y-2">
                   {deviationAnalysis.recommendations.map((rec, idx) => (
                     <li key={idx} className="flex items-start gap-2">
-                      <CheckCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                      <CheckCircle className="w-5 h-5 mt-0.5 flex-shrink-0 gi3d" />
                       <span>{rec}</span>
                     </li>
                   ))}
@@ -539,7 +540,7 @@ export default function LearningEnginePage() {
 
         {activeTab === 'deviation' && !deviationAnalysis && (
           <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
-            <AlertTriangle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <GlassIcon icon={AlertTriangle} size={115} className="mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-600 mb-2">분석 데이터 부족</h3>
             <p className="text-gray-500">키워드 검색을 통해 데이터를 수집하면 괴리율 분석이 시작됩니다.</p>
           </div>
@@ -638,7 +639,7 @@ export default function LearningEnginePage() {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-              <Activity className="w-12 h-12 mb-3" />
+              <GlassIcon icon={Activity} size={86} className="mb-3" />
               <p className="text-lg font-medium">가중치 데이터를 불러오는 중...</p>
               <p className="text-sm mt-1">학습이 진행되면 가중치 분포가 표시됩니다</p>
             </div>

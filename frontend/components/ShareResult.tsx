@@ -145,7 +145,7 @@ export default function ShareResult({
         onClick={() => setIsOpen(true)}
         className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white rounded-xl font-medium shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 transition-all"
       >
-        <Share2 className="w-4 h-4" />
+        <Share2 className="w-4 h-4 gi3d" />
         결과 공유하기
       </motion.button>
 
@@ -173,7 +173,7 @@ export default function ShareResult({
                   onClick={() => setIsOpen(false)}
                   className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-5 h-5 gi3d" />
                 </button>
               </div>
 
@@ -242,9 +242,9 @@ export default function ShareResult({
                   className="flex flex-col items-center gap-2 p-3 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors"
                 >
                   {copied ? (
-                    <Check className="w-6 h-6 text-green-500" />
+                    <Check className="w-6 h-6 text-green-500 gi3d" />
                   ) : (
-                    <Link2 className="w-6 h-6 text-gray-600" />
+                    <Link2 className="w-6 h-6 text-gray-600 gi3d" />
                   )}
                   <span className="text-xs text-gray-600">링크 복사</span>
                 </button>
@@ -253,7 +253,7 @@ export default function ShareResult({
                   onClick={shareTwitter}
                   className="flex flex-col items-center gap-2 p-3 rounded-xl bg-[#1DA1F2]/10 hover:bg-[#1DA1F2]/20 transition-colors"
                 >
-                  <Twitter className="w-6 h-6 text-[#1DA1F2]" />
+                  <Twitter className="w-6 h-6 text-[#1DA1F2] gi3d" />
                   <span className="text-xs text-[#1DA1F2]">트위터</span>
                 </button>
 
@@ -261,7 +261,7 @@ export default function ShareResult({
                   onClick={shareKakao}
                   className="flex flex-col items-center gap-2 p-3 rounded-xl bg-[#FEE500]/30 hover:bg-[#FEE500]/50 transition-colors"
                 >
-                  <MessageCircle className="w-6 h-6 text-[#3C1E1E]" />
+                  <MessageCircle className="w-6 h-6 text-[#3C1E1E] gi3d" />
                   <span className="text-xs text-[#3C1E1E]">카카오톡</span>
                 </button>
 
@@ -269,7 +269,7 @@ export default function ShareResult({
                   onClick={downloadImage}
                   className="flex flex-col items-center gap-2 p-3 rounded-xl bg-purple-100 hover:bg-purple-200 transition-colors"
                 >
-                  <Camera className="w-6 h-6 text-purple-600" />
+                  <Camera className="w-6 h-6 text-purple-600 gi3d" />
                   <span className="text-xs text-purple-600">이미지 저장</span>
                 </button>
               </div>

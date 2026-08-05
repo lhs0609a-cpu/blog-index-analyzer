@@ -6,6 +6,7 @@ import {
   Trash2, Play, Info, Download, RefreshCw, X, Rocket, CheckCircle2,
   Pause, StopCircle, ArrowRight, BeakerIcon, Sparkles
 } from 'lucide-react'
+import GlassIcon from '@/components/GlassIcon'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/lib/stores/auth'
 import { adGet, adUpload, adPost, getApiBaseUrl } from '@/lib/api'
@@ -501,7 +502,7 @@ export default function VolumeFilterPage() {
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            <Filter className="inline w-8 h-8 mr-2 text-indigo-600" />
+            <Filter className="inline w-8 h-8 mr-2 text-indigo-600 gi3d" />
             검색량 필터링 (50만 규모)
           </h1>
           <p className="text-gray-600">
@@ -513,7 +514,7 @@ export default function VolumeFilterPage() {
         {/* 캐너리 안내 */}
         <div className="bg-gradient-to-r from-emerald-50 to-blue-50 border border-emerald-200 rounded-xl p-4 mb-6">
           <div className="flex gap-3">
-            <BeakerIcon className="w-5 h-5 text-emerald-700 flex-shrink-0 mt-0.5" />
+            <BeakerIcon className="w-5 h-5 text-emerald-700 flex-shrink-0 mt-0.5 gi3d" />
             <div className="text-sm text-emerald-900">
               <p className="font-semibold mb-1">캐너리 테스트 + 자동 계속 실행</p>
               <p className="text-emerald-800">
@@ -531,7 +532,7 @@ export default function VolumeFilterPage() {
         {/* 소요 시간 */}
         <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 mb-6">
           <div className="flex gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-700 flex-shrink-0 mt-0.5" />
+            <AlertTriangle className="w-5 h-5 text-amber-700 flex-shrink-0 mt-0.5 gi3d" />
             <div className="text-sm text-amber-900">
               <p className="font-semibold mb-1">소요 시간 안내</p>
               <ul className="space-y-1 text-amber-800">
@@ -547,7 +548,7 @@ export default function VolumeFilterPage() {
         {isAdmin && (
           <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl border-2 border-purple-300 p-6 mb-6">
             <div className="flex items-center gap-2 mb-1">
-              <Sparkles className="w-5 h-5 text-purple-600" />
+              <Sparkles className="w-5 h-5 text-purple-600 gi3d" />
               <h2 className="font-semibold text-gray-900">AI 키워드 자동 확장</h2>
               <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-600 text-white">ADMIN</span>
             </div>
@@ -559,7 +560,7 @@ export default function VolumeFilterPage() {
             {/* Step 0: AI 자동 제안 */}
             <div className="bg-gradient-to-r from-indigo-100 to-purple-100 border border-indigo-300 rounded-lg p-4 mb-4">
               <div className="flex items-center gap-2 mb-2">
-                <Sparkles className="w-4 h-4 text-indigo-700" />
+                <Sparkles className="w-4 h-4 text-indigo-700 gi3d" />
                 <span className="text-sm font-semibold text-indigo-900">
                   Step 0. 귀찮으면 AI에게 맡겨봐 (주제만 알려주면 씨앗/앵커 자동 생성)
                 </span>
@@ -591,7 +592,7 @@ export default function VolumeFilterPage() {
                 className="w-full bg-indigo-600 text-white py-2 rounded font-medium hover:bg-indigo-700 disabled:bg-gray-300 flex items-center justify-center gap-2 text-sm"
               >
                 {aiSuggesting ? <><Loader2 className="w-4 h-4 animate-spin" /> AI 추천 생성 중...</> :
-                  <><Sparkles className="w-4 h-4" /> 씨앗/앵커 AI 추천 받기</>}
+                  <><Sparkles className="w-4 h-4 gi3d" /> 씨앗/앵커 AI 추천 받기</>}
               </button>
               {aiSuggestionNote && (
                 <div className="mt-2 p-2 bg-white/70 rounded text-xs text-gray-700 whitespace-pre-line">
@@ -628,7 +629,7 @@ export default function VolumeFilterPage() {
               {/* 씨앗 증폭 버튼 */}
               <div className="mt-3 bg-gradient-to-r from-pink-50 to-purple-50 border border-pink-200 rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-2">
-                  <Sparkles className="w-4 h-4 text-pink-600" />
+                  <Sparkles className="w-4 h-4 text-pink-600 gi3d" />
                   <span className="text-sm font-semibold text-pink-900">
                     씨앗 AI 증폭 (위에 10개 주면 아래 버튼으로 N개로 펼쳐줌)
                   </span>
@@ -649,7 +650,7 @@ export default function VolumeFilterPage() {
                     className="flex-1 bg-pink-600 text-white py-2 rounded font-medium hover:bg-pink-700 disabled:bg-gray-300 flex items-center justify-center gap-2 text-sm"
                   >
                     {aiAmplifying ? <><Loader2 className="w-4 h-4 animate-spin" /> 증폭 중...</> :
-                      <><Sparkles className="w-4 h-4" /> 현재 씨앗을 {aiAmplifyTarget}개로 증폭</>}
+                      <><Sparkles className="w-4 h-4 gi3d" /> 현재 씨앗을 {aiAmplifyTarget}개로 증폭</>}
                   </button>
                 </div>
                 {aiAmplifyNote && (
@@ -814,7 +815,7 @@ export default function VolumeFilterPage() {
               className="w-full bg-purple-600 text-white py-3 rounded-lg font-medium hover:bg-purple-700 disabled:bg-gray-300 flex items-center justify-center gap-2"
             >
               {aiStarting ? <><Loader2 className="w-4 h-4 animate-spin" /> 시작 중...</> :
-                <><Sparkles className="w-4 h-4" /> {aiStreamRegister ? 'AI 확장 + 실시간 등록 시작' : 'AI 확장 시작 (수집만)'}</>}
+                <><Sparkles className="w-4 h-4 gi3d" /> {aiStreamRegister ? 'AI 확장 + 실시간 등록 시작' : 'AI 확장 시작 (수집만)'}</>}
             </button>
           </div>
         )}
@@ -897,7 +898,7 @@ export default function VolumeFilterPage() {
             />
             {file ? (
               <div className="flex items-center justify-center gap-3">
-                <FileSpreadsheet className="w-8 h-8 text-green-600" />
+                <FileSpreadsheet className="w-8 h-8 text-green-600 gi3d" />
                 <div className="text-left">
                   <div className="font-medium">{file.name}</div>
                   <div className="text-sm text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</div>
@@ -905,11 +906,11 @@ export default function VolumeFilterPage() {
                 <button
                   onClick={(e) => { e.stopPropagation(); setFile(null); if (fileInputRef.current) fileInputRef.current.value = '' }}
                   className="ml-4 p-2 text-gray-400 hover:text-red-600"
-                ><Trash2 className="w-4 h-4" /></button>
+                ><Trash2 className="w-4 h-4 gi3d" /></button>
               </div>
             ) : (
               <>
-                <Upload className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                <GlassIcon icon={Upload} size={72} className="mx-auto mb-2" />
                 <p className="text-gray-700 font-medium">엑셀 드래그 또는 클릭</p>
                 <p className="text-sm text-gray-500 mt-1">.xlsx, .xls, .csv (최대 100MB)</p>
               </>
@@ -922,7 +923,7 @@ export default function VolumeFilterPage() {
             className="mt-4 w-full bg-indigo-600 text-white py-3 rounded-lg font-medium hover:bg-indigo-700 disabled:bg-gray-300 flex items-center justify-center gap-2"
           >
             {starting ? <><Loader2 className="w-4 h-4 animate-spin" /> 시작 중...</> :
-              <><Filter className="w-4 h-4" /> 캐너리 테스트 시작</>}
+              <><Filter className="w-4 h-4 gi3d" /> 캐너리 테스트 시작</>}
           </button>
         </div>
 
@@ -940,26 +941,26 @@ export default function VolumeFilterPage() {
                     onClick={() => handlePause(currentJob.id)}
                     disabled={actionInFlight}
                     className="px-3 py-1.5 bg-yellow-100 text-yellow-800 hover:bg-yellow-200 rounded text-sm flex items-center gap-1"
-                  ><Pause className="w-3 h-3" /> 일시정지</button>
+                  ><Pause className="w-3 h-3 gi3d" /> 일시정지</button>
                 )}
                 {canResume && (
                   <button
                     onClick={() => handleResume(currentJob.id)}
                     disabled={actionInFlight}
                     className="px-3 py-1.5 bg-blue-100 text-blue-800 hover:bg-blue-200 rounded text-sm flex items-center gap-1"
-                  ><Play className="w-3 h-3" /> 재개</button>
+                  ><Play className="w-3 h-3 gi3d" /> 재개</button>
                 )}
                 {canCancel && (
                   <button
                     onClick={() => handleCancel(currentJob.id)}
                     disabled={actionInFlight}
                     className="px-3 py-1.5 bg-red-100 text-red-800 hover:bg-red-200 rounded text-sm flex items-center gap-1"
-                  ><StopCircle className="w-3 h-3" /> 취소</button>
+                  ><StopCircle className="w-3 h-3 gi3d" /> 취소</button>
                 )}
                 <button
                   onClick={() => { setCurrentJobId(null); setCurrentJob(null); setPreviewResults([]); setShowRegisterForm(false) }}
                   className="text-gray-400 hover:text-gray-600"
-                ><X className="w-4 h-4" /></button>
+                ><X className="w-4 h-4 gi3d" /></button>
               </div>
             </div>
 
@@ -1000,7 +1001,7 @@ export default function VolumeFilterPage() {
               <div className={`mt-4 p-3 rounded-lg flex items-center gap-3 ${
                 currentJob.canary_passed ? 'bg-green-50 border border-green-200' : 'bg-orange-50 border border-orange-200'
               }`}>
-                <BeakerIcon className={`w-5 h-5 ${currentJob.canary_passed ? 'text-green-700' : 'text-orange-700'}`} />
+                <BeakerIcon className={`gi3d w-5 h-5 ${currentJob.canary_passed ? 'text-green-700' : 'text-orange-700'}`} />
                 <div className="text-sm">
                   <span className="font-semibold">
                     캐너리 {currentJob.canary_passed ? '통과' : '미달'}:
@@ -1021,11 +1022,11 @@ export default function VolumeFilterPage() {
                   <button
                     onClick={() => downloadCsv(currentJob.id)}
                     className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 text-sm"
-                  ><Download className="w-4 h-4" /> 전체 CSV 다운로드</button>
+                  ><Download className="w-4 h-4 gi3d" /> 전체 CSV 다운로드</button>
                   <button
                     onClick={() => setShowRegisterForm(!showRegisterForm)}
                     className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
-                  ><Rocket className="w-4 h-4" /> 이 결과로 광고 등록하기</button>
+                  ><Rocket className="w-4 h-4 gi3d" /> 이 결과로 광고 등록하기</button>
                 </div>
 
                 {previewResults.length > 0 && (
@@ -1061,7 +1062,7 @@ export default function VolumeFilterPage() {
                 {showRegisterForm && (
                   <div className="mt-4 bg-indigo-50 border border-indigo-200 rounded-lg p-4">
                     <h3 className="font-semibold mb-3 flex items-center gap-2">
-                      <Rocket className="w-4 h-4" /> 2. 광고 등록 설정
+                      <Rocket className="w-4 h-4 gi3d" /> 2. 광고 등록 설정
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                       <div>
@@ -1095,7 +1096,7 @@ export default function VolumeFilterPage() {
                     >
                       {registering ? <><Loader2 className="w-4 h-4 animate-spin" /> 시작 중...</> :
                         registerJobId ? <>등록 작업 #{registerJobId} 진행 중</> :
-                        <><CheckCircle2 className="w-4 h-4" /> {currentJob.passed_count.toLocaleString()}개 광고 등록 시작</>}
+                        <><CheckCircle2 className="w-4 h-4 gi3d" /> {currentJob.passed_count.toLocaleString()}개 광고 등록 시작</>}
                     </button>
 
                     {/* 등록 작업 진행 패널 — redirect 제거하고 같은 페이지에서 표시 */}
@@ -1205,7 +1206,7 @@ export default function VolumeFilterPage() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-gray-900">필터 작업 이력</h2>
             <button onClick={refreshJobs} className="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1">
-              <RefreshCw className="w-3 h-3" /> 새로고침
+              <RefreshCw className="w-3 h-3 gi3d" /> 새로고침
             </button>
           </div>
           {jobs.length === 0 ? (

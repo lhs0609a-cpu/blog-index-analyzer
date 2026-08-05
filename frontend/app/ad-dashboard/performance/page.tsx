@@ -7,6 +7,7 @@ import {
   ArrowUpRight, ArrowDownRight, Minus, Eye
 } from 'lucide-react';
 import { useAuthStore } from '@/lib/stores/auth';
+import GlassIcon from '@/components/GlassIcon'
 
 interface KeywordPerformance {
   keyword_id: string;
@@ -146,9 +147,9 @@ export default function PerformanceDetailPage() {
 
   const getChangeIcon = (value: number, inverse: boolean = false) => {
     const isPositive = inverse ? value < 0 : value > 0;
-    if (Math.abs(value) < 0.1) return <Minus className="w-4 h-4 text-gray-400" />;
-    if (isPositive) return <ArrowUpRight className="w-4 h-4 text-green-400" />;
-    return <ArrowDownRight className="w-4 h-4 text-red-400" />;
+    if (Math.abs(value) < 0.1) return <Minus className="w-4 h-4 text-gray-400 gi3d" />;
+    if (isPositive) return <ArrowUpRight className="w-4 h-4 text-green-400 gi3d" />;
+    return <ArrowDownRight className="w-4 h-4 text-red-400 gi3d" />;
   };
 
   const getChangeColor = (value: number, inverse: boolean = false) => {
@@ -182,7 +183,7 @@ export default function PerformanceDetailPage() {
         <div className="flex items-center gap-4">
           {/* 마지막 업데이트 */}
           <div className="flex items-center gap-2 text-sm text-gray-400">
-            <Clock className="w-4 h-4" />
+            <Clock className="w-4 h-4 gi3d" />
             <span>마지막 업데이트: {lastUpdated.toLocaleTimeString()}</span>
           </div>
 
@@ -193,7 +194,7 @@ export default function PerformanceDetailPage() {
               autoRefresh ? 'bg-green-600/20 text-green-400' : 'bg-gray-800 text-gray-400'
             }`}
           >
-            <Activity className={`w-4 h-4 ${autoRefresh ? 'animate-pulse' : ''}`} />
+            <Activity className={`gi3d w-4 h-4 ${autoRefresh ? 'animate-pulse' : ''}`} />
             {autoRefresh ? '실시간 ON' : '실시간 OFF'}
           </button>
 
@@ -202,7 +203,7 @@ export default function PerformanceDetailPage() {
             onClick={fetchPerformanceData}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="w-4 h-4 gi3d" />
             새로고침
           </button>
         </div>
@@ -211,7 +212,7 @@ export default function PerformanceDetailPage() {
       {/* 실시간 최적화 로그 (라이브 피드) */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 mb-8">
         <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-          <Activity className="w-5 h-5 text-green-400" />
+          <Activity className="w-5 h-5 text-green-400 gi3d" />
           실시간 최적화 로그
           <span className="ml-2 px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-full animate-pulse">
             LIVE
@@ -229,7 +230,7 @@ export default function PerformanceDetailPage() {
               <div className="flex-shrink-0">
                 {log.result === 'success' ? (
                   <div className="w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center">
-                    <Zap className="w-4 h-4 text-green-400" />
+                    <Zap className="w-4 h-4 text-green-400 gi3d" />
                   </div>
                 ) : log.result === 'pending' ? (
                   <div className="w-8 h-8 bg-yellow-500/20 rounded-full flex items-center justify-center">
@@ -237,7 +238,7 @@ export default function PerformanceDetailPage() {
                   </div>
                 ) : (
                   <div className="w-8 h-8 bg-red-500/20 rounded-full flex items-center justify-center">
-                    <Minus className="w-4 h-4 text-red-400" />
+                    <Minus className="w-4 h-4 text-red-400 gi3d" />
                   </div>
                 )}
               </div>
@@ -252,7 +253,7 @@ export default function PerformanceDetailPage() {
 
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-gray-400">{formatCurrency(log.old_value)}</span>
-                <ArrowRight className="w-4 h-4 text-gray-500" />
+                <ArrowRight className="w-4 h-4 text-gray-500 gi3d" />
                 <span className={log.new_value > log.old_value ? 'text-green-400' : 'text-red-400'}>
                   {formatCurrency(log.new_value)}
                 </span>
@@ -269,7 +270,7 @@ export default function PerformanceDetailPage() {
       {/* 성과 추이 그래프 */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 mb-8">
         <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-          <BarChart2 className="w-5 h-5 text-blue-400" />
+          <BarChart2 className="w-5 h-5 text-blue-400 gi3d" />
           성과 추이 (최근 14일)
         </h2>
 
@@ -361,7 +362,7 @@ export default function PerformanceDetailPage() {
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Eye className="w-5 h-5 text-[#0064FF]" />
+            <Eye className="w-5 h-5 text-[#0064FF] gi3d" />
             키워드/광고별 성과 비교 (Before → After)
           </h2>
 
@@ -378,7 +379,7 @@ export default function PerformanceDetailPage() {
               <option value="meta_ads">Meta Ads</option>
               <option value="kakao_moment">카카오 모먼트</option>
             </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none gi3d" />
           </div>
         </div>
 
@@ -413,7 +414,7 @@ export default function PerformanceDetailPage() {
                   <td className="py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <span className="text-gray-400">{formatCurrency(kw.before.bid)}</span>
-                      <ArrowRight className="w-3 h-3 text-gray-500" />
+                      <ArrowRight className="w-3 h-3 text-gray-500 gi3d" />
                       <span className={kw.after.bid !== kw.before.bid ? 'text-blue-400 font-medium' : ''}>
                         {formatCurrency(kw.after.bid)}
                       </span>
@@ -471,7 +472,7 @@ export default function PerformanceDetailPage() {
 
         {keywords.length === 0 && (
           <div className="text-center py-12 text-gray-400">
-            <BarChart2 className="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <GlassIcon icon={BarChart2} size={86} className="mx-auto mb-4" />
             <p>아직 최적화된 키워드가 없습니다</p>
           </div>
         )}

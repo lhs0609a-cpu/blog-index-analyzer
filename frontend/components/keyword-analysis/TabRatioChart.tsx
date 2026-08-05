@@ -61,7 +61,7 @@ export default function TabRatioChart({
   return (
     <div className={`bg-white rounded-xl border border-gray-200 p-5 ${className}`}>
       <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-        <Globe className="w-5 h-5 text-purple-500" />
+        <Globe className="w-5 h-5 text-purple-500 gi3d" />
         탭별 검색 비율
       </h3>
 
@@ -167,7 +167,7 @@ export default function TabRatioChart({
       <div className="mt-4 pt-4 border-t border-gray-100">
         {tabRatio.blog > 0.4 && (
           <div className="flex items-start gap-2 p-2 bg-green-50 rounded-lg">
-            <FileText className="w-4 h-4 text-green-600 mt-0.5" />
+            <FileText className="w-4 h-4 text-green-600 mt-0.5 gi3d" />
             <p className="text-sm text-green-700">
               블로그 콘텐츠가 {toPercent(tabRatio.blog)}로 높습니다. 블로그 SEO에 집중하세요!
             </p>
@@ -175,7 +175,7 @@ export default function TabRatioChart({
         )}
         {tabRatio.cafe > 0.3 && (
           <div className="flex items-start gap-2 p-2 bg-orange-50 rounded-lg mt-2">
-            <Users className="w-4 h-4 text-orange-600 mt-0.5" />
+            <Users className="w-4 h-4 text-orange-600 mt-0.5 gi3d" />
             <p className="text-sm text-orange-700">
               카페 콘텐츠 비율이 높습니다. 네이버 카페 활동도 고려해보세요.
             </p>
@@ -183,7 +183,7 @@ export default function TabRatioChart({
         )}
         {tabRatio.kin > 0.25 && (
           <div className="flex items-start gap-2 p-2 bg-blue-50 rounded-lg mt-2">
-            <HelpCircle className="w-4 h-4 text-blue-600 mt-0.5" />
+            <HelpCircle className="w-4 h-4 text-blue-600 mt-0.5 gi3d" />
             <p className="text-sm text-blue-700">
               지식인 비율이 높습니다. Q&A 형식의 콘텐츠가 효과적일 수 있습니다.
             </p>

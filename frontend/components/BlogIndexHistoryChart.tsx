@@ -272,7 +272,7 @@ export default function BlogIndexHistoryChart({ blogId }: { blogId: string }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-[#0064FF]" strokeWidth={2} />
+            <TrendingUp className="w-5 h-5 text-[#0064FF] gi3d" strokeWidth={2} />
             지수 변화 추이
           </h3>
           <p className="text-sm text-gray-500 mt-1">
@@ -354,7 +354,7 @@ export default function BlogIndexHistoryChart({ blogId }: { blogId: string }) {
 
           <div className="h-56 -ml-2">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={rows} margin={{ top: 16, right: 28, bottom: 4, left: 0 }}>
+              <LineChart data={rows} margin={{ top: 16, right: 28, bottom: 4, left: 0 }} className="gi3d">
                 <CartesianGrid stroke={GRID} strokeWidth={1} vertical={false} />
                 <XAxis {...axisProps} />
                 <YAxis
@@ -407,7 +407,7 @@ export default function BlogIndexHistoryChart({ blogId }: { blogId: string }) {
 
       {!loading && !error && rows.length <= 1 && (
         <div className="mt-4 rounded-2xl border border-dashed border-gray-300 bg-gray-50/60 p-5 text-center">
-          <Clock className="w-6 h-6 text-gray-400 mx-auto mb-2" strokeWidth={1.75} />
+          <Clock className="w-6 h-6 text-gray-400 mx-auto mb-2 gi3d" strokeWidth={1.75} />
           <div className="font-semibold text-gray-800">
             {rows.length === 1 ? '지수는 오늘이 첫 기록입니다' : '이 기간에 측정한 지수가 없습니다'}
           </div>
@@ -430,7 +430,7 @@ export default function BlogIndexHistoryChart({ blogId }: { blogId: string }) {
       <div className="mt-6 border-t border-gray-100 pt-5">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
           <div className="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
-            <PenLine className="w-4 h-4 text-gray-400" strokeWidth={2} />
+            <PenLine className="w-4 h-4 text-gray-400 gi3d" strokeWidth={2} />
             발행 활동 {monthly ? '(월별)' : '(일별)'}
           </div>
           {postingSummary && (
@@ -518,7 +518,7 @@ export default function BlogIndexHistoryChart({ blogId }: { blogId: string }) {
 
       {data?.has_legacy && (
         <div className="mt-4 flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 leading-relaxed">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" strokeWidth={2} />
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 gi3d" strokeWidth={2} />
           <span>
             점선 왼쪽은 이전 채점 기준으로 매긴 점수입니다. 채점 방식이 바뀐 구간을 가로질러
             비교하면 실제 변화가 아닌 <b>기준 변경</b>이 상승·하락처럼 보일 수 있습니다.

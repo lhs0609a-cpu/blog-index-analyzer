@@ -89,8 +89,8 @@ export default function UsageIndicator({ compact = false, showUpgrade = true }: 
   const isLowUsage = !isUnlimited && (keywordRemaining <= 1 || analysisRemaining <= 0)
 
   const planIcon = subscription?.plan_type === 'pro' || subscription?.plan_type === 'business'
-    ? <Crown className="w-4 h-4" />
-    : <Zap className="w-4 h-4" />
+    ? <Crown className="w-4 h-4 gi3d" />
+    : <Zap className="w-4 h-4 gi3d" />
 
   // 컴팩트 모드
   if (compact) {
@@ -137,11 +137,11 @@ export default function UsageIndicator({ compact = false, showUpgrade = true }: 
         {!isUnlimited && (
           <div className="flex items-center gap-2 text-xs">
             <span className="flex items-center gap-1">
-              <Search className="w-3 h-3" />
+              <Search className="w-3 h-3 gi3d" />
               {keywordRemaining}
             </span>
             <span className="flex items-center gap-1">
-              <TrendingUp className="w-3 h-3" />
+              <TrendingUp className="w-3 h-3 gi3d" />
               {analysisRemaining}
             </span>
           </div>
@@ -152,9 +152,9 @@ export default function UsageIndicator({ compact = false, showUpgrade = true }: 
         )}
 
         {isExpanded ? (
-          <ChevronUp className="w-4 h-4 opacity-50" />
+          <ChevronUp className="w-4 h-4 opacity-50 gi3d" />
         ) : (
-          <ChevronDown className="w-4 h-4 opacity-50" />
+          <ChevronDown className="w-4 h-4 opacity-50 gi3d" />
         )}
       </button>
 
@@ -176,7 +176,7 @@ export default function UsageIndicator({ compact = false, showUpgrade = true }: 
               <div className="mb-3">
                 <div className="flex items-center justify-between text-sm mb-1">
                   <span className="flex items-center gap-1">
-                    <Search className="w-4 h-4 text-blue-500" />
+                    <Search className="w-4 h-4 text-blue-500 gi3d" />
                     키워드 검색
                   </span>
                   <span className="font-medium">
@@ -199,7 +199,7 @@ export default function UsageIndicator({ compact = false, showUpgrade = true }: 
               <div>
                 <div className="flex items-center justify-between text-sm mb-1">
                   <span className="flex items-center gap-1">
-                    <TrendingUp className="w-4 h-4 text-purple-500" />
+                    <TrendingUp className="w-4 h-4 text-purple-500 gi3d" />
                     블로그 분석
                   </span>
                   <span className="font-medium">
@@ -222,7 +222,7 @@ export default function UsageIndicator({ compact = false, showUpgrade = true }: 
             {/* 경고 메시지 */}
             {isLowUsage && (
               <div className="flex items-start gap-2 p-3 bg-orange-50 rounded-xl mb-3 text-sm">
-                <AlertCircle className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
+                <AlertCircle className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5 gi3d" />
                 <div className="text-orange-700">
                   <p className="font-medium">사용량이 거의 소진되었습니다</p>
                   <p className="text-xs opacity-80">업그레이드하여 더 많이 검색하세요</p>

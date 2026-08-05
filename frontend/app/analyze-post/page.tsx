@@ -56,7 +56,7 @@ export default function AnalyzePostPage() {
           href="/analyze"
           className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-4"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-4 h-4 gi3d" />
           블로그 분석으로 돌아가기
         </Link>
 
@@ -120,7 +120,7 @@ export default function AnalyzePostPage() {
                 </>
               ) : (
                 <>
-                  <Search className="w-4 h-4" />
+                  <Search className="w-4 h-4 gi3d" />
                   포스트 진단
                 </>
               )}
@@ -130,7 +130,7 @@ export default function AnalyzePostPage() {
 
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start gap-2">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5 gi3d" />
             <div className="text-sm text-red-800">{error}</div>
           </div>
         )}
@@ -311,7 +311,7 @@ function PostResultView({ data }: { data: PostAnalysisResult }) {
                   <div className="flex items-center gap-1">
                     <span className="font-medium text-gray-900">{sig.name}</span>
                     <div className="group relative">
-                      <HelpCircle className="w-3.5 h-3.5 text-gray-400 cursor-help" />
+                      <HelpCircle className="w-3.5 h-3.5 text-gray-400 cursor-help gi3d" />
                       <div className="absolute left-0 bottom-full mb-2 w-60 p-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 shadow-xl">
                         {sig.help}
                       </div>
@@ -371,7 +371,7 @@ function PostResultView({ data }: { data: PostAnalysisResult }) {
       {/* Disclaimer */}
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
         <div className="flex items-start gap-2">
-          <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5 gi3d" />
           <div className="text-sm text-gray-700">
             <strong className="text-amber-900">주의:</strong> {data.disclaimer}
           </div>
@@ -385,7 +385,7 @@ function PostResultView({ data }: { data: PostAnalysisResult }) {
         rel="noopener noreferrer"
         className="inline-flex items-center gap-2 text-sm text-[#0064FF] hover:underline"
       >
-        <ExternalLink className="w-4 h-4" />
+        <ExternalLink className="w-4 h-4 gi3d" />
         원본 포스트 보기
       </a>
     </motion.div>

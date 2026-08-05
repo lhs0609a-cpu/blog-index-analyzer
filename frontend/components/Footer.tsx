@@ -12,15 +12,15 @@ export default function Footer() {
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3 text-white">
-              <Crown className="w-5 h-5" />
+              <Crown className="w-5 h-5 gi3d" />
               <span className="font-medium">Pro 플랜으로 1위 가능 키워드를 매일 5개 받아보세요</span>
             </div>
             <div className="flex items-center gap-4">
               <div className="hidden md:flex items-center gap-2 text-white/80 text-sm">
-                <Check className="w-4 h-4" />
+                <Check className="w-4 h-4 gi3d" />
                 <span>7일 내 전액 환불</span>
                 <span className="mx-2">·</span>
-                <Check className="w-4 h-4" />
+                <Check className="w-4 h-4 gi3d" />
                 <span>클릭 한 번 해지</span>
               </div>
               <Link
@@ -88,19 +88,19 @@ export default function Footer() {
             <ul className="space-y-2 text-sm">
               <li>
                 <a href="https://www.brandplaton.com/" target="_blank" rel="noopener noreferrer" className="py-1 hover:text-violet-400 transition-colors flex items-center gap-2 cursor-pointer">
-                  <Building2 className="w-4 h-4" />
+                  <Building2 className="w-4 h-4 gi3d" />
                   병원마케팅 전문
                 </a>
               </li>
               <li>
                 <a href="https://www.brandplaton.com/" target="_blank" rel="noopener noreferrer" className="py-1 hover:text-violet-400 transition-colors flex items-center gap-2 cursor-pointer">
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight className="w-4 h-4 gi3d" />
                   무료 상담 신청
                 </a>
               </li>
               <li>
                 <a href="https://doctor-voice-pro-ghwi.vercel.app/" target="_blank" rel="noopener noreferrer" className="py-1 hover:text-cyan-400 transition-colors flex items-center gap-2 cursor-pointer">
-                  <Mic className="w-4 h-4" />
+                  <Mic className="w-4 h-4 gi3d" />
                   AI 자동 글쓰기
                 </a>
               </li>
@@ -136,7 +136,7 @@ export default function Footer() {
             <div className="mt-4 p-3 bg-gray-800 rounded-lg">
               <div className="text-xs text-gray-400">
                 <div className="flex items-center gap-2 mb-1">
-                  <Shield className="w-3 h-3 text-green-400" />
+                  <Shield className="w-3 h-3 text-green-400 gi3d" />
                   <span className="text-green-400 font-medium">평일 24시간 내 응답</span>
                 </div>
                 <div className="text-gray-500">

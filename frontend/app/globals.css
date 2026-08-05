@@ -891,6 +891,39 @@ body::before {
 .giorb .gi-spin { animation: giSpin 9s linear infinite; }
 @keyframes giSpin { to { transform: rotate(360deg); } }
 
+/* ------------------------------------------------------------
+   gi3d — 아이콘 입체화 (오브를 씌울 수 없는 크기용)
+   16~28px 아이콘에 유리 오브를 씌우면 글리프가 7px 로 줄어 뭉개진다.
+   그래서 컨테이너 없이 글리프 자체를 입체로 만든다:
+   위쪽 하이라이트(빛) + 아래쪽 접지 그림자(무게) + 확산 그림자(부유).
+   currentColor 를 건드리지 않으므로 의미색(빨강=경고 등)과 애니메이션이 그대로 산다.
+   ------------------------------------------------------------ */
+.gi3d {
+  filter:
+    drop-shadow(0 -0.5px 0 rgba(255, 255, 255, .9))
+    drop-shadow(0 1px 1.5px rgba(15, 23, 42, .34))
+    drop-shadow(0 3px 6px rgba(15, 23, 42, .16));
+}
+/* 어두운 배경(파란 버튼 등) 위에서는 흰 하이라이트가 번지므로 약하게 */
+.gi3d-on-dark {
+  filter:
+    drop-shadow(0 -0.5px 0 rgba(255, 255, 255, .55))
+    drop-shadow(0 1.5px 2px rgba(2, 8, 40, .5));
+}
+
+/* 중간 크기(28~40px)용 축약 오브 — 샤드·이리데선스·색수차를 빼서
+   작은 면적에서 진흙처럼 뭉치는 것을 막는다. */
+.giorb.gi-compact .gi-fc,
+.giorb.gi-compact .gi-fm,
+.giorb.gi-compact .gi-iris,
+.giorb.gi-compact .gi-shard,
+.giorb.gi-compact .gi-p2 { display: none; }
+.giorb.gi-compact .gi-base {
+  box-shadow: 0 8px 18px -8px rgba(0, 60, 255, .5),
+    inset 0 2px 3px rgba(255, 255, 255, .8),
+    inset 0 -8px 14px -6px rgba(2, 8, 40, .55);
+}
+
 /* 접근성: 모션 최소화 설정 존중 */
 @media (prefers-reduced-motion: reduce) {
   body::before,

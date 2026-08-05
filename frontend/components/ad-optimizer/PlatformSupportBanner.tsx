@@ -241,7 +241,7 @@ export function PlatformSupportBanner({
   return (
     <div className={`bg-gradient-to-r from-slate-800 to-slate-700 rounded-xl p-5 mb-6 ${className}`}>
       <div className="flex items-start gap-3 mb-4">
-        <Info className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
+        <Info className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0 gi3d" />
         <div>
           <h3 className="font-semibold text-white">{title}</h3>
           <p className="text-sm text-gray-300 mt-1">{description}</p>
@@ -265,7 +265,7 @@ export function PlatformSupportBanner({
               >
                 <span className="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-black/5" style={{ backgroundColor: platform.color }} />
                 <span className={`text-sm ${style.supportedText} font-medium`}>{platform.name}</span>
-                <CheckCircle className={`w-4 h-4 ${style.supportedText}`} />
+                <CheckCircle className={`gi3d w-4 h-4 ${style.supportedText}`} />
               </div>
             );
           })}
@@ -290,7 +290,7 @@ export function PlatformSupportBanner({
                 >
                   <span className="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-black/5 opacity-60" style={{ backgroundColor: platform.color }} />
                   <span className={`text-sm ${style.comingSoonText}`}>{platform.name}</span>
-                  <AlertCircle className={`w-4 h-4 ${style.comingSoonText}`} />
+                  <AlertCircle className={`gi3d w-4 h-4 ${style.comingSoonText}`} />
                 </div>
               );
             })}
@@ -314,7 +314,7 @@ export function PlatformSupportBanner({
               >
                 <span className="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-black/5" style={{ backgroundColor: platform.color }} />
                 <span>{platform.name}</span>
-                <ExternalLink className="w-3 h-3" />
+                <ExternalLink className="w-3 h-3 gi3d" />
               </Link>
             );
           })}
@@ -506,7 +506,7 @@ export function PlatformSelectButton({
     >
       <span className={iconSizes[size]}>{logo}</span>
       <span>{style.name}</span>
-      {selected && <CheckCircle className={`${iconSizes[size]} ml-1`} />}
+      {selected && <CheckCircle className={`gi3d ${iconSizes[size]} ml-1`} />}
     </button>
   );
 }

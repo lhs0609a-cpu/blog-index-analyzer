@@ -11,10 +11,10 @@ export default function PrivacyPage() {
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             <Link href="/" className="text-gray-500 hover:text-gray-700">
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-5 h-5 gi3d" />
             </Link>
             <div className="flex items-center gap-2">
-              <Lock className="w-6 h-6 text-blue-600" />
+              <Lock className="w-6 h-6 text-blue-600 gi3d" />
               <h1 className="text-xl font-bold">개인정보처리방침</h1>
             </div>
           </div>
@@ -40,7 +40,7 @@ export default function PrivacyPage() {
           <div className="space-y-6 text-gray-700">
             <section>
               <h4 className="font-bold text-gray-900 mb-3 text-lg flex items-center gap-2">
-                <Shield className="w-5 h-5 text-blue-600" />
+                <Shield className="w-5 h-5 text-blue-600 gi3d" />
                 1. 수집하는 개인정보 항목
               </h4>
               <p className="mb-2">회사는 다음의 개인정보를 수집합니다:</p>

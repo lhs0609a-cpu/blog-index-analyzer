@@ -1150,7 +1150,7 @@ export default function KeywordPoolPage() {
           href="/ad-optimizer"
           className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-4"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-4 h-4 gi3d" />
           광고 최적화
         </Link>
 
@@ -1193,7 +1193,7 @@ export default function KeywordPoolPage() {
         {accountsState === 'empty' && (
           <div className="mb-4 p-4 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-900">
             <div className="flex items-start gap-2">
-              <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5 gi3d" />
               <div>
                 <p className="font-semibold mb-1">연결된 광고주가 없습니다</p>
                 <p className="text-amber-800">
@@ -1211,7 +1211,7 @@ export default function KeywordPoolPage() {
         {accountsState === 'fetch_failed' && (
           <div className="mb-4 p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-900">
             <div className="flex items-start gap-2">
-              <XCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <XCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5 gi3d" />
               <div className="flex-1">
                 <p className="font-semibold mb-1">광고주 목록 조회 실패</p>
                 <p className="text-red-800 mb-2">
@@ -1221,7 +1221,7 @@ export default function KeywordPoolPage() {
                   onClick={loadAccounts}
                   className="inline-flex items-center gap-1 px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
                 >
-                  <RefreshCw className="w-3 h-3" /> 다시 시도
+                  <RefreshCw className="w-3 h-3 gi3d" /> 다시 시도
                 </button>
               </div>
             </div>
@@ -1251,7 +1251,7 @@ export default function KeywordPoolPage() {
           <div className="mt-3" />
         <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-6">
           <div className="flex items-center gap-2 mb-2">
-            <Zap className="w-5 h-5 text-amber-600" />
+            <Zap className="w-5 h-5 text-amber-600 gi3d" />
             <h2 className="font-bold text-gray-900">입찰가 default 설정</h2>
             <span className="text-xs text-gray-500">
               현재: {(accounts.find(a => a.customer_id === selectedCid)?.default_bid ?? 100).toLocaleString()}원
@@ -1296,7 +1296,7 @@ export default function KeywordPoolPage() {
         {/* 한도 사용량 */}
         <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-2 mb-3">
-            <Database className="w-5 h-5 text-[#0064FF]" />
+            <Database className="w-5 h-5 text-[#0064FF] gi3d" />
             <h2 className="font-bold text-gray-900">계정 한도 사용량</h2>
             <button
               onClick={handleRebuildFromNaver}
@@ -1304,7 +1304,7 @@ export default function KeywordPoolPage() {
               className="ml-auto inline-flex items-center gap-1 px-3 py-1 text-xs border border-emerald-400 text-emerald-700 rounded hover:bg-emerald-50 disabled:bg-gray-100 disabled:text-gray-400"
               title="네이버에서 실제 등록된 KW 전체 pull → DB 재구성. 한도 0 표시 사고 복구용."
             >
-              {rebuilding ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              {rebuilding ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3 gi3d" />}
               DB 재구성 (네이버 pull)
             </button>
             <button
@@ -1313,7 +1313,7 @@ export default function KeywordPoolPage() {
               className="inline-flex items-center gap-1 px-3 py-1 text-xs border border-blue-300 text-blue-700 rounded hover:bg-blue-50 disabled:bg-gray-100 disabled:text-gray-400"
               title="네이버 광고 콘솔에서 직접 삭제한 캠페인을 우리 DB 와 sync — 한도 사용량 정확화"
             >
-              {reconciling ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              {reconciling ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3 gi3d" />}
               네이버 sync (한도 재계산)
             </button>
           </div>
@@ -1331,12 +1331,12 @@ export default function KeywordPoolPage() {
           </div>
           {usePct >= 98 ? (
             <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-800 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4" />
+              <AlertCircle className="w-4 h-4 gi3d" />
               계정 한도 도달 임박 — 곧 자동 수집 정지. 노출제한/저성과 KW 정리하면 슬롯 회수.
             </div>
           ) : usePct >= 90 ? (
             <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4" />
+              <AlertCircle className="w-4 h-4 gi3d" />
               계정 한도 90% 도달 — 100k 까지 자동으로 계속 채우는 중. 정상 작동.
             </div>
           ) : null}
@@ -1354,7 +1354,7 @@ export default function KeywordPoolPage() {
         {/* CORE — 도메인 키워드 + 자동화 ON/OFF (페이지에서 가장 중요한 박스) */}
         <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-50 rounded-2xl border-2 border-blue-300 p-6 mb-6 shadow-sm">
           <div className="flex items-center gap-2 mb-3 flex-wrap">
-            <Activity className="w-6 h-6 text-blue-700" />
+            <Activity className="w-6 h-6 text-blue-700 gi3d" />
             <h2 className="font-bold text-gray-900 text-lg">도메인 + 자동화 (필수 설정)</h2>
             <span className="text-xs text-gray-600">— 1회 저장하면 100k 까지 자동 진행</span>
             <button
@@ -1363,7 +1363,7 @@ export default function KeywordPoolPage() {
               className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 disabled:bg-gray-300 shadow-sm"
               title="네이버 광고주 가이드 (저품질 처분 회피) — 점수 ≤ N 등록 KW 최대 50,000개 즉시 백그라운드 삭제"
             >
-              {emergencyRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <AlertCircle className="w-3.5 h-3.5" />}
+              {emergencyRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <AlertCircle className="w-3.5 h-3.5 gi3d" />}
               긴급 일괄 삭제 (네이버 가이드)
             </button>
           </div>
@@ -1497,7 +1497,7 @@ export default function KeywordPoolPage() {
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <div className="relative">
-                <Zap className="w-5 h-5 text-[#0064FF]" />
+                <Zap className="w-5 h-5 text-[#0064FF] gi3d" />
                 {(liveCollect || liveRegister) && (
                   <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                 )}
@@ -1511,7 +1511,7 @@ export default function KeywordPoolPage() {
                 className="text-xs px-3 py-1.5 bg-[#0064FF] text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 inline-flex items-center gap-1"
                 title="cron 다음 tick 안 기다리고 collect+register 즉시 실행"
               >
-                {triggerRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                {triggerRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3 gi3d" />}
                 지금 실행
               </button>
               <input
@@ -1528,11 +1528,11 @@ export default function KeywordPoolPage() {
                 className="text-xs px-3 py-1.5 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:bg-gray-300 inline-flex items-center gap-1"
                 title="파워링크 이미지를 전 광고그룹에 일괄 부착(이미 있으면 skip). 비워두면 자동탐색"
               >
-                {imgBackfillRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                {imgBackfillRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3 gi3d" />}
                 파워링크 이미지 백필
               </button>
               <span className="text-xs inline-flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-gray-500" />
+                <Clock className="w-3.5 h-3.5 text-gray-500 gi3d" />
                 {schedulerKnownDown ? (
                   <span className="text-red-700 font-semibold">백엔드 스케줄러 정지됨</span>
                 ) : (
@@ -1553,7 +1553,7 @@ export default function KeywordPoolPage() {
           {schedulerKnownDown && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800 mb-3">
               <div className="flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 gi3d" />
                 <div>
                   <strong>백엔드 APScheduler 가 실행 중이 아닙니다.</strong>
                   <div className="mt-1 text-xs">
@@ -1572,7 +1572,7 @@ export default function KeywordPoolPage() {
           {!schedulerKnownDown && collectStalled && lastCollectAgeMin !== null && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900 mb-3">
               <div className="flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 gi3d" />
                 <div>
                   <strong>collect cron 이 {lastCollectAgeMin}분째 정체</strong>
                   <div className="mt-1 text-xs">
@@ -1588,7 +1588,7 @@ export default function KeywordPoolPage() {
           {!schedulerKnownDown && !collectStalled && neverRanWithSeeds && (
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900 mb-3">
               <div className="flex items-start gap-2">
-                <Clock className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <Clock className="w-4 h-4 flex-shrink-0 mt-0.5 gi3d" />
                 <div>
                   <strong>첫 collect 실행 대기 중</strong>
                   <div className="mt-1 text-xs">
@@ -1617,7 +1617,7 @@ export default function KeywordPoolPage() {
 
           {lastError && (
             <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800 flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 gi3d" />
               <div>
                 <strong>최근 에러 ({fmtTime(lastError.started_at, mounted)})</strong>
                 <div className="mt-1 font-mono text-[11px] break-all">{lastError.error_message || lastError.status}</div>
@@ -1635,7 +1635,7 @@ export default function KeywordPoolPage() {
           <div className="mt-3" />
           <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
             <div className="flex items-center gap-2 mb-3 flex-wrap">
-              <Database className="w-5 h-5 text-[#0064FF]" />
+              <Database className="w-5 h-5 text-[#0064FF] gi3d" />
               <h2 className="font-bold text-gray-900">시드별 발굴 키워드</h2>
               <span className="text-xs text-gray-500">매 5분 cron이 검색량 상위·등록완료 키워드 30개를 자동 시드로 승격합니다 (cap 200, 도메인 검증). 부적절하면 휴지통.</span>
             </div>
@@ -1676,7 +1676,7 @@ export default function KeywordPoolPage() {
                             className="text-gray-400 hover:text-red-600 p-1"
                             title="시드 + 자식 키워드 삭제"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-4 h-4 gi3d" />
                           </button>
                         </td>
                       </tr>
@@ -1697,7 +1697,7 @@ export default function KeywordPoolPage() {
           <div className="mt-3" />
         <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-2 mb-3 flex-wrap">
-            <Activity className="w-5 h-5 text-[#0064FF]" />
+            <Activity className="w-5 h-5 text-[#0064FF] gi3d" />
             <h2 className="font-bold text-gray-900">클릭 발생 키워드 검수</h2>
             <span className="text-xs text-gray-500">사업 무관 키워드(시드 매칭 X) 발견 시 일괄 삭제</span>
             <div className="ml-auto flex items-center gap-2">
@@ -1716,7 +1716,7 @@ export default function KeywordPoolPage() {
                 disabled={clickedLoading}
                 className="text-xs border border-gray-300 rounded px-3 py-1 hover:bg-gray-50 inline-flex items-center gap-1"
               >
-                {clickedLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                {clickedLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3 gi3d" />}
                 조회
               </button>
             </div>
@@ -1725,7 +1725,7 @@ export default function KeywordPoolPage() {
           {/* 연관성 기준 키워드 — 사용자가 직접 도메인 토큰 명시. 자동/수동 cleanup 모두 이 키워드로 점수 매김 */}
           <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded">
             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              <Activity className="w-4 h-4 text-blue-700" />
+              <Activity className="w-4 h-4 text-blue-700 gi3d" />
               <span className="text-xs font-medium text-blue-900">연관성 기준 키워드</span>
               <span className="text-xs text-gray-600">— 점수 계산 도메인 (예: 피부 광고주면 "피부질환,피부,피부과,아토피,여드름,트러블")</span>
               <span className="ml-auto text-[11px] text-gray-500">
@@ -1802,7 +1802,7 @@ export default function KeywordPoolPage() {
 
           {/* 수동 일괄 정리 — click 무관, 등록 KW 전체 audit. cascade drift 옛날 무관 KW 정리. 항상 표시. */}
           <div className="flex items-center gap-2 mb-2 p-2 bg-orange-50 border border-orange-200 rounded flex-wrap">
-            <Trash2 className="w-4 h-4 text-orange-700" />
+            <Trash2 className="w-4 h-4 text-orange-700 gi3d" />
             <span className="text-xs font-medium text-orange-900">기존 등록 KW 일괄 정리 (click 무관)</span>
             <span className="text-xs text-gray-700">— 점수</span>
             <input
@@ -1820,7 +1820,7 @@ export default function KeywordPoolPage() {
               disabled={manualCleanupRunning}
               className="ml-auto text-xs px-3 py-1 bg-orange-600 text-white rounded hover:bg-orange-700 disabled:bg-gray-300 inline-flex items-center gap-1"
             >
-              {manualCleanupRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              {manualCleanupRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3 gi3d" />}
               {manualCleanupRunning ? '조회 중…' : '점수 ≤ N 등록 KW 조회'}
             </button>
             <div className="basis-full text-[11px] text-gray-600 mt-1">
@@ -1858,7 +1858,7 @@ export default function KeywordPoolPage() {
                   disabled={manualSelected.size === 0 || manualDeleting}
                   className="ml-auto text-xs px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-gray-300 inline-flex items-center gap-1"
                 >
-                  {manualDeleting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                  {manualDeleting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3 gi3d" />}
                   선택 {manualSelected.size.toLocaleString()}개 일괄 삭제
                 </button>
               </div>
@@ -1957,7 +1957,7 @@ export default function KeywordPoolPage() {
                   disabled={clickedSelected.size === 0}
                   className="ml-auto text-xs px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-gray-300 inline-flex items-center gap-1"
                 >
-                  <Trash2 className="w-3 h-3" />
+                  <Trash2 className="w-3 h-3 gi3d" />
                   선택 {clickedSelected.size}개 일괄 삭제
                 </button>
               </div>
@@ -2049,7 +2049,7 @@ export default function KeywordPoolPage() {
           <div className="mt-3" />
           <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
             <div className="flex items-center gap-2 mb-3">
-              <Activity className="w-5 h-5 text-[#0064FF]" />
+              <Activity className="w-5 h-5 text-[#0064FF] gi3d" />
               <h2 className="font-bold text-gray-900">최근 풀에 추가된 키워드 (최신 30개)</h2>
               <span className="text-xs text-gray-500">상태: 대기=곧 등록, 신규=등록완료, 이미있음=skip(영향없음), 실패=등록거부 · 부적절하면 X로 빼세요</span>
             </div>
@@ -2090,7 +2090,7 @@ export default function KeywordPoolPage() {
                           className="text-gray-400 hover:text-red-600 p-1"
                           title="이 키워드만 풀에서 삭제"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3.5 h-3.5 gi3d" />
                         </button>
                       </td>
                     </tr>
@@ -2107,7 +2107,7 @@ export default function KeywordPoolPage() {
           <div className="bg-red-50 border-2 border-red-300 rounded-2xl p-5 mb-6">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                <AlertTriangle className="w-6 h-6" strokeWidth={1.75} />
+                <AlertTriangle className="w-6 h-6 gi3d" strokeWidth={1.75} />
               </div>
               <div className="flex-1">
                 <h3 className="font-bold text-red-900 mb-1">
@@ -2130,7 +2130,7 @@ export default function KeywordPoolPage() {
         {runs.length > 0 && (
           <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
             <div className="flex items-center gap-2 mb-3">
-              <Activity className="w-5 h-5 text-[#0064FF]" />
+              <Activity className="w-5 h-5 text-[#0064FF] gi3d" />
               <h2 className="font-bold text-gray-900">최근 실행 이력</h2>
               <span className="text-xs text-gray-500">10초마다 자동 갱신</span>
             </div>
@@ -2187,7 +2187,7 @@ export default function KeywordPoolPage() {
         {/* 시드 추가 */}
         <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-2 mb-3">
-            <Plus className="w-5 h-5 text-[#0064FF]" />
+            <Plus className="w-5 h-5 text-[#0064FF] gi3d" />
             <h2 className="font-bold text-gray-900">초기 시드 추가</h2>
           </div>
           <p className="text-sm text-gray-600 mb-3">
@@ -2208,7 +2208,7 @@ export default function KeywordPoolPage() {
               disabled={adding || !seedInput.trim()}
               className="px-4 py-2 bg-[#0064FF] text-white rounded-lg font-medium hover:shadow-lg disabled:bg-gray-300 inline-flex items-center gap-2"
             >
-              {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4 gi3d" />}
               시드 추가
             </button>
             <span className="text-gray-300">|</span>
@@ -2217,7 +2217,7 @@ export default function KeywordPoolPage() {
               disabled={exploding || !seedInput.trim()}
               className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-lg font-medium hover:shadow-lg disabled:opacity-50 inline-flex items-center gap-2"
             >
-              {exploding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              {exploding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 gi3d" />}
               연관키워드 대량 등록
             </button>
             <label className="text-sm text-gray-600 inline-flex items-center gap-1">
@@ -2237,7 +2237,7 @@ export default function KeywordPoolPage() {
               disabled={exploding}
               className="mt-3 w-full px-4 py-2.5 bg-gradient-to-r from-rose-500 to-red-600 text-white rounded-lg font-bold hover:shadow-lg disabled:opacity-50 inline-flex items-center justify-center gap-2"
             >
-              {exploding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              {exploding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 gi3d" />}
               저장된 도메인 키워드 {autoCleanup.relevance_keywords.length}개로 한 번에 폭발 (타이핑 불필요)
             </button>
           )}
@@ -2257,7 +2257,7 @@ export default function KeywordPoolPage() {
           <div className="mt-3" />
         <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-2xl border border-indigo-200 p-6 mb-6">
           <div className="flex items-center gap-2 mb-3">
-            <Zap className="w-5 h-5 text-indigo-600" />
+            <Zap className="w-5 h-5 text-indigo-600 gi3d" />
             <h2 className="font-bold text-gray-900">AI 도메인 시드 확장 (LLM)</h2>
           </div>
           <p className="text-sm text-gray-700 mb-3">
@@ -2303,7 +2303,7 @@ export default function KeywordPoolPage() {
             disabled={aiExpandRunning || !aiExpandInput.trim()}
             className="mt-3 px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:shadow-lg disabled:bg-gray-300 inline-flex items-center gap-2"
           >
-            {aiExpandRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+            {aiExpandRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 gi3d" />}
             {aiExpandRunning ? 'LLM 호출 + 검증 중…' : 'AI 확장 시작'}
           </button>
 
@@ -2330,7 +2330,7 @@ export default function KeywordPoolPage() {
         {/* 비도메인 시드 일괄 정리 — 과거 POOL bridge 누수 잔재 */}
         <div className="bg-gradient-to-br from-rose-50 to-orange-50 rounded-2xl border border-rose-200 p-6 mb-6">
           <div className="flex items-center gap-2 mb-3">
-            <Trash2 className="w-5 h-5 text-rose-600" />
+            <Trash2 className="w-5 h-5 text-rose-600 gi3d" />
             <h2 className="font-bold text-gray-900">비도메인 시드 일괄 정리</h2>
           </div>
           <p className="text-sm text-gray-700 mb-3">
@@ -2366,7 +2366,7 @@ export default function KeywordPoolPage() {
                 disabled={cleanupRunning}
                 className="px-4 py-2 bg-rose-600 text-white rounded-lg font-medium hover:bg-rose-700 disabled:bg-gray-300 inline-flex items-center gap-2"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-4 h-4 gi3d" />
                 {cleanupPreview.will_delete_now}개 KW 삭제 확정
               </button>
             )}
@@ -2421,7 +2421,7 @@ export default function KeywordPoolPage() {
           <div className="mt-3" />
         <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl border border-purple-200 p-6 mb-6">
           <div className="flex items-center gap-2 mb-3">
-            <Zap className="w-5 h-5 text-purple-600" />
+            <Zap className="w-5 h-5 text-purple-600 gi3d" />
             <h2 className="font-bold text-gray-900">AI 시드 자동 확장 (GPT-4o-mini)</h2>
           </div>
           <p className="text-sm text-gray-700 mb-3">
@@ -2452,7 +2452,7 @@ export default function KeywordPoolPage() {
               disabled={aiClassifying || rejectStats.pending === 0}
               className="px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:bg-gray-300 inline-flex items-center gap-2"
             >
-              {aiClassifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              {aiClassifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 gi3d" />}
               AI 로 시드 자동 확장
             </button>
             {rejectStats.cooldown_remaining_min > 0 && (
@@ -2477,7 +2477,7 @@ export default function KeywordPoolPage() {
         {/* 안내 */}
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-900">
           <div className="flex items-start gap-2">
-            <Activity className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <Activity className="w-5 h-5 flex-shrink-0 mt-0.5 gi3d" />
             <div>
               <strong>자동 운영 흐름</strong>
               <ul className="mt-1 text-xs space-y-0.5 list-disc pl-5">

@@ -3037,7 +3037,7 @@ export default function ToolsPage() {
           className="text-center mb-8"
         >
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 border border-blue-100 mb-4">
-            <Crown className="w-5 h-5 text-[#0064FF]" />
+            <Crown className="w-5 h-5 text-[#0064FF] gi3d" />
             <span className="text-sm font-semibold text-[#0064FF]">프리미엄 도구</span>
           </div>
           <h1 className="text-4xl font-bold mb-2">
@@ -3080,7 +3080,7 @@ export default function ToolsPage() {
                       onClick={() => setShowGuide(false)}
                       className="p-2 hover:bg-white/20 rounded-full transition-colors"
                     >
-                      <X className="w-5 h-5" />
+                      <X className="w-5 h-5 gi3d" />
                     </button>
                   </div>
                 </div>
@@ -3096,7 +3096,7 @@ export default function ToolsPage() {
                     <div className="space-y-2">
                       {toolGuides[activeTab].steps.map((step, i) => (
                         <div key={i} className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
-                          <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                          <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0 gi3d" />
                           <span className="text-gray-700 text-sm">{step}</span>
                         </div>
                       ))}
@@ -3112,7 +3112,7 @@ export default function ToolsPage() {
                     <div className="space-y-2">
                       {toolGuides[activeTab].tips.map((tip, i) => (
                         <div key={i} className="flex items-start gap-3 p-3 bg-yellow-50 rounded-xl border border-yellow-100">
-                          <Lightbulb className="w-5 h-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                          <Lightbulb className="w-5 h-5 text-yellow-500 mt-0.5 flex-shrink-0 gi3d" />
                           <span className="text-gray-700 text-sm">{tip}</span>
                         </div>
                       ))}
@@ -3144,7 +3144,7 @@ export default function ToolsPage() {
             onClick={startToolTutorial}
             className="w-14 h-14 rounded-full bg-[#0064FF] text-white shadow-lg shadow-[#0064FF]/15 hover:shadow-xl hover:scale-110 transition-all flex items-center justify-center group"
           >
-            <HelpCircle className="w-6 h-6" />
+            <HelpCircle className="w-6 h-6 gi3d" />
             <span className="absolute right-full mr-3 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
               도구 설명 보기
             </span>
@@ -3158,7 +3158,7 @@ export default function ToolsPage() {
             onClick={() => setShowGuide(true)}
             className="w-14 h-14 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] text-white shadow-lg hover:shadow-xl hover:scale-110 transition-all flex items-center justify-center group"
           >
-            <Info className="w-6 h-6" />
+            <Info className="w-6 h-6 gi3d" />
             <span className="absolute right-full mr-3 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
               전체 가이드
             </span>
@@ -3188,7 +3188,7 @@ export default function ToolsPage() {
                 <div className="absolute -top-1 -right-1 px-1.5 py-0.5 text-[9px] font-bold rounded bg-red-500 text-white">
                   PRO
                 </div>
-                <Megaphone className="w-8 h-8 text-red-500 group-hover:text-red-600" />
+                <Megaphone className="w-8 h-8 text-red-500 group-hover:text-red-600 gi3d" />
                 <span className="text-xs font-bold text-center">AI 광고 타겟팅</span>
                 <span className="text-[9px] text-amber-700">비용 절감 자동화</span>
               </Link>
@@ -3210,7 +3210,7 @@ export default function ToolsPage() {
                   >
                     {isLocked && (
                       <div className="absolute -top-1 -right-1 w-5 h-5 bg-gray-500 rounded-full flex items-center justify-center">
-                        <Lock className="w-3 h-3 text-white" />
+                        <Lock className="w-3 h-3 text-white gi3d" />
                       </div>
                     )}
                     {badge && !isLocked && (
@@ -3251,7 +3251,7 @@ export default function ToolsPage() {
                   >
                     {isLocked && (
                       <div className="absolute -top-1 -right-1 w-4 h-4 bg-gray-500 rounded-full flex items-center justify-center">
-                        <Lock className="w-2.5 h-2.5 text-white" />
+                        <Lock className="w-2.5 h-2.5 text-white gi3d" />
                       </div>
                     )}
                     {badge && !isLocked && (
@@ -3291,7 +3291,7 @@ export default function ToolsPage() {
                   >
                     {isLocked && (
                       <div className="absolute -top-1 -right-1 w-4 h-4 bg-gray-500 rounded-full flex items-center justify-center">
-                        <Lock className="w-2.5 h-2.5 text-white" />
+                        <Lock className="w-2.5 h-2.5 text-white gi3d" />
                       </div>
                     )}
                     {badge && !isLocked && (
@@ -3312,7 +3312,7 @@ export default function ToolsPage() {
             <div className="glass-3d p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Crown className="w-5 h-5 text-[#0064FF]" />
+                  <Crown className="w-5 h-5 text-[#0064FF] gi3d" />
                   <div>
                     <p className="text-sm text-gray-600">
                       현재 <span className="font-bold text-[#0064FF]">{PLAN_INFO[plan].name}</span> 플랜 이용 중
@@ -3346,7 +3346,7 @@ export default function ToolsPage() {
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
                     <div className="p-3 rounded-xl bg-gradient-to-r from-[#0064FF] to-[#3182F6]">
-                      <PenTool className="w-6 h-6 text-white" />
+                      <PenTool className="w-6 h-6 text-white gi3d" />
                     </div>
                     <div>
                       <h2 className="text-2xl font-bold">AI 제목 생성기</h2>
@@ -3357,14 +3357,14 @@ export default function ToolsPage() {
                     onClick={() => setShowGuide(true)}
                     className="flex items-center gap-2 px-4 py-2 text-[#0064FF] hover:bg-blue-50 rounded-xl transition-colors"
                   >
-                    <Info className="w-5 h-5" />
+                    <Info className="w-5 h-5 gi3d" />
                     <span className="text-sm font-medium">사용법</span>
                   </button>
                 </div>
 
                 <div className="flex gap-4 mb-6">
                   <div className="relative flex-1">
-                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 gi3d" />
                     <input
                       type="text"
                       value={titleKeyword}
@@ -3384,7 +3384,7 @@ export default function ToolsPage() {
                       <Loader2 className="w-5 h-5 animate-spin" />
                     ) : (
                       <>
-                        <Sparkles className="w-5 h-5" />
+                        <Sparkles className="w-5 h-5 gi3d" />
                         생성하기
                       </>
                     )}
@@ -3405,7 +3405,7 @@ export default function ToolsPage() {
                         onClick={handleTitleGenerate}
                         className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-100 text-[#0064FF] font-medium hover:bg-blue-200 transition-colors"
                       >
-                        <RefreshCw className="w-4 h-4" />
+                        <RefreshCw className="w-4 h-4 gi3d" />
                         다시 생성
                       </button>
                     </div>
@@ -3437,7 +3437,7 @@ export default function ToolsPage() {
                             {isLocked && (
                               <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center z-10">
                                 <div className="text-center">
-                                  <Flame className="w-5 h-5 mb-1" strokeWidth={1.75} />
+                                  <Flame className="w-5 h-5 mb-1 gi3d" strokeWidth={1.75} />
                                   <Link href="/pricing" className="text-sm text-amber-700 font-bold hover:underline">
                                     CTR 8% 이상 제목 확인하기
                                   </Link>
@@ -3467,7 +3467,7 @@ export default function ToolsPage() {
                               <div className="text-lg font-bold text-green-600">{item.ctr.toFixed(1)}%</div>
                               <div className="text-xs text-gray-500">예상 CTR</div>
                             </div>
-                            <Copy className="w-5 h-5 text-gray-400 ml-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <Copy className="w-5 h-5 text-gray-400 ml-4 opacity-0 group-hover:opacity-100 transition-opacity gi3d" />
                           </motion.div>
                         )
                       })}
@@ -3508,7 +3508,7 @@ export default function ToolsPage() {
               <div className="glass-3d p-8 ">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500">
-                    <Compass className="w-6 h-6 text-white" />
+                    <Compass className="w-6 h-6 text-white gi3d" />
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold">블루오션 키워드 발굴</h2>
@@ -3518,14 +3518,14 @@ export default function ToolsPage() {
                     href="/blue-ocean"
                     className="ml-auto px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg text-sm font-semibold hover:shadow-lg transition-all flex items-center gap-2"
                   >
-                    <Sparkles className="w-4 h-4" />
+                    <Sparkles className="w-4 h-4 gi3d" />
                     고급 분석 (BOS)
                   </a>
                 </div>
 
                 <div className="flex gap-4 mb-6">
                   <div className="relative flex-1">
-                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 gi3d" />
                     <input
                       type="text"
                       value={blueOceanKeyword}
@@ -3545,7 +3545,7 @@ export default function ToolsPage() {
                       <Loader2 className="w-5 h-5 animate-spin" />
                     ) : (
                       <>
-                        <Compass className="w-5 h-5" />
+                        <Compass className="w-5 h-5 gi3d" />
                         발굴하기
                       </>
                     )}
@@ -3563,7 +3563,7 @@ export default function ToolsPage() {
                         "{blueOceanResult.mainKeyword}" 연관 블루오션 키워드
                       </h3>
                       <div className="flex items-center gap-2 text-sm text-gray-500">
-                        <Zap className="w-4 h-4 text-yellow-500" />
+                        <Zap className="w-4 h-4 text-yellow-500 gi3d" />
                         기회지수 순 정렬
                       </div>
                     </div>
@@ -3586,12 +3586,12 @@ export default function ToolsPage() {
                             <div className={isLocked ? 'blur-sm select-none' : ''}>
                               <div className="flex items-center justify-between mb-2">
                                 <div className="flex items-center gap-2">
-                                  {i < 3 && <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />}
+                                  {i < 3 && <Star className="w-4 h-4 text-yellow-500 fill-yellow-500 gi3d" />}
                                   <span className="font-semibold text-gray-800">{item.keyword}</span>
                                 </div>
                                 <div className="flex items-center gap-1">
-                                  {item.trend === 'up' && <TrendingUp className="w-4 h-4 text-green-500" />}
-                                  {item.trend === 'down' && <TrendingDown className="w-4 h-4 text-red-500" />}
+                                  {item.trend === 'up' && <TrendingUp className="w-4 h-4 text-green-500 gi3d" />}
+                                  {item.trend === 'down' && <TrendingDown className="w-4 h-4 text-red-500 gi3d" />}
                                   {item.trend === 'stable' && <span className="text-gray-400">-</span>}
                                 </div>
                               </div>
@@ -3614,7 +3614,7 @@ export default function ToolsPage() {
                             </div>
                             {isLocked && (
                               <div className="absolute inset-0 flex items-center justify-center bg-white/60 rounded-xl">
-                                <Lock className="w-5 h-5 text-gray-400" />
+                                <Lock className="w-5 h-5 text-gray-400 gi3d" />
                               </div>
                             )}
                           </motion.div>
@@ -3627,7 +3627,7 @@ export default function ToolsPage() {
                       <div className="mt-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border-2 border-amber-300">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <Flame className="w-6 h-6" strokeWidth={1.75} />
+                            <Flame className="w-6 h-6 gi3d" strokeWidth={1.75} />
                             <div>
                               <div className="font-bold text-amber-900">
                                 경쟁도 10% 미만 '꿀통 키워드' {Math.min(blueOceanResult.keywords.length - 4, 3)}개가 숨겨져 있습니다
@@ -3649,7 +3649,7 @@ export default function ToolsPage() {
 
                     <div className="mt-6 p-4 bg-cyan-50 rounded-xl border border-cyan-200">
                       <div className="flex items-start gap-3">
-                        <Lightbulb className="w-5 h-5 text-cyan-600 mt-0.5" />
+                        <Lightbulb className="w-5 h-5 text-cyan-600 mt-0.5 gi3d" />
                         <div>
                           <div className="font-semibold text-cyan-800">블루오션 키워드 활용 팁</div>
                           <ul className="mt-2 space-y-1 text-sm text-cyan-700">
@@ -3678,7 +3678,7 @@ export default function ToolsPage() {
               <div className="glass-3d p-8 ">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500">
-                    <FileText className="w-6 h-6 text-white" />
+                    <FileText className="w-6 h-6 text-white gi3d" />
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold">AI 글쓰기 가이드</h2>
@@ -3732,7 +3732,7 @@ export default function ToolsPage() {
                       </>
                     ) : (
                       <>
-                        <Zap className="w-5 h-5" />
+                        <Zap className="w-5 h-5 gi3d" />
                         SEO 점수 체크
                       </>
                     )}
@@ -3779,16 +3779,16 @@ export default function ToolsPage() {
                             <div className={isLocked ? 'blur-sm select-none' : ''}>
                               <div className="flex items-start gap-3">
                                 <div className="mt-0.5">
-                                  {check.status === 'pass' && <CheckCircle className="w-5 h-5 text-green-500" />}
-                                  {check.status === 'warning' && <AlertCircle className="w-5 h-5 text-yellow-500" />}
-                                  {check.status === 'fail' && <XCircle className="w-5 h-5 text-red-500" />}
+                                  {check.status === 'pass' && <CheckCircle className="w-5 h-5 text-green-500 gi3d" />}
+                                  {check.status === 'warning' && <AlertCircle className="w-5 h-5 text-yellow-500 gi3d" />}
+                                  {check.status === 'fail' && <XCircle className="w-5 h-5 text-red-500 gi3d" />}
                                 </div>
                                 <div className="flex-1">
                                   <div className="font-medium text-gray-800">{check.item}</div>
                                   <div className="text-sm text-gray-600">{check.message}</div>
                                   {check.suggestion && (
                                     <div className="text-sm text-blue-600 mt-1 flex items-center gap-1">
-                                      <Lightbulb className="w-4 h-4" />
+                                      <Lightbulb className="w-4 h-4 gi3d" />
                                       {check.suggestion}
                                     </div>
                                   )}
@@ -3797,7 +3797,7 @@ export default function ToolsPage() {
                             </div>
                             {isLocked && (
                               <div className="absolute inset-0 flex items-center justify-center bg-white/60 rounded-xl">
-                                <Lock className="w-5 h-5 text-gray-400" />
+                                <Lock className="w-5 h-5 text-gray-400 gi3d" />
                               </div>
                             )}
                           </div>
@@ -3809,7 +3809,7 @@ export default function ToolsPage() {
                         <div className="mt-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border-2 border-amber-300">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <TrendingUp className="w-6 h-6" strokeWidth={1.75} />
+                              <TrendingUp className="w-6 h-6 gi3d" strokeWidth={1.75} />
                               <div>
                                 <div className="font-bold text-amber-900">
                                   상위노출에 결정적인 SEO 포인트 {writingResult.checks.length - 3}개가 숨겨져 있습니다
@@ -3845,7 +3845,7 @@ export default function ToolsPage() {
               <div className="glass-3d p-8 ">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500">
-                    <Hash className="w-6 h-6 text-white" />
+                    <Hash className="w-6 h-6 text-white gi3d" />
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold">해시태그 추천</h2>
@@ -3855,7 +3855,7 @@ export default function ToolsPage() {
 
                 <div className="flex gap-4 mb-6">
                   <div className="relative flex-1">
-                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 gi3d" />
                     <input
                       type="text"
                       value={hashtagKeyword}
@@ -3917,7 +3917,7 @@ export default function ToolsPage() {
                             {/* P0: 블러 오버레이 */}
                             {isLocked && (
                               <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center z-10">
-                                <Lock className="w-4 h-4 text-gray-400" />
+                                <Lock className="w-4 h-4 text-gray-400 gi3d" />
                               </div>
                             )}
                             <div className="flex items-center gap-3">
@@ -3966,7 +3966,7 @@ export default function ToolsPage() {
               <div className="glass-3d p-8 ">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-3 rounded-xl bg-gradient-to-r from-teal-500 to-cyan-500">
-                    <Activity className="w-6 h-6 text-white" />
+                    <Activity className="w-6 h-6 text-white gi3d" />
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold">키워드 순위 추적</h2>
@@ -3977,7 +3977,7 @@ export default function ToolsPage() {
                 <div className="space-y-4 mb-6">
                   <div className="flex gap-4">
                     <div className="relative flex-1">
-                      <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 gi3d" />
                       <input
                         type="text"
                         value={trackBlogId}
@@ -3988,7 +3988,7 @@ export default function ToolsPage() {
                       />
                     </div>
                     <div className="relative flex-1">
-                      <Hash className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <Hash className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 gi3d" />
                       <input
                         type="text"
                         value={trackKeyword}
@@ -4013,7 +4013,7 @@ export default function ToolsPage() {
                       </>
                     ) : (
                       <>
-                        <Activity className="w-5 h-5" />
+                        <Activity className="w-5 h-5 gi3d" />
                         순위 조회
                       </>
                     )}
@@ -4142,7 +4142,7 @@ export default function ToolsPage() {
               <div className="glass-3d p-8 ">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-3 rounded-xl bg-gradient-to-r from-[#0064FF] to-[#3182F6]">
-                    <Scan className="w-6 h-6 text-white" />
+                    <Scan className="w-6 h-6 text-white gi3d" />
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold">경쟁 블로그 클론 분석</h2>
@@ -4152,7 +4152,7 @@ export default function ToolsPage() {
 
                 <div className="flex gap-4 mb-6">
                   <div className="relative flex-1">
-                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 gi3d" />
                     <input
                       type="text"
                       value={cloneBlogUrl}
@@ -4172,7 +4172,7 @@ export default function ToolsPage() {
                       <Loader2 className="w-5 h-5 animate-spin" />
                     ) : (
                       <>
-                        <Scan className="w-5 h-5" />
+                        <Scan className="w-5 h-5 gi3d" />
                         분석하기
                       </>
                     )}
@@ -4219,7 +4219,7 @@ export default function ToolsPage() {
                     {/* 성공 전략 분석 */}
                     <div className="bg-white rounded-2xl p-6">
                       <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                        <Lightbulb className="w-5 h-5 text-[#0064FF]" />
+                        <Lightbulb className="w-5 h-5 text-[#0064FF] gi3d" />
                         성공 전략 분석
                       </h3>
                       <div className="space-y-4">
@@ -4230,7 +4230,7 @@ export default function ToolsPage() {
                             </div>
                             <div className="font-medium text-gray-800 mb-1">{item.insight}</div>
                             <div className="text-sm text-[#0064FF] flex items-center gap-1">
-                              <Zap className="w-4 h-4" />
+                              <Zap className="w-4 h-4 gi3d" />
                               {item.actionItem}
                             </div>
                           </div>
@@ -4285,7 +4285,7 @@ export default function ToolsPage() {
                         <div className="space-y-3">
                           {cloneResult.successFactors.map((factor, i) => (
                             <div key={i} className="flex items-center gap-3 p-3 bg-green-50 rounded-xl">
-                              <CheckCircle className="w-5 h-5 text-green-500" />
+                              <CheckCircle className="w-5 h-5 text-green-500 gi3d" />
                               <span className="text-gray-800">{factor}</span>
                             </div>
                           ))}
@@ -4308,7 +4308,7 @@ export default function ToolsPage() {
               <div className="glass-3d p-8 ">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="p-3 rounded-xl bg-gradient-to-r from-red-500 to-orange-500">
-                    <Radio className="w-6 h-6 text-white" />
+                    <Radio className="w-6 h-6 text-white gi3d" />
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold">실시간 트렌드 스나이퍼</h2>
@@ -4359,7 +4359,7 @@ export default function ToolsPage() {
                         </>
                       ) : (
                         <>
-                          <Crosshair className="w-5 h-5" />
+                          <Crosshair className="w-5 h-5 gi3d" />
                           트렌드 스나이핑
                         </>
                       )}
@@ -4460,7 +4460,7 @@ export default function ToolsPage() {
                               }}
                               className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200"
                             >
-                              <Copy className="w-4 h-4" />
+                              <Copy className="w-4 h-4 gi3d" />
                             </button>
                             <button
                               onClick={() => toast.success('글쓰기 페이지로 이동합니다!')}

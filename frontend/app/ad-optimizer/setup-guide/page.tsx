@@ -601,13 +601,13 @@ export default function SetupGuidePage() {
         <div className="max-w-5xl mx-auto px-4 py-4">
           <div className="flex items-center gap-3">
             <Link href="/ad-optimizer/unified" className="text-gray-500 hover:text-gray-700 flex items-center gap-1">
-              <ArrowLeft className="w-4 h-4" />
+              <ArrowLeft className="w-4 h-4 gi3d" />
               통합 광고
             </Link>
             <div className="w-px h-6 bg-gray-300" />
             <div className="flex items-center gap-2">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-                <Zap className="w-6 h-6 text-white" />
+                <Zap className="w-6 h-6 text-white gi3d" />
               </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">플랫폼 세팅 가이드</h1>
@@ -650,7 +650,7 @@ export default function SetupGuidePage() {
                         {platform.difficulty}
                       </span>
                       <span className="text-xs text-gray-500 flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
+                        <Clock className="w-3 h-3 gi3d" />
                         {platform.timeRequired}
                       </span>
                     </div>
@@ -658,7 +658,7 @@ export default function SetupGuidePage() {
                   <h3 className="font-bold text-gray-900 mb-2">{platform.name}</h3>
                   <p className="text-sm text-gray-600 line-clamp-2">{platform.description}</p>
                   <div className="mt-4 flex items-center text-indigo-600 text-sm font-medium">
-                    가이드 보기 <ChevronRight className="w-4 h-4 ml-1" />
+                    가이드 보기 <ChevronRight className="w-4 h-4 ml-1 gi3d" />
                   </div>
                 </motion.button>
               ))}
@@ -673,7 +673,7 @@ export default function SetupGuidePage() {
                 onClick={() => setSelectedPlatform(null)}
                 className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
               >
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowLeft className="w-4 h-4 gi3d" />
                 다른 플랫폼 선택
               </button>
 
@@ -685,11 +685,11 @@ export default function SetupGuidePage() {
                     <p className="text-white/80">{guide.description}</p>
                     <div className="flex items-center gap-4 mt-2 text-sm">
                       <span className="flex items-center gap-1">
-                        <Shield className="w-4 h-4" />
+                        <Shield className="w-4 h-4 gi3d" />
                         난이도: {guide.difficulty}
                       </span>
                       <span className="flex items-center gap-1">
-                        <Clock className="w-4 h-4" />
+                        <Clock className="w-4 h-4 gi3d" />
                         {guide.timeRequired}
                       </span>
                     </div>
@@ -701,13 +701,13 @@ export default function SetupGuidePage() {
             {/* 준비사항 */}
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 mb-6">
               <h3 className="font-bold text-blue-900 flex items-center gap-2 mb-3">
-                <Info className="w-5 h-5" />
+                <Info className="w-5 h-5 gi3d" />
                 시작하기 전 준비사항
               </h3>
               <ul className="space-y-2">
                 {guide.prerequisites.map((item, idx) => (
                   <li key={idx} className="flex items-start gap-2 text-blue-800">
-                    <Check className="w-4 h-4 mt-0.5 text-blue-600" />
+                    <Check className="w-4 h-4 mt-0.5 text-blue-600 gi3d" />
                     {item}
                   </li>
                 ))}
@@ -735,9 +735,9 @@ export default function SetupGuidePage() {
                         <span className="font-medium text-gray-900">{step.title}</span>
                       </div>
                       {expandedStep === idx ? (
-                        <ChevronDown className="w-5 h-5 text-gray-400" />
+                        <ChevronDown className="w-5 h-5 text-gray-400 gi3d" />
                       ) : (
-                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                        <ChevronRight className="w-5 h-5 text-gray-400 gi3d" />
                       )}
                     </button>
                     <AnimatePresence>
@@ -769,7 +769,7 @@ export default function SetupGuidePage() {
                                 onClick={() => setExpandedStep(idx + 1)}
                                 className="mt-4 text-indigo-600 text-sm font-medium hover:text-indigo-700 flex items-center gap-1"
                               >
-                                다음 단계로 <ChevronRight className="w-4 h-4" />
+                                다음 단계로 <ChevronRight className="w-4 h-4 gi3d" />
                               </button>
                             )}
                           </div>
@@ -794,9 +794,9 @@ export default function SetupGuidePage() {
                         className="text-gray-400 hover:text-gray-600"
                       >
                         {copiedField === field.name ? (
-                          <Check className="w-4 h-4 text-green-500" />
+                          <Check className="w-4 h-4 text-green-500 gi3d" />
                         ) : (
-                          <Copy className="w-4 h-4" />
+                          <Copy className="w-4 h-4 gi3d" />
                         )}
                       </button>
                     </div>
@@ -811,7 +811,7 @@ export default function SetupGuidePage() {
             <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
               <div className="p-4 border-b border-gray-100">
                 <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                  <AlertCircle className="w-5 h-5 text-orange-500" />
+                  <AlertCircle className="w-5 h-5 text-orange-500 gi3d" />
                   자주 묻는 질문
                 </h3>
               </div>
@@ -831,7 +831,7 @@ export default function SetupGuidePage() {
                 href="/ad-optimizer/unified"
                 className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-medium hover:opacity-90 transition-opacity"
               >
-                <Zap className="w-5 h-5" />
+                <Zap className="w-5 h-5 gi3d" />
                 지금 연동하러 가기
               </Link>
             </div>

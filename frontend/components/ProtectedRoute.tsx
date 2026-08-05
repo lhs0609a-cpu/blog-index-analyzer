@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/stores/auth'
 import { motion } from 'framer-motion'
 import { Sparkles } from 'lucide-react'
+import GlassIcon from '@/components/GlassIcon'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -35,7 +36,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
             transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
             className="inline-flex p-6 rounded-full bg-[#0064FF] mb-4"
           >
-            <Sparkles className="w-12 h-12 text-white" />
+            <GlassIcon icon={Sparkles} size={86} />
           </motion.div>
           <p className="text-gray-600 text-lg">로딩 중...</p>
         </div>

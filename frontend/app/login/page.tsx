@@ -104,7 +104,7 @@ export default function LoginPage() {
           whileTap={{ scale: 0.95 }}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/70 border border-gray-200/50 backdrop-blur-xl hover:bg-white/90 transition-all text-sm font-medium shadow-lg shadow-gray-200/50"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-4 h-4 gi3d" />
           홈으로
         </motion.button>
       </Link>
@@ -150,7 +150,7 @@ export default function LoginPage() {
                   이메일
                 </label>
                 <div className="relative group">
-                  <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-[#0064FF] transition-colors" />
+                  <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-[#0064FF] transition-colors gi3d" />
                   <input
                     type="email"
                     value={email}
@@ -170,7 +170,7 @@ export default function LoginPage() {
                   비밀번호
                 </label>
                 <div className="relative group">
-                  <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-[#0064FF] transition-colors" />
+                  <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-[#0064FF] transition-colors gi3d" />
                   <input
                     type={showPassword ? "text" : "password"}
                     value={password}
@@ -187,7 +187,7 @@ export default function LoginPage() {
                     aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
                     className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                   >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {showPassword ? <EyeOff className="w-5 h-5 gi3d" /> : <Eye className="w-5 h-5 gi3d" />}
                   </button>
                 </div>
               </div>

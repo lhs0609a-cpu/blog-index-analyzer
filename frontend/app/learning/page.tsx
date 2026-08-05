@@ -28,6 +28,7 @@ import {
   RotateCcw,
 } from 'lucide-react'
 
+import GlassIcon from '@/components/GlassIcon'
 // 타입 정의
 interface LearningWeights {
   c_rank: {
@@ -288,11 +289,11 @@ export default function LearningDashboard() {
     if (Math.abs(diff) < 1) return null
     return diff > 0 ? (
       <span className="text-green-500 text-xs flex items-center">
-        <TrendingUp className="w-3 h-3 mr-1" />+{diff.toFixed(1)}
+        <TrendingUp className="w-3 h-3 mr-1 gi3d" />+{diff.toFixed(1)}
       </span>
     ) : (
       <span className="text-red-500 text-xs flex items-center">
-        <TrendingDown className="w-3 h-3 mr-1" />{diff.toFixed(1)}
+        <TrendingDown className="w-3 h-3 mr-1 gi3d" />{diff.toFixed(1)}
       </span>
     )
   }
@@ -322,7 +323,7 @@ export default function LearningDashboard() {
           transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
           className="p-6 rounded-full instagram-gradient"
         >
-          <Brain className="w-8 h-8 text-white" />
+          <Brain className="w-8 h-8 text-white gi3d" />
         </motion.div>
       </div>
     )
@@ -335,7 +336,7 @@ export default function LearningDashboard() {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
             <Link href="/dashboard" className="p-2 rounded-full hover:bg-white/50 transition-colors">
-              <ArrowLeft className="w-6 h-6 text-gray-600" />
+              <ArrowLeft className="w-6 h-6 text-gray-600 gi3d" />
             </Link>
             <div>
               <h1 className="text-4xl font-bold mb-2">
@@ -355,7 +356,7 @@ export default function LearningDashboard() {
                   : 'bg-gray-100 text-gray-600'
               }`}
             >
-              <Activity className={`w-4 h-4 ${autoRefresh ? 'animate-pulse' : ''}`} />
+              <Activity className={`gi3d w-4 h-4 ${autoRefresh ? 'animate-pulse' : ''}`} />
               {autoRefresh ? '실시간' : '수동'}
             </button>
 
@@ -378,7 +379,7 @@ export default function LearningDashboard() {
               {training ? (
                 <RefreshCw className="w-4 h-4 animate-spin" />
               ) : (
-                <Play className="w-4 h-4" />
+                <Play className="w-4 h-4 gi3d" />
               )}
               학습 실행
             </button>
@@ -392,10 +393,10 @@ export default function LearningDashboard() {
             animate={{ opacity: 1, y: 0 }}
             className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 flex items-center gap-2"
           >
-            <AlertCircle className="w-5 h-5" />
+            <AlertCircle className="w-5 h-5 gi3d" />
             {error}
             <button onClick={() => setError('')} className="ml-auto">
-              <ChevronUp className="w-4 h-4" />
+              <ChevronUp className="w-4 h-4 gi3d" />
             </button>
           </motion.div>
         )}
@@ -410,7 +411,7 @@ export default function LearningDashboard() {
           >
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center">
-                <Database className="w-6 h-6 text-purple-600" />
+                <Database className="w-6 h-6 text-purple-600 gi3d" />
               </div>
               <span className="text-xs text-gray-500">총 샘플</span>
             </div>
@@ -433,7 +434,7 @@ export default function LearningDashboard() {
           >
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 rounded-xl bg-pink-100 flex items-center justify-center">
-                <Brain className="w-6 h-6 text-pink-600" />
+                <Brain className="w-6 h-6 text-pink-600 gi3d" />
               </div>
               <span className="text-xs text-gray-500">학습 횟수</span>
             </div>
@@ -456,7 +457,7 @@ export default function LearningDashboard() {
           >
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
-                <Target className="w-6 h-6 text-green-600" />
+                <Target className="w-6 h-6 text-green-600 gi3d" />
               </div>
               <span className="text-xs text-gray-500">예측 정확도</span>
             </div>
@@ -477,7 +478,7 @@ export default function LearningDashboard() {
           >
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center">
-                <PieChart className="w-6 h-6 text-orange-600" />
+                <PieChart className="w-6 h-6 text-orange-600 gi3d" />
               </div>
               <span className="text-xs text-gray-500">가중치 비율</span>
             </div>
@@ -508,7 +509,7 @@ export default function LearningDashboard() {
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl instagram-gradient flex items-center justify-center">
-                    <BarChart3 className="w-5 h-5 text-white" />
+                    <BarChart3 className="w-5 h-5 text-white gi3d" />
                   </div>
                   <div>
                     <h2 className="text-xl font-bold">현재 학습된 가중치</h2>
@@ -521,12 +522,12 @@ export default function LearningDashboard() {
                     className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
                     title="가중치 초기화"
                   >
-                    <RotateCcw className="w-4 h-4 text-gray-500" />
+                    <RotateCcw className="w-4 h-4 text-gray-500 gi3d" />
                   </button>
                   {showWeightsDetail ? (
-                    <ChevronUp className="w-5 h-5 text-gray-500" />
+                    <ChevronUp className="w-5 h-5 text-gray-500 gi3d" />
                   ) : (
-                    <ChevronDown className="w-5 h-5 text-gray-500" />
+                    <ChevronDown className="w-5 h-5 text-gray-500 gi3d" />
                   )}
                 </div>
               </div>
@@ -598,27 +599,27 @@ export default function LearningDashboard() {
                       <h3 className="font-semibold text-orange-700 mb-3">추가 요소 보너스</h3>
                       <div className="grid grid-cols-5 gap-3">
                         <div className="bg-white rounded-lg p-3 text-center">
-                          <FileText className="w-4 h-4 mx-auto text-gray-400 mb-1" />
+                          <FileText className="w-4 h-4 mx-auto text-gray-400 mb-1 gi3d" />
                           <div className="text-xs text-gray-500">포스트</div>
                           <div className="font-bold">{weights.extra_factors?.post_count || 5}</div>
                         </div>
                         <div className="bg-white rounded-lg p-3 text-center">
-                          <Users className="w-4 h-4 mx-auto text-gray-400 mb-1" />
+                          <Users className="w-4 h-4 mx-auto text-gray-400 mb-1 gi3d" />
                           <div className="text-xs text-gray-500">이웃</div>
                           <div className="font-bold">{weights.extra_factors?.neighbor_count || 5}</div>
                         </div>
                         <div className="bg-white rounded-lg p-3 text-center">
-                          <Clock className="w-4 h-4 mx-auto text-gray-400 mb-1" />
+                          <Clock className="w-4 h-4 mx-auto text-gray-400 mb-1 gi3d" />
                           <div className="text-xs text-gray-500">블로그 나이</div>
                           <div className="font-bold">{weights.extra_factors?.blog_age || 5}</div>
                         </div>
                         <div className="bg-white rounded-lg p-3 text-center">
-                          <Zap className="w-4 h-4 mx-auto text-gray-400 mb-1" />
+                          <Zap className="w-4 h-4 mx-auto text-gray-400 mb-1 gi3d" />
                           <div className="text-xs text-gray-500">최근 활동</div>
                           <div className="font-bold">{weights.extra_factors?.recent_activity || 10}</div>
                         </div>
                         <div className="bg-white rounded-lg p-3 text-center">
-                          <Eye className="w-4 h-4 mx-auto text-gray-400 mb-1" />
+                          <Eye className="w-4 h-4 mx-auto text-gray-400 mb-1 gi3d" />
                           <div className="text-xs text-gray-500">방문자</div>
                           <div className="font-bold">{weights.extra_factors?.visitor_count || 5}</div>
                         </div>
@@ -668,7 +669,7 @@ export default function LearningDashboard() {
               className="glass rounded-2xl p-6"
             >
               <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <Zap className="w-5 h-5 text-yellow-500" />
+                <Zap className="w-5 h-5 text-yellow-500 gi3d" />
                 현재 점수 계산 공식
               </h2>
 
@@ -704,7 +705,7 @@ export default function LearningDashboard() {
             >
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-green-500" />
+                  <Activity className="w-5 h-5 text-green-500 gi3d" />
                   실시간 피드
                 </h2>
                 {autoRefresh && (
@@ -718,7 +719,7 @@ export default function LearningDashboard() {
               <div className="space-y-3 max-h-[500px] overflow-y-auto">
                 {realtimeUpdates.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
-                    <Brain className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <GlassIcon icon={Brain} size={86} className="mx-auto mb-2" />
                     <p>아직 활동이 없습니다</p>
                     <p className="text-xs mt-1">키워드 검색을 하면 여기에 표시됩니다</p>
                   </div>
@@ -737,9 +738,9 @@ export default function LearningDashboard() {
                       }`}
                     >
                       <div className="flex items-start gap-2">
-                        {update.type === 'learn' && <Brain className="w-4 h-4 text-purple-600 mt-0.5" />}
-                        {update.type === 'search' && <Search className="w-4 h-4 text-blue-600 mt-0.5" />}
-                        {update.type === 'weight_update' && <RefreshCw className="w-4 h-4 text-orange-600 mt-0.5" />}
+                        {update.type === 'learn' && <Brain className="w-4 h-4 text-purple-600 mt-0.5 gi3d" />}
+                        {update.type === 'search' && <Search className="w-4 h-4 text-blue-600 mt-0.5 gi3d" />}
+                        {update.type === 'weight_update' && <RefreshCw className="w-4 h-4 text-orange-600 mt-0.5 gi3d" />}
 
                         <div className="flex-1">
                           <div className="text-sm font-medium">
@@ -778,7 +779,7 @@ export default function LearningDashboard() {
                 href="/keyword-search"
                 className="mt-4 flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold hover:shadow-lg transition-all"
               >
-                <Search className="w-4 h-4" />
+                <Search className="w-4 h-4 gi3d" />
                 키워드 검색하러 가기
               </Link>
             </motion.div>
@@ -794,7 +795,7 @@ export default function LearningDashboard() {
         >
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold flex items-center gap-2">
-              <Clock className="w-5 h-5 text-blue-500" />
+              <Clock className="w-5 h-5 text-blue-500 gi3d" />
               검색 이력 및 학습 데이터
             </h2>
             <button
@@ -807,7 +808,7 @@ export default function LearningDashboard() {
 
           {searchHistory.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              <Search className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <GlassIcon icon={Search} size={86} className="mx-auto mb-2" />
               <p>검색 이력이 없습니다</p>
               <p className="text-xs mt-1">키워드 검색을 하면 여기에 이력이 표시됩니다</p>
             </div>
@@ -823,7 +824,7 @@ export default function LearningDashboard() {
                 >
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                      <Search className="w-5 h-5 text-blue-600" />
+                      <Search className="w-5 h-5 text-blue-600 gi3d" />
                     </div>
                     <div>
                       <div className="font-semibold">{item.keyword}</div>
@@ -878,7 +879,7 @@ export default function LearningDashboard() {
             className="mt-8 glass rounded-2xl p-6"
           >
             <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-purple-500" />
+              <BarChart3 className="w-5 h-5 text-purple-500 gi3d" />
               키워드별 평균 점수 비교
             </h2>
 
@@ -1014,7 +1015,7 @@ export default function LearningDashboard() {
           </div>
 
           <div className="mt-6 p-4 bg-yellow-50 rounded-xl flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5 gi3d" />
             <div>
               <p className="text-sm text-yellow-800">
                 <strong>팁:</strong> 더 많은 키워드를 검색할수록 학습 데이터가 풍부해지고,

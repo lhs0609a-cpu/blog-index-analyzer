@@ -212,7 +212,7 @@ export function InlineSuccessCheck({ show }: { show: boolean }) {
             animate={{ pathLength: 1 }}
             transition={{ duration: 0.3 }}
           >
-            <Check className="w-4 h-4 text-white" strokeWidth={3} />
+            <Check className="w-4 h-4 text-white gi3d" strokeWidth={3} />
           </motion.div>
         </motion.div>
       )}
@@ -243,7 +243,7 @@ export function SuccessToast({
         >
           <div className="flex items-center gap-2 px-4 py-3 bg-gray-900 text-white rounded-full shadow-lg">
             <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-              <Check className="w-3 h-3 text-white" strokeWidth={3} />
+              <Check className="w-3 h-3 text-white gi3d" strokeWidth={3} />
             </div>
             <span className="font-medium">{message}</span>
           </div>

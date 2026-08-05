@@ -88,7 +88,7 @@ export default function TrialExpiryBanner({ dismissible = true, compact = false 
           className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2 text-center text-sm font-medium relative"
         >
           <div className="flex items-center justify-center gap-2">
-            <Clock className="w-4 h-4" />
+            <Clock className="w-4 h-4 gi3d" />
             <span>
               무료 체험이 <strong>{daysRemaining}일</strong> 남았어요!
             </span>
@@ -104,7 +104,7 @@ export default function TrialExpiryBanner({ dismissible = true, compact = false 
               onClick={handleDismiss}
               className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-white/20 rounded transition-colors"
             >
-              <X className="w-4 h-4" />
+              <X className="w-4 h-4 gi3d" />
             </button>
           )}
         </motion.div>
@@ -130,7 +130,7 @@ export default function TrialExpiryBanner({ dismissible = true, compact = false 
             onClick={handleDismiss}
             className="absolute top-3 right-3 p-1.5 text-amber-600 hover:bg-amber-100 rounded-lg transition-colors"
           >
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4 gi3d" />
           </button>
         )}
 
@@ -141,7 +141,7 @@ export default function TrialExpiryBanner({ dismissible = true, compact = false 
             transition={{ repeat: Infinity, duration: 2, repeatDelay: 3 }}
             className="w-16 h-16 bg-gradient-to-br from-amber-400 to-orange-500 rounded-2xl flex items-center justify-center shadow-lg"
           >
-            <Clock className="w-8 h-8 text-white" />
+            <Clock className="w-8 h-8 text-white gi3d" />
           </motion.div>
 
           {/* 내용 */}

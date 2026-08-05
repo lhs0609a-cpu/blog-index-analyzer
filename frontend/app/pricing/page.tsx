@@ -11,10 +11,10 @@ import { PLAN_INFO, PLAN_LIMITS, FEATURES } from '@/lib/features/featureAccess'
 import toast from 'react-hot-toast'
 
 const planIcons: Record<PlanType, React.ReactNode> = {
-  free: <Sparkles className="w-8 h-8" />,
-  basic: <Zap className="w-8 h-8" />,
-  pro: <Crown className="w-8 h-8" />,
-  business: <Building2 className="w-8 h-8" />
+  free: <Sparkles className="w-8 h-8 gi3d" />,
+  basic: <Zap className="w-8 h-8 gi3d" />,
+  pro: <Crown className="w-8 h-8 gi3d" />,
+  business: <Building2 className="w-8 h-8 gi3d" />
 }
 
 const planColors: Record<PlanType, string> = {
@@ -137,10 +137,10 @@ export default function PricingPage() {
 
   const getFeatureValue = (value: number | boolean): string | React.ReactNode => {
     if (typeof value === 'boolean') {
-      return value ? <Check className="w-5 h-5 text-green-500" /> : <X className="w-5 h-5 text-gray-300" />
+      return value ? <Check className="w-5 h-5 text-green-500 gi3d" /> : <X className="w-5 h-5 text-gray-300 gi3d" />
     }
     if (value === -1) return '무제한'
-    if (value === 0) return <X className="w-5 h-5 text-gray-300" />
+    if (value === 0) return <X className="w-5 h-5 text-gray-300 gi3d" />
     return `${value}회`
   }
 
@@ -217,7 +217,7 @@ export default function PricingPage() {
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-r from-yellow-400 to-amber-500 flex items-center justify-center shadow-lg shadow-yellow-500/30">
-                  <Trophy className="w-7 h-7 text-white" />
+                  <Trophy className="w-7 h-7 text-white gi3d" />
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -230,7 +230,7 @@ export default function PricingPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-full text-sm font-medium">
-                <TrendingUp className="w-4 h-4" />
+                <TrendingUp className="w-4 h-4 gi3d" />
                 데이터 기반 키워드 추천
               </div>
             </div>
@@ -266,7 +266,7 @@ export default function PricingPage() {
                   <div className="flex items-center gap-2 text-xs text-gray-500 mb-3">
                     <span>월 {item.volume.toLocaleString()}회</span>
                     <span className="flex items-center gap-1 text-amber-600">
-                      <Clock className="w-3 h-3" />
+                      <Clock className="w-3 h-3 gi3d" />
                       {item.goldenTime}
                     </span>
                   </div>
@@ -295,7 +295,7 @@ export default function PricingPage() {
                 }}
                 className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-yellow-400 to-amber-500 text-white font-semibold rounded-xl hover:shadow-lg transition-all whitespace-nowrap"
               >
-                <Target className="w-4 h-4" />
+                <Target className="w-4 h-4 gi3d" />
                 Pro 플랜 시작하기
               </button>
             </div>
@@ -398,7 +398,7 @@ export default function PricingPage() {
                 {isPro && (
                   <div className="absolute -top-5 left-1/2 transform -translate-x-1/2">
                     <span className="px-6 py-2 bg-gradient-to-r from-[#0064FF] to-blue-500 text-white text-sm font-bold rounded-full shadow-lg flex items-center gap-1">
-                      <Star className="w-4 h-4 fill-yellow-300 text-yellow-300" />
+                      <Star className="w-4 h-4 fill-yellow-300 text-yellow-300 gi3d" />
                       가장 인기 · 추천
                     </span>
                   </div>
@@ -442,28 +442,28 @@ export default function PricingPage() {
                 {/* Features */}
                 <ul className="space-y-3 mb-6">
                   <li className="flex items-center gap-3">
-                    <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
+                    <Check className="w-5 h-5 text-green-500 flex-shrink-0 gi3d" />
                     <span className="text-sm">
                       키워드 검색 {plan.features.keyword_search_daily === -1 ? '무제한' : `${plan.features.keyword_search_daily}회/일`}
                     </span>
                   </li>
                   <li className="flex items-center gap-3">
-                    <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
+                    <Check className="w-5 h-5 text-green-500 flex-shrink-0 gi3d" />
                     <span className="text-sm">
                       블로그 분석 {plan.features.blog_analysis_daily === -1 ? '무제한' : `${plan.features.blog_analysis_daily}회/일`}
                     </span>
                   </li>
                   <li className="flex items-center gap-3">
-                    <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
+                    <Check className="w-5 h-5 text-green-500 flex-shrink-0 gi3d" />
                     <span className="text-sm">
                       검색 결과 {plan.features.search_results_count}개
                     </span>
                   </li>
                   <li className="flex items-center gap-3">
                     {plan.features.history_days > 0 || plan.features.history_days === -1 ? (
-                      <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
+                      <Check className="w-5 h-5 text-green-500 flex-shrink-0 gi3d" />
                     ) : (
-                      <X className="w-5 h-5 text-gray-300 flex-shrink-0" />
+                      <X className="w-5 h-5 text-gray-300 flex-shrink-0 gi3d" />
                     )}
                     <span className={`text-sm ${plan.features.history_days === 0 ? 'text-gray-400' : ''}`}>
                       히스토리 {plan.features.history_days === -1 ? '무제한' : plan.features.history_days === 0 ? '미제공' : `${plan.features.history_days}일`}
@@ -471,9 +471,9 @@ export default function PricingPage() {
                   </li>
                   <li className="flex items-center gap-3">
                     {plan.features.rank_alert ? (
-                      <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
+                      <Check className="w-5 h-5 text-green-500 flex-shrink-0 gi3d" />
                     ) : (
-                      <X className="w-5 h-5 text-gray-300 flex-shrink-0" />
+                      <X className="w-5 h-5 text-gray-300 flex-shrink-0 gi3d" />
                     )}
                     <span className={`text-sm ${!plan.features.rank_alert ? 'text-gray-400' : ''}`}>
                       순위 알림
@@ -481,9 +481,9 @@ export default function PricingPage() {
                   </li>
                   <li className="flex items-center gap-3">
                     {plan.features.excel_export ? (
-                      <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
+                      <Check className="w-5 h-5 text-green-500 flex-shrink-0 gi3d" />
                     ) : (
-                      <X className="w-5 h-5 text-gray-300 flex-shrink-0" />
+                      <X className="w-5 h-5 text-gray-300 flex-shrink-0 gi3d" />
                     )}
                     <span className={`text-sm ${!plan.features.excel_export ? 'text-gray-400' : ''}`}>
                       엑셀 내보내기
@@ -491,9 +491,9 @@ export default function PricingPage() {
                   </li>
                   <li className="flex items-center gap-3">
                     {plan.features.api_access ? (
-                      <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
+                      <Check className="w-5 h-5 text-green-500 flex-shrink-0 gi3d" />
                     ) : (
-                      <X className="w-5 h-5 text-gray-300 flex-shrink-0" />
+                      <X className="w-5 h-5 text-gray-300 flex-shrink-0 gi3d" />
                     )}
                     <span className={`text-sm ${!plan.features.api_access ? 'text-gray-400' : ''}`}>
                       API 접근
@@ -549,7 +549,7 @@ export default function PricingPage() {
             {/* 기능 1: 키워드 경쟁도 분석 */}
             <div className="bg-white rounded-2xl p-6 border border-emerald-100 shadow-sm">
               <div className="flex items-center gap-3 mb-4">
-                <Search className="w-6 h-6 w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center" strokeWidth={1.75} />
+                <Search className="w-6 h-6 w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center gi3d" strokeWidth={1.75} />
                 <div>
                   <div className="font-bold text-gray-900">경쟁도 분석</div>
                   <div className="text-xs text-gray-500">일 200회 검색</div>
@@ -577,7 +577,7 @@ export default function PricingPage() {
             {/* 기능 2: 순위 추적 */}
             <div className="bg-white rounded-2xl p-6 border border-emerald-100 shadow-sm">
               <div className="flex items-center gap-3 mb-4">
-                <BarChart3 className="w-6 h-6 w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center" strokeWidth={1.75} />
+                <BarChart3 className="w-6 h-6 w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center gi3d" strokeWidth={1.75} />
                 <div>
                   <div className="font-bold text-gray-900">순위 추적</div>
                   <div className="text-xs text-gray-500">실시간 모니터링</div>
@@ -594,7 +594,7 @@ export default function PricingPage() {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">순위 알림</span>
-                  <Check className="w-5 h-5 text-green-500" />
+                  <Check className="w-5 h-5 text-green-500 gi3d" />
                 </div>
               </div>
               <div className="bg-orange-50 rounded-xl p-3 text-sm text-orange-700">
@@ -605,7 +605,7 @@ export default function PricingPage() {
             {/* 기능 3: 경쟁사 비교 */}
             <div className="bg-white rounded-2xl p-6 border border-emerald-100 shadow-sm">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center"><Swords className="w-6 h-6 text-purple-600" strokeWidth={1.75} /></div>
+                <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center"><Swords className="w-6 h-6 text-purple-600 gi3d" strokeWidth={1.75} /></div>
                 <div>
                   <div className="font-bold text-gray-900">경쟁사 비교</div>
                   <div className="text-xs text-gray-500">최대 10개 블로그</div>
@@ -618,7 +618,7 @@ export default function PricingPage() {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">엑셀 내보내기</span>
-                  <Check className="w-5 h-5 text-green-500" />
+                  <Check className="w-5 h-5 text-green-500 gi3d" />
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">팀 멤버</span>
@@ -936,7 +936,7 @@ export default function PricingPage() {
             >
               <div className="text-center mb-6">
                 <div className="w-16 h-16 rounded-full bg-[#0064FF]/10 flex items-center justify-center mx-auto mb-4">
-                  <Crown className="w-8 h-8 text-[#0064FF]" />
+                  <Crown className="w-8 h-8 text-[#0064FF] gi3d" />
                 </div>
                 <h3 className="text-2xl font-bold text-gray-900 mb-2">
                   {PLAN_INFO[selectedTrialPlan].name} 플랜 시작하기
@@ -949,7 +949,7 @@ export default function PricingPage() {
               {/* 체험 안내 - 신뢰도 강화 */}
               <div className="bg-green-50 rounded-2xl p-4 mb-6 border border-green-200">
                 <div className="flex items-start gap-3 mb-3">
-                  <Shield className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                  <Shield className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5 gi3d" />
                   <div className="text-sm">
                     <p className="font-semibold text-green-800 mb-1">한 클릭으로 언제든 해지</p>
                     <p className="text-green-700">
@@ -959,7 +959,7 @@ export default function PricingPage() {
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <Check className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                  <Check className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5 gi3d" />
                   <div className="text-sm">
                     <p className="font-semibold text-green-800 mb-1">7일 이내 전액 환불</p>
                     <p className="text-green-700">
@@ -1027,7 +1027,7 @@ export default function PricingPage() {
                 {/* 신뢰 배지 */}
                 {!processingPlan && (
                   <div className="text-center text-xs text-gray-500 flex items-center justify-center gap-2">
-                    <Shield className="w-3 h-3" />
+                    <Shield className="w-3 h-3 gi3d" />
                     <span>7일 내 전액 환불 · 위약금 0원 · 클릭 한 번으로 해지</span>
                   </div>
                 )}

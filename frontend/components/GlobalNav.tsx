@@ -141,7 +141,7 @@ export default function GlobalNav() {
                       whileTap={{ scale: 0.95 }}
                       className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-[#0064FF] transition-colors flex items-center gap-1"
                     >
-                      <CreditCard className="w-4 h-4" />
+                      <CreditCard className="w-4 h-4 gi3d" />
                       <span className="hidden xl:inline">요금제</span>
                     </motion.button>
                   </Link>
@@ -156,7 +156,7 @@ export default function GlobalNav() {
                         className="p-2 rounded-xl bg-blue-50 border border-blue-100"
                         title="관리자"
                       >
-                        <Shield className="w-4 h-4 text-[#0064FF]" />
+                        <Shield className="w-4 h-4 text-[#0064FF] gi3d" />
                       </motion.button>
                     </Link>
                   )}
@@ -167,7 +167,7 @@ export default function GlobalNav() {
                     className="p-2 rounded-xl hover:bg-gray-100 transition-colors"
                     title="로그아웃"
                   >
-                    <LogOut className="w-4 h-4 text-gray-500" />
+                    <LogOut className="w-4 h-4 text-gray-500 gi3d" />
                   </motion.button>
 
                   {/* Mobile Menu Button */}
@@ -177,7 +177,7 @@ export default function GlobalNav() {
                     onClick={() => setMobileMenuOpen(true)}
                     className="lg:hidden p-2 rounded-xl hover:bg-gray-100 transition-colors"
                   >
-                    <Menu className="w-5 h-5 text-gray-600" />
+                    <Menu className="w-5 h-5 text-gray-600 gi3d" />
                   </motion.button>
                 </div>
               ) : (
@@ -188,7 +188,7 @@ export default function GlobalNav() {
                       whileTap={{ scale: 0.95 }}
                       className="px-3 py-2 text-sm font-semibold text-[#0064FF] hover:text-[#0050CC] transition-colors flex items-center gap-1"
                     >
-                      <Sparkles className="w-4 h-4" />
+                      <Sparkles className="w-4 h-4 gi3d" />
                       요금제 보기
                     </motion.button>
                   </Link>
@@ -218,7 +218,7 @@ export default function GlobalNav() {
                     onClick={() => setMobileMenuOpen(true)}
                     className="lg:hidden p-2 rounded-xl hover:bg-gray-100 transition-colors"
                   >
-                    <Menu className="w-5 h-5 text-gray-600" />
+                    <Menu className="w-5 h-5 text-gray-600 gi3d" />
                   </motion.button>
                 </div>
               )}
@@ -258,7 +258,7 @@ export default function GlobalNav() {
                   onClick={() => setMobileMenuOpen(false)}
                   className="p-2 rounded-xl hover:bg-gray-100 transition-colors"
                 >
-                  <X className="w-5 h-5 text-gray-600" />
+                  <X className="w-5 h-5 text-gray-600 gi3d" />
                 </button>
               </div>
 
@@ -288,7 +288,7 @@ export default function GlobalNav() {
                   <div className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-colors ${
                     pathname === '/' ? 'bg-[#0064FF] text-white' : 'hover:bg-gray-100'
                   }`}>
-                    <Home className="w-5 h-5" />
+                    <Home className="w-5 h-5 gi3d" />
                     <span className="font-medium">홈</span>
                   </div>
                 </Link>
@@ -320,7 +320,7 @@ export default function GlobalNav() {
               <div className="p-4 border-t space-y-2">
                 <Link href="/pricing" onClick={() => setMobileMenuOpen(false)}>
                   <div className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-100 transition-colors">
-                    <CreditCard className="w-5 h-5 text-gray-600" />
+                    <CreditCard className="w-5 h-5 text-gray-600 gi3d" />
                     <span className="font-medium">요금제</span>
                   </div>
                 </Link>
@@ -330,7 +330,7 @@ export default function GlobalNav() {
                     {user?.is_admin && (
                       <Link href="/admin" onClick={() => setMobileMenuOpen(false)}>
                         <div className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-100 transition-colors">
-                          <Shield className="w-5 h-5 text-[#0064FF]" />
+                          <Shield className="w-5 h-5 text-[#0064FF] gi3d" />
                           <span className="font-medium">관리자</span>
                         </div>
                       </Link>
@@ -339,7 +339,7 @@ export default function GlobalNav() {
                       onClick={handleLogout}
                       className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-red-50 text-red-600 transition-colors"
                     >
-                      <LogOut className="w-5 h-5" />
+                      <LogOut className="w-5 h-5 gi3d" />
                       <span className="font-medium">로그아웃</span>
                     </button>
                   </>

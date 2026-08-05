@@ -11,6 +11,7 @@ import {
   ShoppingCart, Percent, Brain, Lightbulb, Award, Flame, Bell, Globe,
   HelpCircle, BookOpen, PlayCircle
 } from 'lucide-react'
+import GlassIcon from '@/components/GlassIcon'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
@@ -416,7 +417,7 @@ export default function UnifiedAdOptimizerPage() {
               transition={{ duration: 0.5 }}
               className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-br from-pink-500 via-purple-500 to-indigo-500 mb-8"
             >
-              <Zap className="w-10 h-10 text-white" />
+              <GlassIcon icon={Zap} size={72} />
             </motion.div>
 
             <motion.h1
@@ -471,10 +472,10 @@ export default function UnifiedAdOptimizerPage() {
             className="grid md:grid-cols-2 gap-4 mb-16"
           >
             {[
-              { icon: <Globe className="w-5 h-5" />, title: "멀티 플랫폼 통합", desc: "8개 광고 플랫폼을 한 곳에서" },
-              { icon: <Brain className="w-5 h-5" />, title: "AI 실시간 최적화", desc: "입찰가, 예산 자동 조정" },
-              { icon: <TrendingUp className="w-5 h-5" />, title: "ROAS 극대화", desc: "성과 기반 예산 재배분" },
-              { icon: <Bell className="w-5 h-5" />, title: "이상 징후 감지", desc: "문제 발생 시 즉시 알림" },
+              { icon: <Globe className="w-5 h-5 gi3d" />, title: "멀티 플랫폼 통합", desc: "8개 광고 플랫폼을 한 곳에서" },
+              { icon: <Brain className="w-5 h-5 gi3d" />, title: "AI 실시간 최적화", desc: "입찰가, 예산 자동 조정" },
+              { icon: <TrendingUp className="w-5 h-5 gi3d" />, title: "ROAS 극대화", desc: "성과 기반 예산 재배분" },
+              { icon: <Bell className="w-5 h-5 gi3d" />, title: "이상 징후 감지", desc: "문제 발생 시 즉시 알림" },
             ].map((feature, idx) => (
               <div
                 key={idx}
@@ -568,7 +569,7 @@ export default function UnifiedAdOptimizerPage() {
           className="bg-white/10 backdrop-blur-xl rounded-3xl border border-white/20 p-8 max-w-lg text-center"
         >
           <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <Zap className="w-10 h-10 text-white" />
+            <Zap className="w-10 h-10 text-white gi3d" />
           </div>
           <h1 className="text-2xl font-bold text-white mb-3">프로 플랜 전용 기능</h1>
           <p className="text-gray-300 mb-6">
@@ -617,10 +618,10 @@ export default function UnifiedAdOptimizerPage() {
                 onClick={() => setShowTutorial(true)}
                 className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
               >
-                <HelpCircle className="w-5 h-5" />
+                <HelpCircle className="w-5 h-5 gi3d" />
               </button>
               <Link href="/ad-optimizer/anomaly-detection" className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
-                <Bell className="w-5 h-5" />
+                <Bell className="w-5 h-5 gi3d" />
               </Link>
             </div>
           </div>
@@ -669,7 +670,7 @@ export default function UnifiedAdOptimizerPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center">
-                      <BookOpen className="w-5 h-5 text-white" />
+                      <BookOpen className="w-5 h-5 text-white gi3d" />
                     </div>
                     <div>
                       <p className="font-medium text-gray-900">처음이신가요?</p>
@@ -722,10 +723,10 @@ export default function UnifiedAdOptimizerPage() {
               <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">최적화 도구</h3>
               <div className="grid md:grid-cols-2 gap-3">
                 {[
-                  { href: '/ad-optimizer/hourly-bidding', icon: <Clock className="w-5 h-5" />, title: '시간대별 입찰', desc: '비용 15-25% 절감' },
-                  { href: '/ad-optimizer/anomaly-detection', icon: <Bell className="w-5 h-5" />, title: '이상 징후 감지', desc: '실시간 모니터링' },
-                  { href: '/ad-optimizer/budget-reallocation', icon: <PieChart className="w-5 h-5" />, title: '예산 재분배', desc: 'ROAS 10-20% 개선' },
-                  { href: '/ad-optimizer/creative-fatigue', icon: <Flame className="w-5 h-5" />, title: '크리에이티브 분석', desc: '교체 시점 추천' },
+                  { href: '/ad-optimizer/hourly-bidding', icon: <Clock className="w-5 h-5 gi3d" />, title: '시간대별 입찰', desc: '비용 15-25% 절감' },
+                  { href: '/ad-optimizer/anomaly-detection', icon: <Bell className="w-5 h-5 gi3d" />, title: '이상 징후 감지', desc: '실시간 모니터링' },
+                  { href: '/ad-optimizer/budget-reallocation', icon: <PieChart className="w-5 h-5 gi3d" />, title: '예산 재분배', desc: 'ROAS 10-20% 개선' },
+                  { href: '/ad-optimizer/creative-fatigue', icon: <Flame className="w-5 h-5 gi3d" />, title: '크리에이티브 분석', desc: '교체 시점 추천' },
                 ].map((tool, idx) => (
                   <Link key={idx} href={tool.href}>
                     <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all cursor-pointer group">
@@ -736,7 +737,7 @@ export default function UnifiedAdOptimizerPage() {
                         <h4 className="font-medium text-gray-900">{tool.title}</h4>
                         <p className="text-sm text-gray-400">{tool.desc}</p>
                       </div>
-                      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-400 transition-colors" />
+                      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-400 transition-colors gi3d" />
                     </div>
                   </Link>
                 ))}
@@ -749,25 +750,25 @@ export default function UnifiedAdOptimizerPage() {
                 <Link href="/ad-optimizer/naver-quality">
                   <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all cursor-pointer group">
                     <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-600 group-hover:bg-gray-100 transition-colors">
-                      <Award className="w-5 h-5" />
+                      <Award className="w-5 h-5 gi3d" />
                     </div>
                     <div className="flex-1">
                       <h4 className="font-medium text-gray-900">품질지수 최적화</h4>
                       <p className="text-sm text-gray-400">네이버 광고 품질 개선</p>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-400 transition-colors" />
+                    <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-400 transition-colors gi3d" />
                   </div>
                 </Link>
                 <Link href="/ad-optimizer/funnel-bidding">
                   <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all cursor-pointer group">
                     <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-600 group-hover:bg-gray-100 transition-colors">
-                      <Target className="w-5 h-5" />
+                      <Target className="w-5 h-5 gi3d" />
                     </div>
                     <div className="flex-1">
                       <h4 className="font-medium text-gray-900">퍼널 기반 입찰</h4>
                       <p className="text-sm text-gray-400">단계별 전략 적용</p>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-400 transition-colors" />
+                    <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-400 transition-colors gi3d" />
                   </div>
                 </Link>
               </div>
@@ -788,37 +789,37 @@ export default function UnifiedAdOptimizerPage() {
                 <tbody className="divide-y divide-gray-50">
                   <tr className="hover:bg-gray-50/50">
                     <td className="px-4 py-2.5 text-gray-700">시간대별 입찰</td>
-                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto" /></td>
-                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto" /></td>
-                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto" /></td>
-                    <td className="px-3 py-2.5 text-center"><X className="w-4 h-4 text-gray-200 mx-auto" /></td>
+                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto gi3d" /></td>
+                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto gi3d" /></td>
+                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto gi3d" /></td>
+                    <td className="px-3 py-2.5 text-center"><X className="w-4 h-4 text-gray-200 mx-auto gi3d" /></td>
                   </tr>
                   <tr className="hover:bg-gray-50/50">
                     <td className="px-4 py-2.5 text-gray-700">예산 재분배</td>
-                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto" /></td>
-                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto" /></td>
-                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto" /></td>
-                    <td className="px-3 py-2.5 text-center"><X className="w-4 h-4 text-gray-200 mx-auto" /></td>
+                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto gi3d" /></td>
+                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto gi3d" /></td>
+                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto gi3d" /></td>
+                    <td className="px-3 py-2.5 text-center"><X className="w-4 h-4 text-gray-200 mx-auto gi3d" /></td>
                   </tr>
                   <tr className="hover:bg-gray-50/50">
                     <td className="px-4 py-2.5 text-gray-700">크리에이티브 피로도</td>
-                    <td className="px-3 py-2.5 text-center"><X className="w-4 h-4 text-gray-200 mx-auto" /></td>
-                    <td className="px-3 py-2.5 text-center"><Clock className="w-4 h-4 text-gray-400 mx-auto" /></td>
-                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto" /></td>
-                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto" /></td>
+                    <td className="px-3 py-2.5 text-center"><X className="w-4 h-4 text-gray-200 mx-auto gi3d" /></td>
+                    <td className="px-3 py-2.5 text-center"><Clock className="w-4 h-4 text-gray-400 mx-auto gi3d" /></td>
+                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto gi3d" /></td>
+                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto gi3d" /></td>
                   </tr>
                   <tr className="hover:bg-gray-50/50">
                     <td className="px-4 py-2.5 text-gray-700">품질지수 최적화</td>
-                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto" /></td>
-                    <td className="px-3 py-2.5 text-center"><Clock className="w-4 h-4 text-gray-400 mx-auto" /></td>
-                    <td className="px-3 py-2.5 text-center"><X className="w-4 h-4 text-gray-200 mx-auto" /></td>
-                    <td className="px-3 py-2.5 text-center"><X className="w-4 h-4 text-gray-200 mx-auto" /></td>
+                    <td className="px-3 py-2.5 text-center"><Check className="w-4 h-4 text-gray-900 mx-auto gi3d" /></td>
+                    <td className="px-3 py-2.5 text-center"><Clock className="w-4 h-4 text-gray-400 mx-auto gi3d" /></td>
+                    <td className="px-3 py-2.5 text-center"><X className="w-4 h-4 text-gray-200 mx-auto gi3d" /></td>
+                    <td className="px-3 py-2.5 text-center"><X className="w-4 h-4 text-gray-200 mx-auto gi3d" /></td>
                   </tr>
                 </tbody>
               </table>
               <div className="px-4 py-2 border-t border-gray-50 flex items-center gap-4 text-xs text-gray-400">
-                <span className="flex items-center gap-1"><Check className="w-3 h-3" /> 지원</span>
-                <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> 준비 중</span>
+                <span className="flex items-center gap-1"><Check className="w-3 h-3 gi3d" /> 지원</span>
+                <span className="flex items-center gap-1"><Clock className="w-3 h-3 gi3d" /> 준비 중</span>
                 <Link href="/ad-optimizer/setup-guide" className="ml-auto hover:text-gray-600">연동 가이드 →</Link>
               </div>
             </div>
@@ -940,7 +941,7 @@ export default function UnifiedAdOptimizerPage() {
                 <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl p-5 text-white">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                      <Brain className="w-5 h-5" />
+                      <Brain className="w-5 h-5 gi3d" />
                     </div>
                     <div>
                       <h3 className="font-bold">AI 인사이트</h3>
@@ -954,7 +955,7 @@ export default function UnifiedAdOptimizerPage() {
                       </div>
                     ) : aiInsights.length === 0 ? (
                       <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 text-center">
-                        <Sparkles className="w-6 h-6 mx-auto text-white/50 mb-2" />
+                        <Sparkles className="w-6 h-6 mx-auto text-white/50 mb-2 gi3d" />
                         <p className="text-sm text-white/70">플랫폼 연동 후 AI가 분석합니다</p>
                       </div>
                     ) : (
@@ -967,10 +968,10 @@ export default function UnifiedAdOptimizerPage() {
                           className="bg-white/10 backdrop-blur-sm rounded-xl p-3"
                         >
                           <div className="flex items-center gap-2 mb-1">
-                            {insight.type === 'opportunity' && <Sparkles className="w-4 h-4 text-yellow-300" />}
-                            {insight.type === 'warning' && <AlertCircle className="w-4 h-4 text-orange-300" />}
-                            {insight.type === 'success' && <Check className="w-4 h-4 text-green-300" />}
-                            {insight.type === 'tip' && <Lightbulb className="w-4 h-4 text-blue-300" />}
+                            {insight.type === 'opportunity' && <Sparkles className="w-4 h-4 text-yellow-300 gi3d" />}
+                            {insight.type === 'warning' && <AlertCircle className="w-4 h-4 text-orange-300 gi3d" />}
+                            {insight.type === 'success' && <Check className="w-4 h-4 text-green-300 gi3d" />}
+                            {insight.type === 'tip' && <Lightbulb className="w-4 h-4 text-blue-300 gi3d" />}
                             <span className="font-medium text-sm">{insight.title}</span>
                           </div>
                           <p className="text-xs text-white/80">{insight.impact}</p>
@@ -982,14 +983,14 @@ export default function UnifiedAdOptimizerPage() {
                     onClick={() => setActiveTab('insights')}
                     className="w-full mt-4 py-2.5 bg-white/20 hover:bg-white/30 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2"
                   >
-                    전체 인사이트 보기 <ArrowRight className="w-4 h-4" />
+                    전체 인사이트 보기 <ArrowRight className="w-4 h-4 gi3d" />
                   </button>
                 </div>
 
                 {/* 빠른 작업 */}
                 <div className="bg-white rounded-2xl shadow-sm p-5">
                   <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <Zap className="w-5 h-5 text-yellow-500" />
+                    <Zap className="w-5 h-5 text-yellow-500 gi3d" />
                     빠른 작업
                   </h3>
                   <div className="space-y-2">
@@ -998,7 +999,7 @@ export default function UnifiedAdOptimizerPage() {
                       className="w-full p-3 text-left bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors flex items-center gap-3"
                     >
                       <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <Link2 className="w-4 h-4 text-blue-600" />
+                        <Link2 className="w-4 h-4 text-blue-600 gi3d" />
                       </div>
                       <span className="text-sm font-medium text-gray-900">새 플랫폼 연동</span>
                     </button>
@@ -1007,7 +1008,7 @@ export default function UnifiedAdOptimizerPage() {
                       className="w-full p-3 text-left bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors flex items-center gap-3"
                     >
                       <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                        <Wallet className="w-4 h-4 text-green-600" />
+                        <Wallet className="w-4 h-4 text-green-600 gi3d" />
                       </div>
                       <span className="text-sm font-medium text-gray-900">예산 재배분</span>
                     </button>
@@ -1024,7 +1025,7 @@ export default function UnifiedAdOptimizerPage() {
                       className="w-full p-3 text-left bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors flex items-center gap-3"
                     >
                       <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                        <RefreshCw className="w-4 h-4 text-purple-600" />
+                        <RefreshCw className="w-4 h-4 text-purple-600 gi3d" />
                       </div>
                       <span className="text-sm font-medium text-gray-900">수동 최적화 실행</span>
                     </button>
@@ -1035,7 +1036,7 @@ export default function UnifiedAdOptimizerPage() {
                 {dashboardSummary && (
                   <div className="bg-gradient-to-br from-green-50 to-emerald-100 rounded-2xl p-5 border border-green-200">
                     <div className="flex items-center gap-2 mb-3">
-                      <Award className="w-5 h-5 text-green-600" />
+                      <Award className="w-5 h-5 text-green-600 gi3d" />
                       <h3 className="font-bold text-green-800">성과 요약</h3>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
@@ -1081,7 +1082,7 @@ export default function UnifiedAdOptimizerPage() {
           <div className="flex flex-wrap items-center gap-4">
             {/* 검색 */}
             <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 gi3d" />
               <input
                 type="text"
                 value={searchQuery}
@@ -1124,13 +1125,13 @@ export default function UnifiedAdOptimizerPage() {
                 onClick={() => setViewMode('grid')}
                 className={`p-2 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-white shadow-sm' : ''}`}
               >
-                <Grid className="w-4 h-4" />
+                <Grid className="w-4 h-4 gi3d" />
               </button>
               <button
                 onClick={() => setViewMode('list')}
                 className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-white shadow-sm' : ''}`}
               >
-                <List className="w-4 h-4" />
+                <List className="w-4 h-4 gi3d" />
               </button>
             </div>
           </div>
@@ -1218,21 +1219,21 @@ export default function UnifiedAdOptimizerPage() {
                               }`}
                               title={isActive ? '최적화 중지' : '최적화 시작'}
                             >
-                              {isActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                              {isActive ? <Pause className="w-4 h-4 gi3d" /> : <Play className="w-4 h-4 gi3d" />}
                             </button>
                             <button
                               onClick={() => disconnectPlatform(platform.id)}
                               className="p-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
                               title="연동 해제"
                             >
-                              <Unlink className="w-4 h-4" />
+                              <Unlink className="w-4 h-4 gi3d" />
                             </button>
                             <Link
                               href={`/ad-optimizer/${platform.id}`}
                               className="p-2 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition-colors"
                               title="상세 설정"
                             >
-                              <Settings className="w-4 h-4" />
+                              <Settings className="w-4 h-4 gi3d" />
                             </Link>
                           </div>
                         </>
@@ -1241,7 +1242,7 @@ export default function UnifiedAdOptimizerPage() {
                           onClick={() => openConnectModal(platform)}
                           className={`flex items-center gap-2 px-4 py-2 bg-gradient-to-r ${platform.color} text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity`}
                         >
-                          <Link2 className="w-4 h-4" />
+                          <Link2 className="w-4 h-4 gi3d" />
                           연동하기
                         </button>
                       )}
@@ -1269,7 +1270,7 @@ export default function UnifiedAdOptimizerPage() {
 
             {filteredPlatforms.length === 0 && (
               <div className="text-center py-20 text-gray-500">
-                <Search className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                <GlassIcon icon={Search} size={86} className="mx-auto mb-4" />
                 <p>검색 결과가 없습니다</p>
               </div>
             )}
@@ -1288,7 +1289,7 @@ export default function UnifiedAdOptimizerPage() {
               <div className="bg-white rounded-2xl p-5 shadow-sm">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                    <Wallet className="w-5 h-5 text-blue-600" />
+                    <Wallet className="w-5 h-5 text-blue-600 gi3d" />
                   </div>
                   <span className="text-sm text-gray-500">총 예산</span>
                 </div>
@@ -1298,7 +1299,7 @@ export default function UnifiedAdOptimizerPage() {
               <div className="bg-white rounded-2xl p-5 shadow-sm">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
-                    <TrendingUp className="w-5 h-5 text-green-600" />
+                    <TrendingUp className="w-5 h-5 text-green-600 gi3d" />
                   </div>
                   <span className="text-sm text-gray-500">AI 권장 예산</span>
                 </div>
@@ -1308,7 +1309,7 @@ export default function UnifiedAdOptimizerPage() {
               <div className="bg-white rounded-2xl p-5 shadow-sm">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
-                    <Target className="w-5 h-5 text-orange-600" />
+                    <Target className="w-5 h-5 text-orange-600 gi3d" />
                   </div>
                   <span className="text-sm text-gray-500">평균 ROAS</span>
                 </div>
@@ -1318,7 +1319,7 @@ export default function UnifiedAdOptimizerPage() {
               <div className="bg-white rounded-2xl p-5 shadow-sm">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
-                    <Percent className="w-5 h-5 text-purple-600" />
+                    <Percent className="w-5 h-5 text-purple-600 gi3d" />
                   </div>
                   <span className="text-sm text-gray-500">연동 플랫폼</span>
                 </div>
@@ -1332,7 +1333,7 @@ export default function UnifiedAdOptimizerPage() {
                 <div className="p-4 border-b border-gray-100 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                      <PieChart className="w-5 h-5 text-indigo-500" />
+                      <PieChart className="w-5 h-5 text-indigo-500 gi3d" />
                       플랫폼별 예산 배분
                     </h3>
                     <FeatureHelpCard featureId="budget-reallocation" variant="button" />
@@ -1341,7 +1342,7 @@ export default function UnifiedAdOptimizerPage() {
                     href="/ad-optimizer/budget-reallocation"
                     className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity flex items-center gap-2"
                   >
-                    <Sparkles className="w-4 h-4" />
+                    <Sparkles className="w-4 h-4 gi3d" />
                     AI 최적화 적용
                   </Link>
                 </div>
@@ -1409,7 +1410,7 @@ export default function UnifiedAdOptimizerPage() {
                 <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-5 text-white">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                      <Brain className="w-5 h-5" />
+                      <Brain className="w-5 h-5 gi3d" />
                     </div>
                     <div>
                       <h3 className="font-bold">AI 예산 분석</h3>
@@ -1423,7 +1424,7 @@ export default function UnifiedAdOptimizerPage() {
                       return (
                         <div key={i} className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
                           <div className="flex items-center gap-2 mb-1">
-                            {isIncrease ? <ArrowUpRight className="w-4 h-4 text-green-300" /> : <ArrowDownRight className="w-4 h-4 text-orange-300" />}
+                            {isIncrease ? <ArrowUpRight className="w-4 h-4 text-green-300 gi3d" /> : <ArrowDownRight className="w-4 h-4 text-orange-300 gi3d" />}
                             <span className="font-medium text-sm">{p.name} {isIncrease ? '증액 권장' : '감액 권장'}</span>
                           </div>
                           <p className="text-xs text-white/80">
@@ -1442,7 +1443,7 @@ export default function UnifiedAdOptimizerPage() {
                 {/* 예산 히스토리 */}
                 <div className="bg-white rounded-2xl shadow-sm p-5">
                   <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-gray-500" />
+                    <Clock className="w-5 h-5 text-gray-500 gi3d" />
                     예산 변경 이력
                   </h3>
                   <div className="space-y-3">
@@ -1484,7 +1485,7 @@ export default function UnifiedAdOptimizerPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <div className="bg-gradient-to-br from-yellow-400 to-orange-500 rounded-2xl p-5 text-white">
                 <div className="flex items-center gap-3 mb-2">
-                  <Sparkles className="w-6 h-6" />
+                  <Sparkles className="w-6 h-6 gi3d" />
                   <span className="text-sm text-white/80">기회 발견</span>
                 </div>
                 <p className="text-3xl font-bold">{aiInsights.filter(i => i.type === 'opportunity').length}</p>
@@ -1492,7 +1493,7 @@ export default function UnifiedAdOptimizerPage() {
 
               <div className="bg-gradient-to-br from-orange-400 to-red-500 rounded-2xl p-5 text-white">
                 <div className="flex items-center gap-3 mb-2">
-                  <AlertCircle className="w-6 h-6" />
+                  <AlertCircle className="w-6 h-6 gi3d" />
                   <span className="text-sm text-white/80">주의 필요</span>
                 </div>
                 <p className="text-3xl font-bold">{aiInsights.filter(i => i.type === 'warning').length}</p>
@@ -1500,7 +1501,7 @@ export default function UnifiedAdOptimizerPage() {
 
               <div className="bg-gradient-to-br from-green-400 to-emerald-500 rounded-2xl p-5 text-white">
                 <div className="flex items-center gap-3 mb-2">
-                  <Check className="w-6 h-6" />
+                  <Check className="w-6 h-6 gi3d" />
                   <span className="text-sm text-white/80">성공 사례</span>
                 </div>
                 <p className="text-3xl font-bold">{aiInsights.filter(i => i.type === 'success').length}</p>
@@ -1508,7 +1509,7 @@ export default function UnifiedAdOptimizerPage() {
 
               <div className="bg-gradient-to-br from-blue-400 to-indigo-500 rounded-2xl p-5 text-white">
                 <div className="flex items-center gap-3 mb-2">
-                  <Lightbulb className="w-6 h-6" />
+                  <Lightbulb className="w-6 h-6 gi3d" />
                   <span className="text-sm text-white/80">최적화 팁</span>
                 </div>
                 <p className="text-3xl font-bold">{aiInsights.filter(i => i.type === 'tip').length}</p>
@@ -1518,7 +1519,7 @@ export default function UnifiedAdOptimizerPage() {
             {/* 인사이트 리스트 */}
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                <Brain className="w-5 h-5 text-indigo-500" />
+                <Brain className="w-5 h-5 text-indigo-500 gi3d" />
                 AI 분석 결과
               </h3>
               <FeatureHelpCard featureId="anomaly-detection" variant="button" />
@@ -1543,10 +1544,10 @@ export default function UnifiedAdOptimizerPage() {
                         insight.type === 'warning' ? 'bg-red-100' :
                         insight.type === 'success' ? 'bg-green-100' : 'bg-blue-100'
                       }`}>
-                        {insight.type === 'opportunity' && <Sparkles className="w-6 h-6 text-yellow-600" />}
-                        {insight.type === 'warning' && <AlertCircle className="w-6 h-6 text-red-600" />}
-                        {insight.type === 'success' && <Check className="w-6 h-6 text-green-600" />}
-                        {insight.type === 'tip' && <Lightbulb className="w-6 h-6 text-blue-600" />}
+                        {insight.type === 'opportunity' && <Sparkles className="w-6 h-6 text-yellow-600 gi3d" />}
+                        {insight.type === 'warning' && <AlertCircle className="w-6 h-6 text-red-600 gi3d" />}
+                        {insight.type === 'success' && <Check className="w-6 h-6 text-green-600 gi3d" />}
+                        {insight.type === 'tip' && <Lightbulb className="w-6 h-6 text-blue-600 gi3d" />}
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
@@ -1593,7 +1594,7 @@ export default function UnifiedAdOptimizerPage() {
                 }}
                 className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-medium hover:opacity-90 transition-opacity flex items-center gap-2 mx-auto"
               >
-                <RefreshCw className="w-4 h-4" />
+                <RefreshCw className="w-4 h-4 gi3d" />
                 더 많은 인사이트 분석하기
               </button>
             </div>
@@ -1632,7 +1633,7 @@ export default function UnifiedAdOptimizerPage() {
                     onClick={() => setConnectModalOpen(false)}
                     className="p-2 hover:bg-white/20 rounded-lg transition-colors"
                   >
-                    <X className="w-5 h-5 text-white" />
+                    <X className="w-5 h-5 text-white gi3d" />
                   </button>
                 </div>
               </div>
@@ -1647,7 +1648,7 @@ export default function UnifiedAdOptimizerPage() {
                   <div className="grid grid-cols-2 gap-2">
                     {selectedPlatform.features.map((feature, i) => (
                       <div key={i} className="flex items-center gap-2 text-sm text-gray-600">
-                        <Check className="w-4 h-4 text-green-500" />
+                        <Check className="w-4 h-4 text-green-500 gi3d" />
                         {feature}
                       </div>
                     ))}
@@ -1683,7 +1684,7 @@ export default function UnifiedAdOptimizerPage() {
                     rel="noopener noreferrer"
                     className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 mb-6"
                   >
-                    <ExternalLink className="w-4 h-4" />
+                    <ExternalLink className="w-4 h-4 gi3d" />
                     API 키 발급 방법 보기
                   </a>
                 )}
@@ -1704,7 +1705,7 @@ export default function UnifiedAdOptimizerPage() {
                     {isConnecting ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
-                      <Link2 className="w-4 h-4" />
+                      <Link2 className="w-4 h-4 gi3d" />
                     )}
                     연동하기
                   </button>
@@ -1724,7 +1725,7 @@ export default function UnifiedAdOptimizerPage() {
         className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-full shadow-lg hover:shadow-xl flex items-center justify-center transition-all z-40 hover:scale-110 group"
         title="도움말 및 설정 가이드"
       >
-        <HelpCircle className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+        <HelpCircle className="w-6 h-6 group-hover:rotate-12 transition-transform gi3d" />
       </motion.button>
 
       {/* 튜토리얼 모달 (대시보드용) */}

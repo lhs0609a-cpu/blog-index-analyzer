@@ -165,7 +165,7 @@ function PaymentContent() {
             transition={{ type: 'spring', delay: 0.2 }}
             className="inline-flex p-6 rounded-full bg-green-100 mb-6"
           >
-            <CheckCircle className="w-16 h-16 text-green-500" />
+            <GlassIcon icon={CheckCircle} size={115} />
           </motion.div>
           <h1 className="text-3xl font-bold mb-4">정기결제 등록 완료!</h1>
           <p className="text-gray-600 mb-6">
@@ -206,7 +206,7 @@ function PaymentContent() {
           className="glass rounded-3xl p-12 text-center max-w-md"
         >
           <div className="inline-flex p-6 rounded-full bg-red-100 mb-6">
-            <CreditCard className="w-16 h-16 text-red-500" />
+            <CreditCard className="w-16 h-16 text-red-500 gi3d" />
           </div>
           <h1 className="text-3xl font-bold mb-4">등록 실패</h1>
           <p className="text-gray-600 mb-4">
@@ -250,7 +250,7 @@ function PaymentContent() {
             animate={{ opacity: 1, x: 0 }}
             className="mb-8 flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-white/50 rounded-lg transition-all"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-5 h-5 gi3d" />
             <span className="font-medium">요금제로 돌아가기</span>
           </motion.button>
         </Link>
@@ -273,7 +273,7 @@ function PaymentContent() {
           <div className="bg-green-50 border border-green-200 rounded-2xl p-4 mb-6">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                <Shield className="w-5 h-5 text-green-600" />
+                <Shield className="w-5 h-5 text-green-600 gi3d" />
               </div>
               <div>
                 <p className="font-semibold text-green-800 text-sm">마이페이지에서 클릭 한 번으로 해지</p>
@@ -285,7 +285,7 @@ function PaymentContent() {
           {/* 정기결제 안내 */}
           <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-6">
             <div className="flex items-start gap-3">
-              <RefreshCw className="w-5 h-5 text-[#0064FF] flex-shrink-0 mt-0.5" />
+              <RefreshCw className="w-5 h-5 text-[#0064FF] flex-shrink-0 mt-0.5 gi3d" />
               <div className="text-sm">
                 <p className="font-semibold text-[#0064FF] mb-1">정기결제 서비스</p>
                 <p className="text-[#3182F6]">
@@ -325,15 +325,15 @@ function PaymentContent() {
           {/* Benefits */}
           <div className="grid grid-cols-3 gap-3 mb-6">
             <div className="text-center p-3 bg-gray-50 rounded-xl">
-              <Calendar className="w-5 h-5 text-[#0064FF] mx-auto mb-1" />
+              <Calendar className="w-5 h-5 text-[#0064FF] mx-auto mb-1 gi3d" />
               <p className="text-xs text-gray-600">자동 갱신</p>
             </div>
             <div className="text-center p-3 bg-gray-50 rounded-xl">
-              <Shield className="w-5 h-5 text-green-600 mx-auto mb-1" />
+              <Shield className="w-5 h-5 text-green-600 mx-auto mb-1 gi3d" />
               <p className="text-xs text-gray-600">7일 환불</p>
             </div>
             <div className="text-center p-3 bg-gray-50 rounded-xl">
-              <Lock className="w-5 h-5 text-blue-600 mx-auto mb-1" />
+              <Lock className="w-5 h-5 text-blue-600 mx-auto mb-1 gi3d" />
               <p className="text-xs text-gray-600">안전 결제</p>
             </div>
           </div>
@@ -341,19 +341,19 @@ function PaymentContent() {
           {/* 환불 정책 요약 - 구체적 예시 포함 */}
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6">
             <h3 className="font-semibold text-gray-800 text-sm mb-3 flex items-center gap-2">
-              <Shield className="w-4 h-4 text-green-600" />
+              <Shield className="w-4 h-4 text-green-600 gi3d" />
               환불 정책 안내
             </h3>
             <div className="space-y-3 text-xs">
               <div className="flex items-start gap-2">
-                <CheckCircle className="w-4 h-4 text-green-500 mt-0 flex-shrink-0" />
+                <CheckCircle className="w-4 h-4 text-green-500 mt-0 flex-shrink-0 gi3d" />
                 <div>
                   <p className="font-medium text-gray-800">7일 이내 전액 환불</p>
                   <p className="text-gray-500">결제 후 7일 이내, 서비스 미사용 시 100% 환불</p>
                 </div>
               </div>
               <div className="flex items-start gap-2">
-                <CheckCircle className="w-4 h-4 text-green-500 mt-0 flex-shrink-0" />
+                <CheckCircle className="w-4 h-4 text-green-500 mt-0 flex-shrink-0 gi3d" />
                 <div>
                   <p className="font-medium text-gray-800">7일 이후 일할 계산 환불</p>
                   <p className="text-gray-500">
@@ -363,7 +363,7 @@ function PaymentContent() {
                 </div>
               </div>
               <div className="flex items-start gap-2">
-                <CheckCircle className="w-4 h-4 text-green-500 mt-0 flex-shrink-0" />
+                <CheckCircle className="w-4 h-4 text-green-500 mt-0 flex-shrink-0 gi3d" />
                 <div>
                   <p className="font-medium text-gray-800">한 클릭 해지</p>
                   <p className="text-gray-500">마이페이지에서 클릭 한 번으로 즉시 해지 · 위약금 0원</p>
@@ -399,7 +399,7 @@ function PaymentContent() {
 
           {/* Security Notice */}
           <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
-            <Lock className="w-4 h-4" />
+            <Lock className="w-4 h-4 gi3d" />
             <span>결제 정보는 토스페이먼츠를 통해 안전하게 처리됩니다</span>
           </div>
 

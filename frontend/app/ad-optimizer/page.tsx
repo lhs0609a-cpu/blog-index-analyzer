@@ -180,7 +180,7 @@ export default function AdOptimizerPage() {
                 className="relative mx-auto w-16 h-16 mb-6"
               >
                 <div className="w-full h-full bg-gradient-to-br from-[#0064FF] via-[#3182F6] to-[#4A9AF6] rounded-2xl flex items-center justify-center shadow-lg">
-                  <Zap className="w-8 h-8 text-white" />
+                  <Zap className="w-8 h-8 text-white gi3d" />
                 </div>
               </motion.div>
 
@@ -263,15 +263,15 @@ export default function AdOptimizerPage() {
                   </div>
                   <ul className="space-y-2 text-xs text-slate-500">
                     <li className="flex items-center gap-2">
-                      <X className="w-3 h-3" />
+                      <X className="w-3 h-3 gi3d" />
                       <span>매일 3시간+ 모니터링</span>
                     </li>
                     <li className="flex items-center gap-2">
-                      <X className="w-3 h-3" />
+                      <X className="w-3 h-3 gi3d" />
                       <span>감에 의존한 조정</span>
                     </li>
                     <li className="flex items-center gap-2">
-                      <X className="w-3 h-3" />
+                      <X className="w-3 h-3 gi3d" />
                       <span>기회 손실 발생</span>
                     </li>
                   </ul>
@@ -283,15 +283,15 @@ export default function AdOptimizerPage() {
                     </div>
                     <ul className="space-y-2 text-xs text-slate-300">
                       <li className="flex items-center gap-2">
-                        <Check className="w-3 h-3 text-emerald-400" />
+                        <Check className="w-3 h-3 text-emerald-400 gi3d" />
                         <span>100% 자동 운영</span>
                       </li>
                       <li className="flex items-center gap-2">
-                        <Check className="w-3 h-3 text-emerald-400" />
+                        <Check className="w-3 h-3 text-emerald-400 gi3d" />
                         <span>데이터 기반 최적화</span>
                       </li>
                       <li className="flex items-center gap-2">
-                        <Check className="w-3 h-3 text-emerald-400" />
+                        <Check className="w-3 h-3 text-emerald-400 gi3d" />
                         <span>24시간 기회 포착</span>
                       </li>
                     </ul>
@@ -314,7 +314,7 @@ export default function AdOptimizerPage() {
                       ))}
                     </div>
                     <div className="flex text-amber-400 text-xs gap-0.5">
-                      {[...Array(5)].map((_, i) => <Star key={i} className="w-3 h-3 fill-current" />)}
+                      {[...Array(5)].map((_, i) => <Star key={i} className="w-3 h-3 fill-current gi3d" />)}
                     </div>
                     <span className="text-slate-500 text-xs">4.9/5</span>
                   </div>
@@ -336,7 +336,7 @@ export default function AdOptimizerPage() {
                       <div className="absolute inset-0 bg-gradient-to-r from-[#0064FF] via-[#3182F6] to-[#4A9AF6]" />
                       <div className="absolute inset-0 bg-gradient-to-r from-[#0064FF] via-[#3182F6] to-[#4A9AF6] opacity-0 group-hover:opacity-100 transition-opacity" />
                       <span className="relative flex items-center justify-center gap-2">
-                        <Sparkles className="w-4 h-4" />
+                        <Sparkles className="w-4 h-4 gi3d" />
                         프로 플랜 시작하기
                         <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">₩19,900/월</span>
                       </span>
@@ -359,7 +359,7 @@ export default function AdOptimizerPage() {
                 className="mt-4 text-center"
               >
                 <p className="text-gray-500 text-xs flex items-center justify-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  <CheckCircle className="w-4 h-4 text-green-500 gi3d" />
                   7일 내 전액 환불 · 언제든 해지 가능 · 위약금 0원
                 </p>
               </motion.div>
@@ -571,7 +571,7 @@ export default function AdOptimizerPage() {
           <div className="flex flex-col items-center gap-2 text-center">
             <div className="flex items-center gap-3">
               <span className="px-2 py-0.5 bg-orange-500 text-white text-xs font-bold rounded animate-pulse">BETA</span>
-              <AlertTriangle className="w-4 h-4 text-orange-600" />
+              <AlertTriangle className="w-4 h-4 text-orange-600 gi3d" />
               <p className="text-orange-700 text-sm font-semibold">
                 실험적 기능 - 테스트 목적으로만 사용하세요
               </p>
@@ -596,7 +596,7 @@ export default function AdOptimizerPage() {
               <div className="w-px h-6 bg-gray-300" />
               <div className="flex items-center gap-2">
                 <div className="w-10 h-10 rounded-xl bg-[linear-gradient(135deg,#4C7DFF_0%,#0064FF_46%,#6D3BFF_100%)] flex items-center justify-center">
-                  <Zap className="w-6 h-6 text-white" />
+                  <Zap className="w-6 h-6 text-white gi3d" />
                 </div>
                 <div>
                   <h1 className="text-xl font-bold text-gray-900">네이버 광고 자동 최적화</h1>
@@ -629,9 +629,9 @@ export default function AdOptimizerPage() {
                 {isLoading ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : isAutoRunning ? (
-                  <Pause className="w-4 h-4" />
+                  <Pause className="w-4 h-4 gi3d" />
                 ) : (
-                  <Play className="w-4 h-4" />
+                  <Play className="w-4 h-4 gi3d" />
                 )}
                 {isAutoRunning ? '중지' : '시작'}
               </button>
@@ -677,7 +677,7 @@ export default function AdOptimizerPage() {
                   onClick={() => setShowAddWizard(false)}
                   className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="w-4 h-4 gi3d" />
                   {adAccounts.length > 0 ? '계정 목록으로 돌아가기' : '취소'}
                 </button>
                 {addMode === 'quick' ? (
@@ -697,7 +697,7 @@ export default function AdOptimizerPage() {
                       onClick={() => setAddMode('quick')}
                       className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
                     >
-                      <ChevronLeft className="w-4 h-4" />
+                      <ChevronLeft className="w-4 h-4 gi3d" />
                       빠른 연동으로 돌아가기
                     </button>
                     <AccountSetupWizard
@@ -727,7 +727,7 @@ export default function AdOptimizerPage() {
                 {adAccounts.length === 0 && (
                   <div className="rounded-2xl bg-white border-2 border-dashed border-gray-200 p-10 text-center">
                     <div className="w-16 h-16 mx-auto bg-blue-50 rounded-2xl flex items-center justify-center mb-4">
-                      <Link2 className="w-8 h-8 text-blue-500" />
+                      <Link2 className="w-8 h-8 text-blue-500 gi3d" />
                     </div>
                     <h3 className="font-bold text-gray-900 mb-1">등록된 광고주 계정이 없습니다</h3>
                     <p className="text-sm text-gray-500">
@@ -761,9 +761,9 @@ export default function AdOptimizerPage() {
                               isActive ? 'bg-white/20' : acct.is_connected ? 'bg-[#0064FF]/10' : 'bg-red-100'
                             }`}>
                               {acct.is_connected ? (
-                                <CheckCircle className={`w-6 h-6 ${isActive ? 'text-white' : 'text-[#0064FF]'}`} />
+                                <CheckCircle className={`gi3d w-6 h-6 ${isActive ? 'text-white' : 'text-[#0064FF]'}`} />
                               ) : (
-                                <AlertTriangle className="w-6 h-6 text-red-600" />
+                                <AlertTriangle className="w-6 h-6 text-red-600 gi3d" />
                               )}
                             </div>
                             <div className="min-w-0">
@@ -816,7 +816,7 @@ export default function AdOptimizerPage() {
                   onClick={() => { setAddMode('quick'); setShowAddWizard(true) }}
                   className="w-full py-4 rounded-2xl border-2 border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50 text-gray-600 hover:text-blue-700 font-medium transition-all flex items-center justify-center gap-2"
                 >
-                  <Plus className="w-5 h-5" />
+                  <Plus className="w-5 h-5 gi3d" />
                   새 광고주 계정 추가
                 </button>
               </>
@@ -831,7 +831,7 @@ export default function AdOptimizerPage() {
             >
               <div className="glass-card rounded-2xl p-6">
                 <div className="w-12 h-12 bg-[#0064FF]/10 rounded-xl flex items-center justify-center mb-4">
-                  <Zap className="w-6 h-6 text-[#0064FF]" />
+                  <Zap className="w-6 h-6 text-[#0064FF] gi3d" />
                 </div>
                 <h3 className="font-bold text-gray-900 mb-2">실시간 자동 최적화</h3>
                 <p className="text-sm text-gray-600">24시간 자동으로 입찰가를 조정하여 광고 효율을 극대화합니다.</p>
@@ -839,7 +839,7 @@ export default function AdOptimizerPage() {
 
               <div className="glass-card rounded-2xl p-6">
                 <div className="w-12 h-12 bg-[#0064FF]/10 rounded-xl flex items-center justify-center mb-4">
-                  <Wallet className="w-6 h-6 text-[#0064FF]" />
+                  <Wallet className="w-6 h-6 text-[#0064FF] gi3d" />
                 </div>
                 <h3 className="font-bold text-gray-900 mb-2">비용 절감 추적</h3>
                 <p className="text-sm text-gray-600">얼마나 비용을 절감했는지 실시간으로 확인할 수 있습니다.</p>
@@ -847,7 +847,7 @@ export default function AdOptimizerPage() {
 
               <div className="glass-card rounded-2xl p-6">
                 <div className="w-12 h-12 bg-[#0064FF]/10 rounded-xl flex items-center justify-center mb-4">
-                  <Flame className="w-6 h-6 text-[#0064FF]" />
+                  <Flame className="w-6 h-6 text-[#0064FF] gi3d" />
                 </div>
                 <h3 className="font-bold text-gray-900 mb-2">트렌드 키워드 추천</h3>
                 <p className="text-sm text-gray-600">검색량이 급상승하는 키워드를 자동으로 추천받습니다.</p>
@@ -868,7 +868,7 @@ export default function AdOptimizerPage() {
               >
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 rounded-xl bg-[#0064FF]/10 flex items-center justify-center">
-                    <Search className="w-5 h-5 text-[#0064FF]" />
+                    <Search className="w-5 h-5 text-[#0064FF] gi3d" />
                   </div>
                   <span className="text-sm text-gray-500">활성 키워드</span>
                 </div>
@@ -885,7 +885,7 @@ export default function AdOptimizerPage() {
               >
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 rounded-xl bg-[#0064FF]/10 flex items-center justify-center">
-                    <TrendingUp className="w-5 h-5 text-[#0064FF]" />
+                    <TrendingUp className="w-5 h-5 text-[#0064FF] gi3d" />
                   </div>
                   <span className="text-sm text-gray-500">오늘 입찰 변경</span>
                 </div>
@@ -902,7 +902,7 @@ export default function AdOptimizerPage() {
               >
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 rounded-xl bg-[#0064FF]/10 flex items-center justify-center">
-                    <DollarSign className="w-5 h-5 text-[#0064FF]" />
+                    <DollarSign className="w-5 h-5 text-[#0064FF] gi3d" />
                   </div>
                   <span className="text-sm text-gray-500">ROAS</span>
                 </div>
@@ -919,7 +919,7 @@ export default function AdOptimizerPage() {
               >
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 rounded-xl bg-[#0064FF]/10 flex items-center justify-center">
-                    <Target className="w-5 h-5 text-[#0064FF]" />
+                    <Target className="w-5 h-5 text-[#0064FF] gi3d" />
                   </div>
                   <span className="text-sm text-gray-500">전략</span>
                 </div>
@@ -942,7 +942,7 @@ export default function AdOptimizerPage() {
                     onClick={loadDashboard}
                     className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                   >
-                    <RefreshCw className="w-4 h-4 text-gray-500" />
+                    <RefreshCw className="w-4 h-4 text-gray-500 gi3d" />
                   </button>
                 </div>
 
@@ -988,7 +988,7 @@ export default function AdOptimizerPage() {
                     disabled={isLoading}
                     className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#0064FF] hover:bg-[#0052D4] text-white rounded-xl font-semibold transition-colors disabled:opacity-50"
                   >
-                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 gi3d" />}
                     입찰 최적화 1회 실행
                   </button>
 
@@ -997,7 +997,7 @@ export default function AdOptimizerPage() {
                     disabled={isLoading}
                     className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-semibold transition-colors disabled:opacity-50"
                   >
-                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Filter className="w-4 h-4" />}
+                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Filter className="w-4 h-4 gi3d" />}
                     비효율 키워드 평가
                   </button>
 
@@ -1005,7 +1005,7 @@ export default function AdOptimizerPage() {
                     onClick={() => setActiveTab('discover')}
                     className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-semibold transition-colors"
                   >
-                    <Sparkles className="w-4 h-4" />
+                    <Sparkles className="w-4 h-4 gi3d" />
                     키워드 발굴하기
                   </button>
                 </div>
@@ -1049,9 +1049,9 @@ export default function AdOptimizerPage() {
                               change.new_bid > change.old_bid ? 'text-green-600' : 'text-red-600'
                             }`}>
                               {change.new_bid > change.old_bid ? (
-                                <ArrowUpRight className="w-4 h-4" />
+                                <ArrowUpRight className="w-4 h-4 gi3d" />
                               ) : (
-                                <ArrowDownRight className="w-4 h-4" />
+                                <ArrowDownRight className="w-4 h-4 gi3d" />
                               )}
                               {formatCurrency(change.new_bid)}
                             </span>
@@ -1088,7 +1088,7 @@ export default function AdOptimizerPage() {
                 <div className="absolute top-3 right-4 px-2.5 py-0.5 bg-white/20 rounded-full text-[10px] font-bold tracking-wider">RECOMMENDED</div>
                 <div className="flex items-center gap-5">
                   <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center flex-shrink-0">
-                    <Zap className="w-8 h-8" />
+                    <Zap className="w-8 h-8 gi3d" />
                   </div>
                   <div className="flex-1">
                     <h3 className="text-2xl font-extrabold mb-1.5">24시간 자동 키워드 풀</h3>
@@ -1097,7 +1097,7 @@ export default function AdOptimizerPage() {
                       <span className="font-bold"> 최대 10만 개까지 완전 자동</span>으로 채웁니다.
                     </p>
                   </div>
-                  <ArrowUpRight className="w-6 h-6 flex-shrink-0" />
+                  <ArrowUpRight className="w-6 h-6 flex-shrink-0 gi3d" />
                 </div>
               </Link>
             </div>
@@ -1150,7 +1150,7 @@ export default function AdOptimizerPage() {
                       </div>
                       <p className="text-gray-500 text-sm leading-relaxed">{card.desc}</p>
                     </div>
-                    <ArrowUpRight className="w-5 h-5 text-gray-400 group-hover:text-[#0064FF] transition-colors flex-shrink-0" />
+                    <ArrowUpRight className="w-5 h-5 text-gray-400 group-hover:text-[#0064FF] transition-colors flex-shrink-0 gi3d" />
                   </div>
                 </Link>
               ))}
@@ -1196,7 +1196,7 @@ export default function AdOptimizerPage() {
                   <>
                     <div className="md:col-span-2 p-4 bg-[#0064FF]/5 rounded-xl border border-[#0064FF]/20">
                       <h4 className="font-semibold text-[#0064FF] mb-3 flex items-center gap-2">
-                        <Target className="w-4 h-4" />
+                        <Target className="w-4 h-4 gi3d" />
                         전환 최적화 설정
                       </h4>
                       <div className="grid md:grid-cols-2 gap-4">
@@ -1389,7 +1389,7 @@ export default function AdOptimizerPage() {
                 disabled={isLoading}
                 className="mt-6 flex items-center justify-center gap-2 w-full px-6 py-3 bg-[#0064FF] hover:bg-[#0052D4] text-white rounded-xl font-semibold transition-colors disabled:opacity-50"
               >
-                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 gi3d" />}
                 설정 저장
               </button>
             </motion.div>

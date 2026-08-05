@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Sparkles, Search, BarChart3, Zap, ArrowRight, CheckCircle2, Award, TrendingUp } from 'lucide-react'
+import GlassIcon from '@/components/GlassIcon'
 import Link from 'next/link'
 
 interface WelcomeOnboardingProps {
@@ -39,7 +40,7 @@ export default function WelcomeOnboarding({ onComplete }: WelcomeOnboardingProps
 
   const steps = [
     {
-      icon: <Sparkles className="w-12 h-12 text-white" />,
+      icon: <GlassIcon icon={Sparkles} size={86} />,
       iconBg: 'from-[#0064FF] to-[#3182F6]',
       title: '블랭크에 오신 것을 환영합니다!',
       description: 'AI 기반 블로그 분석 플랫폼 블랭크입니다.\n40개 이상의 지표로 블로그를 분석하고 성장 전략을 세워보세요.',
@@ -50,14 +51,14 @@ export default function WelcomeOnboarding({ onComplete }: WelcomeOnboardingProps
       ]
     },
     {
-      icon: <Award className="w-12 h-12 text-white" />,
+      icon: <GlassIcon icon={Award} size={86} />,
       iconBg: 'from-purple-500 to-pink-500',
       title: '이런 분석 결과를 받아보세요',
       description: '블로그 ID 하나로 네이버가 당신의 블로그를 어떻게 평가하는지 알 수 있어요.',
       preview: true  // 미리보기 플래그
     },
     {
-      icon: <Search className="w-12 h-12 text-white" />,
+      icon: <GlassIcon icon={Search} size={86} />,
       iconBg: 'from-[#3182F6] to-sky-500',
       title: '블로그 분석하기',
       description: '네이버 블로그 ID만 입력하면 네이버 신뢰점수, 문서 품질점수 등\n40개 이상의 지표로 블로그 상태를 진단해드려요.',
@@ -67,7 +68,7 @@ export default function WelcomeOnboarding({ onComplete }: WelcomeOnboardingProps
       }
     },
     {
-      icon: <BarChart3 className="w-12 h-12 text-white" />,
+      icon: <GlassIcon icon={BarChart3} size={86} />,
       iconBg: 'from-sky-500 to-cyan-500',
       title: '키워드 검색하기',
       description: '목표 키워드를 검색하면 상위 노출 블로그들의\n공통 패턴을 분석해 어떻게 써야 할지 알려드려요.',
@@ -77,7 +78,7 @@ export default function WelcomeOnboarding({ onComplete }: WelcomeOnboardingProps
       }
     },
     {
-      icon: <Zap className="w-12 h-12 text-white" />,
+      icon: <GlassIcon icon={Zap} size={86} />,
       iconBg: 'from-orange-500 to-amber-500',
       title: 'AI 도구 활용하기',
       description: '블루오션 키워드 발굴, AI 글쓰기 가이드 등\n9가지 AI 도구로 효율적으로 블로그를 운영하세요.',
@@ -115,7 +116,7 @@ export default function WelcomeOnboarding({ onComplete }: WelcomeOnboardingProps
                 onClick={handleClose}
                 className="absolute top-4 right-4 p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
               >
-                <X className="w-5 h-5 text-white" />
+                <X className="w-5 h-5 text-white gi3d" />
               </button>
 
               {/* Step indicator */}
@@ -164,7 +165,7 @@ export default function WelcomeOnboarding({ onComplete }: WelcomeOnboardingProps
                   <div className="mt-4 space-y-2">
                     {currentStepData.features.map((feature, index) => (
                       <div key={index} className="flex items-center gap-2 text-sm">
-                        <CheckCircle2 className="w-5 h-5 text-green-500" />
+                        <CheckCircle2 className="w-5 h-5 text-green-500 gi3d" />
                         <span className="text-gray-700">{feature}</span>
                       </div>
                     ))}
@@ -218,7 +219,7 @@ export default function WelcomeOnboarding({ onComplete }: WelcomeOnboardingProps
                     </div>
 
                     <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <TrendingUp className="w-4 h-4 text-green-500" />
+                      <TrendingUp className="w-4 h-4 text-green-500 gi3d" />
                       <span>레벨별 맞춤 성장 전략도 함께 제공됩니다</span>
                     </div>
                   </div>
@@ -232,7 +233,7 @@ export default function WelcomeOnboarding({ onComplete }: WelcomeOnboardingProps
                     className="mt-4 inline-flex items-center gap-2 text-[#0064FF] font-semibold hover:underline"
                   >
                     {currentStepData.action.label}
-                    <ArrowRight className="w-4 h-4" />
+                    <ArrowRight className="w-4 h-4 gi3d" />
                   </Link>
                 )}
               </motion.div>

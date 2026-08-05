@@ -86,7 +86,7 @@ export default function QuickConnectForm({ userId, onComplete, onShowTutorial }:
       <div className="flex items-start justify-between gap-4 mb-5">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
-            <Zap className="w-6 h-6 text-blue-600" />
+            <Zap className="w-6 h-6 text-blue-600 gi3d" />
           </div>
           <div>
             <h3 className="font-bold text-gray-900">빠른 연동</h3>
@@ -99,7 +99,7 @@ export default function QuickConnectForm({ userId, onComplete, onShowTutorial }:
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600 flex-shrink-0"
         >
-          네이버 광고시스템 <ExternalLink className="w-3 h-3" />
+          네이버 광고시스템 <ExternalLink className="w-3 h-3 gi3d" />
         </a>
       </div>
 
@@ -163,7 +163,7 @@ export default function QuickConnectForm({ userId, onComplete, onShowTutorial }:
               onClick={() => setShowSecret(v => !v)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
             >
-              {showSecret ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              {showSecret ? <EyeOff className="w-5 h-5 gi3d" /> : <Eye className="w-5 h-5 gi3d" />}
             </button>
           </div>
           {form.secret_key && !secretKeyFilled && (
@@ -185,7 +185,7 @@ export default function QuickConnectForm({ userId, onComplete, onShowTutorial }:
 
         {error && (
           <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-200">
-            <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5 gi3d" />
             <p className="text-sm text-red-700">{error}</p>
           </div>
         )}
@@ -202,7 +202,7 @@ export default function QuickConnectForm({ userId, onComplete, onShowTutorial }:
           {isConnecting ? (
             <><Loader2 className="w-5 h-5 animate-spin" /> 연동 확인 중...</>
           ) : (
-            <><CheckCircle className="w-5 h-5" /> 연동하기</>
+            <><CheckCircle className="w-5 h-5 gi3d" /> 연동하기</>
           )}
         </button>
 
@@ -211,7 +211,7 @@ export default function QuickConnectForm({ userId, onComplete, onShowTutorial }:
             onClick={onShowTutorial}
             className="w-full flex items-center justify-center gap-2 text-sm text-gray-500 hover:text-blue-600 py-1"
           >
-            <BookOpen className="w-4 h-4" />
+            <BookOpen className="w-4 h-4 gi3d" />
             처음이세요? 단계별 가이드로 연동하기
           </button>
         )}

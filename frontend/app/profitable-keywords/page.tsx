@@ -104,7 +104,7 @@ export default function ProfitableKeywordsPage() {
               className="text-center mb-8"
             >
               <div className="w-20 h-20 bg-gradient-to-r from-amber-400 to-orange-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-orange-200">
-                <DollarSign className="w-10 h-10 text-white" />
+                <DollarSign className="w-10 h-10 text-white gi3d" />
               </div>
               <h1 className="text-3xl md:text-4xl font-bold mb-3">
                 <span className="bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
@@ -215,7 +215,7 @@ export default function ProfitableKeywordsPage() {
           >
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
-                <Target className="w-5 h-5 text-amber-600" />
+                <Target className="w-5 h-5 text-amber-600 gi3d" />
               </div>
               <div className="text-sm text-gray-500">1위 가능 키워드</div>
             </div>
@@ -232,7 +232,7 @@ export default function ProfitableKeywordsPage() {
           >
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                <DollarSign className="w-5 h-5 text-green-600" />
+                <DollarSign className="w-5 h-5 text-green-600 gi3d" />
               </div>
               <div className="text-sm text-gray-500">전체 잠재 수익</div>
             </div>
@@ -249,7 +249,7 @@ export default function ProfitableKeywordsPage() {
           >
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                <BarChart3 className="w-5 h-5 text-blue-600" />
+                <BarChart3 className="w-5 h-5 text-blue-600 gi3d" />
               </div>
               <div className="text-sm text-gray-500">내 레벨</div>
             </div>
@@ -266,7 +266,7 @@ export default function ProfitableKeywordsPage() {
           >
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-purple-600" />
+                <Sparkles className="w-5 h-5 text-purple-600 gi3d" />
               </div>
               <div className="text-sm text-gray-500">열람 가능</div>
             </div>
@@ -284,7 +284,7 @@ export default function ProfitableKeywordsPage() {
             className="bg-gradient-to-r from-red-500 to-orange-500 rounded-2xl p-6 mb-8 text-white"
           >
             <div className="flex items-center gap-2 mb-4">
-              <Zap className="w-5 h-5" />
+              <Zap className="w-5 h-5 gi3d" />
               <h2 className="font-bold">실시간 기회 알림</h2>
             </div>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -351,7 +351,7 @@ export default function ProfitableKeywordsPage() {
             ) : keywords.length === 0 ? (
               <div className="bg-white rounded-2xl p-12 text-center">
                 <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Search className="w-8 h-8 text-gray-400" />
+                  <Search className="w-8 h-8 text-gray-400 gi3d" />
                 </div>
                 <h3 className="text-lg font-semibold text-gray-700 mb-2">
                   키워드가 없습니다
@@ -388,7 +388,7 @@ export default function ProfitableKeywordsPage() {
                         <span>월 {keyword.monthly_search_volume.toLocaleString()}회</span>
                         {keyword.search_trend > 1 && (
                           <span className="text-green-600 flex items-center gap-1">
-                            <TrendingUp className="w-3 h-3" />
+                            <TrendingUp className="w-3 h-3 gi3d" />
                             +{Math.round((keyword.search_trend - 1) * 100)}%
                           </span>
                         )}
@@ -420,7 +420,7 @@ export default function ProfitableKeywordsPage() {
 
                     {keyword.golden_time && (
                       <div className="flex items-center gap-1 text-sm text-amber-600">
-                        <Clock className="w-4 h-4" />
+                        <Clock className="w-4 h-4 gi3d" />
                         {keyword.golden_time}
                       </div>
                     )}
@@ -452,7 +452,7 @@ export default function ProfitableKeywordsPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="flex items-center gap-2 mb-2">
-                      <Lock className="w-5 h-5" />
+                      <Lock className="w-5 h-5 gi3d" />
                       <span className="font-bold">
                         {summary.upgradeToSee.toLocaleString()}개 키워드가 더 있습니다
                       </span>
@@ -528,7 +528,7 @@ export default function ProfitableKeywordsPage() {
                   {selectedKeyword.golden_time && (
                     <div className="mb-6 p-4 bg-amber-50 rounded-xl">
                       <div className="flex items-center gap-2 text-amber-700 mb-1">
-                        <Clock className="w-4 h-4" />
+                        <Clock className="w-4 h-4 gi3d" />
                         <span className="font-semibold">골든타임</span>
                       </div>
                       <div className="text-lg font-bold text-amber-600">
@@ -545,9 +545,9 @@ export default function ProfitableKeywordsPage() {
                     href={`/keyword-search?keyword=${encodeURIComponent(selectedKeyword.keyword)}`}
                     className="flex items-center justify-center gap-2 w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-xl hover:shadow-lg transition-all"
                   >
-                    <Target className="w-5 h-5" />
+                    <Target className="w-5 h-5 gi3d" />
                     이 키워드로 글쓰기
-                    <ChevronRight className="w-5 h-5" />
+                    <ChevronRight className="w-5 h-5 gi3d" />
                   </Link>
                 </motion.div>
               )}

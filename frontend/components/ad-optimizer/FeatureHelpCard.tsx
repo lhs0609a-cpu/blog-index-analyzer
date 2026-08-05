@@ -8,6 +8,7 @@ import {
   Clock, Target, Zap, Shield, Settings, BarChart3, Link2
 } from 'lucide-react'
 
+import GlassIcon from '@/components/GlassIcon'
 // 기능별 도움말 데이터
 export interface FeatureHelp {
   id: string
@@ -246,7 +247,7 @@ export function FeatureHelpCard({ featureId, variant = 'button', className = '' 
           onClick={() => setIsOpen(true)}
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-indigo-100 text-gray-600 hover:text-indigo-700 rounded-lg text-sm font-medium transition-colors ${className}`}
         >
-          <HelpCircle className="w-4 h-4" />
+          <HelpCircle className="w-4 h-4 gi3d" />
           도움말
         </button>
 
@@ -266,7 +267,7 @@ export function FeatureHelpCard({ featureId, variant = 'button', className = '' 
           onClick={() => setIsOpen(true)}
           className={`fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg hover:shadow-xl flex items-center justify-center transition-all z-40 ${className}`}
         >
-          <HelpCircle className="w-6 h-6" />
+          <HelpCircle className="w-6 h-6 gi3d" />
         </button>
 
         <FeatureHelpModal
@@ -283,7 +284,7 @@ export function FeatureHelpCard({ featureId, variant = 'button', className = '' 
     <div className={`bg-indigo-50 border border-indigo-100 rounded-xl p-4 ${className}`}>
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
-          <Lightbulb className="w-5 h-5 text-indigo-600" />
+          <Lightbulb className="w-5 h-5 text-indigo-600 gi3d" />
         </div>
         <div className="flex-1">
           <h4 className="font-semibold text-gray-900 mb-1">{help.title}</h4>
@@ -293,7 +294,7 @@ export function FeatureHelpCard({ featureId, variant = 'button', className = '' 
             className="text-sm text-indigo-600 font-medium flex items-center gap-1 hover:text-indigo-800"
           >
             자세히 보기
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="w-4 h-4 gi3d" />
           </button>
         </div>
       </div>
@@ -339,7 +340,7 @@ function FeatureHelpModal({ help, isOpen, onClose }: FeatureHelpModalProps) {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                  <BookOpen className="w-5 h-5" />
+                  <BookOpen className="w-5 h-5 gi3d" />
                 </div>
                 <div>
                   <h2 className="text-lg font-bold">{help.title}</h2>
@@ -350,13 +351,13 @@ function FeatureHelpModal({ help, isOpen, onClose }: FeatureHelpModalProps) {
                 onClick={onClose}
                 className="p-2 hover:bg-white/20 rounded-lg transition-colors"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5 gi3d" />
               </button>
             </div>
 
             {help.estimatedTime && (
               <div className="flex items-center gap-2 text-sm text-white/80">
-                <Clock className="w-4 h-4" />
+                <Clock className="w-4 h-4 gi3d" />
                 {help.estimatedTime}
               </div>
             )}
@@ -394,7 +395,7 @@ function FeatureHelpModal({ help, isOpen, onClose }: FeatureHelpModalProps) {
 
                 <div>
                   <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-green-500" />
+                    <CheckCircle className="w-5 h-5 text-green-500 gi3d" />
                     이런 효과가 있어요
                   </h4>
                   <div className="grid gap-2">
@@ -414,7 +415,7 @@ function FeatureHelpModal({ help, isOpen, onClose }: FeatureHelpModalProps) {
 
                 <div>
                   <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <Lightbulb className="w-5 h-5 text-yellow-500" />
+                    <Lightbulb className="w-5 h-5 text-yellow-500 gi3d" />
                     꿀팁
                   </h4>
                   <div className="space-y-2">
@@ -423,7 +424,7 @@ function FeatureHelpModal({ help, isOpen, onClose }: FeatureHelpModalProps) {
                         key={idx}
                         className="flex items-start gap-2 p-3 bg-yellow-50 rounded-lg"
                       >
-                        <Lightbulb className="w-4 h-4 text-yellow-600" strokeWidth={1.75} />
+                        <Lightbulb className="w-4 h-4 text-yellow-600 gi3d" strokeWidth={1.75} />
                         <span className="text-gray-700">{tip}</span>
                       </div>
                     ))}
@@ -484,7 +485,7 @@ function FeatureHelpModal({ help, isOpen, onClose }: FeatureHelpModalProps) {
 
             {activeTab === 'faq' && !help.faqs && (
               <div className="text-center py-8 text-gray-500">
-                <HelpCircle className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                <GlassIcon icon={HelpCircle} size={86} className="mx-auto mb-3" />
                 <p>아직 FAQ가 없어요</p>
               </div>
             )}
@@ -520,10 +521,10 @@ export function QuickStartGuide({ className = '' }: QuickStartGuideProps) {
   const [isExpanded, setIsExpanded] = useState(true)
 
   const quickSteps = [
-    { icon: <Link2 className="w-5 h-5" />, title: '1. 플랫폼 연동', desc: '네이버 광고부터 시작하세요', done: false },
-    { icon: <Settings className="w-5 h-5" />, title: '2. 최적화 설정', desc: '안전 모드로 시작하세요', done: false },
-    { icon: <Shield className="w-5 h-5" />, title: '3. 알림 설정', desc: '긴급 알림만 켜두세요', done: false },
-    { icon: <BarChart3 className="w-5 h-5" />, title: '4. 성과 확인', desc: '매일 대시보드를 확인하세요', done: false }
+    { icon: <Link2 className="w-5 h-5 gi3d" />, title: '1. 플랫폼 연동', desc: '네이버 광고부터 시작하세요', done: false },
+    { icon: <Settings className="w-5 h-5 gi3d" />, title: '2. 최적화 설정', desc: '안전 모드로 시작하세요', done: false },
+    { icon: <Shield className="w-5 h-5 gi3d" />, title: '3. 알림 설정', desc: '긴급 알림만 켜두세요', done: false },
+    { icon: <BarChart3 className="w-5 h-5 gi3d" />, title: '4. 성과 확인', desc: '매일 대시보드를 확인하세요', done: false }
   ]
 
   return (
@@ -534,14 +535,14 @@ export function QuickStartGuide({ className = '' }: QuickStartGuideProps) {
       >
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
-            <Zap className="w-5 h-5 text-white" />
+            <Zap className="w-5 h-5 text-white gi3d" />
           </div>
           <div className="text-left">
             <h3 className="font-bold text-gray-900">퀵 스타트 가이드</h3>
             <p className="text-sm text-gray-500">5분 만에 설정 완료하기</p>
           </div>
         </div>
-        <ChevronRight className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+        <ChevronRight className={`gi3d w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
       </button>
 
       <AnimatePresence>
@@ -563,14 +564,14 @@ export function QuickStartGuide({ className = '' }: QuickStartGuideProps) {
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
                     step.done ? 'bg-green-500 text-white' : 'bg-indigo-100 text-indigo-600'
                   }`}>
-                    {step.done ? <CheckCircle className="w-4 h-4" /> : step.icon}
+                    {step.done ? <CheckCircle className="w-4 h-4 gi3d" /> : step.icon}
                   </div>
                   <div className="flex-1">
                     <div className="font-medium text-gray-900 text-sm">{step.title}</div>
                     <div className="text-xs text-gray-500">{step.desc}</div>
                   </div>
                   {!step.done && (
-                    <ArrowRight className="w-4 h-4 text-gray-400" />
+                    <ArrowRight className="w-4 h-4 text-gray-400 gi3d" />
                   )}
                 </div>
               ))}

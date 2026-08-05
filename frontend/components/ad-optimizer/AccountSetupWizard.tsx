@@ -9,6 +9,7 @@ import {
   ExternalLink, Eye, EyeOff, Zap, Star, Trophy, Target,
   Search, Settings, Copy, Shield
 , CheckCircle2, ClipboardList, FileText, KeyRound, MousePointerClick, UserRound} from 'lucide-react'
+import GlassIcon from '@/components/GlassIcon'
 import confetti from 'canvas-confetti'
 import toast from 'react-hot-toast'
 import { useXPStore } from '@/lib/stores/xp'
@@ -127,7 +128,7 @@ function NaverScreenMockup({
         </div>
         <div className="flex-1 ml-2">
           <div className="bg-white border border-gray-200 rounded-md px-3 py-1 text-xs text-gray-500 flex items-center gap-1.5">
-            <Lock className="w-3 h-3 text-green-500" />
+            <Lock className="w-3 h-3 text-green-500 gi3d" />
             {url}
           </div>
         </div>
@@ -201,7 +202,7 @@ function TroubleshootingPanel({ stepId }: { stepId: number }) {
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 text-sm text-gray-500 hover:text-red-500 transition-colors group"
       >
-        <HelpCircle className="w-4 h-4 group-hover:text-red-500" />
+        <HelpCircle className="w-4 h-4 group-hover:text-red-500 gi3d" />
         {isOpen ? '도움말 닫기' : '막혔어요'}
       </button>
 
@@ -224,10 +225,10 @@ function TroubleshootingPanel({ stepId }: { stepId: number }) {
                     className="w-full flex items-center justify-between px-4 py-3 text-left text-sm font-medium"
                   >
                     <div className="flex items-center gap-2">
-                      <AlertTriangle className={`w-4 h-4 flex-shrink-0 ${severityIcon[item.severity]}`} />
+                      <AlertTriangle className={`gi3d w-4 h-4 flex-shrink-0 ${severityIcon[item.severity]}`} />
                       {item.symptom}
                     </div>
-                    <ChevronDown className={`w-4 h-4 transition-transform flex-shrink-0 ${openItem === idx ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`gi3d w-4 h-4 transition-transform flex-shrink-0 ${openItem === idx ? 'rotate-180' : ''}`} />
                   </button>
                   <AnimatePresence>
                     {openItem === idx && (
@@ -287,7 +288,7 @@ function PhaseProgressBar({
                   : 'bg-gray-200 text-gray-400'
               }`}>
                 {status === 'completed' ? (
-                  <CheckCircle className="w-5 h-5" />
+                  <CheckCircle className="w-5 h-5 gi3d" />
                 ) : (
                   <phase.icon className="w-4 h-4" strokeWidth={1.75} />
                 )}
@@ -345,11 +346,11 @@ function StepCard({
                 onClick={onBack}
                 className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center hover:bg-white/30 transition-colors"
               >
-                <ChevronLeft className="w-5 h-5" />
+                <ChevronLeft className="w-5 h-5 gi3d" />
               </button>
             )}
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center text-xl">
-              {completed ? <CheckCircle className="w-6 h-6" /> : <step.icon className="w-5 h-5" strokeWidth={1.75} />}
+              {completed ? <CheckCircle className="w-6 h-6 gi3d" /> : <step.icon className="w-5 h-5" strokeWidth={1.75} />}
             </div>
             <div>
               <div className="text-white/80 text-xs font-medium flex items-center gap-2">
@@ -365,7 +366,7 @@ function StepCard({
             </div>
           ) : (
             <div className="px-3 py-1 bg-white/20 rounded-full text-sm font-medium flex items-center gap-1">
-              <Zap className="w-3.5 h-3.5" />
+              <Zap className="w-3.5 h-3.5 gi3d" />
               +{step.xp} XP
             </div>
           )}
@@ -380,7 +381,7 @@ function StepCard({
       {/* XP Preview */}
       {!completed && (
         <div className="px-6 py-3 bg-gray-50 border-t flex items-center justify-center gap-2 text-sm text-gray-500">
-          <Zap className="w-4 h-4 text-yellow-500" />
+          <Zap className="w-4 h-4 text-yellow-500 gi3d" />
           이 미션 완료 시 <span className="font-bold text-yellow-600">+{step.xp} XP</span>
         </div>
       )}
@@ -584,11 +585,11 @@ export default function AccountSetupWizard({ userId, onComplete, onStartAutoOpti
 
                 <div className="bg-gradient-to-r from-purple-100 to-pink-100 rounded-2xl p-4 mb-4">
                   <div className="flex items-center justify-center gap-2 mb-2">
-                    <Star className="w-6 h-6 text-yellow-500 fill-yellow-500" />
+                    <Star className="w-6 h-6 text-yellow-500 fill-yellow-500 gi3d" />
                     <span className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
                       +{sessionXP} XP
                     </span>
-                    <Star className="w-6 h-6 text-yellow-500 fill-yellow-500" />
+                    <Star className="w-6 h-6 text-yellow-500 fill-yellow-500 gi3d" />
                   </div>
                   <p className="text-sm text-gray-500">총 획득 경험치</p>
                   <p className="text-xs text-purple-600 mt-1">
@@ -598,11 +599,11 @@ export default function AccountSetupWizard({ userId, onComplete, onStartAutoOpti
 
                 <div className="flex justify-center gap-2 mb-6 flex-wrap">
                   <div className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm flex items-center gap-1">
-                    <Trophy className="w-4 h-4" />
+                    <Trophy className="w-4 h-4 gi3d" />
                     계정 연동 완료
                   </div>
                   <div className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm flex items-center gap-1">
-                    <Target className="w-4 h-4" />
+                    <Target className="w-4 h-4 gi3d" />
                     광고 전문가
                   </div>
                 </div>
@@ -632,7 +633,7 @@ export default function AccountSetupWizard({ userId, onComplete, onStartAutoOpti
               {currentRank.name}
             </div>
             <div className="flex items-center gap-1 text-yellow-600 font-medium text-sm">
-              <Star className="w-4 h-4 fill-yellow-500" />
+              <Star className="w-4 h-4 fill-yellow-500 gi3d" />
               {totalXP.toLocaleString()} XP
               {sessionXP > 0 && (
                 <span className="text-green-500 text-xs">(+{sessionXP})</span>
@@ -784,9 +785,9 @@ function Step1({
           rel="noopener noreferrer"
           className="flex items-center justify-center gap-3 w-full px-6 py-4 bg-green-500 hover:bg-green-600 text-white rounded-xl font-medium text-lg transition-colors"
         >
-          <Globe className="w-6 h-6" />
+          <Globe className="w-6 h-6 gi3d" />
           네이버 광고센터 열기
-          <ExternalLink className="w-5 h-5" />
+          <ExternalLink className="w-5 h-5 gi3d" />
         </a>
 
         <TroubleshootingPanel stepId={1} />
@@ -796,7 +797,7 @@ function Step1({
             onClick={onComplete}
             className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:shadow-lg transition-all"
           >
-            <CheckCircle className="w-5 h-5" />
+            <CheckCircle className="w-5 h-5 gi3d" />
             로그인 완료!
           </button>
         )}
@@ -845,7 +846,7 @@ function Step2({
         {/* 중요 안내 */}
         <div className="bg-green-50 border border-green-200 rounded-xl p-4">
           <div className="flex items-start gap-3">
-            <Shield className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+            <Shield className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5 gi3d" />
             <div className="text-sm text-green-800 space-y-1">
               <p className="font-semibold">안심하세요! 완전 무료입니다</p>
               <p>• 사업자등록번호 <strong>불필요</strong> (개인 유형 선택)</p>
@@ -863,7 +864,7 @@ function Step2({
               onClick={onComplete}
               className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:shadow-lg transition-all"
             >
-              <CheckCircle className="w-5 h-5" />
+              <CheckCircle className="w-5 h-5 gi3d" />
               계정 확인 완료!
             </button>
             <button
@@ -952,7 +953,7 @@ function Step3({
             onClick={onComplete}
             className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:shadow-lg transition-all"
           >
-            <CheckCircle className="w-5 h-5" />
+            <CheckCircle className="w-5 h-5 gi3d" />
             광고시스템에 들어갔어요!
           </button>
         )}
@@ -1045,7 +1046,7 @@ function Step4({
                   animate={{ opacity: 1 }}
                   className="text-center space-y-1"
                 >
-                  <CheckCircle className="w-8 h-8 text-green-500 mx-auto" />
+                  <CheckCircle className="w-8 h-8 text-green-500 mx-auto gi3d" />
                   <p className="text-green-600 font-medium text-xs">정확해요! 실제 화면에서도 같은 순서로 진행하세요.</p>
                 </motion.div>
               ) : (
@@ -1062,7 +1063,7 @@ function Step4({
             onClick={onComplete}
             className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:shadow-lg transition-all"
           >
-            <CheckCircle className="w-5 h-5" />
+            <CheckCircle className="w-5 h-5 gi3d" />
             API 관리 메뉴 찾았어요!
           </button>
         )}
@@ -1102,21 +1103,21 @@ function Step5({
           <div className={`flex items-center gap-1 px-3 py-1.5 rounded-full ${
             subStep >= 0 ? 'bg-purple-100 text-purple-700 font-medium' : 'bg-gray-100 text-gray-400'
           }`}>
-            {subStep > 0 ? <CheckCircle className="w-3 h-3" /> : <span className="w-3 h-3 rounded-full border border-current inline-block" />}
+            {subStep > 0 ? <CheckCircle className="w-3 h-3 gi3d" /> : <span className="w-3 h-3 rounded-full border border-current inline-block" />}
             신청 클릭
           </div>
-          <ChevronRight className="w-3 h-3 text-gray-300" />
+          <ChevronRight className="w-3 h-3 text-gray-300 gi3d" />
           <div className={`flex items-center gap-1 px-3 py-1.5 rounded-full ${
             subStep >= 1 ? 'bg-purple-100 text-purple-700 font-medium' : 'bg-gray-100 text-gray-400'
           }`}>
-            {subStep > 1 ? <CheckCircle className="w-3 h-3" /> : <span className="w-3 h-3 rounded-full border border-current inline-block" />}
+            {subStep > 1 ? <CheckCircle className="w-3 h-3 gi3d" /> : <span className="w-3 h-3 rounded-full border border-current inline-block" />}
             약관 동의
           </div>
-          <ChevronRight className="w-3 h-3 text-gray-300" />
+          <ChevronRight className="w-3 h-3 text-gray-300 gi3d" />
           <div className={`flex items-center gap-1 px-3 py-1.5 rounded-full ${
             subStep >= 2 ? 'bg-green-100 text-green-700 font-medium' : 'bg-gray-100 text-gray-400'
           }`}>
-            {subStep >= 2 ? <CheckCircle className="w-3 h-3" /> : <span className="w-3 h-3 rounded-full border border-current inline-block" />}
+            {subStep >= 2 ? <CheckCircle className="w-3 h-3 gi3d" /> : <span className="w-3 h-3 rounded-full border border-current inline-block" />}
             저장
           </div>
         </div>
@@ -1125,7 +1126,7 @@ function Step5({
         <NaverScreenMockup url="searchad.naver.com/dashboard/api-manager">
           {subStep === 0 && (
             <div className="flex flex-col items-center py-6 space-y-4">
-              <Settings className="w-10 h-10 text-gray-400" />
+              <GlassIcon icon={Settings} size={72} />
               <p className="text-sm text-gray-600">API 라이선스 관리</p>
               <p className="text-xs text-gray-400">등록된 API 라이선스가 없습니다.</p>
               <ClickIndicator
@@ -1183,7 +1184,7 @@ function Step5({
               animate={{ opacity: 1 }}
               className="flex flex-col items-center py-6 space-y-3"
             >
-              <CheckCircle className="w-10 h-10 text-green-500" />
+              <GlassIcon icon={CheckCircle} size={72} />
               <p className="text-sm font-semibold text-green-700">API 서비스 신청 완료!</p>
               <p className="text-xs text-gray-500">실제 화면에서도 같은 순서로 진행하세요.</p>
             </motion.div>
@@ -1197,7 +1198,7 @@ function Step5({
             onClick={onComplete}
             className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:shadow-lg transition-all"
           >
-            <CheckCircle className="w-5 h-5" />
+            <CheckCircle className="w-5 h-5 gi3d" />
             API 신청 완료했어요!
           </button>
         )}
@@ -1233,7 +1234,7 @@ function Step6({
           transition={{ duration: 2, repeat: Infinity }}
           className="bg-red-50 border-2 border-red-400 rounded-xl p-4 flex items-start gap-3"
         >
-          <AlertTriangle className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" />
+          <AlertTriangle className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5 gi3d" />
           <div>
             <p className="font-bold text-red-800">비밀키는 이 순간만 표시됩니다!</p>
             <p className="text-sm text-red-700 mt-1">
@@ -1254,7 +1255,7 @@ function Step6({
                 <p className="text-sm font-mono font-bold text-blue-800 mt-0.5">1234567</p>
               </div>
               <div className="flex items-center gap-1 px-2 py-1 bg-blue-100 rounded text-blue-600 text-xs">
-                <Copy className="w-3 h-3" />
+                <Copy className="w-3 h-3 gi3d" />
                 복사
               </div>
             </div>
@@ -1266,7 +1267,7 @@ function Step6({
                 <p className="text-sm font-mono font-bold text-indigo-800 mt-0.5 truncate max-w-[200px]">010000000012ab3c4d...</p>
               </div>
               <div className="flex items-center gap-1 px-2 py-1 bg-indigo-100 rounded text-indigo-600 text-xs">
-                <Copy className="w-3 h-3" />
+                <Copy className="w-3 h-3 gi3d" />
                 복사
               </div>
             </div>
@@ -1282,7 +1283,7 @@ function Step6({
                 <p className="text-sm font-mono font-bold text-red-800 mt-0.5 truncate max-w-[200px]">a1B2c3D4e5F6g7H8i9...</p>
               </div>
               <div className="flex items-center gap-1 px-3 py-1.5 bg-red-500 rounded text-white text-xs font-bold animate-pulse">
-                <Copy className="w-3 h-3" />
+                <Copy className="w-3 h-3 gi3d" />
                 지금 복사!
               </div>
             </motion.div>
@@ -1296,7 +1297,7 @@ function Step6({
             onClick={onComplete}
             className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:shadow-lg transition-all"
           >
-            <CheckCircle className="w-5 h-5" />
+            <CheckCircle className="w-5 h-5 gi3d" />
             3가지 키 모두 복사했어요!
           </button>
         )}
@@ -1343,7 +1344,7 @@ function Step7({
         {/* KeyLocationReference 미니 요약 */}
         <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
           <p className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1">
-            <Search className="w-3 h-3" />
+            <Search className="w-3 h-3 gi3d" />
             키 위치 요약
           </p>
           <div className="grid grid-cols-3 gap-2 text-[10px]">
@@ -1393,7 +1394,7 @@ function Step7({
               )}
               {customerIdValid && (
                 <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3" /> 올바른 형식입니다
+                  <CheckCircle className="w-3 h-3 gi3d" /> 올바른 형식입니다
                 </p>
               )}
             </div>
@@ -1427,7 +1428,7 @@ function Step7({
               )}
               {apiKeyValid && (
                 <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3" /> 올바른 형식입니다
+                  <CheckCircle className="w-3 h-3 gi3d" /> 올바른 형식입니다
                 </p>
               )}
             </div>
@@ -1460,7 +1461,7 @@ function Step7({
                   onClick={() => setShowSecretKey(!showSecretKey)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
-                  {showSecretKey ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  {showSecretKey ? <EyeOff className="w-5 h-5 gi3d" /> : <Eye className="w-5 h-5 gi3d" />}
                 </button>
               </div>
               {connectForm.secret_key && !secretKeyFilled && (
@@ -1468,7 +1469,7 @@ function Step7({
               )}
               {secretKeyFilled && (
                 <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3" /> 입력 완료
+                  <CheckCircle className="w-3 h-3 gi3d" /> 입력 완료
                 </p>
               )}
             </div>
@@ -1495,7 +1496,7 @@ function Step7({
                 animate={{ opacity: 1, y: 0 }}
                 className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3"
               >
-                <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5 gi3d" />
                 <div>
                   <p className="text-sm text-red-800 font-medium">{connectError}</p>
                 </div>
@@ -1515,7 +1516,7 @@ function Step7({
                 </>
               ) : (
                 <>
-                  <Rocket className="w-5 h-5" />
+                  <Rocket className="w-5 h-5 gi3d" />
                   연동하기
                 </>
               )}
@@ -1525,7 +1526,7 @@ function Step7({
 
         {completed && (
           <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
-            <CheckCircle className="w-6 h-6 text-green-500" />
+            <CheckCircle className="w-6 h-6 text-green-500 gi3d" />
             <div>
               <p className="font-semibold text-green-800">연동 완료!</p>
               <p className="text-sm text-green-700">계정이 성공적으로 연동되었습니다.</p>
@@ -1564,7 +1565,7 @@ function Step8({
           <div className="bg-green-50 border border-green-200 rounded-xl p-4">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                <CheckCircle className="w-7 h-7 text-green-500" />
+                <CheckCircle className="w-7 h-7 text-green-500 gi3d" />
               </div>
               <div>
                 <p className="font-semibold text-green-800">연동 성공!</p>
@@ -1586,7 +1587,7 @@ function Step8({
         <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Zap className="w-5 h-5 text-indigo-600" />
+              <Zap className="w-5 h-5 text-indigo-600 gi3d" />
             </div>
             <div>
               <h4 className="font-semibold text-indigo-900">자동 최적화 추천: 안전 모드</h4>
@@ -1603,7 +1604,7 @@ function Step8({
               onClick={onStartOptimization}
               className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium text-lg hover:shadow-lg transition-all"
             >
-              <Rocket className="w-5 h-5" />
+              <Rocket className="w-5 h-5 gi3d" />
               자동 최적화 켜기 (안전 모드)
             </button>
             <button
@@ -1617,7 +1618,7 @@ function Step8({
 
         {completed && (
           <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 flex items-center gap-3">
-            <Rocket className="w-6 h-6 text-purple-500" />
+            <Rocket className="w-6 h-6 text-purple-500 gi3d" />
             <div>
               <p className="font-semibold text-purple-800">미션 완료!</p>
               <p className="text-sm text-purple-700">모든 설정이 완료되었습니다.</p>

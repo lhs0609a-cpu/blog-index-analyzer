@@ -8,18 +8,19 @@ import {
   TrendingUp, Award, Clock, ChevronRight
 } from 'lucide-react';
 import { useNotifications, useUnreadCount, NOTIFICATION_CATEGORIES } from '@/lib/hooks/useNotification';
+import GlassIcon from '@/components/GlassIcon'
 
 interface NotificationCenterProps {
   className?: string;
 }
 
 const categoryIcons: Record<string, React.ReactNode> = {
-  system: <MessageCircle className="w-4 h-4" />,
-  marketing: <Gift className="w-4 h-4" />,
-  analysis: <TrendingUp className="w-4 h-4" />,
-  alert: <AlertTriangle className="w-4 h-4" />,
-  reminder: <Clock className="w-4 h-4" />,
-  achievement: <Award className="w-4 h-4" />
+  system: <MessageCircle className="w-4 h-4 gi3d" />,
+  marketing: <Gift className="w-4 h-4 gi3d" />,
+  analysis: <TrendingUp className="w-4 h-4 gi3d" />,
+  alert: <AlertTriangle className="w-4 h-4 gi3d" />,
+  reminder: <Clock className="w-4 h-4 gi3d" />,
+  achievement: <Award className="w-4 h-4 gi3d" />
 };
 
 const categoryColors: Record<string, string> = {
@@ -80,7 +81,7 @@ export default function NotificationCenter({ className = '' }: NotificationCente
         onClick={() => setIsOpen(!isOpen)}
         className="relative p-2 rounded-full hover:bg-gray-100 transition-colors"
       >
-        <Bell className="w-6 h-6 text-gray-600" />
+        <Bell className="w-6 h-6 text-gray-600 gi3d" />
         {count > 0 && (
           <span className="absolute -top-1 -right-1 min-w-[20px] h-5 flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full px-1">
             {count > 99 ? '99+' : count}
@@ -100,7 +101,7 @@ export default function NotificationCenter({ className = '' }: NotificationCente
             {/* 헤더 */}
             <div className="flex items-center justify-between p-4 border-b border-gray-100">
               <div className="flex items-center gap-2">
-                <Bell className="w-5 h-5 text-[#0064FF]" />
+                <Bell className="w-5 h-5 text-[#0064FF] gi3d" />
                 <h3 className="font-bold text-gray-800">알림</h3>
                 {unreadCount > 0 && (
                   <span className="px-2 py-0.5 bg-red-100 text-red-600 text-xs font-medium rounded-full">
@@ -115,14 +116,14 @@ export default function NotificationCenter({ className = '' }: NotificationCente
                     className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
                     title="모두 읽음 처리"
                   >
-                    <CheckCheck className="w-4 h-4 text-gray-500" />
+                    <CheckCheck className="w-4 h-4 text-gray-500 gi3d" />
                   </button>
                 )}
                 <button
                   onClick={() => setIsOpen(false)}
                   className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
                 >
-                  <X className="w-4 h-4 text-gray-500" />
+                  <X className="w-4 h-4 text-gray-500 gi3d" />
                 </button>
               </div>
             </div>
@@ -135,7 +136,7 @@ export default function NotificationCenter({ className = '' }: NotificationCente
                 </div>
               ) : notifications.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-                  <Bell className="w-12 h-12 mb-3 opacity-50" />
+                  <GlassIcon icon={Bell} size={86} className="mb-3" />
                   <p className="text-sm">알림이 없습니다</p>
                 </div>
               ) : (
@@ -152,7 +153,7 @@ export default function NotificationCenter({ className = '' }: NotificationCente
                       <div className="flex gap-3">
                         {/* 아이콘 */}
                         <div className={`p-2 rounded-xl ${categoryColors[notification.category] || 'bg-gray-100 text-gray-600'}`}>
-                          {categoryIcons[notification.category] || <MessageCircle className="w-4 h-4" />}
+                          {categoryIcons[notification.category] || <MessageCircle className="w-4 h-4 gi3d" />}
                         </div>
 
                         {/* 내용 */}
@@ -176,7 +177,7 @@ export default function NotificationCenter({ className = '' }: NotificationCente
                                 onClick={() => markAsRead(notification.id)}
                                 className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
                               >
-                                <Check className="w-3 h-3" />
+                                <Check className="w-3 h-3 gi3d" />
                                 읽음
                               </button>
                             )}
@@ -184,7 +185,7 @@ export default function NotificationCenter({ className = '' }: NotificationCente
                               onClick={() => deleteNotification(notification.id)}
                               className="text-xs text-gray-400 hover:text-red-500 flex items-center gap-1"
                             >
-                              <Trash2 className="w-3 h-3" />
+                              <Trash2 className="w-3 h-3 gi3d" />
                               삭제
                             </button>
                             {notification.data?.url && (
@@ -193,7 +194,7 @@ export default function NotificationCenter({ className = '' }: NotificationCente
                                 className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 ml-auto"
                               >
                                 자세히
-                                <ChevronRight className="w-3 h-3" />
+                                <ChevronRight className="w-3 h-3 gi3d" />
                               </a>
                             )}
                           </div>
@@ -211,7 +212,7 @@ export default function NotificationCenter({ className = '' }: NotificationCente
                 href="/settings/notifications"
                 className="flex items-center justify-center gap-2 text-sm text-gray-500 hover:text-[#0064FF] transition-colors"
               >
-                <Settings className="w-4 h-4" />
+                <Settings className="w-4 h-4 gi3d" />
                 알림 설정
               </a>
             </div>
@@ -278,7 +279,7 @@ export function NotificationSettings({ className = '' }: NotificationSettingsPro
     <div className={`bg-white rounded-2xl border border-gray-200 ${className}`}>
       <div className="p-6 border-b border-gray-100">
         <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-          <Settings className="w-5 h-5 text-[#0064FF]" />
+          <Settings className="w-5 h-5 text-[#0064FF] gi3d" />
           알림 설정
         </h2>
         <p className="text-sm text-gray-500 mt-1">알림 수신 방법을 설정하세요</p>
@@ -288,7 +289,7 @@ export function NotificationSettings({ className = '' }: NotificationSettingsPro
         {/* 이메일 알림 */}
         <div>
           <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-600 mb-2">
-            <Mail className="w-4 h-4" />
+            <Mail className="w-4 h-4 gi3d" />
             이메일 알림
           </h3>
           <div className="bg-gray-50 rounded-xl p-4">
@@ -313,7 +314,7 @@ export function NotificationSettings({ className = '' }: NotificationSettingsPro
         {/* 푸시 알림 */}
         <div>
           <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-600 mb-2">
-            <Smartphone className="w-4 h-4" />
+            <Smartphone className="w-4 h-4 gi3d" />
             푸시 알림
           </h3>
           <div className="bg-gray-50 rounded-xl p-4">
@@ -338,7 +339,7 @@ export function NotificationSettings({ className = '' }: NotificationSettingsPro
         {/* 인앱 알림 */}
         <div>
           <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-600 mb-2">
-            <MessageCircle className="w-4 h-4" />
+            <MessageCircle className="w-4 h-4 gi3d" />
             인앱 알림
           </h3>
           <div className="bg-gray-50 rounded-xl p-4">

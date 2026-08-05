@@ -21,7 +21,7 @@ export function DemoBadge({ className = '' }: { className?: string }) {
 export function DemoBanner({ platformName }: { platformName?: string }) {
   return (
     <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-3 text-sm">
-      <AlertTriangle className="w-5 h-5 text-amber-500" strokeWidth={1.75} />
+      <AlertTriangle className="w-5 h-5 text-amber-500 gi3d" strokeWidth={1.75} />
       <div>
         <span className="font-medium text-amber-800">데모 데이터</span>
         <span className="text-amber-700 ml-1">

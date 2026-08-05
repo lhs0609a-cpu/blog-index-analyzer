@@ -31,22 +31,25 @@ export default function GlassIcon({
   animated = true,
   className = '',
 }: GlassIconProps) {
-  const glyph = Math.round(size * 0.44)
+  // 크기에 따라 층 수를 줄인다. 40px 미만에서 9겹을 다 쌓으면 글리프가 파묻혀
+  // '무슨 아이콘인지' 자체가 안 보인다 — 3D 로 보이는 것보다 그게 더 큰 손해다.
+  const compact = size < 40
+  const glyph = Math.round(size * (compact ? 0.5 : 0.44))
   return (
     <span
-      className={`giorb ${animated ? 'gi-float' : ''} ${className}`}
+      className={`giorb ${compact ? 'gi-compact' : ''} ${animated && !compact ? 'gi-float' : ''} ${className}`}
       style={{ width: size, height: size }}
       aria-hidden="true"
     >
-      <i className="gi-fc" />
-      <i className="gi-fm" />
+      {!compact && <i className="gi-fc" />}
+      {!compact && <i className="gi-fm" />}
       <i className="gi-base" />
-      <i className={`gi-iris ${animated ? 'gi-spin' : ''}`} />
+      {!compact && <i className={`gi-iris ${animated ? 'gi-spin' : ''}`} />}
       <i className="gi-pane gi-p1" />
-      <i className="gi-pane gi-p2" />
+      {!compact && <i className="gi-pane gi-p2" />}
       <i className="gi-spec" />
-      <i className="gi-shard gi-s1" />
-      <i className="gi-shard gi-s2" />
+      {!compact && <i className="gi-shard gi-s1" />}
+      {!compact && <i className="gi-shard gi-s2" />}
       <span className="gi-glyph" style={{ width: glyph, height: glyph }}>
         <Icon strokeWidth={2} />
       </span>

@@ -392,7 +392,7 @@ export default function AnomalyDetectionPage() {
               <div className="text-center py-12 text-gray-400">로딩 중...</div>
             ) : alerts.length === 0 ? (
               <div className="text-center py-12 bg-gray-800 rounded-lg">
-                <CheckCircle2 className="w-10 h-10 mb-3" strokeWidth={1.75} />
+                <CheckCircle2 className="w-10 h-10 mb-3 gi3d" strokeWidth={1.75} />
                 <div className="text-gray-400">
                   {showResolved
                     ? "알림 내역이 없습니다."
@@ -605,7 +605,7 @@ export default function AnomalyDetectionPage() {
               if (!showResolved) {
                 return (
                   <div className="text-center py-12 bg-gray-800 rounded-lg">
-                    <BarChart3 className="w-10 h-10 mb-3" strokeWidth={1.75} />
+                    <BarChart3 className="w-10 h-10 mb-3 gi3d" strokeWidth={1.75} />
                     <div className="text-gray-400 mb-4">
                       해결된 알림 히스토리를 보려면 아래 버튼을 클릭하세요.
                     </div>

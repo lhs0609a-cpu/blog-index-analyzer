@@ -162,7 +162,7 @@ export default function CompetitorRadarChart({ competitors, myBlog, keyword }: C
       >
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-            <Target className="w-5 h-5 text-white" />
+            <Target className="w-5 h-5 text-white gi3d" />
           </div>
           <div className="text-left">
             <h3 className="font-bold text-gray-900">경쟁자 비교 분석</h3>
@@ -173,7 +173,7 @@ export default function CompetitorRadarChart({ competitors, myBlog, keyword }: C
           animate={{ rotate: isExpanded ? 180 : 0 }}
           transition={{ duration: 0.2 }}
         >
-          <ChevronDown className="w-5 h-5 text-gray-500" />
+          <ChevronDown className="w-5 h-5 text-gray-500 gi3d" />
         </motion.div>
       </button>
 
@@ -211,7 +211,7 @@ export default function CompetitorRadarChart({ competitors, myBlog, keyword }: C
                     <span className="text-sm font-medium text-gray-700">
                       {competitor.rank}위
                     </span>
-                    {competitor.rank === 1 && <Crown className="w-3 h-3 text-yellow-500" />}
+                    {competitor.rank === 1 && <Crown className="w-3 h-3 text-yellow-500 gi3d" />}
                   </button>
                 ))}
               </div>
@@ -282,7 +282,7 @@ export default function CompetitorRadarChart({ competitors, myBlog, keyword }: C
                 {myBlog && (
                   <div className="p-4 rounded-xl bg-green-50 border border-green-200">
                     <div className="flex items-center gap-2 mb-2">
-                      <TrendingUp className="w-4 h-4 text-green-600" />
+                      <TrendingUp className="w-4 h-4 text-green-600 gi3d" />
                       <span className="font-bold text-green-800">나의 강점</span>
                     </div>
                     <p className="text-sm text-green-700">
@@ -306,7 +306,7 @@ export default function CompetitorRadarChart({ competitors, myBlog, keyword }: C
                 {/* 개선 포인트 */}
                 <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
                   <div className="flex items-center gap-2 mb-2">
-                    <Target className="w-4 h-4 text-amber-600" />
+                    <Target className="w-4 h-4 text-amber-600 gi3d" />
                     <span className="font-bold text-amber-800">경쟁 전략</span>
                   </div>
                   <p className="text-sm text-amber-700">

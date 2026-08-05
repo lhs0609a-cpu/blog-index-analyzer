@@ -11,10 +11,10 @@ export default function RefundPolicyPage() {
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             <Link href="/" className="text-gray-500 hover:text-gray-700">
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-5 h-5 gi3d" />
             </Link>
             <div className="flex items-center gap-2">
-              <CreditCard className="w-6 h-6 text-purple-600" />
+              <CreditCard className="w-6 h-6 text-purple-600 gi3d" />
               <h1 className="text-xl font-bold">환불 및 결제취소 정책</h1>
             </div>
           </div>
@@ -27,17 +27,17 @@ export default function RefundPolicyPage() {
           <h2 className="text-2xl font-bold mb-4">블랭크 환불 정책 요약</h2>
           <div className="grid md:grid-cols-3 gap-4">
             <div className="bg-white/20 rounded-xl p-4">
-              <Calendar className="w-8 h-8 mb-2" />
+              <Calendar className="w-8 h-8 mb-2 gi3d" />
               <div className="font-bold text-lg">7일 이내</div>
               <div className="text-sm opacity-90">전액 환불 가능</div>
             </div>
             <div className="bg-white/20 rounded-xl p-4">
-              <Clock className="w-8 h-8 mb-2" />
+              <Clock className="w-8 h-8 mb-2 gi3d" />
               <div className="font-bold text-lg">7일 초과</div>
               <div className="text-sm opacity-90">일할 계산 환불</div>
             </div>
             <div className="bg-white/20 rounded-xl p-4">
-              <CheckCircle className="w-8 h-8 mb-2" />
+              <CheckCircle className="w-8 h-8 mb-2 gi3d" />
               <div className="font-bold text-lg">3영업일</div>
               <div className="text-sm opacity-90">환불 처리 기간</div>
             </div>
@@ -91,7 +91,7 @@ export default function RefundPolicyPage() {
 
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div className="flex gap-3">
-                  <RefreshCw className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <RefreshCw className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5 gi3d" />
                   <div>
                     <p className="text-blue-800 font-semibold mb-1">자동 갱신 안내</p>
                     <p className="text-blue-700 text-sm">
@@ -178,24 +178,24 @@ export default function RefundPolicyPage() {
             <div className="space-y-4 text-gray-700">
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                 <div className="flex gap-3">
-                  <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5 gi3d" />
                   <div>
                     <h4 className="font-semibold text-yellow-800 mb-2">환불이 제한되는 경우</h4>
                     <ul className="text-sm text-yellow-700 space-y-2">
                       <li className="flex items-start gap-2">
-                        <XCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <XCircle className="w-4 h-4 mt-0.5 flex-shrink-0 gi3d" />
                         <span>서비스 이용기간의 50%를 초과하여 이용한 경우</span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <XCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <XCircle className="w-4 h-4 mt-0.5 flex-shrink-0 gi3d" />
                         <span>이벤트, 프로모션 등 특별 할인이 적용된 결제의 경우 (별도 안내된 환불정책 적용)</span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <XCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <XCircle className="w-4 h-4 mt-0.5 flex-shrink-0 gi3d" />
                         <span>서비스 악용, 부정 이용, 이용약관 위반이 확인된 경우</span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <XCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <XCircle className="w-4 h-4 mt-0.5 flex-shrink-0 gi3d" />
                         <span>회원의 귀책사유로 서비스 이용이 제한된 경우</span>
                       </li>
                     </ul>
@@ -227,7 +227,7 @@ export default function RefundPolicyPage() {
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="border rounded-lg p-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <Mail className="w-5 h-5 text-purple-600" />
+                    <Mail className="w-5 h-5 text-purple-600 gi3d" />
                     <span className="font-semibold">이메일 신청</span>
                   </div>
                   <p className="text-sm mb-2">아래 이메일로 환불 신청해 주세요.</p>
@@ -237,7 +237,7 @@ export default function RefundPolicyPage() {
                 </div>
                 <div className="border rounded-lg p-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <Phone className="w-5 h-5 text-purple-600" />
+                    <Phone className="w-5 h-5 text-purple-600 gi3d" />
                     <span className="font-semibold">전화 신청</span>
                   </div>
                   <p className="text-sm mb-2">고객센터로 연락해 주세요.</p>
@@ -323,7 +323,7 @@ export default function RefundPolicyPage() {
 
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div className="flex gap-3">
-                  <Shield className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <Shield className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5 gi3d" />
                   <div>
                     <p className="text-blue-800 font-semibold mb-1">해지 후 서비스 이용</p>
                     <p className="text-blue-700 text-sm">
