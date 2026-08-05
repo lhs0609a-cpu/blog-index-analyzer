@@ -183,11 +183,18 @@ def cache_summary() -> Dict[str, Any]:
             "SELECT category, COUNT(*) c FROM keyword_serp_stats GROUP BY category "
             "ORDER BY c DESC"
         ).fetchall()
+        # 수집기가 돌긴 했는지 / 돌다 실패했는지를 구분할 근거.
+        # 이게 없으면 '아직 도는 중'과 '조용히 죽음'을 밖에서 알 수 없다.
+        runs = cur.execute(
+            "SELECT category, last_run_at, keywords_stored, last_error "
+            "FROM category_runs ORDER BY last_run_at DESC LIMIT 20"
+        ).fetchall()
         return {
             "total": total,
             "fresh": fresh,
             "last_measured_at": last,
             "categories": {r["category"]: r["c"] for r in cats if r["category"]},
+            "runs": [dict(r) for r in runs],
         }
     finally:
         conn.close()

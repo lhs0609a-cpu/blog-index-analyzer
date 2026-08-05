@@ -239,6 +239,34 @@ async def get_cache_status():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/precompute-now")
+async def trigger_precompute(
+    categories: int = Query(1, ge=1, le=3, description="이번에 갱신할 카테고리 수"),
+):
+    """측정을 지금 한 번 돌린다 (별도 프로세스). 운영/검증용.
+
+    API 프로세스에서 직접 돌리지 않는다 — 그게 2026-08-05 장애의 원인이었다.
+    """
+    import asyncio as _asyncio
+    import os as _os
+    import sys as _sys
+
+    root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+    cmd = [_sys.executable, "-m", "scripts.precompute_winner_keywords",
+           "--categories", str(categories)]
+    try:
+        proc = await _asyncio.create_subprocess_exec(
+            *cmd, cwd=root,
+            stdout=_asyncio.subprocess.DEVNULL,
+            stderr=_asyncio.subprocess.DEVNULL,
+            env={**_os.environ, "SCHEDULERS_DISABLED": "1"},
+        )
+        return {"started": True, "pid": proc.pid, "categories": categories,
+                "note": "진행 상황은 /cache-status 의 runs 로 확인"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"실행 실패: {e}")
+
+
 @router.get("/quick-winners", response_model=QuickWinnersResponse)
 async def get_quick_winners(
     my_blog_id: str = Query(..., description="내 블로그 ID"),
