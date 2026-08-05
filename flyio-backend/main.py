@@ -213,6 +213,24 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"⚠️ Keyword pool scheduler failed to start: {e}")
 
+    # 블로그 지수 시계열 DB 초기화 (모든 프로세스 — 분석 응답이 여기 적재한다)
+    try:
+        from database.blog_index_history_db import init_index_history_db
+        init_index_history_db()
+        logger.info("✅ Blog index history table initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ Blog index history init failed: {e}")
+
+    # 지수 자동 스냅샷 — 분석을 안 한 날도 추이가 이어지도록 하루 1회 재측정.
+    # worker 전용: API 프로세스에서 스크래핑을 돌리면 이벤트루프가 막힌다.
+    if RUN_SCHEDULERS:
+        try:
+            from services.index_snapshot_scheduler import index_snapshot_scheduler
+            index_snapshot_scheduler.start(interval_seconds=6 * 3600)
+            logger.info("✅ Index snapshot scheduler started (every 6h, daily 1 point/blog)")
+        except Exception as e:
+            logger.warning(f"⚠️ Index snapshot scheduler failed to start: {e}")
+
     # Ad Optimization DB 초기화
     try:
         from database.ad_optimization_db import init_ad_optimization_tables
@@ -279,6 +297,7 @@ async def lifespan(app: FastAPI):
         ("auto_learning_scheduler", "services.auto_learning_service"),
         ("ad_auto_optimizer", "services.ad_auto_optimizer"),
         ("backup_scheduler", "services.backup_service"),
+        ("index_snapshot_scheduler", "services.index_snapshot_scheduler"),
     ]
 
     for scheduler_name, module_name in schedulers_to_stop:

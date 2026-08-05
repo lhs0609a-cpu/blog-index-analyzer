@@ -22,6 +22,7 @@ import UpgradeModal from '@/components/UpgradeModal'
 import TrialExpiryBanner from '@/components/TrialExpiryBanner'
 import { AnimatedScore, AnimatedLevel, CircularProgress } from '@/components/AnimatedScore'
 import ShareResult from '@/components/ShareResult'
+import BlogIndexHistoryChart from '@/components/BlogIndexHistoryChart'
 import { getLevelGrade, getGradeBadgeStyle, getLevelsToNextGrade, getPointsToNextLevel } from '@/lib/utils/levelGrade'
 import TermTooltip from '@/components/TermTooltip'
 
@@ -1933,6 +1934,9 @@ export default function AnalyzePage() {
                     ))}
                   </div>
                 </div>
+
+                {/* 지수 변화 추이 — "언제, 어떻게 올랐나"는 현재 점수만큼 중요하다 */}
+                <BlogIndexHistoryChart blogId={result.blog.blog_id} />
 
                 {/* 할 일 — 화면에서 가장 먼저 보여야 하는 것 */}
                 <ConcreteRecommendations result={result} isFreeUser={isFreeUser} />

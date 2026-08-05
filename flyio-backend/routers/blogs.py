@@ -4256,6 +4256,14 @@ async def analyze_blog_endpoint(request: BlogAnalysisRequest):
             last_analyzed_at=datetime.now().isoformat()
         )
 
+        # 지수 시계열 적재 — 이걸 안 하면 "언제 올랐는지"를 영영 알 수 없다.
+        # 분석 응답을 막지 않도록 스레드로 던지고, 실패해도 분석은 성공으로 둔다.
+        try:
+            from database.blog_index_history_db import record_snapshot
+            await asyncio.to_thread(record_snapshot, blog_id, index, stats, "analyze")
+        except Exception as e:
+            logger.warning(f"[index-history] snapshot skipped for {blog_id}: {e}")
+
         return BlogAnalysisResponse(
             job_id=job_id,
             status="completed",
@@ -4413,6 +4421,12 @@ async def get_blog_index(blog_id: str):
         # Get score breakdown
         score_breakdown = index.get("score_breakdown", {})
 
+        try:
+            from database.blog_index_history_db import record_snapshot
+            await asyncio.to_thread(record_snapshot, blog_id, index, stats, "index")
+        except Exception as e:
+            logger.warning(f"[index-history] snapshot skipped for {blog_id}: {e}")
+
         return {
             "blog": {
                 "blog_id": blog_id,
@@ -4450,6 +4464,32 @@ async def get_blog_index(blog_id: str):
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=404, detail=f"블로그를 찾을 수 없습니다: {blog_id}")
+
+
+@router.get("/{blog_id}/index-history")
+async def get_blog_index_history(
+    blog_id: str,
+    days: int = Query(180, ge=7, le=1095, description="조회 기간(일)"),
+):
+    """
+    블로그 지수 변화 추이 (시계열).
+
+    분석할 때마다 하루 1점씩 쌓인 스냅샷을 돌려준다. 여기에 없는 과거는
+    "아직 안 오른 것"이 아니라 "그때 측정한 적이 없는 것"이다 — 프론트는
+    이 둘을 구분해서 표시해야 한다(summary.count == 0/1 처리).
+
+    인증 불필요: 분석 자체가 공개 기능이라 이력도 같은 가시성을 따른다.
+    """
+    blog_id = (blog_id or "").strip()
+    if not blog_id:
+        raise HTTPException(status_code=400, detail="blog_id가 필요합니다")
+
+    try:
+        from database.blog_index_history_db import build_history_payload
+        return await asyncio.to_thread(build_history_payload, blog_id, days)
+    except Exception as e:
+        logger.error(f"Error getting index history for {blog_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/related-keywords/{keyword}", response_model=RelatedKeywordsResponse)

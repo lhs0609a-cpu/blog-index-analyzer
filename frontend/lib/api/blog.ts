@@ -432,6 +432,77 @@ export async function judgeKeyword(
 }
 
 /**
+ * 지수 변화 추이 (시계열)
+ *
+ * 분석할 때마다 하루 1점씩 쌓인다. points 가 비었거나 1개면 "아직 안 올랐다"가
+ * 아니라 "그때는 측정한 적이 없다" 이므로, 화면에서 반드시 구분해서 말해야 한다.
+ */
+export interface IndexHistoryPoint {
+  date: string
+  captured_at: string
+  total_score: number
+  level: number
+  grade: string
+  tier: string
+  percentile: number | null
+  c_rank: number | null
+  dia: number | null
+  content_factors: number | null
+  total_posts: number | null
+  total_visitors: number | null
+  neighbor_count: number | null
+  recent_avg_visitors: number | null
+  scoring_version: number
+  source: string
+  /** 현재 채점 버전과 같은 자로 잰 점수인가 */
+  comparable: boolean
+}
+
+export interface IndexHistoryEvent {
+  date: string
+  type: 'level_up' | 'level_down' | 'ruler_change'
+  from_level?: number | null
+  to_level?: number | null
+  from_tier?: string | null
+  to_tier?: string | null
+  score_delta?: number
+  message: string
+}
+
+export interface IndexHistoryResponse {
+  blog_id: string
+  days: number
+  scoring_version: number
+  has_legacy: boolean
+  points: IndexHistoryPoint[]
+  events: IndexHistoryEvent[]
+  summary: {
+    count: number
+    first_date: string | null
+    last_date: string | null
+    current_score: number | null
+    current_level: number | null
+    current_tier: string | null
+    score_delta?: number
+    level_delta?: number
+    baseline_date?: string
+    best_score?: number
+    best_date?: string
+  }
+}
+
+export async function getIndexHistory(
+  blogId: string,
+  days: number = 180
+): Promise<IndexHistoryResponse> {
+  const response = await apiClient.get<IndexHistoryResponse>(
+    `/api/blogs/${encodeURIComponent(blogId)}/index-history`,
+    { params: { days } }
+  )
+  return response.data
+}
+
+/**
  * Search blogs by keyword (returns all results at once)
  */
 export async function searchKeyword(keyword: string, limit: number = 100): Promise<any> {
