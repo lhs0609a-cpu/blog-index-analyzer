@@ -4492,6 +4492,31 @@ async def get_blog_index_history(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/{blog_id}/posting-history")
+async def get_blog_posting_history(
+    blog_id: str,
+    force: bool = Query(False, description="캐시 무시하고 다시 수집"),
+):
+    """
+    발행 이력 (개설 이후 전체).
+
+    지수는 측정한 날에만 존재하지만 글 발행일은 블로그가 스스로 들고 있는 과거
+    기록이라, 지수 측정 이전 구간의 활동 변화를 실제 데이터로 보여줄 수 있다.
+    과거 지수를 역산하지는 않는다 — 방문자·이웃의 과거값이 없어서 그건 추정이 아니라
+    발행량을 지수라고 칠하는 일이 된다.
+    """
+    blog_id = (blog_id or "").strip()
+    if not blog_id:
+        raise HTTPException(status_code=400, detail="blog_id가 필요합니다")
+
+    try:
+        from services.posting_history import get_posting_history
+        return await get_posting_history(blog_id, force=force)
+    except Exception as e:
+        logger.error(f"Error getting posting history for {blog_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/related-keywords/{keyword}", response_model=RelatedKeywordsResponse)
 async def get_related_keywords(keyword: str):
     """

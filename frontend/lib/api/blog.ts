@@ -503,6 +503,31 @@ export async function getIndexHistory(
 }
 
 /**
+ * 발행 이력 (개설 이후 전체)
+ *
+ * 지수 측정 이전 구간을 채우는 유일한 '진짜 과거 데이터'다. 과거 지수를 역산한
+ * 값이 아니라 실제 글 발행일이므로, 지수 선과 같은 축에 섞지 말고 따로 그린다.
+ */
+export interface PostingHistoryResponse {
+  blog_id: string
+  daily: { date: string; count: number }[]
+  total_posts: number | null
+  collected: number
+  first_post_date: string | null
+  last_post_date: string | null
+  truncated: boolean
+  cached?: boolean
+}
+
+export async function getPostingHistory(blogId: string): Promise<PostingHistoryResponse> {
+  const response = await apiClient.get<PostingHistoryResponse>(
+    `/api/blogs/${encodeURIComponent(blogId)}/posting-history`,
+    { timeout: 60000 }
+  )
+  return response.data
+}
+
+/**
  * Search blogs by keyword (returns all results at once)
  */
 export async function searchKeyword(keyword: string, limit: number = 100): Promise<any> {
