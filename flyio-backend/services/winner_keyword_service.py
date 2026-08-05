@@ -343,6 +343,17 @@ class WinnerKeywordService:
 
         return None
 
+    @staticmethod
+    def _is_on_topic(keyword: str, topic_terms: List[str]) -> bool:
+        """키워드가 이 블로그 주제에 속하는가 (주제어와 글자를 공유하는가).
+
+        형태소 분석기 없이 부분 문자열로 본다. '대출' 이 들어간 키워드는
+        대출 블로그의 것이고, '맛집' 은 아니다. 완벽하진 않지만
+        전혀 안 보는 것보다 훨씬 낫다."""
+        if not keyword:
+            return False
+        return any(t and (t in keyword or keyword in t) for t in topic_terms)
+
     async def match_from_cache(
         self,
         my_blog_id: str,
@@ -369,6 +380,33 @@ class WinnerKeywordService:
             summary = await asyncio.to_thread(cache_summary)
             return {"status": "cache_empty", "keywords": [], "cache": summary,
                     "my_level": my_level, "my_score": my_score}
+
+        # 주제 적합성 — 레벨만 보면 대출 블로그에 '왕십리맛집'을 추천하게 된다.
+        # 이길 수 있어도 자기 주제가 아니면 쓸 수 없는 키워드고, 써도 안 뜬다.
+        # 주제어는 이미 받아 둔 발행 이력 캐시에서만 읽는다(네트워크 금지).
+        topic_terms: List[str] = []
+        try:
+            from services.posting_history import read_cache as _ph_read
+            ph = await asyncio.to_thread(_ph_read, my_blog_id)
+            if ph:
+                topic_terms = ph.get("topic_terms") or []
+        except Exception as e:
+            logger.debug(f"topic terms lookup failed for {my_blog_id}: {e}")
+
+        if topic_terms:
+            relevant = [s for s in stats if self._is_on_topic(s["keyword"], topic_terms)]
+            if not relevant:
+                # 이 블로그 주제의 키워드를 아직 재 본 적이 없다는 뜻이다.
+                # 수집기가 다음 회차에 이 주제를 재도록 남겨 둔다.
+                try:
+                    from database.winner_keyword_cache_db import record_requested_topics
+                    await asyncio.to_thread(record_requested_topics, topic_terms, 3)
+                except Exception:
+                    pass
+                return {"status": "no_topic_match", "keywords": [],
+                        "my_level": my_level, "my_score": my_score,
+                        "topic_terms": topic_terms[:5], "analyzed": len(stats)}
+            stats = relevant
 
         winners: List[WinnerKeyword] = []
         for s in stats:

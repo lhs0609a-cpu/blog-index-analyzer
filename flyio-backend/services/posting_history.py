@@ -18,6 +18,7 @@ import logging
 import re
 from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional
+from urllib.parse import unquote_plus
 
 logger = logging.getLogger(__name__)
 
@@ -57,13 +58,50 @@ def _parse_add_date(raw: str, today: Optional[date] = None) -> Optional[str]:
 
 
 def _extract(text: str) -> Dict:
-    """응답에서 발행일과 총 개수만 뽑는다 (title 은 URL 인코딩이라 파싱 비용만 든다)."""
+    """응답에서 발행일·총 개수·제목을 뽑는다.
+
+    제목까지 가져오는 이유: 이 블로그가 '무엇에 대해 쓰는 블로그인지'를 알 수 있는
+    가장 확실한 신호다. 그게 없으면 대출 블로그에 '왕십리맛집'을 추천하게 된다.
+    """
     dates = [d for d in (_parse_add_date(x) for x in re.findall(r'"addDate":"([^"]*)"', text)) if d]
+    titles = []
+    for raw in re.findall(r'"title":"([^"]*)"', text):
+        try:
+            titles.append(unquote_plus(raw))
+        except Exception:
+            continue
     total_m = re.search(r'"totalCount":"?(\d+)', text)
     return {
         "dates": dates,
+        "titles": titles,
         "total": int(total_m.group(1)) if total_m else None,
     }
+
+
+# 주제와 무관하게 아무 블로그 제목에나 나오는 말들
+_STOPWORDS = {
+    "추천", "후기", "정리", "방법", "가격", "비용", "이유", "차이", "총정리", "리뷰",
+    "안내", "소개", "선택", "사용", "확인", "진행", "가능", "필요", "그리고", "하지만",
+    "오늘", "요즘", "최근", "여기", "저기", "이것", "그것", "우리", "제가", "저는",
+    "합니다", "했습니다", "입니다", "하는", "있는", "없는", "위한", "관련", "대해",
+}
+
+
+def extract_topic_terms(titles: List[str], top_n: int = 25) -> List[str]:
+    """제목들에서 이 블로그의 주제어를 뽑는다 (빈도 기반, 형태소 분석기 없이).
+
+    2글자 이상 한글 덩어리만 센다. 완벽한 주제 분류가 아니라
+    '이 블로그가 반복해서 쓰는 말'을 찾는 것이 목적이다.
+    """
+    from collections import Counter
+    counter: "Counter[str]" = Counter()
+    for t in titles:
+        for tok in re.findall(r"[가-힣]{2,}", t or ""):
+            if tok in _STOPWORDS or len(tok) > 12:
+                continue
+            counter[tok] += 1
+    # 한 번만 나온 말은 주제어가 아니라 그날의 소재다
+    return [w for w, c in counter.most_common(top_n * 3) if c >= 2][:top_n]
 
 
 async def fetch_posting_history(blog_id: str, max_pages: int = MAX_PAGES) -> Dict:
@@ -87,6 +125,7 @@ async def fetch_posting_history(blog_id: str, max_pages: int = MAX_PAGES) -> Dic
         "first_post_date": None,
         "last_post_date": None,
         "truncated": False,
+        "topic_terms": [],
     }
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0),
@@ -115,6 +154,7 @@ async def fetch_posting_history(blog_id: str, max_pages: int = MAX_PAGES) -> Dic
             result["truncated"] = True
 
         all_dates: List[str] = list(first["dates"])
+        all_titles: List[str] = list(first.get("titles") or [])
 
         # 시간 예산 — Fly → 네이버는 로컬보다 훨씬 느릴 수 있다. 45페이지를 끝까지
         # 기다리다 요청이 통째로 타임아웃되느니, 모은 만큼만 주고 truncated 를 세운다.
@@ -135,6 +175,7 @@ async def fetch_posting_history(blog_id: str, max_pages: int = MAX_PAGES) -> Dic
 
             for p in await asyncio.gather(*(guarded(i) for i in chunk)):
                 all_dates.extend(p["dates"])
+                all_titles.extend(p.get("titles") or [])
 
     if not all_dates:
         return result
@@ -148,6 +189,7 @@ async def fetch_posting_history(blog_id: str, max_pages: int = MAX_PAGES) -> Dic
     result["collected"] = len(all_dates)
     result["first_post_date"] = daily[0]["date"]
     result["last_post_date"] = daily[-1]["date"]
+    result["topic_terms"] = extract_topic_terms(all_titles)
     return result
 
 
@@ -186,6 +228,10 @@ def read_cache(blog_id: str) -> Optional[Dict]:
         if datetime.now() - fetched > timedelta(hours=CACHE_TTL_HOURS):
             return None
         payload = json.loads(row["payload"])
+        # 주제어가 없는 캐시는 이 기능이 생기기 전에 저장된 것이다.
+        # 그대로 쓰면 주제 필터가 조용히 꺼진 채로 돌아가므로 낡은 것으로 취급한다.
+        if "topic_terms" not in payload:
+            return None
         payload["cached"] = True
         return payload
     except Exception as e:

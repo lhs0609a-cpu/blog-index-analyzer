@@ -89,9 +89,18 @@ async def run_once() -> dict:
     )
 
     await asyncio.to_thread(init_winner_cache_db)
-    targets = await asyncio.to_thread(
-        pick_categories_to_refresh, SEED_CATEGORIES, CATEGORIES_PER_RUN
-    )
+
+    # 실제 사용자 블로그의 주제를 먼저 잰다. 씨앗 카테고리(맛집·카페·여행…)는
+    # 소비재 블로그 위주라 대출·의료 같은 주제의 사용자에게는 맞는 키워드가 없다.
+    from database.winner_keyword_cache_db import get_requested_topics
+    requested = await asyncio.to_thread(get_requested_topics, CATEGORIES_PER_RUN)
+    if requested:
+        targets = requested[:CATEGORIES_PER_RUN]
+        logger.info(f"[winner-precompute] 사용자 요청 주제 우선: {targets}")
+    else:
+        targets = await asyncio.to_thread(
+            pick_categories_to_refresh, SEED_CATEGORIES, CATEGORIES_PER_RUN
+        )
     if not targets:
         return {"categories": [], "stored": 0}
 

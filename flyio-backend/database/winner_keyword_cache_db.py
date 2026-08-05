@@ -83,8 +83,60 @@ def init_winner_cache_db() -> None:
                 last_error TEXT
             )
         """)
+        # 사용자 블로그의 주제어 — 수집기가 '실제로 필요한 주제'를 학습하는 통로.
+        # 씨앗 카테고리(맛집·카페·여행…)는 소비재 블로그 위주라, 대출/의료 같은
+        # 주제의 블로그에는 맞는 키워드가 하나도 없다. 그런 요청을 여기 쌓아 둔다.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS requested_topics (
+                term TEXT PRIMARY KEY,
+                times INTEGER DEFAULT 1,
+                first_requested_at TIMESTAMP,
+                last_requested_at TIMESTAMP
+            )
+        """)
         conn.commit()
         logger.info("✅ Winner keyword cache tables initialized")
+    finally:
+        conn.close()
+
+
+def record_requested_topics(terms: List[str], limit: int = 3) -> None:
+    """캐시에 맞는 키워드가 없던 블로그의 주제어를 적어 둔다 (수집 대상 후보)"""
+    terms = [t for t in (terms or []) if t][:limit]
+    if not terms:
+        return
+    now = datetime.now(KST).isoformat()
+    conn = _connect()
+    try:
+        for t in terms:
+            conn.execute("""
+                INSERT INTO requested_topics (term, times, first_requested_at, last_requested_at)
+                VALUES (?, 1, ?, ?)
+                ON CONFLICT(term) DO UPDATE SET
+                    times = times + 1,
+                    last_requested_at = excluded.last_requested_at
+            """, (t, now, now))
+        conn.commit()
+    except Exception as e:
+        logger.debug(f"[winner-cache] requested topic 기록 실패: {e}")
+    finally:
+        conn.close()
+
+
+def get_requested_topics(limit: int = 10) -> List[str]:
+    """많이 요청된 주제어부터. 아직 측정 안 된 것만 돌려준다."""
+    conn = _connect()
+    try:
+        rows = conn.execute("""
+            SELECT r.term FROM requested_topics r
+            LEFT JOIN category_runs c ON c.category = r.term
+            WHERE c.category IS NULL
+            ORDER BY r.times DESC, r.last_requested_at DESC
+            LIMIT ?
+        """, (limit,)).fetchall()
+        return [r["term"] for r in rows]
+    except Exception:
+        return []
     finally:
         conn.close()
 
