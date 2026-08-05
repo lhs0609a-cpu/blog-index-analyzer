@@ -69,7 +69,13 @@ def jload(p, d):
 
 
 def jdump(o, p):
-    json.dump(o, open(p, "w", encoding="utf-8"), ensure_ascii=False)
+    """⚠️ 원자적 저장 필수 — 26만행 캐시를 직접 write 하면 동시 읽기가 반쪽 파일을 보고,
+    쓰는 중 프로세스가 죽으면 수 시간치 검증 결과가 통째로 날아간다(2026-07-31 실측)."""
+    import os as _oz
+    tmp = p + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(o, f, ensure_ascii=False)
+    _oz.replace(tmp, p)
 
 
 # ------------------------------------------------------------------

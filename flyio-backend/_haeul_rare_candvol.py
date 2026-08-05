@@ -24,6 +24,9 @@ WORK = ("C:/Users/lhs06/AppData/Local/Temp/claude/"
         "937e50ce-e620-44d2-8ad2-78c11c394bc3/scratchpad/")
 VOLC = WORK + "_haeul_rare_volcache.json"
 CAND = WORK + "_haeul_rare_cand.json"
+# CANDFILE 로 검증 대상을 갈아끼운다(리스트 JSON 도 허용) — 라운드마다 대상이 다르다.
+import os as _o
+_CF = _o.environ.get("CANDFILE")
 STATE = WORK + "_haeul_rare_candvol_state.json"
 
 _src = open(BASE + "_haeul_disease_bfs2.py", encoding="utf-8").read()
@@ -57,11 +60,19 @@ def jload(p, d):
 
 
 def jdump(o, p):
-    json.dump(o, open(p, "w", encoding="utf-8"), ensure_ascii=False)
+    """⚠️ 원자적 저장 필수 — 26만행 캐시를 직접 write 하면 동시 읽기가 반쪽 파일을 보고,
+    쓰는 중 프로세스가 죽으면 수 시간치 검증 결과가 통째로 날아간다(2026-07-31 실측)."""
+    import os as _oz
+    tmp = p + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(o, f, ensure_ascii=False)
+    _oz.replace(tmp, p)
 
 
 vol = jload(VOLC, {})
-cand = sorted(jload(CAND, {}))
+_src = jload(BASE + _CF, None) if _CF else jload(CAND, {})
+# ⚠️ 조합 뱅크는 **정렬이 곧 수율**이다 — sorted() 로 다시 섞으면 생산구간이 흩어진다.
+cand = list(_src) if isinstance(_src, list) else sorted(_src)
 todo = [k for k in cand if k not in vol]
 chunks = [todo[i:i + 5] for i in range(0, len(todo), 5)]
 print(f"후보 {len(cand):,} / 캐시적중 {len(cand)-len(todo):,} / 미검증 {len(todo):,} "

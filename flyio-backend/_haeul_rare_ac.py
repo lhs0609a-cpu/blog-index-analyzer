@@ -54,7 +54,13 @@ def jload(p, d):
 
 
 def jdump(o, p):
-    json.dump(o, open(p, "w", encoding="utf-8"), ensure_ascii=False)
+    """⚠️ 원자적 저장 필수 — 26만행 캐시를 직접 write 하면 동시 읽기가 반쪽 파일을 보고,
+    쓰는 중 프로세스가 죽으면 수 시간치 검증 결과가 통째로 날아간다(2026-07-31 실측)."""
+    import os as _oz
+    tmp = p + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(o, f, ensure_ascii=False)
+    _oz.replace(tmp, p)
 
 
 # 게이트 재사용 (_haeul_rare_bfs.py 의 2단 게이트)
@@ -195,6 +201,15 @@ elif PHASE == "d2":
     print(f"D2 frontier {len(front):,}", flush=True)
     crawl(front, PREFIX_D2, "D2", "pc", workers=28)
     state["done"] = list(done | {"d2"})
+    jdump(state, STATE)
+
+elif PHASE == "bare":
+    # 루트가 **10만 단위 조합**일 때 쓴다. 접두사까지 붙이면 질의가 수백만이 되는데,
+    # 조합 루트는 대부분 자동완성이 아무것도 안 준다(수율 1/13) — 먼저 bare 로 훑어
+    # '살아있는 루트'가 어디인지부터 알아낸다. 살아있는 것만 나중에 접두사로 판다.
+    crawl(roots, [""], "BARE", "pc", workers=30)
+    crawl(roots, [""], "BARE", "bing", workers=12)
+    state["done"] = list(done | {"bare"})
     jdump(state, STATE)
 
 elif PHASE == "gb":
