@@ -30,7 +30,9 @@ SEED_CATEGORIES: List[str] = [
 # Fly IP 는 네이버 응답이 훨씬 느리다. 주기당 1개씩만 확실히 끝내는 편이 낫다.
 CATEGORIES_PER_RUN = int(os.environ.get("WINNER_PRECOMPUTE_CATEGORIES", "1"))
 SPACING_SECONDS = int(os.environ.get("WINNER_PRECOMPUTE_SPACING", "45"))
-MAX_KEYWORDS_PER_CATEGORY = int(os.environ.get("WINNER_PRECOMPUTE_MAX_KW", "30"))
+# 30개를 한 번에 재면 Fly IP 의 느린 네이버 응답에서 전멸한다(프로덕션 '대출' 0개 실측,
+# 같은 호출이 로컬 max_keywords=6 에서는 6개 정상). 적게·확실히 재는 편이 낫다.
+MAX_KEYWORDS_PER_CATEGORY = int(os.environ.get("WINNER_PRECOMPUTE_MAX_KW", "12"))
 MIN_SEARCH_VOLUME = int(os.environ.get("WINNER_PRECOMPUTE_MIN_VOL", "300"))
 # 한 번 도는 데 이보다 오래 걸리면 뭔가 잘못된 것이다 — 죽이고 다음 주기를 기다린다
 SUBPROCESS_TIMEOUT = int(os.environ.get("WINNER_PRECOMPUTE_TIMEOUT", "2700"))

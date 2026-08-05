@@ -577,7 +577,12 @@ class KeywordAnalysisService:
 
             analysis = CompetitionAnalysis(
                 keyword=keyword,
-                search_volume=search_result.insights.get('total_search_volume', 0) if hasattr(search_result, 'insights') else 0,
+                # ⚠️ insights 는 SearchInsights 모델이지 dict 가 아니다. 예전 코드가
+                # .get('total_search_volume') 을 호출해 AttributeError 를 냈고,
+                # 그 예외가 경쟁도 분석을 통째로 죽였다(필드명도 틀렸다 —
+                # 실제 이름은 monthly_search_volume). 2026-08-05 실측으로 발견.
+                search_volume=getattr(getattr(search_result, 'insights', None),
+                                      'monthly_search_volume', 0) or 0,
                 competition_level=competition_level,
                 top10_stats=top10_stats,
                 tab_ratio=tab_ratio,
