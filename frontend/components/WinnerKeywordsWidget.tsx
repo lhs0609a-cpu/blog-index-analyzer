@@ -25,10 +25,13 @@ export default function WinnerKeywordsWidget({ blogId, className = '' }: WinnerK
   const [error, setError] = useState<string | null>(null)
   const [selectedKeyword, setSelectedKeyword] = useState<WinnerKeyword | null>(null)
 
+  // ⚠️ 자동 호출 금지 (2026-08-05).
+  // 이 위젯이 부르는 quick-winners 는 5개 카테고리 blue-ocean 확장 분석을
+  // 실시간으로 돌린다. 프로덕션 실측: 7분 넘게 응답 없음 + 그동안 /health 조차
+  // 28~30초로 밀림. 대시보드에 들어오기만 해도 서비스 전체가 멈추므로,
+  // 서버에서 사전계산 구조로 바뀌기 전까지는 사용자가 직접 누를 때만 호출한다.
   useEffect(() => {
-    if (blogId) {
-      loadKeywords()
-    }
+    setIsLoading(false)
   }, [blogId])
 
   const loadKeywords = async () => {
@@ -130,11 +133,14 @@ export default function WinnerKeywordsWidget({ blogId, className = '' }: WinnerK
           </div>
           <div>
             <h3 className="font-bold text-gray-900">1위 가능 키워드</h3>
-            <p className="text-xs text-gray-500">현재 1위 가능한 키워드를 찾지 못했습니다</p>
+            <p className="text-xs text-gray-500">준비 중입니다</p>
           </div>
         </div>
+        {/* '찾지 못했습니다' 라고 쓰면 안 된다 — 지금은 아예 묻지 않는다.
+            없는 결과와 안 물어본 것을 같은 문장으로 말하면 그건 거짓말이 된다. */}
         <p className="text-sm text-gray-600 mb-4">
-          블로그 레벨을 높이면 더 많은 키워드에서 1위가 가능해집니다.
+          추천 방식을 다시 만들고 있습니다. 그동안은 키워드 검색으로 직접
+          경쟁 강도를 확인하실 수 있습니다.
         </p>
         <Link
           href="/keyword-search"

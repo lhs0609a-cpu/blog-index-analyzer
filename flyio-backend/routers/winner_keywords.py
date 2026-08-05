@@ -24,6 +24,12 @@ from database.subscription_db import check_feature_access
 
 router = APIRouter(tags=["Winner Keywords"])
 
+# 실시간 분석 경로 잠금 스위치.
+# 켜려면 WINNER_KEYWORDS_ENABLED=1 — 단, worker 사전계산 구조로 바꾸기 전에는
+# 켜는 순간 요청 한 건이 API 전체를 몇 분간 마비시킨다(2026-08-05 실측).
+import os as _os
+_WINNER_KEYWORDS_ENABLED = _os.environ.get("WINNER_KEYWORDS_ENABLED") == "1"
+
 
 # ========== Response Models ==========
 
@@ -158,6 +164,13 @@ async def get_daily_winners(
         - moderate_keywords: 50-69% 확률 키워드
     """
 
+    # 같은 실시간 분석 경로를 타므로 함께 잠근다 (위 quick-winners 주석 참조)
+    if not _WINNER_KEYWORDS_ENABLED:
+        raise HTTPException(
+            status_code=503,
+            detail="1위 가능 키워드 추천은 재작업 중입니다. (실시간 분석이 서비스 전체를 지연시켜 잠금)",
+        )
+
     # 플랜 확인 (Pro 이상)
     if user_id:
         access = await check_feature_access(user_id, "winner_keywords")
@@ -218,6 +231,19 @@ async def get_quick_winners(
     - **my_blog_id**: 분석 대상 블로그 ID
     - **limit**: 반환할 키워드 수 (기본: 5)
     """
+    # ⚠️ 2026-08-05 실측으로 잠금.
+    # '빠른 응답용' 이라고 적혀 있지만 실제로는 5개 카테고리에 대해 blue-ocean
+    # 확장 분석(expand=True)을 돌린다. 프로덕션에서 7분을 넘겨도 응답이 없었고,
+    # 그동안 /health 조차 28~30초로 밀렸다 — 요청 한 건이 API 전체를 마비시킨다.
+    # (1 CPU 머신에서 SERP 파싱이 이벤트루프를 굶긴다 — 로그인 hang 과 같은 원인)
+    # 대시보드 위젯이 자동 호출하므로 사용자가 접속만 해도 장애가 난다.
+    # 제대로 고치려면 worker 에서 미리 계산해 두고 여기서는 읽기만 해야 한다.
+    if not _WINNER_KEYWORDS_ENABLED:
+        raise HTTPException(
+            status_code=503,
+            detail="1위 가능 키워드 추천은 재작업 중입니다. (실시간 분석이 서비스 전체를 지연시켜 잠금)",
+        )
+
     try:
         service = get_winner_keyword_service()
         keywords = await service.get_quick_winners(
