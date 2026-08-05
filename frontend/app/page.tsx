@@ -389,15 +389,6 @@ export default function Home() {
                     블루오션 키워드 발굴
                     <ArrowRight className="w-3 h-3 gi3d" />
                   </Link>
-                  <span className="text-gray-300">|</span>
-                  <Link
-                    href="/tools"
-                    className="text-gray-500 hover:text-[#0064FF] transition-colors inline-flex items-center gap-1"
-                  >
-                    <Sparkles className="w-4 h-4 gi3d" />
-                    AI 도구 모음
-                    <ArrowRight className="w-3 h-3 gi3d" />
-                  </Link>
                 </div>
               </motion.div>
 
@@ -441,7 +432,7 @@ export default function Home() {
         </Marquee>
       </section>
 
-      {/* Core Features Section - 3개 핵심 기능만 */}
+      {/* Core Features Section - 핵심 기능 */}
       <section className="py-20 relative">
         <div className="container mx-auto px-4">
           {/* 섹션 헤더 */}
@@ -456,15 +447,15 @@ export default function Home() {
               시작하기
             </span>
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">무엇을 도와드릴까요?</h2>
-            <p className="text-gray-500">가장 많이 사용하는 핵심 기능 3가지</p>
+            <p className="text-gray-500">가장 많이 사용하는 핵심 기능</p>
           </motion.div>
 
-          {/* 3개 핵심 카드 */}
+          {/* 핵심 카드 */}
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto"
+            className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto"
           >
             {/* 1. 키워드 분석 */}
             <Link href="/keyword-search" className="group">
@@ -520,32 +511,6 @@ export default function Home() {
               </TiltCard>
             </Link>
 
-            {/* 3. AI 도구 */}
-            <Link href="/tools" className="group">
-              <TiltCard className="h-full">
-                <motion.div
-                  whileHover={{ scale: 1.02, y: -5 }}
-                  className="relative h-full p-8 rounded-3xl bg-gradient-to-br from-amber-50 to-white border border-amber-100/50 overflow-hidden shadow-xl shadow-amber-100/50"
-                >
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-amber-100/30 rounded-full blur-[60px]" />
-                  <div className="relative">
-                    <div className="w-16 h-16 rounded-2xl bg-amber-500 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:rotate-3 transition-all shadow-lg shadow-amber-500/25">
-                      <Sparkles className="w-8 h-8 text-white gi3d" />
-                    </div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="px-2 py-1 text-xs font-bold bg-amber-500 text-white rounded-full">AI (일 5회)</span>
-                      <span className="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-full border border-gray-200">8개 도구</span>
-                    </div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2">AI 도구</h3>
-                    <p className="text-gray-600 mb-4">제목 생성, 글쓰기 가이드, 해시태그 추천 등</p>
-                    <div className="flex items-center gap-2 text-amber-600 font-medium group-hover:gap-3 transition-all">
-                      <span>도구 살펴보기</span>
-                      <ArrowRight className="w-4 h-4 gi3d" />
-                    </div>
-                  </div>
-                </motion.div>
-              </TiltCard>
-            </Link>
           </motion.div>
 
           {/* 더 많은 기능 링크 */}

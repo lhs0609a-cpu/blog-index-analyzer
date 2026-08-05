@@ -344,10 +344,10 @@ export default function AdOptimizerPage() {
                   </motion.div>
 
                   <Link
-                    href="/tools"
+                    href="/analyze"
                     className="block w-full py-3 text-slate-500 text-center text-sm hover:text-slate-300 transition-colors"
                   >
-                    다른 기능 둘러보기 →
+                    블로그 분석 둘러보기 →
                   </Link>
               </div>
 

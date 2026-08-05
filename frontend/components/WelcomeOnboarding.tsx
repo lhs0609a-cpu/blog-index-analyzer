@@ -80,11 +80,11 @@ export default function WelcomeOnboarding({ onComplete }: WelcomeOnboardingProps
     {
       icon: <GlassIcon icon={Zap} size={86} />,
       iconBg: 'from-orange-500 to-amber-500',
-      title: 'AI 도구 활용하기',
-      description: '블루오션 키워드 발굴, AI 글쓰기 가이드 등\n9가지 AI 도구로 효율적으로 블로그를 운영하세요.',
+      title: '광고 최적화 연결하기',
+      description: '네이버 광고 계정을 연결하면 키워드·입찰·예산을\n자동으로 관리해 광고비를 아낄 수 있습니다.',
       action: {
-        label: 'AI 도구 보러 가기',
-        href: '/tools'
+        label: '광고 최적화 보러 가기',
+        href: '/ad-optimizer'
       }
     }
   ]

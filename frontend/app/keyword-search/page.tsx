@@ -2148,14 +2148,6 @@ function KeywordSearchContent() {
                     총 {results.results.length}개 블로그
                   </span>
                 </div>
-                {/* P1-3: 키워드→글쓰기 연결 버튼 */}
-                <Link
-                  href={`/tools?keyword=${encodeURIComponent(results.keyword)}&action=write`}
-                  className="flex items-center gap-2 px-4 py-2 bg-white text-[#0064FF] rounded-lg font-bold text-sm hover:shadow-lg transition-all"
-                >
-                  <PenTool className="w-4 h-4 gi3d" />
-                  이 키워드로 글쓰기 가이드
-                </Link>
               </div>
             </div>
 

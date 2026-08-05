@@ -673,7 +673,6 @@ from routers import subscription, payment, naver_ad, content_lifespan, admin, co
 from routers import rank_tracker
 from routers import user_blogs
 from routers import keyword_analysis
-from routers import premium_tools
 from routers import revenue
 from routers import unified_ads
 from routers import ad_dashboard
@@ -709,7 +708,6 @@ app.include_router(content_lifespan.router, prefix="/api/content-lifespan", tags
 app.include_router(rank_tracker.router, prefix="/api/rank-tracker", tags=["순위추적"])
 app.include_router(user_blogs.router, prefix="/api/user-blogs", tags=["사용자블로그"])
 app.include_router(keyword_analysis.router, prefix="/api/keyword-analysis", tags=["키워드분석"])
-app.include_router(premium_tools.router, prefix="/api/tools", tags=["프리미엄도구"])
 app.include_router(revenue.router, prefix="/api/revenue", tags=["수익관리"])
 app.include_router(unified_ads.router)  # prefix already set in router
 app.include_router(ad_dashboard.router)  # prefix already set in router

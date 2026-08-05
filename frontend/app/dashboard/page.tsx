@@ -126,7 +126,6 @@ function DropdownMenu({ user }: DropdownMenuProps) {
   const menuItems = [
     { href: '/keyword-search', icon: Search, label: '키워드 검색', color: 'text-[#0064FF]' },
     { href: '/dashboard/rank-tracker', icon: Target, label: '순위 추적', color: 'text-[#0064FF]' },
-    { href: '/tools', icon: Sparkles, label: 'AI 도구', color: 'text-purple-600' },
     ...(user?.is_admin ? [
       { href: '/dashboard/learning', icon: Brain, label: 'AI 학습 엔진', color: 'text-green-600' },
       { href: '/dashboard/batch-learning', icon: Zap, label: '대량 학습', color: 'text-orange-600' },
@@ -422,12 +421,12 @@ export default function Dashboard() {
 
                   <div className="bg-white rounded-2xl p-6 border border-blue-100 hover:shadow-lg transition-all">
                     <div className="w-12 h-12 rounded-full bg-sky-500 text-white flex items-center justify-center text-xl font-bold mb-4">3</div>
-                    <h4 className="font-bold text-lg mb-2">AI 도구 활용하기</h4>
+                    <h4 className="font-bold text-lg mb-2">광고 최적화하기</h4>
                     <p className="text-gray-600 text-sm mb-4">
-                      블루오션 키워드 발굴, AI 글쓰기 가이드 등 9가지 도구를 활용하세요
+                      네이버 광고 계정을 연결하면 키워드·입찰·예산을 자동으로 관리해드려요
                     </p>
-                    <Link href="/tools" className="text-[#0064FF] font-semibold text-sm hover:underline">
-                      AI 도구 보기 →
+                    <Link href="/ad-optimizer" className="text-[#0064FF] font-semibold text-sm hover:underline">
+                      광고 최적화 보기 →
                     </Link>
                   </div>
                 </div>

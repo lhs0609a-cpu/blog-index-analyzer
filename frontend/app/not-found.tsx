@@ -52,7 +52,6 @@ export default function NotFound() {
             {[
               { href: '/analyze', label: '블로그 분석' },
               { href: '/keyword-search', label: '키워드 분석' },
-              { href: '/tools', label: '블로그 도구' },
               { href: '/pricing', label: '요금제' },
             ].map((link) => (
               <Link

@@ -70,11 +70,6 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/tools" className="block py-1 hover:text-violet-400 transition-colors cursor-pointer">
-                  프리미엄 도구
-                </Link>
-              </li>
-              <li>
                 <Link href="/pricing" className="block py-1 hover:text-violet-400 transition-colors cursor-pointer">
                   요금제
                 </Link>

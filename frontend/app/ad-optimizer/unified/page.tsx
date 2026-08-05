@@ -403,8 +403,8 @@ export default function UnifiedAdOptimizerPage() {
             animate={{ opacity: 1, y: 0 }}
             className="flex items-center justify-between mb-16"
           >
-            <Link href="/tools" className="text-gray-400 hover:text-gray-600 transition-colors text-sm">
-              ← 도구 목록
+            <Link href="/dashboard" className="text-gray-400 hover:text-gray-600 transition-colors text-sm">
+              ← 대시보드
             </Link>
             <span className="text-xs font-medium text-gray-400 tracking-wider">PRO</span>
           </motion.nav>
@@ -607,8 +607,8 @@ export default function UnifiedAdOptimizerPage() {
         <div className="max-w-6xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link href="/tools" className="text-gray-400 hover:text-gray-600 text-sm">
-                ← 도구
+              <Link href="/dashboard" className="text-gray-400 hover:text-gray-600 text-sm">
+                ← 대시보드
               </Link>
               <h1 className="text-lg font-semibold text-gray-900">광고 자동 최적화</h1>
             </div>

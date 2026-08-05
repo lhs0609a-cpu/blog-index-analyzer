@@ -29,11 +29,6 @@ const navItems = [
     icon: BarChart3,
   },
   {
-    label: 'AI도구',
-    href: '/tools',
-    icon: Zap,
-  },
-  {
     label: '대시보드',
     href: '/dashboard',
     icon: User,
