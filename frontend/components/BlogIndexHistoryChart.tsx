@@ -41,7 +41,13 @@ const NEUTRAL = '#9ca3af'
 
 const DAY = 86400000
 
-type ChartRow = IndexHistoryPoint & { ts: number; event?: 'level_up' | 'level_down' | 'ruler_change' }
+type ChartRow = IndexHistoryPoint & {
+  ts: number
+  event?: 'level_up' | 'level_down' | 'ruler_change'
+  /** 채점 기준이 다른 점수는 선을 잇지 않는다 — 이으면 기준 변경이 폭등으로 보인다 */
+  score_current: number | null
+  score_legacy: number | null
+}
 type Bucket = { ts: number; count: number; label: string }
 
 const toTs = (d: string) => new Date(`${d}T00:00:00+09:00`).getTime()
@@ -139,7 +145,13 @@ export default function BlogIndexHistoryChart({ blogId }: { blogId: string }) {
   const allRows: ChartRow[] = useMemo(() => {
     if (!data) return []
     const eventByDate = new Map(data.events.map((e) => [e.date, e.type]))
-    return data.points.map((p) => ({ ...p, ts: toTs(p.date), event: eventByDate.get(p.date) }))
+    return data.points.map((p) => ({
+      ...p,
+      ts: toTs(p.date),
+      event: eventByDate.get(p.date),
+      score_current: p.comparable ? p.total_score : null,
+      score_legacy: p.comparable ? null : p.total_score,
+    }))
   }, [data])
 
   const rows = useMemo(() => allRows.filter((r) => r.ts >= rangeStart), [allRows, rangeStart])
@@ -201,21 +213,49 @@ export default function BlogIndexHistoryChart({ blogId }: { blogId: string }) {
     return { recent, prior, pct }
   }, [posting, now])
 
+  const comparableCount = useMemo(() => rows.filter((r) => r.comparable).length, [rows])
+  const hasLegacyInView = useMemo(() => rows.some((r) => !r.comparable), [rows])
+
   const summary = data?.summary
   const delta = summary?.score_delta ?? 0
   const DeltaIcon = delta > 0 ? TrendingUp : delta < 0 ? TrendingDown : Minus
   const deltaColor = delta > 0 ? 'text-emerald-600' : delta < 0 ? 'text-red-600' : 'text-gray-400'
+
+  // 두 패널이 같은 눈금을 써야 축을 공유한다는 게 눈에 보인다.
+  // (recharts 는 시리즈 데이터로 눈금을 만들기 때문에, 명시하지 않으면 패널마다 달라진다)
+  const sharedTicks = useMemo(() => {
+    const [lo, hi] = xDomain
+    if (!(hi > lo)) return undefined
+    const out: number[] = []
+    if (monthly) {
+      const d = new Date(lo)
+      let cur = new Date(d.getFullYear(), d.getMonth(), 1).getTime()
+      const months: number[] = []
+      while (cur <= hi) {
+        if (cur >= lo) months.push(cur)
+        const n = new Date(cur)
+        cur = new Date(n.getFullYear(), n.getMonth() + 1, 1).getTime()
+      }
+      const step = Math.max(1, Math.ceil(months.length / 7))
+      months.forEach((m, i) => { if (i % step === 0) out.push(m) })
+    } else {
+      const n = 6
+      for (let i = 0; i <= n; i++) out.push(Math.round(lo + ((hi - lo) * i) / n))
+    }
+    return out
+  }, [xDomain, monthly])
 
   const axisProps = {
     dataKey: 'ts',
     type: 'number' as const,
     scale: 'time' as const,
     domain: xDomain,
+    ticks: sharedTicks,
     tickFormatter: (v: number) => fmtTick(v, monthly),
     tick: { fill: AXIS_TEXT, fontSize: 12 },
     tickLine: false,
     axisLine: { stroke: GRID },
-    minTickGap: 28,
+    minTickGap: 12,
   }
 
   return (
@@ -261,14 +301,23 @@ export default function BlogIndexHistoryChart({ blogId }: { blogId: string }) {
       {!loading && !error && rows.length > 1 && (
         <>
           <div className="mt-4 mb-1 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-            <div className={`flex items-center gap-1.5 font-semibold ${deltaColor}`}>
-              <DeltaIcon className="w-4 h-4" strokeWidth={2.25} />
-              {delta > 0 ? '+' : ''}{delta.toFixed(1)}점
-              <span className="font-normal text-gray-400">
-                ({summary?.baseline_date} → {summary?.last_date})
-              </span>
-            </div>
-            {!!summary?.level_delta && (
+            {/* 같은 자로 잰 점이 2개 이상일 때만 변화량을 말한다.
+                1개뿐인데 "0.0점"이라고 쓰면 '변화 없음'으로 읽힌다. */}
+            {comparableCount >= 2 ? (
+              <div className={`flex items-center gap-1.5 font-semibold ${deltaColor}`}>
+                <DeltaIcon className="w-4 h-4" strokeWidth={2.25} />
+                {delta > 0 ? '+' : ''}{delta.toFixed(1)}점
+                <span className="font-normal text-gray-400">
+                  ({summary?.baseline_date} → {summary?.last_date})
+                </span>
+              </div>
+            ) : (
+              <div className="text-gray-500">
+                현재 기준으로 잰 기록이 <b className="text-gray-800">1개</b>뿐이라 아직 변화량을
+                {' '}낼 수 없습니다
+              </div>
+            )}
+            {!!summary?.level_delta && comparableCount >= 2 && (
               <div className="text-gray-600">
                 레벨 {summary.level_delta > 0 ? '+' : ''}{summary.level_delta}
                 <span className="text-gray-400"> · 현재 {summary.current_tier}</span>
@@ -279,6 +328,20 @@ export default function BlogIndexHistoryChart({ blogId }: { blogId: string }) {
               <span className="text-gray-400"> ({summary?.best_date})</span>
             </div>
           </div>
+
+          {/* 선이 두 종류라 색만으로 구분하게 두지 않는다 */}
+          {hasLegacyInView && (
+            <div className="mb-1 flex items-center gap-4 text-xs text-gray-500">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-4 h-0.5 rounded" style={{ background: LINE }} />
+                현재 채점 기준
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ background: NEUTRAL }} />
+                이전 기준 (지금 점수와 직접 비교 불가)
+              </span>
+            </div>
+          )}
 
           <div className="h-56 -ml-2">
             <ResponsiveContainer width="100%" height="100%">
@@ -302,13 +365,27 @@ export default function BlogIndexHistoryChart({ blogId }: { blogId: string }) {
                     label={{ value: '기준 변경', position: 'top', fill: AXIS_TEXT, fontSize: 11 }}
                   />
                 ))}
+                {/* 이전 채점 기준 점수 — 점으로만 찍는다. 현재 기준 점과 선으로 이으면
+                    자가 바뀐 것이 점수가 뛴 것처럼 보인다. */}
                 <Line
                   type="monotone"
-                  dataKey="total_score"
+                  dataKey="score_legacy"
+                  stroke={NEUTRAL}
+                  strokeWidth={2}
+                  strokeDasharray="4 4"
+                  connectNulls={false}
+                  dot={{ r: 4, fill: NEUTRAL, stroke: SURFACE, strokeWidth: 2 }}
+                  activeDot={{ r: 6, fill: NEUTRAL, stroke: SURFACE, strokeWidth: 2 }}
+                  isAnimationActive={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="score_current"
                   stroke={LINE}
                   strokeWidth={2}
                   strokeLinecap="round"
                   strokeLinejoin="round"
+                  connectNulls={false}
                   dot={<EventDot dataLength={rows.length} />}
                   activeDot={{ r: 6, fill: LINE, stroke: SURFACE, strokeWidth: 2 }}
                   isAnimationActive={false}
