@@ -90,10 +90,14 @@ def init_winner_cache_db() -> None:
             CREATE TABLE IF NOT EXISTS requested_topics (
                 term TEXT PRIMARY KEY,
                 times INTEGER DEFAULT 1,
+                rank INTEGER DEFAULT 99,
                 first_requested_at TIMESTAMP,
                 last_requested_at TIMESTAMP
             )
         """)
+        cur.execute("PRAGMA table_info(requested_topics)")
+        if "rank" not in {r["name"] for r in cur.fetchall()}:
+            cur.execute("ALTER TABLE requested_topics ADD COLUMN rank INTEGER DEFAULT 99")
         conn.commit()
         logger.info("✅ Winner keyword cache tables initialized")
     finally:
@@ -108,14 +112,18 @@ def record_requested_topics(terms: List[str], limit: int = 3) -> None:
     now = datetime.now(KST).isoformat()
     conn = _connect()
     try:
-        for t in terms:
+        # rank = 블로그에서 그 말이 얼마나 대표적인가(빈도 순위).
+        # 이걸 안 담으면 '대출'과 '한도'가 같은 무게가 되어, 검색 주제로 약한
+        # 조각어가 먼저 측정되고 0개를 물고 온다 (2026-08-05 실측: 한도 → 0개).
+        for i, t in enumerate(terms):
             conn.execute("""
-                INSERT INTO requested_topics (term, times, first_requested_at, last_requested_at)
-                VALUES (?, 1, ?, ?)
+                INSERT INTO requested_topics (term, times, rank, first_requested_at, last_requested_at)
+                VALUES (?, 1, ?, ?, ?)
                 ON CONFLICT(term) DO UPDATE SET
                     times = times + 1,
+                    rank = MIN(rank, excluded.rank),
                     last_requested_at = excluded.last_requested_at
-            """, (t, now, now))
+            """, (t, i, now, now))
         conn.commit()
     except Exception as e:
         logger.debug(f"[winner-cache] requested topic 기록 실패: {e}")
@@ -131,7 +139,7 @@ def get_requested_topics(limit: int = 10) -> List[str]:
             SELECT r.term FROM requested_topics r
             LEFT JOIN category_runs c ON c.category = r.term
             WHERE c.category IS NULL
-            ORDER BY r.times DESC, r.last_requested_at DESC
+            ORDER BY r.times DESC, r.rank ASC, r.last_requested_at DESC
             LIMIT ?
         """, (limit,)).fetchall()
         return [r["term"] for r in rows]
