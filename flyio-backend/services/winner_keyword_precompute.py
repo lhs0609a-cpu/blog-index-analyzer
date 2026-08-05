@@ -56,7 +56,9 @@ async def precompute_category(category: str) -> int:
         )
     except Exception as e:
         logger.warning(f"[winner-precompute] {category} 측정 실패: {e}")
-        await asyncio.to_thread(mark_category_run, category, 0, str(e)[:200])
+        await asyncio.to_thread(
+            mark_category_run, category, 0, f"{type(e).__name__}: {str(e)[:180]}"
+        )
         return 0
 
     rows = []
@@ -78,9 +80,22 @@ async def precompute_category(category: str) -> int:
             "bos_score": getattr(kw, "bos_score", None),
         })
 
+    # 0개가 나왔을 때 '어디서 사라졌는지'를 남긴다. 이게 없으면 로컬에서는 되는데
+    # 프로덕션에서만 0개인 상황을 밖에서 진단할 수 없다 (2026-08-05 실측).
+    diag = None
+    if not rows:
+        raw = getattr(result, "keywords", None)
+        diag = (f"확장 {len(raw) if raw is not None else 'None'}개, "
+                f"min_vol={MIN_SEARCH_VOLUME}, max_kw={MAX_KEYWORDS_PER_CATEGORY}")
+    else:
+        vols = [r.get("search_volume") or 0 for r in rows]
+        avgs = [r.get("top10_avg_score") or 0 for r in rows]
+        if not any(avgs):
+            diag = f"{len(rows)}개 확장됐으나 상위10 점수 전무 (검색량 최대 {max(vols) if vols else 0})"
+
     stored = await asyncio.to_thread(upsert_keyword_stats, rows)
-    await asyncio.to_thread(mark_category_run, category, stored, None)
-    logger.info(f"[winner-precompute] {category}: {stored}개 저장")
+    await asyncio.to_thread(mark_category_run, category, stored, diag)
+    logger.info(f"[winner-precompute] {category}: {stored}개 저장 {diag or ''}")
     return stored
 
 
