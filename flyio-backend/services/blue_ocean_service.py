@@ -346,7 +346,13 @@ class BlueOceanService:
                         for blog in search_result.results[:10]:
                             if blog.index:
                                 scores.append(blog.index.total_score)
-                            if blog.is_influencer:
+                            # ⚠️ BlogResult 에는 is_influencer 가 없다(그 필드는 BlogStatsResponse 쪽).
+                            # 이 한 줄이 AttributeError 를 던져 **모든 키워드 분석이 죽었고**,
+                            # 블루오션/1위키워드가 항상 빈 결과를 돌려주고 있었다 (2026-08-05 발견).
+                            # 검색 결과에는 인플루언서 표식이 없으므로 여기서는 셀 수 없다.
+                            # 셀 수 없는 값을 0으로 두고 '인플루언서 없음'이라 말하면 안 된다
+                            # → 아래 경쟁 강도 판단은 실측되는 고점자 수(70점 이상)로 한다.
+                            if getattr(blog, "is_influencer", False):
                                 influencer_count += 1
 
                             # 포스트 분석 데이터 수집

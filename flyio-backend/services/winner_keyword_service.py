@@ -273,9 +273,10 @@ class WinnerKeywordService:
         elif score_gap >= 5:
             reasons.append(f"상위 10위 진입 점수 충분")
 
-        if influencer_count == 0:
-            reasons.append("상위권에 인플루언서 없음")
-        elif influencer_count == 1:
+        # 인플루언서 수는 검색 결과에서 측정할 수 없다(표식이 없음).
+        # 그래서 0이라고 '인플루언서가 없다'고 말하면 안 된다 — 안 센 것과 없는 것은 다르다.
+        # 실제로 센 값이 있을 때만 근거로 쓴다.
+        if influencer_count == 1:
             reasons.append("상위권 인플루언서 1명뿐")
 
         if high_scorer_count <= 2:
