@@ -340,14 +340,14 @@ export default function BlogIndexHistoryChart({ blogId }: { blogId: string }) {
 
           {/* 선이 두 종류라 색만으로 구분하게 두지 않는다 */}
           {hasLegacyInView && (
-            <div className="mb-1 flex items-center gap-4 text-xs text-gray-500">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-4 h-0.5 rounded" style={{ background: LINE }} />
+            <div className="mb-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+              <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                <span className="w-4 h-0.5 rounded shrink-0" style={{ background: LINE }} />
                 현재 채점 기준
               </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full" style={{ background: NEUTRAL }} />
-                이전 기준 (지금 점수와 직접 비교 불가)
+              <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: NEUTRAL }} />
+                이전 기준 (비교 불가)
               </span>
             </div>
           )}
