@@ -33,12 +33,22 @@ async def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--categories", type=int, default=None,
                     help="이번 실행에서 갱신할 카테고리 수")
+    ap.add_argument("--category", type=str, default=None,
+                    help="이 주제 하나만 강제로 측정 (재시도 대기와 무관)")
     args = ap.parse_args()
 
     if args.categories:
         os.environ["WINNER_PRECOMPUTE_CATEGORIES"] = str(args.categories)
 
-    from services.winner_keyword_precompute import run_once
+    from services.winner_keyword_precompute import run_once, precompute_category
+
+    if args.category:
+        # 이 경로는 run_once 를 안 거치므로 테이블 생성을 직접 보장한다
+        from database.winner_keyword_cache_db import init_winner_cache_db
+        await asyncio.to_thread(init_winner_cache_db)
+        stored = await precompute_category(args.category)
+        logger.info(f"결과: {{'category': '{args.category}', 'stored': {stored}}}")
+        return 0
 
     result = await run_once()
     logger.info(f"결과: {result}")

@@ -242,6 +242,7 @@ async def get_cache_status():
 @router.post("/precompute-now")
 async def trigger_precompute(
     categories: int = Query(1, ge=1, le=3, description="이번에 갱신할 카테고리 수"),
+    category: Optional[str] = Query(None, description="이 주제 하나만 강제 측정"),
 ):
     """측정을 지금 한 번 돌린다 (별도 프로세스). 운영/검증용.
 
@@ -252,8 +253,11 @@ async def trigger_precompute(
     import sys as _sys
 
     root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-    cmd = [_sys.executable, "-m", "scripts.precompute_winner_keywords",
-           "--categories", str(categories)]
+    cmd = [_sys.executable, "-m", "scripts.precompute_winner_keywords"]
+    if category:
+        cmd += ["--category", category]
+    else:
+        cmd += ["--categories", str(categories)]
     try:
         proc = await _asyncio.create_subprocess_exec(
             *cmd, cwd=root,
@@ -261,7 +265,8 @@ async def trigger_precompute(
             stderr=_asyncio.subprocess.DEVNULL,
             env={**_os.environ, "SCHEDULERS_DISABLED": "1"},
         )
-        return {"started": True, "pid": proc.pid, "categories": categories,
+        return {"started": True, "pid": proc.pid,
+                "target": category or f"{categories}개 자동 선택",
                 "note": "진행 상황은 /cache-status 의 runs 로 확인"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"실행 실패: {e}")
