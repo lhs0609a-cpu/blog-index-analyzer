@@ -809,7 +809,7 @@ export default function Home() {
                   {[
                     '블로그 분석 2회/일',
                     '키워드 검색 8회/일',
-                    'AI 도구 5회/일',
+                    '지수 변화 추이 기록',
                     '기본 분석 리포트'
                   ].map((item, i) => (
                     <li key={i} className="flex items-center gap-2 text-gray-600">
@@ -851,7 +851,7 @@ export default function Home() {
                   {[
                     '블로그 분석 무제한',
                     '키워드 검색 200회/일',
-                    'AI 도구 무제한',
+                    '지수 변화 추이 + 발행 활동 분석',
                     '상세 분석 리포트',
                     '1위 가능 키워드 5개/일',
                     '순위 추적 & 알림',
