@@ -152,3 +152,8 @@ openapi*.json
 # 브라우저 자동화 세션 (로그인 쿠키 포함 — 절대 커밋 금지)
 _pw_naver_profile/
 _pw_naver_p2/
+
+# 자동발행 에이전트 — 살아있는 네이버/구글 세션. 절대 커밋 금지
+agent/_profile_*/
+agent/_state_*.json
+agent/_smoke_*.json
