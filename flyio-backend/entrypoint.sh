@@ -20,14 +20,29 @@ python -c "from database.learning_db import init_learning_tables; init_learning_
 # 스파이크/무응답. worker 를 nice 19 로 낮추면 커널 CFS 가 API(우선순위 0, login 은 CPU
 # 수ms)에 슬라이스를 우선 배분 → login 즉시 응답, worker 는 남는 CPU 로 마이닝(약간 느려짐).
 # ──────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────
+# 판정 전용 워커 (3번째 프로세스, nice 5) — 자세한 이유는 verdict_worker.py 상단.
+# 요약: 판정 워치독이 크론과 같은 프로세스에 있으면 2초 틱이 100초 넘게 밀린다
+# (2026-08-13 실측 225초 중 115초가 큐 대기). 별도 GIL + API 와 크론 사이 우선순위.
+# 머신은 그대로라 요금 변화 없음.
+# ──────────────────────────────────────────────────────────────────────────
+# 세 프로세스 모두가 알아야 한다 — app/scheduler 는 이걸 보고 판정 워치독을 **안** 켠다
+# (같은 job 을 둘이 claim 하면 안 된다).
+export KWV_DEDICATED=1
+
+echo "Starting keyword-verdict worker process (nice 5)..."
+ROLE=verdict nice -n 5 python verdict_worker.py &
+VERDICT_PID=$!
+echo "Keyword-verdict worker started (PID=$VERDICT_PID)"
+
 echo "Starting scheduler worker process (internal :8001, nice 19)..."
 SCHEDULERS_DISABLED=0 ROLE=worker nice -n 19 uvicorn main:app \
   --host 127.0.0.1 --port 8001 --log-level warning &
 WORKER_PID=$!
 echo "Scheduler worker started (PID=$WORKER_PID)"
 
-# API(PID 1) 종료 시 worker 도 함께 정리.
-trap 'kill "$WORKER_PID" 2>/dev/null || true' EXIT
+# API(PID 1) 종료 시 worker 들도 함께 정리.
+trap 'kill "$WORKER_PID" "$VERDICT_PID" 2>/dev/null || true' EXIT
 
 # API 프로세스 (public) — 스케줄러 OFF. PID 1 (fly SIGTERM 수신).
 exec env SCHEDULERS_DISABLED=1 ROLE=app uvicorn main:app \

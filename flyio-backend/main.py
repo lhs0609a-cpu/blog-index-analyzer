@@ -310,13 +310,18 @@ async def lifespan(app: FastAPI):
             logger.warning(f"⚠️ Seed-explode watchdog failed to start: {e}")
 
         # 키워드 판정 STAGE2 워치독 — 사용자 대기형이라 2초 틱(seed-explode 20초와 다름).
-        # 경쟁자 11개 채점을 worker(nice 19)에서 돌려 API 프로세스를 보호한다.
-        try:
-            from services.keyword_verdict_queue import watchdog_loop as kwv_watchdog
-            asyncio.create_task(kwv_watchdog())
-            logger.info("✅ Keyword-verdict queue watchdog started (every 2s)")
-        except Exception as e:
-            logger.warning(f"⚠️ Keyword-verdict watchdog failed to start: {e}")
+        # 기본은 **전용 프로세스**(verdict_worker.py, nice 5)가 돌린다. 여기서 또 돌리면
+        # 두 프로세스가 같은 job 을 다투므로(claim 은 단일 워커 전제) 켜지 않는다.
+        # KWV_DEDICATED 가 없으면(로컬·구버전 배포) 예전처럼 이 프로세스가 맡는다.
+        if os.environ.get("KWV_DEDICATED") == "1":
+            logger.info("↪️ Keyword-verdict watchdog: 전용 프로세스가 담당 (여기선 skip)")
+        else:
+            try:
+                from services.keyword_verdict_queue import watchdog_loop as kwv_watchdog
+                asyncio.create_task(kwv_watchdog())
+                logger.info("✅ Keyword-verdict queue watchdog started (every 2s)")
+            except Exception as e:
+                logger.warning(f"⚠️ Keyword-verdict watchdog failed to start: {e}")
 
     yield
 

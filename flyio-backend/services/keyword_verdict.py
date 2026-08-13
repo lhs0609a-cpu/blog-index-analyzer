@@ -57,7 +57,9 @@ logger = logging.getLogger(__name__)
 PAGE1_CUTOFF = 10          # 1페이지 = 상위 10위
 SERP_LIMIT = 20            # 조회 범위 (2페이지) — 11~30위 색인 신호까지 본다
 SERP_TTL = 6 * 3600        # 공용 SERP 캐시 6시간
-SCORE_CONCURRENCY = 5      # 경쟁자 동시 채점 (worker nice19, 봇탐지 회피)
+# 경쟁자 동시 채점. 5 는 nice 19 워커에 얹혀 있을 때의 보수치였다. 전용 프로세스(nice 5)로
+# 옮긴 뒤로는 8 이 안전하다 — 대부분 네이버 응답 대기(I/O)라 CPU 가 아니라 봇탐지가 상한이다.
+SCORE_CONCURRENCY = int(os.environ.get("KWV_SCORE_CONCURRENCY", "8"))
 # 프로덕션 worker 는 nice 19 + 공유 2vCPU 라 로컬(4.3s)보다 훨씬 느리다. 20초로 잘랐더니
 # 10명 중 4명이 미채점으로 남아 confidence 가 medium 으로 떨어졌다(2026-08-13 실측).
 PER_BLOG_TIMEOUT = 32.0    # 경쟁자 1개 채점 상한
@@ -79,6 +81,11 @@ _DATA_DIR = os.environ.get("DATA_DIR", "/data")
 _SERP_DIR = os.path.join(_DATA_DIR, "_kwverdict_serp")
 
 _MEM_SERP: Dict[str, Dict] = {}   # 프로세스 내 캐시 (app/worker 각각)
+
+# 경쟁자 점수 캐시 — 같은 주제 키워드들은 1페이지 점유자가 대부분 겹친다.
+_SCORE_DIR = os.path.join(_DATA_DIR, "_kwverdict_scores")
+_MEM_SCORE: Dict[str, Dict] = {}
+SCORE_TTL = float(os.environ.get("KWV_SCORE_TTL", str(6 * 3600)))
 
 DISCLAIMER = (
     "판정은 이 키워드의 실제 네이버 블로그탭 1페이지를 조회해, 그 자리에 앉아 있는 "
@@ -518,9 +525,52 @@ async def stage1_facts(blog_id: str, keyword: str, use_cache: bool = True,
 # 3. STAGE 2 — 컷라인 층 (판정)
 # ══════════════════════════════════════════════════════════════════
 
-async def _score_blog(blog_id: str) -> Optional[Dict]:
-    """블로그 1개를 v5 채점기로 채점 (analyze_blog 캐시 재사용). 실패 시 None."""
+def _score_cache_get(blog_id: str) -> Optional[Dict]:
+    now = time.time()
+    hit = _MEM_SCORE.get(blog_id)
+    if hit and now - hit.get("_at", 0) < SCORE_TTL:
+        return hit
+    try:
+        with open(os.path.join(_SCORE_DIR, f"{blog_id}.json"), "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if now - float(data.get("_at") or 0) < SCORE_TTL:
+            _MEM_SCORE[blog_id] = data
+            return data
+    except Exception:
+        pass
+    return None
+
+
+def _score_cache_set(blog_id: str, data: Dict) -> None:
+    rec = {**data, "_at": time.time()}
+    _MEM_SCORE[blog_id] = rec
+    try:
+        os.makedirs(_SCORE_DIR, exist_ok=True)
+        tmp = os.path.join(_SCORE_DIR, f"{blog_id}.json.tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(rec, f, ensure_ascii=False)
+        os.replace(tmp, os.path.join(_SCORE_DIR, f"{blog_id}.json"))
+    except Exception:
+        pass
+
+
+async def _score_blog(blog_id: str, use_cache: bool = True) -> Optional[Dict]:
+    """블로그 1개를 v5 채점기로 채점 (analyze_blog 캐시 재사용). 실패 시 None.
+
+    **디스크 캐시를 두는 이유**: 채점이 판정에서 가장 무거운 일인데(블로그당 최대 32초),
+    같은 주제의 키워드들은 1페이지 점유자가 대부분 겹친다 — 한 번 잰 경쟁자를 6시간 안에
+    다시 재는 건 순수 낭비다. analyze_blog 의 메모리 캐시는 1시간·프로세스 로컬이라
+    재배포하면 날아가고 프로세스 간에도 공유되지 않는다.
+
+    use_cache=False 는 **내 블로그**용이다. 남의 점수는 6시간 묵어도 되지만, 글을 막
+    발행하고 다시 재보는 사람에게 어제 점수를 보여주면 안 된다.
+    """
     from routers.blogs import analyze_blog
+
+    if use_cache:
+        hit = _score_cache_get(blog_id)
+        if hit:
+            return {k: v for k, v in hit.items() if not k.startswith("_")}
     try:
         res = await asyncio.wait_for(analyze_blog(blog_id), timeout=PER_BLOG_TIMEOUT)
     except asyncio.TimeoutError:
@@ -535,13 +585,15 @@ async def _score_blog(blog_id: str) -> Optional[Dict]:
     score = idx.get("total_score")
     if not score:  # 0 또는 None = 채점 실패로 본다(추정값을 만들지 않는다)
         return None
-    return {
+    out = {
         "blog_id": blog_id,
         "score": float(score),
         "level": idx.get("level"),
         "grade": idx.get("grade"),
         "total_posts": (res.get("stats") or {}).get("total_posts"),
     }
+    _score_cache_set(blog_id, out)   # 실패는 캐시하지 않는다 — 다음엔 될 수도 있다
+    return out
 
 
 async def _measure_idle_days(blog_ids: List[str]) -> Dict[str, Optional[int]]:
@@ -800,10 +852,10 @@ async def stage2_deep(blog_id: str, keyword: str,
     # 화면에 추정치 대신 **실제 진척**을 줄 수 있으므로 하나 끝날 때마다 알린다.
     prog = {"done": 0, "total": 0}
 
-    async def _bounded(bid: str):
+    async def _bounded(bid: str, use_cache: bool = True):
         async with sem:
             try:
-                return await _score_blog(bid)
+                return await _score_blog(bid, use_cache=use_cache)
             finally:
                 prog["done"] += 1
                 if on_progress:
@@ -816,7 +868,7 @@ async def stage2_deep(blog_id: str, keyword: str,
     prog["total"] = len(targets) + 1   # 경쟁자 + 내 블로그
     scored_list, my, topical, ceiling, idle = await asyncio.gather(
         asyncio.gather(*[_bounded(b) for b in targets]),
-        _bounded(blog_id),
+        _bounded(blog_id, use_cache=False),   # 내 점수는 항상 새로 잰다
         _topical_fit(blog_id, keyword),
         _cached_ceiling(blog_id),
         _measure_idle_days(targets),
@@ -827,16 +879,24 @@ async def stage2_deep(blog_id: str, keyword: str,
     # 1차에서 타임아웃난 경쟁자 재시도 — analyze_blog 는 타임아웃 뒤에도 내부적으로
     # 캐시를 채우는 경우가 많아(실측: 15s 타임아웃 → 재호출 4.3s→0.1s) 두 번째 시도는
     # 대부분 즉답이다. 컷라인은 채점된 경쟁자 수가 곧 신뢰도라 회수 가치가 크다.
+    # 재시도는 **병렬**로 — 순차로 돌리면 6개 × 32초 = 3분이 통째로 사용자 대기에 붙는다
+    # (2026-08-13: 6/10 만 채점된 판정이 360초 걸린 원인). 내 블로그 재시도도 같이 태운다.
     missing = [b for b in targets if b not in by_id][:RETRY_MISSING]
-    for bid in missing:
-        s = await _score_blog(bid)
-        if s:
-            by_id[bid] = s
-
-    # 내 블로그도 같은 이유로 실패할 수 있고, 실패하면 **판정 자체가 unknown 이 된다**
-    # (경쟁자 10명을 다 채점해 놓고 내 점수가 없어서 버리는 낭비 — 2026-08-13 실측).
-    if my is None:
-        my = await _score_blog(blog_id)
+    retry_my = my is None
+    if missing or retry_my:
+        # 재시도도 진행률에 센다 — 안 세면 화면이 11/11 에서 멈춘 채 몇십 초를 더 돈다.
+        prog["total"] += len(missing) + (1 if retry_my else 0)
+        again = await asyncio.gather(
+            asyncio.gather(*[_bounded(b) for b in missing]),
+            _bounded(blog_id, use_cache=False) if retry_my else asyncio.sleep(0),
+        )
+        for s in (again[0] or []):
+            if s:
+                by_id[s["blog_id"]] = s
+        # 내 블로그도 같은 이유로 실패할 수 있고, 실패하면 **판정 자체가 unknown 이 된다**
+        # (경쟁자 10명을 다 채점해 놓고 내 점수가 없어서 버리는 낭비 — 2026-08-13 실측).
+        if retry_my:
+            my = again[1]
 
     competitors = []
     for r in serp_rows_all[:PAGE1_CUTOFF]:

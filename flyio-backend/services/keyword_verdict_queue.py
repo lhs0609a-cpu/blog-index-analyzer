@@ -137,15 +137,22 @@ def enqueue(blog_id: str, keyword: str, user_id: Optional[int] = None) -> Dict:
 
 
 def has_pending() -> bool:
-    """아직 워치독이 집지 않은 사용자 job 이 있는가 (우선순위 게이트 probe).
+    """사람이 지금 결과를 기다리는 job 이 있는가 (우선순위 게이트 probe).
 
-    STALE_AFTER 를 넘긴 것은 세지 않는다 — 워커가 죽어 남은 좀비 job 이 크론을 영구히
+    queued 뿐 아니라 **running 도 센다**. 판정은 전용 프로세스에서 돌기 때문에
+    priority_gate 의 프로세스 로컬 홀더가 크론 쪽(스케줄러 프로세스)에는 안 보인다.
+    크론이 양보해야 하는 건 '이 머신에서 사람이 기다리는 동안' 이므로 디스크에 남는
+    job 상태가 유일한 공용 신호다.
+
+    STALE_AFTER 를 넘긴 것은 세지 않는다 — 죽어서 남은 좀비 job 이 크론을 영구히
     굶기면 안 된다(그 좀비는 _sweep 이 따로 회수한다).
     """
     now = time.time()
-    return any(j.get("status") == "queued"
-               and now - float(j.get("requested_at") or 0) < STALE_AFTER
-               for j in _all_jobs())
+    return any(
+        j.get("status") in ("queued", "running")
+        and now - float(j.get("claimed_at") or j.get("requested_at") or 0) < STALE_AFTER
+        for j in _all_jobs()
+    )
 
 
 def get_job(job_id: str) -> Optional[Dict]:
