@@ -34,7 +34,9 @@ _DATA_DIR = os.environ.get("DATA_DIR", "/data")
 _JOB_DIR = os.path.join(_DATA_DIR, "_kwverdict_jobs")
 
 WATCHDOG_EVERY = float(os.environ.get("KWV_WATCHDOG_EVERY", "2"))
-STAGE1_TIMEOUT = float(os.environ.get("KWV_STAGE1_TIMEOUT", "90"))    # SERP 조회
+# SERP 조회. 프로덕션 worker 는 브라우저를 띄워야 하고(HTTP 는 Fly IP 에서 빈 페이지),
+# 크론과 CPU 를 나눠 쓰므로 90초로는 모자랐다(2026-08-13 timeout_at_serp 실측).
+STAGE1_TIMEOUT = float(os.environ.get("KWV_STAGE1_TIMEOUT", "210"))
 # 프로덕션 실측(2026-08-13): 캐시 없는 첫 조회가 249초(worker 는 nice 19 + 공유 2vCPU).
 # 캐시가 도는 두 번째 조회부터는 수 초. 첫 조회를 자르면 아무 결과도 못 주므로 넉넉히 둔다.
 STAGE2_TIMEOUT = float(os.environ.get("KWV_STAGE2_TIMEOUT", "330"))   # 경쟁자 채점

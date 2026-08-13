@@ -63,6 +63,7 @@ SCORE_CONCURRENCY = 5      # 경쟁자 동시 채점 (worker nice19, 봇탐지 �
 PER_BLOG_TIMEOUT = 32.0    # 경쟁자 1개 채점 상한
 RETRY_MISSING = 6          # 1차에서 못 잰 경쟁자 재시도 상한 (캐시가 채워져 대부분 즉답)
 SERP_PAGE_TIMEOUT = 12.0
+PLAYWRIGHT_TIMEOUT = 75.0  # 브라우저 기동~파싱 전체 상한 (매달림 방지)
 
 _DATA_DIR = os.environ.get("DATA_DIR", "/data")
 _SERP_DIR = os.path.join(_DATA_DIR, "_kwverdict_serp")
@@ -207,19 +208,57 @@ async def _fetch_serp_playwright(keyword: str, limit: int) -> List[Dict]:
     셀렉터(.api_subject_bx)를 쓰고 스크롤을 30회 돌아 키워드당 2분이 넘는다. 여기서는
     상위 20개만 필요하고, 그건 첫 렌더에 이미 들어 있다.
     """
+    return await _playwright_serp_guarded(keyword, limit)
+
+
+async def _playwright_serp_guarded(keyword: str, limit: int) -> List[Dict]:
+    """전용 브라우저로 조회 + 전체 하드 타임아웃."""
+    try:
+        return await asyncio.wait_for(_playwright_serp_inner(keyword, limit),
+                                      timeout=PLAYWRIGHT_TIMEOUT)
+    except asyncio.TimeoutError:
+        logger.warning(f"[kwv] playwright serp hard-timeout {keyword!r}")
+        return []
+    except Exception as e:
+        logger.warning(f"[kwv] playwright serp error {keyword!r}: {e}")
+        return []
+
+
+async def _playwright_serp_inner(keyword: str, limit: int) -> List[Dict]:
     from urllib.parse import quote
-    from services.blog_scraper import get_browser
+    from playwright.async_api import async_playwright
 
     url = f"https://search.naver.com/search.naver?ssc=tab.blog.all&query={quote(keyword)}&start=1"
-    context = None
+    pw = browser = context = None
+    t0 = time.time()
     try:
-        browser = await get_browser()
+        # ⚠️ services.blog_scraper.get_browser() 의 공용 인스턴스를 쓰지 않는다.
+        #   그 브라우저는 다른 크론(winner-keywords 등)과 공유되고 `--single-process` +
+        #   힙 256MB 로 떠 있어, 실측에서 "Target page, context or browser has been closed"
+        #   가 나거나 컨텍스트 생성 단계에서 매달렸다(stage1 210초 타임아웃).
+        #   여기서는 전용 인스턴스를 띄우고 즉시 닫는다 — 격리가 속도보다 중요하다.
+        pw = await async_playwright().start()
+        browser = await pw.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu",
+                  "--disable-extensions", "--mute-audio"],
+        )
         context = await browser.new_context(
             viewport={"width": 1280, "height": 900},
             user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                         "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"),
             locale="ko-KR",
         )
+        # 이미지·폰트·미디어 차단. 우리가 필요한 건 링크 목록 DOM 뿐인데, SERP 는 썸네일이
+        # 수십 개라 worker(nice 19, 공유 2vCPU)에서는 이게 시간을 지배한다
+        # (2026-08-13 실측: 차단 없이 stage1 이 90초 타임아웃).
+        async def _block(route, request):
+            if request.resource_type in ("image", "font", "media", "stylesheet"):
+                await route.abort()
+            else:
+                await route.continue_()
+        await context.route("**/*", _block)
+
         page = await context.new_page()
         await page.goto(url, wait_until="domcontentloaded", timeout=25000)
         try:
@@ -228,17 +267,25 @@ async def _fetch_serp_playwright(keyword: str, limit: int) -> List[Dict]:
         except Exception:
             logger.warning(f"[kwv] playwright: list container not found {keyword!r}")
         rows, mode = _parse_serp_html(await page.content())
+        logger.warning(f"[kwv] playwright serp {keyword!r}: {len(rows)} rows mode={mode} "
+                       f"in {round(time.time() - t0, 1)}s")
         if mode != "list":
-            logger.warning(f"[kwv] playwright parse fell back to {mode} for {keyword!r}")
             return []
         return rows[:limit]
     except Exception as e:
-        logger.warning(f"[kwv] playwright serp failed {keyword!r}: {e}")
+        logger.warning(f"[kwv] playwright serp failed {keyword!r} "
+                       f"after {round(time.time() - t0, 1)}s: {e}")
         return []
     finally:
-        if context:
+        for closer in (context, browser):
+            if closer:
+                try:
+                    await closer.close()
+                except Exception:
+                    pass
+        if pw:
             try:
-                await context.close()
+                await pw.stop()
             except Exception:
                 pass
 
@@ -675,6 +722,11 @@ async def stage2_deep(blog_id: str, keyword: str,
         s = await _score_blog(bid)
         if s:
             by_id[bid] = s
+
+    # 내 블로그도 같은 이유로 실패할 수 있고, 실패하면 **판정 자체가 unknown 이 된다**
+    # (경쟁자 10명을 다 채점해 놓고 내 점수가 없어서 버리는 낭비 — 2026-08-13 실측).
+    if my is None:
+        my = await _score_blog(blog_id)
 
     competitors = []
     for r in serp_rows_all[:PAGE1_CUTOFF]:
