@@ -34,6 +34,14 @@ const navItems = [
     description: '40개 이상의 지표로 블로그 분석'
   },
   {
+    label: '키워드 판정',
+    href: '/keyword-check',
+    icon: Target,
+    badge: 'NEW',
+    badgeColor: 'bg-emerald-500 text-white',
+    description: '이 키워드로 1페이지 가능한지 실제 검색결과로 판정'
+  },
+  {
     label: '광고 최적화',
     href: '/ad-optimizer',
     icon: Target,

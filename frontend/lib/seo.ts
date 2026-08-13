@@ -97,6 +97,7 @@ export const PUBLIC_ROUTES: Array<{
   { path: '/', changeFrequency: 'daily', priority: 1.0 },
   { path: '/analyze', changeFrequency: 'weekly', priority: 0.9 },
   { path: '/keyword-search', changeFrequency: 'weekly', priority: 0.9 },
+  { path: '/keyword-check', changeFrequency: 'weekly', priority: 0.9 },
   { path: '/analyze-post', changeFrequency: 'weekly', priority: 0.8 },
   { path: '/blue-ocean', changeFrequency: 'weekly', priority: 0.7 },
   { path: '/profitable-keywords', changeFrequency: 'weekly', priority: 0.7 },
