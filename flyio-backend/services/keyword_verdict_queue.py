@@ -209,8 +209,15 @@ async def _run_job(job: Dict) -> None:
         _write(cur)
         _beat(f"scoring:{job_id}")
 
+        def _on_progress(done: int, total: int) -> None:
+            """채점 진척을 job 파일에 실어 화면이 실제 숫자를 쓰게 한다(최대 11회 write)."""
+            cur = _read(job_id) or job
+            cur["progress"] = {"done": done, "total": total, "at": time.time()}
+            _write(cur)
+
         result = await asyncio.wait_for(
-            stage2_deep(job["blog_id"], job["keyword"], facts=facts),
+            stage2_deep(job["blog_id"], job["keyword"], facts=facts,
+                        on_progress=_on_progress),
             timeout=STAGE2_TIMEOUT)
         cur = _read(job_id) or job
         cur.update(status="done", done_at=time.time(), result=result, error=None)

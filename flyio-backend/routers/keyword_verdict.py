@@ -102,6 +102,8 @@ async def keyword_deep_result(job_id: str):
         # 사실(1단)은 판정(2단)보다 먼저 실린다 — 화면을 먼저 채우라고 따로 내보낸다.
         "facts": job.get("facts"),
         "phase": job.get("phase"),
+        # 채점 단계의 실제 진척 {done,total} — 화면 진행률이 추정치만 쓰지 않게.
+        "progress": job.get("progress"),
         "result": job.get("result"),
         "waited_seconds": round((job.get("done_at") or time.time())
                                 - float(job.get("requested_at") or 0), 1),

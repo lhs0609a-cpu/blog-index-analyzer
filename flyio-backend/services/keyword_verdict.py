@@ -49,7 +49,7 @@ import os
 import re
 import statistics
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -754,11 +754,15 @@ def compute_verdict(*, my: Optional[Dict], competitors: List[Dict], volume: int,
 
 
 async def stage2_deep(blog_id: str, keyword: str,
-                      facts: Optional[Dict] = None) -> Dict:
+                      facts: Optional[Dict] = None,
+                      on_progress: Optional[Callable[[int, int], None]] = None) -> Dict:
     """전체 판정 — SERP + 경쟁자/내 블로그 채점 + 주제적합도 + 확률.
 
     무거우므로 worker 프로세스에서 실행한다(routers/keyword_verdict.py 가 큐로 넘긴다).
     facts 를 넘기면 stage1 을 다시 돌지 않는다(워커가 사실을 먼저 발행할 때 씀).
+
+    on_progress(done, total): 블로그 하나를 채점할 때마다 호출. 사용자가 3~6분을 기다리는
+    화면에 추정치가 아니라 실제 진척을 보여주기 위한 것이다(큐가 job 파일에 실어 준다).
     """
     t0 = time.time()
     blog_id = (blog_id or "").strip()
@@ -792,12 +796,24 @@ async def stage2_deep(blog_id: str, keyword: str,
 
     # 경쟁자 + 내 블로그 채점 (동시성 제한)
     sem = asyncio.Semaphore(SCORE_CONCURRENCY)
+    # 채점은 이 판정에서 가장 길고 가장 들쭉날쭉한 구간이다(실측 30~180초). 여기만은
+    # 화면에 추정치 대신 **실제 진척**을 줄 수 있으므로 하나 끝날 때마다 알린다.
+    prog = {"done": 0, "total": 0}
 
     async def _bounded(bid: str):
         async with sem:
-            return await _score_blog(bid)
+            try:
+                return await _score_blog(bid)
+            finally:
+                prog["done"] += 1
+                if on_progress:
+                    try:
+                        on_progress(prog["done"], prog["total"])
+                    except Exception:
+                        pass   # 진행률 보고가 판정을 죽이면 안 된다
 
     targets = [r["blog_id"] for r in serp_rows_all[:PAGE1_CUTOFF]]
+    prog["total"] = len(targets) + 1   # 경쟁자 + 내 블로그
     scored_list, my, topical, ceiling, idle = await asyncio.gather(
         asyncio.gather(*[_bounded(b) for b in targets]),
         _bounded(blog_id),

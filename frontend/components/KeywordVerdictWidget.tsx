@@ -39,6 +39,67 @@ const CONFIDENCE_KO: Record<string, string> = { high: '높음', medium: '보통'
 // SERP 를 못 가져오면 서버는 두 가지 모습으로 끝난다 — 단계 타임아웃(status=error)이거나
 // 조회 실패(status=done + verdict=unknown). 원인이 같은데 화면 문구가 갈리면 사용자는
 // 다른 고장으로 읽는다(2026-08-13 실측). 같은 문장으로 합친다.
+// 판정은 짧아도 1분, 처음 보는 키워드는 5분 넘게 걸린다. 그 시간을 스피너 하나로만
+// 버티게 하면 사용자는 "멈췄나?" 로 읽는다. 서버가 알려주는 단계(queued→serp→scoring)에
+// 단계별 예상치를 붙여 진행률과 남은 시간을 낸다. est 는 프로덕션 실측 기반이다
+// (2026-08-13: 큐 87~111초 / SERP 51~87초 / 채점 30~180초).
+const PHASE_PLAN = [
+  { key: 'queued', label: '앞선 요청이 끝나기를 기다리는 중', est: 75 },
+  { key: 'serp', label: '네이버 블로그탭에서 이 키워드의 실제 1페이지를 가져오는 중', est: 90 },
+  { key: 'scoring', label: '1페이지 블로그 10개를 내 블로그와 같은 기준으로 채점하는 중', est: 120 },
+] as const
+const TOTAL_EST = PHASE_PLAN.reduce((s, p) => s + p.est, 0)
+
+function fmtSec(sec: number): string {
+  const r = Math.max(0, Math.round(sec))
+  return r >= 60 ? `${Math.floor(r / 60)}분 ${String(r % 60).padStart(2, '0')}초` : `${r}초`
+}
+
+function progressOf(
+  jobPhase: string | null,
+  phaseAt: number,
+  now: number,
+  scored?: { done: number; total: number } | null,
+) {
+  const i = Math.max(0, PHASE_PLAN.findIndex((p) => p.key === (jobPhase ?? 'queued')))
+  const cur = PHASE_PLAN[i]
+  const tIn = Math.max(0, (now - phaseAt) / 1000)
+  const before = PHASE_PLAN.slice(0, i).reduce((s, p) => s + p.est, 0)
+  const later = PHASE_PLAN.slice(i + 1).reduce((s, p) => s + p.est, 0)
+
+  // 채점 단계는 서버가 실제 진척(done/total)을 준다 — 추정치보다 이게 먼저다.
+  // 남은 시간도 지금까지의 실제 속도로 낸다.
+  if (cur.key === 'scoring' && scored && scored.total > 0 && scored.done > 0) {
+    const frac = Math.min(1, scored.done / scored.total)
+    const remainReal = (tIn / scored.done) * Math.max(0, scored.total - scored.done)
+    return {
+      percent: Math.min(99, Math.max(2, ((before + cur.est * frac * 0.98) / TOTAL_EST) * 100)),
+      remain: remainReal,
+      overrun: false,
+      atLeast: false,
+      label: `1페이지 블로그를 내 블로그와 같은 기준으로 채점하는 중 (${scored.done}/${scored.total})`,
+      step: i + 1,
+    }
+  }
+
+  // 예상을 넘겨도 바를 100% 로 채우지 않는다 — 끝나지도 않았는데 다 됐다고 말하는 게
+  // 더 나쁜 거짓말이다. 마지막 5% 는 점근적으로만 줄어든다.
+  const inFrac = tIn <= cur.est
+    ? (tIn / cur.est) * 0.95
+    : 0.95 + 0.05 * (1 - Math.exp(-(tIn - cur.est) / cur.est))
+  const remain = Math.max(0, cur.est - tIn) + later
+  return {
+    percent: Math.min(99, Math.max(2, ((before + cur.est * inFrac) / TOTAL_EST) * 100)),
+    remain,
+    overrun: remain <= 0,
+    // 이 단계가 예상을 넘겼는데 남은 시간을 그대로 두면 카운트다운이 멈춘 것처럼 보인다.
+    // 멈춘 게 아니라 하한이라는 뜻이므로 '이상' 을 붙여 말한다.
+    atLeast: tIn > cur.est,
+    label: cur.label,
+    step: i + 1,
+  }
+}
+
 const SERP_FAIL_MSG =
   '이 키워드의 네이버 블로그탭 1페이지를 가져오지 못했습니다. 판정은 실제 1페이지를 ' +
   '읽어야만 나오므로 결과를 내지 않았습니다. 잠시 후 다시 시도해 주세요.'
@@ -68,6 +129,12 @@ export default function KeywordVerdictWidget({
   const [errMsg, setErrMsg] = useState<string | null>(null)
   const [usedFree, setUsedFree] = useState(false)
   const [accuracy, setAccuracy] = useState<VerdictAccuracy | null>(null)
+  // 진행률용 — 서버가 준 단계와 그 단계가 시작된 시각, 그리고 1초마다 도는 시계.
+  const [jobPhase, setJobPhase] = useState<string | null>(null)
+  const [phaseAt, setPhaseAt] = useState(0)
+  const [startedAt, setStartedAt] = useState(0)
+  const [nowMs, setNowMs] = useState(0)
+  const [scored, setScored] = useState<{ done: number; total: number } | null>(null)
 
   useEffect(() => {
     getVerdictAccuracy().then(setAccuracy).catch(() => {})
@@ -87,12 +154,22 @@ export default function KeywordVerdictWidget({
   const locked = isFreeUser && usedFree
   const busy = phase === 'facts' || phase === 'deep'
 
+  // 폴링은 2.5초 간격이라 그것만으로는 카운트다운이 뚝뚝 끊긴다. 진행 중에만 1초 시계를 돈다.
+  useEffect(() => {
+    if (!busy) return
+    setNowMs(Date.now())
+    const t = setInterval(() => setNowMs(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [busy])
+
   const run = async () => {
     const kw = keyword.trim()
     if (!effectiveBlogId) { toast.error('블로그 ID를 입력하세요'); return }
     if (!kw) { toast.error('키워드를 입력하세요'); return }
     if (locked || busy) return
 
+    const t0 = Date.now()
+    setStartedAt(t0); setPhaseAt(t0); setNowMs(t0); setJobPhase('queued'); setScored(null)
     setFacts(null); setDeep(null); setErrMsg(null); setPhase('facts')
     try {
       if (isFreeUser) setUsedFree(true)
@@ -110,9 +187,14 @@ export default function KeywordVerdictWidget({
       // 2단: 워커가 SERP 조회 + 경쟁자 채점. 사실이 먼저 실려 온다.
       setPhase('deep')
       const job = await startKeywordDeep(effectiveBlogId, kw)
+      let seenPhase = 'queued'
       for (let i = 0; i < 140; i++) {
         await new Promise((r) => setTimeout(r, i === 0 ? 3000 : 2500))
         const s = await getKeywordDeep(job.job_id)
+        // 단계가 바뀐 순간을 기억해야 "이 단계에서 얼마나 지났나"를 셀 수 있다.
+        const ph = s.status === 'running' ? (s.phase || 'serp') : s.status === 'queued' ? 'queued' : null
+        if (ph && ph !== seenPhase) { seenPhase = ph; setJobPhase(ph); setPhaseAt(Date.now()) }
+        if (s.progress?.total) setScored({ done: s.progress.done, total: s.progress.total })
         if (s.facts?.ok) setFacts(s.facts)
         if (s.status === 'done' && s.result) {
           // SERP 를 못 읽어 판정이 비었으면 '판정 불가' 카드만 띄우지 않고 이유를 말한다.
@@ -258,16 +340,50 @@ export default function KeywordVerdictWidget({
         </div>
       )}
 
-      {/* ── 진행 중 ── */}
-      {(phase === 'facts' || phase === 'deep') && (
-        <div className="mt-4 flex items-center gap-2 text-sm text-gray-500 flex-wrap">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          {facts?.ok
-            ? '1페이지 블로그 10개를 내 블로그와 같은 기준으로 채점하는 중입니다…'
-            : '네이버 블로그탭에서 이 키워드의 실제 1페이지를 가져오는 중입니다…'}
-          <span className="text-gray-400">처음 보는 키워드는 몇 분 걸릴 수 있습니다</span>
-        </div>
-      )}
+      {/* ── 진행 중 (단계·진행률·남은 시간) ── */}
+      {busy && (() => {
+        const p = progressOf(jobPhase, phaseAt || nowMs, nowMs, scored)
+        const elapsed = startedAt ? (nowMs - startedAt) / 1000 : 0
+        return (
+          <div className="mt-4 p-4 rounded-xl bg-gray-50 border border-gray-200">
+            <div className="flex items-center gap-2 text-sm text-gray-700 flex-wrap">
+              <Loader2 className="w-4 h-4 animate-spin text-blue-500 shrink-0" />
+              <span className="text-xs font-semibold text-blue-600 shrink-0">
+                {p.step}/{PHASE_PLAN.length}단계
+              </span>
+              <span className="min-w-0">{p.label}…</span>
+              <span className="ml-auto text-base font-bold text-gray-800 tabular-nums shrink-0">
+                {Math.round(p.percent)}%
+              </span>
+            </div>
+
+            <div className="mt-2.5 h-2 rounded-full bg-gray-200 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-[width] duration-1000 ease-linear"
+                style={{ width: `${p.percent}%` }}
+              />
+            </div>
+
+            <div className="mt-2 flex items-center justify-between gap-3 text-xs text-gray-500 flex-wrap">
+              <span className="tabular-nums">
+                {p.overrun
+                  ? '예상보다 오래 걸리는 중입니다 — 결과가 나올 때까지 기다립니다'
+                  // 채점을 다 끝내도 못 잰 블로그 재시도·주제적합도가 남는다. 그 구간에서
+                  // "남은 0초" 를 띄우면 멈춘 것처럼 보이므로 마무리 중이라고 말한다.
+                  : p.remain < 5
+                    ? '마무리하는 중입니다'
+                    : `남은 시간 약 ${fmtSec(p.remain)}${p.atLeast ? ' 이상' : ''}`}
+              </span>
+              <span className="tabular-nums text-gray-400">{fmtSec(elapsed)} 경과</span>
+            </div>
+
+            <p className="mt-2 text-[11px] text-gray-400">
+              남은 시간은 예상치입니다. 처음 보는 키워드는 1페이지를 직접 열어 10개 블로그를
+              전부 채점하므로 몇 분 걸릴 수 있고, 같은 키워드를 다시 보면 훨씬 빠릅니다.
+            </p>
+          </div>
+        )
+      })()}
 
       {/* ── 판정 ── */}
       {v && !locked && phase === 'done' && (

@@ -625,6 +625,10 @@ export interface KeywordDeepJob {
   error: string | null
   /** 1단 사실. 2단 판정보다 먼저 실린다(화면을 먼저 채우라고). */
   facts?: KeywordFactsResponse | null
+  /** 워커가 지금 어느 단계인지: serp(1페이지 조회) → scoring(경쟁자 채점). 진행률 표시용. */
+  phase?: string | null
+  /** 채점 단계의 실제 진척 (블로그 done/total). 추정치 대신 이걸 쓴다. */
+  progress?: { done: number; total: number; at?: number } | null
   result: KeywordDeepResult | null
   waited_seconds?: number
 }
