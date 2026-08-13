@@ -23,6 +23,68 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+# ── 깨진 키워드 판정 ─────────────────────────────────────────
+# LLM 시드 생성이 반복 루프에 빠지면 이런 문자열이 나온다(프로덕션 실측):
+#   "어지럼증과 심리적 요인 치료법 연구 방법 기법 적용 연구 방법 기법 적용 연구 방법 기법 적용 …"
+#   "소아비타민영양소비타민전문가추천센터비용상담센터비용상담센터비용상담센터 …"
+#   "쿠팡판매자후기비법비교리뷰리뷰방법"
+# 이게 시드가 되면 그 원자(방법·비용·추천·센터…)가 앵커 토큰으로 합류해
+# 앵커 게이트가 사실상 아무 키워드나 통과시킨다 → 자기증식 오염 루프.
+# 검색량도 당연히 0 이라 광고로서도 가치가 없다.
+_DEGENERATE_MAX_LEN = 40          # 실검색어가 이보다 길 일은 사실상 없다
+_DEGENERATE_MIN_REPEAT = 3        # 같은 2글자 조각이 3회 이상 반복되면 깨진 것
+
+# ★조합 폭발 — 실제로 가장 흔한 오염 형태다(소잠 프로덕션 실측).
+#   "여드름치료비용자금추천후기비용후기상담" / "…비용후기전문" / "…비용정보" …
+#   같은 줄기에 아래 범용어를 사슬로 이어붙여 수천 개를 찍어낸다.
+#   앞에 도메인어(여드름·치료)가 붙어 있어 **관련성 점수는 100점**을 받는다 —
+#   그래서 seed-audit 이 "정상" 으로 통과시키고 있었다.
+#   사람은 이렇게 검색하지 않는다. 범용어가 3개 이상 이어지면 조합 산물로 본다.
+_JUNK_CHAIN_TOKENS = (
+    '비용', '자금', '추천', '후기', '정보', '상담', '전문', '비교', '방법',
+    '가격', '문의', '사이트', '업체', '순위', '리뷰', '비법', '사례',
+)
+_JUNK_CHAIN_MAX = 3               # 범용어가 이 수 이상이면 조합 폭발
+
+
+def is_degenerate_keyword(kw: str, *, max_len: int = _DEGENERATE_MAX_LEN) -> bool:
+    """LLM 반복 루프 산물 등 '실제 검색어일 수 없는' 문자열인지."""
+    s = (kw or "").strip()
+    if not s:
+        return True
+    if len(s) > max_len:
+        return True
+
+    # 2글자 조각의 반복 — 띄어쓰기 유무와 무관하게 잡는다
+    body = s.replace(" ", "")
+    if len(body) >= 8:
+        counts: Dict[str, int] = {}
+        for i in range(len(body) - 1):
+            piece = body[i:i + 2]
+            counts[piece] = counts.get(piece, 0) + 1
+            if counts[piece] >= _DEGENERATE_MIN_REPEAT:
+                return True
+
+    # 바로 붙은 반복 — "리뷰리뷰", "센터비용상담센터비용상담" 처럼 같은 조각이 연달아 나온다.
+    # 전역 반복 카운트를 낮추면 정상 키워드를 잡으므로, 인접 반복만 따로 본다.
+    for n in range(2, 7):
+        for i in range(len(body) - 2 * n + 1):
+            if body[i:i + n] == body[i + n:i + 2 * n]:
+                return True
+
+    # 조합 폭발 — 범용어를 사슬로 이어붙인 것 (등장 횟수 기준, 중복 포함)
+    chain_hits = sum(body.count(t) for t in _JUNK_CHAIN_TOKENS)
+    if chain_hits >= _JUNK_CHAIN_MAX:
+        return True
+
+    # 같은 어절이 두 번 이상
+    words = [w for w in s.split() if len(w) >= 2]
+    if len(words) != len(set(words)):
+        return True
+
+    return False
+
 if sys.platform == "win32":
     _default_path = os.path.join(os.path.dirname(__file__), "..", "data", "blog_analyzer.db")
 else:
@@ -812,6 +874,17 @@ class KeywordPoolDB:
             )
             existing_seeds = {r["keyword"] for r in cur.fetchall()}
 
+            # ★fail-closed. 예전엔 `if domain_tokens and ...` 이라 domain_tokens 가 비면
+            #   게이트가 통째로 꺼져 아무 키워드나 시드가 됐다(위례·화성점은 user_seed=0).
+            #   앵커를 모르면 승격하지 않는 게 맞다 — 잘못 승격된 시드는 다음 라운드부터
+            #   그 niche 를 통째로 빨아들여 되돌리기 어렵다(자기증식 오염 루프).
+            if not domain_tokens:
+                logger.warning(
+                    f"[pool/promote] cid={account_customer_id} 앵커 토큰이 없어 시드 승격을 건너뜁니다 "
+                    f"(fail-closed). user_seed 를 먼저 등록하세요."
+                )
+                return []
+
             promoted: List[Dict] = []
             for row in cand_rows:
                 if len(promoted) >= target:
@@ -819,7 +892,12 @@ class KeywordPoolDB:
                 kw = row["keyword"]
                 if kw in existing_seeds:
                     continue
+                # 깨진 시드 차단 — LLM 이 반복 루프에 빠져 만든 문자열이 시드가 되면
+                # 그 원자(방법·비용·추천…)가 앵커로 합류해 게이트를 무력화한다.
+                if is_degenerate_keyword(kw):
+                    continue
                 # anchor 게이트 — domain_tokens 에 user_seed atom (length≥2) 을 넘겨받음.
+                # (domain_tokens 가 비는 경우는 위에서 이미 return 으로 막았다)
                 # Why: 어떤 등록 KW (예: POOL "강의" 매치로 등록된 "블렌더강의") 가 promote
                 #      되면 그 atom (블렌더) 이 seed_atoms 에 합류 → 다음 라운드 모든
                 #      "블렌더X" KW 통과 → drift cascade. user_seed lineage 만 promote 허용.
