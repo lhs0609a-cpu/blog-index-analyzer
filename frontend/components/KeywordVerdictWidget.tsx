@@ -36,6 +36,13 @@ const VERDICT_UI: Record<string, { label: string; cls: string; Icon: typeof Chec
 
 const CONFIDENCE_KO: Record<string, string> = { high: '높음', medium: '보통', low: '낮음' }
 
+// SERP 를 못 가져오면 서버는 두 가지 모습으로 끝난다 — 단계 타임아웃(status=error)이거나
+// 조회 실패(status=done + verdict=unknown). 원인이 같은데 화면 문구가 갈리면 사용자는
+// 다른 고장으로 읽는다(2026-08-13 실측). 같은 문장으로 합친다.
+const SERP_FAIL_MSG =
+  '이 키워드의 네이버 블로그탭 1페이지를 가져오지 못했습니다. 판정은 실제 1페이지를 ' +
+  '읽어야만 나오므로 결과를 내지 않았습니다. 잠시 후 다시 시도해 주세요.'
+
 export interface KeywordVerdictWidgetProps {
   /** 이미 아는 블로그 ID (분석 페이지에서 내려줌) */
   blogId?: string
@@ -108,6 +115,12 @@ export default function KeywordVerdictWidget({
         const s = await getKeywordDeep(job.job_id)
         if (s.facts?.ok) setFacts(s.facts)
         if (s.status === 'done' && s.result) {
+          // SERP 를 못 읽어 판정이 비었으면 '판정 불가' 카드만 띄우지 않고 이유를 말한다.
+          if (s.result.verdict === 'unknown' && s.result.error === 'serp_fetch_failed') {
+            setErrMsg(SERP_FAIL_MSG)
+            setPhase('error')
+            return
+          }
           setDeep(s.result)
           if (s.result.facts?.ok) setFacts(s.result.facts)
           setPhase('done')
@@ -116,7 +129,7 @@ export default function KeywordVerdictWidget({
         if (s.status === 'error') {
           setErrMsg(
             s.error?.startsWith('timeout')
-              ? '네이버 검색 결과를 가져오는 데 실패했습니다. 잠시 후 다시 시도해 주세요.'
+              ? SERP_FAIL_MSG
               : s.error || '판정 중 오류가 발생했습니다'
           )
           setPhase('error')

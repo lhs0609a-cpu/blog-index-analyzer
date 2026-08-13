@@ -259,6 +259,10 @@ class KeywordPoolScheduler:
     async def _inspect_full(self):
         """전체 풀 광고그룹 노출제한 검사 + 자동 네이버 DELETE/PAUSE.
         다중 광고주(B 시나리오) — (user_id, customer_id) 페어 모두 처리."""
+        from services.priority_gate import yielded
+        if yielded("pool/inspect-full"):
+            return
+
         try:
             from routers.naver_ad import _inspect_ad_groups
             from database.naver_ad_db import list_connected_ad_accounts, get_ad_account_by_customer
@@ -313,6 +317,10 @@ class KeywordPoolScheduler:
         SQLite 는 WAL + busy_timeout 30s 로 동시 write 직렬화. breaker OPEN(15s)는 자동 회복.
         동시성 3: pass 시간 ~40분 → ~13분(계정당 collect 빈도 3배 → floor 하강·채우기 3배).
         """
+        from services.priority_gate import yielded
+        if yielded("pool/collect"):
+            return
+
         try:
             from routers.naver_ad import _run_pool_collect, _fill_escalation_decide
             from database.naver_ad_db import list_connected_ad_accounts
@@ -351,6 +359,10 @@ class KeywordPoolScheduler:
           2) 누적 — 전체 등록순 max 1500개 audit + DELETE (id DESC, 최근부터 점진)
         max DELETE 2000/광고주/cron — 13만 정리 약 5~6시간.
         """
+        from services.priority_gate import yielded
+        if yielded("pool/ai-cleanup"):
+            return
+
         try:
             from config import settings
             if not settings.OPENAI_API_KEY:
@@ -398,6 +410,10 @@ class KeywordPoolScheduler:
         다음 collect/autocomplete 의 BFS 시드 풀을 ↑.
         OPENAI_API_KEY 없으면 noop.
         """
+        from services.priority_gate import yielded
+        if yielded("pool/amplify"):
+            return
+
         try:
             from config import settings
             if not settings.OPENAI_API_KEY:
@@ -431,6 +447,10 @@ class KeywordPoolScheduler:
 
         OPENAI_API_KEY 없으면 즉시 noop. 광고주별 쿨다운 없음 (GPT 호출 1회/cron).
         """
+        from services.priority_gate import yielded
+        if yielded("pool/autocomplete"):
+            return
+
         try:
             from config import settings
             if not settings.OPENAI_API_KEY:
@@ -482,6 +502,10 @@ class KeywordPoolScheduler:
         쿨다운 30분은 _run_pool_ai_classify 내부에서 처리 (force=False).
         OPENAI_API_KEY 없으면 즉시 noop (로그만).
         """
+        from services.priority_gate import yielded
+        if yielded("pool/ai-classify"):
+            return
+
         try:
             from config import settings
             if not settings.OPENAI_API_KEY:
@@ -529,6 +553,10 @@ class KeywordPoolScheduler:
         모두 'account keyword cap' 거부 → fly httpx connection pool (max=5) 점유 +
         PoolTimeout 사고. cleanup 이 슬롯 회수할 때까지 register 무의미 시도 차단.
         """
+        from services.priority_gate import yielded
+        if yielded("pool/register"):
+            return
+
         try:
             from routers.naver_ad import _run_pool_register
             from database.naver_ad_db import list_connected_ad_accounts
@@ -565,6 +593,10 @@ class KeywordPoolScheduler:
         click_cleanup_tick 과 동일 사고 (Naver API hang → 다음 tick 영구 skip) 가드:
         per-account 1200s, 전체 1500s timeout.
         """
+        from services.priority_gate import yielded
+        if yielded("pool/domain-cleanup"):
+            return
+
         # interval 20분 (1200s) — 다음 tick 전에 끝나야 max_instances=1 안 막힘.
         PER_ACCOUNT_TIMEOUT = 800   # 13분 — 광고주 한 명 처리 한계
         TICK_TIMEOUT = 1050         # 17.5분 — 다음 20분 tick 전 양보
@@ -617,6 +649,10 @@ class KeywordPoolScheduler:
         한 번에 다음 모든 ticks 영구 skip (사용자 관점에선 "하루 1번만 실행" 처럼 보임).
         per-account 600s, 전체 tick 700s 가드로 다음 tick 살아남게 보장.
         """
+        from services.priority_gate import yielded
+        if yielded("pool/click-cleanup"):
+            return
+
         PER_ACCOUNT_TIMEOUT = 600   # 10분 — 한 광고주 stats fetch 한계
         TICK_TIMEOUT = 700          # 11.7분 — 다음 15분 tick 전에 무조건 양보
         try:
@@ -665,6 +701,10 @@ class KeywordPoolScheduler:
         가드: 목표 도달(active≥target) 또는 pending 적체(>8000) 시 skip — 무의미 발사/적체 차단.
         검색량0/무관 조합은 seed-explode min_volume=10 + S4 register 게이트(≥min_score)가 거름.
         """
+        from services.priority_gate import yielded
+        if yielded("pool/auto-discovery"):
+            return
+
         # 틱당 80조합 — 300이면 Naver relatedKeywords 300회 + ConnectTimeout 재시도로
         # 배치가 3분 주기를 초과 → 다음 틱과 'max instances' 충돌 → cursor 영구 정체.
         # 80이면 주기 안에 확실히 완료돼 cursor 가 매 틱 전진 (타임아웃에도 강건).
@@ -744,6 +784,10 @@ class KeywordPoolScheduler:
         핵심: rebuild 가 ncc_id 사각지대를 없애 cleanup 이 **전체 라이브 키워드**를 채점/삭제
         (이번 세션 도시락 4만 사각지대 사고의 근본 해결 — 자동화). 빈 슬롯은 발굴 cron 이 채움.
         """
+        from services.priority_gate import yielded
+        if yielded("pool/auto-maint"):
+            return
+
         PER_ACCOUNT_TIMEOUT = 900   # 15분 — rebuild+cleanup 한 광고주 한계
         try:
             from routers.naver_ad import keyword_pool_rebuild_from_naver, _run_domain_cleanup_for_account

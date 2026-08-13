@@ -63,7 +63,17 @@ SCORE_CONCURRENCY = 5      # 경쟁자 동시 채점 (worker nice19, 봇탐지 �
 PER_BLOG_TIMEOUT = 32.0    # 경쟁자 1개 채점 상한
 RETRY_MISSING = 6          # 1차에서 못 잰 경쟁자 재시도 상한 (캐시가 채워져 대부분 즉답)
 SERP_PAGE_TIMEOUT = 12.0
-PLAYWRIGHT_TIMEOUT = 75.0  # 브라우저 기동~파싱 전체 상한 (매달림 방지)
+# 브라우저 기동~파싱 전체 상한. 75초로는 worker(nice 19 + 공유 2vCPU + 크론 경합)에서
+# 콜드 기동조차 못 끝냈다 — 2026-08-13 실측 3회 전부 `playwright serp hard-timeout`.
+PLAYWRIGHT_TIMEOUT = float(os.environ.get("KWV_PLAYWRIGHT_TIMEOUT", "150"))
+# 프로덕션(Fly)에서 HTTP 경로는 **실패가 확정**돼 있다(빈 껍데기 — 아래 함정 주석 참고).
+# 그런데도 매 요청 2회 시도하느라 실측 120초(12초 상한이 CPU 경합으로 54~66초로 늘어남)를
+# 태우고 남은 예산으로 브라우저를 켜다 죽었다. Fly 에서는 처음부터 브라우저로 간다.
+SKIP_HTTP_SERP = (os.environ.get("KWV_SKIP_HTTP_SERP")
+                  or ("1" if os.environ.get("FLY_APP_NAME") else "0")) == "1"
+# 판정 전용 브라우저를 살려 두는 시간. 콜드 기동이 이 경로의 지배적 비용이라 상주시키고,
+# 오래 안 쓰이면 닫아 worker RAM 을 돌려준다.
+BROWSER_IDLE_CLOSE = float(os.environ.get("KWV_BROWSER_IDLE_CLOSE", "600"))
 
 _DATA_DIR = os.environ.get("DATA_DIR", "/data")
 _SERP_DIR = os.path.join(_DATA_DIR, "_kwverdict_serp")
@@ -211,13 +221,113 @@ async def _fetch_serp_playwright(keyword: str, limit: int) -> List[Dict]:
     return await _playwright_serp_guarded(keyword, limit)
 
 
+_BROWSER_LOCK: Optional[asyncio.Lock] = None
+_PW = None
+_BROWSER = None
+_BROWSER_LAST_USE = 0.0
+_REAPER_TASK = None
+
+
+def _browser_lock() -> asyncio.Lock:
+    # 모듈 임포트 시점엔 이벤트 루프가 없을 수 있어 지연 생성한다.
+    global _BROWSER_LOCK
+    if _BROWSER_LOCK is None:
+        _BROWSER_LOCK = asyncio.Lock()
+    return _BROWSER_LOCK
+
+
+async def _close_browser(reason: str) -> None:
+    """상주 브라우저 정리. **호출자를 막지 않는 곳에서만** 부른다(아래 하드타임아웃 참고)."""
+    global _PW, _BROWSER
+    browser, pw = _BROWSER, _PW
+    _BROWSER = _PW = None
+    if browser or pw:
+        logger.warning(f"[kwv] verdict browser 정리 ({reason})")
+    for closer in (browser, pw):
+        if closer is None:
+            continue
+        try:
+            await (closer.close() if closer is browser else closer.stop())
+        except Exception:
+            pass
+
+
+async def _reaper_loop() -> None:
+    """오래 안 쓰인 상주 브라우저를 닫아 worker RAM 을 돌려준다."""
+    while True:
+        await asyncio.sleep(60)
+        if _BROWSER is not None and time.time() - _BROWSER_LAST_USE > BROWSER_IDLE_CLOSE:
+            async with _browser_lock():
+                if _BROWSER is not None and time.time() - _BROWSER_LAST_USE > BROWSER_IDLE_CLOSE:
+                    await _close_browser("idle")
+
+
+async def _get_browser():
+    """판정 전용 chromium 을 **상주**시킨다.
+
+    이전에는 요청마다 띄우고 즉시 닫았는데, worker(nice 19 + 공유 2vCPU + 크론 경합)에서는
+    그 콜드 기동이 이 경로 비용의 대부분이라 75초 상한 안에 페이지를 못 열었다
+    (2026-08-13 실측 3회 전부 hard-timeout). 격리 원칙은 그대로다 — `blog_scraper` 의
+    공용 브라우저(`--single-process`, 힙 256MB, 다른 크론과 공유)는 여전히 쓰지 않는다.
+    죽었거나(is_connected 실패) 타임아웃을 낸 브라우저는 버리고 새로 띄운다.
+    """
+    global _PW, _BROWSER, _BROWSER_LAST_USE, _REAPER_TASK
+    from playwright.async_api import async_playwright
+
+    async with _browser_lock():
+        if _BROWSER is not None:
+            try:
+                if _BROWSER.is_connected():
+                    _BROWSER_LAST_USE = time.time()
+                    return _BROWSER
+            except Exception:
+                pass
+            await _close_browser("disconnected")
+
+        t0 = time.time()
+        pw = browser = None
+        try:
+            pw = await async_playwright().start()
+            browser = await pw.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu",
+                      "--disable-extensions", "--mute-audio"],
+            )
+        except BaseException:
+            # 기동 도중 하드타임아웃으로 취소되면 여기서 정리하지 않는 한 chromium 이
+            # 고아로 남는다(worker RAM 누수). 전역에는 완성된 것만 싣는다.
+            for c, m in ((browser, "close"), (pw, "stop")):
+                if c is not None:
+                    try:
+                        await getattr(c, m)()
+                    except Exception:
+                        pass
+            raise
+        _PW, _BROWSER = pw, browser
+        _BROWSER_LAST_USE = time.time()
+        logger.warning(f"[kwv] verdict browser 기동 {round(time.time() - t0, 1)}s")
+        if _REAPER_TASK is None or _REAPER_TASK.done():
+            _REAPER_TASK = asyncio.create_task(_reaper_loop())
+        return _BROWSER
+
+
 async def _playwright_serp_guarded(keyword: str, limit: int) -> List[Dict]:
-    """전용 브라우저로 조회 + 전체 하드 타임아웃."""
+    """전용 브라우저로 조회 + 전체 하드 타임아웃.
+
+    ⚠️ `await asyncio.wait_for(inner)` 로 감싸면 상한이 지켜지지 않는다. wait_for 는
+    취소한 코루틴이 **끝날 때까지** 기다리는데, 매달린 브라우저를 정리하는 finally 가
+    같이 매달리면 상한을 넘겨 통째로 늘어진다. 그래서 task 를 shield 로 분리해 상한이
+    되면 즉시 손을 떼고, 뒷정리는 별도 task 에 맡긴다.
+    """
+    task = asyncio.create_task(_playwright_serp_inner(keyword, limit))
     try:
-        return await asyncio.wait_for(_playwright_serp_inner(keyword, limit),
-                                      timeout=PLAYWRIGHT_TIMEOUT)
+        return await asyncio.wait_for(asyncio.shield(task), timeout=PLAYWRIGHT_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning(f"[kwv] playwright serp hard-timeout {keyword!r}")
+        logger.warning(f"[kwv] playwright serp hard-timeout {keyword!r} "
+                       f"({PLAYWRIGHT_TIMEOUT}s) — 브라우저 폐기")
+        task.cancel()
+        # 매달린 브라우저는 다음 요청에 재사용하면 안 된다. 정리를 기다리지는 않는다.
+        asyncio.create_task(_close_browser("hard-timeout"))
         return []
     except Exception as e:
         logger.warning(f"[kwv] playwright serp error {keyword!r}: {e}")
@@ -226,23 +336,12 @@ async def _playwright_serp_guarded(keyword: str, limit: int) -> List[Dict]:
 
 async def _playwright_serp_inner(keyword: str, limit: int) -> List[Dict]:
     from urllib.parse import quote
-    from playwright.async_api import async_playwright
 
     url = f"https://search.naver.com/search.naver?ssc=tab.blog.all&query={quote(keyword)}&start=1"
-    pw = browser = context = None
+    context = None
     t0 = time.time()
     try:
-        # ⚠️ services.blog_scraper.get_browser() 의 공용 인스턴스를 쓰지 않는다.
-        #   그 브라우저는 다른 크론(winner-keywords 등)과 공유되고 `--single-process` +
-        #   힙 256MB 로 떠 있어, 실측에서 "Target page, context or browser has been closed"
-        #   가 나거나 컨텍스트 생성 단계에서 매달렸다(stage1 210초 타임아웃).
-        #   여기서는 전용 인스턴스를 띄우고 즉시 닫는다 — 격리가 속도보다 중요하다.
-        pw = await async_playwright().start()
-        browser = await pw.chromium.launch(
-            headless=True,
-            args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu",
-                  "--disable-extensions", "--mute-audio"],
-        )
+        browser = await _get_browser()
         context = await browser.new_context(
             viewport={"width": 1280, "height": 900},
             user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -277,15 +376,10 @@ async def _playwright_serp_inner(keyword: str, limit: int) -> List[Dict]:
                        f"after {round(time.time() - t0, 1)}s: {e}")
         return []
     finally:
-        for closer in (context, browser):
-            if closer:
-                try:
-                    await closer.close()
-                except Exception:
-                    pass
-        if pw:
+        # 브라우저는 상주시키고 컨텍스트만 닫는다(요청 간 쿠키·캐시 격리는 유지).
+        if context:
             try:
-                await pw.stop()
+                await context.close()
             except Exception:
                 pass
 
@@ -304,7 +398,7 @@ async def _fetch_serp_pages(keyword: str, limit: int) -> Tuple[List[Dict], Optio
     client = await get_http_client()
     encoded = quote(keyword)
 
-    attempts = [
+    attempts = [] if SKIP_HTTP_SERP else [
         ("http", f"https://search.naver.com/search.naver?ssc=tab.blog.all&query={encoded}&start=1", False),
         ("mobile", f"https://m.search.naver.com/search.naver?ssc=tab.m_blog.all&query={encoded}&start=1", True),
     ]

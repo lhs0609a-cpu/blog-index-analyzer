@@ -163,7 +163,17 @@ async def run_job(job: Dict) -> None:
     사실(stage1)을 먼저 job 파일에 실어 두는 이유: 프로덕션에서는 SERP 조회조차
     브라우저 경로라 API 프로세스에서 못 돈다. 그래서 두 단계 모두 워커에서 돌리되,
     사실이 나오는 즉시 발행해 화면이 먼저 채워지게 한다(2단 응답 유지).
+
+    실행하는 동안 우선순위 게이트를 잡는다 — 같은 worker 의 키워드 풀 크론이 CPU 를
+    점유하면 여기 타임아웃이 전부 4~6배로 늘어나 판정이 통째로 실패한다(2026-08-13 실측).
     """
+    from services.priority_gate import with_user_job
+
+    with with_user_job(f"kwv:{job['job_id']}"):
+        await _run_job(job)
+
+
+async def _run_job(job: Dict) -> None:
     from services.keyword_verdict import stage1_facts, stage2_deep
 
     job_id = job["job_id"]
