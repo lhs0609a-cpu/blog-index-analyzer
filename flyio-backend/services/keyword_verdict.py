@@ -58,8 +58,10 @@ PAGE1_CUTOFF = 10          # 1페이지 = 상위 10위
 SERP_LIMIT = 20            # 조회 범위 (2페이지) — 11~30위 색인 신호까지 본다
 SERP_TTL = 6 * 3600        # 공용 SERP 캐시 6시간
 SCORE_CONCURRENCY = 5      # 경쟁자 동시 채점 (worker nice19, 봇탐지 회피)
-PER_BLOG_TIMEOUT = 20.0    # 경쟁자 1개 채점 상한
-RETRY_MISSING = 4          # 1차에서 못 잰 경쟁자 재시도 상한 (캐시가 채워져 대부분 즉답)
+# 프로덕션 worker 는 nice 19 + 공유 2vCPU 라 로컬(4.3s)보다 훨씬 느리다. 20초로 잘랐더니
+# 10명 중 4명이 미채점으로 남아 confidence 가 medium 으로 떨어졌다(2026-08-13 실측).
+PER_BLOG_TIMEOUT = 32.0    # 경쟁자 1개 채점 상한
+RETRY_MISSING = 6          # 1차에서 못 잰 경쟁자 재시도 상한 (캐시가 채워져 대부분 즉답)
 SERP_PAGE_TIMEOUT = 12.0
 
 _DATA_DIR = os.environ.get("DATA_DIR", "/data")
@@ -193,6 +195,54 @@ def _parse_serp_html(html: str) -> Tuple[List[Dict], str]:
     return rows, "regex"
 
 
+async def _fetch_serp_playwright(keyword: str, limit: int) -> List[Dict]:
+    """브라우저로 블로그탭을 열어 목록을 읽는다 (HTTP 가 막힌 환경용).
+
+    **왜 필요한가 (2026-08-13 프로덕션 실측)**: Fly IP 로 검색 HTML 을 그냥 GET 하면
+    200 이 오지만 본문에 blog.naver.com 링크가 **한 개도 없는** 축소 페이지가 온다
+    (70KB, 로컬은 491KB, 캡차도 아님). 즉 결과가 JS/차단 뒤에 있다. 로컬·개발에서는
+    HTTP 로 충분하므로 HTTP → 실패 시 이 경로 순으로 쓴다.
+
+    기존 scrape_blog_tab_results 를 쓰지 않는 이유: 그쪽은 구 URL(where=blog)과 구
+    셀렉터(.api_subject_bx)를 쓰고 스크롤을 30회 돌아 키워드당 2분이 넘는다. 여기서는
+    상위 20개만 필요하고, 그건 첫 렌더에 이미 들어 있다.
+    """
+    from urllib.parse import quote
+    from services.blog_scraper import get_browser
+
+    url = f"https://search.naver.com/search.naver?ssc=tab.blog.all&query={quote(keyword)}&start=1"
+    context = None
+    try:
+        browser = await get_browser()
+        context = await browser.new_context(
+            viewport={"width": 1280, "height": 900},
+            user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"),
+            locale="ko-KR",
+        )
+        page = await context.new_page()
+        await page.goto(url, wait_until="domcontentloaded", timeout=25000)
+        try:
+            await page.wait_for_selector(
+                'div[class*="fds-ugc-single-intention-item-list"]', timeout=12000)
+        except Exception:
+            logger.warning(f"[kwv] playwright: list container not found {keyword!r}")
+        rows, mode = _parse_serp_html(await page.content())
+        if mode != "list":
+            logger.warning(f"[kwv] playwright parse fell back to {mode} for {keyword!r}")
+            return []
+        return rows[:limit]
+    except Exception as e:
+        logger.warning(f"[kwv] playwright serp failed {keyword!r}: {e}")
+        return []
+    finally:
+        if context:
+            try:
+                await context.close()
+            except Exception:
+                pass
+
+
 async def _fetch_serp_pages(keyword: str, limit: int) -> Tuple[List[Dict], Optional[str], str]:
     """실제 블로그탭 SERP 조회. (rows, source, parse_mode)
 
@@ -227,6 +277,11 @@ async def _fetch_serp_pages(keyword: str, limit: int) -> Tuple[List[Dict], Optio
         rows, mode = _parse_serp_html(resp.text)
         if rows:
             return rows[:limit], source, mode
+
+    # HTTP 로 한 줄도 못 얻었다 → 브라우저로 재시도 (프로덕션의 정상 경로)
+    rows = await _fetch_serp_playwright(keyword, limit)
+    if rows:
+        return rows, "playwright", "list"
 
     return [], None, "none"
 
@@ -269,15 +324,28 @@ async def serp_snapshot(keyword: str, limit: int = SERP_LIMIT,
 # 2. STAGE 1 — 사실 층 (빠름)
 # ══════════════════════════════════════════════════════════════════
 
-async def stage1_facts(blog_id: str, keyword: str, use_cache: bool = True) -> Dict:
-    """반박 불가능한 사실만 빠르게: 내 현재 순위 + 1페이지 점유자 + 검색량.
+async def stage1_facts(blog_id: str, keyword: str, use_cache: bool = True,
+                       cache_only: bool = False) -> Dict:
+    """반박 불가능한 사실만: 내 현재 순위 + 1페이지 점유자 + 검색량.
 
     판정(확률)은 하지 않는다. 여기서 이미 노출 중이면 판정 자체가 불필요하다.
+
+    cache_only=True 면 SERP 를 새로 조회하지 않는다. public API 프로세스에서 호출할 때
+    쓴다 — 프로덕션에서 SERP 조회는 브라우저 경로라 API 이벤트루프에서 돌리면 안 된다.
     """
     from services.exposure_ceiling import _fetch_volumes
 
     blog_id = (blog_id or "").strip()
     keyword = (keyword or "").strip()
+
+    if cache_only:
+        cached = _serp_cache_get(keyword) if use_cache else None
+        if not cached or not cached.get("rows"):
+            return {"ok": False, "blog_id": blog_id, "keyword": keyword,
+                    "error": "not_measured_yet", "page1": [], "my_rank": None,
+                    "already_page1": False, "volume": 0, "volume_measured": False,
+                    "serp_source": None, "serp_parse_mode": None, "serp_cached": False,
+                    "serp_measured_at": None, "serp_size": 0}
 
     serp_task = serp_snapshot(keyword, use_cache=use_cache)
     vol_task = _fetch_volumes([keyword])
@@ -544,16 +612,19 @@ def compute_verdict(*, my: Optional[Dict], competitors: List[Dict], volume: int,
     }
 
 
-async def stage2_deep(blog_id: str, keyword: str) -> Dict:
-    """전체 판정 — SERP(캐시) + 경쟁자/내 블로그 채점 + 주제적합도 + 확률.
+async def stage2_deep(blog_id: str, keyword: str,
+                      facts: Optional[Dict] = None) -> Dict:
+    """전체 판정 — SERP + 경쟁자/내 블로그 채점 + 주제적합도 + 확률.
 
     무거우므로 worker 프로세스에서 실행한다(routers/keyword_verdict.py 가 큐로 넘긴다).
+    facts 를 넘기면 stage1 을 다시 돌지 않는다(워커가 사실을 먼저 발행할 때 씀).
     """
     t0 = time.time()
     blog_id = (blog_id or "").strip()
     keyword = (keyword or "").strip()
 
-    facts = await stage1_facts(blog_id, keyword)
+    if facts is None:
+        facts = await stage1_facts(blog_id, keyword)
     rows = (facts.get("page1") or [])
     serp_rows_all = rows
 

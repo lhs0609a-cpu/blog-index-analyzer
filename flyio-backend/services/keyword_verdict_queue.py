@@ -34,7 +34,12 @@ _DATA_DIR = os.environ.get("DATA_DIR", "/data")
 _JOB_DIR = os.path.join(_DATA_DIR, "_kwverdict_jobs")
 
 WATCHDOG_EVERY = float(os.environ.get("KWV_WATCHDOG_EVERY", "2"))
-STALE_AFTER = float(os.environ.get("KWV_STALE_AFTER", "180"))     # 3분
+STAGE1_TIMEOUT = float(os.environ.get("KWV_STAGE1_TIMEOUT", "90"))    # SERP 조회
+# 프로덕션 실측(2026-08-13): 캐시 없는 첫 조회가 249초(worker 는 nice 19 + 공유 2vCPU).
+# 캐시가 도는 두 번째 조회부터는 수 초. 첫 조회를 자르면 아무 결과도 못 주므로 넉넉히 둔다.
+STAGE2_TIMEOUT = float(os.environ.get("KWV_STAGE2_TIMEOUT", "330"))   # 경쟁자 채점
+# 좀비 판정은 두 단계 타임아웃 합보다 넉넉해야 한다 — 정상 job 을 회수하면 무한 재시도가 된다.
+STALE_AFTER = float(os.environ.get("KWV_STALE_AFTER", "540"))     # 9분
 MAX_ATTEMPTS = int(os.environ.get("KWV_MAX_ATTEMPTS", "2"))
 KEEP_DONE = float(os.environ.get("KWV_KEEP_DONE", "3600"))        # 완료 job 보관 1시간
 MAX_PENDING = int(os.environ.get("KWV_MAX_PENDING", "40"))
@@ -151,12 +156,38 @@ def claim() -> Optional[Dict]:
 
 
 async def run_job(job: Dict) -> None:
-    """STAGE 2 실행 후 결과를 job 파일에 기록. 예외는 error 로 남긴다."""
-    from services.keyword_verdict import stage2_deep
+    """STAGE 1 → (중간 발행) → STAGE 2 실행 후 결과를 job 파일에 기록.
+
+    사실(stage1)을 먼저 job 파일에 실어 두는 이유: 프로덕션에서는 SERP 조회조차
+    브라우저 경로라 API 프로세스에서 못 돈다. 그래서 두 단계 모두 워커에서 돌리되,
+    사실이 나오는 즉시 발행해 화면이 먼저 채워지게 한다(2단 응답 유지).
+    """
+    from services.keyword_verdict import stage1_facts, stage2_deep
 
     job_id = job["job_id"]
+
+    def _phase(name: str) -> None:
+        """어디까지 갔는지 job 에 남긴다 — 안 남기면 '멈췄다'만 보이고 원인을 못 잡는다."""
+        cur = _read(job_id) or job
+        cur["phase"] = name
+        _write(cur)
+        _beat(f"{name}:{job_id}")
+
     try:
-        result = await stage2_deep(job["blog_id"], job["keyword"])
+        _phase("serp")
+        # 단계별 하드 타임아웃. 사용자가 기다리는 job 이 무한정 매달리면 안 되고,
+        # 어느 단계에서 죽었는지가 그대로 에러 메시지가 돼야 진단이 된다.
+        facts = await asyncio.wait_for(
+            stage1_facts(job["blog_id"], job["keyword"]), timeout=STAGE1_TIMEOUT)
+        cur = _read(job_id) or job
+        cur["facts"] = facts
+        cur["phase"] = "scoring"
+        _write(cur)
+        _beat(f"scoring:{job_id}")
+
+        result = await asyncio.wait_for(
+            stage2_deep(job["blog_id"], job["keyword"], facts=facts),
+            timeout=STAGE2_TIMEOUT)
         cur = _read(job_id) or job
         cur.update(status="done", done_at=time.time(), result=result, error=None)
         _write(cur)
@@ -164,10 +195,18 @@ async def run_job(job: Dict) -> None:
                     f"→ {result.get('verdict')} p={result.get('probability')} "
                     f"({result.get('elapsed')}s)")
         _record_prediction(result)
+    except asyncio.TimeoutError:
+        cur = _read(job_id) or job
+        phase = cur.get("phase") or "?"
+        logger.warning(f"[kwv-q] job timeout {job_id} at phase={phase}")
+        cur.update(status="error", done_at=time.time(),
+                   error=f"timeout_at_{phase}")
+        _write(cur)
     except Exception as e:
         logger.exception(f"[kwv-q] job failed {job_id}: {e}")
         cur = _read(job_id) or job
-        cur.update(status="error", done_at=time.time(), error=str(e))
+        cur.update(status="error", done_at=time.time(),
+                   error=f"{type(e).__name__}: {e}")
         _write(cur)
 
 
@@ -199,15 +238,45 @@ def _record_prediction(result: Dict) -> None:
         logger.warning(f"[kwv-q] prediction ledger write failed: {e}")
 
 
+def _hb_path() -> str:
+    return os.path.join(_JOB_DIR, "_heartbeat.json")
+
+
+def _beat(state: str) -> None:
+    """워치독 생존 신호. **워커 이벤트루프가 크론에 수분씩 막히는 게 이 코드베이스의
+    고질병**이라(문서화된 실측), '워치독이 안 도는 것'과 '큐 경로가 틀린 것'을 구분할
+    수단이 없으면 진단이 불가능하다. 틱마다 파일 하나를 갱신해 app 이 읽게 한다."""
+    try:
+        os.makedirs(_JOB_DIR, exist_ok=True)
+        tmp = _hb_path() + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"ts": time.time(), "pid": os.getpid(), "state": state}, f)
+        os.replace(tmp, _hb_path())
+    except Exception:
+        pass
+
+
+def read_heartbeat() -> Optional[Dict]:
+    try:
+        with open(_hb_path(), "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
 async def watchdog_loop() -> None:
     """worker 프로세스에서만 기동 (main.py lifespan, RUN_SCHEDULERS)."""
-    logger.info(f"[kwv-q] watchdog started (every {WATCHDOG_EVERY}s)")
+    logger.warning(f"[kwv-q] watchdog started (every {WATCHDOG_EVERY}s) pid={os.getpid()}")
+    _beat("started")
     while True:
         try:
             job = claim()
             if job:
+                _beat(f"running:{job['job_id']}")
                 await run_job(job)
+                _beat("idle")
                 continue  # 큐가 밀렸으면 즉시 다음 job
+            _beat("idle")
         except Exception as e:
             logger.warning(f"[kwv-q] watchdog tick failed: {e}")
         await asyncio.sleep(WATCHDOG_EVERY)

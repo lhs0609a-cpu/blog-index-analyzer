@@ -2,6 +2,10 @@
 FastAPI 메인 애플리케이션
 Version: 2.3.1 - Rate limiting + security hardening
 """
+import asyncio   # lifespan 의 워치독 기동(asyncio.create_task)에 필요.
+                 # 없으면 NameError 가 try/except 로 삼켜져 **워치독이 전부 조용히 죽는다**
+                 # (2026-08-13 프로덕션 로그에서 backtest·seed-explode·keyword-verdict
+                 #  세 워치독이 모두 "name 'asyncio' is not defined" 로 기동 실패 중이었음).
 import os
 import time
 from collections import defaultdict
@@ -304,6 +308,15 @@ async def lifespan(app: FastAPI):
             logger.info("✅ Seed-explode queue watchdog started (every 20s)")
         except Exception as e:
             logger.warning(f"⚠️ Seed-explode watchdog failed to start: {e}")
+
+        # 키워드 판정 STAGE2 워치독 — 사용자 대기형이라 2초 틱(seed-explode 20초와 다름).
+        # 경쟁자 11개 채점을 worker(nice 19)에서 돌려 API 프로세스를 보호한다.
+        try:
+            from services.keyword_verdict_queue import watchdog_loop as kwv_watchdog
+            asyncio.create_task(kwv_watchdog())
+            logger.info("✅ Keyword-verdict queue watchdog started (every 2s)")
+        except Exception as e:
+            logger.warning(f"⚠️ Keyword-verdict watchdog failed to start: {e}")
 
     yield
 
@@ -692,6 +705,7 @@ from routers import subscription, payment, naver_ad, content_lifespan, admin, co
 from routers import rank_tracker
 from routers import user_blogs
 from routers import keyword_analysis
+from routers import keyword_verdict
 from routers import revenue
 from routers import unified_ads
 from routers import ad_dashboard
@@ -743,6 +757,8 @@ app.include_router(notification.router, tags=["알림시스템"])
 app.include_router(winner_keywords.router, prefix="/api/winner-keywords", tags=["1위보장키워드"])
 app.include_router(profitable_keywords.router, prefix="/api", tags=["수익성키워드"])
 app.include_router(competitive_analysis.router, tags=["경쟁력분석"])
+# 키워드 상위노출 판정 v2 (2단 응답) — prefix 는 라우터에 이미 있음
+app.include_router(keyword_verdict.router)
 
 
 if __name__ == "__main__":

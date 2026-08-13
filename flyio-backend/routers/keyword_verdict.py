@@ -39,15 +39,18 @@ def _clean(request: VerdictRequest):
 
 @router.post("/facts")
 async def keyword_facts(request: VerdictRequest):
-    """1단: 사실만. 실제 블로그탭 SERP 1회 조회(키워드 단위 공용 캐시 6h) + 검색량.
+    """1단: 사실만 — **이미 측정된 SERP 캐시가 있을 때만** 즉답한다.
 
-    확률·판정은 여기서 내지 않는다. 이미 1페이지면 `already_page1=true` 로 끝난다.
+    캐시가 없으면 `error="not_measured_yet"` 을 주고, 클라이언트는 `/deep` 을 걸어
+    워커가 조회하게 해야 한다. 이 프로세스에서 SERP 를 새로 조회하지 않는 이유:
+    프로덕션(Fly)에서는 검색 HTML 이 빈 페이지로 와서 브라우저 경로를 타야 하는데,
+    그걸 public API 이벤트루프에서 돌리면 로그인·/health 까지 밀린다.
     """
     from services.keyword_verdict import stage1_facts
 
     blog_id, keyword = _clean(request)
     try:
-        return await stage1_facts(blog_id, keyword)
+        return await stage1_facts(blog_id, keyword, cache_only=True)
     except Exception as e:
         logger.exception(f"[kwv] facts failed {blog_id}/{keyword}: {e}")
         raise HTTPException(status_code=500, detail=f"facts_failed: {e}")
@@ -96,10 +99,88 @@ async def keyword_deep_result(job_id: str):
         "blog_id": job.get("blog_id"),
         "keyword": job.get("keyword"),
         "error": job.get("error"),
+        # 사실(1단)은 판정(2단)보다 먼저 실린다 — 화면을 먼저 채우라고 따로 내보낸다.
+        "facts": job.get("facts"),
+        "phase": job.get("phase"),
         "result": job.get("result"),
         "waited_seconds": round((job.get("done_at") or time.time())
                                 - float(job.get("requested_at") or 0), 1),
     }
+
+
+@router.get("/debug/queue")
+async def debug_queue():
+    """큐/워치독 상태. 워치독 하트비트가 늙어 있으면 워커 루프가 막힌 것이다."""
+    from services.keyword_verdict_queue import _all_jobs, read_heartbeat, _JOB_DIR
+
+    jobs = _all_jobs()
+    hb = read_heartbeat()
+    return {
+        "job_dir": _JOB_DIR,
+        "counts": {s: sum(1 for j in jobs if j.get("status") == s)
+                   for s in ("queued", "running", "done", "error")},
+        "running": [{"job_id": j["job_id"], "phase": j.get("phase"),
+                     "keyword": j.get("keyword"), "attempts": j.get("attempts"),
+                     "age": round(time.time() - float(j.get("claimed_at") or 0), 1)}
+                    for j in jobs if j.get("status") == "running"],
+        "recent_errors": [{"job_id": j["job_id"], "keyword": j.get("keyword"),
+                           "error": j.get("error"), "phase": j.get("phase")}
+                          for j in jobs if j.get("status") == "error"][:5],
+        "oldest_queued_age": round(time.time() - min(
+            [float(j.get("requested_at") or 0) for j in jobs
+             if j.get("status") == "queued"] or [time.time()]), 1),
+        "heartbeat": hb,
+        "heartbeat_age": round(time.time() - float(hb["ts"]), 1) if hb else None,
+    }
+
+
+@router.get("/debug/serp")
+async def debug_serp(keyword: str, ua: Optional[str] = None):
+    """SERP 조회가 **어디서** 깨지는지 보는 진단.
+
+    로컬에서는 되는데 Fly 에서 안 될 때, 원인이 (a) 차단/비200 (b) 200 이지만 다른 마크업
+    (c) 파싱 실패 중 무엇인지 구분해야 고칠 수 있다. 응답 본문을 그대로 내보내지 않고
+    판별에 필요한 지표만 낸다.
+    """
+    from urllib.parse import quote
+    from routers.blogs import get_http_client, get_random_headers
+    from services.keyword_verdict import _parse_serp_html
+
+    encoded = quote(keyword.strip())
+    client = await get_http_client()
+    out = []
+    candidates = [
+        ("ssc_pc", f"https://search.naver.com/search.naver?ssc=tab.blog.all&query={encoded}&start=1", False),
+        ("ssc_mo", f"https://m.search.naver.com/search.naver?ssc=tab.m_blog.all&query={encoded}&start=1", True),
+        ("where_pc", f"https://search.naver.com/search.naver?where=blog&query={encoded}&start=1&sm=tab_opt&sort=sim", False),
+        ("where_mo", f"https://m.search.naver.com/search.naver?where=m_blog&query={encoded}&start=1", True),
+    ]
+    for name, url, mobile in candidates:
+        rec = {"name": name, "mobile": mobile}
+        try:
+            headers = get_random_headers(mobile=mobile)
+            headers["Referer"] = ("https://m.search.naver.com/" if mobile
+                                  else "https://search.naver.com/")
+            if ua:
+                headers["User-Agent"] = ua
+            resp = await client.get(url, headers=headers, timeout=15.0)
+            html = resp.text
+            rows, mode = _parse_serp_html(html)
+            rec.update({
+                "status": resp.status_code,
+                "final_url": str(resp.url),
+                "bytes": len(html),
+                "has_list_container": "fds-ugc-single-intention-item-list" in html,
+                "has_blog_link": "blog.naver.com/" in html,
+                "looks_blocked": any(t in html for t in ("비정상적인 검색", "captcha", "자동입력 방지")),
+                "parse_mode": mode,
+                "rows": len(rows),
+                "top3": [r["blog_id"] for r in rows[:3]],
+            })
+        except Exception as e:
+            rec.update({"error": f"{type(e).__name__}: {e}"})
+        out.append(rec)
+    return {"keyword": keyword, "attempts": out}
 
 
 @router.get("/accuracy")
