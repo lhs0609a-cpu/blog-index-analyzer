@@ -136,6 +136,18 @@ def enqueue(blog_id: str, keyword: str, user_id: Optional[int] = None) -> Dict:
             "status": "queued", "queue_len": len(pending) + 1}
 
 
+def has_pending() -> bool:
+    """아직 워치독이 집지 않은 사용자 job 이 있는가 (우선순위 게이트 probe).
+
+    STALE_AFTER 를 넘긴 것은 세지 않는다 — 워커가 죽어 남은 좀비 job 이 크론을 영구히
+    굶기면 안 된다(그 좀비는 _sweep 이 따로 회수한다).
+    """
+    now = time.time()
+    return any(j.get("status") == "queued"
+               and now - float(j.get("requested_at") or 0) < STALE_AFTER
+               for j in _all_jobs())
+
+
 def get_job(job_id: str) -> Optional[Dict]:
     return _read(job_id)
 
@@ -279,6 +291,12 @@ def read_heartbeat() -> Optional[Dict]:
 async def watchdog_loop() -> None:
     """worker 프로세스에서만 기동 (main.py lifespan, RUN_SCHEDULERS)."""
     logger.warning(f"[kwv-q] watchdog started (every {WATCHDOG_EVERY}s) pid={os.getpid()}")
+    # 집기 전 대기 구간도 크론이 양보하게 한다 — 실측에서 2초 틱이 87초 만에 집었다.
+    try:
+        from services.priority_gate import register_probe
+        register_probe(has_pending)
+    except Exception as e:
+        logger.warning(f"[kwv-q] priority probe 등록 실패: {e}")
     _beat("started")
     while True:
         try:

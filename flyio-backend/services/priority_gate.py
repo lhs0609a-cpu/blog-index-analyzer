@@ -23,7 +23,7 @@ import logging
 import os
 import time
 from contextlib import contextmanager
-from typing import Dict
+from typing import Callable, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -32,18 +32,36 @@ logger = logging.getLogger(__name__)
 MAX_HOLD = float(os.environ.get("PRIORITY_GATE_MAX_HOLD", "600"))
 
 _holders: Dict[str, float] = {}   # tag -> 시작 시각
+_probes: List[Callable[[], bool]] = []   # "아직 안 집었지만 사람이 기다리는 중" 판정기
+
+
+def register_probe(fn: Callable[[], bool]) -> None:
+    """큐에 **대기 중인** 사용자 job 이 있는지 알려주는 콜백을 등록한다.
+
+    홀더만 보면 job 을 집은 뒤부터 보호가 시작된다. 그런데 워치독이 job 을 집는 것 자체가
+    크론에 막혀 늦어진다 — 2026-08-13 프로덕션 실측에서 2초 틱 워치독이 **87초** 만에
+    집었고, 그게 사용자 대기 213초의 40%였다. 그래서 '적재됐지만 아직 안 집힌' 구간도
+    양보 대상으로 본다.
+    """
+    _probes.append(fn)
 
 
 def active() -> bool:
-    """지금 사용자 대기형 job 이 도는 중인가. 만료된 홀더는 여기서 청소한다."""
-    if not _holders:
-        return False
+    """지금 사용자 대기형 job 이 도는 중(또는 대기 중)인가. 만료된 홀더는 여기서 청소한다."""
     now = time.time()
     for tag, started in list(_holders.items()):
         if now - started > MAX_HOLD:
             logger.warning(f"[gate] holder 만료 강제 해제: {tag} ({round(now - started)}s)")
             _holders.pop(tag, None)
-    return bool(_holders)
+    if _holders:
+        return True
+    for fn in _probes:
+        try:
+            if fn():
+                return True
+        except Exception:
+            pass   # 진단용 장치가 크론을 죽이면 안 된다
+    return False
 
 
 def begin(tag: str) -> None:
