@@ -548,3 +548,130 @@ export async function searchKeywordWithTabs(keyword: string, limit: number = 100
   })
   return response.data
 }
+
+/**
+ * ────────────────────────────────────────────────────────────────
+ * 키워드 상위노출 판정 v2 (2단 응답)
+ *
+ * 1단 `/facts`  — 사실만. 실제 블로그탭 SERP 1회 조회 + 검색량. 수 초.
+ * 2단 `/deep`   — 1페이지 경쟁자를 내 블로그와 같은 채점기로 채점해 컷라인 판정.
+ *                 worker 프로세스에서 돌고, job_id 로 폴링한다.
+ *
+ * 기존 judgeKeyword(/api/blogs/judge-keyword)는 "검색량 vs 내 천장" 비교라
+ * 그 키워드 1페이지가 실제로 얼마나 센지를 보지 않았다. 이쪽이 후속 버전이다.
+ * ────────────────────────────────────────────────────────────────
+ */
+export interface SerpRow {
+  rank: number
+  blog_id: string
+  blog_name?: string
+  post_title?: string
+  post_url?: string
+}
+
+export interface KeywordFactsResponse {
+  ok: boolean
+  blog_id: string
+  keyword: string
+  volume: number
+  volume_measured: boolean
+  my_rank: number | null
+  already_page1: boolean
+  serp_source: 'http' | 'mobile' | null
+  serp_parse_mode: 'list' | 'regex' | 'none' | null
+  serp_cached: boolean
+  serp_size: number
+  page1: SerpRow[]
+  error: string | null
+}
+
+export interface KeywordCompetitor extends SerpRow {
+  score: number | null
+  level: number | null
+  grade: string | null
+  recent_activity_days: number | null
+  measured: boolean
+}
+
+export interface KeywordDeepResult {
+  ok: boolean
+  blog_id: string
+  keyword: string
+  verdict: 'likely' | 'contested' | 'unlikely' | 'unknown' | 'already_ranked'
+  probability: number | null
+  confidence: 'high' | 'medium' | 'low'
+  reasons: string[]
+  cut_line: number | null
+  entry_bar?: number | null
+  median_score: number | null
+  my_score?: number | null
+  my: { score: number; level: number | null; grade: string | null } | null
+  competitors: KeywordCompetitor[]
+  topical_posts: number | null
+  scored_competitors?: number
+  vacancy_count?: number
+  facts: KeywordFactsResponse
+  model_version?: string
+  elapsed: number
+  disclaimer: string
+  error?: string
+}
+
+export interface KeywordDeepJob {
+  job_id: string
+  status: 'queued' | 'running' | 'done' | 'error'
+  blog_id?: string
+  keyword?: string
+  error: string | null
+  /** 1단 사실. 2단 판정보다 먼저 실린다(화면을 먼저 채우라고). */
+  facts?: KeywordFactsResponse | null
+  result: KeywordDeepResult | null
+  waited_seconds?: number
+}
+
+export async function fetchKeywordFacts(
+  blogId: string,
+  keyword: string
+): Promise<KeywordFactsResponse> {
+  const response = await apiClient.post<KeywordFactsResponse>(
+    '/api/keyword-verdict/facts',
+    { blog_id: blogId, keyword },
+    { timeout: 40000 }
+  )
+  return response.data
+}
+
+export async function startKeywordDeep(
+  blogId: string,
+  keyword: string
+): Promise<{ job_id: string; status: string; poll_after_seconds: number }> {
+  const response = await apiClient.post('/api/keyword-verdict/deep', {
+    blog_id: blogId,
+    keyword,
+  })
+  return response.data
+}
+
+export async function getKeywordDeep(jobId: string): Promise<KeywordDeepJob> {
+  const response = await apiClient.get<KeywordDeepJob>(`/api/keyword-verdict/deep/${jobId}`)
+  return response.data
+}
+
+/** 판정기의 실측 정확도 — 정답지로 채점된 것만. 표본이 적으면 그대로 드러난다. */
+export interface VerdictAccuracy {
+  graded_total: number
+  overall_accuracy: number | null
+  brier: number | null
+  base_rate: number | null
+  pending: number
+  model_version: string
+  is_validated: boolean
+  note: string | null
+}
+
+export async function getVerdictAccuracy(blogId?: string): Promise<VerdictAccuracy> {
+  const response = await apiClient.get<VerdictAccuracy>(
+    `/api/keyword-verdict/accuracy${blogId ? `?blog_id=${encodeURIComponent(blogId)}` : ''}`
+  )
+  return response.data
+}
