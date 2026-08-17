@@ -539,6 +539,11 @@ _WORKER_OFFLOAD_PATHS = frozenset({
     # **일회성** 백필이 영영 시작 못 함(202 만 받고 무실행). 응답을 끝까지 기다리는
     # 클라이언트로 app 프로세스(scheduler OFF·free loop)에서 직접 돌리면 안정 완주.
     # I/O 바운드(네이버 await)라 0.12s 페이싱이면 login 등 다른 요청도 안 막힘.
+    # NOTE: /api/seo/precompute 도 offload 에서 제외 — 위 seed-explode-register 와 같은
+    # 패턴(add_task 후 즉시 return)이라 프록시하면 8s ack 만 받고 무실행이 될 수 있다.
+    # 대신 배치 크기를 제한하고(limit, 기본 10) 키워드 사이에 2초씩 양보해
+    # 이벤트루프를 굶기지 않는다. 상시 대량 생성으로 키우려면 이 방식이 아니라
+    # keyword_verdict_queue 처럼 큐 파일 + worker 워치독으로 옮겨야 한다.
 })
 _WORKER_INTERNAL_URL = os.getenv("WORKER_INTERNAL_URL", "http://127.0.0.1:8001")
 _OFFLOAD_ROLE = os.getenv("ROLE", "all")
@@ -711,6 +716,7 @@ from routers import rank_tracker
 from routers import user_blogs
 from routers import keyword_analysis
 from routers import keyword_verdict
+from routers import seo_pages
 from routers import revenue
 from routers import unified_ads
 from routers import ad_dashboard
@@ -764,6 +770,8 @@ app.include_router(profitable_keywords.router, prefix="/api", tags=["수익성�
 app.include_router(competitive_analysis.router, tags=["경쟁력분석"])
 # 키워드 상위노출 판정 v2 (2단 응답) — prefix 는 라우터에 이미 있음
 app.include_router(keyword_verdict.router)
+# 프로그래매틱 SEO 키워드 페이지 (읽기는 캐시라 밀리초) — prefix 는 라우터에 이미 있음
+app.include_router(seo_pages.router)
 
 
 if __name__ == "__main__":

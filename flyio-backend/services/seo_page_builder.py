@@ -1,0 +1,171 @@
+"""
+프로그래매틱 SEO 페이지 — 측정 worker.
+
+큐에서 키워드를 꺼내 세 가지를 재고 캐시에 넣는다:
+  1) SERP 난이도      (services.serp_difficulty)      — 1페이지 경쟁자 체력
+  2) 경쟁도/상위10 지표 (keyword_analysis_service)      — C-Rank·D.I.A.·탭 비율
+  3) 연관 키워드       (자동완성/검색광고)               — 내부 링크 + 큐 확장
+
+⚠️ 이벤트루프 보호:
+SERP 파싱은 1 CPU 머신에서 이벤트루프를 굶긴다. winner_keywords 가 이 방식으로
+/health 를 30초까지 밀어 서비스를 멈춘 전례가 있다. 그래서
+  - 키워드 사이에 반드시 yield(sleep)를 넣고
+  - 한 번에 도는 개수를 batch 로 제한하며
+  - 크론이 아니라 명시적 호출(관리자/스케줄러)로만 돈다.
+"""
+import asyncio
+import logging
+from typing import Any, Dict, List, Optional
+
+from database import seo_keyword_pages_db as seo_db
+
+logger = logging.getLogger(__name__)
+
+# 키워드 하나를 재는 데 붙이는 상한. 이걸 넘기면 그 키워드는 건너뛴다 —
+# 한 키워드가 배치 전체를 잡아먹는 것을 막는다.
+PER_KEYWORD_TIMEOUT_S = 90
+
+# 측정 사이 양보 시간. 이벤트루프가 /health 등 가벼운 요청을 처리할 틈.
+YIELD_BETWEEN_S = 2.0
+
+# 연관 키워드로 큐를 확장할 최대 깊이. 무한 확장하면 도메인 밖으로 새어나간다.
+MAX_DEPTH = 2
+
+
+async def _measure_one(keyword: str) -> Optional[Dict[str, Any]]:
+    """키워드 하나의 페이지 데이터를 만든다. 실패하면 None."""
+    from services.serp_difficulty import measure_serp_difficulty
+    from services.keyword_analysis_service import keyword_analysis_service
+
+    data: Dict[str, Any] = {"keyword": keyword}
+
+    # 1) SERP 난이도 — 이게 실패하면 페이지의 핵심이 비므로 전체 실패로 본다.
+    serp = await measure_serp_difficulty(keyword, top_n=10)
+    if not serp or not serp.get("ok"):
+        raise RuntimeError(f"serp_difficulty not ok: {str(serp)[:160]}")
+
+    data["difficulty_score"] = serp.get("difficulty_score")
+    data["difficulty_label"] = serp.get("difficulty_label")
+    data["competitors_scanned"] = serp.get("competitors_scanned")
+    data["alive_ratio"] = serp.get("alive_ratio")
+    data["median_vitality"] = serp.get("median_vitality")
+    data["competitors"] = serp.get("competitors") or []
+
+    await asyncio.sleep(0)  # yield
+
+    # 2) 경쟁도 — 실패해도 페이지는 성립한다(난이도만으로도 본문이 된다).
+    #    _analyze_competition 은 pydantic 모델을 돌려주므로 dict 로 단정하면 안 된다.
+    try:
+        comp = await keyword_analysis_service._analyze_competition(keyword, None)
+        if comp is not None:
+            comp_d = comp if isinstance(comp, dict) else comp.model_dump()
+            data["search_volume"] = comp_d.get("search_volume")
+            top10 = comp_d.get("top10_stats") or {}
+            data["top10_avg_score"] = top10.get("avg_total_score")
+            data["top10_min_score"] = top10.get("min_score")
+            data["top10_max_score"] = top10.get("max_score")
+            data["top10_avg_c_rank"] = top10.get("avg_c_rank")
+            data["top10_avg_dia"] = top10.get("avg_dia")
+            data["top10_avg_posts"] = top10.get("avg_posts")
+            data["tab_ratio"] = comp_d.get("tab_ratio") or {}
+    except Exception as e:
+        logger.warning(f"[seo_builder] competition failed for {keyword}: {e}")
+
+    await asyncio.sleep(0)
+
+    # 3) 카테고리·팁 — 순수 함수(네트워크 없음)라 사실상 실패하지 않는다
+    try:
+        from services.category_weights import (
+            detect_keyword_category,
+            get_category_optimization_tips,
+        )
+
+        data["category"] = detect_keyword_category(keyword)
+        tips_data = get_category_optimization_tips(keyword) or {}
+        data["category_label"] = tips_data.get("category") or data["category"]
+        data["tips"] = tips_data.get("tips") or []
+    except Exception as e:
+        logger.warning(f"[seo_builder] category failed for {keyword}: {e}")
+
+    # 4) 연관 키워드 — 내부 링크와 큐 확장 양쪽에 쓴다
+    try:
+        from routers.blogs import (
+            get_related_keywords_from_searchad,
+            get_related_keywords_from_autocomplete,
+        )
+
+        rel = await get_related_keywords_from_searchad(keyword)
+        if not (rel and rel.success and rel.total_count > 0):
+            rel = await get_related_keywords_from_autocomplete(keyword)
+        if rel and rel.total_count > 0:
+            items = []
+            for k in rel.keywords[:40]:
+                kw = getattr(k, "keyword", None) or (k.get("keyword") if isinstance(k, dict) else None)
+                if not kw:
+                    continue
+                vol = getattr(k, "monthly_total_search", None)
+                if vol is None and isinstance(k, dict):
+                    vol = k.get("monthly_total_search")
+                items.append({"keyword": kw, "monthly_total_search": vol})
+            data["related"] = items
+    except Exception as e:
+        logger.warning(f"[seo_builder] related failed for {keyword}: {e}")
+
+    return data
+
+
+async def build_batch(limit: int = 10, expand: bool = True) -> Dict[str, Any]:
+    """
+    큐에서 limit 개를 꺼내 측정하고 캐시에 넣는다.
+
+    expand=True 면 연관 키워드를 큐에 추가해 프론티어를 넓힌다.
+    깊이 MAX_DEPTH 를 넘으면 확장하지 않는다 — 자동완성은 몇 단계만 지나면
+    도메인 밖(쇼핑·연예)으로 새어나간다.
+    """
+    seo_db.init_seo_pages_db()
+    seo_db.requeue_stuck()
+
+    items = seo_db.take_pending(limit=limit)
+    if not items:
+        return {"taken": 0, "ok": 0, "failed": 0, "enqueued": 0, "message": "queue empty"}
+
+    ok = failed = enqueued = 0
+    errors: List[str] = []
+
+    for item in items:
+        kw = item["keyword"]
+        depth = int(item.get("depth") or 0)
+        try:
+            data = await asyncio.wait_for(_measure_one(kw), timeout=PER_KEYWORD_TIMEOUT_S)
+            if not data:
+                raise RuntimeError("no data")
+            seo_db.upsert_page(data)
+            seo_db.mark_queue(kw, "done")
+            ok += 1
+
+            if expand and depth < MAX_DEPTH:
+                cand = [r["keyword"] for r in (data.get("related") or [])]
+                if cand:
+                    enqueued += seo_db.enqueue_keywords(
+                        cand, source=f"related:{kw}", depth=depth + 1
+                    )
+        except asyncio.TimeoutError:
+            failed += 1
+            errors.append(f"{kw}: timeout>{PER_KEYWORD_TIMEOUT_S}s")
+            seo_db.mark_queue(kw, "pending", "timeout")
+        except Exception as e:
+            failed += 1
+            errors.append(f"{kw}: {str(e)[:120]}")
+            seo_db.mark_queue(kw, "pending", str(e))
+
+        # 이벤트루프 양보 — 이게 없으면 배치 도는 동안 서비스가 멈춘다
+        await asyncio.sleep(YIELD_BETWEEN_S)
+
+    return {
+        "taken": len(items),
+        "ok": ok,
+        "failed": failed,
+        "enqueued": enqueued,
+        "errors": errors[:10],
+        "stats": seo_db.stats(),
+    }

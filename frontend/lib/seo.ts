@@ -16,6 +16,29 @@ export function absoluteUrl(path = '/'): string {
   return `${SITE_URL}${path.startsWith('/') ? path : `/${path}`}`
 }
 
+/**
+ * 사이트 소유확인 코드 (검색엔진 웹마스터 도구).
+ *
+ * 네이버 서치어드바이저는 발급 완료. 구글은 Search Console 에서
+ * "HTML 태그" 방식으로 발급받은 content 값을 GOOGLE_SITE_VERIFICATION
+ * 환경변수(Vercel Project Settings → Environment Variables)에 넣으면 된다.
+ * 값이 비어 있으면 태그 자체를 내보내지 않는다 — 빈 verification 태그는
+ * 구글이 소유확인 실패로 처리한다.
+ *
+ * metadata 는 서버에서만 평가되므로 NEXT_PUBLIC_ 접두사를 쓰지 않는다.
+ */
+export const NAVER_SITE_VERIFICATION = 'a2d07f71e11662403bea4bf15caa6b6582f57693'
+export const GOOGLE_SITE_VERIFICATION = process.env.GOOGLE_SITE_VERIFICATION || ''
+
+export function verificationMetadata(): Pick<Metadata, 'verification' | 'other'> {
+  return {
+    ...(GOOGLE_SITE_VERIFICATION
+      ? { verification: { google: GOOGLE_SITE_VERIFICATION } }
+      : {}),
+    other: { 'naver-site-verification': NAVER_SITE_VERIFICATION },
+  }
+}
+
 type PageMetaInput = {
   title: string
   description: string
@@ -98,6 +121,8 @@ export const PUBLIC_ROUTES: Array<{
   { path: '/analyze', changeFrequency: 'weekly', priority: 0.9 },
   { path: '/keyword-search', changeFrequency: 'weekly', priority: 0.9 },
   { path: '/keyword-check', changeFrequency: 'weekly', priority: 0.9 },
+  // 프로그래매틱 키워드 페이지의 입구. 여기가 없으면 그 페이지들이 고아가 된다.
+  { path: '/keyword', changeFrequency: 'daily', priority: 0.9 },
   { path: '/analyze-post', changeFrequency: 'weekly', priority: 0.8 },
   { path: '/blue-ocean', changeFrequency: 'weekly', priority: 0.7 },
   { path: '/profitable-keywords', changeFrequency: 'weekly', priority: 0.7 },

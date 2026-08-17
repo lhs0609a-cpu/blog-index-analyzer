@@ -47,7 +47,9 @@ export default function robots(): MetadataRoute.Robots {
         disallow: privateAreas,
       })),
     ],
-    sitemap: `${SITE_URL}/sitemap.xml`,
+    // 인덱스가 정적 페이지 사이트맵 + 키워드 페이지 청크를 전부 묶는다.
+    // /sitemap.xml 도 같이 알려준다 — 인덱스를 못 읽는 크롤러 대비.
+    sitemap: [`${SITE_URL}/sitemap-index.xml`, `${SITE_URL}/sitemap.xml`],
     host: SITE_URL,
   }
 }

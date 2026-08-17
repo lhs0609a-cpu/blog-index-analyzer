@@ -75,6 +75,11 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/keyword" className="block py-1 hover:text-violet-400 transition-colors cursor-pointer">
+                  키워드별 난이도
+                </Link>
+              </li>
+              <li>
                 <Link href="/guides" className="block py-1 hover:text-violet-400 transition-colors cursor-pointer">
                   블로그 성장 가이드
                 </Link>

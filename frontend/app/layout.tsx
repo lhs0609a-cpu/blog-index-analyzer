@@ -10,6 +10,7 @@ import {
   jsonLdScript,
   organizationJsonLd,
   softwareAppJsonLd,
+  verificationMetadata,
   websiteJsonLd,
 } from '@/lib/seo'
 import './globals.css'
@@ -90,15 +91,9 @@ export const metadata: Metadata = {
   // 각 페이지가 lib/seo.ts 의 pageMetadata() 로 자기 canonical 을 선언한다.
   category: 'technology',
 
-  // 사이트 인증 (Google Search Console 등록 후 실제 코드로 교체 필요)
-  // verification: {
-  //   google: 'YOUR_ACTUAL_GOOGLE_VERIFICATION_CODE',
-  // },
-
-  // 네이버 서치어드바이저 인증
-  other: {
-    'naver-site-verification': 'a2d07f71e11662403bea4bf15caa6b6582f57693',
-  },
+  // 사이트 소유확인 (네이버 서치어드바이저 + 구글 서치콘솔)
+  // 코드는 lib/seo.ts 단일 소스. 구글은 GOOGLE_SITE_VERIFICATION 환경변수.
+  ...verificationMetadata(),
 }
 
 export const viewport: Viewport = {
