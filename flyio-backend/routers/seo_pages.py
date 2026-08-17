@@ -6,10 +6,12 @@
 precompute 에서만 일어난다.
 """
 import asyncio
+import hmac
 import logging
+import os
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from database import seo_keyword_pages_db as seo_db
@@ -21,6 +23,21 @@ router = APIRouter(prefix="/api/seo", tags=["프로그래매틱SEO"])
 # precompute 가 겹쳐 돌면 1 CPU 머신에서 이벤트루프가 죽는다. 한 번에 하나만.
 _build_lock = asyncio.Lock()
 _last_build: Dict[str, Any] = {}
+
+
+def _require_cron_token(authorization: Optional[str]) -> None:
+    """
+    쓰기 엔드포인트 보호. 읽기(GET)는 공개지만 enqueue/precompute 는
+    키워드당 20초 넘는 실측을 유발하므로 아무나 호출하게 두면 안 된다.
+    rank-tracker/measure-all 과 같은 CRON_TOKEN 규약을 쓴다.
+    """
+    expected = (os.environ.get("CRON_TOKEN") or "").strip()
+    if not expected:
+        raise HTTPException(status_code=503, detail="CRON_TOKEN 환경변수가 설정되지 않음")
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authorization Bearer 토큰 필요")
+    if not hmac.compare_digest(authorization.split(" ", 1)[1].strip(), expected):
+        raise HTTPException(status_code=403, detail="잘못된 cron 토큰")
 
 
 @router.get("/keyword/{slug}")
@@ -67,8 +84,9 @@ class EnqueueRequest(BaseModel):
 
 
 @router.post("/enqueue")
-async def enqueue(req: EnqueueRequest):
+async def enqueue(req: EnqueueRequest, authorization: Optional[str] = Header(None)):
     """측정 후보 키워드를 큐에 넣는다."""
+    _require_cron_token(authorization)
     seo_db.init_seo_pages_db()
     added = seo_db.enqueue_keywords(req.keywords, source=req.source or "manual", depth=req.depth or 0)
     return {"added": added, "stats": seo_db.stats()}
@@ -96,11 +114,16 @@ async def _run_build(limit: int, expand: bool) -> None:
 
 
 @router.post("/precompute")
-async def precompute(req: PrecomputeRequest, background: BackgroundTasks):
+async def precompute(
+    req: PrecomputeRequest,
+    background: BackgroundTasks,
+    authorization: Optional[str] = Header(None),
+):
     """
     큐에서 꺼내 실측한다. 오래 걸리므로 백그라운드로 던지고 즉시 응답한다.
     진행 상황은 GET /api/seo/stats, 마지막 결과는 GET /api/seo/precompute/last.
     """
+    _require_cron_token(authorization)
     if _build_lock.locked():
         return {"started": False, "reason": "already_running", "last": _last_build}
     background.add_task(_run_build, int(req.limit or 10), bool(req.expand))

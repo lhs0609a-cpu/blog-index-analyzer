@@ -1,0 +1,72 @@
+name: SEO keyword pages — precompute
+
+# 프로그래매틱 SEO 페이지를 조금씩 계속 만든다.
+#
+# 왜 조금씩인가: 키워드 1개 측정에 21~26초가 걸리고(SERP + 경쟁도), 1 CPU
+# 머신에서 SERP 파싱은 이벤트루프를 굶긴다. 한 번에 많이 돌리면 /health 까지
+# 밀려 서비스가 멈춘다(winner_keywords 전례). batch 를 작게 잡고 자주 돈다.
+#
+# 필요 GitHub Secrets:
+#   CRON_TOKEN — 백엔드 CRON_TOKEN 과 동일 값 (rank-tracker cron 과 공유)
+
+on:
+  schedule:
+    # 2시간마다. batch 15개 x 하루 12회 = 하루 최대 180 페이지.
+    - cron: "17 */2 * * *"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "이번 실행에서 측정할 키워드 수"
+        required: false
+        default: "15"
+      expand:
+        description: "연관 키워드로 큐를 확장할지 (true/false)"
+        required: false
+        default: "true"
+
+concurrency:
+  group: seo-pages-precompute
+  cancel-in-progress: false
+
+jobs:
+  precompute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10 # 백엔드가 백그라운드로 돌리므로 트리거만 하고 끝난다
+
+    steps:
+      - name: Trigger precompute
+        env:
+          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
+          BACKEND_URL: https://blog-index-analyzer.fly.dev
+          LIMIT: ${{ github.event.inputs.limit || '15' }}
+          EXPAND: ${{ github.event.inputs.expand || 'true' }}
+        run: |
+          if [ -z "$CRON_TOKEN" ]; then
+            echo "::error::CRON_TOKEN secret 미설정"
+            exit 1
+          fi
+
+          response=$(curl -sS -w "\n%{http_code}" \
+            -X POST "${BACKEND_URL}/api/seo/precompute" \
+            -H "Authorization: Bearer ${CRON_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"limit\": ${LIMIT}, \"expand\": ${EXPAND}}" \
+            --max-time 60)
+
+          body=$(echo "$response" | head -n -1)
+          status=$(echo "$response" | tail -n 1)
+          echo "status=$status"
+          echo "body=$body"
+
+          if [ "$status" != "200" ]; then
+            echo "::error::precompute 트리거 실패 status=$status"
+            exit 1
+          fi
+          echo "::notice::precompute 시작: $body"
+
+      - name: Report current stats
+        env:
+          BACKEND_URL: https://blog-index-analyzer.fly.dev
+        run: |
+          stats=$(curl -sS --max-time 30 "${BACKEND_URL}/api/seo/stats" || echo '{}')
+          echo "::notice::stats=$stats"
