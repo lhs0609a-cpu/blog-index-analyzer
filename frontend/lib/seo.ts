@@ -19,16 +19,23 @@ export function absoluteUrl(path = '/'): string {
 /**
  * 사이트 소유확인 코드 (검색엔진 웹마스터 도구).
  *
- * 네이버 서치어드바이저는 발급 완료. 구글은 Search Console 에서
- * "HTML 태그" 방식으로 발급받은 content 값을 GOOGLE_SITE_VERIFICATION
- * 환경변수(Vercel Project Settings → Environment Variables)에 넣으면 된다.
+ * 비밀값이 아니다 — 어차피 모든 페이지의 HTML 에 그대로 노출되는 메타 태그다.
+ * 그래서 네이버와 같은 방식으로 여기 상수로 둔다. 값을 바꿔야 하면
+ * GOOGLE_SITE_VERIFICATION 환경변수로 덮어쓸 수 있다(재배포 없이 교체할 때).
+ *
  * 값이 비어 있으면 태그 자체를 내보내지 않는다 — 빈 verification 태그는
  * 구글이 소유확인 실패로 처리한다.
+ *
+ * ⚠️ 구글은 확인 방법마다 다른 토큰을 준다. 아래 값은 "HTML 태그" 방식용이어야
+ * 한다. DNS TXT 방식 토큰(google-site-verification=... 형태로 안내되는 것)을
+ * 여기 넣으면 확인이 실패한다. 도메인 속성을 쓸 거라면 코드가 아니라
+ * DNS 에 TXT 레코드를 넣어야 한다.
  *
  * metadata 는 서버에서만 평가되므로 NEXT_PUBLIC_ 접두사를 쓰지 않는다.
  */
 export const NAVER_SITE_VERIFICATION = 'a2d07f71e11662403bea4bf15caa6b6582f57693'
-export const GOOGLE_SITE_VERIFICATION = process.env.GOOGLE_SITE_VERIFICATION || ''
+export const GOOGLE_SITE_VERIFICATION =
+  process.env.GOOGLE_SITE_VERIFICATION || 'Kt7BSBg8FgtNhD6uzjfJ6CHvU08uGstodUDxj_P-92E'
 
 export function verificationMetadata(): Pick<Metadata, 'verification' | 'other'> {
   return {
