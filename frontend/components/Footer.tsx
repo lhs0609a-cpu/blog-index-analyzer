@@ -74,6 +74,11 @@ export default function Footer() {
                   요금제
                 </Link>
               </li>
+              <li>
+                <Link href="/guides" className="block py-1 hover:text-violet-400 transition-colors cursor-pointer">
+                  블로그 성장 가이드
+                </Link>
+              </li>
             </ul>
           </div>
 

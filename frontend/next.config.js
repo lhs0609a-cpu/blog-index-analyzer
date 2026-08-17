@@ -28,6 +28,20 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
 
+  async headers() {
+    return [
+      {
+        // *.vercel.app 미리보기/기본 도메인은 www.blrank.co.kr 과 내용이 같아
+        // 중복 콘텐츠로 정본이 분산된다. 크롤러 차단은 여기서만 한다.
+        source: '/:path*',
+        has: [{ type: 'host', value: '.*\\.vercel\\.app' }],
+        headers: [
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+        ],
+      },
+    ]
+  },
+
 }
 
 module.exports = nextConfig

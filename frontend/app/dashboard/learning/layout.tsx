@@ -1,19 +1,11 @@
-import { Metadata } from 'next'
+import { noindexMetadata } from '@/lib/seo'
 
-export const metadata: Metadata = {
-  title: 'AI 키워드 학습 - 상위 노출 패턴 분석',
-  description: '네이버 블로그 상위 노출 게시물의 패턴을 AI가 학습합니다. 글자수, 이미지 수, 소제목 구성 등 상위 노출의 비밀을 데이터로 분석하세요.',
-  keywords: ['AI 학습', '상위 노출 분석', '블로그 패턴', '콘텐츠 분석', '네이버 상위 노출'],
-  openGraph: {
-    title: 'AI 키워드 학습 | 블랭크',
-    description: '상위 노출 블로그의 패턴을 AI가 학습하고 분석합니다',
-  },
-}
+/** 로그인 뒤 화면 — 색인 제외 (과거 sitemap 에 priority 0.9 로 올라가 있었다) */
+export const metadata = noindexMetadata(
+  'AI 키워드 학습',
+  '상위 노출 문서의 패턴을 학습하는 내부 분석 화면입니다.'
+)
 
-export default function LearningLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function LearningLayout({ children }: { children: React.ReactNode }) {
   return children
 }

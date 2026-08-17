@@ -118,9 +118,12 @@ export default function BlueOceanPage() {
           <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center">
             <Lock className="w-8 h-8 text-white gi3d" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-3">
+          {/* h1 이 아니라 h2 — 서버 렌더링 시 로그인 상태를 몰라 이 페이월이 먼저 그려지는데,
+              h1 이면 검색 결과의 대표 제목이 "유료 기능입니다" 가 되어버린다.
+              페이지의 h1 은 page.tsx 의 SeoContent 가 담당한다. */}
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">
             블루오션 키워드는 유료 기능입니다
-          </h1>
+          </h2>
           <p className="text-gray-600 mb-6">
             경쟁이 낮고 진입 가능성이 높은 황금 키워드를 발굴하세요.
             <br />

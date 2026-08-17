@@ -5,11 +5,18 @@ import BackendStatus from '../components/BackendStatus'
 import Footer from '../components/Footer'
 import GlobalNav from '../components/GlobalNav'
 import ClientProviders from '../components/ClientProviders'
+import {
+  SITE_URL,
+  jsonLdScript,
+  organizationJsonLd,
+  softwareAppJsonLd,
+  websiteJsonLd,
+} from '@/lib/seo'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
 
-const BASE_URL = 'https://www.blrank.co.kr'
+const BASE_URL = SITE_URL
 
 export const metadata: Metadata = {
   // 기본 메타데이터
@@ -56,14 +63,8 @@ export const metadata: Metadata = {
     siteName: '블랭크',
     title: '블랭크 - AI 블로그 분석 플랫폼',
     description: '네이버 블로그 품질 지수 측정, AI 키워드 분석, 블루오션 키워드 발굴. 블로그 성장을 위한 올인원 솔루션',
-    images: [
-      {
-        url: `${BASE_URL}/og-image.png`,
-        width: 1200,
-        height: 630,
-        alt: '블랭크 - AI 블로그 분석 플랫폼',
-      },
-    ],
+    // 이미지는 app/opengraph-image.tsx 파일 컨벤션이 자동 생성한다.
+    // (예전에 /og-image.png 를 직접 가리켰으나 그 파일은 존재하지 않아 404 였다)
   },
 
   // Twitter Cards
@@ -71,7 +72,6 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: '블랭크 - AI 블로그 분석 플랫폼',
     description: '네이버 블로그 품질 지수 측정, AI 키워드 분석, 블루오션 키워드 발굴',
-    images: [`${BASE_URL}/og-image.png`],
     creator: '@blank_blog',
   },
 
@@ -85,10 +85,9 @@ export const metadata: Metadata = {
   // 매니페스트
   manifest: '/manifest.json',
 
-  // 기타
-  alternates: {
-    canonical: BASE_URL,
-  },
+  // ⚠️ canonical 은 여기(루트)에 두지 않는다.
+  // 루트에 두면 하위 페이지가 전부 홈으로 정본 지정되어 색인에서 제외된다.
+  // 각 페이지가 lib/seo.ts 의 pageMetadata() 로 자기 canonical 을 선언한다.
   category: 'technology',
 
   // 사이트 인증 (Google Search Console 등록 후 실제 코드로 교체 필요)
@@ -112,35 +111,10 @@ export const viewport: Viewport = {
   ],
 }
 
-// JSON-LD 구조화 데이터
-const jsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'WebApplication',
-  name: '블랭크',
-  alternateName: 'Blank Blog Analyzer',
-  description: '네이버 블로그 품질 지수를 정확하게 측정하고 분석하는 AI 기반 플랫폼',
-  url: BASE_URL,
-  applicationCategory: 'BusinessApplication',
-  operatingSystem: 'Web',
-  offers: {
-    '@type': 'Offer',
-    price: '0',
-    priceCurrency: 'KRW',
-    description: '무료 기본 플랜 제공',
-  },
-  creator: {
-    '@type': 'Organization',
-    name: '블랭크',
-    url: BASE_URL,
-  },
-  featureList: [
-    '네이버 블로그 품질 지수 분석',
-    'AI 기반 키워드 분석',
-    '블루오션 키워드 발굴',
-    '글쓰기 가이드',
-    'X/Threads 자동화',
-  ],
-}
+// JSON-LD 구조화 데이터 (lib/seo.ts 단일 소스)
+// Organization / WebSite(SearchAction) / SoftwareApplication 을 @id 로 연결해
+// 검색엔진과 AI 검색이 같은 실체로 인식하게 한다.
+const jsonLd = [organizationJsonLd, websiteJsonLd, softwareAppJsonLd]
 
 export default function RootLayout({
   children,
@@ -151,10 +125,7 @@ export default function RootLayout({
     <html lang="ko">
       <head>
         {/* JSON-LD 구조화 데이터 */}
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
+        <script {...jsonLdScript(jsonLd)} />
       </head>
       <body className={inter.className}>
         <ClientProviders>
