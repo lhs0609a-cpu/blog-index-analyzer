@@ -78,6 +78,27 @@ export async function fetchKeywordPage(slug: string): Promise<KeywordPage | null
   }
 }
 
+/**
+ * 발행된 페이지 수만 센다. **캐시하지 않는다.**
+ *
+ * 사이트맵 인덱스가 이 값으로 청크 개수를 계산하는데, 캐시된 값이 0 이면
+ * 인덱스가 청크를 하나도 안 싣고 그 상태로 다음 갱신까지 굳는다.
+ * 크롤러가 그때 읽으면 키워드 페이지 전체가 사이트맵에서 사라진 것으로 보인다.
+ * 응답이 작으므로(카운트 1개) 매번 조회해도 부담 없다.
+ */
+export async function fetchKeywordCount(): Promise<number> {
+  try {
+    const res = await fetch(`${API_BASE}/api/seo/keywords?offset=0&limit=1`, {
+      cache: 'no-store',
+    })
+    if (!res.ok) return 0
+    const data = await res.json()
+    return data.total ?? 0
+  } catch {
+    return 0
+  }
+}
+
 export async function fetchKeywordList(
   offset = 0,
   limit = 5000

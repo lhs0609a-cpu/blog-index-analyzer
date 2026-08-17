@@ -1,5 +1,5 @@
 import { absoluteUrl } from '@/lib/seo'
-import { fetchKeywordList, SITEMAP_REVALIDATE } from '@/lib/seoApi'
+import { fetchKeywordCount } from '@/lib/seoApi'
 
 /**
  * 사이트맵 인덱스.
@@ -12,13 +12,21 @@ import { fetchKeywordList, SITEMAP_REVALIDATE } from '@/lib/seoApi'
  * 전부 실제 URL 이 담긴 사이트맵이어야 한다.
  */
 
-export const revalidate = SITEMAP_REVALIDATE
+/**
+ * 인덱스는 캐시하지 않는다.
+ * 페이지가 0개일 때 굳은 인덱스는 키워드 청크를 하나도 싣지 않고, 그 상태로
+ * 다음 갱신까지 남는다. 크롤러가 그 사이에 읽으면 키워드 페이지 전체가
+ * 사이트맵에서 빠진 것으로 본다. 실제로 첫 배포에서 그렇게 됐다.
+ * 응답은 몇 줄짜리 XML 이라 매번 만들어도 싸다. 청크(/sitemap-keywords/N.xml)는
+ * 무겁고 자주 안 바뀌므로 그쪽만 캐시한다.
+ */
+export const dynamic = 'force-dynamic'
 
 // 청크당 URL 수. 상한(50,000)보다 넉넉히 낮게 잡아 응답 크기를 작게 유지한다.
 export const CHUNK_SIZE = 5000
 
 export async function GET() {
-  const { total } = await fetchKeywordList(0, 1)
+  const total = await fetchKeywordCount()
   const chunks = Math.max(0, Math.ceil(total / CHUNK_SIZE))
   const now = new Date().toISOString()
 
@@ -38,7 +46,9 @@ export async function GET() {
   return new Response(xml, {
     headers: {
       'Content-Type': 'application/xml; charset=utf-8',
-      'Cache-Control': `public, max-age=0, s-maxage=${SITEMAP_REVALIDATE}`,
+      // force-dynamic 을 걸어도 CDN 이 6시간 잡고 있으면 같은 문제가 난다.
+      // 인덱스는 짧게만 캐시한다(청크는 SITEMAP_REVALIDATE 그대로).
+      'Cache-Control': 'public, max-age=0, s-maxage=300',
     },
   })
 }
