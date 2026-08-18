@@ -20,7 +20,9 @@ export default function KeywordCheckClient() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#F5F7FA] to-white">
-      <div className="max-w-4xl mx-auto px-4 py-12">
+      {/* 상단 여백은 고정 헤더(약 82px)보다 커야 한다. py-12(48px) 였을 때
+          히어로 아이콘이 헤더 뒤로 34px 파고들어 잘려 보였다. */}
+      <div className="max-w-4xl mx-auto px-4 pt-24 pb-12">
         <motion.div
           initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
           className="text-center mb-10"

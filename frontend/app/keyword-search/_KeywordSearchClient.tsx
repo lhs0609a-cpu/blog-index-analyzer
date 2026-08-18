@@ -1174,7 +1174,7 @@ function KeywordSearchContent() {
 
 
   return (
-    <div className="min-h-screen bg-[#fafafa] pt-20">
+    <div className="min-h-screen bg-[#fafafa] pt-24">
       {/* Connection Indicator */}
       <ConnectionIndicator />
 

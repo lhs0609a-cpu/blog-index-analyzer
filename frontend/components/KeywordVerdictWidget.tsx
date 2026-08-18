@@ -265,6 +265,10 @@ export default function KeywordVerdictWidget({
             disabled={busy || locked}
           />
         )}
+        {/* ⚠️ 아래 input 은 !pl-9 여야 한다. .toss-input 이 @apply px-4 로 좌우
+            패딩을 잡는데 컴포넌트 레이어와 유틸리티가 명시도가 같아 px-4 가 이긴다
+            (실측 paddingLeft 16px). 그래서 왼쪽 돋보기 아이콘이 placeholder 를
+            12px 덮고 있었다. */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 gi3d" />
           <input
@@ -272,7 +276,7 @@ export default function KeywordVerdictWidget({
             onChange={(e) => setKeyword(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && run()}
             placeholder="확인할 키워드 (예: 아토피 치료)"
-            className="toss-input pl-9 w-full"
+            className="toss-input !pl-9 w-full"
             disabled={busy || locked}
           />
         </div>
