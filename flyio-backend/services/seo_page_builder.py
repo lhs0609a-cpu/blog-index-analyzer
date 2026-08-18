@@ -137,9 +137,14 @@ async def enrich_volumes(limit: int = 200) -> Dict[str, Any]:
     from services.naver_ad_service import NaverAdApiClient
 
     seo_db.init_seo_pages_db()
+    # 기준(MIN_QUEUE_VOLUME)이 올라갔다면 예전 기준으로 통과한 행을 먼저 걸러낸다.
+    reclassified = seo_db.reclassify_by_volume()
     todo = seo_db.pending_without_volume(limit=limit)
     if not todo:
-        return {"checked": 0, "kept": 0, "skipped": 0, "message": "볼륨 미확인 키워드 없음"}
+        return {
+            "checked": 0, "kept": 0, "skipped": 0, "reclassified": reclassified,
+            "message": "볼륨 미확인 키워드 없음", "stats": seo_db.stats(),
+        }
 
     client = NaverAdApiClient()
     kept = skipped = checked = 0
@@ -169,6 +174,7 @@ async def enrich_volumes(limit: int = 200) -> Dict[str, Any]:
         "checked": checked,
         "kept": kept,
         "skipped": skipped,
+        "reclassified": reclassified,
         "errors": errors[:5],
         "stats": seo_db.stats(),
     }
@@ -185,11 +191,16 @@ async def build_batch(limit: int = 10, expand: bool = True) -> Dict[str, Any]:
     seo_db.init_seo_pages_db()
     seo_db.requeue_stuck()
 
-    # 측정 대상(검색량 확인 완료)이 모자라면 먼저 채운다. 싼 작업이라 먼저 해도
-    # 배치 시간에 거의 영향이 없고, 이게 없으면 take_pending 이 빈 손으로 돌아온다.
+    # ⚠️ 선별(enrich)과 측정을 같은 배치에서 연달아 돌리면 서로 느려진다.
+    # 둘 다 keywordstool 을 때리기 때문이다 — 측정의 competition 단계가
+    # search_keyword_with_tabs → get_related_keywords_from_searchad 를 호출한다.
+    # 선별 40콜 직후 측정을 시작하면 네이버 스로틀링에 걸려 키워드당 53초가
+    # 300초까지 늘어졌다(실측). 그래서 평소 선별은 워크플로가 별도 단계로
+    # 먼저 돌리고 쉬었다가 측정한다. 여기서는 측정 대상이 **아예 0** 일 때만
+    # 큐가 마르지 않도록 최소한으로 채운다.
     enriched = None
-    if seo_db.volume_ready_count() < limit:
-        enriched = await enrich_volumes(limit=200)
+    if seo_db.volume_ready_count() == 0:
+        enriched = await enrich_volumes(limit=100)
 
     items = seo_db.take_pending(limit=limit)
     if not items:
@@ -214,7 +225,11 @@ async def build_batch(limit: int = 10, expand: bool = True) -> Dict[str, Any]:
             seo_db.mark_queue(kw, "done")
             ok += 1
 
-            if expand and depth < MAX_DEPTH:
+            # 확장은 **수요가 큰 키워드에서만**. 무제한 확장하면 측정 1건당
+            # 연관 28개가 들어와 큐가 영원히 안 줄고(실측: 15분에 3개 측정하는
+            # 동안 큐 +77), 깊이가 깊어질수록 도메인 밖으로 새어 질이 떨어진다.
+            kw_vol = int(item.get("search_volume") or 0)
+            if expand and depth < MAX_DEPTH and kw_vol >= seo_db.EXPAND_MIN_VOLUME:
                 cand = [r["keyword"] for r in (data.get("related") or [])]
                 if cand:
                     enqueued += seo_db.enqueue_keywords(

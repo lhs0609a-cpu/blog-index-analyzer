@@ -47,9 +47,18 @@ FRESH_DAYS = 30
 MIN_COMPETITORS_FOR_PUBLISH = 5
 
 # 이 검색량 미만이면 아예 측정하지 않는다(state='skipped').
-# 네이버 keywordstool 은 월 10회 미만을 "< 10" 문자열로 주고, 코드가 그걸 5 로
-# 환산한다. 즉 10 미만 = 사실상 수요 없음. 키워드당 53초를 거기에 쓸 이유가 없다.
-MIN_QUEUE_VOLUME = 10
+#
+# ⚠️ 처음엔 10 으로 잡았는데 실측에서 200개 중 9개(4%)만 걸러졌다. 자동완성이
+# 만든 '블로그종류' 같은 조합도 월 10~50 은 나와서 통과해버린 것이다. 월 30회짜리
+# 페이지는 만들어봐야 유입이 없고, 그런 게 수천 개면 scaled content abuse 로 보인다.
+# 100 으로 올려 실제로 수요가 있는 것만 남긴다.
+MIN_QUEUE_VOLUME = 100
+
+# 이 검색량 이상인 키워드에서만 연관 키워드로 큐를 확장한다.
+# 확장을 무제한 허용하면 측정 1건당 연관 28개가 들어와 큐가 영원히 안 줄고
+# (실측: 15분에 3개 측정하는 동안 큐 +77), 깊이가 깊어질수록 도메인에서
+# 멀어져 질이 떨어진다. 수요가 큰 키워드의 이웃만 캔다.
+EXPAND_MIN_VOLUME = 1000
 
 
 def _connect() -> sqlite3.Connection:
@@ -264,6 +273,25 @@ def set_queue_volumes(volumes: Dict[str, int]) -> Dict[str, int]:
     finally:
         conn.close()
     return {"kept": kept, "skipped": skipped}
+
+
+def reclassify_by_volume() -> int:
+    """
+    MIN_QUEUE_VOLUME 을 올렸을 때 이미 통과 처리된 행을 다시 걸러낸다.
+    기준만 바꾸고 이걸 안 돌리면 예전 기준으로 통과한 저볼륨 키워드가
+    계속 측정 대상으로 남는다. 멱등이라 매번 호출해도 안전하다.
+    """
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            "UPDATE seo_keyword_queue SET state='skipped' "
+            "WHERE state='pending' AND volume_checked_at IS NOT NULL AND search_volume < ?",
+            (MIN_QUEUE_VOLUME,),
+        )
+        conn.commit()
+        return cur.rowcount
+    finally:
+        conn.close()
 
 
 def volume_ready_count() -> int:

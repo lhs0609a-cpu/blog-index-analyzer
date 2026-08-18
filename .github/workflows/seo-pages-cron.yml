@@ -34,6 +34,23 @@ jobs:
     timeout-minutes: 10 # 백엔드가 백그라운드로 돌리므로 트리거만 하고 끝난다
 
     steps:
+      # ⚠️ 선별과 측정은 반드시 분리해서 돌린다.
+      # 둘 다 keywordstool 을 때린다(측정의 competition 단계가 내부적으로 호출).
+      # 연달아 돌리면 네이버 스로틀링에 걸려 키워드당 53초가 300초까지 늘어졌다.
+      - name: Enrich volumes (선별 — 싸고 빠름, 측정 대상 줄세우기)
+        continue-on-error: true # 선별이 실패해도 측정은 시도한다
+        env:
+          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
+          BACKEND_URL: https://blog-index-analyzer.fly.dev
+        run: |
+          response=$(curl -sS -w "
+%{http_code}"             -X POST "${BACKEND_URL}/api/seo/enrich-volumes"             -H "Authorization: Bearer ${CRON_TOKEN}"             -H "Content-Type: application/json"             -d '{"limit": 200}'             --max-time 300)
+          echo "status=$(echo "$response" | tail -n 1)"
+          echo "body=$(echo "$response" | head -n -1)"
+
+      - name: Cooldown (네이버 스로틀링 회피)
+        run: sleep 60
+
       - name: Trigger precompute
         env:
           CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
