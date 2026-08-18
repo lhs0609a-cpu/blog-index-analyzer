@@ -2,16 +2,19 @@ name: SEO keyword pages — precompute
 
 # 프로그래매틱 SEO 페이지를 조금씩 계속 만든다.
 #
-# 왜 조금씩인가: 키워드 1개 측정에 21~26초가 걸리고(SERP + 경쟁도), 1 CPU
-# 머신에서 SERP 파싱은 이벤트루프를 굶긴다. 한 번에 많이 돌리면 /health 까지
-# 밀려 서비스가 멈춘다(winner_keywords 전례). batch 를 작게 잡고 자주 돈다.
+# 왜 조금씩인가: 키워드 1개 측정에 약 53초가 걸린다(SERP 난이도 + 경쟁도).
+# 배치를 작게 잡고 자주 돈다.
+#
+# ⚠️ 선별(enrich)과 측정(precompute)은 반드시 분리해서 돌린다.
+# 둘 다 keywordstool 을 때린다 — 측정의 competition 단계가 내부적으로
+# search_keyword_with_tabs → get_related_keywords_from_searchad 를 호출한다.
+# 연달아 돌리면 네이버 스로틀링에 걸려 키워드당 53초가 300초까지 늘어졌다.
 #
 # 필요 GitHub Secrets:
 #   CRON_TOKEN — 백엔드 CRON_TOKEN 과 동일 값 (rank-tracker cron 과 공유)
 
 on:
   schedule:
-    # 2시간마다. batch 15개 x 하루 12회 = 하루 최대 180 페이지.
     - cron: "17 */2 * * *"
   workflow_dispatch:
     inputs:
@@ -28,33 +31,39 @@ concurrency:
   group: seo-pages-precompute
   cancel-in-progress: false
 
+env:
+  BACKEND_URL: https://blog-index-analyzer.fly.dev
+
 jobs:
   precompute:
     runs-on: ubuntu-latest
-    timeout-minutes: 10 # 백엔드가 백그라운드로 돌리므로 트리거만 하고 끝난다
+    timeout-minutes: 15
 
     steps:
-      # ⚠️ 선별과 측정은 반드시 분리해서 돌린다.
-      # 둘 다 keywordstool 을 때린다(측정의 competition 단계가 내부적으로 호출).
-      # 연달아 돌리면 네이버 스로틀링에 걸려 키워드당 53초가 300초까지 늘어졌다.
-      - name: Enrich volumes (선별 — 싸고 빠름, 측정 대상 줄세우기)
-        continue-on-error: true # 선별이 실패해도 측정은 시도한다
+      - name: Enrich volumes
+        continue-on-error: true
         env:
           CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
-          BACKEND_URL: https://blog-index-analyzer.fly.dev
         run: |
-          response=$(curl -sS -w "
-%{http_code}"             -X POST "${BACKEND_URL}/api/seo/enrich-volumes"             -H "Authorization: Bearer ${CRON_TOKEN}"             -H "Content-Type: application/json"             -d '{"limit": 200}'             --max-time 300)
-          echo "status=$(echo "$response" | tail -n 1)"
-          echo "body=$(echo "$response" | head -n -1)"
+          if [ -z "$CRON_TOKEN" ]; then
+            echo "::error::CRON_TOKEN secret 미설정"
+            exit 1
+          fi
+          body=$(curl -sS -X POST "${BACKEND_URL}/api/seo/enrich-volumes" \
+            -H "Authorization: Bearer ${CRON_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"limit": 200}' \
+            --max-time 300 \
+            -o response.json -w '%{http_code}')
+          echo "status=${body}"
+          echo "body=$(cat response.json)"
 
-      - name: Cooldown (네이버 스로틀링 회피)
+      - name: Cooldown
         run: sleep 60
 
       - name: Trigger precompute
         env:
           CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
-          BACKEND_URL: https://blog-index-analyzer.fly.dev
           LIMIT: ${{ github.event.inputs.limit || '15' }}
           EXPAND: ${{ github.event.inputs.expand || 'true' }}
         run: |
@@ -62,28 +71,19 @@ jobs:
             echo "::error::CRON_TOKEN secret 미설정"
             exit 1
           fi
-
-          response=$(curl -sS -w "\n%{http_code}" \
-            -X POST "${BACKEND_URL}/api/seo/precompute" \
+          status=$(curl -sS -X POST "${BACKEND_URL}/api/seo/precompute" \
             -H "Authorization: Bearer ${CRON_TOKEN}" \
             -H "Content-Type: application/json" \
             -d "{\"limit\": ${LIMIT}, \"expand\": ${EXPAND}}" \
-            --max-time 60)
-
-          body=$(echo "$response" | head -n -1)
-          status=$(echo "$response" | tail -n 1)
-          echo "status=$status"
-          echo "body=$body"
-
+            --max-time 60 \
+            -o response.json -w '%{http_code}')
+          echo "status=${status}"
+          echo "body=$(cat response.json)"
           if [ "$status" != "200" ]; then
             echo "::error::precompute 트리거 실패 status=$status"
             exit 1
           fi
-          echo "::notice::precompute 시작: $body"
 
-      - name: Report current stats
-        env:
-          BACKEND_URL: https://blog-index-analyzer.fly.dev
+      - name: Report stats
         run: |
-          stats=$(curl -sS --max-time 30 "${BACKEND_URL}/api/seo/stats" || echo '{}')
-          echo "::notice::stats=$stats"
+          echo "::notice::stats=$(curl -sS --max-time 30 "${BACKEND_URL}/api/seo/stats")"
