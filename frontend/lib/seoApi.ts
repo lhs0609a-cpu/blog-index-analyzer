@@ -2,10 +2,10 @@
  * 프로그래매틱 SEO 페이지 — 서버 전용 데이터 접근.
  *
  * ⚠️ NEXT_PUBLIC_API_URL 을 쓰지 않는다.
- * next.config.js 의 env 블록이 이 변수의 기본값을 'https://bqts.fly.dev' 로
- * 박아두고 있는데 그건 이 서비스의 백엔드가 아니다. 실제 프로덕션 백엔드는
- * blog-index-analyzer.fly.dev 다(lib/api/apiConfig.ts 의 fallback 과 동일).
- * 잘못된 호스트로 빌드되면 전 페이지가 조용히 404 가 되므로 여기서 끊는다.
+ * 예전에 next.config.js 가 이 변수의 기본값을 'https://bqts.fly.dev'(같은 Fly
+ * 계정의 다른 프로젝트)로 박아둬서, 환경변수가 비는 순간 전 페이지가 남의 API 를
+ * 때리게 돼 있었다. 그 기본값은 고쳤지만, 사이트맵·키워드 페이지는 조용히 404 가
+ * 나면 알아채기 어려우므로 여기서는 전용 변수만 본다.
  */
 const API_BASE =
   process.env.SEO_API_URL?.replace(/\/$/, '') || 'https://blog-index-analyzer.fly.dev'

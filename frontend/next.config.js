@@ -5,7 +5,11 @@ const nextConfig = {
   // 환경 변수
   env: {
     API_BASE_URL: process.env.API_BASE_URL || 'http://localhost:8000',
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'https://bqts.fly.dev',
+    // ⚠️ 기본값은 반드시 이 서비스의 백엔드여야 한다. 예전 기본값이
+    // 'https://bqts.fly.dev' 였는데 그건 같은 Fly 계정의 **다른 프로젝트**
+    // (자동매매 API)다. Vercel 에 이 변수가 없는 순간 프론트 전체가
+    // 남의 API 를 때리게 된다. lib/api/apiConfig.ts 의 fallback 과 일치시킨다.
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'https://blog-index-analyzer.fly.dev',
   },
 
   // 이미지 최적화 (remotePatterns 사용)
