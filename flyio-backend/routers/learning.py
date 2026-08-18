@@ -31,6 +31,18 @@ except ImportError as e:
 
 # Request/Response Models
 class BlogFeatures(BaseModel):
+    """
+    학습 샘플 1건의 피처.
+
+    ⚠️ 여기 선언되지 않은 필드는 pydantic 이 조용히 버린다.
+    예전엔 7개만 선언돼 있어서, 프론트가 더 보내도 저장되지 않았고
+    실제로 저장된 샘플 6,470건 중 콘텐츠 피처 13개가 **전부 0** 이었다.
+    그 상태로 학습하면 스코어러 가중치의 27%(content_factors)와
+    C-Rank·D.I.A. 하위 가중치가 순위에 아무 영향을 못 주므로,
+    옵티마이저가 그걸 아무리 흔들어도 점수가 안 변한다(= 학습 정지).
+    스코어러가 쓰는 피처는 빠짐없이 여기 선언해야 한다.
+    """
+    # 블로그 전체 지수
     c_rank_score: Optional[float] = 0
     dia_score: Optional[float] = 0
     post_count: Optional[int] = 0
@@ -38,6 +50,32 @@ class BlogFeatures(BaseModel):
     blog_age_days: Optional[int] = 0
     recent_posts_30d: Optional[int] = 0
     visitor_count: Optional[int] = 0
+
+    # C-Rank / D.I.A. 하위 점수 — DB 에 아예 없던 값들
+    context_score: Optional[float] = None
+    content_score: Optional[float] = None
+    chain_score: Optional[float] = None
+    depth_score: Optional[float] = None
+    information_score: Optional[float] = None
+    accuracy_score: Optional[float] = None
+
+    # 글 콘텐츠 요소
+    content_length: Optional[float] = 0
+    heading_count: Optional[float] = 0
+    paragraph_count: Optional[float] = 0
+    image_count: Optional[float] = 0
+    keyword_count: Optional[float] = 0
+    keyword_density: Optional[float] = 0
+    post_age_days: Optional[float] = 0
+    title_has_keyword: Optional[bool] = False
+    title_keyword_position: Optional[int] = 0
+
+    # 보너스 요소
+    has_map: Optional[bool] = False
+    has_link: Optional[bool] = False
+    video_count: Optional[float] = 0
+    like_count: Optional[float] = 0
+    comment_count: Optional[float] = 0
 
 
 class SearchResult(BaseModel):

@@ -926,19 +926,54 @@ function KeywordSearchContent() {
   const collectLearningData = async (searchKeyword: string, searchResults: KeywordSearchResponse) => {
     try {
       // 학습용 샘플 데이터 준비
-      const samples = searchResults.results.map((blog, index) => ({
-        blog_id: blog.blog_id,
-        actual_rank: index + 1, // 실제 검색 순위
-        blog_features: {
-          c_rank_score: blog.index?.score_breakdown?.c_rank || 0,
-          dia_score: blog.index?.score_breakdown?.dia || 0,
-          post_count: blog.stats?.total_posts || 0,
-          neighbor_count: blog.stats?.neighbor_count || 0,
-          blog_age_days: 0, // 나중에 추가
-          recent_posts_30d: 0, // 나중에 추가
-          visitor_count: blog.stats?.total_visitors || 0
+      // ⚠️ 스코어러가 쓰는 피처를 **빠짐없이** 보내야 한다.
+      // 예전엔 7개만 보냈고 그중 2개는 0 하드코딩이라, 저장된 샘플 6,470건에서
+      // 콘텐츠 피처 13개가 전부 0 이었다. 그 데이터로는 content_factors(27%)와
+      // C-Rank·D.I.A. 하위 가중치가 순위에 아무 영향을 못 주므로 학습이 멈춘다.
+      // 아래 값들은 이미 검색 응답의 score_breakdown 안에 다 들어 있었다.
+      const samples = searchResults.results.map((blog, index) => {
+        const sb: any = blog.index?.score_breakdown || {}
+        const cd: any = sb.content_detail || {}
+        const rs: any = sb.raw_signals || {}
+        const cr: any = sb.c_rank_detail || {}
+        const di: any = sb.dia_detail || {}
+        const raw = (o: any) => (o && typeof o === 'object' ? o.raw ?? 0 : o ?? 0)
+
+        return {
+          blog_id: blog.blog_id,
+          actual_rank: index + 1, // 실제 검색 순위
+          blog_features: {
+            c_rank_score: sb.c_rank || 0,
+            dia_score: sb.dia || 0,
+            post_count: blog.stats?.total_posts ?? rs.total_posts ?? 0,
+            neighbor_count: blog.stats?.neighbor_count ?? rs.neighbor_count ?? 0,
+            visitor_count: blog.stats?.total_visitors ?? rs.total_visitors ?? 0,
+            // 발행 활동 — 예전엔 0 하드코딩이었다
+            recent_posts_30d: Math.round(rs.recent_activity_days ?? 0),
+            blog_age_days: 0, // 응답에 없음 — 백엔드가 채워야 함
+
+            // C-Rank / D.I.A. 하위 점수
+            context_score: cr.context ?? null,
+            content_score: cr.content ?? null,
+            chain_score: cr.chain ?? null,
+            depth_score: di.depth ?? null,
+            information_score: di.information ?? null,
+            accuracy_score: di.accuracy ?? null,
+
+            // 글 콘텐츠 — content_detail 은 {score, raw} 형태라 raw 를 쓴다
+            content_length: raw(cd.content_length) || rs.fullparse_avg_content_length || 0,
+            heading_count: raw(cd.heading_count),
+            paragraph_count: raw(cd.paragraph_count),
+            image_count: raw(cd.image_count) || rs.fullparse_avg_images || 0,
+            post_age_days: raw(cd.freshness),
+
+            // 보너스
+            video_count: rs.fullparse_avg_videos ?? 0,
+            like_count: rs.fullparse_avg_likes ?? 0,
+            comment_count: rs.fullparse_avg_comments ?? 0,
+          },
         }
-      }))
+      })
 
       // 백엔드로 전송 (비동기, 실패해도 사용자 경험에 영향 없음)
       fetch(`${getApiUrl()}/api/learning/collect`, {

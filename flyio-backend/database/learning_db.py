@@ -62,6 +62,17 @@ def init_learning_tables():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_keyword ON learning_samples(keyword)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_collected_at ON learning_samples(collected_at)")
 
+        # C-Rank / D.I.A. 하위 점수 (2026-08-18 추가).
+        # 스코어러는 이 6개로 c_rank·dia 하위 가중치를 적용하는데 저장을 안 하고
+        # 있었다. 그래서 옵티마이저가 그 가중치를 흔들어도 점수가 안 변했고,
+        # 학습이 100회 시도에서 단 하나도 못 바꾸는 상태였다.
+        for _col in ("context_score", "content_score", "chain_score",
+                     "depth_score", "information_score", "accuracy_score"):
+            try:
+                cursor.execute(f"ALTER TABLE learning_samples ADD COLUMN {_col} REAL")
+            except sqlite3.OperationalError:
+                pass  # 이미 있음
+
         # 2. learning_sessions table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS learning_sessions (
@@ -229,8 +240,10 @@ def add_learning_sample(
                 title_has_keyword, title_keyword_position, content_length,
                 image_count, video_count, keyword_count, keyword_density,
                 heading_count, paragraph_count, has_map, has_link,
-                like_count, comment_count, post_age_days
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                like_count, comment_count, post_age_days,
+                context_score, content_score, chain_score,
+                depth_score, information_score, accuracy_score
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             keyword,
             blog_id,
@@ -259,6 +272,12 @@ def add_learning_sample(
             blog_features.get('like_count', 0),
             blog_features.get('comment_count', 0),
             blog_features.get('post_age_days'),
+            blog_features.get('context_score'),
+            blog_features.get('content_score'),
+            blog_features.get('chain_score'),
+            blog_features.get('depth_score'),
+            blog_features.get('information_score'),
+            blog_features.get('accuracy_score'),
         ))
         return cursor.lastrowid
 
