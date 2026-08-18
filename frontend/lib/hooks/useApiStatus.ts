@@ -17,6 +17,8 @@ interface ApiStatusState {
 
 // 프로덕션에서는 더 긴 간격과 타임아웃 사용
 const HEALTH_CHECK_INTERVAL = 30000 // 30초마다 체크 (프로덕션에서는 덜 자주)
+// 상태에서 읽지 않고 여기서 정의한다 — 상태를 의존성에 넣으면 루프가 된다.
+const SERVICE_NAMES = ['Backend API'] as const
 const HEALTH_CHECK_TIMEOUT = 15000 // 15초 타임아웃 (프로덕션 서버 응답 대기)
 
 export function useApiStatus(enabled = true) {
@@ -90,11 +92,19 @@ export function useApiStatus(enabled = true) {
     isCheckingRef.current = true
 
     try {
-      // 현재 API URL로 서비스 업데이트
+      // ⚠️ status.services 를 읽지 않는다.
+      // 예전엔 여기서 status.services 를 map 하고 아래에서 setStatus 로 교체했는데,
+      // 그 값이 이 useCallback 의 의존성에 들어 있어 무한 루프가 됐다:
+      //   setStatus → services 참조 변경 → useCallback 재생성 → useEffect 재실행
+      //   → 즉시 checkAllServices() → 처음으로
+      // fetch 왕복(~80ms)만큼만 쉬어서 /health 를 **초당 12회** 때리고 있었다
+      // (실측: 30초에 367건). 서비스 목록은 이름 상수 + 현재 URL 로 매번 새로
+      // 만들면 되므로 상태를 읽을 이유가 없다.
       const currentUrl = getApiUrl()
-      const updatedServices = status.services.map(s => ({
-        ...s,
-        url: `${currentUrl}/health`
+      const updatedServices: ApiStatusCheck[] = SERVICE_NAMES.map((name) => ({
+        name,
+        url: `${currentUrl}/health`,
+        status: 'checking',
       }))
 
       const results = await Promise.all(
@@ -120,7 +130,7 @@ export function useApiStatus(enabled = true) {
     } finally {
       isCheckingRef.current = false
     }
-  }, [status.services, checkHealth, enabled])
+  }, [checkHealth, enabled])
 
   // 초기 체크 및 주기적 체크
   useEffect(() => {
