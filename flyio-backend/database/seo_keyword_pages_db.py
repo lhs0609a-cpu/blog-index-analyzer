@@ -228,6 +228,56 @@ def take_pending(limit: int = 20) -> List[Dict[str, Any]]:
         conn.close()
 
 
+# 이 토큰 중 하나라도 포함해야 우리 도메인으로 본다.
+# keywordstool 이 돌려주는 연관 키워드에는 '블로그' 힌트에서 출발해도
+# 전혀 무관한 것들이 섞인다. 도메인 밖으로 새면 만들어봐야 우리 서비스와
+# 연결되지 않는 페이지가 된다.
+DOMAIN_TOKENS = (
+    "블로그", "포스팅", "포스트", "네이버", "애드포스트", "인플루언서",
+    "티스토리", "상위노출", "검색", "키워드", "seo", "SEO", "저품질",
+    "최적화", "지수", "방문자", "이웃", "체험단", "협찬", "글쓰기",
+)
+
+
+def in_domain(keyword: str) -> bool:
+    k = (keyword or "")
+    return any(t in k for t in DOMAIN_TOKENS)
+
+
+def enqueue_with_volume(items: Dict[str, int], source: str = "keywordstool", depth: int = 1) -> int:
+    """
+    검색량을 이미 아는 키워드를 큐에 넣는다 — 바로 측정 대상이 된다.
+
+    keywordstool 은 힌트 5개당 최대 100개의 연관 키워드를 **검색량과 함께**
+    돌려준다. 지금까지는 힌트 5개 값만 쓰고 나머지 95개를 버리고 있었다.
+    자동완성이 뽑아낸 키워드는 실측 결과 거의 전부 월 10회 미만(placeholder)
+    이었던 반면, 이쪽은 네이버가 실제 검색량을 보증하는 목록이다.
+    """
+    now = datetime.now(KST).isoformat()
+    conn = _connect()
+    added = 0
+    try:
+        cur = conn.cursor()
+        for kw, vol in items.items():
+            kw = (kw or "").strip()
+            vol = int(vol or 0)
+            if not kw or len(kw) < 2 or vol < MIN_QUEUE_VOLUME:
+                continue
+            if not in_domain(kw):
+                continue
+            cur.execute(
+                "INSERT OR IGNORE INTO seo_keyword_queue "
+                "(keyword, source, depth, state, added_at, search_volume, volume_checked_at) "
+                "VALUES (?,?,?,'pending',?,?,?)",
+                (kw, source, depth, now, vol, now),
+            )
+            added += cur.rowcount
+        conn.commit()
+    finally:
+        conn.close()
+    return added
+
+
 def pending_without_volume(limit: int = 200) -> List[str]:
     """검색량을 아직 안 재본 대기 키워드. 얕은 깊이부터(시드에 가까울수록 유망)."""
     conn = _connect()

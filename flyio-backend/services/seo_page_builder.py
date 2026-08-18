@@ -147,7 +147,7 @@ async def enrich_volumes(limit: int = 200) -> Dict[str, Any]:
         }
 
     client = NaverAdApiClient()
-    kept = skipped = checked = 0
+    kept = skipped = checked = discovered = 0
     errors: List[str] = []
 
     # hintKeywords 는 5개까지. 네이버는 공백을 제거한 형태(relKeyword)로 돌려주므로
@@ -167,6 +167,20 @@ async def enrich_volumes(limit: int = 200) -> Dict[str, Any]:
         skipped += r["skipped"]
         checked += len(chunk)
 
+        # ★ 응답에 딸려온 나머지 연관 키워드를 그대로 큐에 넣는다.
+        # keywordstool 은 힌트 5개당 최대 100개를 **검색량과 함께** 준다.
+        # 지금까지 힌트 5개 값만 쓰고 95개를 버리고 있었다. 자동완성이 뽑은
+        # 키워드는 실측 결과 거의 전부 월 10회 미만(네이버 '< 10' placeholder)
+        # 이었던 반면, 이쪽은 네이버가 실제 검색량을 보증하는 목록이다.
+        # 검색량을 이미 알고 들어가므로 재조회 없이 바로 측정 대상이 된다.
+        harvest = {
+            k: v.get("monthly_total", 0)
+            for k, v in (vol_map or {}).items()
+            if k.replace(" ", "") not in {c.replace(" ", "") for c in chunk}
+        }
+        if harvest:
+            discovered += seo_db.enqueue_with_volume(harvest, source="keywordstool", depth=1)
+
         # 네이버 rate limit 여유 + 이벤트루프 양보
         await asyncio.sleep(0.35)
 
@@ -174,6 +188,7 @@ async def enrich_volumes(limit: int = 200) -> Dict[str, Any]:
         "checked": checked,
         "kept": kept,
         "skipped": skipped,
+        "discovered": discovered,
         "reclassified": reclassified,
         "errors": errors[:5],
         "stats": seo_db.stats(),
