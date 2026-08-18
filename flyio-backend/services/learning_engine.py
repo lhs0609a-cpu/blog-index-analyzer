@@ -393,10 +393,23 @@ def calculate_exact_match_rate_by_keyword(samples: List[Dict], predicted_scores:
     """
     from collections import defaultdict
 
-    # 키워드별로 그룹화
+    # 키워드별로 그룹화.
+    #
+    # ⚠️ 같은 키워드를 여러 번 수집하면 한 그룹에 같은 블로그가 여러 번 들어온다.
+    # 그대로 rankdata 를 돌리면 예측 순위는 1..60 으로 매겨지는데 actual_rank 는
+    # 1..10 뿐이라, 모델이 완벽해도 편차가 폭발한다. 실제로 '대출' 그룹이
+    # 6회 수집 × 10블로그 = 60개였고 그래서 정확도가 무작위(1/N)보다 낮은
+    # 4.7% 로 표시되고 있었다(spearman 0.022 = 무상관).
+    # → 키워드 안에서 blog_id 로 중복을 제거하고 **최신 수집분만** 남긴다.
+    # samples 는 collected_at DESC 로 오므로 먼저 만난 것이 최신이다.
     keyword_groups = defaultdict(list)
+    seen = set()
     for i, sample in enumerate(samples):
         keyword = sample.get('keyword', 'unknown')
+        dedup_key = (keyword, sample.get('blog_id'))
+        if dedup_key in seen:
+            continue
+        seen.add(dedup_key)
         keyword_groups[keyword].append({
             'index': i,
             'actual_rank': sample.get('actual_rank', 0),

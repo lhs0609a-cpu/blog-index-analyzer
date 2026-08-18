@@ -265,11 +265,20 @@ async def get_deviation_analysis():
                 "overall_deviation": None
             }
 
-        # ===== 키워드별로 그룹화 (핵심 수정!) =====
+        # ===== 키워드별로 그룹화 =====
+        # ⚠️ 같은 키워드를 여러 번 수집하면 한 그룹에 같은 블로그가 중복으로 들어온다.
+        # 그러면 예측 순위는 1..60 인데 actual_rank 는 1..10 뿐이라 편차가 폭발하고,
+        # 정확도가 무작위보다 낮게 나온다(실측: 4.5%, spearman 0.022).
+        # blog_id 로 중복 제거하고 최신 수집분만 남긴다(samples 는 collected_at DESC).
         keyword_groups = defaultdict(list)
+        _seen = set()
         for s in samples:
             keyword = s.get('keyword', '')
+            _k = (keyword, s.get('blog_id'))
+            if _k in _seen:
+                continue
             if keyword and s.get('actual_rank') and s.get('predicted_score'):
+                _seen.add(_k)
                 keyword_groups[keyword].append({
                     'keyword': keyword,
                     'blog_id': s.get('blog_id', ''),
