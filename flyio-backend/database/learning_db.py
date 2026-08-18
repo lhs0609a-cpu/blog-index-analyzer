@@ -73,6 +73,21 @@ def init_learning_tables():
             except sqlite3.OperationalError:
                 pass  # 이미 있음
 
+        # 글 본문을 실제로 읽었는지 (2026-08-19 추가).
+        # ⚠️ 풀파싱은 결과의 약 25% 에서 실패한다(실측 20건 중 5건).
+        # 그때 content_length 는 0 으로 저장되는데, 이건 '글이 짧다'가 아니라
+        # '못 읽었다'다. 학습기는 둘을 구분할 수 없어 "내용 없는 글이 1위" 라는
+        # 거짓 신호를 배운다. 플래그를 달아 학습에서 제외한다.
+        # ⚠️ DEFAULT 를 주지 않는다. DEFAULT 0 으로 만들면 기존 6,470건이 전부
+        # '못 읽음' 으로 표시돼 학습에서 통째로 제외된다. NULL = 플래그 도입 전
+        # 데이터(판단 보류), 0 = 이번에 읽기 실패한 것, 1 = 읽음.
+        try:
+            cursor.execute(
+                "ALTER TABLE learning_samples ADD COLUMN content_parsed INTEGER"
+            )
+        except sqlite3.OperationalError:
+            pass
+
         # 2. learning_sessions table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS learning_sessions (
@@ -242,8 +257,9 @@ def add_learning_sample(
                 heading_count, paragraph_count, has_map, has_link,
                 like_count, comment_count, post_age_days,
                 context_score, content_score, chain_score,
-                depth_score, information_score, accuracy_score
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                depth_score, information_score, accuracy_score,
+                content_parsed
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             keyword,
             blog_id,
@@ -278,6 +294,11 @@ def add_learning_sample(
             blog_features.get('depth_score'),
             blog_features.get('information_score'),
             blog_features.get('accuracy_score'),
+            # 본문을 실제로 읽었는지 — 프론트가 명시적으로 알려주지 않으면
+            # content_length 로 추정한다(0 이면 못 읽은 것으로 본다).
+            1 if (blog_features.get('content_parsed')
+                  if blog_features.get('content_parsed') is not None
+                  else (blog_features.get('content_length') or 0) > 0) else 0,
         ))
         return cursor.lastrowid
 

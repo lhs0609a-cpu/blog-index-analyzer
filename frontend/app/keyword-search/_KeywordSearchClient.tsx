@@ -971,6 +971,11 @@ function KeywordSearchContent() {
             video_count: rs.fullparse_avg_videos ?? 0,
             like_count: rs.fullparse_avg_likes ?? 0,
             comment_count: rs.fullparse_avg_comments ?? 0,
+
+            // 본문을 실제로 읽었는지. 풀파싱은 결과의 약 25%에서 실패하고
+            // 그때 콘텐츠 피처가 전부 0으로 온다. '짧은 글'과 구분되지 않으면
+            // 학습기가 "내용 없는 글이 1위"를 배우므로 명시적으로 알려준다.
+            content_parsed: (rs.fullparse_n ?? 0) > 0 || raw(cd.content_length) > 0,
           },
         }
       })

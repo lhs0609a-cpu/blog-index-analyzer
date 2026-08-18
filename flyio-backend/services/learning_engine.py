@@ -410,6 +410,12 @@ def calculate_exact_match_rate_by_keyword(samples: List[Dict], predicted_scores:
         if dedup_key in seen:
             continue
         seen.add(dedup_key)
+        # ⚠️ 본문을 못 읽은 샘플은 콘텐츠 피처가 전부 0 이다. '짧은 글'과
+        # 구분되지 않아 학습을 오염시키므로 지표 계산에서 뺀다.
+        # 0 = 이번에 읽기 실패 / NULL(None) = 플래그 도입 전 데이터라 판단 보류
+        # (그것까지 빼면 기존 6,470건이 통째로 사라져 지표가 비어버린다).
+        if sample.get('content_parsed') == 0:
+            continue
         keyword_groups[keyword].append({
             'index': i,
             'actual_rank': sample.get('actual_rank', 0),

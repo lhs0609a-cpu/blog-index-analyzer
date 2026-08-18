@@ -77,6 +77,11 @@ class BlogFeatures(BaseModel):
     like_count: Optional[float] = 0
     comment_count: Optional[float] = 0
 
+    # 글 본문을 실제로 읽었는지. 풀파싱은 약 25% 에서 실패하는데,
+    # 그때 content_length=0 은 '짧다'가 아니라 '못 읽었다'다.
+    # 구분하지 않으면 학습기가 "내용 없는 글이 1위" 를 배운다.
+    content_parsed: Optional[bool] = None
+
 
 class SearchResult(BaseModel):
     blog_id: str
