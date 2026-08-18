@@ -62,7 +62,13 @@ async def _measure_one(keyword: str) -> Optional[Dict[str, Any]]:
     # 2) 경쟁도 — 실패해도 페이지는 성립한다(난이도만으로도 본문이 된다).
     #    _analyze_competition 은 pydantic 모델을 돌려주므로 dict 로 단정하면 안 된다.
     try:
-        comp = await keyword_analysis_service._analyze_competition(keyword, None)
+        # collect_learning=True — 이미 뽑아온 상위 블로그 결과를 학습 샘플로도
+        # 저장한다. 추가 네트워크 호출이 없으므로 비용 0.
+        # 예전엔 SEO 페이지에만 쓰고 버려서, 학습 데이터는 사용자가
+        # /keyword-search 에서 검색할 때만 쌓였다(트래픽 의존).
+        comp = await keyword_analysis_service._analyze_competition(
+            keyword, None, collect_learning=True
+        )
         if comp is not None:
             comp_d = comp if isinstance(comp, dict) else comp.model_dump()
             data["search_volume"] = comp_d.get("search_volume")

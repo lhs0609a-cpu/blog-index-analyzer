@@ -468,7 +468,8 @@ class KeywordAnalysisService:
     async def _analyze_competition(
         self,
         keyword: str,
-        my_blog_id: Optional[str] = None
+        my_blog_id: Optional[str] = None,
+        collect_learning: bool = False
     ) -> CompetitionAnalysis:
         """경쟁도 분석 (의료/지역 키워드 특수성 반영)"""
         # 상위 블로그 분석 (기존 search-keyword-with-tabs 활용)
@@ -476,6 +477,16 @@ class KeywordAnalysisService:
 
         try:
             search_result = await search_keyword_with_tabs(keyword, limit=10, analyze_content=True)
+
+            # 학습 샘플 적재 (선택). 이미 뽑아온 결과를 그대로 쓰므로
+            # 네트워크 비용이 0 이다. SEO 키워드 페이지 크론이 2시간마다
+            # 돌면서 이걸 켜면, 사용자 트래픽 없이도 샘플이 쌓인다.
+            if collect_learning:
+                try:
+                    from services.learning_sample_mapper import collect_from_search
+                    collect_from_search(keyword, search_result.results, limit=10)
+                except Exception as e:
+                    logger.warning(f"[learning] 샘플 적재 실패 {keyword}: {e}")
 
             # 상위 10개 블로그 통계
             top10_scores = []
