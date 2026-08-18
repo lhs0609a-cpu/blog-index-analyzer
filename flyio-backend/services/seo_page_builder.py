@@ -120,6 +120,60 @@ async def _measure_one(keyword: str) -> Optional[Dict[str, Any]]:
     return data
 
 
+async def enrich_volumes(limit: int = 200) -> Dict[str, Any]:
+    """
+    대기 키워드에 월 검색량을 붙인다. 기준 미달은 'skipped' 로 내려 측정 대상에서 뺀다.
+
+    왜 이게 측정보다 먼저인가:
+    keywordstool 은 1콜(약 2초)에 5개 힌트를 받아 최대 100개 키워드+검색량을 준다.
+    SERP 측정은 키워드당 53초다. 즉 **25배 싼 정보로 먼저 줄을 세우고**,
+    비싼 측정은 수요가 확인된 것에만 쓴다. 이걸 안 하면 자동완성이 만들어낸
+    '블로그 종류'·'블로그 효과' 같은 수요 0 짜리에 하루치 예산을 다 쓴다.
+
+    ⚠️ 네이버는 검색량이 없는 키워드를 응답에서 아예 빼버린다. 그래서 응답에
+    없는 것은 0 으로 기록해야 한다 — 안 그러면 volume_checked_at 이 NULL 로 남아
+    매번 같은 키워드를 다시 조회하고 큐가 영원히 줄지 않는다.
+    """
+    from services.naver_ad_service import NaverAdApiClient
+
+    seo_db.init_seo_pages_db()
+    todo = seo_db.pending_without_volume(limit=limit)
+    if not todo:
+        return {"checked": 0, "kept": 0, "skipped": 0, "message": "볼륨 미확인 키워드 없음"}
+
+    client = NaverAdApiClient()
+    kept = skipped = checked = 0
+    errors: List[str] = []
+
+    # hintKeywords 는 5개까지. 네이버는 공백을 제거한 형태(relKeyword)로 돌려주므로
+    # 매칭도 공백 제거 기준으로 한다.
+    for i in range(0, len(todo), 5):
+        chunk = todo[i : i + 5]
+        try:
+            vol_map = await client.get_keywords_volume_batch(chunk)
+        except Exception as e:
+            errors.append(f"{chunk[:2]}...: {str(e)[:100]}")
+            vol_map = {}
+
+        norm = {k.replace(" ", ""): v.get("monthly_total", 0) for k, v in (vol_map or {}).items()}
+        batch_result = {kw: int(norm.get(kw.replace(" ", ""), 0)) for kw in chunk}
+        r = seo_db.set_queue_volumes(batch_result)
+        kept += r["kept"]
+        skipped += r["skipped"]
+        checked += len(chunk)
+
+        # 네이버 rate limit 여유 + 이벤트루프 양보
+        await asyncio.sleep(0.35)
+
+    return {
+        "checked": checked,
+        "kept": kept,
+        "skipped": skipped,
+        "errors": errors[:5],
+        "stats": seo_db.stats(),
+    }
+
+
 async def build_batch(limit: int = 10, expand: bool = True) -> Dict[str, Any]:
     """
     큐에서 limit 개를 꺼내 측정하고 캐시에 넣는다.
@@ -131,9 +185,20 @@ async def build_batch(limit: int = 10, expand: bool = True) -> Dict[str, Any]:
     seo_db.init_seo_pages_db()
     seo_db.requeue_stuck()
 
+    # 측정 대상(검색량 확인 완료)이 모자라면 먼저 채운다. 싼 작업이라 먼저 해도
+    # 배치 시간에 거의 영향이 없고, 이게 없으면 take_pending 이 빈 손으로 돌아온다.
+    enriched = None
+    if seo_db.volume_ready_count() < limit:
+        enriched = await enrich_volumes(limit=200)
+
     items = seo_db.take_pending(limit=limit)
     if not items:
-        return {"taken": 0, "ok": 0, "failed": 0, "enqueued": 0, "message": "queue empty"}
+        return {
+            "taken": 0, "ok": 0, "failed": 0, "enqueued": 0,
+            "enriched": enriched,
+            "message": "측정 대상 없음 (검색량 기준 통과 키워드 부족)",
+            "stats": seo_db.stats(),
+        }
 
     ok = failed = enqueued = 0
     errors: List[str] = []
@@ -172,6 +237,7 @@ async def build_batch(limit: int = 10, expand: bool = True) -> Dict[str, Any]:
         "ok": ok,
         "failed": failed,
         "enqueued": enqueued,
+        "enriched": enriched,
         "errors": errors[:10],
         "stats": seo_db.stats(),
     }

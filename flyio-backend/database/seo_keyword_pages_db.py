@@ -46,6 +46,11 @@ FRESH_DAYS = 30
 # (얇은 페이지 대량 = scaled content abuse).
 MIN_COMPETITORS_FOR_PUBLISH = 5
 
+# 이 검색량 미만이면 아예 측정하지 않는다(state='skipped').
+# 네이버 keywordstool 은 월 10회 미만을 "< 10" 문자열로 주고, 코드가 그걸 5 로
+# 환산한다. 즉 10 미만 = 사실상 수요 없음. 키워드당 53초를 거기에 쓸 이유가 없다.
+MIN_QUEUE_VOLUME = 10
+
 
 def _connect() -> sqlite3.Connection:
     d = os.path.dirname(SEO_PAGES_DB_PATH)
@@ -126,6 +131,25 @@ def init_seo_pages_db() -> None:
             "CREATE INDEX IF NOT EXISTS idx_seo_queue_state "
             "ON seo_keyword_queue(state, depth, added_at)"
         )
+
+        # 검색량 계층 (2026-08-18 추가).
+        # 자동완성 확장은 '블로그 종류'·'블로그 효과'처럼 아무도 안 찾는 조합을
+        # 대량으로 만든다. 키워드당 53초를 쓰는 SERP 측정을 그런 데 쓰면
+        # 수요 없는 페이지만 쌓이고, 그게 곧 구글의 scaled content abuse 다.
+        # keywordstool 은 1콜(약 2초)에 100개 키워드+검색량을 주므로,
+        # 비싼 측정 전에 싼 검색량으로 먼저 줄을 세운다.
+        for ddl in (
+            "ALTER TABLE seo_keyword_queue ADD COLUMN search_volume INTEGER",
+            "ALTER TABLE seo_keyword_queue ADD COLUMN volume_checked_at TIMESTAMP",
+        ):
+            try:
+                cur.execute(ddl)
+            except sqlite3.OperationalError:
+                pass  # 이미 있음
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_seo_queue_volume "
+            "ON seo_keyword_queue(state, search_volume DESC)"
+        )
         conn.commit()
         logger.info(f"[seo_pages_db] initialized at {SEO_PAGES_DB_PATH}")
     finally:
@@ -161,7 +185,12 @@ def enqueue_keywords(keywords: List[str], source: str = "manual", depth: int = 0
 
 def take_pending(limit: int = 20) -> List[Dict[str, Any]]:
     """
-    측정할 키워드를 꺼낸다. 얕은 깊이(=시드에 가까운, 수요가 큰) 것부터.
+    측정할 키워드를 꺼낸다. **검색량이 큰 것부터.**
+
+    예전엔 depth 순(= 사실상 무작위)이었다. 그러면 자동완성이 만들어낸
+    '블로그 종류'·'블로그 효과' 같은 수요 0 짜리에 키워드당 53초를 써버린다.
+    지금은 검색량이 확인된 것만, 큰 순서로 꺼낸다. 검색량 확인이 안 된 키워드는
+    아직 대상이 아니다 — enrich_volumes 가 먼저 채워야 한다(build_batch 가 자동 호출).
 
     꺼내면서 바로 'running' 으로 바꾼다 — worker 가 중간에 죽어도 같은 키워드를
     무한 반복하지 않게 하기 위함. 대신 attempts 로 재시도 횟수를 제한한다.
@@ -171,10 +200,11 @@ def take_pending(limit: int = 20) -> List[Dict[str, Any]]:
     try:
         cur = conn.cursor()
         cur.execute(
-            "SELECT keyword, source, depth, attempts FROM seo_keyword_queue "
+            "SELECT keyword, source, depth, attempts, search_volume FROM seo_keyword_queue "
             "WHERE state = 'pending' AND attempts < 3 "
-            "ORDER BY depth ASC, added_at ASC LIMIT ?",
-            (limit,),
+            "  AND volume_checked_at IS NOT NULL AND search_volume >= ? "
+            "ORDER BY search_volume DESC, added_at ASC LIMIT ?",
+            (MIN_QUEUE_VOLUME, limit),
         )
         rows = [dict(r) for r in cur.fetchall()]
         for r in rows:
@@ -185,6 +215,68 @@ def take_pending(limit: int = 20) -> List[Dict[str, Any]]:
             )
         conn.commit()
         return rows
+    finally:
+        conn.close()
+
+
+def pending_without_volume(limit: int = 200) -> List[str]:
+    """검색량을 아직 안 재본 대기 키워드. 얕은 깊이부터(시드에 가까울수록 유망)."""
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            "SELECT keyword FROM seo_keyword_queue "
+            "WHERE state = 'pending' AND volume_checked_at IS NULL "
+            "ORDER BY depth ASC, added_at ASC LIMIT ?",
+            (limit,),
+        )
+        return [r["keyword"] for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def set_queue_volumes(volumes: Dict[str, int]) -> Dict[str, int]:
+    """
+    검색량을 기록하고, 기준 미달은 'skipped' 로 내린다.
+
+    ⚠️ 응답에 없는 키워드는 0 으로 기록해야 한다. 그냥 두면 volume_checked_at 이
+    NULL 로 남아 매 배치마다 같은 키워드를 다시 조회하게 되고 큐가 영원히 안 준다.
+    네이버는 검색량이 없는 키워드를 아예 응답에서 빼기 때문에 이 경우가 흔하다.
+    """
+    now = datetime.now(KST).isoformat()
+    conn = _connect()
+    kept = skipped = 0
+    try:
+        cur = conn.cursor()
+        for kw, vol in volumes.items():
+            vol = int(vol or 0)
+            state = "pending" if vol >= MIN_QUEUE_VOLUME else "skipped"
+            if state == "skipped":
+                skipped += 1
+            else:
+                kept += 1
+            cur.execute(
+                "UPDATE seo_keyword_queue SET search_volume=?, volume_checked_at=?, "
+                "state=CASE WHEN state='pending' THEN ? ELSE state END, updated_at=? "
+                "WHERE keyword=?",
+                (vol, now, state, now, kw),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"kept": kept, "skipped": skipped}
+
+
+def volume_ready_count() -> int:
+    """측정 대상(검색량 확인 완료 + 기준 통과) 개수."""
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            "SELECT COUNT(*) n FROM seo_keyword_queue "
+            "WHERE state='pending' AND attempts < 3 "
+            "  AND volume_checked_at IS NOT NULL AND search_volume >= ?",
+            (MIN_QUEUE_VOLUME,),
+        )
+        return int(cur.fetchone()["n"])
     finally:
         conn.close()
 
@@ -383,6 +475,12 @@ def stats() -> Dict[str, Any]:
         out["pages_published"] = int(cur.fetchone()["n"])
         cur.execute("SELECT state, COUNT(*) n FROM seo_keyword_queue GROUP BY state")
         out["queue"] = {r["state"]: int(r["n"]) for r in cur.fetchall()}
+        cur.execute(
+            "SELECT COUNT(*) n FROM seo_keyword_queue "
+            "WHERE state='pending' AND volume_checked_at IS NULL"
+        )
+        out["volume_unchecked"] = int(cur.fetchone()["n"])
+        out["volume_ready"] = volume_ready_count()
         cur.execute("SELECT MAX(measured_at) m FROM seo_keyword_pages")
         out["last_measured_at"] = cur.fetchone()["m"]
         return out

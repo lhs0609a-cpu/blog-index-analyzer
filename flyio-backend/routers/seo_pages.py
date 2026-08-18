@@ -130,6 +130,27 @@ async def precompute(
     return {"started": True, "limit": req.limit, "expand": req.expand}
 
 
+class EnrichRequest(BaseModel):
+    limit: Optional[int] = 200
+
+
+@router.post("/enrich-volumes")
+async def enrich_volumes_endpoint(
+    req: EnrichRequest,
+    authorization: Optional[str] = Header(None),
+):
+    """
+    대기 키워드에 월 검색량을 붙이고 기준 미달을 걸러낸다.
+
+    keywordstool 1콜(약 2초)에 5개씩 처리하므로 200개면 1분대다. 동기로 응답한다
+    — precompute(키워드당 53초)와 달리 짧아서 백그라운드로 던질 이유가 없다.
+    """
+    _require_cron_token(authorization)
+    from services.seo_page_builder import enrich_volumes
+
+    return await enrich_volumes(limit=int(req.limit or 200))
+
+
 @router.get("/precompute/last")
 async def precompute_last():
     return {"running": _build_lock.locked(), "last": _last_build}
