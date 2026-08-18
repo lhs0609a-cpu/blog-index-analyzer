@@ -44,7 +44,9 @@ export default function GuidesIndexPage() {
       />
 
       <div className="bg-white">
-        <div className="max-w-4xl mx-auto px-4 py-12 md:py-16">
+        {/* 상단 여백은 고정 헤더(82px)보다 커야 한다. py-12(48px) 였을 때
+            빵부스러기(홈/가이드)가 헤더 뒤로 17px 가려졌다. */}
+        <div className="max-w-4xl mx-auto px-4 pt-24 pb-12 md:pt-28 md:pb-16">
           <nav aria-label="breadcrumb" className="text-sm text-gray-500 mb-6">
             <Link href="/" className="hover:text-[#0064FF]">
               홈

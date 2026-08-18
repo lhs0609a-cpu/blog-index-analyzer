@@ -123,7 +123,8 @@ export default function GuidePage({ params }: Params) {
       />
 
       <article className="bg-white">
-        <div className="max-w-3xl mx-auto px-4 py-12 md:py-16">
+        {/* 고정 헤더(82px) 회피 — 목록 페이지와 동일 규칙 */}
+        <div className="max-w-3xl mx-auto px-4 pt-24 pb-12 md:pt-28 md:pb-16">
           <nav aria-label="breadcrumb" className="text-sm text-gray-500 mb-6">
             <Link href="/" className="hover:text-[#0064FF]">
               홈
