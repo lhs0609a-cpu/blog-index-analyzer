@@ -3825,7 +3825,12 @@ async def get_related_keywords_from_searchad(keyword: str, retry_count: int = 0)
         }
 
         params = {
-            "hintKeywords": keyword,
+            # ⚠️ hintKeywords 에 공백이 있으면 네이버가 11001 BAD_REQUEST 로 거부한다.
+            # 이 한 줄이 빠져 있어 '블로그 지수'처럼 띄어쓴 키워드는 전부 검색광고를
+            # 못 타고 자동완성으로 폴백했고, 그래서 월 검색량이 늘 None/0 이었다.
+            # (naver_ad_service.py·exposure_ceiling.py·journey_p0_probe.py 는 이미
+            #  전부 공백을 제거하고 있었다 — 여기만 누락)
+            "hintKeywords": (keyword or "").replace(" ", ""),
             "showDetail": "1"
         }
 
