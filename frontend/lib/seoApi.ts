@@ -64,12 +64,29 @@ export type KeywordListItem = {
   measured_at: string
 }
 
+/**
+ * 백엔드 호출 상한.
+ *
+ * ⚠️ 타임아웃이 없으면 사이트맵/페이지 라우트가 백엔드를 무한정 기다린다.
+ * Fly 머신은 유휴 시 정지했다가 콜드 스타트하므로 첫 요청이 수 초 걸릴 수 있고,
+ * 그동안 Vercel 함수 실행 한도를 넘기면 504 가 나간다. 크롤러에게 504 는
+ * "가져올 수 없음"이다 — 사이트맵이 통째로 거부된다.
+ * 끊고 빈 값으로 떨어지는 편이 낫다(빈 urlset 은 유효한 XML 이다).
+ */
+const FETCH_TIMEOUT_MS = 6000
+
+function withTimeout(ms = FETCH_TIMEOUT_MS): RequestInit {
+  return typeof AbortSignal?.timeout === 'function'
+    ? { signal: AbortSignal.timeout(ms) }
+    : {}
+}
+
 /** 페이지 데이터. 없으면 null — 호출부가 notFound() 를 내야 한다. */
 export async function fetchKeywordPage(slug: string): Promise<KeywordPage | null> {
   try {
     const res = await fetch(
       `${API_BASE}/api/seo/keyword/${encodeURIComponent(slug)}`,
-      { next: { revalidate: KEYWORD_PAGE_REVALIDATE } }
+      { ...withTimeout(), next: { revalidate: KEYWORD_PAGE_REVALIDATE } }
     )
     if (!res.ok) return null
     return (await res.json()) as KeywordPage
@@ -89,6 +106,7 @@ export async function fetchKeywordPage(slug: string): Promise<KeywordPage | null
 export async function fetchKeywordCount(): Promise<number> {
   try {
     const res = await fetch(`${API_BASE}/api/seo/keywords?offset=0&limit=1`, {
+      ...withTimeout(),
       cache: 'no-store',
     })
     if (!res.ok) return 0
@@ -106,7 +124,7 @@ export async function fetchKeywordList(
   try {
     const res = await fetch(
       `${API_BASE}/api/seo/keywords?offset=${offset}&limit=${limit}`,
-      { next: { revalidate: SITEMAP_REVALIDATE } }
+      { ...withTimeout(), next: { revalidate: SITEMAP_REVALIDATE } }
     )
     if (!res.ok) return { total: 0, items: [] }
     const data = await res.json()

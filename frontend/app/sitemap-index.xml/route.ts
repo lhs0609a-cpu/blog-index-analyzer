@@ -13,21 +13,25 @@ import { fetchKeywordCount } from '@/lib/seoApi'
  */
 
 /**
- * 인덱스는 캐시하지 않는다.
- * 페이지가 0개일 때 굳은 인덱스는 키워드 청크를 하나도 싣지 않고, 그 상태로
- * 다음 갱신까지 남는다. 크롤러가 그 사이에 읽으면 키워드 페이지 전체가
- * 사이트맵에서 빠진 것으로 본다. 실제로 첫 배포에서 그렇게 됐다.
- * 응답은 몇 줄짜리 XML 이라 매번 만들어도 싸다. 청크(/sitemap-keywords/N.xml)는
- * 무겁고 자주 안 바뀌므로 그쪽만 캐시한다.
+ * 5분 ISR.
+ *
+ * 처음엔 force-dynamic 이었다. 페이지가 0개일 때 굳은 인덱스가 청크를 하나도
+ * 안 싣는 사고를 막으려던 것인데, 그러면 크롤러 요청마다 백엔드를 기다리게 되고
+ * Fly 콜드 스타트가 겹치면 504 → "가져올 수 없음"이 된다.
+ * 지금은 ①짧은 ISR 로 원본 부하를 없애고 ②청크를 최소 1개는 무조건 실어서
+ * 두 문제를 동시에 막는다. 캐시가 낡아도 청크는 빠지지 않는다.
  */
-export const dynamic = 'force-dynamic'
+export const revalidate = 300
 
 // 청크당 URL 수. 상한(50,000)보다 넉넉히 낮게 잡아 응답 크기를 작게 유지한다.
 export const CHUNK_SIZE = 5000
 
 export async function GET() {
   const total = await fetchKeywordCount()
-  const chunks = Math.max(0, Math.ceil(total / CHUNK_SIZE))
+  // 최소 1개는 항상 싣는다. 카운트 조회가 실패하거나(타임아웃) 아직 0 이어도
+  // 인덱스가 청크를 통째로 빠뜨리지 않게 한다. 비어 있는 urlset 은 유효한 XML 이라
+  // 크롤러가 무시할 뿐 오류가 아니다.
+  const chunks = Math.max(1, Math.ceil(total / CHUNK_SIZE))
   const now = new Date().toISOString()
 
   const entries = [
