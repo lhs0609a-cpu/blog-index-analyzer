@@ -2,8 +2,8 @@ name: SEO keyword pages — precompute
 
 # 프로그래매틱 SEO 페이지를 조금씩 계속 만든다.
 #
-# 왜 조금씩인가: 키워드 1개 측정에 약 53초가 걸린다(SERP 난이도 + 경쟁도).
-# 배치를 작게 잡고 자주 돈다.
+# 왜 조금씩인가: 키워드 1개 측정에 약 155초가 걸린다(SERP 난이도 55s + 경쟁도 100s).
+# 한 번에 몰아 돌리면 이벤트루프가 굶어 /health 까지 밀린다. 배치를 작게 잡고 자주 돈다.
 #
 # ⚠️ 선별(enrich)과 측정(precompute)은 반드시 분리해서 돌린다.
 # 둘 다 keywordstool 을 때린다 — 측정의 competition 단계가 내부적으로
@@ -15,7 +15,11 @@ name: SEO keyword pages — precompute
 
 on:
   schedule:
-    - cron: "17 */2 * * *"
+    # 매시 17분. 15개 x 24회 = 하루 최대 360 페이지.
+    # ⚠️ 키워드당 실측 155초(serp 55 + competition 100)라, 15개면 약 39분이 걸린다.
+    # = 머신 가동률 약 65%. 480/일(가동률 86%)까지 올릴 수 있지만 여유가 거의 없어
+    # /health 가 밀릴 위험이 있다(winner_keywords 전례). 65% 에서 하루 지켜본 뒤 판단.
+    - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
       limit:
