@@ -67,7 +67,9 @@ apiClient.interceptors.response.use(
             return `${field}: ${err.msg}`
           }).join(', ')
         } else if (typeof data.detail === 'object') {
-          message = JSON.stringify(data.detail)
+          // 구조화된 오류: { error_code, message, ... }
+          // 예전엔 통째로 JSON.stringify 해서 사용자에게 중괄호가 그대로 보였다.
+          message = data.detail.message || data.detail.detail || JSON.stringify(data.detail)
         }
       } else if (data?.message) {
         message = data.message
@@ -77,6 +79,13 @@ apiClient.interceptors.response.use(
       const requestUrl = error.config?.url || ''
       const isAuthRequest = requestUrl.includes('/api/auth/login') || requestUrl.includes('/api/auth/register')
 
+      // ⚠️ 구조화된 오류(error_code 가 있는 것)는 **호출한 화면이 직접 처리**한다.
+      // 예: 블로그 주소 오타 → analyze 화면이 "실제 주소는 'xxx' 입니다" 안내를 띄운다.
+      // 여기서 또 토스트를 띄우면 친절한 안내 옆에 "요청한 리소스를 찾을 수 없습니다"
+      // 같은 개발자 문구가 나란히 떠서 사용자를 헷갈리게 한다(실제 사고).
+      const isStructured =
+        data && typeof data.detail === 'object' && !Array.isArray(data.detail) && data.detail?.error_code
+
       if (status === 401) {
         // Unauthorized - clear token and redirect to login
         // 단, 로그인/회원가입 요청 자체의 401은 리다이렉트 하지 않음 (에러 메시지 표시 위해)
@@ -84,10 +93,12 @@ apiClient.interceptors.response.use(
           localStorage.removeItem('auth_token')
           window.location.href = '/login'
         }
-      } else if (!isAuthRequest) {
-        // 인증 요청이 아닌 경우에만 toast 표시
+      } else if (!isAuthRequest && !isStructured) {
+        // 인증 요청이 아니고, 화면이 직접 처리하는 구조화 오류도 아닐 때만 toast
         if (status === 404) {
-          toast.error('요청한 리소스를 찾을 수 없습니다')
+          // 서버가 준 설명이 있으면 그걸 쓴다. 'lhs0609c 는 블로그 주소가 아닙니다'
+          // 같은 문장을 버리고 generic 문구를 띄우면 사용자는 뭘 고쳐야 할지 모른다.
+          toast.error(message && message !== error.message ? message : '요청한 리소스를 찾을 수 없습니다')
         } else if (status === 422) {
           toast.error(`입력 오류: ${message}`)
         } else if (status === 500) {
