@@ -44,7 +44,16 @@ export async function GET() {
   const guideItems = GUIDES.map((g) => ({
     title: g.title,
     link: absoluteUrl(`/guides/${g.slug}`),
-    description: g.description,
+    // 한 줄 요약 대신 실제 본문(네이버 권장). summary 는 '이 문단만 떼어 읽어도
+    // 말이 되는' 자립형 요약이고, keyFacts 는 발췌 인용 대상이라 목록으로 붙인다.
+    description:
+      `<p>${escHtml(g.summary || g.description)}</p>` +
+      (g.keyFacts?.length
+        ? `<ul>${g.keyFacts.slice(0, 6).map((f) => `<li>${escHtml(f)}</li>`).join('')}</ul>`
+        : '') +
+      (g.faq?.length
+        ? `<p><strong>${escHtml(g.faq[0].question)}</strong> ${escHtml(g.faq[0].answer)}</p>`
+        : ''),
     date: new Date(g.updated),
   }))
 
