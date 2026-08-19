@@ -142,6 +142,62 @@ async def daily(
     }
 
 
+@router.post("/collect-reports")
+async def collect_reports_endpoint(
+    authorization: Optional[str] = Header(None),
+    customer_id: Optional[str] = Query(None),
+    date: Optional[str] = Query(None, description="YYYY-MM-DD. 기본은 어제"),
+    keyword_master: bool = Query(True),
+    ad_detail: bool = Query(True),
+    expkeyword: bool = Query(True),
+    search_term_top_n: int = Query(3000, ge=100, le=50000),
+):
+    """대량 리포트 수집 — 키워드 10만 계정을 호출 몇 번으로.
+
+    /collect 는 캠페인·그룹까지만 본다. 키워드는 단건 /stats 로 불가능해서
+    (10만 콜 vs 시간당 1만 제한) 리포트 경로가 따로 있다.
+    """
+    _require_cron_token(authorization)
+    from services.ad_report_collector import collect_reports
+
+    accounts = list_connected_ad_accounts()
+    if customer_id:
+        accounts = [a for a in accounts if str(a.get("customer_id")) == str(customer_id)]
+    if not accounts:
+        return {"ok": True, "accounts": 0, "results": []}
+
+    results: List[Dict[str, Any]] = []
+    for a in accounts:
+        full = get_ad_account_by_customer(a["user_id"], str(a["customer_id"]))
+        if not full or not full.get("api_key"):
+            results.append({"customer_id": a.get("customer_id"), "ok": False,
+                            "errors": ["자격증명 없음"]})
+            continue
+        client = _client_for(full)
+        try:
+            r = await collect_reports(
+                client, str(full["customer_id"]), day=date,
+                include_keyword_master=keyword_master,
+                include_ad_detail=ad_detail,
+                include_expkeyword=expkeyword,
+                search_term_top_n=search_term_top_n)
+            r["name"] = a.get("name")
+            results.append(r)
+        except Exception as e:
+            logger.exception(f"[collect-reports] {a.get('customer_id')} 실패")
+            results.append({"customer_id": a.get("customer_id"), "ok": False,
+                            "errors": [f"{type(e).__name__}: {str(e)[:300]}"]})
+        finally:
+            try:
+                await client.close()
+            except Exception:
+                pass
+
+    ok = sum(1 for r in results if r.get("ok"))
+    return {"ok": ok > 0, "accounts": len(accounts), "succeeded": ok,
+            "failed": len(results) - ok, "results": results}
+
+
 @router.post("/report-probe")
 async def report_probe(
     authorization: Optional[str] = Header(None),

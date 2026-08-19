@@ -76,6 +76,57 @@ jobs:
             exit 1
           fi
 
+      - name: Collect bulk reports
+        continue-on-error: true
+        env:
+          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
+          CUSTOMER_ID: ${{ github.event.inputs.customer_id }}
+        run: |
+          # 키워드 단위는 /stats 단건으로 불가능하다(10만 콜 vs 시간당 1만).
+          # 대량 리포트가 같은 데이터를 호출 몇 번으로 준다.
+          url="${BACKEND_URL}/api/ad-snapshot/collect-reports"
+          if [ -n "$CUSTOMER_ID" ]; then
+            url="${url}?customer_id=${CUSTOMER_ID}"
+          fi
+          status=$(curl -sS -X POST "$url" \
+            -H "Authorization: Bearer ${CRON_TOKEN}" \
+            --max-time 1500 \
+            -o reports.json -w '%{http_code}')
+          echo "status=${status}"
+          if [ "$status" != "200" ]; then
+            echo "::warning::리포트 수집 실패 status=$status"
+            exit 0
+          fi
+          python3 - <<'PY'
+          import json
+          d = json.load(open("reports.json"))
+          for r in d.get("results", []):
+              name = r.get("name") or r.get("customer_id")
+              if r.get("errors"):
+                  print(f"::warning::{name} 리포트 일부 실패 — {r['errors']}")
+              km = r.get("keyword_master") or {}
+              if km:
+                  print(f"::notice::{name} 키워드 {km.get('keywords'):,}개 "
+                        f"(그룹입찰 상속 {km.get('inherited_pct')}% / "
+                        f"정지 {km.get('paused_pct')}%)")
+              ad = r.get("ad_detail") or {}
+              if ad:
+                  u = ad.get("unattributed") or {}
+                  print(f"::notice::{name} {ad.get('date')} 노출 "
+                        f"{ad['totals']['impressions']:,} 클릭 {ad['totals']['clicks']:,} "
+                        f"비용 {ad['totals']['cost']:,}원")
+                  if u.get("clicks_pct", 0) >= 20:
+                      # 등록 키워드로 설명 안 되는 몫이 크면 키워드 통계만 보면 헛다리다.
+                      print(f"::warning::{name} 등록 키워드로 귀속 안 되는 트래픽 — "
+                            f"클릭 {u['clicks_pct']}% / 비용 {u['cost_pct']}% "
+                            f"({u['cost']:,}원). 키워드확장 설정을 확인하세요.")
+              ex = r.get("expkeyword") or {}
+              if ex.get("dropped_beyond_top_n"):
+                  print(f"::warning::{name} 검색어 {ex['distinct_search_terms']:,}종 중 "
+                        f"상위 {ex['top_n']:,}만 저장 "
+                        f"({ex['dropped_beyond_top_n']:,}종 미저장)")
+          PY
+
       - name: Scan for incidents
         env:
           CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
