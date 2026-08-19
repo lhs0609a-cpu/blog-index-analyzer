@@ -39,6 +39,7 @@ function rfc822(d: Date): string {
 }
 
 export async function GET() {
+  // 목록 fetch 는 SITEMAP_REVALIDATE(6h) 를 쓰지 않는다 — RSS 는 신선도가 목적이다.
   const { items } = await fetchKeywordList(0, MAX_ITEMS, 'recent')
 
   const guideItems = GUIDES.map((g) => ({
