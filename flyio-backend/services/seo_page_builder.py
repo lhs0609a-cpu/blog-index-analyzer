@@ -151,11 +151,15 @@ async def enrich_volumes(limit: int = 200) -> Dict[str, Any]:
     # 기준(MIN_QUEUE_VOLUME)이 올라갔다면 예전 기준으로 통과한 행을 먼저 걸러낸다.
     reclassified = seo_db.reclassify_by_volume()
     off_domain = seo_db.skip_off_domain()
+    # 판정 기준을 좁히기 전에 만들어진 무관 페이지도 색인에서 뺀다.
+    unpublished = seo_db.unpublish_off_domain_pages()
     todo = seo_db.pending_without_volume(limit=limit)
     if not todo:
         return {
             "checked": 0, "kept": 0, "skipped": 0, "reclassified": reclassified,
         "off_domain_skipped": off_domain,
+        "unpublished": unpublished[:10],
+        "unpublished_count": len(unpublished),
             "message": "볼륨 미확인 키워드 없음", "stats": seo_db.stats(),
         }
 
@@ -204,6 +208,8 @@ async def enrich_volumes(limit: int = 200) -> Dict[str, Any]:
         "discovered": discovered,
         "reclassified": reclassified,
         "off_domain_skipped": off_domain,
+        "unpublished": unpublished[:10],
+        "unpublished_count": len(unpublished),
         "errors": errors[:5],
         "stats": seo_db.stats(),
     }

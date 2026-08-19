@@ -228,20 +228,41 @@ def take_pending(limit: int = 20) -> List[Dict[str, Any]]:
         conn.close()
 
 
-# 이 토큰 중 하나라도 포함해야 우리 도메인으로 본다.
-# keywordstool 이 돌려주는 연관 키워드에는 '블로그' 힌트에서 출발해도
-# 전혀 무관한 것들이 섞인다. 도메인 밖으로 새면 만들어봐야 우리 서비스와
-# 연결되지 않는 페이지가 된다.
-DOMAIN_TOKENS = (
-    "블로그", "포스팅", "포스트", "네이버", "애드포스트", "인플루언서",
-    "티스토리", "상위노출", "검색", "키워드", "seo", "SEO", "저품질",
-    "최적화", "지수", "방문자", "이웃", "체험단", "협찬", "글쓰기",
+# 도메인 판정 토큰.
+#
+# ⚠️ 넓은 토큰을 쓰면 안 된다. 처음엔 '검색'·'지수'·'이웃'·'최적화' 같은 것을
+# 넣었다가 '이미지검색'·'지도검색'(네이버 기능), '물가지수'·'코스피지수',
+# '이웃사촌' 이 전부 통과해 무관한 페이지가 만들어졌다.
+# (같은 함정: 지역토큰 '곡성' 이 '도곡성장' 을 삼킨 사례)
+#
+# STRONG  하나만 있어도 우리 도메인이다.
+# WEAK    혼자서는 부족하고, STRONG 이나 다른 WEAK 와 같이 있어야 인정한다.
+DOMAIN_TOKENS_STRONG = (
+    "블로그", "포스팅", "애드포스트", "인플루언서", "티스토리",
+    "저품질", "상위노출", "서로이웃", "체험단", "씨랭크", "c랭크",
 )
+DOMAIN_TOKENS_WEAK = (
+    "네이버", "검색", "키워드", "seo", "노출", "지수",
+    "방문자", "글쓰기", "협찬", "최적화", "포스트",
+)
+
+# 강한 토큰이 있어도 이게 붙으면 제외한다 — 네이버 기능/타 서비스 이름.
+DOMAIN_EXCLUDE = ("지도검색", "이미지검색", "쇼핑검색", "통합검색", "카페", "지식인", "지식iN")
 
 
 def in_domain(keyword: str) -> bool:
-    k = (keyword or "")
-    return any(t in k for t in DOMAIN_TOKENS)
+    k = (keyword or "").lower()
+    if any(x.lower() in k for x in DOMAIN_EXCLUDE):
+        return False
+    if any(t.lower() in k for t in DOMAIN_TOKENS_STRONG):
+        return True
+    # 약한 토큰은 2개 이상 겹쳐야 인정 ('네이버 키워드 검색' 은 통과, '이미지검색' 은 탈락)
+    weak_hits = sum(1 for t in DOMAIN_TOKENS_WEAK if t.lower() in k)
+    return weak_hits >= 2
+
+
+# 하위호환 (기존 참조가 있을 경우)
+DOMAIN_TOKENS = DOMAIN_TOKENS_STRONG + DOMAIN_TOKENS_WEAK
 
 
 def enqueue_with_volume(items: Dict[str, int], source: str = "keywordstool", depth: int = 1) -> int:
@@ -323,6 +344,27 @@ def set_queue_volumes(volumes: Dict[str, int]) -> Dict[str, int]:
     finally:
         conn.close()
     return {"kept": kept, "skipped": skipped}
+
+
+def unpublish_off_domain_pages() -> List[str]:
+    """
+    이미 만들어진 페이지 중 도메인 밖인 것을 비공개(published=0)로 내린다.
+
+    도메인 판정을 좁히기 전에 만들어진 페이지가 남아 있다('이미지검색',
+    '지도검색' 등). 지우지 않고 비공개로만 돌린다 — 측정값은 나중에 판정
+    기준이 또 바뀔 때 재활용할 수 있고, 사이트맵/RSS 에서는 published=1 만
+    나가므로 색인 대상에서는 즉시 빠진다.
+    """
+    conn = _connect()
+    try:
+        cur = conn.execute("SELECT slug, keyword FROM seo_keyword_pages WHERE published = 1")
+        bad = [(r["slug"], r["keyword"]) for r in cur.fetchall() if not in_domain(r["keyword"])]
+        for slug, _ in bad:
+            conn.execute("UPDATE seo_keyword_pages SET published = 0 WHERE slug = ?", (slug,))
+        conn.commit()
+        return [kw for _, kw in bad]
+    finally:
+        conn.close()
 
 
 def skip_off_domain() -> int:
