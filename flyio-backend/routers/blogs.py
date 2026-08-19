@@ -5611,6 +5611,56 @@ async def debug_searchad_status():
 
 
 # ===== Real Index Verification Endpoint =====
+class DraftCheckRequest(BaseModel):
+    title: str
+    content: str
+    keyword: str
+    image_count: Optional[int] = 0
+
+
+@router.post("/draft-check")
+async def draft_check(request: DraftCheckRequest):
+    """
+    발행 전 원고 진단 — 그 키워드 1페이지 글들의 실측 평균과 비교.
+
+    기존 도구는 전부 사후 진단이었다(/analyze-post 는 발행된 URL 만 받는다).
+    이건 발행 버튼 누르기 직전에 쓰는 유일한 도구다.
+
+    비교 기준은 학습 샘플에 쌓인 1페이지 글들의 실측값이라 **네트워크 호출이 없다** —
+    즉시 응답한다. 해당 키워드 데이터가 없으면 전체 평균으로 대체하고 그 사실을 표시한다.
+    """
+    from database.learning_db import (
+        get_keyword_content_baseline,
+        get_global_content_baseline,
+    )
+    from services.draft_scorer import diagnose_draft
+
+    kw = (request.keyword or "").strip()
+    if not (request.content or "").strip():
+        raise HTTPException(status_code=400, detail="본문을 입력해 주세요")
+    if not kw:
+        raise HTTPException(status_code=400, detail="목표 키워드를 입력해 주세요")
+
+    baseline = None
+    is_global = False
+    try:
+        baseline = get_keyword_content_baseline(kw)
+        if not baseline:
+            baseline = get_global_content_baseline()
+            is_global = baseline is not None
+    except Exception as e:
+        logger.warning(f"draft-check baseline failed for {kw}: {e}")
+
+    return diagnose_draft(
+        title=request.title or "",
+        content=request.content,
+        keyword=kw,
+        image_count=request.image_count or 0,
+        baseline=baseline,
+        baseline_is_global=is_global,
+    )
+
+
 class SearchHealthRequest(BaseModel):
     blog_id: str
     sample_size: Optional[int] = 10

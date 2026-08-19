@@ -313,6 +313,72 @@ def get_learning_samples(limit: int = 1000) -> List[Dict]:
         """, (limit,))
         return [dict(row) for row in cursor.fetchall()]
 
+def get_keyword_content_baseline(keyword: str, top_n: int = 10) -> Optional[Dict]:
+    """
+    특정 키워드 1페이지 글들의 콘텐츠 평균 — 발행 전 원고 비교 기준.
+
+    학습 샘플로 쌓아둔 실측값을 그대로 쓴다. 따로 측정하지 않으므로 즉시 응답한다.
+    ⚠️ content_parsed = 0 인 샘플은 본문을 못 읽은 것이라 0 이 들어 있다.
+    그걸 평균에 넣으면 기준이 통째로 내려가므로 반드시 제외한다.
+    """
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT AVG(content_length) avg_len,
+                   AVG(image_count)    avg_img,
+                   AVG(heading_count)  avg_head,
+                   AVG(paragraph_count) avg_para,
+                   COUNT(*)            n
+            FROM (
+                SELECT content_length, image_count, heading_count, paragraph_count
+                FROM learning_samples
+                WHERE keyword = ?
+                  AND actual_rank <= ?
+                  AND content_parsed = 1
+                  AND content_length > 0
+                GROUP BY blog_id
+            )
+        """, (keyword, top_n))
+        row = cur.fetchone()
+        if not row or not row["n"]:
+            return None
+        return {
+            "keyword": keyword,
+            "samples": int(row["n"]),
+            "avg_content_length": round(row["avg_len"] or 0),
+            "avg_image_count": round(row["avg_img"] or 0, 1),
+            "avg_heading_count": round(row["avg_head"] or 0, 1),
+            "avg_paragraph_count": round(row["avg_para"] or 0, 1),
+        }
+
+
+def get_global_content_baseline() -> Optional[Dict]:
+    """
+    키워드별 기준이 없을 때 쓰는 전체 평균.
+    "이 키워드는 아직 측정 전" 이라고만 하고 끝내면 사용자가 얻는 게 없으므로,
+    전체 평균이라도 보여주되 그렇다는 사실을 분명히 표시한다.
+    """
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT AVG(content_length) avg_len, AVG(image_count) avg_img,
+                   AVG(heading_count) avg_head, COUNT(*) n
+            FROM learning_samples
+            WHERE actual_rank <= 10 AND content_parsed = 1 AND content_length > 0
+        """)
+        row = cur.fetchone()
+        if not row or not row["n"]:
+            return None
+        return {
+            "keyword": None,
+            "samples": int(row["n"]),
+            "avg_content_length": round(row["avg_len"] or 0),
+            "avg_image_count": round(row["avg_img"] or 0, 1),
+            "avg_heading_count": round(row["avg_head"] or 0, 1),
+            "avg_paragraph_count": None,
+        }
+
+
 def save_training_session(
     session_id: str,
     samples_used: int,

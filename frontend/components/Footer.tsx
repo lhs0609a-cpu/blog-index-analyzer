@@ -80,6 +80,11 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/draft-check" className="block py-1 hover:text-violet-400 transition-colors cursor-pointer">
+                  발행 전 원고 진단
+                </Link>
+              </li>
+              <li>
                 <Link href="/keyword" className="block py-1 hover:text-violet-400 transition-colors cursor-pointer">
                   키워드별 난이도
                 </Link>
