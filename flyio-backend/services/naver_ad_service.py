@@ -1006,6 +1006,84 @@ class NaverAdApiClient:
                     logger.warning(f"[NaverAd/stats] {kid} 실패: {str(e)[:120]}")
         return merged
 
+    # ============ 대량 리포트 ============
+    # 왜 필요한가: /stats 는 단건 ID 만 안정적이라 키워드 10만 개 계정은 이 경로로
+    # 훑을 수 없다(10만 콜 vs 시간당 1만 제한). 대량 리포트가 유일한 길이다.
+    #
+    # 라이브 확인(2026-08-19, cid 1858907):
+    #   StatReport reportTp  = AD | AD_DETAIL | AD_CONVERSION | EXPKEYWORD
+    #                          | ADEXTENSION | CRITERION
+    #     ↑ KEYWORD/ADGROUP/CAMPAIGN 은 11001 로 거부된다. 키워드 성과는
+    #       AD_DETAIL·CRITERION 쪽에 실린다.
+    #     ↑ EXPKEYWORD 가 키워드확장 실검색어 — 키워드 통계에 안 잡히던 지출의 정체.
+    #   MasterReport item    = Campaign | Adgroup | Keyword | Ad | AdExtension
+    #                          | BusinessChannel | Qi
+    #     ↑ AdKeyword 는 400. Ad 마스터가 소재 검수상태 전수를 한 번에 준다
+    #       (그룹당 1콜씩 3,783번 돌 필요가 없어진다).
+
+    STAT_REPORT_TYPES = ("AD", "AD_DETAIL", "AD_CONVERSION",
+                         "EXPKEYWORD", "ADEXTENSION", "CRITERION")
+    MASTER_REPORT_ITEMS = ("Campaign", "Adgroup", "Keyword", "Ad",
+                           "AdExtension", "BusinessChannel", "Qi")
+
+    async def list_stat_reports(self) -> List[dict]:
+        r = await self._request("GET", "/stat-reports")
+        return r if isinstance(r, list) else []
+
+    async def create_stat_report(self, report_tp: str, stat_dt: str) -> dict:
+        """성과 리포트 작업 생성. stat_dt 는 'YYYY-MM-DD' 또는 ISO.
+
+        네이버는 KST 자정을 UTC 15:00 으로 받는다 — 날짜만 주면 여기서 맞춘다.
+        """
+        if len(stat_dt) == 10:
+            stat_dt = f"{stat_dt}T00:00:00.000Z"
+        return await self._request("POST", "/stat-reports",
+                                   {"reportTp": report_tp, "statDt": stat_dt})
+
+    async def get_stat_report(self, job_id) -> dict:
+        return await self._request("GET", f"/stat-reports/{job_id}")
+
+    async def delete_stat_report(self, job_id) -> Any:
+        """다 쓴 작업은 지운다 — 계정당 보관 개수 제한이 있다."""
+        return await self._request("DELETE", f"/stat-reports/{job_id}")
+
+    async def list_master_reports(self) -> List[dict]:
+        r = await self._request("GET", "/master-reports")
+        return r if isinstance(r, list) else []
+
+    async def create_master_report(self, item: str,
+                                   from_time: Optional[str] = None) -> dict:
+        body: Dict[str, Any] = {"item": item}
+        if from_time:
+            body["fromTime"] = from_time
+        return await self._request("POST", "/master-reports", body)
+
+    async def get_master_report(self, report_id: str) -> dict:
+        return await self._request("GET", f"/master-reports/{report_id}")
+
+    async def download_report_text(self, download_url: str,
+                                   max_bytes: Optional[int] = None) -> str:
+        """리포트 파일을 텍스트로 받는다.
+
+        ⚠️ _request 를 못 쓴다 — 응답이 TSV 라 JSON 파싱에서 죽는다.
+        ⚠️ URL 에 authtoken 이 붙어 있지만 그것만으로는 400 이다. 서명 헤더가
+           함께 있어야 한다(라이브 확인). 서명 path 는 query 를 뺀 /report-download.
+        """
+        from urllib.parse import urlparse
+
+        path = urlparse(download_url).path or "/report-download"
+        headers = self._get_headers("GET", path)
+        # TSV 라 JSON Content-Type 을 지우고 받는다.
+        headers.pop("Content-Type", None)
+
+        resp = await self.client.get(download_url, headers=headers,
+                                     follow_redirects=True, timeout=180.0)
+        if resp.status_code >= 400:
+            raise RuntimeError(
+                f"report-download {resp.status_code}: {(resp.text or '')[:300]}")
+        text = resp.text
+        return text[:max_bytes] if max_bytes else text
+
     async def close(self):
         """클라이언트 종료"""
         await self.client.aclose()

@@ -142,6 +142,85 @@ async def daily(
     }
 
 
+@router.post("/report-probe")
+async def report_probe(
+    authorization: Optional[str] = Header(None),
+    customer_id: str = Query(...),
+    kind: str = Query("stat", pattern="^(stat|master)$"),
+    name: str = Query(..., description="stat: AD_DETAIL 등 / master: Keyword 등"),
+    stat_date: Optional[str] = Query(None, description="stat 전용. YYYY-MM-DD"),
+    lines: int = Query(5, ge=1, le=50),
+):
+    """진단 전용 — 대량 리포트를 만들고 앞 몇 줄을 돌려준다.
+
+    리포트 TSV 는 헤더 행이 없다. 컬럼 의미를 확인해야 파서를 붙일 수 있어
+    실물을 보는 경로가 필요하다. 데이터가 아니라 **모양**을 보는 용도라
+    줄 수를 좁게 제한한다.
+    """
+    _require_cron_token(authorization)
+    from database.naver_ad_db import list_connected_ad_accounts as _l
+
+    acct = next((a for a in _l() if str(a["customer_id"]) == str(customer_id)), None)
+    if not acct:
+        raise HTTPException(status_code=404, detail="연결된 계정이 아닙니다")
+    full = get_ad_account_by_customer(acct["user_id"], str(customer_id))
+    if not full or not full.get("api_key"):
+        raise HTTPException(status_code=400, detail="자격증명 없음")
+
+    client = _client_for(full)
+    try:
+        import asyncio
+        from datetime import datetime, timedelta
+
+        if kind == "stat":
+            day = stat_date or (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+            job = await client.create_stat_report(name, day)
+            jid = job.get("reportJobId")
+            url, status = job.get("downloadUrl"), job.get("status")
+            # REGIST → BUILT 까지 잠깐 기다린다. 실측상 수 초면 끝난다.
+            for _ in range(15):
+                if url:
+                    break
+                await asyncio.sleep(2)
+                cur = await client.get_stat_report(jid)
+                url, status = cur.get("downloadUrl"), cur.get("status")
+            meta = {"reportJobId": jid, "status": status, "statDt": day}
+        else:
+            job = await client.create_master_report(name)
+            rid = job.get("id")
+            url, status = job.get("downloadUrl"), job.get("status")
+            for _ in range(15):
+                if url:
+                    break
+                await asyncio.sleep(2)
+                cur = await client.get_master_report(rid)
+                url, status = cur.get("downloadUrl"), cur.get("status")
+            meta = {"id": rid, "status": status}
+
+        if not url:
+            return {"ok": False, "meta": meta,
+                    "error": "리포트가 아직 BUILT 되지 않았습니다"}
+
+        text = await client.download_report_text(url, max_bytes=200_000)
+        rows = text.splitlines()
+        preview = [r.split("\t") for r in rows[:lines]]
+        return {
+            "ok": True, "kind": kind, "name": name, "meta": meta,
+            "total_lines_in_sample": len(rows),
+            "column_count": len(preview[0]) if preview else 0,
+            "preview": preview,
+        }
+    except Exception as e:
+        logger.exception(f"[report-probe] {customer_id} {kind}/{name} 실패")
+        return {"ok": False, "kind": kind, "name": name,
+                "error": f"{type(e).__name__}: {str(e)[:400]}"}
+    finally:
+        try:
+            await client.close()
+        except Exception:
+            pass
+
+
 @router.get("/incidents")
 async def incidents(
     customer_id: str = Query(...),
