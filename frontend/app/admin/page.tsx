@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
+import SiteAnalyticsPanel from '@/components/admin/SiteAnalyticsPanel';
 import { getApiUrl } from '@/lib/api/apiConfig';
 import { toast } from 'react-hot-toast';
 
@@ -108,7 +109,7 @@ export default function AdminPage() {
   const [totalUsers, setTotalUsers] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [apiUrl, setApiUrlState] = useState('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'premium' | 'expiring' | 'logs' | 'payments'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'traffic' | 'users' | 'premium' | 'expiring' | 'logs' | 'payments'>('overview');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -810,6 +811,7 @@ export default function AdminPage() {
           <nav className="flex gap-8">
             {[
               { id: 'overview', label: '개요' },
+              { id: 'traffic', label: '방문 통계' },
               { id: 'payments', label: '결제 내역' },
               { id: 'users', label: '전체 사용자' },
               { id: 'premium', label: '프리미엄 사용자' },
@@ -855,6 +857,8 @@ export default function AdminPage() {
         ) : (
           <>
             {/* Overview Tab */}
+            {activeTab === 'traffic' && <SiteAnalyticsPanel />}
+
             {activeTab === 'overview' && (
               <div className="space-y-8">
                 {/* Stats Cards */}

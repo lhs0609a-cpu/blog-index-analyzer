@@ -452,6 +452,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS":
             return await call_next(request)
 
+        # 방문 통계 비컨은 페이지마다 1회 날아온다. 여기서 429 를 주면
+        # 통계가 비는데, 본문이 몇 바이트라 부하는 사실상 없다.
+        if request.url.path == "/api/analytics/collect":
+            return await call_next(request)
+
         # 내부 worker 프록시(127.0.0.1) 면제 — WorkerOffloadMiddleware 가 API→worker 로
         # 위임한 요청. 모두 동일 IP(localhost)라 하나의 버킷에 묶여 오탐 차단되고,
         # public 노출 없는 내부 트래픽이라 면제해도 안전.
@@ -745,6 +750,7 @@ from routers import user_blogs
 from routers import keyword_analysis
 from routers import keyword_verdict
 from routers import seo_pages
+from routers import site_analytics
 from routers import revenue
 from routers import unified_ads
 from routers import ad_dashboard
@@ -800,6 +806,8 @@ app.include_router(competitive_analysis.router, tags=["경쟁력분석"])
 app.include_router(keyword_verdict.router)
 # 프로그래매틱 SEO 키워드 페이지 (읽기는 캐시라 밀리초) — prefix 는 라우터에 이미 있음
 app.include_router(seo_pages.router)
+# 사이트 방문 통계 — 수집은 공개(브라우저 비컨), 조회는 관리자 전용
+app.include_router(site_analytics.router)
 
 
 if __name__ == "__main__":
