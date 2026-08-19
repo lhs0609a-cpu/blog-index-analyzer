@@ -128,6 +128,7 @@ export const PUBLIC_ROUTES: Array<{
   { path: '/analyze', changeFrequency: 'weekly', priority: 0.9 },
   { path: '/keyword-search', changeFrequency: 'weekly', priority: 0.9 },
   { path: '/keyword-check', changeFrequency: 'weekly', priority: 0.9 },
+  { path: '/blog-check', changeFrequency: 'weekly', priority: 0.9 },
   // 프로그래매틱 키워드 페이지의 입구. 여기가 없으면 그 페이지들이 고아가 된다.
   { path: '/keyword', changeFrequency: 'daily', priority: 0.9 },
   { path: '/analyze-post', changeFrequency: 'weekly', priority: 0.8 },

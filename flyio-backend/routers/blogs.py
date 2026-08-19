@@ -5611,6 +5611,45 @@ async def debug_searchad_status():
 
 
 # ===== Real Index Verification Endpoint =====
+class SearchHealthRequest(BaseModel):
+    blog_id: str
+    sample_size: Optional[int] = 10
+
+
+@router.post("/search-health")
+async def search_health(request: SearchHealthRequest, refresh: bool = Query(False)):
+    """
+    검색 노출 진단 — 흔히 '저품질'이라 부르는 상태를 실제 색인 데이터로 확인.
+
+    최근 글 제목을 그대로 검색해 노출 여부를 본다. 정상 블로그는 제목 정확검색이면
+    거의 100% 나오므로, 안 나오는 비율이 곧 노출 문제의 크기다.
+    지수를 추정해 '추측'하는 방식과 달리 관측이다.
+
+    측정은 verify-index 와 동일 엔진을 쓰므로 추가 비용이 없다(글 10개 약 6초).
+    """
+    from services.blog_index_verifier import verify_blog_index_level
+    from services.search_health import diagnose
+
+    blog_id = (request.blog_id or "").strip().replace("https://blog.naver.com/", "").strip("/")
+    if not blog_id:
+        raise HTTPException(status_code=400, detail="blog_id is required")
+
+    sample = max(5, min(int(request.sample_size or 10), 20))
+
+    blog_stats = None
+    cached_analysis = get_cached_blog_analysis(blog_id)
+    if cached_analysis:
+        blog_stats = cached_analysis.get("stats")
+
+    try:
+        result = await verify_blog_index_level(blog_id, sample_size=sample, blog_stats=blog_stats)
+    except Exception as e:
+        logger.exception(f"search_health failed for {blog_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"진단 실패: {e}")
+
+    return diagnose(result if isinstance(result, dict) else result.dict())
+
+
 @router.post("/verify-index", response_model=VerifyIndexResponse)
 async def verify_blog_index_endpoint(
     request: VerifyIndexRequest,
