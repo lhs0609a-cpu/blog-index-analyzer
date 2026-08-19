@@ -419,9 +419,37 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             if not self._hour_hits[ip]:
                 del self._hour_hits[ip]
 
+    @staticmethod
+    def _client_ip(request: Request) -> str:
+        """
+        진짜 클라이언트 IP.
+
+        ⚠️ request.client.host 를 그대로 쓰면 안 된다. Fly 프록시 뒤라 **모든 요청이
+        같은 내부 IP(172.16.x.x)** 로 보이고, 그러면 rate limit 버킷이 하나로 합쳐져
+        사이트 전체가 분당 한도를 공유한다. 실제로 그 상태에서 사용자가
+        "서버에 연결할 수 없습니다" 를 봤다 — 429 자체가 아니라, 429 를 받은
+        preflight(OPTIONS)가 실패해 브라우저가 응답을 통째로 막은 것이다.
+        크롤러(구글·네이버)·크론·Vercel ISR 재검증까지 같은 버킷에 들어온다.
+        """
+        fly_ip = request.headers.get("fly-client-ip")
+        if fly_ip:
+            return fly_ip.strip()
+        xff = request.headers.get("x-forwarded-for")
+        if xff:
+            # 첫 번째가 원 클라이언트
+            return xff.split(",")[0].strip()
+        return request.client.host if request.client else "unknown"
+
     async def dispatch(self, request: Request, call_next):
         # 헬스 체크는 rate limit 면제
         if request.url.path in ("/", "/health", "/deployment-test-v6"):
+            return await call_next(request)
+
+        # ⚠️ CORS preflight 는 절대 429 를 주면 안 된다. preflight 가 막히면
+        # 브라우저는 본 요청을 보내지도 않고 '네트워크 오류' 로 처리해서,
+        # 사용자에게 "서버에 연결할 수 없습니다" 라는 엉뚱한 메시지가 뜬다.
+        # 본문도 없는 요청이라 부하도 사실상 없다.
+        if request.method == "OPTIONS":
             return await call_next(request)
 
         # 내부 worker 프록시(127.0.0.1) 면제 — WorkerOffloadMiddleware 가 API→worker 로
@@ -430,7 +458,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if request.client and request.client.host in ("127.0.0.1", "::1"):
             return await call_next(request)
 
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = self._client_ip(request)
         now = time.time()
 
         self._cleanup(now)
