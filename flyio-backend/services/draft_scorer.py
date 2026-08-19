@@ -30,6 +30,10 @@ _HEADING_PAT = re.compile(
 # 문장 끝이 아닌 짧은 줄도 소제목일 확률이 높다(제목형 줄)
 _MAX_HEADING_LEN = 40
 
+# 1페이지 글의 소제목 평균이 이 값을 넘으면 측정이 오염된 것으로 보고 비교에서 뺀다.
+# 사람이 쓰는 글에서 소제목이 20개를 넘는 경우는 사실상 없다.
+MAX_PLAUSIBLE_HEADINGS = 20
+
 
 def analyze_text(title: str, content: str, keyword: str) -> Dict[str, Any]:
     """원고 텍스트에서 관측 가능한 지표를 뽑는다. 네트워크 호출 없음."""
@@ -95,6 +99,16 @@ def diagnose_draft(
     gaps: List[Dict] = []
     checks: List[Dict] = []
 
+    # ⚠️ 기준선 위생 검사.
+    # heading_count 는 오랫동안 '가운데 정렬 문단'까지 소제목으로 세고 있었다
+    # (blog_scraper 선택자 버그, 2026-08-19 수정). 그 시기에 쌓인 샘플이 남아 있어
+    # 평균이 48.7 처럼 말이 안 되는 값으로 나온다. 그대로 쓰면 사용자에게
+    # "소제목 49개 필요" 라는 엉터리 조언을 하게 되므로, 비현실적인 기준은 버린다.
+    # 잘못된 조언을 하느니 그 항목을 아예 비교하지 않는 편이 낫다.
+    if baseline:
+        if (baseline.get("avg_heading_count") or 0) > MAX_PLAUSIBLE_HEADINGS:
+            baseline = {**baseline, "avg_heading_count": 0, "heading_unreliable": True}
+
     if baseline:
         for field, mine, target, unit, advice in (
             ("content_length", m["content_length"], baseline.get("avg_content_length") or 0, "자",
@@ -104,6 +118,10 @@ def diagnose_draft(
             ("heading_count", m["heading_count"], baseline.get("avg_heading_count") or 0, "개",
              "소제목으로 나누세요. 검색 의도별로 문단을 끊으면 발췌 노출에도 유리합니다."),
         ):
+            # 기준값이 없거나 신뢰할 수 없는 항목은 **비교 목록에서 아예 뺀다.**
+            # 통과 처리하면 준비도가 부풀려져서, 못 재는 것을 잘한 것처럼 보이게 된다.
+            if not target or target <= 0:
+                continue
             g = _gap(field, mine, round(target), unit, advice)
             if g:
                 gaps.append(g)
@@ -164,5 +182,7 @@ def diagnose_draft(
             "그 키워드 1페이지에 실제로 올라와 있는 글들과 내 원고의 차이를 숫자로 보여줍니다."
             + ("" if not baseline_is_global else
                " ⚠️ 이 키워드는 아직 측정 전이라 전체 평균을 기준으로 비교했습니다.")
+            + ("" if not (baseline or {}).get("heading_unreliable") else
+               " 소제목은 측정값이 신뢰할 수 없어 이번 비교에서 제외했습니다.")
         ),
     }

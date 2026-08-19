@@ -1170,7 +1170,10 @@ async def scrape_post_content_playwright(blog_id: str, post_no: str, keyword: st
                 result.videoCount = videos.length;
 
                 // Headings (소제목)
-                const headings = contentEl.querySelectorAll('h2, h3, h4, .se-section-title, .se-text-paragraph-align-center');
+                // ⚠️ .se-text-paragraph-align-center 를 넣으면 안 된다 — 그건 소제목이 아니라
+                // **가운데 정렬 문단** 클래스다. 본문을 가운데 정렬하는 블로거가 많아
+                // 문단 하나하나가 소제목으로 세어졌다(실측: 한 글에서 219개, 전체 평균 48.7개).
+                const headings = contentEl.querySelectorAll('h2, h3, h4, .se-section-title');
                 result.headingCount = headings.length;
 
                 // Paragraphs
