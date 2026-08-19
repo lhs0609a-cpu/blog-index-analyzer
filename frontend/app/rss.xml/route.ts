@@ -15,7 +15,8 @@ import { GUIDES } from '@/lib/content/guides'
  * 리더/크롤러가 잘라 읽고, 최신순이라는 의미도 사라진다.
  */
 
-export const revalidate = 1800 // 30분 — 사이트맵보다 짧게 (신선도가 목적)
+// RSS 의 존재 이유가 신선도라 사이트맵(6h)보다 훨씬 짧게 잡는다.
+export const revalidate = 300
 
 const MAX_ITEMS = 50
 
@@ -142,7 +143,10 @@ export async function GET() {
   return new Response(xml, {
     headers: {
       'Content-Type': 'application/rss+xml; charset=utf-8',
-      'Cache-Control': 'public, max-age=0, s-maxage=1800',
+      // ⚠️ 항목이 비었을 때 오래 캐시하면 그동안 크롤러에게 '가이드 8개짜리
+      // 사이트'로 보인다. 실제로 백엔드 재배포와 겹쳐 그렇게 굳은 적이 있다
+      // (사이트맵 인덱스와 같은 유형의 사고). 비면 60초로 낮춰 자가 회복.
+      'Cache-Control': `public, max-age=0, s-maxage=${items.length > 0 ? 1800 : 60}`,
     },
   })
 }
