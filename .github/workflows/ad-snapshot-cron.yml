@@ -76,6 +76,38 @@ jobs:
             exit 1
           fi
 
+      - name: Scan for incidents
+        env:
+          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
+          CUSTOMER_ID: ${{ github.event.inputs.customer_id }}
+        run: |
+          url="${BACKEND_URL}/api/ad-snapshot/watch"
+          if [ -n "$CUSTOMER_ID" ]; then
+            url="${url}?customer_id=${CUSTOMER_ID}"
+          fi
+          status=$(curl -sS -X POST "$url" \
+            -H "Authorization: Bearer ${CRON_TOKEN}" \
+            --max-time 300 \
+            -o incidents.json -w '%{http_code}')
+          echo "status=${status}"
+          if [ "$status" != "200" ]; then
+            echo "::warning::사고 감시 호출 실패 status=$status"
+            echo '{"scans":[]}' > incidents.json
+          fi
+          python3 - <<'PY'
+          import json
+          d = json.load(open("incidents.json"))
+          for s in d.get("scans", []):
+              name = s.get("name") or s.get("customer_id")
+              msg = s.get("message")
+              if not msg:
+                  # 정상이면 침묵한다. 매일 "이상 없음" 을 보내면 곧 안 읽는다.
+                  continue
+              print(f"::error::[{name}] 사고 감지")
+              for line in msg.splitlines():
+                  print(f"  {line}")
+          PY
+
       - name: Summarize
         run: |
           # 계정별 결과를 요약한다. 일부 계정이 실패해도 나머지는 저장됐다.

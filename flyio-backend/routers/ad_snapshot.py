@@ -142,6 +142,64 @@ async def daily(
     }
 
 
+@router.get("/incidents")
+async def incidents(
+    customer_id: str = Query(...),
+    date: Optional[str] = Query(None, description="기준일(YYYY-MM-DD). 기본은 오늘"),
+):
+    """이 계정에 지금 무슨 사고가 있는지.
+
+    정상이면 incidents 가 빈 목록이다. 단, 기준선이 아직 없으면
+    all_clear 는 False 다 — 못 보는 것을 정상이라 말하지 않는다.
+    """
+    from services.ad_incident_watch import scan_account, summarize_for_notification
+    scan = scan_account(customer_id, date)
+    scan["message"] = summarize_for_notification(scan)
+    return scan
+
+
+@router.post("/watch")
+async def watch(
+    authorization: Optional[str] = Header(None),
+    customer_id: Optional[str] = Query(None),
+    date: Optional[str] = Query(None),
+):
+    """cron 전용 — 연결된 전 계정을 훑어 사고만 모아 돌려준다.
+
+    수집(collect) 직후에 부른다. 알림 발송은 아직 붙이지 않았다 —
+    먼저 며칠 돌려 보고 오탐이 없는지 확인한 뒤에 연결한다.
+    """
+    _require_cron_token(authorization)
+    from services.ad_incident_watch import scan_account, summarize_for_notification
+
+    accounts = list_connected_ad_accounts()
+    if customer_id:
+        accounts = [a for a in accounts if str(a.get("customer_id")) == str(customer_id)]
+
+    scans: List[Dict[str, Any]] = []
+    for a in accounts:
+        try:
+            s = scan_account(str(a["customer_id"]), date)
+            s["name"] = a.get("name")
+            s["message"] = summarize_for_notification(s)
+            scans.append(s)
+        except Exception as e:
+            logger.exception(f"[ad-watch] {a.get('customer_id')} 실패")
+            scans.append({"customer_id": a.get("customer_id"), "name": a.get("name"),
+                          "error": f"{type(e).__name__}: {str(e)[:300]}",
+                          "incidents": [], "critical": 0, "warning": 0,
+                          "all_clear": False})
+
+    return {
+        "ok": True,
+        "accounts": len(accounts),
+        "accounts_with_incidents": sum(1 for s in scans if s.get("incidents")),
+        "total_critical": sum(s.get("critical", 0) for s in scans),
+        "total_warning": sum(s.get("warning", 0) for s in scans),
+        "scans": scans,
+    }
+
+
 @router.get("/changes")
 async def changes(
     customer_id: str = Query(...),
