@@ -1,0 +1,157 @@
+"""
+광고 스냅샷 API — 수집 트리거 + 쌓인 과거 조회.
+
+naver_ad.py 는 이미 1.5만 줄이라 새 라우터로 분리한다.
+
+경로:
+  POST /api/ad-snapshot/collect        cron 전용. 연결된 전 계정 수집.
+  GET  /api/ad-snapshot/status         수집이 돌고 있는지 (사용자 인증)
+  GET  /api/ad-snapshot/daily          일자별 성과 시계열
+  GET  /api/ad-snapshot/changes        변경 이력
+"""
+import hmac
+import logging
+import os
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
+
+from database import ad_snapshot_db as S
+from database.naver_ad_db import (
+    get_ad_account_by_customer,
+    list_connected_ad_accounts,
+)
+
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/api/ad-snapshot", tags=["ad-snapshot"])
+
+
+def _require_cron_token(authorization: Optional[str]) -> None:
+    """rank-tracker/measure-all 과 같은 CRON_TOKEN 규약."""
+    expected = (os.environ.get("CRON_TOKEN") or "").strip()
+    if not expected:
+        raise HTTPException(status_code=503, detail="CRON_TOKEN 환경변수가 설정되지 않음")
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Bearer 토큰 필요")
+    if not hmac.compare_digest(authorization.split(" ", 1)[1].strip(), expected):
+        raise HTTPException(status_code=403, detail="잘못된 cron 토큰")
+
+
+def _client_for(account: Dict[str, Any]):
+    from services.naver_ad_service import NaverAdApiClient
+    c = NaverAdApiClient()
+    c.customer_id = account["customer_id"]
+    c.api_key = account["api_key"]
+    c.secret_key = account["secret_key"]
+    return c
+
+
+@router.post("/collect")
+async def collect(
+    authorization: Optional[str] = Header(None),
+    customer_id: Optional[str] = Query(None, description="지정 시 이 계정만"),
+    scan_ads: bool = Query(True, description="소재 검수상태까지 수집"),
+    ad_group_scan_limit: int = Query(400, ge=0, le=5000),
+    days: Optional[int] = Query(None, ge=1, le=90,
+                                description="며칠 치를 다시 수집할지. 기본은 전환 지연 흡수 구간"),
+):
+    """연결된 광고 계정의 상태·성과를 수집해 저장한다.
+
+    매일 1회 크론으로 부른다. 실패한 계정이 있어도 나머지는 계속 간다 —
+    한 계정의 자격증명 만료로 전체 수집이 멈추면 안 된다.
+    """
+    _require_cron_token(authorization)
+    from services.ad_snapshot_collector import collect_account_snapshot
+
+    accounts = list_connected_ad_accounts()
+    if customer_id:
+        accounts = [a for a in accounts if str(a.get("customer_id")) == str(customer_id)]
+    if not accounts:
+        return {"ok": True, "accounts": 0, "results": [],
+                "note": "연결된 광고 계정이 없습니다"}
+
+    since = until = None
+    if days:
+        from datetime import datetime, timedelta
+        end = datetime.now()
+        since = (end - timedelta(days=days)).strftime("%Y-%m-%d")
+        until = end.strftime("%Y-%m-%d")
+
+    results: List[Dict[str, Any]] = []
+    for a in accounts:
+        full = get_ad_account_by_customer(a["user_id"], str(a["customer_id"]))
+        if not full or not full.get("api_key"):
+            results.append({"customer_id": a.get("customer_id"), "ok": False,
+                            "errors": ["자격증명 없음"]})
+            continue
+        client = _client_for(full)
+        try:
+            r = await collect_account_snapshot(
+                client, str(full["customer_id"]),
+                since=since, until=until,
+                scan_ads=scan_ads, ad_group_scan_limit=ad_group_scan_limit)
+            r["name"] = a.get("name")
+            results.append(r)
+        except Exception as e:
+            logger.exception(f"[ad-snapshot] {a.get('customer_id')} 수집 실패")
+            results.append({"customer_id": a.get("customer_id"), "ok": False,
+                            "errors": [f"{type(e).__name__}: {str(e)[:300]}"]})
+        finally:
+            try:
+                await client.close()
+            except Exception:
+                pass
+
+    ok = sum(1 for r in results if r.get("ok"))
+    return {
+        "ok": ok > 0,
+        "accounts": len(accounts),
+        "succeeded": ok,
+        "failed": len(results) - ok,
+        "results": results,
+    }
+
+
+@router.get("/status")
+async def status(customer_id: str = Query(...)):
+    """수집이 실제로 돌고 있는지. 공개 조회 — 자격증명을 노출하지 않는다."""
+    last = S.last_run(customer_id, "daily-snapshot")
+    totals = S.get_daily_totals(customer_id,
+                                *S.backfill_window(), entity_type="CAMPAIGN")
+    return {
+        "customer_id": customer_id,
+        "last_run": last,
+        "days_with_data": len(totals),
+        # 수집이 아예 안 돈 것과 돌았는데 0건인 것은 다른 사건이다.
+        "collecting": bool(last and last.get("status") == "ok"),
+    }
+
+
+@router.get("/daily")
+async def daily(
+    customer_id: str = Query(...),
+    since: Optional[str] = Query(None),
+    until: Optional[str] = Query(None),
+    entity_type: str = Query("CAMPAIGN"),
+):
+    a, b = S.backfill_window()
+    return {
+        "customer_id": customer_id,
+        "entity_type": entity_type,
+        "series": S.get_daily_totals(customer_id, since or a, until or b, entity_type),
+    }
+
+
+@router.get("/changes")
+async def changes(
+    customer_id: str = Query(...),
+    hours: int = Query(24, ge=1, le=24 * 30),
+    entity_type: Optional[str] = Query(None),
+    limit: int = Query(200, ge=1, le=2000),
+):
+    return {
+        "customer_id": customer_id,
+        "hours": hours,
+        "by_field": S.count_recent_changes(customer_id, hours),
+        "changes": S.get_recent_changes(customer_id, hours, limit, entity_type),
+    }

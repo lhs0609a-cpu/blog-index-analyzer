@@ -15,6 +15,11 @@ from services.naver_ad_service import (
     BidStrategy
 )
 
+from services.ad_stat_mapper import (
+    conversions_of as _conv,
+    conv_amount_of as _conv_amt,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -94,7 +99,7 @@ class NaverSearchAdService(AdPlatformBase):
                 stat = stats_map.get(campaign_id, {})
 
                 cost = stat.get("salesAmt", 0)
-                revenue = stat.get("convAmt", 0)
+                revenue = _conv_amt(stat)
 
                 campaigns.append(CampaignData(
                     campaign_id=campaign_id,
@@ -105,7 +110,7 @@ class NaverSearchAdService(AdPlatformBase):
                     impressions=stat.get("impCnt", 0),
                     clicks=stat.get("clkCnt", 0),
                     cost=cost,
-                    conversions=stat.get("convCnt", 0),
+                    conversions=_conv(stat),
                     revenue=revenue,
                     roas=(revenue / cost * 100) if cost > 0 else 0,
                 ))
@@ -136,7 +141,7 @@ class NaverSearchAdService(AdPlatformBase):
                 stat = stats_map.get(group_id, {})
 
                 cost = stat.get("salesAmt", 0)
-                revenue = stat.get("convAmt", 0)
+                revenue = _conv_amt(stat)
 
                 groups.append(AdGroupData(
                     adgroup_id=group_id,
@@ -147,7 +152,7 @@ class NaverSearchAdService(AdPlatformBase):
                     impressions=stat.get("impCnt", 0),
                     clicks=stat.get("clkCnt", 0),
                     cost=cost,
-                    conversions=stat.get("convCnt", 0),
+                    conversions=_conv(stat),
                 ))
 
             return groups
@@ -176,9 +181,9 @@ class NaverSearchAdService(AdPlatformBase):
                 stat = stats_map.get(keyword_id, {})
 
                 cost = stat.get("salesAmt", 0)
-                revenue = stat.get("convAmt", 0)
+                revenue = _conv_amt(stat)
                 clicks = stat.get("clkCnt", 0)
-                conversions = stat.get("convCnt", 0)
+                conversions = _conv(stat)
 
                 keywords.append(KeywordData(
                     keyword_id=keyword_id,
@@ -228,10 +233,10 @@ class NaverSearchAdService(AdPlatformBase):
             performance = []
             for stat in stats:
                 cost = stat.get("salesAmt", 0)
-                revenue = stat.get("convAmt", 0)
+                revenue = _conv_amt(stat)
                 clicks = stat.get("clkCnt", 0)
                 impressions = stat.get("impCnt", 0)
-                conversions = stat.get("convCnt", 0)
+                conversions = _conv(stat)
 
                 performance.append(PerformanceData(
                     date=end_date.strftime("%Y-%m-%d"),
@@ -422,10 +427,10 @@ class NaverSearchAdService(AdPlatformBase):
             performance = []
             for stat in stats:
                 cost = stat.get("salesAmt", 0)
-                revenue = stat.get("convAmt", 0)
+                revenue = _conv_amt(stat)
                 clicks = stat.get("clkCnt", 0)
                 impressions = stat.get("impCnt", 0)
-                conversions = stat.get("convCnt", 0)
+                conversions = _conv(stat)
 
                 performance.append(PerformanceData(
                     date=stat.get("statDt", end_date.strftime("%Y-%m-%d")),

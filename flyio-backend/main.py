@@ -156,6 +156,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Naver Ad tables initialization failed: {e}")
 
+    # 광고 스냅샷(성과 시계열·엔티티 상태·변경 이력) DB 초기화.
+    # naver_ad.db 를 공유하므로 위 초기화 뒤에 와야 한다.
+    try:
+        from database.ad_snapshot_db import init_ad_snapshot_tables
+        init_ad_snapshot_tables()
+        logger.info("✅ Ad snapshot tables initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ Ad snapshot tables initialization failed: {e}")
+
     # Legal Compliance DB 초기화
     try:
         from database.compliance_db import init_compliance_tables
@@ -750,6 +759,7 @@ from routers import user_blogs
 from routers import keyword_analysis
 from routers import keyword_verdict
 from routers import seo_pages
+from routers import ad_snapshot
 from routers import site_analytics
 from routers import revenue
 from routers import unified_ads
@@ -808,6 +818,8 @@ app.include_router(keyword_verdict.router)
 app.include_router(seo_pages.router)
 # 사이트 방문 통계 — 수집은 공개(브라우저 비컨), 조회는 관리자 전용
 app.include_router(site_analytics.router)
+# 광고 스냅샷 — 성과 시계열·엔티티 상태·변경 이력. 수집은 CRON_TOKEN 전용
+app.include_router(ad_snapshot.router)
 
 
 if __name__ == "__main__":

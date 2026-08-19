@@ -1,0 +1,100 @@
+name: Ad snapshot — daily collect
+
+# 광고 계정의 상태·성과를 매일 떠서 저장한다.
+#
+# 왜 매일 도는가: 지금까지 광고 데이터는 화면을 그릴 때만 읽고 버려졌다.
+# 그래서 "광고가 언제부터 멈췄나"·"누가 언제 입찰을 바꿨나" 에 답할 과거가
+# 아예 없었다. 실제로 소재 반려로 광고가 멈춘 것을 8일 뒤에야 발견한 적이 있다.
+#
+# ⚠️ 오늘부터 쌓지 않으면 한 달 뒤에도 비교할 과거가 없다. 화면보다 수집이 먼저다.
+#
+# 왜 새벽 4시(KST)인가: 네이버 통계는 전날치가 새벽에 확정된다. 그리고 이 시간대는
+# 다른 크론(키워드풀·SEO 페이지)과 겹치지 않아 레이트리밋을 나눠 쓰지 않는다.
+#
+# 필요 GitHub Secrets:
+#   CRON_TOKEN — 백엔드 CRON_TOKEN 과 동일 값 (다른 cron 과 공유)
+
+on:
+  schedule:
+    # 19:00 UTC = 04:00 KST
+    - cron: "0 19 * * *"
+  workflow_dispatch:
+    inputs:
+      customer_id:
+        description: "특정 광고주만 수집 (비우면 전체)"
+        required: false
+        default: ""
+      days:
+        description: "며칠 치를 다시 수집할지 (비우면 전환 지연 흡수 구간)"
+        required: false
+        default: ""
+      ad_group_scan_limit:
+        description: "소재 검수상태를 확인할 광고그룹 수 상한"
+        required: false
+        default: "400"
+
+concurrency:
+  group: ad-snapshot-collect
+  cancel-in-progress: false
+
+env:
+  BACKEND_URL: https://blog-index-analyzer.fly.dev
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Collect account snapshots
+        env:
+          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
+          CUSTOMER_ID: ${{ github.event.inputs.customer_id }}
+          DAYS: ${{ github.event.inputs.days }}
+          SCAN_LIMIT: ${{ github.event.inputs.ad_group_scan_limit || '400' }}
+        run: |
+          if [ -z "$CRON_TOKEN" ]; then
+            echo "::error::CRON_TOKEN secret 미설정"
+            exit 1
+          fi
+          url="${BACKEND_URL}/api/ad-snapshot/collect?ad_group_scan_limit=${SCAN_LIMIT}"
+          if [ -n "$CUSTOMER_ID" ]; then
+            url="${url}&customer_id=${CUSTOMER_ID}"
+          fi
+          if [ -n "$DAYS" ]; then
+            url="${url}&days=${DAYS}"
+          fi
+          echo "POST ${url}"
+          status=$(curl -sS -X POST "$url" \
+            -H "Authorization: Bearer ${CRON_TOKEN}" \
+            --max-time 1500 \
+            -o response.json -w '%{http_code}')
+          echo "status=${status}"
+          cat response.json
+          if [ "$status" != "200" ]; then
+            echo "::error::수집 트리거 실패 status=$status"
+            exit 1
+          fi
+
+      - name: Summarize
+        run: |
+          # 계정별 결과를 요약한다. 일부 계정이 실패해도 나머지는 저장됐다.
+          python3 - <<'PY'
+          import json
+          d = json.load(open("response.json"))
+          print(f"accounts={d.get('accounts')} ok={d.get('succeeded')} failed={d.get('failed')}")
+          for r in d.get("results", []):
+              name = r.get("name") or r.get("customer_id")
+              if not r.get("ok"):
+                  print(f"::warning::{name} 수집 실패 — {r.get('errors')}")
+                  continue
+              missed = r.get("ad_groups_not_scanned") or 0
+              line = (f"{name}: 캠페인 {r.get('campaigns')} / 그룹 {r.get('ad_groups')} "
+                      f"/ 소재 {r.get('ads')} / 성과 {r.get('stat_rows')}행 "
+                      f"/ 변경 {r.get('changes')}건")
+              print(f"::notice::{line}")
+              if missed:
+                  # 조용히 자르지 않는다 — 못 본 그룹이 있으면 반드시 말한다.
+                  print(f"::warning::{name} 소재 미확인 광고그룹 {missed}개 "
+                        f"(상한에 걸림 — ad_group_scan_limit 를 올리거나 리포트 경로 필요)")
+          PY

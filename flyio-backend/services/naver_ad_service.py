@@ -16,6 +16,11 @@ import httpx
 
 from config import settings
 
+from services.ad_stat_mapper import (
+    conversions_of as _conv,
+    conv_amount_of as _conv_amt,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -931,12 +936,21 @@ class NaverAdApiClient:
         과거 코드는 /stats/{type} 으로 호출해 404 (path:/api/stats/keyword 등) 발생,
         클릭 데이터 0 으로 보이던 회귀의 원인.
         """
-        if fields is None:
-            # Naver 공식 샘플과 동일 — convCnt/convAmt/viewCnt 등은 entity 별로
-            # 미지원이라 일부 type 에서 11001 잘못된 파라미터 유발 가능.
-            fields = [
-                "clkCnt", "impCnt", "salesAmt", "ctr", "cpc", "avgRnk", "ccnt"
-            ]
+        from services.ad_stat_mapper import (
+            STAT_FIELDS_BASE, STAT_FIELDS_WITH_CONVERSION,
+            is_unsupported_field_error,
+        )
+
+        # 전환(ccnt·convAmt·crto·ror)까지 요청한다. 과거에는 ccnt 만 넣고
+        # 코드는 convCnt 를 읽어서 전환이 언제나 0 이었다.
+        #
+        # ⚠️ 전환 필드는 entity 별로 지원 범위가 달라 11001 을 유발할 수 있고,
+        # 그러면 **응답 전체가 실패**해 클릭·비용까지 잃는다. 그래서 한 번
+        # 실패하면 이 호출 안에서 BASE 로 내려가 나머지 ID 를 건진다.
+        explicit_fields = fields is not None
+        if not explicit_fields:
+            fields = list(STAT_FIELDS_WITH_CONVERSION)
+        conv_downgraded = False
 
         # Naver SearchAd /stats: GET endpoint, single-id 만 안정적 (multi-id 11001).
         # 응답: {"data": [{...stats}], "compTm": ..., "cycleBaseTm": ...}.
@@ -969,6 +983,26 @@ class NaverAdApiClient:
                     # circuit OPEN — 남은 ID 도 skip
                     break
                 except Exception as e:
+                    # 전환 필드 미지원(11001)이면 이 ID 를 BASE 로 한 번 재시도하고,
+                    # 이후 ID 는 처음부터 BASE 로 간다. 전환을 못 얻는 것보다
+                    # 클릭·비용까지 통째로 잃는 쪽이 훨씬 나쁘다.
+                    if (not explicit_fields and not conv_downgraded
+                            and is_unsupported_field_error(e)):
+                        conv_downgraded = True
+                        fields = list(STAT_FIELDS_BASE)
+                        logger.info(
+                            f"[NaverAd/stats] 전환 필드 미지원 — BASE 로 강등 ({kid})")
+                        try:
+                            params["fields"] = _json.dumps(fields)
+                            resp = await self._request("GET", "/stats", params)
+                            data = resp.get("data") if isinstance(resp, dict) else resp
+                            if isinstance(data, list):
+                                merged.extend(data)
+                            elif isinstance(data, dict):
+                                merged.append(data)
+                            continue
+                        except Exception as e2:
+                            e = e2
                     logger.warning(f"[NaverAd/stats] {kid} 실패: {str(e)[:120]}")
         return merged
 
@@ -1304,8 +1338,8 @@ class BidOptimizationEngine:
                     impressions=stat.get("impCnt", 0),
                     clicks=stat.get("clkCnt", 0),
                     cost=stat.get("salesAmt", 0),
-                    conversions=stat.get("convCnt", 0),
-                    revenue=stat.get("convAmt", 0),
+                    conversions=_conv(stat),
+                    revenue=_conv_amt(stat),
                     avg_position=stat.get("avgRnk", 0)
                 )
 
@@ -1341,7 +1375,7 @@ class BidOptimizationEngine:
                                     "impressions": stat.get("impCnt", 0),
                                     "clicks": stat.get("clkCnt", 0),
                                     "cost": stat.get("salesAmt", 0),
-                                    "conversions": stat.get("convCnt", 0)
+                                    "conversions": _conv(stat)
                                 },
                                 session_id=self.session_id if hasattr(self, 'session_id') else None
                             )
@@ -1627,7 +1661,7 @@ class KeywordExclusionEngine:
         impressions = stats.get("impCnt", 0)
         clicks = stats.get("clkCnt", 0)
         cost = stats.get("salesAmt", 0)
-        conversions = stats.get("convCnt", 0)
+        conversions = _conv(stats)
         quality_score = keyword.get("qualityScore", 10)
 
         # 평가 기준 미달 (노출수 부족)
