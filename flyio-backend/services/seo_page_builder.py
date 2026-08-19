@@ -29,7 +29,12 @@ logger = logging.getLogger(__name__)
 # 실패-재시도로 시간을 까먹고 있었고(21s→113s), ②정상일 때도 키워드 합계가
 # 50초대라 90초는 편차를 못 견뎠다. 자격증명은 넣었고, 상한도 실측(53초)의
 # 약 3배로 올린다. 15개 × 최악 150초 = 38분이라 2시간 주기 안에 든다.
-PER_KEYWORD_TIMEOUT_S = 150
+# 2026-08-19 재측정: serp-difficulty 55s + competition 100s = 155s 로,
+# 150초 상한에 딱 걸려 배치가 또 전멸했다(3/3 timeout). competition 이 느린 건
+# 내부에서 search_keyword_with_tabs(analyze_content=True) 로 상위 10개 글을
+# 풀파싱하기 때문이다 — 그 파싱 결과가 곧 학습 샘플의 콘텐츠 피처라 뺄 수 없다.
+# 실측의 약 2배로 잡는다. 15개 × 최악 300초 = 75분이라 2시간 주기 안에 든다.
+PER_KEYWORD_TIMEOUT_S = 300
 
 # 측정 사이 양보 시간. 이벤트루프가 /health 등 가벼운 요청을 처리할 틈.
 YIELD_BETWEEN_S = 2.0
@@ -145,10 +150,12 @@ async def enrich_volumes(limit: int = 200) -> Dict[str, Any]:
     seo_db.init_seo_pages_db()
     # 기준(MIN_QUEUE_VOLUME)이 올라갔다면 예전 기준으로 통과한 행을 먼저 걸러낸다.
     reclassified = seo_db.reclassify_by_volume()
+    off_domain = seo_db.skip_off_domain()
     todo = seo_db.pending_without_volume(limit=limit)
     if not todo:
         return {
             "checked": 0, "kept": 0, "skipped": 0, "reclassified": reclassified,
+        "off_domain_skipped": off_domain,
             "message": "볼륨 미확인 키워드 없음", "stats": seo_db.stats(),
         }
 
@@ -196,6 +203,7 @@ async def enrich_volumes(limit: int = 200) -> Dict[str, Any]:
         "skipped": skipped,
         "discovered": discovered,
         "reclassified": reclassified,
+        "off_domain_skipped": off_domain,
         "errors": errors[:5],
         "stats": seo_db.stats(),
     }

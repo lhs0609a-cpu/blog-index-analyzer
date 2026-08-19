@@ -325,6 +325,34 @@ def set_queue_volumes(volumes: Dict[str, int]) -> Dict[str, int]:
     return {"kept": kept, "skipped": skipped}
 
 
+def skip_off_domain() -> int:
+    """
+    큐에 남아 있는 **도메인 밖** 키워드를 'skipped' 로 내린다.
+
+    ⚠️ 검색량 우선 정렬로 바꾸면서 드러난 문제다. 도메인 필터가 없던 시절
+    자동완성으로 쌓인 '쇼핑몰'·'택배기사'·'전자책' 같은 일반 상업 키워드는
+    검색량이 크기 때문에 정렬하면 **맨 앞으로 올라온다**. 즉 우선순위 도입이
+    오히려 쓰레기를 먼저 측정하게 만들었다(실측: 배치 3건이 전부 이런 키워드).
+    enqueue_with_volume 은 필터를 타지만 예전 데이터는 안 탔으므로 여기서 청소한다.
+    """
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            "SELECT keyword FROM seo_keyword_queue WHERE state='pending'"
+        )
+        bad = [r["keyword"] for r in cur.fetchall() if not in_domain(r["keyword"])]
+        for kw in bad:
+            conn.execute(
+                "UPDATE seo_keyword_queue SET state='skipped', last_error='off_domain' "
+                "WHERE keyword=? AND state='pending'",
+                (kw,),
+            )
+        conn.commit()
+        return len(bad)
+    finally:
+        conn.close()
+
+
 def reclassify_by_volume() -> int:
     """
     MIN_QUEUE_VOLUME 을 올렸을 때 이미 통과 처리된 행을 다시 걸러낸다.
