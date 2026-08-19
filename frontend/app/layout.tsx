@@ -119,6 +119,9 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <head>
+        {/* RSS 자동발견 — 네이버 서치어드바이저는 사이트맵과 RSS 를 다른 채널로
+            취급한다. 사이트맵=전수 색인, RSS=새 글 빠른 발견. */}
+        <link rel="alternate" type="application/rss+xml" title="블랭크" href="/rss.xml" />
         {/* JSON-LD 구조화 데이터 */}
         <script {...jsonLdScript(jsonLd)} />
       </head>

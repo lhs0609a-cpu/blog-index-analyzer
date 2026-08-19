@@ -60,14 +60,20 @@ async def get_keyword_page(slug: str):
 async def list_keyword_pages(
     offset: int = Query(0, ge=0),
     limit: int = Query(5000, ge=1, le=5000),
+    order: str = Query("volume", pattern="^(volume|recent)$"),
 ):
-    """사이트맵 생성용 슬러그 목록. 검색량 큰 것부터."""
+    """
+    슬러그 목록.
+    order=volume(기본) 사이트맵용 — 검색량 큰 것부터
+    order=recent       RSS 용 — 최근 측정순
+    """
     seo_db.init_seo_pages_db()
     return {
         "total": seo_db.count_published(),
         "offset": offset,
         "limit": limit,
-        "items": seo_db.list_published_slugs(offset=offset, limit=limit),
+        "order": order,
+        "items": seo_db.list_published_slugs(offset=offset, limit=limit, order=order),
     }
 
 

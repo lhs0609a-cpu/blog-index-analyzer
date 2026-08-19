@@ -523,14 +523,27 @@ def get_page(slug: str) -> Optional[Dict[str, Any]]:
         conn.close()
 
 
-def list_published_slugs(offset: int = 0, limit: int = 5000) -> List[Dict[str, Any]]:
-    """사이트맵용. 검색량 큰 것부터 — 색인 예산을 중요한 페이지에 먼저 쓴다."""
+def list_published_slugs(
+    offset: int = 0, limit: int = 5000, order: str = "volume"
+) -> List[Dict[str, Any]]:
+    """
+    사이트맵/RSS 용 목록.
+
+    order="volume"  검색량 큰 것부터 — 사이트맵. 색인 예산을 중요한 페이지에 먼저.
+    order="recent"  최근 측정순 — RSS. RSS 는 '새로 생긴 것'을 알리는 채널이라
+                    검색량이 아니라 신선도로 정렬해야 의미가 있다.
+    """
+    order_by = (
+        "measured_at DESC, slug ASC"
+        if order == "recent"
+        else "COALESCE(search_volume, 0) DESC, slug ASC"
+    )
     conn = _connect()
     try:
         cur = conn.execute(
-            "SELECT slug, keyword, measured_at FROM seo_keyword_pages "
-            "WHERE published = 1 ORDER BY COALESCE(search_volume, 0) DESC, slug ASC "
-            "LIMIT ? OFFSET ?",
+            "SELECT slug, keyword, measured_at, search_volume, difficulty_label "
+            "FROM seo_keyword_pages WHERE published = 1 "
+            f"ORDER BY {order_by} LIMIT ? OFFSET ?",
             (limit, offset),
         )
         return [dict(r) for r in cur.fetchall()]

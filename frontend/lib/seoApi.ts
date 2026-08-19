@@ -62,6 +62,8 @@ export type KeywordListItem = {
   slug: string
   keyword: string
   measured_at: string
+  search_volume?: number | null
+  difficulty_label?: string | null
 }
 
 /**
@@ -119,11 +121,13 @@ export async function fetchKeywordCount(): Promise<number> {
 
 export async function fetchKeywordList(
   offset = 0,
-  limit = 5000
+  limit = 5000,
+  /** 'volume' 사이트맵용(검색량순) · 'recent' RSS 용(최신순) */
+  order: 'volume' | 'recent' = 'volume'
 ): Promise<{ total: number; items: KeywordListItem[] }> {
   try {
     const res = await fetch(
-      `${API_BASE}/api/seo/keywords?offset=${offset}&limit=${limit}`,
+      `${API_BASE}/api/seo/keywords?offset=${offset}&limit=${limit}&order=${order}`,
       { ...withTimeout(), next: { revalidate: SITEMAP_REVALIDATE } }
     )
     if (!res.ok) return { total: 0, items: [] }

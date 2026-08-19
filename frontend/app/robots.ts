@@ -49,7 +49,13 @@ export default function robots(): MetadataRoute.Robots {
     ],
     // 인덱스가 정적 페이지 사이트맵 + 키워드 페이지 청크를 전부 묶는다.
     // /sitemap.xml 도 같이 알려준다 — 인덱스를 못 읽는 크롤러 대비.
-    sitemap: [`${SITE_URL}/sitemap-index.xml`, `${SITE_URL}/sitemap.xml`],
+    // RSS 는 robots 의 Sitemap 지시자로도 인식되는 크롤러가 있어 함께 알린다
+    // (네이버 서치어드바이저에는 별도로 'RSS 제출' 해야 한다).
+    sitemap: [
+      `${SITE_URL}/sitemap-index.xml`,
+      `${SITE_URL}/sitemap.xml`,
+      `${SITE_URL}/rss.xml`,
+    ],
     host: SITE_URL,
   }
 }
