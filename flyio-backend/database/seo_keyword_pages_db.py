@@ -582,8 +582,13 @@ def list_published_slugs(
     )
     conn = _connect()
     try:
+        # RSS 는 '본문 전체' 제공이 권장이라(네이버 웹마스터 가이드) 요약을
+        # 만들 수 있을 만큼의 필드를 함께 준다. 페이지당 추가 조회 없이
+        # 한 쿼리로 끝내기 위함이다.
         cur = conn.execute(
-            "SELECT slug, keyword, measured_at, search_volume, difficulty_label "
+            "SELECT slug, keyword, measured_at, search_volume, difficulty_label, "
+            "       difficulty_score, competitors_scanned, alive_ratio, "
+            "       top10_avg_score, top10_min_score, category_label "
             "FROM seo_keyword_pages WHERE published = 1 "
             f"ORDER BY {order_by} LIMIT ? OFFSET ?",
             (limit, offset),

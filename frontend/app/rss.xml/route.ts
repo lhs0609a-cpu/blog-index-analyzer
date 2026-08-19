@@ -19,6 +19,11 @@ export const revalidate = 1800 // 30분 — 사이트맵보다 짧게 (신선도
 
 const MAX_ITEMS = 50
 
+/** 본문 안에 넣는 사용자 문자열용 (태그는 우리가 만든 것만 허용) */
+function escHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
 function esc(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -43,15 +48,58 @@ export async function GET() {
     date: new Date(g.updated),
   }))
 
-  const keywordItems = items.map((k) => ({
-    title: `${k.keyword} — 블로그 상위노출 난이도`,
-    link: absoluteUrl(`/keyword/${encodeURIComponent(k.slug)}`),
-    description:
-      `'${k.keyword}' 키워드의 네이버 블로그 1페이지 경쟁 분석. ` +
-      (k.difficulty_label ? `진입 난이도 ${difficultyKo(k.difficulty_label)}. ` : '') +
-      (k.search_volume ? `월 검색량 ${k.search_volume.toLocaleString()}회.` : ''),
-    date: new Date(k.measured_at),
-  }))
+  // 네이버 웹마스터 가이드: "RSS 피드 내의 콘텐츠는 본문 전체를 제공하는 것을 권장".
+  // 다만 같은 문서가 "본문 크기에 따라 제출이 제한될 수 있다"고도 하므로,
+  // 한 줄 요약이 아니라 **읽을 만한 분석 본문**을 넣되 항목당 2KB 안쪽으로 유지한다.
+  const keywordItems = items.map((k) => {
+    const dormant =
+      k.alive_ratio != null && k.competitors_scanned
+        ? Math.round((1 - k.alive_ratio) * k.competitors_scanned)
+        : null
+
+    const lines: string[] = [
+      `<p>네이버에서 <strong>${escHtml(k.keyword)}</strong>를 검색했을 때 블로그탭 1페이지에 ` +
+        `실제로 올라와 있는 블로그들을 조회해 경쟁 강도를 계산한 결과입니다.</p>`,
+    ]
+    const facts: string[] = []
+    if (k.difficulty_label) {
+      facts.push(
+        `진입 난이도 <strong>${difficultyKo(k.difficulty_label)}</strong>` +
+          (k.difficulty_score != null ? ` (${Math.round(k.difficulty_score)}점/100)` : '')
+      )
+    }
+    if (k.search_volume) facts.push(`월 검색량 ${k.search_volume.toLocaleString()}회`)
+    if (k.competitors_scanned) facts.push(`1페이지 경쟁 블로그 ${k.competitors_scanned}개 실측`)
+    if (k.top10_avg_score != null) facts.push(`상위권 평균 지수 ${k.top10_avg_score.toFixed(1)}점`)
+    if (k.top10_min_score != null)
+      facts.push(`1페이지 진입 컷라인 ${k.top10_min_score.toFixed(1)}점`)
+    if (dormant != null) facts.push(`30일 이상 미발행 경쟁자 ${dormant}개`)
+    if (facts.length) lines.push(`<ul>${facts.map((f) => `<li>${f}</li>`).join('')}</ul>`)
+
+    if (k.top10_min_score != null) {
+      lines.push(
+        `<p>1페이지 최하위 블로그의 지수가 ${k.top10_min_score.toFixed(1)}점이므로, ` +
+          `이 점수를 넘기는 것이 진입의 최소 조건입니다.</p>`
+      )
+    }
+    if (dormant != null && dormant >= 3) {
+      lines.push(
+        `<p>1페이지 경쟁자 중 ${dormant}개가 30일 넘게 새 글을 올리지 않았습니다. ` +
+          `활동이 멈춘 자리는 새 글이 밀어낼 여지가 있습니다.</p>`
+      )
+    }
+    lines.push(
+      `<p>여기 쓰인 지수는 네이버가 공개하는 공식 값이 아니라 외부에서 관측 가능한 ` +
+        `지표로 계산한 추정치입니다.</p>`
+    )
+
+    return {
+      title: `${k.keyword} — 블로그 상위노출 난이도`,
+      link: absoluteUrl(`/keyword/${encodeURIComponent(k.slug)}`),
+      description: lines.join(''),
+      date: new Date(k.measured_at),
+    }
+  })
 
   const all = [...guideItems, ...keywordItems]
     .sort((a, b) => b.date.getTime() - a.date.getTime())
@@ -74,7 +122,7 @@ export async function GET() {
           `    <title>${esc(it.title)}</title>\n` +
           `    <link>${esc(it.link)}</link>\n` +
           `    <guid isPermaLink="true">${esc(it.link)}</guid>\n` +
-          `    <description>${esc(it.description)}</description>\n` +
+          `    <description><![CDATA[${it.description}]]></description>\n` +
           `    <pubDate>${rfc822(it.date)}</pubDate>\n` +
           `  </item>`
       )

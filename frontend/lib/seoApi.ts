@@ -64,6 +64,13 @@ export type KeywordListItem = {
   measured_at: string
   search_volume?: number | null
   difficulty_label?: string | null
+  /** 아래는 RSS 본문 구성용 — 페이지당 추가 조회 없이 목록 쿼리에서 함께 온다 */
+  difficulty_score?: number | null
+  competitors_scanned?: number | null
+  alive_ratio?: number | null
+  top10_avg_score?: number | null
+  top10_min_score?: number | null
+  category_label?: string | null
 }
 
 /**
