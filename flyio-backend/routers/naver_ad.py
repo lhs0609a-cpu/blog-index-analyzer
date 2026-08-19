@@ -7072,6 +7072,79 @@ async def keyword_pool_diagnostics_accounts_list():
     return {"success": True, "count": len(out), "accounts": out}
 
 
+@router.get("/keyword-pool/diagnostics/channel-health")
+async def keyword_pool_diagnostics_channel_health(
+    seed: str = Query("두통", description="테스트 시드"),
+    jamo: bool = Query(True, description="자모 접두사 확장까지 측정"),
+):
+    """진단 — 발굴 채널이 **이 서버에서** 실제로 작동하는지 (인증 없음, 읽기 전용).
+
+    왜 필요한가: 자동완성은 발굴 엔진의 주 채널인데, 서버에서 그게 살아있는지 확인할
+    방법이 없었다. 그래서 "collect 가 마르는" 원인이 ①우주 고갈인지 ②네이버가 이 서버
+    IP 를 막는지 구분이 안 됐다. 로컬에서는 자모가 12~17배를 내는데 프로덕션은 마른
+    상태였고, 이 둘을 가르는 관측 수단이 없었다.
+
+    읽는 법:
+      seed_only 가 0        → 이 서버에서 네이버 자동완성 자체가 막힘 (IP/네트워크)
+      seed_only>0, jamo≈0   → 자모 확장 경로가 죽음
+      둘 다 정상인데 collect 가 마름 → 진짜 우주 고갈 (기준을 낮출 게 아니라 축을 늘려야 함)
+    """
+    import time as _t
+    from services.naver_autocomplete import (
+        build_jamo_variants, collect_autocomplete, collect_bing_expanded,
+    )
+
+    s = (seed or "").strip() or "두통"
+    out: Dict[str, Any] = {"seed": s}
+
+    t0 = _t.time()
+    try:
+        base = await collect_autocomplete([s], per_seed=30, concurrency=2, timeout=6.0)
+        base_kws = set(base.get(s) or [])
+        out["seed_only"] = {"count": len(base_kws), "ms": int((_t.time() - t0) * 1000),
+                            "samples": sorted(base_kws)[:8]}
+    except Exception as e:
+        base_kws = set()
+        out["seed_only"] = {"error": f"{type(e).__name__}: {e}"}
+
+    if jamo:
+        t1 = _t.time()
+        try:
+            qs = build_jamo_variants(s, tier=1)
+            raw = await collect_autocomplete(qs, per_seed=30, concurrency=5, timeout=6.0)
+            jam = set()
+            for v in raw.values():
+                jam |= set(v)
+            new = jam - base_kws
+            out["jamo"] = {
+                "queries": len(qs),
+                "count": len(jam),
+                "new_vs_seed": len(new),
+                "multiplier": round(len(jam) / max(1, len(base_kws)), 1),
+                "ms": int((_t.time() - t1) * 1000),
+                "samples": sorted(new)[:8],
+            }
+        except Exception as e:
+            out["jamo"] = {"error": f"{type(e).__name__}: {e}"}
+
+    t2 = _t.time()
+    try:
+        bing = await collect_bing_expanded([s], concurrency=2)
+        out["bing"] = {"count": len(bing), "ms": int((_t.time() - t2) * 1000),
+                       "samples": sorted(bing)[:6]}
+    except Exception as e:
+        out["bing"] = {"error": f"{type(e).__name__}: {e}"}
+
+    seed_ok = int((out.get("seed_only") or {}).get("count") or 0) > 0
+    jamo_ok = int((out.get("jamo") or {}).get("new_vs_seed") or 0) > 0
+    out["verdict"] = (
+        "네이버 자동완성 차단/불능 — IP·네트워크 문제" if not seed_ok
+        else "자모 확장 불능 — 확장 경로 점검" if (jamo and not jamo_ok)
+        else "채널 정상 — collect 가 마르면 우주 고갈이 원인"
+    )
+    return {"success": True, **out}
+
+
 @router.get("/keyword-pool/diagnostics/recent-registered")
 async def keyword_pool_diagnostics_recent_registered(
     customer_id: int = Query(..., description="광고주 customer_id"),
@@ -14152,6 +14225,101 @@ class ExplicitBackfillRequest(BaseModel):
     mode: str = Field("backfill", description="test_one | backfill")
 
 
+class CopyAdToGroupsRequest(BaseModel):
+    """승인된 소재 1개를 **지정한 광고그룹들에만** 복제.
+
+    ads/backfill-creative 는 계정 전체의 '소재 없는 그룹'을 대상으로 하기 때문에,
+    새로 만든 캠페인 3개 그룹에 소재를 붙이려다 풀 전체 수천 그룹을 깨우게 된다.
+    (소잠 2026-08-05: 승인·서빙 중인 소재는 type=MEDICAL_AD·심의필 한80866 하나뿐이고,
+     promote-core 가 만들던 TEXT_45·한42606 은 AD_DISAPPROVED 상태였다.)
+    """
+    source_ad_id: str = Field(..., description="복제 원본 nccAdId (승인된 소재)")
+    group_ids: List[str] = Field(..., description="붙일 광고그룹 ID 목록")
+    campaign_id: Optional[str] = Field(
+        None, description="주면 그 캠페인의 활성 그룹 전체를 대상으로 한다(group_ids 대신)")
+    dry_run: bool = Field(True)
+
+
+@router.post("/keyword-pool/ads/copy-to-groups")
+async def keyword_pool_ads_copy_to_groups(
+    request: CopyAdToGroupsRequest,
+    background_tasks: BackgroundTasks,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """승인 소재를 지정 그룹에 복제 (MEDICAL_AD / TEXT_45 / RSA_AD 자동 판별)."""
+    from services.naver_ad_service import NaverAdApiClient
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    def _as_list(x):
+        return x if isinstance(x, list) else ((x or {}).get("data") or [])
+
+    try:
+        src = await client.get_ad_by_id(request.source_ad_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"원본 소재 조회 실패: {str(e)[:150]}")
+    ad_type = src.get("type")
+    basic = ((src.get("ad") or {}).get("basic")) or {}
+    if ad_type == "MEDICAL_AD" and not basic:
+        raise HTTPException(status_code=400, detail="MEDICAL_AD 인데 ad.basic 이 비었다")
+
+    gids = list(request.group_ids or [])
+    if request.campaign_id:
+        try:
+            for g in _as_list(await client._request(
+                    "GET", "/ncc/adgroups", {"nccCampaignId": request.campaign_id})):
+                if not g.get("userLock") and g.get("nccAdgroupId"):
+                    gids.append(g["nccAdgroupId"])
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"그룹 열거 실패: {str(e)[:150]}")
+    gids = list(dict.fromkeys(gids))
+    if not gids:
+        raise HTTPException(status_code=400, detail="대상 그룹 없음")
+
+    if request.dry_run:
+        return {"success": True, "dry_run": True, "customer_id": cid,
+                "source_type": ad_type, "medical_no": basic.get("medicalNo"),
+                "headline": basic.get("headline"),
+                "inspect_status": src.get("inspectStatus"), "status": src.get("status"),
+                "target_groups": len(gids), "samples": gids[:10]}
+
+    async def _run():
+        ok = fail = skip = 0
+        for gid in gids:
+            try:
+                if _as_list(await client._request("GET", "/ncc/ads",
+                                                  {"nccAdgroupId": gid})):
+                    skip += 1
+                    continue
+                if ad_type == "MEDICAL_AD":
+                    await client.create_medical_ad(gid, basic=dict(basic))
+                else:
+                    ad = src.get("ad") or {}
+                    await client.create_ad(
+                        ad_group_id=gid,
+                        headline_pc=ad.get("headline"), description_pc=ad.get("description"),
+                        display_url=ad.get("displayUrl"), final_url_pc=ad.get("finalUrl"),
+                        medical_no=ad.get("medicalNo"))
+                ok += 1
+            except Exception as e:
+                fail += 1
+                logger.warning(f"[copy-to-groups] {gid} 실패: {str(e)[:120]}")
+            await asyncio.sleep(0.25)
+        logger.warning(f"[copy-to-groups] 완료 — 생성 {ok} / 기존보유 {skip} / 실패 {fail}")
+
+    background_tasks.add_task(_run)
+    return {"success": True, "started": True, "customer_id": cid, "source_type": ad_type,
+            "medical_no": basic.get("medicalNo"), "target_groups": len(gids),
+            "message": "소재 복제 백그라운드 시작 (로그 [copy-to-groups])"}
+
+
 @router.post("/keyword-pool/ads/backfill-explicit")
 async def keyword_pool_ads_backfill_explicit(
     request: ExplicitBackfillRequest,
@@ -14953,11 +15121,23 @@ async def keyword_pool_debug_naver_raw(
     if not account or not account.get("is_connected"):
         raise HTTPException(status_code=400, detail="광고 계정 미연결")
     path = (request.path or "").strip()
-    if not path.startswith("/ncc/"):
-        raise HTTPException(status_code=400, detail="path 는 /ncc/ 로 시작해야 함")
+    # /ncc/ 는 광고 실체(캠페인·그룹·키워드) — 전 메서드 허용.
+    # 그 밖에 진단에 꼭 필요한 읽기 계열을 허용목록으로 연다. 과거 이 가드가
+    # /stats 를 HTTP400 으로 막아 전환·확장검색어 진단이 통째로 불가능했다.
+    #   /stats          단건 성과 조회
+    #   /stat-reports   대량 성과 리포트(전환·확장검색어 포함) 작업 생성/조회
+    #   /master-reports 계정 마스터 덤프(소재 검수상태 등) 작업 생성/조회
+    READONLY_PREFIXES = ("/stats", "/stat-reports", "/master-reports")
+    if not (path.startswith("/ncc/") or path.startswith(READONLY_PREFIXES)):
+        raise HTTPException(
+            status_code=400,
+            detail="path 는 /ncc/ 또는 " + ", ".join(READONLY_PREFIXES) + " 로 시작해야 함")
     method = (request.method or "GET").upper()
     if method not in ("GET", "POST", "PUT", "DELETE"):
         raise HTTPException(status_code=400, detail="method 불가")
+    # 리포트 계열은 PUT 으로 광고를 바꿀 수 없다 — 실수 방지로 메서드도 좁힌다.
+    if path.startswith(READONLY_PREFIXES) and method == "PUT":
+        raise HTTPException(status_code=400, detail="리포트 경로에 PUT 불가")
     client = NaverAdApiClient()
     client.customer_id = account["customer_id"]
     client.api_key = account["api_key"]
@@ -15220,6 +15400,14 @@ class PromoteCoreRequest(BaseModel):
         None, description="키워드별 입찰가 {키워드: 원}. 목록에 없으면 init_bid 를 쓴다.")
     skip_existing: bool = Field(
         True, description="explicit_keywords 중 이미 등록된 키워드는 제외(중복 등록 방지)")
+    # ★소잠 실측(2026-08-05): 이 엔드포인트가 만드는 TEXT_45 + 심의필 한42606 소재는
+    #   현재 계정에서 inspectStatus=PENDING / status=PAUSED(AD_DISAPPROVED) 다.
+    #   승인돼 서빙 중인 소재는 type=MEDICAL_AD · 심의필 한80866(이미지 포함)뿐이다.
+    #   그런데 ads/backfill-creative 는 **소재가 없는 그룹에만** 붙으므로, 여기서 소재를
+    #   먼저 만들면 승인 소재를 못 붙인다. 그래서 소재 생성을 건너뛰는 경로가 필요하다.
+    skip_creative: bool = Field(
+        False, description="소재를 만들지 않는다. 생성 후 ads/backfill-creative 로 "
+                           "승인된 소재(source_ad_id)를 복제할 때 쓴다.")
     dry_run: bool = Field(True)
 
 
@@ -15407,15 +15595,17 @@ async def keyword_pool_promote_core(
                 except Exception as e:
                     logger.warning(f"[promote-core] 키워드 생성 실패 grp{grp_idx} sub{j}: {str(e)[:120]}")
                 await asyncio.sleep(0.15)
-            # 의료심의 소재 1개
-            try:
-                await client.create_ad(
-                    ad_group_id=gid, headline_pc=request.headline, description_pc=request.description,
-                    display_url=request.display_url, final_url_pc=request.final_url,
-                    medical_no=request.medical_no,
-                )
-            except Exception as e:
-                logger.warning(f"[promote-core] 소재 생성 실패 grp{grp_idx}: {str(e)[:120]}")
+            # 의료심의 소재 1개 (skip_creative 면 건너뛰고 backfill-creative 에 맡긴다)
+            if not request.skip_creative:
+                try:
+                    await client.create_ad(
+                        ad_group_id=gid, headline_pc=request.headline,
+                        description_pc=request.description,
+                        display_url=request.display_url, final_url_pc=request.final_url,
+                        medical_no=request.medical_no,
+                    )
+                except Exception as e:
+                    logger.warning(f"[promote-core] 소재 생성 실패 grp{grp_idx}: {str(e)[:120]}")
             await asyncio.sleep(0.2)
         logger.warning(f"[promote-core] 이동 생성 완료 — {len(moved)}개 (그룹 {grp_idx})")
         # 4) DB 반영 — 명시 모드는 신규 INSERT, 승격 모드는 기존 행 UPDATE
