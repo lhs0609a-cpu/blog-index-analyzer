@@ -30,6 +30,59 @@ KEYWORD_BATCH_SIZE = 100               # API 한 번에 보낼 키워드 수
 API_RATE_LIMIT_DELAY = 0.5             # 호출 간 최소 대기(초)
 
 
+NAVER_ADGROUP_NAME_MAX = 30
+
+
+def _fit_group_name(head: str, tail: str) -> str:
+    """
+    네이버 광고그룹명 길이 제한에 맞춘다.
+
+    ⚠️ 실제 제한은 **30자**다(code 3711: "그룹명을 1자~30자로 설정하세요").
+    예전 코드는 [:60] 으로 잘라 여전히 초과였고, 그것만으로 19,949건이 실패했다.
+
+    ⚠️ 그리고 뒤에서 자르면 안 된다. 구분용 인덱스/런 접미사(_0001_ab12)가
+    잘려 나가면 이름이 서로 겹쳐 code 3710("이미 사용 중")으로 다시 실패한다.
+    설명부(head)를 줄이고 접미사(tail)는 반드시 보존한다.
+    """
+    tail = (tail or "")[:NAVER_ADGROUP_NAME_MAX]
+    room = NAVER_ADGROUP_NAME_MAX - len(tail)
+    head = (head or "")[:room] if room > 0 else ""
+    return (head + tail) or tail or "grp"
+
+
+def _describe_error(e: Exception) -> str:
+    """
+    예외를 사람이 읽을 수 있게 요약한다.
+
+    ⚠️ str(e) 만 쓰면 안 된다. httpx 의 ConnectTimeout 처럼 메시지가 비어 있는
+    예외가 많아서, 실패 사유가 "API 오류: " 로만 남는다. 실제로 그렇게 기록된 건이
+    38,280건이었고 원인 파악이 불가능했다. 타입은 항상 남기고, 응답 본문이 있으면
+    같이 붙인다.
+    """
+    parts = [type(e).__name__]
+    msg = str(e).strip()
+    if msg:
+        parts.append(msg[:300])
+    # ⚠️ getattr 자체를 try 로 감싼다. httpx 예외의 .request 는 값이 없으면
+    # RuntimeError 를 던지는 **프로퍼티**라, 단순 getattr 이 오류 처리기 안에서
+    # 다시 터진다(실제로 그렇게 터졌다).
+    try:
+        resp = getattr(e, "response", None)
+        if resp is not None:
+            parts.append(f"HTTP {resp.status_code}: {str(resp.text)[:300]}")
+    except Exception:
+        pass
+    if not msg:
+        try:
+            req = getattr(e, "request", None)
+            if req is not None:
+                parts.append(f"{req.method} {req.url}")
+        except Exception:
+            pass
+    return " | ".join(parts)
+
+
+
 @dataclass
 class BulkJobConfig:
     job_id: int
@@ -412,37 +465,69 @@ class BulkUploadOrchestrator:
                 campaign_id = created_campaigns[c_idx]
                 # 광고그룹 이름 — reuse 시 인덱스 시작점 + epoch suffix로 중복 방지
                 base_grp_idx = g_idx + 1 + config.start_ad_group_index
+                # 이름은 head(설명) + tail(구분자)로 나눠 만든다.
+                # 30자를 넘을 때 잘리는 쪽이 tail 이어선 안 된다 — _fit_group_name 참고.
+                _tail = f"_{base_grp_idx:04d}"
+                if config.reuse_campaign_id:
+                    _tail = f"{_tail}_{run_suffix}"
+
                 if config.group_label:
                     # 계층 등록 — 그룹명을 소분류 라벨로 고정.
-                    ad_group_name = f"{config.group_label}_{base_grp_idx:04d}"
-                    if config.reuse_campaign_id:
-                        ad_group_name = f"{ad_group_name}_{run_suffix}"
-                    ad_group_name = ad_group_name[:60]
+                    ad_group_name = _fit_group_name(config.group_label, _tail)
                 elif config.descriptive_group_names:
                     # 한글 테마 등록 — 그룹명에 청크 대표 키워드(가장 짧은=핵심 3개) 기재.
                     _reps = "·".join(sorted(set(chunk), key=len)[:3])
-                    ad_group_name = f"{_reps}_{base_grp_idx:04d}"
-                    if config.reuse_campaign_id:
-                        ad_group_name = f"{ad_group_name}_{run_suffix}"
-                    ad_group_name = ad_group_name[:60]  # 네이버 광고그룹명 길이 제한 대비
-                elif config.reuse_campaign_id:
-                    ad_group_name = f"{config.campaign_prefix}_grp_{base_grp_idx:04d}_{run_suffix}"
+                    ad_group_name = _fit_group_name(_reps, _tail)
                 else:
-                    ad_group_name = f"{config.campaign_prefix}_grp_{base_grp_idx:04d}"
+                    ad_group_name = _fit_group_name(f"{config.campaign_prefix}_grp", _tail)
 
-                # 광고그룹 생성
-                try:
-                    ag = await self.api.create_ad_group(
-                        campaign_id=campaign_id,
-                        name=ad_group_name,
-                        bid_amt=config.bid,
-                        business_channel_id=business_channel_id,
-                    )
-                    ad_group_id = ag.get("nccAdgroupId")
-                    if not ad_group_id:
-                        raise ValueError(f"광고그룹 ID 없음: {ag}")
+                # 광고그룹 생성.
+                # ⚠️ code 3710("이미 사용 중")은 실패가 아니다 — 같은 이름의 그룹이
+                # 이미 있다는 뜻이므로 **그걸 재사용**하면 된다. 예전엔 이걸 실패로
+                # 처리해 청크 전체(수백 키워드)를 버렸고, 그것만으로 48,018건이 날아갔다.
+                # 재사용도 안 되면 접미사를 바꿔 다시 시도한다.
+                ad_group_id = None
+                last_err = None
+                for _attempt in range(3):
+                    try:
+                        ag = await self.api.create_ad_group(
+                            campaign_id=campaign_id,
+                            name=ad_group_name,
+                            bid_amt=config.bid,
+                            business_channel_id=business_channel_id,
+                        )
+                        ad_group_id = ag.get("nccAdgroupId")
+                        if not ad_group_id:
+                            raise ValueError(f"광고그룹 ID 없음: {ag}")
+                        break
+                    except Exception as _e:
+                        last_err = _e
+                        if '"code":3710' not in str(_e):
+                            break  # 중복이 아니면 재시도해도 같은 실패다
+                        try:
+                            _existing = await self.api.get_ad_groups(campaign_id)
+                            _hit = next(
+                                (x for x in (_existing or [])
+                                 if (x.get("name") or "").strip() == ad_group_name),
+                                None,
+                            )
+                            if _hit and _hit.get("nccAdgroupId"):
+                                ad_group_id = _hit["nccAdgroupId"]
+                                logger.info(f"[Job {job_id}] 광고그룹 재사용: {ad_group_name}")
+                                break
+                        except Exception as _le:
+                            logger.warning(f"[Job {job_id}] 기존 그룹 조회 실패: {_le}")
+                        ad_group_name = _fit_group_name(ad_group_name, f"_r{_attempt + 1}")
+                        await asyncio.sleep(API_RATE_LIMIT_DELAY)
+
+                if ad_group_id:
                     created_ad_groups.append(ad_group_id)
-                    logger.info(f"[Job {job_id}] 광고그룹 생성 {g_idx+1}/{num_ad_groups}: {ad_group_name}")
+                    logger.info(
+                        f"[Job {job_id}] 광고그룹 확보 {g_idx+1}/{num_ad_groups}: {ad_group_name}"
+                    )
+                try:
+                    if not ad_group_id:
+                        raise last_err or ValueError("광고그룹 확보 실패")
                 except Exception as e:
                     err_type = type(e).__name__
                     err_str = str(e)
@@ -537,7 +622,7 @@ class BulkUploadOrchestrator:
                         for kw in batch:
                             add_bulk_upload_failure(
                                 job_id, kw, config.bid, ad_group_id,
-                                f"API 오류: {str(e)[:200]}"
+                                f"API 오류: {_describe_error(e)}"
                             )
                             ag_failed += 1
 
