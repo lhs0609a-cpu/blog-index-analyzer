@@ -145,9 +145,12 @@ async def collect_ad_detail(client, customer_id: str, day: str) -> Dict[str, Any
         lambda: collections.defaultdict(float))
     grp: Dict[str, Dict[str, float]] = collections.defaultdict(
         lambda: collections.defaultdict(float))
+    camp: Dict[str, Dict[str, float]] = collections.defaultdict(
+        lambda: collections.defaultdict(float))
     unattr: Dict[str, Dict[str, float]] = collections.defaultdict(
         lambda: collections.defaultdict(float))
     kw_parent: Dict[str, str] = {}
+    grp_parent: Dict[str, str] = {}
     total = collections.defaultdict(float)
     anon = collections.defaultdict(float)
 
@@ -157,11 +160,14 @@ async def collect_ad_detail(client, customer_id: str, day: str) -> Dict[str, Any
             # 리포트는 하루치지만 방어적으로 확인한다.
             continue
         m = RS.metrics(r, spec)
+        cid_ = r[spec["campaign_id"]]
         gid = r[spec["adgroup_id"]]
         kid = r[spec["keyword_id"]]
+        grp_parent[gid] = cid_
 
         for k, v in m.items():
             grp[gid][k] += v
+            camp[cid_][k] += v
             total[k] += v
 
         if kid == RS.UNATTRIBUTED:
@@ -193,7 +199,12 @@ async def collect_ad_detail(client, customer_id: str, day: str) -> Dict[str, Any
         return out
 
     written = 0
-    written += S.save_daily_stats(customer_id, _rows(grp, "ADGROUP"))
+    # ⚠️ 캠페인 일별은 여기서만 나온다. /stats 는 timeIncrement=allDays 를 무시하고
+    #    날짜 없는 합계 1행만 돌려주기 때문에 일별 분해가 불가능하다(라이브 확인).
+    #    사고 감시의 '어제 대비' 기준선이 이 행들에 의존한다.
+    written += S.save_daily_stats(customer_id, _rows(camp, "CAMPAIGN"))
+    written += S.save_daily_stats(
+        customer_id, _rows(grp, "ADGROUP", parent_of=lambda g: grp_parent.get(g)))
     written += S.save_daily_stats(
         customer_id, _rows(kw, "KEYWORD", parent_of=lambda k: kw_parent.get(k)))
     # 귀속 불가 트래픽을 그룹별 가상 엔티티로 남긴다. 이걸 따로 두지 않으면
@@ -211,6 +222,7 @@ async def collect_ad_detail(client, customer_id: str, day: str) -> Dict[str, Any
         "rows_skipped": skipped,
         "keywords_with_traffic": len(kw),
         "ad_groups_with_traffic": len(grp),
+        "campaigns_with_traffic": len(camp),
         "rows_written": written,
         "totals": {"impressions": int(ti), "clicks": int(tc), "cost": round(tm)},
         # 이 계정에서 등록 키워드로 설명되지 않는 몫.

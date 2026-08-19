@@ -18,6 +18,7 @@
   · **근거를 숫자로 같이 준다.** "노출이 줄었습니다" 가 아니라
     "어제 노출 1,200 → 340, 직전 7일 중앙값 대비 -72%".
 """
+import collections
 import logging
 import statistics
 from datetime import datetime, timedelta
@@ -132,53 +133,115 @@ def _watch_collection_health(customer_id: str) -> List[Dict[str, Any]]:
     return incidents
 
 
+def _ad_is_serving(a: Dict[str, Any]) -> bool:
+    """이 소재가 실제로 노출될 수 있는 상태인가.
+
+    ⚠️ 필드 하나만 보면 틀린다. 실측(소잠 cid 1858907)에서 관측된 조합:
+        status=PAUSED  status_reason=AD_DISAPPROVED  inspect_status=PENDING  816건
+        status=ELIGIBLE status_reason=ELIGIBLE       inspect_status=APPROVED 250건
+    inspect_status 만 보면 PENDING 은 '심사 중' 이라 문제없어 보이지만,
+    실제로는 노출이 안 되고 있고 그 상태로 수년이 지난 소재도 있다.
+    """
+    if _has(a.get("status_reason"), _DISAPPROVED_TOKENS):
+        return False
+    if _has(a.get("status"), _DISAPPROVED_TOKENS) or \
+       _has(a.get("inspect_status"), _DISAPPROVED_TOKENS):
+        return False
+    insp = (a.get("inspect_status") or "").upper()
+    # APPROVED 가 아니면 노출되지 않는다. 빈 값은 판단 불가라 서빙으로 본다
+    # (없는 사고를 만들지 않는다).
+    return insp in ("", "APPROVED", "ELIGIBLE")
+
+
+def _pending_label(a: Dict[str, Any]) -> str:
+    """반려(거절)와 미승인(심사 대기)은 조치가 다르다. 구분해서 부른다."""
+    if _has(a.get("inspect_status"), _DISAPPROVED_TOKENS) or \
+       _has(a.get("status"), _DISAPPROVED_TOKENS):
+        return "반려"
+    if (a.get("inspect_status") or "").upper() == "PENDING":
+        return "미승인"
+    return "미노출"
+
+
 def _watch_disapproved_ads(customer_id: str,
                            spend_by_group: Dict[str, float]) -> List[Dict[str, Any]]:
-    """소재 반려 — 그룹을 통째로 0원 집행으로 만든다."""
+    """노출되지 않는 소재 — 그룹을 통째로 0원 집행으로 만든다."""
     out: List[Dict[str, Any]] = []
     ads = S.get_entity_states(customer_id, "AD")
     bad_by_group: Dict[str, List[Dict[str, Any]]] = {}
+    kinds: collections.Counter = collections.Counter()
     for a in ads:
-        if _has(a.get("status"), _DISAPPROVED_TOKENS) or \
-           _has(a.get("inspect_status"), _DISAPPROVED_TOKENS) or \
-           _has(a.get("status_reason"), _DISAPPROVED_TOKENS):
+        if not _ad_is_serving(a):
             bad_by_group.setdefault(a.get("parent_id") or "", []).append(a)
+            kinds[_pending_label(a)] += 1
 
     if not bad_by_group:
         return out
 
     groups = {g["entity_id"]: g for g in S.get_entity_states(customer_id, "ADGROUP")}
+    ads_by_group: Dict[str, List[Dict[str, Any]]] = {}
+    for a in ads:
+        ads_by_group.setdefault(a.get("parent_id") or "", []).append(a)
+
+    # ⚠️ 그룹마다 한 건씩 만들면 안 된다. 계정 하나에서 37줄이 쏟아지면
+    # 그건 알림이 아니라 소음이고, 사람은 곧 안 읽는다. 같은 사고는 하나로 묶고
+    # 개별 그룹은 근거(examples)에 넣는다.
+    dead: List[tuple] = []      # 살아 있는 소재가 0인 그룹
+    partial: List[tuple] = []   # 일부만 반려
+    reasons: collections.Counter = collections.Counter()
+
+    oldest = None
     for gid, bad_ads in bad_by_group.items():
         g = groups.get(gid) or {}
-        # 그룹에 살아 있는 소재가 하나라도 있으면 광고는 계속 나간다 — 경고로 낮춘다.
-        all_in_group = [a for a in ads if (a.get("parent_id") or "") == gid]
-        alive = [a for a in all_in_group
-                 if not (_has(a.get("status"), _DISAPPROVED_TOKENS)
-                         or _has(a.get("inspect_status"), _DISAPPROVED_TOKENS))]
-        # 반려 전 이 그룹이 쓰던 하루 광고비 = 손실 규모의 근사치.
+        alive = [a for a in ads_by_group.get(gid, []) if _ad_is_serving(a)]
+        for a in bad_ads:
+            if a.get("status_reason"):
+                reasons[a["status_reason"]] += 1
+            fs = a.get("first_seen")
+            if fs and (oldest is None or str(fs) < str(oldest)):
+                oldest = fs
+        # 막히기 전 이 그룹이 쓰던 하루 광고비 = 손실 규모의 근사치.
         daily = spend_by_group.get(gid, 0.0)
-        if alive:
-            out.append(_incident(
-                "ad_disapproved_partial", WARNING,
-                f"소재 일부 반려 — {g.get('name') or gid}",
-                f"이 광고그룹의 소재 {len(bad_ads)}개가 반려됐습니다. "
-                f"{len(alive)}개는 살아 있어 노출은 이어집니다.",
-                entity={"type": "ADGROUP", "id": gid, "name": g.get("name")},
-                evidence={"disapproved": len(bad_ads), "alive": len(alive),
-                          "reasons": sorted({a.get("status_reason") for a in bad_ads if a.get("status_reason")})},
-                action="반려 사유를 확인하고 소재를 수정해 재심사를 요청하세요."))
-        else:
-            out.append(_incident(
-                "ad_disapproved_all", CRITICAL,
-                f"소재 전량 반려 — 광고가 멈췄습니다 ({g.get('name') or gid})",
-                f"이 광고그룹은 승인된 소재가 하나도 없습니다. "
-                f"수요가 있어도 0원 집행됩니다.",
-                entity={"type": "ADGROUP", "id": gid, "name": g.get("name")},
-                evidence={"disapproved": len(bad_ads),
-                          "reasons": sorted({a.get("status_reason") for a in bad_ads if a.get("status_reason")}),
-                          "daily_spend_before": round(daily)},
-                impact_krw=daily * 30 if daily else None,
-                action="소재를 수정해 재심사를 요청하세요. 의료 광고라면 심의번호가 필요합니다."))
+        (partial if alive else dead).append(
+            (g.get("name") or gid, len(bad_ads), len(alive), daily))
+
+    def _ex(items):
+        # 광고비가 큰 그룹부터 보여준다 — 손실이 큰 쪽이 먼저 눈에 들어와야 한다.
+        top = sorted(items, key=lambda t: -t[3])[:5]
+        return [{"group": n, "not_serving": d, "serving": a,
+                 "daily_spend": round(s)} for n, d, a, s in top]
+
+    # "반려" 와 "미승인" 은 조치가 다르다 — 전자는 수정 후 재심사, 후자는
+    # 심의번호처럼 애초에 통과할 수 없는 구조적 문제인 경우가 많다.
+    kind_txt = " · ".join(f"{k} {v}건" for k, v in kinds.most_common())
+    pending_heavy = kinds.get("미승인", 0) >= kinds.get("반려", 0)
+    action = ("소재를 수정해 재심사를 요청하세요. 의료 광고라면 심의번호가 필요합니다."
+              if not pending_heavy else
+              "심사 대기 상태로 오래 머문 소재는 대개 승인 요건 자체를 못 맞춘 것입니다. "
+              "의료 광고라면 심의번호부터 확인하세요.")
+
+    if dead:
+        loss = sum(t[3] for t in dead)
+        out.append(_incident(
+            "ad_not_serving_all", CRITICAL,
+            f"노출 가능한 소재가 하나도 없는 광고그룹 {len(dead)}개",
+            f"이 그룹들은 수요가 있어도 0원 집행됩니다. ({kind_txt})",
+            evidence={"groups": len(dead), "examples": _ex(dead),
+                      "kinds": dict(kinds), "top_reasons": dict(reasons.most_common(4)),
+                      "daily_spend_before": round(loss),
+                      "oldest_seen": str(oldest) if oldest else None},
+            impact_krw=loss * 30 if loss else None,
+            action=action))
+
+    if partial:
+        out.append(_incident(
+            "ad_not_serving_partial", WARNING,
+            f"일부 소재가 노출되지 않는 광고그룹 {len(partial)}개",
+            f"노출 가능한 소재가 남아 있어 광고는 이어지지만, "
+            f"막힌 소재만큼 기회를 잃고 있습니다. ({kind_txt})",
+            evidence={"groups": len(partial), "examples": _ex(partial),
+                      "kinds": dict(kinds), "top_reasons": dict(reasons.most_common(4))},
+            action=action))
     return out
 
 

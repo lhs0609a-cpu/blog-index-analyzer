@@ -1,18 +1,18 @@
 """
-광고 계정 일일 수집기.
+광고 계정 상태 스냅샷 수집기.
 
-하는 일 두 가지:
-  1) 엔티티 상태 스냅샷 — 캠페인·광고그룹·(선택)소재의 현재 상태를 떠서
-     어제와 다른 것만 변경 이력에 남긴다.
-  2) 성과 시계열 — 캠페인·광고그룹 일자별 성과를 전환까지 포함해 저장한다.
+하는 일: 캠페인·광고그룹·소재의 **현재 상태**를 떠서 어제와 다른 것만
+변경 이력에 남긴다.
+
+⚠️ 성과는 여기서 안 모은다. /stats 가 timeIncrement=allDays 를 무시하고
+   날짜 없는 합계 1행만 돌려주기 때문에 일별 분해가 불가능하다(라이브 확인).
+   일별 성과는 전부 ad_report_collector 의 AD_DETAIL 리포트가 담당한다.
 
 설계 제약(실측):
-  · /stats 는 단건 ID 만 안정적이다. 다중 ID 는 11001 이 난다.
-    → 캠페인 137개·그룹 수백 개는 감당되지만, 키워드 10만 개는 불가능하다.
-      키워드·확장검색어는 대량 리포트(/stat-reports)로 가야 하고, 그 경로는
-      아직 라이브 확인 전이라 이 수집기에 넣지 않았다.
-  · 소재(ads)는 그룹 단위로만 조회된다. 해울은 그룹이 3,783개라
-    한 번에 다 돌면 레이트리밋(시간당 1만)을 먹는다.
+  · 소재(ads)는 그룹 단위로만 조회된다. /ncc/ads 를 필터 없이 부르거나
+    nccCampaignId 로 부르면 400 이다. MasterReport Ad 에도 검수상태가 없어
+    대량 경로로 대체할 수 없다 — 그룹당 1콜이 불가피하다.
+    해울은 그룹이 3,783개라 한 번에 다 돌면 레이트리밋(시간당 1만)을 먹는다.
     → ad_group_scan_limit 로 상한을 두고, 커버 못 한 만큼을 결과에 실어
       보고한다. **조용히 자르지 않는다.**
 
@@ -25,7 +25,6 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from database import ad_snapshot_db as S
-from services.ad_stat_mapper import normalize_stat
 
 logger = logging.getLogger(__name__)
 
@@ -89,48 +88,6 @@ def _ad_entity(a: Dict[str, Any], group_id: str) -> Dict[str, Any]:
         "landing_url": ad.get("final") or ad.get("finalUrl") or a.get("finalUrl"),
         "extra": {"type": a.get("type")},
     }
-
-
-async def _fetch_stats_daily(client, entity_type: str, ids: List[str],
-                             since: str, until: str) -> List[Dict[str, Any]]:
-    """엔티티별 일자별 성과. timeIncrement=allDays 로 하루씩 받는다."""
-    import json as _json
-
-    out: List[Dict[str, Any]] = []
-    sem = asyncio.Semaphore(STATS_CONCURRENCY)
-    from services.ad_stat_mapper import STAT_FIELDS_WITH_CONVERSION, STAT_FIELDS_BASE
-
-    async def one(eid: str, fields: List[str], retried: bool = False):
-        params = {
-            "ids": [eid],
-            "fields": _json.dumps(fields),
-            "timeRange": _json.dumps({"since": since, "until": until}),
-            "timeIncrement": "allDays",
-        }
-        async with sem:
-            try:
-                resp = await client._request("GET", "/stats", params)
-            except Exception as e:
-                if not retried and ("11001" in str(e)):
-                    # 전환 필드 미지원 — BASE 로 한 번만 재시도.
-                    return await one(eid, STAT_FIELDS_BASE, retried=True)
-                logger.warning(f"[snapshot/stats] {eid} 실패: {str(e)[:150]}")
-                return
-        data = resp.get("data") if isinstance(resp, dict) else resp
-        if isinstance(data, dict):
-            data = [data]
-        for row in (data or []):
-            # timeIncrement=allDays 면 각 행에 dateStart(또는 statDt)가 붙는다.
-            d = row.get("dateStart") or row.get("statDt") or row.get("date")
-            if not d:
-                continue
-            m = normalize_stat(row)
-            m.update({"entity_type": entity_type, "entity_id": eid,
-                      "stat_date": str(d)[:10]})
-            out.append(m)
-
-    await asyncio.gather(*[one(i, list(STAT_FIELDS_WITH_CONVERSION)) for i in ids])
-    return out
 
 
 async def collect_account_snapshot(
@@ -206,27 +163,19 @@ async def collect_account_snapshot(
                     detect_removed=(result["ad_groups_not_scanned"] == 0))
                 result["changes"] += a_sync["changed"] + a_sync["added"] + a_sync["removed"]
 
-        # ── 4. 성과 ─────────────────────────────────────────
-        rows: List[Dict[str, Any]] = []
-        if c_ents:
-            rows += await _fetch_stats_daily(
-                client, "CAMPAIGN", [c["entity_id"] for c in c_ents], since, until)
-        if g_ents:
-            rows += await _fetch_stats_daily(
-                client, "ADGROUP", [g["entity_id"] for g in g_ents], since, until)
-
-        # parent 를 붙여 두면 나중에 '어느 캠페인의 그룹인지' 를 조인 없이 안다.
-        gparent = {g["entity_id"]: g.get("parent_id") for g in g_ents}
-        gname = {g["entity_id"]: g.get("name") for g in g_ents}
-        cname = {c["entity_id"]: c.get("name") for c in c_ents}
-        for r in rows:
-            if r["entity_type"] == "ADGROUP":
-                r["parent_id"] = gparent.get(r["entity_id"])
-                r["label"] = gname.get(r["entity_id"])
-            else:
-                r["label"] = cname.get(r["entity_id"])
-
-        result["stat_rows"] = S.save_daily_stats(customer_id, rows)
+        # ── 4. 성과는 여기서 수집하지 않는다 ─────────────────
+        # ⚠️ /stats 는 timeIncrement=allDays 를 **무시하고** 날짜 없는 합계 1행만
+        #    돌려준다(2026-08-19 라이브 확인). 즉 이 경로로는 일별 분해가 불가능하다.
+        #    처음에는 응답에서 dateStart 를 찾는 코드를 뒀는데, 그런 필드가 없어
+        #    조용히 0행을 쓰고 있었다. 잘못된 날짜를 쓰는 것보다는 낫지만
+        #    어차피 쓸모가 없다.
+        #
+        #    일별 성과는 전부 ad_report_collector 의 AD_DETAIL 리포트에서 나온다
+        #    (캠페인·그룹·키워드가 한 번에, 게다가 날짜가 행에 들어 있다).
+        #    이 수집기는 **상태 스냅샷 전담**이다.
+        result["stat_rows"] = 0
+        result["stats_note"] = ("일별 성과는 AD_DETAIL 리포트에서 수집한다 — "
+                                "/stats 는 날짜별 분해를 지원하지 않는다")
 
         S.finish_run(run_id, "ok", rows_written=result["stat_rows"],
                      changes=result["changes"], covered_from=since, covered_to=until)
