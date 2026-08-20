@@ -160,6 +160,19 @@ def record_snapshot(
         logger.debug(f"[index-history] skip unmeasurable snapshot: {blog_id}")
         return False
 
+    # ★ 총점이 나왔다고 다 같은 자로 잰 게 아니다.
+    #   콘텐츠(가중치 50%)를 못 읽으면 총점은 C-Rank+DIA 둘만으로 재정규화돼 나온다.
+    #   그건 '조금 부정확한 값' 이 아니라 **다른 측정**이다. 같은 선에 찍으면
+    #   없던 폭락이 생긴다 — 실측으로 하루 만에 -24.8점(준최6→준최2)이 찍혔고
+    #   그날 블로그는 글 수·방문자·이웃이 모두 평소와 같았다.
+    #   측정에 실패한 날은 점수를 남기지 않는다. 빈 곳은 빈 채로 두는 게 맞다.
+    if index.get("measurement_complete") is False:
+        logger.warning(
+            f"[index-history] skip incomplete snapshot: {blog_id} "
+            f"unmeasured={index.get('unmeasured_dimensions')}"
+        )
+        return False
+
     breakdown = index.get("score_breakdown") or {}
     now = captured_at or datetime.now(KST)
     if now.tzinfo is None:
@@ -229,7 +242,22 @@ def record_snapshot(
         conn.close()
 
 
-def get_snapshots(blog_id: str, days: int = 180, limit: int = 400) -> List[Dict[str, Any]]:
+def get_snapshots(blog_id: str, days: int = 180, limit: int = 400,
+                  include_incomplete: bool = False) -> List[Dict[str, Any]]:
+    """지수 스냅샷. 기본은 **완전 측정분만** 돌려준다.
+
+    content_factors 가 비어 있는 행은 콘텐츠(가중치 50%)를 못 읽은 채 C-Rank+DIA
+    둘만으로 재정규화된 점수다. 다른 날과 같은 자로 잰 값이 아니라서 같은 선에
+    찍으면 없던 등급 변동이 생긴다. 지우지는 않는다 — 가리기만 하고,
+    include_incomplete=True 로 언제든 다시 볼 수 있다.
+    """
+    rows = _get_snapshots_impl(blog_id, days=days, limit=limit)
+    if include_incomplete:
+        return rows
+    return [r for r in rows if r["content_factors"] is not None]
+
+
+def _get_snapshots_impl(blog_id: str, days: int = 180, limit: int = 400) -> List[Dict[str, Any]]:
     """오래된 → 최신 순으로 스냅샷 조회"""
     since = (datetime.now(KST) - timedelta(days=days)).strftime("%Y-%m-%d")
     conn = _connect()
@@ -373,6 +401,9 @@ def build_history_payload(blog_id: str, days: int = 180) -> Dict[str, Any]:
     """차트가 그대로 쓸 수 있는 형태로 가공: 점 + 변화 이벤트 + 요약."""
     backfill_from_saved_history(blog_id)
     rows = get_snapshots(blog_id, days=days)
+    # 가린 개수는 반드시 함께 알린다. 조용히 빼면 "원래 그날은 측정을 안 했다"
+    # 는 오해가 되고, 그건 없던 폭락을 그리는 것과 방향만 다른 같은 거짓말이다.
+    hidden = len(get_snapshots(blog_id, days=days, include_incomplete=True)) - len(rows)
     current_version = _get_scoring_version()
 
     points: List[Dict[str, Any]] = []
@@ -450,6 +481,8 @@ def build_history_payload(blog_id: str, days: int = 180) -> Dict[str, Any]:
         "days": days,
         "scoring_version": current_version,
         "has_legacy": any(not p["comparable"] for p in points),
+        # 콘텐츠(가중치 50%)를 못 읽어 다른 자로 재게 된 날. 지운 게 아니라 가렸다.
+        "hidden_incomplete": hidden,
         "points": points,
         "events": events,
         "summary": summary,

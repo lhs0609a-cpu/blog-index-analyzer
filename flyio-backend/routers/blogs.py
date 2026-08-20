@@ -3457,12 +3457,28 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
         # ===== Base score =====
         # 측정된 차원끼리만 가중치를 정규화한다. 측정 못 한 차원의 몫을 0점으로
         # 깔아버리면(예전 동작) 총점 상한이 인위적으로 눌린다.
+        #
+        # ⚠️ 다만 재정규화는 "0점 처리" 보다 나을 뿐, 같은 자가 되지는 않는다.
+        #    3개 차원으로 잰 점수와 2개 차원으로 잰 점수는 **다른 측정**이다.
+        #    그걸 같은 시계열에 같은 선으로 그리면 없던 등급 변동이 생긴다.
+        #    실측(platonmarketing, 2026-08): 글 수·방문자·이웃이 모두 일정한데
+        #    콘텐츠를 못 읽은 8/14 하루만 -24.8점 폭락했다. 사용자에게는 자기
+        #    블로그가 준최6→준최2로 떨어진 것으로 보였다.
+        #    → 어떤 차원을 못 쟀는지 기록하고, 핵심 차원이 빠지면 '불완전 측정'
+        #      으로 표시한다. 시계열 적재는 그 표시를 보고 거른다.
         dimensions = [
             (c_rank_score, c_rank_weight),
             (dia_score, dia_weight),
         ]
+        unmeasured_dimensions = []
         if content_factor_score is not None:
             dimensions.append((content_factor_score, content_weight))
+        else:
+            unmeasured_dimensions.append("content_factors")
+
+        index["unmeasured_dimensions"] = unmeasured_dimensions
+        # 콘텐츠는 가중치 절반이다. 이게 없으면 그 점수는 다른 날과 비교할 수 없다.
+        index["measurement_complete"] = not unmeasured_dimensions
 
         weight_sum = sum(w for _, w in dimensions)
         if weight_sum <= 0:
