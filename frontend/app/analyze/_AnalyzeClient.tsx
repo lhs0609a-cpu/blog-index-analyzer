@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Search, Loader2, TrendingUp, Award, AlertCircle, BarChart3, ArrowLeft, Target, PenTool, Lightbulb, ChevronRight, Lock, HelpCircle, Clock, CheckCircle, Gauge, XCircle, MinusCircle,
   PenLine, Users, FileCheck2, MessageSquare, CheckCircle2, Gem, Heart, FileText, Activity, Check, ArrowUpRight,
@@ -1357,6 +1357,10 @@ export default function AnalyzePage() {
   const [progress, setProgress] = useState(0)
   const [lastError, setLastError] = useState<string | null>(null)
   const [autoAnalyzeTriggered, setAutoAnalyzeTriggered] = useState(false)
+  // 계정 ID → 실제 블로그 주소로 정정됐을 때, 사용자가 다시 누르지 않아도 이어서 분석한다.
+  // 같은 주소로 두 번 이어가지 않도록 시도한 주소를 기억한다(MOVED 가 연쇄되면 무한루프).
+  const [pendingCanonical, setPendingCanonical] = useState<string | null>(null)
+  const movedTriedRef = useRef<Set<string>>(new Set())
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [usageLimitInfo, setUsageLimitInfo] = useState<{ current: number; limit: number } | null>(null)
   const { width, height } = useWindowSize()
@@ -1462,10 +1466,21 @@ export default function AnalyzePage() {
       // 계정 ID를 블로그 주소로 착각한 경우 — 진짜 주소를 알려주고 바로 재시도시킨다
       if (detail.error_code === 'MOVED' && detail.canonical_blog_id) {
         const canonical = detail.canonical_blog_id
-        toast.error(`'${blogId}'는 블로그 주소가 아닙니다. 실제 주소는 '${canonical}' 입니다.`, {
-          duration: 8000,
-        })
         setBlogId(canonical)
+        if (movedTriedRef.current.has(canonical)) {
+          // 이미 그 주소로 한 번 갔는데 또 MOVED 다 — 자동으로 돌면 무한루프다.
+          toast.error(`'${canonical}' 로도 분석하지 못했습니다. 주소를 확인해 주세요.`, {
+            duration: 8000,
+          })
+        } else {
+          movedTriedRef.current.add(canonical)
+          // 안내만 하고 멈추면 사용자가 버튼을 한 번 더 눌러야 한다. 주소를 아는데
+          // 왜 다시 누르게 하나 — 알려주고 그대로 이어서 분석한다.
+          toast(`'${blogId}' 는 블로그 주소가 아닙니다. 실제 주소 '${canonical}' 로 분석합니다.`, {
+            duration: 6000,
+          })
+          setPendingCanonical(canonical)
+        }
       } else if (errorMessage.includes('not found') || errorMessage.includes('404') || errorMessage.includes('존재하지 않')) {
         toast.error('존재하지 않는 블로그입니다. ID를 확인해주세요.')
       } else if (errorMessage.includes('private') || errorMessage.includes('비공개')) {
@@ -1484,6 +1499,14 @@ export default function AnalyzePage() {
       setProgress(0)
     }
   }
+
+  // 주소 정정 후 이어서 분석. isAnalyzing 이 내려간 뒤에 실행해야 겹치지 않는다.
+  useEffect(() => {
+    if (!pendingCanonical || isAnalyzing) return
+    setPendingCanonical(null)
+    handleAnalyze()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingCanonical, isAnalyzing])
 
   // autoAnalyzeTriggered가 true이고 blogId가 설정되면 자동 분석 실행
   useEffect(() => {
