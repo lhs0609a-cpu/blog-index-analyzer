@@ -55,43 +55,6 @@ function TiltCard({ children, className = "" }: { children: React.ReactNode; cla
   )
 }
 
-// Marquee 컴포넌트 - CSS 기반 무한 스크롤
-function Marquee({ children, speed = 30, direction = "left" }: { children: React.ReactNode; speed?: number; direction?: "left" | "right" }) {
-  return (
-    <div className="relative overflow-hidden whitespace-nowrap">
-      <div
-        className="inline-flex gap-8"
-        style={{
-          animation: `marquee-${direction} ${speed}s linear infinite`,
-        }}
-      >
-        {children}
-        {children}
-        {children}
-        {children}
-      </div>
-      <style jsx>{`
-        @keyframes marquee-left {
-          0% {
-            transform: translateX(0%);
-          }
-          100% {
-            transform: translateX(-50%);
-          }
-        }
-        @keyframes marquee-right {
-          0% {
-            transform: translateX(-50%);
-          }
-          100% {
-            transform: translateX(0%);
-          }
-        }
-      `}</style>
-    </div>
-  )
-}
-
 export default function Home() {
   const { isAuthenticated } = useAuthStore()
   const router = useRouter()
@@ -109,16 +72,8 @@ export default function Home() {
     }, 3000)
     return () => clearTimeout(timer)
   }, [])
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePosition({ x: e.clientX, y: e.clientY })
-    }
-
-    window.addEventListener('mousemove', handleMouseMove)
-    return () => window.removeEventListener('mousemove', handleMouseMove)
-  }, [])
+  // 커서 추적 글로우를 걷어내면서 mousemove 리스너도 함께 없앴다.
+  // 마우스가 움직일 때마다 setState → 리렌더가 걸렸고, 얻는 것은 배경 얼룩뿐이었다.
 
   // P1-3: 블로그 분석 핸들러 (즉시 체험)
   const handleBlogAnalyze = (e: React.FormEvent) => {
@@ -147,52 +102,16 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fafafa] text-gray-900 overflow-hidden">
+    <div className="relative min-h-screen overflow-hidden bg-[#fafafa] text-gray-900">
       {/* Social proof disabled - P0 blocker: fake data */}
 
-      {/* Cursor glow effect - Toss style (subtle) */}
-      <div
-        className="fixed pointer-events-none z-50 w-[600px] h-[600px] rounded-full opacity-20 blur-[120px] transition-all duration-150"
-        style={{
-          background: 'radial-gradient(circle, rgba(0, 100, 255, 0.15) 0%, rgba(49, 130, 246, 0.08) 50%, transparent 70%)',
-          left: mousePosition.x - 300,
-          top: mousePosition.y - 300,
-        }}
-      />
-
-      {/* Animated background grid - Toss style */}
-      <div className="fixed inset-0 bg-[linear-gradient(rgba(0,100,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(0,100,255,0.02)_1px,transparent_1px)] bg-[size:100px_100px]" />
-
-      {/* Floating orbs - Toss blue */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <motion.div
-          className="absolute top-20 left-[10%] w-[400px] h-[400px] rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(0, 100, 255, 0.08) 0%, transparent 70%)' }}
-          animate={{
-            y: [0, -30, 0],
-            scale: [1, 1.05, 1],
-          }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.div
-          className="absolute top-[40%] right-[5%] w-[300px] h-[300px] rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(49, 130, 246, 0.08) 0%, transparent 70%)' }}
-          animate={{
-            y: [0, 30, 0],
-            scale: [1, 1.1, 1],
-          }}
-          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.div
-          className="absolute bottom-[10%] left-[30%] w-[350px] h-[350px] rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(0, 100, 255, 0.06) 0%, transparent 70%)' }}
-          animate={{
-            x: [0, 20, 0],
-            y: [0, -20, 0],
-          }}
-          transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
-        />
-      </div>
+      {/*
+        배경은 조용해야 한다. 화면에서 움직여야 하는 건 사용자의 데이터뿐이다.
+        걷어낸 것: 커서를 따라다니는 600px blur 글로우, 무한 반복하는 구체 3개,
+        전면 고정 격자. 셋 다 상시 렌더 비용을 쓰면서 읽기를 방해했다.
+        남긴 것: 위쪽만 은은하게 비치는 정적 격자 하나(.ds-grid-bg).
+      */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[560px] ds-grid-bg" aria-hidden />
 
       {/* P1-4: 체험 만료 알림 배너 */}
       <TrialExpiryBanner compact />
@@ -414,18 +333,27 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Marquee Section */}
-      <section className="py-8 border-y border-gray-200 bg-white/50">
-        <Marquee speed={40}>
-          <div className="flex items-center gap-8 text-gray-500">
-            {['키워드 리서치', '블로그 분석', 'AI 글쓰기', '광고 최적화', '성장 가이드', '레벨 측정', 'VIEW 탭 분석', '경쟁 분석'].map((item, i) => (
-              <span key={i} className="flex items-center gap-3 text-lg font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#0064FF]" />
-                {item}
-              </span>
+      {/*
+        마퀴를 걷어냈다. 단어가 흘러가는 것만으로는 아무것도 설득하지 못하고,
+        목록에 있던 'AI 글쓰기' 는 아직 출시하지 않은 기능이었다.
+        그 자리에 **실제로 받아보는 결과 세 가지**를 놓는다. 기대를 정확히
+        맞춰 두면 결과 화면에서 실망하지 않는다.
+      */}
+      <section className="border-y border-gray-100 bg-white">
+        <div className="ds-container">
+          <div className="grid divide-y divide-gray-100 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            {[
+              { t: '색인률', d: '최근 글 중 몇 개가 실제로 검색에 나오는지' },
+              { t: '블로그 지수 · 레벨', d: 'C-Rank · D.I.A. · 콘텐츠로 나눠서' },
+              { t: '지수 변화 추이', d: '어떤 지표가 언제 움직였는지' },
+            ].map((x) => (
+              <div key={x.t} className="px-2 py-5 sm:px-6">
+                <div className="text-[15px] font-semibold text-gray-900">{x.t}</div>
+                <div className="mt-1 text-[13px] leading-relaxed text-gray-500">{x.d}</div>
+              </div>
             ))}
           </div>
-        </Marquee>
+        </div>
       </section>
 
       {/* Core Features Section - 핵심 기능 */}
