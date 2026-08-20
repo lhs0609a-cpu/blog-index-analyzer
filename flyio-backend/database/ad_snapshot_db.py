@@ -245,6 +245,50 @@ def get_entity_series(customer_id: str, entity_type: str, entity_id: str,
     return out
 
 
+def get_top_spend(customer_id: str, entity_type: str, since: str, until: str,
+                  limit: int = 50) -> List[Dict[str, Any]]:
+    """돈이 실제로 어디로 나갔는지 — 비용 상위 N.
+
+    이름은 두 곳에서 온다. 검색어(SEARCHTERM)는 행 자체가 label 로 실제 검색어를
+    들고 있고, 키워드/그룹/캠페인은 상태 테이블에 이름이 있다. 둘 다 없으면
+    entity_id 를 그대로 보여준다 — 이름을 못 찾았다고 행을 감추면 "우리 계정엔
+    그런 지출이 없다" 는 오해를 만든다.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT d.entity_id, d.label, e.name AS state_name, e.status,
+               SUM(d.impressions) AS impressions, SUM(d.clicks) AS clicks,
+               SUM(d.cost) AS cost, SUM(d.conversions) AS conversions
+          FROM ad_daily_stats d
+          LEFT JOIN ad_entity_state e
+                 ON e.customer_id = d.customer_id
+                AND e.entity_type = d.entity_type
+                AND e.entity_id   = d.entity_id
+         WHERE d.customer_id = ? AND d.entity_type = ?
+           AND d.stat_date BETWEEN ? AND ?
+         GROUP BY d.entity_id
+         ORDER BY cost DESC, clicks DESC
+         LIMIT ?
+    """, (customer_id, entity_type, since, until, int(limit)))
+    out = []
+    for r in cur.fetchall():
+        r = dict(r)
+        out.append({
+            "entity_id": r["entity_id"],
+            "name": r["label"] or r["state_name"] or r["entity_id"],
+            "named": bool(r["label"] or r["state_name"]),
+            "status": r["status"],
+            "impressions": int(r["impressions"] or 0),
+            "clicks": int(r["clicks"] or 0),
+            "cost": round(r["cost"] or 0),
+            "conversions": r["conversions"] or 0,
+            "cpc": round((r["cost"] or 0) / r["clicks"]) if r["clicks"] else 0,
+        })
+    conn.close()
+    return out
+
+
 def backfill_window(today: Optional[str] = None) -> Tuple[str, str]:
     """다시 수집해 덮어써야 하는 날짜 구간. 전환 지연을 흡수한다."""
     end = datetime.strptime(today, "%Y-%m-%d") if today else datetime.now()

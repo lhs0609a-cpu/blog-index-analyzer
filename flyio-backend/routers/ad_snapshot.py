@@ -142,6 +142,35 @@ async def daily(
     }
 
 
+@router.get("/top-spend")
+async def top_spend(
+    customer_id: str = Query(...),
+    entity_type: str = Query("SEARCHTERM",
+                             description="SEARCHTERM | KEYWORD | ADGROUP | CAMPAIGN"),
+    since: Optional[str] = Query(None),
+    until: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=1000),
+):
+    """돈이 실제로 어디로 나갔는지 — 비용 상위 N.
+
+    캠페인 이름으로는 무관 지출을 찾을 수 없다. 이름이 시드에서 만들어져
+    내용과 무관하기 때문이다(실측: `소잠_그루밍랩샴푸_수원인천공항` 안의 실제
+    키워드는 `헤라CC크림`·`광화문한방병원`). 그래서 이름이 아니라 **지출**로 본다.
+
+    SEARCHTERM 이 가장 정직한 축이다 — 등록 키워드가 아니라 사람이 실제로 친
+    말이고, 키워드확장으로 나간 돈도 여기에만 잡힌다.
+    """
+    a, b = S.backfill_window()
+    return {
+        "customer_id": customer_id,
+        "entity_type": entity_type,
+        "since": since or a,
+        "until": until or b,
+        "rows": S.get_top_spend(customer_id, entity_type,
+                                since or a, until or b, limit),
+    }
+
+
 @router.get("/budget-plan")
 async def budget_plan(
     customer_id: str = Query(...),
