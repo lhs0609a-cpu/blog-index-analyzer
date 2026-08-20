@@ -948,3 +948,90 @@ body::before {
   .iri-border::before { animation: none !important; }
   .spec-sweep::after { transition: none !important; }
 }
+
+/* ============================================================
+   Design System v2 — 마케팅 페이지 공통 층
+   ------------------------------------------------------------
+   기존 .toss-* 유틸은 그대로 두고, 마케팅 페이지가 반복해서 쓰는
+   리듬(섹션 여백)·타이포 스케일·증거 패널만 얹는다.
+
+   원칙
+   · 크게 외치지 않는다. font-black + 8xl 은 자신 없는 제품이 쓰는 크기다.
+     신뢰는 여백과 정렬에서 온다.
+   · 움직이는 장식(커서 글로우·떠다니는 구체·마퀴)은 시선을 뺏는다.
+     화면에서 움직여야 하는 건 사용자의 데이터뿐이다.
+   · 모든 강조는 근거와 함께 온다. 숫자를 키우려면 그 숫자의 출처가 있어야 한다.
+   ============================================================ */
+@layer components {
+  /* 섹션 리듬 — 페이지마다 다른 여백을 쓰면 한 제품으로 안 보인다 */
+  .ds-section {
+    @apply py-20 md:py-28;
+  }
+  .ds-container {
+    @apply mx-auto w-full max-w-6xl px-5 sm:px-6;
+  }
+  .ds-container-narrow {
+    @apply mx-auto w-full max-w-3xl px-5 sm:px-6;
+  }
+
+  /* 타이포 스케일 */
+  .ds-eyebrow {
+    @apply inline-flex items-center gap-2 text-[13px] font-semibold tracking-tight text-[#0064FF];
+  }
+  .ds-display {
+    @apply text-[34px] leading-[1.15] font-bold tracking-[-0.02em] text-gray-900
+           sm:text-[44px] md:text-[56px] md:leading-[1.08];
+  }
+  .ds-headline {
+    @apply text-[26px] leading-[1.25] font-bold tracking-[-0.02em] text-gray-900
+           md:text-[36px] md:leading-[1.2];
+  }
+  .ds-lede {
+    @apply text-[16px] leading-[1.7] text-gray-600 md:text-[18px] md:leading-[1.75];
+  }
+  .ds-caption {
+    @apply text-[13px] leading-[1.6] text-gray-500;
+  }
+
+  /* 증거 패널 — 스크린샷 대신 살아 있는 화면을 담는 틀 */
+  .ds-panel {
+    @apply rounded-2xl border border-gray-100 bg-white shadow-[0_1px_2px_rgba(16,24,40,.04),0_12px_32px_-12px_rgba(16,24,40,.12)];
+  }
+  .ds-panel-head {
+    @apply flex items-center justify-between gap-3 border-b border-gray-50 px-5 py-3.5;
+  }
+
+  /* 근거 배지 — 주장 옆에 출처를 붙일 때 */
+  .ds-proof {
+    @apply inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50
+           px-2 py-0.5 text-[11px] font-medium text-gray-600;
+  }
+
+  /* 단일 행동 버튼 — 화면당 하나만 이 크기를 쓴다 */
+  .ds-cta {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-[#0064FF] px-6 py-3.5
+           text-[15px] font-semibold text-white transition-colors hover:bg-[#0050CC]
+           focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2
+           focus-visible:outline-[#0064FF] disabled:opacity-50;
+  }
+  .ds-cta-quiet {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200
+           bg-white px-6 py-3.5 text-[15px] font-semibold text-gray-700 transition-colors
+           hover:bg-gray-50;
+  }
+
+  /* 아주 옅은 격자 — 배경이 비어 보이지 않게만, 읽기를 방해하지 않게 */
+  .ds-grid-bg {
+    background-image:
+      linear-gradient(to right, rgba(16, 24, 40, 0.04) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(16, 24, 40, 0.04) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(ellipse 70% 55% at 50% 0%, #000 40%, transparent 100%);
+    -webkit-mask-image: radial-gradient(ellipse 70% 55% at 50% 0%, #000 40%, transparent 100%);
+  }
+}
+
+/* 움직임을 줄이도록 설정한 사용자에게는 장식 애니메이션을 멈춘다 */
+@media (prefers-reduced-motion: reduce) {
+  .ds-grid-bg { mask-image: none; -webkit-mask-image: none; }
+}

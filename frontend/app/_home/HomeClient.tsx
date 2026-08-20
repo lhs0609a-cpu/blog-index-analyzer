@@ -203,51 +203,47 @@ export default function Home() {
           <div className="max-w-6xl mx-auto">
             {/* Main Content */}
             <div className="text-center mb-16">
-              {/* Badge */}
+              {/* Eyebrow — 무엇을 하는 제품인지 한 줄. 버전 배지는 사용자에게 의미가 없다. */}
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 border border-blue-100 mb-8"
+                transition={{ duration: 0.4 }}
+                className="ds-eyebrow mb-5"
               >
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3182F6] opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#0064FF]"></span>
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-[#3182F6] opacity-70" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#0064FF]" />
                 </span>
-                <span className="text-sm font-medium text-[#0064FF]">AI 블로그 분석 플랫폼</span>
-                <span className="px-2 py-0.5 text-[10px] font-bold bg-gradient-to-r from-violet-500 to-pink-500 text-white rounded-full">v2.0</span>
+                네이버 블로그 검색 노출 진단
               </motion.div>
 
-              {/* Main Title - P1-3: 더 직관적인 메시지 */}
+              {/*
+                후킹의 축은 '이미 일어나고 있는 손실' 이다. 지어낸 급박함이 아니라
+                실제로 매일 벌어지는 일이라 근거를 댈 수 있다.
+                ★"3초" 같은 속도 약속은 쓰지 않는다 — 실측 6초대이고, 못 지킬 숫자를
+                  헤드라인에 박으면 첫 화면부터 신뢰를 잃는다.
+              */}
               <motion.h1
-                initial={{ opacity: 0, y: 30 }}
+                initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.1 }}
-                className="text-5xl md:text-7xl lg:text-8xl font-black mb-6 tracking-tight leading-[0.9]"
+                transition={{ duration: 0.5, delay: 0.05 }}
+                className="ds-display mb-5"
               >
-                <span className="block mb-2 text-gray-900">내 블로그</span>
-                <span className="relative inline-block">
-                  <span className="text-[#0064FF]">상위 노출</span>
-                  <motion.span
-                    className="absolute -bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-full"
-                    initial={{ scaleX: 0 }}
-                    animate={{ scaleX: 1 }}
-                    transition={{ delay: 0.8, duration: 0.6 }}
-                  />
-                </span>
-                <span className="block mt-2 text-gray-900">될 수 있을까?</span>
+                공들여 쓴 글이
+                <br />
+                <span className="text-[#0064FF]">검색에 안 나오고 있다면</span>
+                <br />
+                오늘 알아야 합니다
               </motion.h1>
 
-              {/* Subtitle - P1-3: 즉시 가치 전달 */}
               <motion.p
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.2 }}
-                className="text-lg md:text-xl text-gray-600 mb-12 max-w-2xl mx-auto leading-relaxed"
+                transition={{ duration: 0.45, delay: 0.12 }}
+                className="ds-lede mx-auto mb-8 max-w-xl"
               >
-                <span className="text-[#0064FF] font-semibold">3초</span> 만에 블로그 점수 확인
-                <br className="hidden md:block" />
-                <span className="text-gray-900 font-semibold">11단계 레벨</span>로 성장 전략 수립
+                최근 글 제목을 <strong className="font-semibold text-gray-900">실제로 검색해</strong> 노출 여부를
+                확인합니다. 지수를 추측하지 않고, 검색 결과를 그대로 봅니다.
               </motion.p>
 
               {/* Live counter disabled - P0 blocker: fake data */}
@@ -712,75 +708,72 @@ export default function Home() {
         </div>
       </section>
 
-      {/* P1: 사용자 후기 (Testimonials) */}
-      <section className="py-20 relative bg-gray-50">
-        <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            className="text-center mb-12"
-          >
-            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 border border-blue-100 text-sm font-medium text-[#0064FF] mb-4">
-              <Heart className="w-4 h-4 gi3d" />
-              REVIEWS
-            </span>
-            <h2 className="text-4xl md:text-5xl font-black mb-4 text-gray-900">
-              이런 경험을 할 수 있어요
+      {/*
+        후기 카드 자리에 '우리가 실제로 무엇을 재는가' 를 놓는다.
+        기존 섹션은 각주로 "실제 사용자 후기가 아닙니다" 라고 밝히고 있었지만,
+        훑어보는 사람에게는 여전히 사회적 증거로 읽힌다. 각주로 방어해야 하는
+        설득은 애초에 약한 설득이다. 검증 가능한 사실이 더 세게 판다.
+      */}
+      <section className="ds-section bg-gray-50">
+        <div className="ds-container">
+          <div className="mx-auto mb-12 max-w-2xl text-center">
+            <span className="ds-eyebrow mb-4">측정 방식</span>
+            <h2 className="ds-headline mb-4">
+              지수를 추측하지 않습니다.
+              <br />
+              검색 결과를 그대로 봅니다.
             </h2>
-            <p className="text-sm text-gray-500">* 서비스 활용 시나리오 예시이며, 실제 사용자 후기가 아닙니다</p>
-          </motion.div>
+            <p className="ds-lede">
+              네이버는 2016년 공식 블로그에서 &ldquo;최적화 블로그, 저품질 블로그, 블로그지수 등은
+              네이버에서 만든 개념이 아닙니다&rdquo;라고 밝혔습니다. 그래서 우리는 내부 판정을 아는
+              척하지 않고, <strong className="font-semibold text-gray-900">관측할 수 있는 것만</strong> 관측합니다.
+            </p>
+          </div>
 
-          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+          <div className="mx-auto grid max-w-5xl gap-5 md:grid-cols-3">
             {[
               {
-                name: '맛집탐방러',
-                level: 'Lv.7 → Lv.9',
-                period: '3개월 사용',
-                content: '"1위 가능 키워드 기능이 진짜 신세계예요. 추천받은 키워드로 글 쓰니까 바로 상위 노출되더라고요!"',
-                highlight: '일 방문자 300 → 2,400'
+                n: '01',
+                t: '글 제목을 실제로 검색합니다',
+                d: '정상 블로그는 제목 정확검색이면 거의 100% 노출됩니다. 안 나오는 비율이 곧 문제의 크기입니다.',
+                proof: '추정 아님 · 관측',
               },
               {
-                name: '육아맘 블로거',
-                level: 'Lv.4 → Lv.6',
-                period: '2개월 사용',
-                content: '"초보라서 어떤 키워드로 글을 써야 할지 몰랐는데, 블랭크가 딱 맞는 키워드를 알려줘서 자신감이 생겼어요."',
-                highlight: 'VIEW탭 첫 노출 성공'
+                n: '02',
+                t: '못 잰 날은 점수를 내지 않습니다',
+                d: '본문을 못 읽은 날 억지로 점수를 만들면 없던 폭락이 그래프에 생깁니다. 빈 날은 빈 채로 둡니다.',
+                proof: '측정 실패 = 공백',
               },
               {
-                name: 'IT리뷰어',
-                level: 'Lv.8 → Lv.10',
-                period: '6개월 사용',
-                content: '"경쟁도 분석이 정확해서 시간 낭비 없이 승산 있는 키워드만 공략할 수 있어요. 효율이 확 올랐습니다."',
-                highlight: '월 수익 3배 증가'
-              }
-            ].map((review, index) => (
+                n: '03',
+                t: '기준이 바뀌면 그렇게 말합니다',
+                d: '채점 기준을 고친 구간은 앞뒤 점수가 다른 자로 잰 값입니다. 같은 선으로 잇지 않고 표시합니다.',
+                proof: '기준 변경 이력 공개',
+              },
+            ].map((c, i) => (
               <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
+                key={c.n}
+                initial={{ opacity: 0, y: 12 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: index * 0.1 }}
-                className="p-6 bg-white rounded-2xl border border-gray-200 shadow-lg"
+                transition={{ duration: 0.4, delay: i * 0.06 }}
+                className="ds-panel p-6"
               >
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-[#0064FF] to-[#3182F6] flex items-center justify-center text-white font-bold">
-                    {review.name.charAt(0)}
-                  </div>
-                  <div>
-                    <div className="font-bold text-gray-900">{review.name}</div>
-                    <div className="text-xs text-gray-500">{review.level} · {review.period}</div>
-                  </div>
-                </div>
-                <p className="text-gray-600 text-sm mb-4 leading-relaxed">{review.content}</p>
-                <div className="px-3 py-2 bg-green-50 text-green-700 rounded-lg text-sm font-medium">
-                  {review.highlight}
-                </div>
+                <div className="mb-3 text-[13px] font-bold tracking-wider text-[#0064FF]">{c.n}</div>
+                <h3 className="mb-2 text-[17px] font-bold leading-snug text-gray-900">{c.t}</h3>
+                <p className="mb-4 text-[14px] leading-relaxed text-gray-600">{c.d}</p>
+                <span className="ds-proof">{c.proof}</span>
               </motion.div>
             ))}
           </div>
+
+          <p className="ds-caption mx-auto mt-8 max-w-2xl text-center">
+            이 진단은 네이버의 내부 판정을 읽은 것이 아니라, 글 제목을 실제로 검색해
+            노출 여부를 관측한 결과입니다.
+          </p>
         </div>
       </section>
+
 
       {/* P1: 무료 vs Pro 비교 */}
       <section className="py-20 relative">
