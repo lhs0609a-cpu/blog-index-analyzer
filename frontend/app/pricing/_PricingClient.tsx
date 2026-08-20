@@ -206,101 +206,58 @@ export default function PricingPage() {
           </div>
         </motion.div>
 
-        {/* Killer Feature: 1위 가능 키워드 미리보기 */}
+        {/*
+          여기 있던 "1위 가능 키워드 미리보기" 를 내렸다. 데모 카드의
+          94%·87%·78% 는 지어낸 숫자였고, 무엇보다 `/analyze` 결과 화면이
+          "이 점수와 실제 SERP 순위의 상관관계는 자체 검증(n=67) ρ=0.04" 라고
+          스스로 밝히고 있다. 요금제에서 순위를 약속하면 결과 화면과 충돌한다.
+          관측할 수 있는 것 — 색인·노출 진단 — 으로 바꾼다.
+        */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="mb-12 rounded-3xl overflow-hidden bg-gradient-to-br from-yellow-50 via-amber-50 to-orange-50 border-2 border-yellow-300 shadow-xl shadow-yellow-200/50"
+          className="mb-12"
         >
-          <div className="p-6 md:p-8">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-r from-yellow-400 to-amber-500 flex items-center justify-center shadow-lg shadow-yellow-500/30">
-                  <Trophy className="w-7 h-7 text-white gi3d" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                    1위 가능 키워드 추천
-                    <span className="px-2 py-1 text-xs bg-red-500 text-white rounded-full animate-pulse">
-                      Pro 전용
-                    </span>
-                  </h2>
-                  <p className="text-gray-600">내 블로그 레벨로 지금 당장 1위 가능한 키워드를 찾아드립니다</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-full text-sm font-medium">
-                <TrendingUp className="w-4 h-4 gi3d" />
-                데이터 기반 키워드 추천
-              </div>
-            </div>
-
-            {/* 데모 키워드 카드 */}
-            <div className="grid md:grid-cols-3 gap-4 mb-6">
-              {[
-                { keyword: '홈트레이닝 루틴', volume: 8400, probability: 94, level: 'Lv.3', myLevel: 'Lv.5', goldenTime: '오후 8-10시' },
-                { keyword: '자취 요리 레시피', volume: 12300, probability: 87, level: 'Lv.4', myLevel: 'Lv.5', goldenTime: '저녁 6-8시' },
-                { keyword: '노트북 추천 2026', volume: 18500, probability: 78, level: 'Lv.5', myLevel: 'Lv.5', goldenTime: '오전 10-12시' }
-              ].map((item, index) => (
-                <div
-                  key={index}
-                  className="p-4 bg-white rounded-2xl border border-yellow-200 shadow-sm hover:shadow-md transition-all"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${
-                      index === 0
-                        ? 'bg-gradient-to-r from-yellow-400 to-amber-500 text-white'
-                        : index === 1
-                        ? 'bg-gradient-to-r from-gray-300 to-gray-400 text-white'
-                        : 'bg-gradient-to-r from-orange-300 to-orange-400 text-white'
-                    }`}>
-                      {index + 1}
-                    </div>
-                    <div className={`text-xl font-bold ${
-                      item.probability >= 90 ? 'text-green-600' : item.probability >= 80 ? 'text-blue-600' : 'text-yellow-600'
-                    }`}>
-                      {item.probability}%
-                    </div>
-                  </div>
-                  <div className="font-semibold text-gray-900 mb-1">{item.keyword}</div>
-                  <div className="flex items-center gap-2 text-xs text-gray-500 mb-3">
-                    <span>월 {item.volume.toLocaleString()}회</span>
-                    <span className="flex items-center gap-1 text-amber-600">
-                      <Clock className="w-3 h-3 gi3d" />
-                      {item.goldenTime}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-500">현재 1위: {item.level}</span>
-                    <span className="text-blue-600 font-medium">내 레벨: {item.myLevel}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* CTA */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <div className="text-center sm:text-left">
-                <p className="text-sm text-gray-600">
-                  <strong className="text-gray-900">Pro 플랜</strong>으로 내 레벨에 맞는 1위 가능 키워드를 찾아보세요
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  블로그 분석 후 맞춤형 키워드 추천 - 골든타임까지 알려드립니다
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  const proCard = document.querySelector('[data-plan="pro"]')
-                  proCard?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                }}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-yellow-400 to-amber-500 text-white font-semibold rounded-xl hover:shadow-lg transition-all whitespace-nowrap"
-              >
-                <Target className="w-4 h-4 gi3d" />
-                Pro 플랜 시작하기
-              </button>
-            </div>
+          <div className="mx-auto mb-8 max-w-2xl text-center">
+            <span className="ds-eyebrow mb-3">유료로 올리면 달라지는 것</span>
+            <h2 className="ds-headline mb-3">
+              한 번 보고 끝나지 않고,
+              <br className="sm:hidden" /> 계속 지켜봅니다
+            </h2>
+            <p className="ds-lede">
+              무료로도 진단은 됩니다. 유료는 <strong className="font-semibold text-gray-900">횟수 제한 없이</strong>,
+              그리고 <strong className="font-semibold text-gray-900">변화를 놓치지 않게</strong> 해 줍니다.
+            </p>
           </div>
+
+          <div className="mx-auto grid max-w-4xl gap-4 md:grid-cols-3">
+            {[
+              {
+                t: '진단 무제한',
+                d: '고치고 다시 재고, 또 고치고 다시 잽니다. 하루 2회 제한에 막히지 않습니다.',
+              },
+              {
+                t: '안 잡히는 글 목록',
+                d: '색인률 숫자에서 끝나지 않고, 검색에 안 나오는 글을 하나씩 짚어 줍니다.',
+              },
+              {
+                t: '순위 추적 & 알림',
+                d: '지켜보던 키워드가 밀리면 알려 줍니다. 매일 직접 검색해 볼 필요가 없습니다.',
+              },
+            ].map((c) => (
+              <div key={c.t} className="ds-panel p-6">
+                <h3 className="mb-2 text-[17px] font-bold leading-snug text-gray-900">{c.t}</h3>
+                <p className="text-[14px] leading-relaxed text-gray-600">{c.d}</p>
+              </div>
+            ))}
+          </div>
+
+          <p className="ds-caption mt-6 text-center">
+            7일 이내 미사용 시 전액 환불 · 클릭 한 번으로 해지 · 위약금 없음
+          </p>
         </motion.div>
+
 
         {/* P1: 사회적 증거 섹션 */}
         <motion.div
@@ -318,8 +275,8 @@ export default function PricingPage() {
               <p className="text-xs md:text-sm text-gray-600">블로그<br/>분석 지표</p>
             </div>
             <div className="text-center p-4 rounded-2xl bg-white border border-green-100">
-              <div className="text-3xl md:text-4xl font-black text-green-600 mb-1">내 레벨</div>
-              <p className="text-xs md:text-sm text-gray-600">기준으로 고른<br/>1위 가능 키워드</p>
+              <div className="text-3xl md:text-4xl font-black text-green-600 mb-1">무제한</div>
+              <p className="text-xs md:text-sm text-gray-600">블로그<br/>진단 횟수</p>
             </div>
             <div className="text-center p-4 rounded-2xl bg-white border border-purple-100">
               <div className="text-3xl md:text-4xl font-black text-purple-600 mb-1">200회</div>
@@ -338,7 +295,7 @@ export default function PricingPage() {
               {
                 name: '맛집 블로거',
                 level: '활용 예시',
-                content: '1위 가능 키워드 추천 기능으로 경쟁이 적은 키워드를 찾아 집중할 수 있어요.',
+                content: '검색에 안 잡히던 글을 목록으로 확인하고, 고친 뒤 다시 재볼 수 있어요.',
                 highlight: '키워드 전략 최적화'
               },
               {
