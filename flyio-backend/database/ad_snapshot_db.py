@@ -394,6 +394,51 @@ def count_recent_changes(customer_id: str, hours: int = 24) -> Dict[str, int]:
     return out
 
 
+def prioritize_groups_for_ad_scan(customer_id: str, group_ids: List[str],
+                                  limit: int,
+                                  since: Optional[str] = None) -> List[str]:
+    """소재를 확인할 광고그룹을 고른다 — 한 번에 다 못 볼 때의 순서 문제.
+
+    소재 조회는 그룹당 1콜이라 큰 계정은 한 실행에 전수가 불가능하다. 매번
+    앞에서부터 자르면 **뒤쪽 그룹은 영원히 안 보인다**. 그래서 회전시킨다:
+
+      1) 아직 한 번도 소재를 못 본 그룹        (모르는 것부터)
+      2) 마지막으로 본 지 가장 오래된 그룹      (오래된 것부터)
+      각 묶음 안에서는 최근 광고비가 큰 순      (손실 규모가 큰 쪽부터)
+
+    이렇게 하면 상한이 낮아도 며칠 안에 전 그룹이 한 번씩 커버된다.
+    """
+    if limit <= 0 or not group_ids:
+        return []
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT parent_id AS gid, MIN(last_seen) AS seen
+        FROM ad_entity_state
+        WHERE customer_id = ? AND entity_type = 'AD' AND parent_id IS NOT NULL
+        GROUP BY parent_id
+    """, (customer_id,))
+    seen = {r["gid"]: r["seen"] for r in cur.fetchall()}
+
+    if since is None:
+        since = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+    cur.execute("""
+        SELECT entity_id, SUM(cost) AS cost FROM ad_daily_stats
+        WHERE customer_id = ? AND entity_type = 'ADGROUP' AND stat_date >= ?
+        GROUP BY entity_id
+    """, (customer_id, since))
+    spend = {r["entity_id"]: (r["cost"] or 0) for r in cur.fetchall()}
+    conn.close()
+
+    def key(gid: str):
+        # (본 적 있나, 마지막으로 본 시각, -광고비)
+        s = seen.get(gid)
+        return (1 if s else 0, s or "", -spend.get(gid, 0))
+
+    return sorted(group_ids, key=key)[:limit]
+
+
 def get_entity_states(customer_id: str, entity_type: str,
                       status: Optional[str] = None,
                       limit: int = 100000) -> List[Dict[str, Any]]:

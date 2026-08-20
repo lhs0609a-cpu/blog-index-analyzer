@@ -136,9 +136,14 @@ async def collect_account_snapshot(
         # 소재 반려는 조용히 광고를 멈춘다. 그룹 단위 조회뿐이라 상한을 둔다.
         if scan_ads and g_ents:
             gids = [g["entity_id"] for g in g_ents]
-            scan = gids[:max(0, int(ad_group_scan_limit))]
+            # ⚠️ 앞에서부터 자르면 뒤쪽 그룹은 영원히 안 보인다. 회전 순서로 고른다
+            # (한 번도 못 본 그룹 → 오래 전에 본 그룹, 각각 광고비 큰 순).
+            scan = S.prioritize_groups_for_ad_scan(
+                customer_id, gids, max(0, int(ad_group_scan_limit)))
             result["ad_groups_scanned_for_ads"] = len(scan)
             result["ad_groups_not_scanned"] = len(gids) - len(scan)
+            result["ad_scan_note"] = ("회전 스캔 — 한 번도 못 본 그룹과 오래된 그룹부터. "
+                                      "며칠에 걸쳐 전 그룹이 커버된다")
 
             ad_ents: List[Dict[str, Any]] = []
             sem = asyncio.Semaphore(STATS_CONCURRENCY)

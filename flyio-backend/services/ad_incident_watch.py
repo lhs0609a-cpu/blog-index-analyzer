@@ -351,20 +351,57 @@ def _watch_traffic_anomaly(customer_id: str, day: str) -> List[Dict[str, Any]]:
 
 
 def _watch_bulk_changes(customer_id: str) -> List[Dict[str, Any]]:
-    """대량 변경 — 대행사나 외부 도구가 일괄로 밀어 넣은 흔적."""
+    """대량 변경 — 대행사나 외부 도구가 일괄로 밀어 넣은 흔적.
+
+    ⚠️ 건수만 알리면 쓸모가 적다. 실제로 잡힌 사례는 3,400건이 **전부 하향**,
+    전부 70원으로 수렴한 일괄 작업이었다. 방향과 규모를 같이 줘야 사용자가
+    "내가 시킨 그 작업" 인지 "모르는 사이 벌어진 일" 인지 판단할 수 있다.
+    """
     out: List[Dict[str, Any]] = []
     counts = S.count_recent_changes(customer_id, hours=24)
     for field in ("bid_amt", "daily_budget", "enabled"):
         n = counts.get(field, 0)
-        if n >= BULK_CHANGE_THRESHOLD:
-            label = {"bid_amt": "입찰가", "daily_budget": "일예산",
-                     "enabled": "on/off"}[field]
-            out.append(_incident(
-                "bulk_change", WARNING,
-                f"{label}가 하루에 {n:,}건 바뀌었습니다",
-                "사람이 하나씩 바꾼 규모가 아닙니다. 의도한 변경인지 확인하세요.",
-                evidence={"field": field, "count": n, "hours": 24},
-                action="변경 이력에서 무엇이 어떻게 바뀌었는지 확인하세요."))
+        if n < BULK_CHANGE_THRESHOLD:
+            continue
+        label = {"bid_amt": "입찰가", "daily_budget": "일예산",
+                 "enabled": "on/off"}[field]
+
+        rows = S.get_recent_changes(customer_id, hours=24, limit=5000)
+        vals = []
+        for r in rows:
+            if r.get("field") != field:
+                continue
+            try:
+                vals.append((float(r["old_value"]), float(r["new_value"]),
+                             r.get("entity_name")))
+            except (TypeError, ValueError):
+                continue
+
+        up = [v for v in vals if v[1] > v[0]]
+        down = [v for v in vals if v[1] < v[0]]
+        detail = "사람이 하나씩 바꾼 규모가 아닙니다. 의도한 변경인지 확인하세요."
+        ev: Dict[str, Any] = {"field": field, "count": n, "hours": 24,
+                              "sampled": len(vals), "raised": len(up),
+                              "lowered": len(down)}
+        if vals:
+            new_vals = sorted({v[1] for v in vals})
+            ev["new_value_range"] = [new_vals[0], new_vals[-1]]
+            ev["examples"] = [
+                {"name": v[2], "from": int(v[0]), "to": int(v[1])}
+                for v in sorted(vals, key=lambda v: -(v[0] - v[1]))[:5]]
+            direction = ("전부 하향" if not up else
+                         "전부 상향" if not down else
+                         f"상향 {len(up):,} / 하향 {len(down):,}")
+            converged = (f", 모두 {int(new_vals[0]):,}원으로"
+                         if len(new_vals) == 1 else "")
+            detail = (f"{direction}{converged}. "
+                      f"사람이 하나씩 바꾼 규모가 아닙니다. 의도한 변경인지 확인하세요.")
+
+        out.append(_incident(
+            "bulk_change", WARNING,
+            f"{label}가 하루에 {n:,}건 바뀌었습니다",
+            detail, evidence=ev,
+            action="변경 이력에서 무엇이 어떻게 바뀌었는지 확인하세요."))
     return out
 
 
