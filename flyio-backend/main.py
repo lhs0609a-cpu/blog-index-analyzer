@@ -208,15 +208,6 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"⚠️ Auto learning scheduler failed to start: {e}")
 
-    # 광고 자동 최적화 스케줄러 시작
-    if RUN_SCHEDULERS:
-        try:
-            from services.ad_auto_optimizer import ad_auto_optimizer
-            ad_auto_optimizer.start(interval_seconds=900)  # 15분마다 실행 (메모리 절약)
-            logger.info("✅ Ad auto optimizer started (every 15 min)")
-        except Exception as e:
-            logger.warning(f"⚠️ Ad auto optimizer failed to start: {e}")
-
     # 키워드 풀 스케줄러 — 백엔드 자체 cron (GitHub Actions schedule 신뢰성 낮음)
     if RUN_SCHEDULERS:
         try:
@@ -261,14 +252,6 @@ async def lifespan(app: FastAPI):
             logger.info("✅ Index snapshot scheduler started (every 6h, daily 1 point/blog)")
         except Exception as e:
             logger.warning(f"⚠️ Index snapshot scheduler failed to start: {e}")
-
-    # Ad Optimization DB 초기화
-    try:
-        from database.ad_optimization_db import init_ad_optimization_tables
-        init_ad_optimization_tables()
-        logger.info("✅ Ad optimization tables initialized")
-    except Exception as e:
-        logger.warning(f"⚠️ Ad optimization tables initialization failed: {e}")
 
     # Notification DB 초기화
     try:
@@ -340,7 +323,6 @@ async def lifespan(app: FastAPI):
     # 모든 스케줄러 빠르게 중지 (wait=False로 즉시 종료)
     schedulers_to_stop = [
         ("auto_learning_scheduler", "services.auto_learning_service"),
-        ("ad_auto_optimizer", "services.ad_auto_optimizer"),
         ("backup_scheduler", "services.backup_service"),
         ("index_snapshot_scheduler", "services.index_snapshot_scheduler"),
         ("winner_precompute_scheduler", "services.winner_keyword_precompute"),
@@ -762,17 +744,7 @@ from routers import seo_pages
 from routers import ad_snapshot
 from routers import site_analytics
 from routers import revenue
-from routers import unified_ads
-from routers import ad_dashboard
 from routers import blue_ocean
-from routers import optimization_monitor
-from routers import hourly_bidding
-from routers import anomaly_detection
-from routers import budget_reallocation
-from routers import creative_fatigue
-from routers import naver_quality
-from routers import budget_pacing
-from routers import funnel_bidding
 from routers import notification
 from routers import winner_keywords
 from routers import profitable_keywords
@@ -797,17 +769,7 @@ app.include_router(rank_tracker.router, prefix="/api/rank-tracker", tags=["순�
 app.include_router(user_blogs.router, prefix="/api/user-blogs", tags=["사용자블로그"])
 app.include_router(keyword_analysis.router, prefix="/api/keyword-analysis", tags=["키워드분석"])
 app.include_router(revenue.router, prefix="/api/revenue", tags=["수익관리"])
-app.include_router(unified_ads.router)  # prefix already set in router
-app.include_router(ad_dashboard.router)  # prefix already set in router
 app.include_router(blue_ocean.router, prefix="/api/blue-ocean", tags=["블루오션키워드"])
-app.include_router(optimization_monitor.router, tags=["최적화모니터링"])
-app.include_router(hourly_bidding.router, tags=["시간대별입찰"])
-app.include_router(anomaly_detection.router, tags=["이상징후감지"])
-app.include_router(budget_reallocation.router, tags=["예산재분배"])
-app.include_router(creative_fatigue.router, tags=["크리에이티브피로도"])
-app.include_router(naver_quality.router, tags=["네이버품질지수"])
-app.include_router(budget_pacing.router, tags=["예산페이싱"])
-app.include_router(funnel_bidding.router, tags=["퍼널입찰"])
 app.include_router(notification.router, tags=["알림시스템"])
 app.include_router(winner_keywords.router, prefix="/api/winner-keywords", tags=["1위보장키워드"])
 app.include_router(profitable_keywords.router, prefix="/api", tags=["수익성키워드"])
