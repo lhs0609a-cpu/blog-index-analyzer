@@ -36,4 +36,9 @@ jobs:
             --max-time 60)
           echo "status=$status"
           cat /tmp/body.json
-          [ "$status" = "200" ] || { echo "::error::pool run 실패"; exit 1; }
+          # 백엔드가 워커로 넘기면 202(비동기 접수)를 준다. 200 만 성공으로 보면
+          # 일은 되는데 빨간불이 뜬다 — 매일 뜨는 거짓 실패는 곧 아무도 안 본다.
+          case "$status" in
+            200|202) ;;
+            *) echo "::error::pool run 실패 status=$status"; exit 1 ;;
+          esac
