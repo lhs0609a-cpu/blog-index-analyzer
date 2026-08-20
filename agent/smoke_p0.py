@@ -177,12 +177,30 @@ def naver_editor_frame(page):
 
 
 def naver_logged_in(page):
-    if "nid.naver.com" in page.url:
+    """
+    로그인 단계의 판정. 에디터 진입 여부는 naver 단계에서 따로 본다.
+
+    ★에디터 프레임만 보면 안 된다. 로그인은 됐는데 에디터가 안 뜨는 상황
+      (팝업·리다이렉트 지연·글쓰기 아닌 페이지 착지)에서 영영 '대기' 로 남는다.
+      _pw_naver_login.py 가 쓰던 판정 — "네이버 도메인인데 비밀번호 입력칸이 없으면
+      로그인된 것" — 을 폴백으로 둔다.
+    """
+    url = page.url
+    if "nid.naver.com" in url:
         return False, "로그인 화면(nid.naver.com)"
+
     fr = naver_editor_frame(page)
     if fr:
         return True, f"에디터 프레임 발견 ({fr.url[:60]})"
-    return False, "에디터를 찾지 못함"
+
+    if "naver.com" in url:
+        try:
+            if page.query_selector("input[type=password]") is None:
+                return True, f"네이버 로그인됨 (에디터 아직 아님: {url[:50]})"
+        except Exception:
+            pass
+
+    return False, f"에디터를 찾지 못함 ({url[:50]})"
 
 
 # ────────────────────────────────────────────────────────────── 단계
@@ -209,6 +227,14 @@ def stage_login(mode, only="both"):
             if only in ("both", "naver"):
                 n = s.ctx.new_page() if g else s.page()
                 n.goto(NAVER_WRITE_URL, wait_until="domcontentloaded", timeout=60000)
+                # ★창을 앞으로. 다른 창 뒤에 숨어서 로그인 자체가 시도되지 않은 적이 있다
+                #   (URL 이 15분 내내 nidlogin.login 에서 그대로였다).
+                try:
+                    n.bring_to_front()
+                except Exception:
+                    pass
+                log("\n  ★ 지금 크롬 창이 열렸습니다. 그 창에서 네이버에 로그인해 주세요.")
+                log("     창이 안 보이면 작업표시줄에서 Chrome 을 찾아 클릭하세요.\n")
 
             t0 = time.time()
             last = 0
@@ -246,8 +272,19 @@ def stage_login(mode, only="both"):
                 el = int(time.time() - t0)
                 if el - last >= 30:
                     last = el
+                    # ★현재 URL 을 반드시 같이 찍는다. 이게 없으면 "네이버=대기" 만 15분 나오고
+                    #   캡차인지 2단계인증인지 창을 못 본 건지 구분이 안 된다(실제로 3회 허비).
+                    #   _pw_naver_login.py 는 처음부터 URL 을 찍고 있었다.
+                    where = ""
+                    try:
+                        if n is not None and not n_ok:
+                            where = f" | 네이버 화면: {n.url[:70]}"
+                        elif g is not None and not g_ok:
+                            where = f" | Gemini 화면: {g.url[:70]}"
+                    except Exception:
+                        where = " | (창 확인 불가)"
                     log(f"  대기 {el}s … Gemini={'OK' if g_ok else '대기'} "
-                        f"네이버={'OK' if n_ok else '대기'}")
+                        f"네이버={'OK' if n_ok else '대기'}{where}")
                 time.sleep(POLL)
 
             # ★부분 성공도 반드시 저장한다.
