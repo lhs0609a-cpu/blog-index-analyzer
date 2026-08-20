@@ -23,6 +23,24 @@ import urllib.request
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
 
+
+def say(msg):
+    """★ 마라톤을 죽이지 않는 print.
+
+    2026-08-05·08-06·08-07 세 번 다 같은 자리에서 죽었다 —
+      `OSError: [Errno 22] Invalid argument` @ print(...)
+    처음엔 PowerShell RedirectStandardOutput 탓으로 봤지만 sh 리다이렉션에서도 재현됐다.
+    진짜 원인은 **로그 파일이 G:(Google Drive 마운트) 위에 있다는 것**이다. Drive File
+    Stream 은 간헐적으로 쓰기를 거부하고, flush=True + line_buffering 이라 그 한 번의
+    거부가 그대로 프로세스를 죽인다. 수십 시간짜리 마라톤이 로그 한 줄 때문에 끝난다.
+    → 로그는 로컬 디스크(C:)에 쓰고(체인 스크립트), 그래도 실패하면 삼킨다."""
+    for _ in range(3):
+        try:
+            print(msg, flush=True)
+            return
+        except OSError:
+            time.sleep(1)
+
 BASE = "G:/내 드라이브/developer/blog-index-analyzer/flyio-backend/"
 SEEDS = sys.argv[1]
 STATE = sys.argv[2]
@@ -32,7 +50,11 @@ B = "https://blog-index-analyzer.fly.dev/api/naver-ad"
 
 BATCH = 150
 FIRE_TRIES, FIRE_GAP = 90, 20      # started 받을 때까지 최대 30분 재시도
-RUN_WAIT, RUN_POLL = 900, 30       # 잡 완료 대기 최대 15분 (pool 델타 감지라 보통 1~3분)
+RUN_WAIT = int(os.environ.get("RUN_WAIT", "900"))   # 잡 완료 대기 (pool 델타 감지라 보통 1~3분)
+RUN_POLL = int(os.environ.get("RUN_POLL", "30"))
+# ⚠️ 포화 구간에선 pool 델타가 0 이라 매 배치가 RUN_WAIT 를 통째로 태운다(555배치×15분=139시간).
+#    짧게 잡아도 안전하다 — 워커가 아직 바쁘면 다음 fire 가 started 를 못 받아 재시도 루프에서
+#    자연히 직렬화된다. 포화 축을 돌릴 땐 RUN_WAIT=240 정도로 낮출 것.
 DRY_MIN = int(os.environ.get("DRY_MIN", "15"))
 DRY_STOP = int(os.environ.get("DRY_STOP", "6"))   # 연속 N배치 순증<DRY_MIN 이면 고갈로 보고 정지
 # ⚠️ 시드파일이 여러 축을 이어붙인 것이면 dry-stop 을 끌 것(DRY_STOP=999).
@@ -79,11 +101,10 @@ if os.path.exists(STATE):
 
 p0, a0, _ = stats()
 if p0 is None:
-    print(f"[{LABEL}] 초기 stats 실패 — 중단", flush=True)
+    say(f"[{LABEL}] 초기 stats 실패 — 중단")
     sys.exit(1)
 nb = (len(seeds) - cur + BATCH - 1) // BATCH
-print(f"=== [{LABEL}] 시드 {len(seeds):,} 커서 {cur} → {nb}배치 | 시작 pool={p0:,} active={a0:,}",
-      flush=True)
+say(f"=== [{LABEL}] 시드 {len(seeds):,} 커서 {cur} → {nb}배치 | 시작 pool={p0:,} active={a0:,}")
 
 prev, dry, bi = p0, 0, 0
 while cur < len(seeds):
@@ -97,10 +118,10 @@ while cur < len(seeds):
             break
         time.sleep(FIRE_GAP)
     if not ok:
-        print(f"⚠️ [{LABEL} {bi}/{nb}] {FIRE_TRIES}회 재시도에도 started 없음 — 중단 "
-              f"(커서 {cur} 보존, 재실행하면 이어감)", flush=True)
+        say(f"⚠️ [{LABEL} {bi}/{nb}] {FIRE_TRIES}회 재시도에도 started 없음 — 중단 "
+              f"(커서 {cur} 보존, 재실행하면 이어감)")
         break
-    print(f"[{LABEL} {bi}/{nb}] STARTED (시도 {tried}) 예시={batch[0]}", flush=True)
+    say(f"[{LABEL} {bi}/{nb}] STARTED (시도 {tried}) 예시={batch[0]}")
 
     cur += BATCH
     json.dump({"cursor": cur}, open(STATE, "w", encoding="utf-8"))
@@ -122,19 +143,17 @@ while cur < len(seeds):
             break
     p, a, _ = stats()
     if p is None:
-        print(f"[{LABEL} {bi}] stats 다운 — 대기", flush=True)
+        say(f"[{LABEL} {bi}] stats 다운 — 대기")
         time.sleep(120)
         continue
     d = p - prev
     prev = p
-    print(f"[{LABEL} {bi}/{nb}] {'완료' if done else '타임아웃(계속)'} "
-          f"pool={p:,}(+{d}) active={a:,} 누적+{p - p0:,}", flush=True)
+    say(f"[{LABEL} {bi}/{nb}] {'완료' if done else '타임아웃(계속)'} "
+          f"pool={p:,}(+{d}) active={a:,} 누적+{p - p0:,}")
     dry = dry + 1 if d < DRY_MIN else 0
     if dry >= DRY_STOP:
-        print(f"⚠️ [{LABEL}] 연속{DRY_STOP}배치 순증<{DRY_MIN} — 광맥 고갈로 정지 (커서 {cur})",
-              flush=True)
+        say(f"⚠️ [{LABEL}] 연속{DRY_STOP}배치 순증<{DRY_MIN} — 광맥 고갈로 정지 (커서 {cur})")
         break
 
 pf, af, _ = stats()
-print(f"=== [{LABEL}] 종료 pool={pf:,}(+{pf-p0:,}) active={af:,}(+{af-a0:,}) 커서={cur}",
-      flush=True)
+say(f"=== [{LABEL}] 종료 pool={pf:,}(+{pf-p0:,}) active={af:,}(+{af-a0:,}) 커서={cur}")
