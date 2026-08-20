@@ -142,6 +142,80 @@ async def daily(
     }
 
 
+@router.get("/budget-plan")
+async def budget_plan(
+    customer_id: str = Query(...),
+    date: Optional[str] = Query(None, description="기준일. 기본은 감시와 같은 확정일(어제)"),
+):
+    """예산 재배분을 사람이 판단할 수 있게 전 캠페인을 한 표로 편다.
+
+    사고 감시(`budget_capped`)는 상위 5개 예시만 싣는다 — 그건 알림이라 그게 맞다.
+    하지만 "어디서 빼서 어디에 넣을지" 를 정하려면 막힌 쪽과 남는 쪽을 **전부**,
+    성과와 함께 봐야 한다. 네이버를 다시 부르지 않고 수집해 둔 스냅샷만 읽는다.
+
+    ⚠️ 정지된 캠페인의 '남는 예산' 은 옮길 수 있는 돈이 아니다. 그 캠페인은 애초에
+    쓰지 않으므로 총액을 그대로 두고 옮긴다는 계산이 성립하지 않는다. 감시의
+    `idle_leftover_krw` 는 이를 나누지 않으므로, 여기서는 active/paused 를 갈라
+    **실제로 옮길 수 있는 몫(movable)** 을 따로 낸다.
+    """
+    from services.ad_incident_watch import _eval_date, BUDGET_EXHAUSTED_RATIO
+
+    day = _eval_date(date)
+    camps = S.get_entity_states(customer_id, "CAMPAIGN")
+
+    capped, idle_active, idle_paused, partial = [], [], [], []
+    for c in camps:
+        budget = c.get("daily_budget") or 0
+        if budget <= 0:
+            continue  # 예산 무제한 — 막힐 일도, 남을 일도 없다
+        series = S.get_entity_series(customer_id, "CAMPAIGN", c["entity_id"], day, day)
+        r = series[0] if series else {}
+        spent = float(r.get("cost") or 0)
+        row = {
+            "campaign_id": c["entity_id"],
+            "name": c.get("name") or c["entity_id"],
+            "status": c.get("status"),
+            "budget": budget,
+            "spent": round(spent),
+            "used_pct": round(spent / budget * 100, 1),
+            "leftover": round(budget - spent),
+            "impressions": int(r.get("impressions") or 0),
+            "clicks": int(r.get("clicks") or 0),
+            "cpc": round(float(r.get("cpc") or 0)),
+        }
+        active = str(c.get("status") or "").upper() not in ("PAUSED", "DELETED")
+        if spent >= budget * BUDGET_EXHAUSTED_RATIO:
+            capped.append(row)
+        elif spent < budget * 0.5:
+            (idle_active if active else idle_paused).append(row)
+        else:
+            partial.append(row)
+
+    # 막힌 쪽은 손실이 큰 순(=쓴 돈이 많은 순), 남는 쪽은 회수액이 큰 순.
+    capped.sort(key=lambda x: -x["spent"])
+    idle_active.sort(key=lambda x: -x["leftover"])
+    idle_paused.sort(key=lambda x: -x["leftover"])
+
+    movable = sum(x["leftover"] for x in idle_active)
+    return {
+        "customer_id": customer_id,
+        "date": day,
+        "capped": capped,
+        "idle_active": idle_active,
+        "idle_paused": idle_paused,
+        "partial_count": len(partial),
+        "totals": {
+            "campaigns_with_budget": len(capped) + len(idle_active)
+                                     + len(idle_paused) + len(partial),
+            "capped_count": len(capped),
+            "capped_spent": sum(x["spent"] for x in capped),
+            "movable_krw": movable,
+            # 정지분까지 합친 값 — 감시 알림의 숫자와 대조하기 위해 남긴다.
+            "idle_leftover_all_krw": movable + sum(x["leftover"] for x in idle_paused),
+        },
+    }
+
+
 @router.post("/collect-reports")
 async def collect_reports_endpoint(
     authorization: Optional[str] = Header(None),
