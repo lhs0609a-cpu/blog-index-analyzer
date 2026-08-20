@@ -12,7 +12,7 @@ import type { BlogListItem } from '@/lib/types/api'
 import toast from 'react-hot-toast'
 import EmptyState from '@/components/EmptyState'
 import TermTooltip from '@/components/TermTooltip'
-import WinnerKeywordsWidget from '@/components/WinnerKeywordsWidget'
+import BlogDiagnosisWidget from '@/components/BlogDiagnosisWidget'
 import OnboardingModal from '@/components/OnboardingModal'
 
 // 레벨별 퍼센타일 매핑 (대략적인 추정치)
@@ -318,7 +318,9 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        {/* 1위 보장 키워드 위젯 - 킬러 기능 */}
+        {/* 내 블로그 문제진단 — 대시보드가 먼저 답해야 할 질문.
+            이 자리에 있던 "1위 가능 키워드" 는 후보 풀이 100개뿐이라
+            피부과 블로그에 `대출계산기` 를 90% 확률로 추천하고 있었다. */}
         {!isLoading && displayBlogs.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -326,9 +328,9 @@ export default function Dashboard() {
             transition={{ delay: 0.1 }}
             className="mb-8"
           >
-            <WinnerKeywordsWidget
+            <BlogDiagnosisWidget
               blogId={displayBlogs[0]?.blog_id}
-              className="shadow-xl shadow-yellow-100/50"
+              className="shadow-xl shadow-gray-100/60"
             />
           </motion.div>
         )}
