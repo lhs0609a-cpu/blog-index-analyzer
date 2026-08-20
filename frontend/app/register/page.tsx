@@ -142,11 +142,18 @@ export default function RegisterPage() {
           >
             <Sparkles className="w-8 h-8 text-white gi3d" />
           </motion.div>
-          <h1 className="text-4xl font-black mb-3">
-            <span className="bg-gradient-to-r from-[#0064FF] to-[#3182F6] bg-clip-text text-transparent">회원가입</span>
-          </h1>
-          <p className="text-gray-500">
-            지금 시작하고 블로그를 성장시키세요
+          {/*
+            가입의 진짜 가치는 '기록' 이다. 진단 1회는 스냅샷이고, 계정이 있어야
+            어제와 비교할 수 있다. 그리고 **과거 지수는 복원할 수 없다** —
+            시작한 날부터만 쌓인다. 지어낸 급박함을 만들 필요가 없다.
+            미루는 하루가 실제로 영영 비는 하루다.
+          */}
+          <h1 className="ds-headline mb-3">진단을 기록으로</h1>
+          <p className="ds-lede">
+            오늘 진단이 저장되고, 내일부터 무엇이 달라졌는지 비교할 수 있습니다.
+          </p>
+          <p className="ds-caption mt-3">
+            과거 지수는 복원할 수 없어 <strong className="font-semibold text-gray-700">시작한 날부터</strong> 쌓입니다.
           </p>
         </motion.div>
 

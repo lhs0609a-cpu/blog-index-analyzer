@@ -124,12 +124,9 @@ export default function LoginPage() {
           >
             <DashboardMockup className="mx-auto" width={460} height={260} />
           </motion.div>
-          <h1 className="text-4xl font-black mb-3 text-gray-900">
-            로그인
-          </h1>
-          <p className="text-gray-500">
-            블랭크에서 블로그를 관리하고 분석하세요
-          </p>
+          {/* 로그인은 이미 결정한 사람이 오는 화면이다. 설득하지 말고 빨리 통과시킨다. */}
+          <h1 className="ds-headline mb-3">다시 오셨네요</h1>
+          <p className="ds-lede">그동안 쌓인 진단 기록이 기다리고 있습니다.</p>
         </motion.div>
 
         {/* Login Form */}
