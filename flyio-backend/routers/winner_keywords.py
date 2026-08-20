@@ -199,8 +199,11 @@ async def get_daily_winners(
         high = [k for k in winners if 70 <= k.win_probability < 95][:max_keywords]
         moderate = [k for k in winners if 50 <= k.win_probability < 70][:max_keywords]
 
-        if result["status"] in ("cache_empty", "no_topic_match"):
-            message = "이 블로그 주제의 키워드를 수집하는 중입니다. 잠시 후 다시 확인해 주세요."
+        if result["status"] in ("cache_empty", "no_topic_match", "no_topic_terms"):
+            message = ("블로그 주제를 아직 파악하지 못했습니다. 글이 쌓이면 주제에 "
+                       "맞는 키워드만 골라 보여 드립니다."
+                       if result["status"] == "no_topic_terms"
+                       else "이 블로그 주제의 키워드를 수집하는 중입니다. 잠시 후 다시 확인해 주세요.")
         else:
             message = f"총 {result.get('analyzed', 0)}개 키워드 분석, {len(winners)}개 1위 가능"
 
@@ -299,10 +302,13 @@ async def get_quick_winners(
                 detail="먼저 블로그를 분석해 주세요. 내 레벨을 알아야 1위 가능 여부를 계산할 수 있습니다.",
             )
 
-        if result["status"] in ("cache_empty", "no_topic_match"):
+        if result["status"] in ("cache_empty", "no_topic_match", "no_topic_terms"):
             # '못 찾았다'가 아니라 '아직 재는 중'이다. 두 가지를 같은 문장으로
             # 말하면 사용자는 자기 블로그가 가망 없다고 오해한다.
-            if result["status"] == "no_topic_match":
+            if result["status"] == "no_topic_terms":
+                msg = ("블로그 주제를 아직 파악하지 못했습니다. 글이 쌓이면 "
+                       "주제에 맞는 키워드만 골라 보여 드립니다.")
+            elif result["status"] == "no_topic_match":
                 terms = ", ".join(result.get("topic_terms", [])[:3])
                 msg = (f"'{terms}' 주제의 키워드를 아직 측정하지 못했습니다. "
                        "수집 목록에 넣었으니 잠시 후 다시 확인해 주세요.")

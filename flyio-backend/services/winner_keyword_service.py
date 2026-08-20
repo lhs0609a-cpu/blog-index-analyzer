@@ -393,6 +393,15 @@ class WinnerKeywordService:
         except Exception as e:
             logger.debug(f"topic terms lookup failed for {my_blog_id}: {e}")
 
+        if not topic_terms:
+            # 주제어를 모르면 거를 수가 없다. 예전에는 여기서 필터를 통째로
+            # 건너뛰고 풀 전체를 그대로 내보냈다 — 그래서 피부과 블로그에
+            # `대출계산기` 가 "90% 매우 높음" 배지를 달고 떴다. 못 거르는 것을
+            # 거른 것처럼 내보내는 게 아무것도 안 내보내는 것보다 나쁘다.
+            return {"status": "no_topic_terms", "keywords": [],
+                    "my_level": my_level, "my_score": my_score,
+                    "analyzed": len(stats)}
+
         if topic_terms:
             relevant = [s for s in stats if self._is_on_topic(s["keyword"], topic_terms)]
             if not relevant:
