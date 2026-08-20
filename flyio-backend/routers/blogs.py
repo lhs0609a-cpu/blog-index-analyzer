@@ -5697,7 +5697,34 @@ async def search_health(request: SearchHealthRequest, refresh: bool = Query(Fals
         logger.exception(f"search_health failed for {blog_id}: {e}")
         raise HTTPException(status_code=500, detail=f"진단 실패: {e}")
 
-    return diagnose(result if isinstance(result, dict) else result.dict())
+    health = diagnose(result if isinstance(result, dict) else result.dict())
+
+    # 잰 값을 남긴다. 대시보드 첫 화면은 6초를 기다릴 수 없으므로 여기 남은
+    # 것만 읽는다 — 남은 게 없으면 '아직 확인 안 함' 이지 '정상' 이 아니다.
+    try:
+        from database.blog_diagnosis_db import write_search_health
+        write_search_health(blog_id, health)
+    except Exception as e:
+        logger.debug(f"search health cache write skipped for {blog_id}: {e}")
+
+    return health
+
+
+@router.get("/{blog_id}/diagnosis")
+async def blog_diagnosis(blog_id: str):
+    """내 블로그 문제진단 — 대시보드 첫 화면.
+
+    네트워크를 타지 않는다. 이미 재 둔 것만 읽고, 안 잰 항목은 `unknown` 으로
+    남긴다. 안 잰 것을 "이상 없음" 이라 말하면 진단이 아니라 장식이 된다.
+    """
+    from services.blog_diagnosis import diagnose_blog
+    try:
+        return diagnose_blog(blog_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception(f"diagnosis failed for {blog_id}")
+        raise HTTPException(status_code=500, detail=f"진단 실패: {e}")
 
 
 @router.post("/verify-index", response_model=VerifyIndexResponse)
