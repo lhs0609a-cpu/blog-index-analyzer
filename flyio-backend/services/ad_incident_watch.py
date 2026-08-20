@@ -279,6 +279,12 @@ def _watch_budget_capped(customer_id: str, day: str) -> List[Dict[str, Any]]:
         budget = c.get("daily_budget") or 0
         if budget <= 0:
             continue
+        # 꺼둔 캠페인은 예산이 막혀서 멈춘 게 아니라 사람이 멈춘 것이다.
+        # 예산을 올려도 아무 일도 일어나지 않고, 그 남는 예산은 옮길 수 있는
+        # 돈도 아니다(애초에 쓰지 않는다). 양쪽 모두에서 뺀다 — 안 그러면
+        # 없는 긴급 사고를 만들고 옮길 돈을 실제보다 크게 말한다.
+        if str(c.get("status") or "").upper() in ("PAUSED", "DELETED"):
+            continue
         series = S.get_entity_series(customer_id, "CAMPAIGN", cid, day, day)
         spent = series[0]["cost"] if series else 0
         if spent >= budget * BUDGET_EXHAUSTED_RATIO:
