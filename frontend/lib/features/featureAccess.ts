@@ -179,7 +179,7 @@ export const FEATURES: Record<string, FeatureConfig> = {
   adOptimizer: {
     name: 'adOptimizer',
     displayName: '광고 최적화',
-    description: '네이버 검색광고를 AI가 자동으로 최적화합니다',
+    description: '네이버 검색광고 키워드·입찰·예산을 진단하고 대량으로 관리합니다',
     category: 'premium',
     access: { guest: 'none', free: 'none', basic: 'none', pro: 'full', business: 'full' }
   }

@@ -68,7 +68,7 @@ export default function NotFound() {
         {/* P3: Pro 안내 */}
         <div className="mt-8 p-4 bg-gradient-to-r from-purple-600/20 to-indigo-600/20 border border-purple-500/30 rounded-xl">
           <p className="text-sm text-white/70 mb-2">
-            Pro 플랜으로 1위 가능 키워드를 매일 받아보세요
+            Pro 플랜으로 내 레벨에 맞는 키워드를 찾아보세요
           </p>
           <Link
             href="/pricing"

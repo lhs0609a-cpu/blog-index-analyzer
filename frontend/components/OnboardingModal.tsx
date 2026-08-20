@@ -108,7 +108,7 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
                       <span className="text-xs font-bold px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full">Pro</span>
                     </div>
                     <p className="text-sm text-gray-600 mb-3">
-                      매일 5개의 1위 가능 키워드를 추천받으세요. Pro 사용자의 82%가 30일 내 상위 노출됩니다.
+                      내 블로그 레벨로 노려볼 만한 키워드를 찾아보세요.
                     </p>
                     <Link
                       href="/pricing"
@@ -130,7 +130,7 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
                     <h4 className="font-semibold text-green-900 mb-2">팁</h4>
                     <ul className="text-sm text-green-800 space-y-1">
                       <li>무료로 블로그 분석과 키워드 검색을 매일 이용할 수 있습니다</li>
-                      <li>Pro로 업그레이드하면 1위 가능 키워드를 매일 추천받습니다</li>
+                      <li>Pro로 업그레이드하면 1위 가능 키워드를 추천받습니다</li>
                       <li>결제 후 7일 이내 미사용 시 전액 환불받을 수 있습니다</li>
                     </ul>
                   </div>

@@ -282,7 +282,7 @@ export default function PricingPage() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <div className="text-center sm:text-left">
                 <p className="text-sm text-gray-600">
-                  <strong className="text-gray-900">Pro 플랜</strong>으로 매일 5개의 1위 가능 키워드를 받아보세요
+                  <strong className="text-gray-900">Pro 플랜</strong>으로 내 레벨에 맞는 1위 가능 키워드를 찾아보세요
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
                   블로그 분석 후 맞춤형 키워드 추천 - 골든타임까지 알려드립니다
@@ -318,8 +318,8 @@ export default function PricingPage() {
               <p className="text-xs md:text-sm text-gray-600">블로그<br/>분석 지표</p>
             </div>
             <div className="text-center p-4 rounded-2xl bg-white border border-green-100">
-              <div className="text-3xl md:text-4xl font-black text-green-600 mb-1">5개</div>
-              <p className="text-xs md:text-sm text-gray-600">매일 새로운<br/>1위 가능 키워드</p>
+              <div className="text-3xl md:text-4xl font-black text-green-600 mb-1">내 레벨</div>
+              <p className="text-xs md:text-sm text-gray-600">기준으로 고른<br/>1위 가능 키워드</p>
             </div>
             <div className="text-center p-4 rounded-2xl bg-white border border-purple-100">
               <div className="text-3xl md:text-4xl font-black text-purple-600 mb-1">200회</div>

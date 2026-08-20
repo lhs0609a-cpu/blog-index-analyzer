@@ -13,7 +13,7 @@ export default function Footer() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3 text-white">
               <Crown className="w-5 h-5 gi3d" />
-              <span className="font-medium">Pro 플랜으로 1위 가능 키워드를 매일 5개 받아보세요</span>
+              <span className="font-medium">Pro 플랜으로 내 레벨에 맞는 키워드를 찾아보세요</span>
             </div>
             <div className="flex items-center gap-4">
               <div className="hidden md:flex items-center gap-2 text-white/80 text-sm">

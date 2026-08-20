@@ -333,7 +333,7 @@ export default function WinnerKeywordsWidget({ blogId, className = '' }: WinnerK
             <div className="flex items-center gap-2">
               <Crown className="w-5 h-5 gi3d" />
               <div>
-                <div className="font-semibold text-sm">Pro로 매일 5개 추천받기</div>
+                <div className="font-semibold text-sm">Pro로 키워드 추천받기</div>
                 <div className="text-xs opacity-80">7일 무료 · 클릭 한 번 해지</div>
               </div>
             </div>

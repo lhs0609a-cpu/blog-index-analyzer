@@ -631,7 +631,7 @@ export default function Home() {
                 Pro 전용 킬러 기능
               </span>
               <h2 className="text-4xl md:text-5xl font-black mb-4">
-                <span className="text-yellow-600">1위 가능 키워드</span>를 매일 받아보세요
+                <span className="text-yellow-600">1위 가능 키워드</span>를 찾아보세요
               </h2>
               <p className="text-gray-600 text-lg max-w-2xl mx-auto">
                 내 블로그 레벨로 지금 당장 1위가 가능한 키워드를 AI가 찾아드립니다
@@ -680,8 +680,8 @@ export default function Home() {
             <div className="bg-gradient-to-r from-yellow-400 to-amber-500 rounded-2xl p-6 text-white text-center mb-8">
               <div className="flex flex-wrap items-center justify-center gap-8">
                 <div>
-                  <div className="text-3xl font-bold">5개/일</div>
-                  <div className="text-sm opacity-90">매일 새로운 1위 가능 키워드</div>
+                  <div className="text-3xl font-bold">내 레벨</div>
+                  <div className="text-sm opacity-90">기준으로 고른 1위 가능 키워드</div>
                 </div>
                 <div className="hidden md:block w-px h-12 bg-white/30" />
                 <div>
@@ -853,7 +853,7 @@ export default function Home() {
                     '키워드 검색 200회/일',
                     '지수 변화 추이 + 발행 활동 분석',
                     '상세 분석 리포트',
-                    '1위 가능 키워드 5개/일',
+                    '1위 가능 키워드 추천',
                     '순위 추적 & 알림',
                     '경쟁사 10개 비교',
                     '엑셀 내보내기'
@@ -1084,7 +1084,7 @@ export default function Home() {
                     <div className="flex items-center gap-2 mb-1">
                       <span className="px-2 py-0.5 text-[9px] font-bold bg-green-500 text-white rounded-full">7일 무료</span>
                     </div>
-                    <div className="text-sm font-bold text-gray-900 truncate">1위 가능 키워드 매일 5개 추천</div>
+                    <div className="text-sm font-bold text-gray-900 truncate">1위 가능 키워드 추천</div>
                     <div className="text-xs text-gray-500">클릭 한 번으로 해지 · 위약금 0원</div>
                   </div>
                   <div className="hidden sm:flex items-center gap-1 px-4 py-2 rounded-xl bg-[#0064FF] text-white text-xs font-bold flex-shrink-0">
