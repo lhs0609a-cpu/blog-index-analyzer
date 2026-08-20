@@ -167,12 +167,13 @@ export default function Home() {
 
               {/* Live counter disabled - P0 blocker: fake data */}
 
-              {/* 검색 모드 전환 탭 + 입력 영역 */}
+              {/* 검색 모드 전환 탭 + 입력 영역 — 아래 섹션 CTA가 여기로 돌려보낸다 */}
               <motion.div
+                id="hero-input"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.3 }}
-                className="max-w-2xl mx-auto mb-10"
+                className="max-w-2xl mx-auto mb-10 scroll-mt-28"
               >
                 {/* 탭 전환 버튼 */}
                 <div className="flex items-center justify-center gap-2 mb-4">
@@ -540,101 +541,75 @@ export default function Home() {
         </div>
       </section>
 
-      {/* P1: Killer Feature - 1위 가능 키워드 */}
-      <section className="py-20 relative bg-gradient-to-b from-yellow-50 to-white">
-        <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            className="max-w-5xl mx-auto"
-          >
-            <div className="text-center mb-12">
-              <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-100 border border-yellow-200 text-sm font-bold text-yellow-700 mb-4">
-                <Crown className="w-4 h-4 gi3d" />
-                Pro 전용 킬러 기능
-              </span>
-              <h2 className="text-4xl md:text-5xl font-black mb-4">
-                <span className="text-yellow-600">1위 가능 키워드</span>를 찾아보세요
-              </h2>
-              <p className="text-gray-600 text-lg max-w-2xl mx-auto">
-                내 블로그 레벨로 지금 당장 1위가 가능한 키워드를 AI가 찾아드립니다
-              </p>
-            </div>
+      {/*
+        여기 있던 "Pro 전용 킬러 기능 — 1위 가능 키워드" 를 내렸다.
+        후보 풀이 fresh 100개뿐이라 매일 채워 줄 수 없고, 데모 카드의 94%·87%·78%
+        는 지어낸 숫자였다. 무엇보다 /analyze 화면이 스스로 이렇게 밝히고 있다 —
+        "이 점수와 실제 네이버 SERP 순위의 상관관계는 자체 검증(n=67) ρ=0.04".
+        상위 노출을 앞세워 팔면서 결과 화면에서 저렇게 말하면 앞뒤가 맞지 않는다.
 
-            {/* 데모 카드 */}
-            <div className="grid md:grid-cols-3 gap-6 mb-10">
-              {[
-                { keyword: '홈트레이닝 루틴', volume: 8400, probability: 94, reason: '현재 1위 Lv.3 → 내 레벨 Lv.5' },
-                { keyword: '자취 요리 레시피', volume: 12300, probability: 87, reason: '경쟁 블로그 3개월 미활동' },
-                { keyword: '노트북 추천 2026', volume: 18500, probability: 78, reason: '상위권 평균보다 높은 D.I.A.' }
-              ].map((item, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: index * 0.1 }}
-                  className="p-6 bg-white rounded-2xl border-2 border-yellow-200 shadow-xl shadow-yellow-100/50"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white ${
-                      index === 0 ? 'bg-gradient-to-r from-yellow-400 to-amber-500' :
-                      index === 1 ? 'bg-gradient-to-r from-gray-300 to-gray-400' :
-                      'bg-gradient-to-r from-orange-300 to-orange-400'
-                    }`}>
-                      {index + 1}
-                    </div>
-                    <div className={`text-2xl font-bold ${
-                      item.probability >= 90 ? 'text-green-600' : item.probability >= 80 ? 'text-blue-600' : 'text-yellow-600'
-                    }`}>
-                      {item.probability}%
-                    </div>
-                  </div>
-                  <div className="font-bold text-lg text-gray-900 mb-2">{item.keyword}</div>
-                  <div className="text-sm text-gray-500 mb-3">월 {item.volume.toLocaleString()}회 검색</div>
-                  <div className="text-xs text-green-600 bg-green-50 rounded-lg p-2">
-                    ✓ {item.reason}
-                  </div>
-                </motion.div>
-              ))}
-            </div>
+        그래서 파는 것을 **관측할 수 있는 것**으로 옮긴다. 색인 여부는 검색해서
+        직접 보는 것이라 ρ 논란이 없다. 지어낸 예시 숫자도 필요 없다 —
+        히어로에서 자기 블로그로 바로 돌려볼 수 있기 때문이다.
+      */}
+      <section className="ds-section">
+        <div className="ds-container">
+          <div className="mx-auto mb-12 max-w-2xl text-center">
+            <span className="ds-eyebrow mb-4">진단서에 담기는 것</span>
+            <h2 className="ds-headline mb-4">
+              &ldquo;왜 안 나오지?&rdquo; 를
+              <br />
+              추측으로 끝내지 않습니다
+            </h2>
+            <p className="ds-lede">
+              막연한 점수 하나가 아니라, 어느 글이 안 잡히는지·어떤 지표가 언제 움직였는지까지
+              그대로 보여 드립니다.
+            </p>
+          </div>
 
-            {/* 서비스 특징 */}
-            <div className="bg-gradient-to-r from-yellow-400 to-amber-500 rounded-2xl p-6 text-white text-center mb-8">
-              <div className="flex flex-wrap items-center justify-center gap-8">
-                <div>
-                  <div className="text-3xl font-bold">내 레벨</div>
-                  <div className="text-sm opacity-90">기준으로 고른 1위 가능 키워드</div>
-                </div>
-                <div className="hidden md:block w-px h-12 bg-white/30" />
-                <div>
-                  <div className="text-3xl font-bold">골든타임</div>
-                  <div className="text-sm opacity-90">최적 발행 시간까지 안내</div>
-                </div>
-                <div className="hidden md:block w-px h-12 bg-white/30" />
-                <div>
-                  <div className="text-3xl font-bold">42개</div>
-                  <div className="text-sm opacity-90">분석 지표로 블로그 진단</div>
-                </div>
-              </div>
-              <p className="text-xs opacity-70 mt-3">* 결과는 개인 블로그 상태 및 운영 방식에 따라 다를 수 있습니다</p>
-            </div>
-
-            <div className="text-center">
-              <Link
-                href="/pricing"
-                className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-yellow-400 to-amber-500 text-white font-bold text-lg rounded-2xl hover:shadow-xl transition-all"
+          <div className="mx-auto grid max-w-4xl gap-4 md:grid-cols-2">
+            {[
+              {
+                t: '안 잡히는 글을 콕 집어서',
+                d: '최근 글 제목을 하나씩 검색해 노출 여부를 확인하고, 검색에 안 나오는 글을 목록으로 보여 줍니다.',
+              },
+              {
+                t: '지수를 셋으로 쪼개서',
+                d: 'C-Rank · D.I.A. · 콘텐츠로 나눠 어디가 발목을 잡는지 봅니다. 총점 하나로는 무엇을 고쳐야 할지 알 수 없습니다.',
+              },
+              {
+                t: '언제 무엇이 움직였는지',
+                d: '지수 변화를 날짜별로 쌓고, 가장 크게 빠진 지표를 함께 짚습니다. 채점 기준을 고친 구간은 따로 표시합니다.',
+              },
+              {
+                t: '못 잰 날은 비워 둡니다',
+                d: '본문을 못 읽은 날 억지로 점수를 만들면 없던 폭락이 그래프에 생깁니다. 빈 날은 빈 채로 둡니다.',
+              },
+            ].map((c, i) => (
+              <motion.div
+                key={c.t}
+                initial={{ opacity: 0, y: 12 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.4, delay: i * 0.05 }}
+                className="ds-panel p-6"
               >
-                <Crown className="w-5 h-5 gi3d" />
-                Pro 7일 무료로 체험하기
-                <ArrowRight className="w-5 h-5 gi3d" />
-              </Link>
-              <p className="text-sm text-gray-500 mt-3">7일 내 해지 시 0원 · 클릭 한 번으로 해지</p>
-            </div>
-          </motion.div>
+                <h3 className="mb-2 text-[17px] font-bold leading-snug text-gray-900">{c.t}</h3>
+                <p className="text-[14px] leading-relaxed text-gray-600">{c.d}</p>
+              </motion.div>
+            ))}
+          </div>
+
+          <div className="mt-10 text-center">
+            <a href="#hero-input" className="ds-cta">
+              내 블로그로 지금 확인하기
+              <ArrowRight className="h-4 w-4" />
+            </a>
+            <p className="ds-caption mt-3">가입 없이 바로 확인할 수 있습니다.</p>
+          </div>
         </div>
       </section>
+
 
       {/*
         후기 카드 자리에 '우리가 실제로 무엇을 재는가' 를 놓는다.
@@ -713,10 +688,11 @@ export default function Home() {
             className="max-w-4xl mx-auto"
           >
             <div className="text-center mb-12">
-              <h2 className="text-4xl md:text-5xl font-black mb-4 text-gray-900">
-                무료 vs <span className="text-[#0064FF]">Pro</span>
+              <h2 className="ds-headline mb-3">
+                먼저 무료로 진단하고,
+                <br className="sm:hidden" /> 필요하면 그때 올리세요
               </h2>
-              <p className="text-gray-600">무료로 시작하고, 필요할 때 업그레이드하세요</p>
+              <p className="ds-lede">진단 결과를 본 뒤에 결정해도 늦지 않습니다.</p>
             </div>
 
             <div className="grid md:grid-cols-2 gap-6">
@@ -728,10 +704,10 @@ export default function Home() {
                 </div>
                 <ul className="space-y-3">
                   {[
-                    '블로그 분석 2회/일',
+                    '블로그 진단 2회/일',
                     '키워드 검색 8회/일',
-                    '지수 변화 추이 기록',
-                    '기본 분석 리포트'
+                    '색인률 · 지수 구성 확인',
+                    '지수 변화 추이 기록'
                   ].map((item, i) => (
                     <li key={i} className="flex items-center gap-2 text-gray-600">
                       <Check className="w-4 h-4 text-gray-400 gi3d" />
@@ -739,10 +715,10 @@ export default function Home() {
                     </li>
                   ))}
                   {[
-                    '1위 가능 키워드 추천',
+                    '진단 무제한',
                     '순위 추적 & 알림',
-                    '경쟁사 비교 분석',
-                    '엑셀 내보내기'
+                    '키워드 경쟁 분석',
+                    '결과 내보내기'
                   ].map((item, i) => (
                     <li key={i} className="flex items-center gap-2 text-gray-400">
                       <X className="w-4 h-4 gi3d" />
@@ -770,14 +746,13 @@ export default function Home() {
                 </div>
                 <ul className="space-y-3">
                   {[
-                    '블로그 분석 무제한',
+                    '블로그 진단 무제한',
                     '키워드 검색 200회/일',
+                    '안 잡히는 글 목록까지',
                     '지수 변화 추이 + 발행 활동 분석',
-                    '상세 분석 리포트',
-                    '1위 가능 키워드 추천',
                     '순위 추적 & 알림',
-                    '경쟁사 10개 비교',
-                    '엑셀 내보내기'
+                    '키워드 경쟁 분석',
+                    '결과 내보내기'
                   ].map((item, i) => (
                     <li key={i} className="flex items-center gap-2">
                       <Check className="w-4 h-4 gi3d" />
@@ -1005,7 +980,7 @@ export default function Home() {
                     <div className="flex items-center gap-2 mb-1">
                       <span className="px-2 py-0.5 text-[9px] font-bold bg-green-500 text-white rounded-full">7일 무료</span>
                     </div>
-                    <div className="text-sm font-bold text-gray-900 truncate">1위 가능 키워드 추천</div>
+                    <div className="text-sm font-bold text-gray-900 truncate">진단 무제한 + 순위 추적</div>
                     <div className="text-xs text-gray-500">클릭 한 번으로 해지 · 위약금 0원</div>
                   </div>
                   <div className="hidden sm:flex items-center gap-1 px-4 py-2 rounded-xl bg-[#0064FF] text-white text-xs font-bold flex-shrink-0">
