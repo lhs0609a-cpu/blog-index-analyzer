@@ -34,6 +34,56 @@ DEFAULT_AD_GROUP_SCAN_LIMIT = 400
 # /stats 동시 호출. 클라이언트에 전역 세마포어가 따로 있으므로 여기선 완만하게.
 STATS_CONCURRENCY = 6
 
+# ★ /ncc/adgroups 를 파라미터 없이 부르면 네이버가 여기서 자른다(실측).
+#   대형 계정 7곳이 전부 정확히 1,001개로 돌아왔다 — 해울은 실제 3,783개인데도.
+#   더 나쁜 건 이 절단이 조용하다는 것이다. 응답에 "잘렸다" 는 표시가 없어서
+#   그대로 믿으면 계정 대부분을 못 보면서 "다 봤다" 고 말하게 된다.
+NAVER_ADGROUP_FLAT_CAP = 1000
+
+# 캠페인별 재조회 동시성. 소잠 137·쿠팡피티 166 캠페인이라 콜 수가 늘어난다.
+ADGROUP_FETCH_CONCURRENCY = 6
+
+
+async def _fetch_all_ad_groups(client, campaign_ids: List[str]) -> Dict[str, Any]:
+    """광고그룹 전수 조회.
+
+    먼저 한 번에 부른다(콜 1회). 상한에 닿지 않았으면 그게 전부이므로 그대로 쓴다.
+    상한에 닿았으면 **잘린 것으로 보고** 캠페인별로 다시 훑는다.
+    작은 계정은 예전처럼 1콜로 끝나고, 큰 계정만 캠페인 수만큼 더 쓴다.
+    """
+    flat = await client.get_ad_groups() or []
+    if len(flat) < NAVER_ADGROUP_FLAT_CAP:
+        return {"groups": flat, "truncated": False, "calls": 1}
+
+    seen: set = set()
+    out: List[Dict[str, Any]] = []
+    sem = asyncio.Semaphore(ADGROUP_FETCH_CONCURRENCY)
+
+    async def one(cid: str) -> List[Dict[str, Any]]:
+        async with sem:
+            try:
+                return await client.get_ad_groups(cid) or []
+            except Exception as e:
+                # 한 캠페인이 실패해도 나머지는 살린다. 다만 조용히 넘기지 않는다.
+                logger.warning(f"[ad-snapshot] adgroups 조회 실패 campaign={cid}: {e}")
+                return []
+
+    for chunk in await asyncio.gather(*[one(c) for c in campaign_ids]):
+        for g in chunk:
+            gid = g.get("nccAdgroupId")
+            if gid and gid not in seen:
+                seen.add(gid)
+                out.append(g)
+
+    # 캠페인별 합계가 평면 조회보다 적으면 뭔가 빠진 것이다 — 그때는 많은 쪽을 쓴다.
+    if len(out) < len(flat):
+        logger.warning(
+            f"[ad-snapshot] 캠페인별 합계({len(out)})가 평면 조회({len(flat)})보다 적다 — 평면 결과 사용"
+        )
+        return {"groups": flat, "truncated": True, "calls": 1 + len(campaign_ids)}
+
+    return {"groups": out, "truncated": True, "calls": 1 + len(campaign_ids)}
+
 
 def _truthy(v: Any) -> Optional[int]:
     if v is None:
@@ -125,9 +175,14 @@ async def collect_account_snapshot(
         result["changes"] += c_sync["changed"] + c_sync["added"] + c_sync["removed"]
 
         # ── 2. 광고그룹 ──────────────────────────────────────
-        # campaign_id 없이 부르면 계정 전체가 온다.
-        groups = await client.get_ad_groups() or []
+        # ⚠️ 예전 주석은 "campaign_id 없이 부르면 계정 전체가 온다" 였는데 사실이 아니다.
+        #    네이버가 1,000개에서 조용히 자른다(실측: 대형 7계정 전부 1,001).
+        fetched = await _fetch_all_ad_groups(
+            client, [c["nccCampaignId"] for c in campaigns if c.get("nccCampaignId")])
+        groups = fetched["groups"]
         result["ad_groups"] = len(groups)
+        result["ad_groups_flat_truncated"] = fetched["truncated"]
+        result["ad_groups_fetch_calls"] = fetched["calls"]
         g_ents = [_adgroup_entity(g) for g in groups if g.get("nccAdgroupId")]
         g_sync = S.sync_entity_states(customer_id, g_ents, "ADGROUP", detect_removed=True)
         result["changes"] += g_sync["changed"] + g_sync["added"] + g_sync["removed"]

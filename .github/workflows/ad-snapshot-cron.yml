@@ -172,12 +172,24 @@ jobs:
                   print(f"::warning::{name} 수집 실패 — {r.get('errors')}")
                   continue
               missed = r.get("ad_groups_not_scanned") or 0
-              line = (f"{name}: 캠페인 {r.get('campaigns')} / 그룹 {r.get('ad_groups')} "
+              total_g = r.get("ad_groups") or 0
+              line = (f"{name}: 캠페인 {r.get('campaigns')} / 그룹 {total_g} "
                       f"/ 소재 {r.get('ads')} / 성과 {r.get('stat_rows')}행 "
                       f"/ 변경 {r.get('changes')}건")
               print(f"::notice::{line}")
+              if r.get("ad_groups_flat_truncated"):
+                  # 평면 조회가 1,000에서 잘려 캠페인별로 다시 훑은 계정.
+                  # 콜 수가 늘어난 사실도 함께 알린다 — 레이트리밋과 직결된다.
+                  print(f"::notice::{name} 그룹 조회가 평면 상한(1,000)에 걸려 "
+                        f"캠페인별로 다시 훑었습니다 — 총 {total_g:,}개 "
+                        f"({r.get('ad_groups_fetch_calls')}콜)")
               if missed:
                   # 조용히 자르지 않는다 — 못 본 그룹이 있으면 반드시 말한다.
-                  print(f"::warning::{name} 소재 미확인 광고그룹 {missed}개 "
-                        f"(상한에 걸림 — ad_group_scan_limit 를 올리거나 리포트 경로 필요)")
+                  # ★이 수치는 '전체 그룹 수' 기준이어야 한다. 예전에는 평면 조회가
+                  #  1,001 에서 잘린 줄 모르고 1001-400=601 을 보고했다.
+                  #  해울은 실제로 3,383 개를 못 보고 있었는데 601 이라고 말한 셈이다.
+                  pct = round(missed / total_g * 100) if total_g else 0
+                  print(f"::warning::{name} 소재 미확인 광고그룹 {missed:,}개 "
+                        f"(전체 {total_g:,}개 중 {pct}% — 회전 스캔이라 며칠에 걸쳐 커버되지만, "
+                        f"오늘 기준으로는 못 본 몫입니다)")
           PY
