@@ -145,19 +145,50 @@ jobs:
             echo "::warning::사고 감시 호출 실패 status=$status"
             echo '{"scans":[]}' > incidents.json
           fi
-          python3 - <<'PY'
-          import json
+          python3 - <<'PYEOF'
+          import json, os, urllib.request
           d = json.load(open("incidents.json"))
+
+          blocks, critical = [], 0
           for s in d.get("scans", []):
               name = s.get("name") or s.get("customer_id")
               msg = s.get("message")
               if not msg:
                   # 정상이면 침묵한다. 매일 "이상 없음" 을 보내면 곧 안 읽는다.
                   continue
+              critical += int(s.get("critical") or 0)
               print(f"::error::[{name}] 사고 감지")
               for line in msg.splitlines():
                   print(f"  {line}")
-          PY
+              blocks.append("[" + str(name) + "]\n" + msg)
+
+          # ── 발송 ────────────────────────────────────────────────
+          # 알림 채널이 아예 없었다. 그동안 사고는 Actions 로그에만 찍히고 아무에게도
+          # 닿지 않았다 — 감시가 돌아도 보는 사람이 없으면 감시가 아니다.
+          if blocks:
+              body = "광고비 관제탑 — 사고 감지\n\n" + "\n\n".join(blocks)
+              url = (os.environ.get("ALERT_WEBHOOK_URL") or "").strip()
+              if url:
+                  try:
+                      req = urllib.request.Request(
+                          url,
+                          data=json.dumps({"text": body}).encode(),
+                          headers={"Content-Type": "application/json"},
+                      )
+                      urllib.request.urlopen(req, timeout=20)
+                      print("::notice::알림 발송 완료")
+                  except Exception as e:
+                      # 발송 실패를 조용히 넘기면 "알림이 갔겠지" 라고 믿게 된다.
+                      print(f"::warning::알림 발송 실패 — {e}")
+              else:
+                  print("::notice::ALERT_WEBHOOK_URL 미설정 — 웹훅 발송은 건너뜁니다"
+                        " (긴급 건은 아래 잡 실패로 GitHub 이 메일을 보냅니다)")
+
+          # 긴급이 있으면 잡을 실패시킨다. 자격증명 없이도 사람에게 닿는 유일한 경로다.
+          # 주의는 실패시키지 않는다 — 매일 빨간불이 뜨면 곧 아무도 안 본다.
+          if critical:
+              raise SystemExit(f"긴급 사고 {critical}건 — 위 로그 참조")
+          PYEOF
 
       - name: Summarize
         run: |
