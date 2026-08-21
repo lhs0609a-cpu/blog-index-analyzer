@@ -249,6 +249,16 @@ function IndexVerificationCard({ blogId }: { blogId: string }) {
     }
   }
 
+  // 이 카드는 이제 결과 화면 맨 위에 있고, 우리가 파는 것 그 자체다.
+  // 버튼을 눌러야 도는 한 "안 잡히는 글을 콕 집어 준다" 는 약속은 기본값으로
+  // 지켜지지 않는다. 그래서 결과가 뜨면 바로 잰다.
+  // refresh=false 라 서버 캐시를 타므로 같은 블로그를 다시 봐도 새로 긁지 않는다.
+  useEffect(() => {
+    if (!blogId) return
+    runVerification(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blogId])
+
   const categoryStyle: Record<string, { bg: string; text: string; ring: string }> = {
     '최적+': { bg: 'bg-purple-100', text: 'text-purple-700', ring: 'ring-purple-200' },
     '최적': { bg: 'bg-blue-100', text: 'text-blue-700', ring: 'ring-blue-200' },
@@ -267,10 +277,13 @@ function IndexVerificationCard({ blogId }: { blogId: string }) {
         <div>
           <h3 className="text-2xl font-bold flex items-center gap-2">
             <CheckCircle className="w-6 h-6 text-indigo-600 gi3d" />
-            실측 인덱스 검증 (NSIDE 방법론 기반)
+            내 글이 검색에 나오는지
           </h3>
           <p className="text-sm text-gray-600 mt-1">
-            6개 공개 신호(정확매칭 색인 / VIEW 노출 / 색인 지연 / 주제 일관성 / 콘텐츠 / 체인)를 NSIDE·whereispost 표준에 가깝게 측정 — 약 8~20초 소요
+            최근 글 제목을 하나씩 그대로 검색해 노출 여부를 확인합니다. 추정이 아니라 관측입니다.
+            <span className="block mt-0.5 text-xs text-gray-500">
+              정확매칭 색인 · VIEW 노출 · 색인 지연 · 주제 일관성 · 콘텐츠 · 체인 6개 신호 · 약 8~20초
+            </span>
           </p>
         </div>
         <button
@@ -278,7 +291,7 @@ function IndexVerificationCard({ blogId }: { blogId: string }) {
           disabled={loading}
           className="shrink-0 px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
         >
-          {loading ? (<><Loader2 className="w-4 h-4 animate-spin" />검증 중...</>) : (data ? '다시 검증' : '검증 시작')}
+          {loading ? (<><Loader2 className="w-4 h-4 animate-spin" />검색해 보는 중...</>) : (data ? '다시 재기' : '지금 확인')}
         </button>
       </div>
 
@@ -1872,6 +1885,18 @@ export default function AnalyzePage() {
                   </div>
                 </div>
 
+                {/*
+                  색인 검증을 맨 위로 올렸다.
+                  이 화면은 바로 위 툴팁에서 스스로 이렇게 밝히고 있다 —
+                  "이 점수와 실제 SERP 순위의 상관관계는 자체 검증(n=67) ρ=0.04".
+                  그런데 정작 **관측한 사실**(제목을 검색해 실제로 나오는지)은
+                  1,900줄 아래 아코디언에 접혀 있었다. 추정치를 앞에 놓고 관측을
+                  숨긴 셈이다.
+                  같은 이유로 KeywordVerdictWidget 도 앞서 승격했다 —
+                  "아코디언 안에 묻혀 있어 사실상 아무도 못 쓰던 기능".
+                */}
+                <IndexVerificationCard blogId={result.blog.blog_id} />
+
                 {/* 지수 변화 추이 — "언제, 어떻게 올랐나"는 현재 점수만큼 중요하다 */}
                 <BlogIndexHistoryChart blogId={result.blog.blog_id} />
 
@@ -1894,8 +1919,8 @@ export default function AnalyzePage() {
                   />
                 </DetailsAccordion>
 
-                <DetailsAccordion title="실제 검색 노출 측정" subtitle="색인 검증 · 노출 천장 · 키워드 판정">
-                  <IndexVerificationCard blogId={result.blog.blog_id} />
+                {/* 색인 검증은 위로 올렸으므로 여기서는 뺀다(중복 측정 방지). */}
+                <DetailsAccordion title="노출 천장" subtitle="이 블로그가 어디까지 올라갈 수 있는지">
                   <ExposureCeilingCard blogId={result.blog.blog_id} />
                 </DetailsAccordion>
 
