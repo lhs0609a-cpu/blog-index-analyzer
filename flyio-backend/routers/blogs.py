@@ -61,6 +61,12 @@ SEARCH_CACHE_TTL = 300  # 5분 (검색 결과는 짧게 캐싱)
 BLOG_ANALYSIS_CACHE: Dict[str, Dict] = {}
 BLOG_CACHE_TTL = 3600  # 1시간 (4시간 → 1시간 메모리 절약)
 
+# 콘텐츠 지표(총점 가중치 50%)를 재는 표본 크기.
+# 글 단위 캐시가 생겨 "성능 제약" 이 사라졌으므로 3 → 15 로 올린다.
+# 15면 하루 6~7개 올리는 블로그도 표본의 절반 이상이 어제와 겹친다.
+FULLPARSE_SAMPLE_SIZE = 15
+
+
 def get_cached_blog_analysis(blog_id: str) -> Optional[Dict]:
     """캐시된 블로그 분석 결과 조회"""
     if blog_id in BLOG_ANALYSIS_CACHE:
@@ -2987,19 +2993,45 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
                     # RSS만으론 RSS description(요약)밖에 못 봄.
                     # analyze_post를 병렬 호출해 공감·댓글·이미지·문단·소제목·키워드밀도까지 추출.
                     try:
+                        # ★ 예전에는 `items[:3]` — 최근 글 3개만 읽었다("성능 제약").
+                        #   3개는 표본이 아니다. 하루 6~7개씩 올리는 블로그라면
+                        #   **매일 표본이 통째로 갈린다.** 그러면 지수는 블로그의
+                        #   상태가 아니라 '오늘 올라온 글 3개가 얼마나 길었나' 가 된다.
+                        #   실측(platonmarketing): 글 수·방문자·이웃이 모두 일정한데
+                        #   점수만 하루걸러 ±8~11 씩 튀었다.
+                        #
+                        #   발행된 글은 변하지 않으므로 URL 로 캐시하면 그 제약이 사라진다.
+                        #   첫 분석만 비용이 들고, 그 뒤로는 새 글만 읽으면 된다.
                         post_links: List[str] = []
-                        for item in items[:3]:  # 처음 3개만 (성능 제약)
+                        for item in items[:FULLPARSE_SAMPLE_SIZE]:
                             link_elem = item.find('link')
                             if link_elem and link_elem.get_text(strip=True):
                                 post_links.append(link_elem.get_text(strip=True))
 
                         if post_links:
                             post_keyword = keyword or ""
-                            # 동시 풀파싱 (최대 3개 병렬)
-                            post_results = await asyncio.gather(
-                                *[analyze_post(url, post_keyword) for url in post_links],
+
+                            from database import post_analysis_cache as PAC
+                            cached = await asyncio.to_thread(PAC.get_many, post_links)
+                            todo = [u for u in post_links if u not in cached]
+
+                            fresh_results = await asyncio.gather(
+                                *[analyze_post(url, post_keyword) for url in todo],
                                 return_exceptions=True,
                             )
+                            fresh: Dict[str, Any] = {}
+                            for url, r in zip(todo, fresh_results):
+                                if isinstance(r, dict) and r.get("data_fetched"):
+                                    fresh[url] = r
+                            if fresh:
+                                await asyncio.to_thread(PAC.put_many, blog_id, fresh)
+
+                            analysis_data["fullparse_cache_hits"] = len(cached)
+                            analysis_data["fullparse_fetched"] = len(fresh)
+
+                            post_results = [
+                                cached.get(u) or fresh.get(u) for u in post_links
+                            ]
                             valid_posts = [
                                 p for p in post_results
                                 if isinstance(p, dict) and p.get("data_fetched")
