@@ -1397,7 +1397,7 @@ export default function AnalyzePage() {
       return
     }
 
-    // 로그인한 사용자인 경우 사용량 체크 및 차감
+    // 로그인한 사용자인 경우 사용량 체크 (차감은 분석이 실제로 성공한 뒤에)
     if (isAuthenticated && user?.id) {
       try {
         const usageCheck = await checkUsageLimit(user.id, 'blog_analysis')
@@ -1407,10 +1407,8 @@ export default function AnalyzePage() {
           setShowLimitModal(true)
           return
         }
-        // 사용량 차감
-        await incrementUsage(user.id, 'blog_analysis')
       } catch {
-        // 사용량 추적 실패 시에도 분석은 진행
+        // 사용량 체크 실패 시에도 분석은 진행
       }
     }
 
@@ -1452,6 +1450,17 @@ export default function AnalyzePage() {
         // 전역 컨텍스트에 저장 (페이지 이동 시 유지)
         setAnalysisResult(analysisResult)
         toast.success('분석이 완료되었습니다!')
+
+        // 사용량 차감은 여기서 한다. 시작할 때 미리 빼면
+        // (2026-08-24 실측) 계정 ID를 넣어 MOVED 로 실패한 무료 사용자가 진짜 주소로
+        // 자동 재시도할 때 자기가 방금 쓴 1회에 막혀 "결과는 없는데 사용은 했다"가 된다.
+        if (isAuthenticated && user?.id) {
+          try {
+            await incrementUsage(user.id, 'blog_analysis')
+          } catch {
+            // 사용량 추적 실패는 분석 결과를 되돌릴 이유가 아니다
+          }
+        }
 
         // 일일 미션 완료
         completeMission('analyze')
