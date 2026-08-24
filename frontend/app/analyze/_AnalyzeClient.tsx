@@ -1228,7 +1228,7 @@ function DetailedMetricsSection({ result, isFreeUser }: { result: any; isFreeUse
                 </div>
                 <h3 className="text-2xl font-bold text-gray-900 mb-2">Pro 기능입니다</h3>
                 <p className="text-gray-600 mb-6">
-                  42개 전체 지표와 상세 분석 결과를<br />
+                  신호별 상세 점수와 전체 분석 결과를<br />
                   Pro 플랜에서 확인하세요
                 </p>
                 <div className="space-y-3">

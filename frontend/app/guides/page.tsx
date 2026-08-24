@@ -101,7 +101,7 @@ export default function GuidesIndexPage() {
               내 블로그는 지금 어느 단계일까
             </h2>
             <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-              블로그 주소만 입력하면 42개 지표로 현재 위치를 추정합니다. 가입 없이 확인할 수
+              블로그 주소만 입력하면 6개 신호를 실측해 현재 위치를 추정합니다. 가입 없이 확인할 수
               있습니다.
             </p>
             <Link

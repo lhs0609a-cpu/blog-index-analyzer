@@ -243,7 +243,7 @@ export default function Home() {
                       </div>
                     </form>
                     <p className="text-xs text-gray-400 mt-2 text-center">
-                      블로그 URL 또는 ID를 입력하면 11단계 레벨과 42개 지표를 분석합니다
+                      블로그 URL 또는 ID를 입력하면 11단계 레벨과 6개 실측 신호를 분석합니다
                     </p>
                   </motion.div>
                 )}
@@ -426,7 +426,7 @@ export default function Home() {
                       <span className="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-full border border-gray-200">11단계 레벨</span>
                     </div>
                     <h3 className="text-2xl font-bold text-gray-900 mb-2">블로그 분석</h3>
-                    <p className="text-gray-600 mb-4">블로그 ID만 입력하면 42개 지표를 즉시 분석합니다</p>
+                    <p className="text-gray-600 mb-4">블로그 ID만 입력하면 6개 신호를 즉시 실측합니다</p>
                     <div className="flex items-center gap-2 text-purple-600 font-medium group-hover:gap-3 transition-all">
                       <span>분석하러 가기</span>
                       <ArrowRight className="w-4 h-4 gi3d" />

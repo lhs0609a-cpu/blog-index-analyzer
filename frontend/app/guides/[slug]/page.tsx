@@ -212,7 +212,7 @@ export default function GuidePage({ params }: Params) {
           <aside className="p-6 rounded-xl bg-[#0064FF] text-white mb-10">
             <h2 className="text-lg font-bold mb-2">내 블로그에 적용하면 어떻게 나올까</h2>
             <p className="text-sm text-blue-100 mb-4 leading-relaxed">
-              블로그 주소만 입력하면 42개 지표로 현재 위치를 추정하고, 지금 뚫을 수 있는 키워드를
+              블로그 주소만 입력하면 6개 신호를 실측해 현재 위치를 추정하고, 지금 뚫을 수 있는 키워드를
               찾아줍니다.
             </p>
             <div className="flex flex-wrap gap-3">

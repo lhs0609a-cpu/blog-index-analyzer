@@ -170,7 +170,7 @@ export const organizationJsonLd = {
     url: `${SITE_URL}/icon.svg`,
   },
   description:
-    '네이버 블로그의 품질 지수(블로그 레벨)를 42개 지표로 측정하고, 상위 노출 가능성이 높은 키워드를 발굴하는 AI 분석 서비스.',
+    '네이버 블로그의 품질 지수(블로그 레벨)를 6개 실측 신호로 측정하고, 상위 노출 가능성이 높은 키워드를 발굴하는 AI 분석 서비스.',
   areaServed: { '@type': 'Country', name: '대한민국' },
   knowsLanguage: 'ko',
 }
@@ -213,7 +213,7 @@ export const softwareAppJsonLd = {
   },
   featureList: [
     '네이버 블로그 품질 지수 11단계 레벨 측정',
-    '블로그 42개 지표 분석',
+    '블로그 색인·노출 6개 신호 실측',
     '키워드 검색량 및 경쟁 강도 분석',
     '블루오션 키워드 발굴',
     '상위 노출 확률 예측',

@@ -55,7 +55,7 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
                       <h3 className="font-bold text-gray-900">블로그 분석하기</h3>
                     </div>
                     <p className="text-sm text-gray-600 mb-3">
-                      블로그 ID를 입력하면 11단계 레벨과 42개 지표로 현재 상태를 파악할 수 있습니다.
+                      블로그 ID를 입력하면 11단계 레벨과 6개 실측 신호로 현재 상태를 파악할 수 있습니다.
                     </p>
                     <Link
                       href="/analyze"
