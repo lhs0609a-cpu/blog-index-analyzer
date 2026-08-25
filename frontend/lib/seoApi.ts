@@ -41,6 +41,9 @@ export type KeywordPage = {
   search_volume?: number | null
   difficulty_score?: number | null
   difficulty_label?: string | null
+  /** 난이도 눈금 버전. 다른 버전끼리는 같은 선에 놓고 비교하지 않는다. */
+  difficulty_version?: number | null
+  difficulty_breakdown?: Record<string, { value: number; weight: number }> | null
   competitors_scanned?: number | null
   alive_ratio?: number | null
   median_vitality?: number | null
@@ -71,6 +74,7 @@ export type KeywordListItem = {
   top10_avg_score?: number | null
   top10_min_score?: number | null
   category_label?: string | null
+  difficulty_version?: number | null
 }
 
 /**
@@ -152,9 +156,38 @@ export const DIFFICULTY_LABEL: Record<string, string> = {
   moderate: '보통',
   hard: '어려움',
   very_hard: '매우 어려움',
+  /**
+   * 상위 10개 블로그의 지수를 못 잰 키워드.
+   *
+   * 예전 눈금은 이런 경우에도 경쟁자 활동성만으로 100점 '매우 어려움'을 찍었다.
+   * 안 잰 것은 unknown 이지 어려움이 아니다 — 여기서 그렇게 말한다.
+   */
+  unknown: '측정 대기',
+}
+
+/** 난이도가 실제로 계산된 키워드인가. unknown/누락은 false. */
+export function hasDifficulty(label?: string | null): boolean {
+  return !!label && label !== 'unknown'
 }
 
 export function difficultyKo(label?: string | null): string {
-  if (!label) return '측정 중'
+  if (!label) return '측정 대기'
   return DIFFICULTY_LABEL[label] ?? label
 }
+
+/** 난이도 라벨 → 뱃지 색. 쉬움이 초록, 어려움이 빨강. */
+export const DIFFICULTY_TONE: Record<string, string> = {
+  very_easy: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  easy: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  moderate: 'bg-amber-50 text-amber-700 border-amber-200',
+  hard: 'bg-orange-50 text-orange-700 border-orange-200',
+  very_hard: 'bg-rose-50 text-rose-700 border-rose-200',
+  unknown: 'bg-gray-50 text-gray-500 border-gray-200',
+}
+
+export function difficultyTone(label?: string | null): string {
+  return DIFFICULTY_TONE[label || 'unknown'] ?? DIFFICULTY_TONE.unknown
+}
+
+/** 허브에서 쓰는 표시 순서 — 쉬운 것부터. */
+export const DIFFICULTY_ORDER = ['very_easy', 'easy', 'moderate', 'hard', 'very_hard', 'unknown'] as const

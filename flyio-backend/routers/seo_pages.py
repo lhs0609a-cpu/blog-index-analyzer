@@ -77,6 +77,22 @@ async def list_keyword_pages(
     }
 
 
+@router.post("/recompute-difficulty")
+async def recompute_difficulty_endpoint(
+    all_rows: bool = Query(False, description="true 면 버전 무관 전부 재계산"),
+    authorization: Optional[str] = Header(None),
+):
+    """
+    난이도 눈금이 바뀌었을 때 저장값만으로 다시 계산한다. **네트워크 호출 0.**
+
+    재측정(키워드당 155초)과 달리 재료가 이미 행에 있으므로 즉시 끝난다.
+    쓰기이므로 cron 토큰으로 막는다.
+    """
+    _require_cron_token(authorization)
+    seo_db.init_seo_pages_db()
+    return seo_db.recompute_difficulty(only_stale=not all_rows)
+
+
 @router.get("/stats")
 async def get_seo_stats():
     seo_db.init_seo_pages_db()

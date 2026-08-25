@@ -55,8 +55,9 @@ async def _measure_one(keyword: str) -> Optional[Dict[str, Any]]:
     if not serp or not serp.get("ok"):
         raise RuntimeError(f"serp_difficulty not ok: {str(serp)[:160]}")
 
-    data["difficulty_score"] = serp.get("difficulty_score")
-    data["difficulty_label"] = serp.get("difficulty_label")
+    # 난이도 점수 자체는 아래 3)에서 상위10 지수까지 합쳐 다시 만든다.
+    # 여기서 오는 값은 '경쟁자 활동성' 성분 하나일 뿐이라 그대로 쓰면 안 된다
+    # (활동성만으로는 340개 중 319개가 100점으로 붙어버렸다).
     data["competitors_scanned"] = serp.get("competitors_scanned")
     data["alive_ratio"] = serp.get("alive_ratio")
     data["median_vitality"] = serp.get("median_vitality")
@@ -89,6 +90,22 @@ async def _measure_one(keyword: str) -> Optional[Dict[str, Any]]:
         logger.warning(f"[seo_builder] competition failed for {keyword}: {e}")
 
     await asyncio.sleep(0)
+
+    # 2-b) 합성 난이도 — SERP 활동성 + 상위10 지수 + 수요를 한 눈금으로.
+    #      순수 계산이라 네트워크 비용 0. 상위10 지수를 못 쟀으면 점수는 None 이고
+    #      라벨은 'unknown' 이다 — 안 잰 것을 '매우 어려움'으로 말하지 않는다.
+    from services.seo_difficulty import DIFFICULTY_VERSION, compute_difficulty
+
+    score, label, breakdown = compute_difficulty(
+        top10_min_score=data.get("top10_min_score"),
+        top10_avg_score=data.get("top10_avg_score"),
+        median_vitality=data.get("median_vitality"),
+        search_volume=data.get("search_volume"),
+    )
+    data["difficulty_score"] = score
+    data["difficulty_label"] = label
+    data["difficulty_version"] = DIFFICULTY_VERSION
+    data["difficulty_breakdown"] = breakdown
 
     # 3) 카테고리·팁 — 순수 함수(네트워크 없음)라 사실상 실패하지 않는다
     try:

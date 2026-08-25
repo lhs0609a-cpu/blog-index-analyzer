@@ -147,7 +147,12 @@ def init_seo_pages_db() -> None:
         # 수요 없는 페이지만 쌓이고, 그게 곧 구글의 scaled content abuse 다.
         # keywordstool 은 1콜(약 2초)에 100개 키워드+검색량을 주므로,
         # 비싼 측정 전에 싼 검색량으로 먼저 줄을 세운다.
+        # 난이도 눈금 버전 (2026-08-25 추가).
+        # 공식이 바뀌면 예전 점수와 같은 선에 놓을 수 없다. 어느 눈금으로 잰
+        # 값인지 행마다 남긴다. 버전이 없는 행 = v1(활동성 단일축, 천장 포화).
         for ddl in (
+            "ALTER TABLE seo_keyword_pages ADD COLUMN difficulty_version INTEGER",
+            "ALTER TABLE seo_keyword_pages ADD COLUMN difficulty_breakdown_json TEXT",
             "ALTER TABLE seo_keyword_queue ADD COLUMN search_volume INTEGER",
             "ALTER TABLE seo_keyword_queue ADD COLUMN volume_checked_at TIMESTAMP",
         ):
@@ -489,8 +494,9 @@ def upsert_page(data: Dict[str, Any]) -> None:
                 top10_avg_score, top10_min_score, top10_max_score,
                 top10_avg_c_rank, top10_avg_dia, top10_avg_posts,
                 competitors_json, tab_ratio_json, related_json, tips_json,
+                difficulty_version, difficulty_breakdown_json,
                 published, measured_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(slug) DO UPDATE SET
                 keyword=excluded.keyword,
                 category=excluded.category,
@@ -511,6 +517,8 @@ def upsert_page(data: Dict[str, Any]) -> None:
                 tab_ratio_json=excluded.tab_ratio_json,
                 related_json=excluded.related_json,
                 tips_json=excluded.tips_json,
+                difficulty_version=excluded.difficulty_version,
+                difficulty_breakdown_json=excluded.difficulty_breakdown_json,
                 published=excluded.published,
                 measured_at=excluded.measured_at
             """,
@@ -527,6 +535,8 @@ def upsert_page(data: Dict[str, Any]) -> None:
                 json.dumps(data.get("tab_ratio") or {}, ensure_ascii=False),
                 json.dumps(data.get("related") or [], ensure_ascii=False),
                 json.dumps(data.get("tips") or [], ensure_ascii=False),
+                data.get("difficulty_version"),
+                json.dumps(data.get("difficulty_breakdown") or {}, ensure_ascii=False),
                 published,
                 datetime.now(KST).isoformat(),
             ),
@@ -543,12 +553,14 @@ def _row_to_page(row: sqlite3.Row) -> Dict[str, Any]:
         ("tab_ratio_json", "tab_ratio"),
         ("related_json", "related"),
         ("tips_json", "tips"),
+        ("difficulty_breakdown_json", "difficulty_breakdown"),
     ):
         raw = d.pop(key, None)
         try:
-            d[target] = json.loads(raw) if raw else ([] if target != "tab_ratio" else {})
+            empty = {} if target in ("tab_ratio", "difficulty_breakdown") else []
+            d[target] = json.loads(raw) if raw else empty
         except (TypeError, ValueError):
-            d[target] = [] if target != "tab_ratio" else {}
+            d[target] = {} if target in ("tab_ratio", "difficulty_breakdown") else []
     d["published"] = bool(d.get("published"))
     return d
 
@@ -588,7 +600,8 @@ def list_published_slugs(
         cur = conn.execute(
             "SELECT slug, keyword, measured_at, search_volume, difficulty_label, "
             "       difficulty_score, competitors_scanned, alive_ratio, "
-            "       top10_avg_score, top10_min_score, category_label "
+            "       top10_avg_score, top10_min_score, category_label, "
+            "       difficulty_version "
             "FROM seo_keyword_pages WHERE published = 1 "
             f"ORDER BY {order_by} LIMIT ? OFFSET ?",
             (limit, offset),
@@ -620,7 +633,7 @@ def related_published(keyword: str, limit: int = 12) -> List[Dict[str, Any]]:
     conn = _connect()
     try:
         cur = conn.execute(
-            "SELECT slug, keyword, search_volume, difficulty_label "
+            "SELECT slug, keyword, search_volume, difficulty_label, difficulty_score "
             "FROM seo_keyword_pages WHERE published = 1 AND keyword LIKE ? AND keyword != ? "
             "ORDER BY COALESCE(search_volume, 0) DESC LIMIT ?",
             (f"%{head}%", keyword, limit),
@@ -628,6 +641,67 @@ def related_published(keyword: str, limit: int = 12) -> List[Dict[str, Any]]:
         return [dict(r) for r in cur.fetchall()]
     finally:
         conn.close()
+
+
+def recompute_difficulty(only_stale: bool = True) -> Dict[str, Any]:
+    """
+    저장된 값만으로 난이도를 다시 계산한다. **네트워크 호출 0.**
+
+    난이도의 재료(top10_min_score / top10_avg_score / median_vitality /
+    search_volume)는 이미 전부 행에 들어 있다. 눈금 공식만 바뀌었으므로
+    SERP 를 다시 긁을 필요가 없다 — 340개 재측정이면 키워드당 155초,
+    약 15시간이 든다. 여기서는 몇 초면 끝난다.
+
+    only_stale=True  현재 버전이 아닌 행만 (기본)
+    only_stale=False 전부 다시
+    """
+    from services.seo_difficulty import DIFFICULTY_VERSION, compute_difficulty
+
+    conn = _connect()
+    changed = 0
+    became_unknown = 0
+    dist: Dict[str, int] = {}
+    try:
+        where = (
+            "WHERE COALESCE(difficulty_version, 1) != ?"
+            if only_stale else "WHERE 1=1 AND ? IS NOT NULL"
+        )
+        cur = conn.execute(
+            "SELECT slug, difficulty_score, difficulty_label, top10_min_score, "
+            "       top10_avg_score, median_vitality, search_volume "
+            f"FROM seo_keyword_pages {where}",
+            (DIFFICULTY_VERSION,),
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+        for r in rows:
+            score, label, breakdown = compute_difficulty(
+                top10_min_score=r["top10_min_score"],
+                top10_avg_score=r["top10_avg_score"],
+                median_vitality=r["median_vitality"],
+                search_volume=r["search_volume"],
+            )
+            dist[label] = dist.get(label, 0) + 1
+            if label == "unknown":
+                became_unknown += 1
+            conn.execute(
+                "UPDATE seo_keyword_pages SET difficulty_score=?, difficulty_label=?, "
+                "difficulty_version=?, difficulty_breakdown_json=? WHERE slug=?",
+                (
+                    score, label, DIFFICULTY_VERSION,
+                    json.dumps(breakdown, ensure_ascii=False), r["slug"],
+                ),
+            )
+            changed += 1
+        conn.commit()
+    finally:
+        conn.close()
+    logger.info(f"[seo_pages_db] recompute_difficulty: {changed} rows -> {dist}")
+    return {
+        "version": DIFFICULTY_VERSION,
+        "recomputed": changed,
+        "unknown": became_unknown,
+        "label_distribution": dist,
+    }
 
 
 def stats() -> Dict[str, Any]:
@@ -646,6 +720,18 @@ def stats() -> Dict[str, Any]:
             "WHERE state='pending' AND volume_checked_at IS NULL"
         )
         out["volume_unchecked"] = int(cur.fetchone()["n"])
+        # 난이도 분포. 한 라벨에 몰려 있으면 눈금이 고장난 것이다
+        # (v1 은 340개 중 338개가 very_hard 였다).
+        cur.execute(
+            "SELECT COALESCE(difficulty_label,'unknown') l, COUNT(*) n "
+            "FROM seo_keyword_pages WHERE published = 1 GROUP BY l"
+        )
+        out["difficulty_distribution"] = {r["l"]: int(r["n"]) for r in cur.fetchall()}
+        cur.execute(
+            "SELECT COALESCE(difficulty_version, 1) v, COUNT(*) n "
+            "FROM seo_keyword_pages GROUP BY v"
+        )
+        out["difficulty_versions"] = {str(r["v"]): int(r["n"]) for r in cur.fetchall()}
         out["volume_ready"] = volume_ready_count()
         cur.execute("SELECT MAX(measured_at) m FROM seo_keyword_pages")
         out["last_measured_at"] = cur.fetchone()["m"]
