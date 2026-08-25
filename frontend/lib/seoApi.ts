@@ -10,6 +10,21 @@
 const API_BASE =
   process.env.SEO_API_URL?.replace(/\/$/, '') || 'https://blog-index-analyzer.fly.dev'
 
+/**
+ * 데이터 세대. **백엔드에서 값의 의미가 바뀌면 올린다.**
+ *
+ * ⚠️ Vercel 의 Data Cache 는 배포해도 지워지지 않는다. Full Route Cache 만
+ * 빌드마다 새로 시작하므로, 배포 후 페이지는 **새 템플릿에 옛 숫자**가 박힌
+ * 상태가 된다 — revalidate(24h) 가 돌 때까지.
+ * 실제 사고: 난이도 v2 백필 후 API 는 '어려움 69.7' 인데 페이지는 계속
+ * '매우 어려움 100' 을 보여줬다.
+ * 쿼리스트링을 하나 바꾸면 캐시 키가 달라져 그 자리에서 끊긴다. FastAPI 는
+ * 선언되지 않은 쿼리 파라미터를 무시하므로 백엔드는 손댈 필요가 없다.
+ *
+ *   1 → 2  난이도 눈금 합성으로 교체(2026-08-25)
+ */
+const DATA_EPOCH = 2
+
 /** 캐시 수명. 백엔드 측정 주기(FRESH_DAYS=30)보다 훨씬 짧게 잡아 갱신을 흘려보낸다. */
 export const KEYWORD_PAGE_REVALIDATE = 60 * 60 * 24 // 24h
 export const SITEMAP_REVALIDATE = 60 * 60 * 6 // 6h
@@ -98,7 +113,7 @@ function withTimeout(ms = FETCH_TIMEOUT_MS): RequestInit {
 export async function fetchKeywordPage(slug: string): Promise<KeywordPage | null> {
   try {
     const res = await fetch(
-      `${API_BASE}/api/seo/keyword/${encodeURIComponent(slug)}`,
+      `${API_BASE}/api/seo/keyword/${encodeURIComponent(slug)}?e=${DATA_EPOCH}`,
       { ...withTimeout(), next: { revalidate: KEYWORD_PAGE_REVALIDATE } }
     )
     if (!res.ok) return null
@@ -118,7 +133,7 @@ export async function fetchKeywordPage(slug: string): Promise<KeywordPage | null
  */
 export async function fetchKeywordCount(): Promise<number> {
   try {
-    const res = await fetch(`${API_BASE}/api/seo/keywords?offset=0&limit=1`, {
+    const res = await fetch(`${API_BASE}/api/seo/keywords?offset=0&limit=1&e=${DATA_EPOCH}`, {
       ...withTimeout(),
       cache: 'no-store',
     })
@@ -138,7 +153,7 @@ export async function fetchKeywordList(
 ): Promise<{ total: number; items: KeywordListItem[] }> {
   try {
     const res = await fetch(
-      `${API_BASE}/api/seo/keywords?offset=${offset}&limit=${limit}&order=${order}`,
+      `${API_BASE}/api/seo/keywords?offset=${offset}&limit=${limit}&order=${order}&e=${DATA_EPOCH}`,
       { ...withTimeout(), next: { revalidate: SITEMAP_REVALIDATE } }
     )
     if (!res.ok) return { total: 0, items: [] }
