@@ -274,6 +274,9 @@ def _watch_budget_capped(customer_id: str, day: str) -> List[Dict[str, Any]]:
     if not conn_rows:
         return out
 
+    # 캠페인마다 조회하면 커넥션이 캠페인 수만큼 열린다. 하루치를 한 번에 받는다.
+    spend_by_camp = S.get_entity_cost_series(customer_id, "CAMPAIGN", day, day)
+
     capped, idle = [], []
     for cid, c in camps.items():
         budget = c.get("daily_budget") or 0
@@ -285,8 +288,7 @@ def _watch_budget_capped(customer_id: str, day: str) -> List[Dict[str, Any]]:
         # 없는 긴급 사고를 만들고 옮길 돈을 실제보다 크게 말한다.
         if str(c.get("status") or "").upper() in ("PAUSED", "DELETED"):
             continue
-        series = S.get_entity_series(customer_id, "CAMPAIGN", cid, day, day)
-        spent = series[0]["cost"] if series else 0
+        spent = sum(spend_by_camp.get(cid) or [])
         if spent >= budget * BUDGET_EXHAUSTED_RATIO:
             capped.append((c.get("name") or cid, spent, budget))
         elif budget > 0 and spent < budget * 0.5:
@@ -424,16 +426,17 @@ def scan_account(customer_id: str, today: Optional[str] = None) -> Dict[str, Any
     blind = any(i["code"] in ("collect_never_ran", "collect_stale") for i in incidents)
 
     if not blind:
-        # 그룹별 최근 하루 광고비 — 반려의 손실 규모를 재는 데 쓴다.
-        spend_by_group: Dict[str, float] = {}
-        for g in S.get_entity_states(customer_id, "ADGROUP"):
-            series = S.get_entity_series(customer_id, "ADGROUP", g["entity_id"],
-                                         (datetime.strptime(day, "%Y-%m-%d")
-                                          - timedelta(days=BASELINE_WINDOW_DAYS)
-                                          ).strftime("%Y-%m-%d"), day)
-            costs = [r["cost"] for r in series if r["cost"] > 0]
-            if costs:
-                spend_by_group[g["entity_id"]] = statistics.median(costs)
+        # 그룹별 최근 광고비 중앙값 — 반려의 손실 규모를 재는 데 쓴다.
+        # ★그룹마다 조회하면 안 된다. 여기서 그룹당 1쿼리를 돌리는 바람에
+        #  9,000그룹 계정의 감시가 크론 상한을 넘겨 며칠간 통째로 잘렸다.
+        since = (datetime.strptime(day, "%Y-%m-%d")
+                 - timedelta(days=BASELINE_WINDOW_DAYS)).strftime("%Y-%m-%d")
+        spend_by_group: Dict[str, float] = {
+            gid: statistics.median(costs)
+            for gid, costs in S.get_entity_cost_series(
+                customer_id, "ADGROUP", since, day).items()
+            if costs
+        }
 
         for fn in (
             lambda: _watch_disapproved_ads(customer_id, spend_by_group),

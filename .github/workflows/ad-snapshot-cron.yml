@@ -8,16 +8,22 @@ name: Ad snapshot — daily collect
 #
 # ⚠️ 오늘부터 쌓지 않으면 한 달 뒤에도 비교할 과거가 없다. 화면보다 수집이 먼저다.
 #
-# 왜 새벽 4시(KST)인가: 네이버 통계는 전날치가 새벽에 확정된다. 그리고 이 시간대는
-# 다른 크론(키워드풀·SEO 페이지)과 겹치지 않아 레이트리밋을 나눠 쓰지 않는다.
+# 왜 새벽 6시(KST)인가: 네이버 통계는 전날치가 새벽에 확정된다.
+#
+# ⚠️ 원래 04:00 KST 였고 주석에는 "다른 크론과 겹치지 않는다" 고 적혀 있었지만
+# 사실이 아니었다. serp-cron.yml 이 `0 19 * * *` 로 **분 단위까지 같았다.**
+# 둘이 같은 백엔드의 이벤트 루프를 물고 늘어지면서, 8/24 에는 요청을 보낸 지
+# 53분 뒤에야 수집이 시작됐다(수집 자체는 3분 40초). 그동안 curl 이 먼저
+# 포기해 크론은 실패로 끝났고, 사고 감시는 아예 돌지도 못했다.
+# → serp(19시 UTC)·prediction-calibration(20시 UTC) 뒤인 21시 UTC 로 옮긴다.
 #
 # 필요 GitHub Secrets:
 #   CRON_TOKEN — 백엔드 CRON_TOKEN 과 동일 값 (다른 cron 과 공유)
 
 on:
   schedule:
-    # 19:00 UTC = 04:00 KST
-    - cron: "0 19 * * *"
+    # 21:00 UTC = 06:00 KST — serp-cron(19 UTC)·calibration(20 UTC) 과 분리
+    - cron: "0 21 * * *"
   workflow_dispatch:
     inputs:
       customer_id:
@@ -43,7 +49,9 @@ env:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # ⚠️ 30분이었을 때 8/21·8/23 이 '취소' 로 끝났다. 취소는 실패와 달리
+    # GitHub 이 메일을 보내지 않는다 — 사고가 있어도 조용히 사라진다.
+    timeout-minutes: 60
 
     steps:
       - name: Collect account snapshots
@@ -131,6 +139,10 @@ jobs:
         env:
           CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
           CUSTOMER_ID: ${{ github.event.inputs.customer_id }}
+          # ⚠️ 아래 파이썬이 이 변수를 읽는데 여기에 없었다. 그래서 알림 발송
+          # 코드는 있었지만 항상 '미설정' 분기로 빠졌고 단 한 건도 나가지 않았다.
+          # 코드를 넣는 것과 배선하는 것은 다른 일이다.
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
         run: |
           url="${BACKEND_URL}/api/ad-snapshot/watch"
           if [ -n "$CUSTOMER_ID" ]; then
