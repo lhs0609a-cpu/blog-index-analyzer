@@ -375,8 +375,12 @@ async def collect_reports(client, customer_id: str,
     result["rows_written"] = written
     # 이 계정이 그날 아예 안 돈 것인지 구분해 준다. "실패 0건" 과 "데이터 0건" 은
     # 다른 사건이고, 둘을 같은 초록불로 보여주면 감시가 눈을 감는다.
-    done = [result.get(n) for n, _ in steps if isinstance(result.get(n), dict)]
-    result["no_data"] = bool(done) and all(r.get("no_data") for r in done)
+    # keyword_master 는 그날 성과가 아니라 계정 상태 스냅샷이다(날짜와 무관하게
+    # 늘 만들어진다). '그날 광고가 안 돌았다' 판정에서는 빼야 한다 — 안 그러면
+    # 키워드만 있고 지출은 0인 휴면 계정이 영영 no_data 로 안 잡힌다.
+    day_steps = [result.get(n) for n in ("ad_detail", "expkeyword")
+                 if isinstance(result.get(n), dict)]
+    result["no_data"] = bool(day_steps) and all(r.get("no_data") for r in day_steps)
     S.finish_run(run_id, "ok" if result["ok"] else "partial",
                  rows_written=written, covered_from=day, covered_to=day,
                  error="; ".join(result["errors"])[:900] or None)
