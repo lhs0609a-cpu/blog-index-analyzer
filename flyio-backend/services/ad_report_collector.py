@@ -33,6 +33,14 @@ logger = logging.getLogger(__name__)
 BUILD_POLL_TRIES = 25
 BUILD_POLL_SLEEP_S = 2
 
+# ★ status="NONE" 은 "아직 안 됐다" 가 아니라 **그 날 데이터가 없다** 는 종착 상태다.
+#   더 기다려도 바뀌지 않는다. 이걸 실패로 세는 바람에 지출 없는 계정 6개가
+#   매일 "리포트가 BUILT 되지 않았습니다" 로 잡혔고, 일별 성과가 영영 안 쌓여
+#   노출급락·지출급증·예산막힘 감지기가 한 번도 뜨지 못했다.
+#   실측(2026-08-26, 어제자 AD_DETAIL): 지출 있는 3계정 전부 BUILT,
+#   지출 없는 6계정 전부 NONE. 예외 없이 갈렸다.
+NO_DATA_CONFIRM_POLLS = 3
+
 # 키워드 상태 동기화를 건너뛸 임계. 이보다 많으면 변경 diff 비용이 커지므로
 # 로그로 알리고 그대로 진행한다(자르지는 않는다).
 LARGE_ACCOUNT_KEYWORDS = 50_000
@@ -55,15 +63,29 @@ async def _build_and_download(client, kind: str, name: str,
         url = job.get("downloadUrl")
         getter = client.get_master_report
 
+    status = str(job.get("status") or "").upper()
+    polls = 0
     for _ in range(BUILD_POLL_TRIES):
         if url:
+            break
+        # 데이터가 없는 계정을 50초씩 기다릴 이유가 없다. 몇 번 확인해 굳어 있으면 끝낸다.
+        if status == "NONE" and polls >= NO_DATA_CONFIRM_POLLS:
             break
         await asyncio.sleep(BUILD_POLL_SLEEP_S)
         cur = await getter(job_id)
         url = cur.get("downloadUrl")
+        status = str(cur.get("status") or "").upper()
+        polls += 1
 
     if not url:
-        raise RuntimeError(f"{kind}/{name} 리포트가 BUILT 되지 않았습니다 (job={job_id})")
+        if status == "NONE":
+            # 실패가 아니다 — 그 날 노출·클릭·지출이 아예 없었다는 뜻이다.
+            logger.info(f"[report] {kind}/{name} 데이터 없음 (job={job_id})")
+            return None, {"job_id": job_id, "kind": kind, "name": name,
+                          "status": status, "no_data": True}
+        # ★상태를 같이 남긴다. 이게 없어서 "데이터 없음" 을 "빌드 실패" 로 오진했다.
+        raise RuntimeError(f"{kind}/{name} 리포트가 BUILT 되지 않았습니다 "
+                           f"(job={job_id}, status={status or '알 수 없음'})")
 
     text = await client.download_report_text(url)
     if kind == "stat":
@@ -87,6 +109,8 @@ async def collect_keyword_master(client, customer_id: str) -> Dict[str, Any]:
        숫자가 실제 적용값이 아니라는 뜻이다.
     """
     text, meta = await _build_and_download(client, "master", "Keyword")
+    if text is None:
+        return {"no_data": True, "keywords": 0, **meta}
     rows = RS.parse_rows(text, RS.MASTER_KEYWORD_COLS)
     skipped = RS.take_skipped(rows)
     spec = RS.MASTER_KEYWORD
@@ -137,6 +161,8 @@ async def collect_keyword_master(client, customer_id: str) -> Dict[str, Any]:
 async def collect_ad_detail(client, customer_id: str, day: str) -> Dict[str, Any]:
     """하루치 키워드 단위 성과. 등록 키워드로 귀속되지 않는 트래픽을 분리한다."""
     text, meta = await _build_and_download(client, "stat", "AD_DETAIL", day)
+    if text is None:
+        return {"no_data": True, "date": day, "rows_written": 0, **meta}
     rows = RS.parse_rows(text, RS.AD_DETAIL_COLS)
     skipped = RS.take_skipped(rows)
     spec = RS.AD_DETAIL
@@ -251,6 +277,8 @@ async def collect_expkeyword(client, customer_id: str, day: str,
     조용히 자르면 "우리 계정 검색어는 3,000종" 이라는 오해를 만든다.
     """
     text, meta = await _build_and_download(client, "stat", "EXPKEYWORD", day)
+    if text is None:
+        return {"no_data": True, "date": day, "stored": 0, **meta}
     rows = RS.parse_rows(text, RS.EXPKEYWORD_COLS)
     skipped = RS.take_skipped(rows)
     spec = RS.EXPKEYWORD
@@ -345,6 +373,10 @@ async def collect_reports(client, customer_id: str,
 
     result["ok"] = not result["errors"]
     result["rows_written"] = written
+    # 이 계정이 그날 아예 안 돈 것인지 구분해 준다. "실패 0건" 과 "데이터 0건" 은
+    # 다른 사건이고, 둘을 같은 초록불로 보여주면 감시가 눈을 감는다.
+    done = [result.get(n) for n, _ in steps if isinstance(result.get(n), dict)]
+    result["no_data"] = bool(done) and all(r.get("no_data") for r in done)
     S.finish_run(run_id, "ok" if result["ok"] else "partial",
                  rows_written=written, covered_from=day, covered_to=day,
                  error="; ".join(result["errors"])[:900] or None)

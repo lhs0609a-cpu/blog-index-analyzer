@@ -112,6 +112,11 @@ jobs:
               name = r.get("name") or r.get("customer_id")
               if r.get("errors"):
                   print(f"::warning::{name} 리포트 일부 실패 — {r['errors']}")
+              if r.get("no_data"):
+                  # 실패가 아니다. 네이버가 status=NONE 을 준다 = 그 날 지출이 없었다.
+                  # 이걸 경고로 띄우면 멀쩡한 휴면 계정이 매일 빨간불이 된다.
+                  print(f"::notice::{name} {r.get('date')} 광고 데이터 없음 "
+                        f"(노출·클릭·지출 0). 계정이 쉬고 있는 상태입니다.")
               km = r.get("keyword_master") or {}
               if km:
                   print(f"::notice::{name} 키워드 {km.get('keywords'):,}개 "

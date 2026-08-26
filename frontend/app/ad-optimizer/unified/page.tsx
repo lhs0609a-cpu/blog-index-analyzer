@@ -45,8 +45,6 @@ interface Scan {
   note?: string
 }
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-
 const TOOLS = [
   { href: '/ad-optimizer/keyword-pool', label: '키워드 풀 관리', desc: '발굴 · 등록 · 정리' },
   { href: '/ad-optimizer/volume-filter', label: '검색량 필터링', desc: '볼륨 검증 후 등록' },
@@ -81,11 +79,12 @@ export default function ControlTowerPage() {
       await Promise.all(
         list.map(async (a) => {
           try {
-            const r = await fetch(
-              `${API}/api/ad-snapshot/incidents?customer_id=${encodeURIComponent(a.customer_id)}`
+            // ⚠️ 생 fetch 로 부르면 토큰이 안 실린다. 이 엔드포인트는 원래 인증이
+            // 없어서 그래도 돌아갔지만, 이제 자기 광고주만 볼 수 있다.
+            const s = await adGet<Scan>(
+              `/api/ad-snapshot/incidents?customer_id=${encodeURIComponent(a.customer_id)}`,
+              { showToast: false }
             )
-            if (!r.ok) throw new Error(`HTTP ${r.status}`)
-            const s: Scan = await r.json()
             setScans((prev) => ({ ...prev, [a.customer_id]: s }))
           } catch {
             setScans((prev) => ({
