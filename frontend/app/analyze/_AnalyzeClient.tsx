@@ -16,6 +16,8 @@ import type { BlogIndexResult } from '@/lib/types/api'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/lib/stores/auth'
 import GlassIcon from '@/components/GlassIcon'
+import AnalysisEmptyState from '@/components/AnalysisEmptyState'
+import AnalysisProgress, { type ProgressStage } from '@/components/AnalysisProgress'
 import { useBlogContextStore } from '@/lib/stores/blogContext'
 import { useXPStore } from '@/lib/stores/xp'
 import { incrementUsage, checkUsageLimit } from '@/lib/api/subscription'
@@ -1357,6 +1359,65 @@ function StartTrackingButton({
 }
 
 
+// 분석 진행 단계.
+//
+// label 은 장식이 아니라 백엔드가 실제로 하는 일이어야 한다. 진행률이 추정치인
+// 이상, 최소한 "지금 뭘 하는 중인지"는 사실이어야 하기 때문이다.
+// 근거는 routers/blogs.py 의 analyze_blog(:2732) 실행 순서다:
+//   1단계 scrape_blog_stats_fast(:2421) — 데스크톱·모바일·방문자 위젯 3개 동시 요청.
+//           방문자 수와 이웃 수가 여기서 같이 온다(별도 단계가 아니다). 각 timeout 5s.
+//   2단계 RSS 파싱(:2841) — 글 목록, 평균 길이, 카테고리 엔트로피, 발행 주기. timeout 5s.
+//   2b   A-2 풀파싱(:2992) — 최신 FULLPARSE_SAMPLE_SIZE=15 개를 한 편씩 연다.
+//           세마포어 없이 gather, 글당 최대 3회 요청(6s) → 최악 ~17s. 여기가 병목이다.
+//   3~6  가중치 로드·C-RANK·D.I.A.·백분위 판정(:3119~:3667) — CPU 계산이라 짧다.
+//
+// estimateMs 합계 31초는 프로덕션 실측(2026-09-10)과 맞춘 값이다:
+// 신규 블로그 41.9s / 40.2s / 37.3s / 24.2s. 이미 분석된 블로그는 캐시가 받아
+// 0.3s 에 끝나는데(메모리 캐시 1시간 + 글 캐시 180일), 그 경우엔 결과가 먼저
+// 도착해 화면이 그냥 넘어간다. 반대로 넘기면 AnalysisProgress 가 마지막 단계에서
+// 99% 에 수렴하며 버틴다 — 끝나지도 않았는데 100% 를 찍지는 않는다.
+const ANALYSIS_STAGES: ProgressStage[] = [
+  {
+    id: 'profile',
+    label: '블로그 정보 확인',
+    details: [
+      '블로그가 있는지, 공개인지 확인하는 중이에요',
+      '방문자 수와 이웃 수를 가져오는 중이에요',
+    ],
+    estimateMs: 5000,
+  },
+  {
+    id: 'feed',
+    label: '글 목록 읽기',
+    details: [
+      '전체 글 목록을 받아오는 중이에요',
+      '얼마나 자주 쓰는지 발행 주기를 보는 중이에요',
+      '어떤 주제를 쓰는지 카테고리를 훑는 중이에요',
+    ],
+    estimateMs: 5000,
+  },
+  {
+    id: 'fullparse',
+    label: '최근 글 15편 정독',
+    details: [
+      '최근 글을 한 편씩 열어보는 중이에요',
+      '본문 길이와 사진 수를 세는 중이에요',
+      '처음 보는 블로그라 글을 다 읽어야 해요',
+      '네이버가 천천히 주고 있어요. 기다리는 중이에요',
+    ],
+    estimateMs: 17000,
+  },
+  {
+    id: 'score',
+    label: '지수 계산',
+    details: [
+      'C-Rank와 D.I.A. 신호를 점수로 바꾸는 중이에요',
+      '전체 블로그 중 몇 등인지 따져보는 중이에요',
+    ],
+    estimateMs: 4000,
+  },
+]
+
 export default function AnalyzePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -1367,7 +1428,6 @@ export default function AnalyzePage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [result, setResult] = useState<BlogIndexResult | null>(null)
   const [showConfetti, setShowConfetti] = useState(false)
-  const [progress, setProgress] = useState(0)
   const [lastError, setLastError] = useState<string | null>(null)
   const [autoAnalyzeTriggered, setAutoAnalyzeTriggered] = useState(false)
   // 계정 ID → 실제 블로그 주소로 정정됐을 때, 사용자가 다시 누르지 않아도 이어서 분석한다.
@@ -1414,7 +1474,6 @@ export default function AnalyzePage() {
 
     setIsAnalyzing(true)
     setResult(null)
-    setProgress(0)
     setLastError(null)
 
     try {
@@ -1518,7 +1577,6 @@ export default function AnalyzePage() {
       // 에러 발생 시 재시도 버튼용 상태 유지 (blogId는 유지)
     } finally {
       setIsAnalyzing(false)
-      setProgress(0)
     }
   }
 
@@ -1543,14 +1601,7 @@ export default function AnalyzePage() {
   }, [autoAnalyzeTriggered, blogId])
 
   return (
-    <div className="min-h-screen pt-24 pb-12 relative overflow-hidden">
-      {/* AURORA GLASS — 배경 3D 오브 (장식, 포인터 이벤트 없음) */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
-        <div className="orb w-72 h-72 -top-16 -left-16 opacity-70" />
-        <div className="orb orb-cyan w-52 h-52 top-1/3 -right-10 opacity-60" style={{ animationDelay: '-4s' }} />
-        <div className="orb w-40 h-40 bottom-24 left-1/4 opacity-40" style={{ animationDelay: '-8s' }} />
-      </div>
-
+    <div className="analysis-tool pt-10 pb-12 relative overflow-hidden">
       {showConfetti && <Confetti width={width} height={height} recycle={false} numberOfPieces={200} />}
 
       <div className="container mx-auto px-4">
@@ -1567,7 +1618,7 @@ export default function AnalyzePage() {
           className="max-w-4xl mx-auto"
         >
           {/* Header */}
-          <div className="text-center mb-12">
+          <div className="analysis-tool-heading">
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
@@ -1577,7 +1628,7 @@ export default function AnalyzePage() {
               <GlassIcon icon={Sparkles} size={76} />
             </motion.div>
 
-            <h1 className="text-5xl font-bold mb-4">
+            <h1 className="text-3xl font-semibold mb-3">
               <span className="gradient-text">블로그 분석</span>
             </h1>
             <p className="text-gray-600 text-lg mb-3">
@@ -1596,9 +1647,9 @@ export default function AnalyzePage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="glass-3d p-8 mb-8 "
+            className="analysis-tool-form glass-3d p-8 mb-8"
           >
-            <div className="flex gap-4">
+            <div className="flex flex-col sm:flex-row gap-4">
               <div className="relative flex-1">
                 <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 gi3d" />
                 <input
@@ -1606,6 +1657,7 @@ export default function AnalyzePage() {
                   value={blogId}
                   onChange={(e) => setBlogId(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleAnalyze()}
+                  aria-label="블로그 아이디"
                   placeholder="블로그 ID 입력 (예: example_blog)"
                   maxLength={50}
                   className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-[#0064FF] focus:outline-none text-lg transition-all"
@@ -1637,6 +1689,8 @@ export default function AnalyzePage() {
             </div>
           </motion.div>
 
+          {!isAnalyzing && !result && <AnalysisEmptyState />}
+
           {/* Loading State */}
           <AnimatePresence>
             {isAnalyzing && (
@@ -1650,36 +1704,16 @@ export default function AnalyzePage() {
                   <GlassIcon icon={Sparkles} size={100} />
                 </div>
 
-                <h3 className="text-2xl font-bold mb-2">AI가 분석중입니다</h3>
-                <p className="text-gray-600">블로그 지표를 측정하고 있어요...</p>
+                <h3 className="text-2xl font-bold mb-2">블로그를 분석하고 있어요</h3>
+                <p className="text-gray-600">
+                  네이버에서 직접 긁어오는 중이라 조금 걸립니다.
+                </p>
 
-                {progress > 0 && (
-                  <div className="mt-6 w-full max-w-md mx-auto">
-                    <div className="relative h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${progress}%` }}
-                        className="absolute inset-y-0 left-0 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-full"
-                      />
-                    </div>
-                    <p className="text-center text-sm text-gray-600 mt-2">{progress}% 완료</p>
-                  </div>
-                )}
-
-                <div className="mt-8 space-y-3">
-                  {['블로그 정보 수집', '콘텐츠 품질 분석', '지수 계산'].map((step, index) => (
-                    <motion.div
-                      key={step}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.5 }}
-                      className="flex items-center gap-3"
-                    >
-                      <div className="w-2 h-2 rounded-full bg-[#0064FF]" />
-                      <span className="text-gray-700">{step}</span>
-                    </motion.div>
-                  ))}
-                </div>
+                <AnalysisProgress
+                  stages={ANALYSIS_STAGES}
+                  running={isAnalyzing}
+                  longRunHint="처음 분석하는 블로그는 글을 한 편씩 다 읽어야 해서 더 걸려요. 창을 닫지 말고 기다려 주세요."
+                />
               </motion.div>
             )}
           </AnimatePresence>
