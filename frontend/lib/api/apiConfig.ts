@@ -57,8 +57,13 @@ export async function safeFetch(
       throw new Error(`Server error: ${response.status}`);
     }
 
-    // 성공하면 서버 다운 상태 해제
-    if (response.ok && globalServerDown) {
+    // 성공하면 서버 다운 상태 해제.
+    // ⚠️ 예전엔 `response.ok && globalServerDown` 이었는데 globalServerDown 은
+    // notifyServerDown 을 no-op 으로 바꿀 때 함께 사라져 어디에도 정의가 없었다.
+    // ES 모듈은 strict mode 라 response.ok 가 true 인 순간 ReferenceError 가 나고,
+    // 아래 catch 가 그걸 되던져서 **성공한 요청이 전부 실패로 둔갑**한다.
+    // 지금은 safeFetch 호출부가 없어 드러나지 않았을 뿐이다.
+    if (response.ok) {
       notifyServerDown(false);
     }
 
@@ -139,12 +144,33 @@ export async function checkHealth(baseUrl: string, timeoutMs: number = 10000): P
   }
 }
 
+// 프로덕션 백엔드 재시도 백오프(ms). 첫 시도는 즉시.
+// fly 머신 재시작은 실측 13초(2026-09-10 10:07:55 stop → 10:08:09 start)이고
+// 거기에 lifespan 스케줄러 부팅이 더 붙는다. 1회 실패로 null 을 리턴하면 하필
+// 그 구간에 페이지를 연 사용자는 다음 주기까지 '연결 끊김'에 갇힌다.
+// ⚠️ 합이 13초를 넘어야 의미가 있다 — [0,3000,6000] 은 9초라 실제 재시작을
+// 못 넘겼다(재현 테스트에서 확인). 누적 20초로 잡는다.
+const PRODUCTION_RETRY_BACKOFF_MS = [0, 2000, 4000, 6000, 8000];
+
+// 첫 시도만 넉넉히 기다린다. 살아 있는 /health 는 실측 200ms 라, 재시도까지
+// 10초씩 물고 있으면 정작 재시도 횟수를 못 쓴다.
+const PRODUCTION_FIRST_TIMEOUT_MS = 10000;
+const PRODUCTION_RETRY_TIMEOUT_MS = 5000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function autoDiscoverBackend(): Promise<string | null> {
   // 프로덕션 환경에서는 Fly.io 서버 사용
   if (isProduction()) {
-    if (await checkHealth(PRODUCTION_API_URL, 10000)) {
-      setApiUrl(PRODUCTION_API_URL);
-      return PRODUCTION_API_URL;
+    for (const delay of PRODUCTION_RETRY_BACKOFF_MS) {
+      if (delay > 0) await sleep(delay);
+      const timeout = delay === 0 ? PRODUCTION_FIRST_TIMEOUT_MS : PRODUCTION_RETRY_TIMEOUT_MS;
+      if (await checkHealth(PRODUCTION_API_URL, timeout)) {
+        setApiUrl(PRODUCTION_API_URL);
+        return PRODUCTION_API_URL;
+      }
     }
     return null;
   }

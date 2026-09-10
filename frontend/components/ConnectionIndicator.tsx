@@ -50,10 +50,27 @@ export function ConnectionIndicator() {
         return 'bg-green-500'
       case 'partial':
         return 'bg-yellow-500'
+      case 'checking':
+        return 'bg-yellow-500 animate-pulse'
       case 'disconnected':
         return 'bg-red-500'
       default:
         return 'bg-gray-500'
+    }
+  }
+
+  // ⚠️ 'checking' 을 여기서 빠뜨리면 배지만 '연결 끊김' 이 되고 아래 서비스 행은
+  // '확인 중...' 이 되어 같은 화면이 서로 다른 말을 한다.
+  const getOverallStatusText = () => {
+    switch (overallStatus) {
+      case 'connected':
+        return '연결됨'
+      case 'partial':
+        return '일부 오류'
+      case 'checking':
+        return '확인 중...'
+      default:
+        return '연결 끊김'
     }
   }
 
@@ -67,11 +84,7 @@ export function ConnectionIndicator() {
         >
           <div className="flex items-center gap-1.5">
             <div className={`w-2 h-2 rounded-full ${getOverallStatusColor()}`}></div>
-            <span className="text-xs text-gray-500">
-              {overallStatus === 'connected' ? '연결됨' :
-               overallStatus === 'partial' ? '일부 오류' :
-               '연결 끊김'}
-            </span>
+            <span className="text-xs text-gray-500">{getOverallStatusText()}</span>
           </div>
           <svg
             className={`w-3 h-3 text-gray-400 transition-transform ${
