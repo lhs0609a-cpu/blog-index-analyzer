@@ -1219,14 +1219,14 @@ function KeywordSearchContent() {
       <ConnectionIndicator />
 
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-[72px] z-10">
+      <div className="keyword-tool-heading">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="w-6"></div>
             <div className="text-center">
               <h1 className="text-lg font-semibold">키워드 검색</h1>
               <p className="text-xs text-gray-500 mt-0.5">
-                플라톤 마케팅에서 개발
+                검색 수요를 읽고, 다음 콘텐츠의 가능성을 발견하세요.
               </p>
             </div>
             <div className="w-6"></div>
@@ -1332,7 +1332,7 @@ function KeywordSearchContent() {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <form onSubmit={handleMultiKeywordSearch}>
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="keyword-analysis-input" className="block text-sm font-medium text-gray-700 mb-2">
                 검색할 키워드 (최대 {maxKeywords}개)
                 {maxKeywords < 100 && (
                   <span className="text-xs text-blue-600 ml-2">

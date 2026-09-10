@@ -1,8 +1,7 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
 import BackendStatus from '../components/BackendStatus'
-import Footer from '../components/Footer'
+import WorkspaceFrame from '../components/WorkspaceFrame'
 import GlobalNav from '../components/GlobalNav'
 import ClientProviders from '../components/ClientProviders'
 import {
@@ -14,8 +13,8 @@ import {
   websiteJsonLd,
 } from '@/lib/seo'
 import './globals.css'
+import './workspace.css'
 
-const inter = Inter({ subsets: ['latin'] })
 
 const BASE_URL = SITE_URL
 
@@ -101,8 +100,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#000000' },
+    { media: '(prefers-color-scheme: light)', color: '#F6F8FC' },
+    { media: '(prefers-color-scheme: dark)', color: '#0064FF' },
   ],
 }
 
@@ -125,14 +124,11 @@ export default function RootLayout({
         {/* JSON-LD 구조화 데이터 */}
         <script {...jsonLdScript(jsonLd)} />
       </head>
-      <body className={inter.className}>
+      <body>
         <ClientProviders>
           <BackendStatus />
           <GlobalNav />
-          <main className="min-h-screen pb-20 md:pb-0">
-            {children}
-          </main>
-          <Footer />
+          <WorkspaceFrame>{children}</WorkspaceFrame>
         </ClientProviders>
         <Toaster
           position="top-right"
@@ -147,7 +143,7 @@ export default function RootLayout({
             },
             success: {
               iconTheme: {
-                primary: '#a855f7',
+                primary: '#0064FF',
                 secondary: '#fff',
               },
             },

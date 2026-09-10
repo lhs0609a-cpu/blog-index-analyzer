@@ -1,4 +1,5 @@
 'use client'
+import { useId } from 'react'
 
 /**
  * 블랭크 브랜드 마크 — AURORA GLASS
@@ -8,7 +9,7 @@
  * gradient id 는 인스턴스마다 고유해야 합니다(같은 페이지에 여러 개 렌더될 때 충돌 방지).
  */
 
-let markSeq = 0
+
 
 interface BlankMarkProps {
   className?: string
@@ -16,7 +17,7 @@ interface BlankMarkProps {
 
 export function BlankMark({ className = 'w-9 h-9' }: BlankMarkProps) {
   // 인스턴스별 고유 접두사
-  const uid = `bm${(markSeq = (markSeq + 1) % 100000)}`
+  const uid = useId().replace(/:/g, '')
 
   return (
     <svg viewBox="0 0 128 128" className={className} aria-hidden="true">

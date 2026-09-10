@@ -66,12 +66,7 @@ export default function Home() {
   const [searchMode, setSearchMode] = useState<'blog' | 'keyword'>('blog')  // 검색 모드 전환
 
   // P2: 프로모 팝업 3초 지연
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowAdPopup(true)
-    }, 3000)
-    return () => clearTimeout(timer)
-  }, [])
+
   // 커서 추적 글로우를 걷어내면서 mousemove 리스너도 함께 없앴다.
   // 마우스가 움직일 때마다 setState → 리렌더가 걸렸고, 얻는 것은 배경 얼룩뿐이었다.
 
@@ -102,7 +97,7 @@ export default function Home() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#fafafa] text-gray-900">
+    <div className="blue-home relative min-h-screen overflow-hidden bg-[#fafafa] text-gray-900">
       {/* Social proof disabled - P0 blocker: fake data */}
 
       {/*
@@ -117,7 +112,7 @@ export default function Home() {
       <TrialExpiryBanner compact />
 
       {/* Hero Section */}
-      <section className="relative pt-28 pb-16 md:pt-36 md:pb-24">
+      <section className="home-hero relative pt-28 pb-16 md:pt-36 md:pb-24">
         <div className="container mx-auto px-4">
           <div className="max-w-6xl mx-auto">
             {/* Main Content */}
@@ -173,11 +168,12 @@ export default function Home() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.3 }}
-                className="max-w-2xl mx-auto mb-10 scroll-mt-28"
+                className="hero-search-panel max-w-2xl mx-auto mb-10 scroll-mt-28"
               >
                 {/* 탭 전환 버튼 */}
                 <div className="flex items-center justify-center gap-2 mb-4">
                   <button
+                    aria-pressed={searchMode === 'blog'}
                     onClick={() => setSearchMode('blog')}
                     className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
                       searchMode === 'blog'
@@ -189,6 +185,7 @@ export default function Home() {
                     블로그 분석
                   </button>
                   <button
+                    aria-pressed={searchMode === 'keyword'}
                     onClick={() => setSearchMode('keyword')}
                     className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
                       searchMode === 'keyword'
@@ -216,6 +213,7 @@ export default function Home() {
                         </div>
                         <input
                           type="text"
+                          aria-label="블로그 아이디 또는 주소"
                           value={blogId}
                           onChange={(e) => setBlogId(e.target.value)}
                           placeholder="블로그 ID 입력 (예: myblog123)"
@@ -263,6 +261,7 @@ export default function Home() {
                         </div>
                         <input
                           type="text"
+                          aria-label="검색할 키워드"
                           value={keyword}
                           onChange={(e) => setKeyword(e.target.value)}
                           placeholder="키워드 입력 (예: 서울맛집, 다이어트)"

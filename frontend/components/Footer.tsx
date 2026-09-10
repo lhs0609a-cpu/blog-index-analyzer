@@ -6,7 +6,7 @@ import { BlankMark } from './BlankLogo'
 
 export default function Footer() {
   return (
-    <footer className="bg-gray-900 text-gray-300">
+    <footer className="brand-footer bg-gray-900 text-gray-300">
       {/* P3: Pro CTA 배너 */}
       <div className="bg-gradient-to-r from-[#0064FF] to-[#3182F6] py-4">
         <div className="max-w-7xl mx-auto px-4">

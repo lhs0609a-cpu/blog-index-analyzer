@@ -8,7 +8,8 @@ import { useRouter } from 'next/navigation'
 import { login } from '@/lib/api/auth'
 import { useAuthStore } from '@/lib/stores/auth'
 import toast from 'react-hot-toast'
-import DashboardMockup from '@/components/mockups/DashboardMockup'
+import BlankLogo from '@/components/BlankLogo'
+
 
 export default function LoginPage() {
   const router = useRouter()
@@ -17,7 +18,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
 
   // 이미 로그인된 사용자는 대시보드로 리다이렉트
   useEffect(() => {
@@ -27,14 +27,7 @@ export default function LoginPage() {
     }
   }, [isAuthenticated, router])
 
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePosition({ x: e.clientX, y: e.clientY })
-    }
 
-    window.addEventListener('mousemove', handleMouseMove)
-    return () => window.removeEventListener('mousemove', handleMouseMove)
-  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -61,52 +54,11 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fafafa] text-gray-900 flex items-center justify-center py-12 px-4 overflow-hidden relative">
-      {/* Cursor glow effect */}
-      <div
-        className="fixed pointer-events-none z-0 w-[600px] h-[600px] rounded-full opacity-30 blur-[120px] transition-all duration-200"
-        style={{
-          background: 'radial-gradient(circle, rgba(0, 100, 255, 0.15) 0%, rgba(49, 130, 246, 0.08) 50%, transparent 70%)',
-          left: mousePosition.x - 300,
-          top: mousePosition.y - 300,
-        }}
-      />
-
-      {/* Animated background grid */}
-      <div className="fixed inset-0 bg-[linear-gradient(rgba(0,100,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(0,100,255,0.02)_1px,transparent_1px)] bg-[size:80px_80px]" />
-
-      {/* Floating orbs */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <motion.div
-          className="absolute top-20 left-[10%] w-[350px] h-[350px] rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(0, 100, 255, 0.08) 0%, transparent 70%)' }}
-          animate={{
-            y: [0, -30, 0],
-            scale: [1, 1.1, 1],
-          }}
-          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.div
-          className="absolute bottom-20 right-[10%] w-[400px] h-[400px] rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(49, 130, 246, 0.08) 0%, transparent 70%)' }}
-          animate={{
-            y: [0, 30, 0],
-            scale: [1, 1.15, 1],
-          }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-        />
-      </div>
-
-      {/* Back to Home */}
-      <Link href="/" className="absolute top-6 left-6 z-50">
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/70 border border-gray-200/50 backdrop-blur-xl hover:bg-white/90 transition-all text-sm font-medium shadow-lg shadow-gray-200/50"
-        >
+    <div className="auth-page min-h-screen text-gray-900 flex items-center justify-center py-24 px-4 relative">
+      <Link href="/" className="absolute top-6 left-6 z-50 text-link">
           <ArrowLeft className="w-4 h-4 gi3d" />
           홈으로
-        </motion.button>
+
       </Link>
 
       <div className="max-w-md w-full relative z-10">
@@ -116,14 +68,7 @@ export default function LoginPage() {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-10"
         >
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 }}
-            className="mb-6"
-          >
-            <DashboardMockup className="mx-auto" width={460} height={260} />
-          </motion.div>
+          <div className="flex justify-center mb-7"><BlankLogo markClassName="w-11 h-11" /></div>
           {/* 로그인은 이미 결정한 사람이 오는 화면이다. 설득하지 말고 빨리 통과시킨다. */}
           <h1 className="ds-headline mb-3">다시 오셨네요</h1>
           <p className="ds-lede">그동안 쌓인 진단 기록이 기다리고 있습니다.</p>
@@ -137,18 +82,18 @@ export default function LoginPage() {
           className="relative"
         >
           {/* Card glow effect */}
-          <div className="absolute -inset-0.5 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-3xl blur opacity-20" />
 
-          <div className="relative backdrop-blur-2xl bg-white/80 border border-gray-200/50 rounded-3xl p-8 shadow-xl shadow-gray-200/50">
+
+          <div className="auth-card">
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Email */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label htmlFor="login-email" className="block text-sm font-semibold text-gray-700 mb-2">
                   이메일
                 </label>
                 <div className="relative group">
                   <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-[#0064FF] transition-colors gi3d" />
-                  <input
+                  <input id="login-email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -163,12 +108,12 @@ export default function LoginPage() {
 
               {/* Password */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label htmlFor="login-password" className="block text-sm font-semibold text-gray-700 mb-2">
                   비밀번호
                 </label>
                 <div className="relative group">
                   <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-[#0064FF] transition-colors gi3d" />
-                  <input
+                  <input id="login-password"
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}

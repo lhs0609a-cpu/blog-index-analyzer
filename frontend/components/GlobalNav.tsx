@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -68,6 +68,34 @@ export default function GlobalNav() {
   }, [])
 
   // 특정 페이지에서는 네비게이션 숨김 (로그인, 회원가입, 결제 페이지 등)
+  const mobilePanel = useRef<HTMLDivElement>(null)
+  useEffect(() => setMobileMenuOpen(false), [pathname])
+  useEffect(() => {
+    if (!mobileMenuOpen) return
+    const previousFocus = document.activeElement as HTMLElement | null
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    mobilePanel.current?.querySelector<HTMLElement>('a, button')?.focus()
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileMenuOpen(false)
+      if (event.key === 'Tab') {
+        const items = Array.from(mobilePanel.current?.querySelectorAll<HTMLElement>('a, button') || []).filter(el => el.getClientRects().length)
+        const first = items[0], last = items[items.length - 1]
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+      }
+    }
+    const desktop = window.matchMedia('(min-width: 1024px)')
+    const closeOnDesktop = () => { if (desktop.matches) setMobileMenuOpen(false) }
+    desktop.addEventListener('change', closeOnDesktop)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', onKey)
+      desktop.removeEventListener('change', closeOnDesktop)
+      previousFocus?.focus()
+    }
+  }, [mobileMenuOpen])
   const hideNavPages = ['/login', '/register', '/payment']
   if (hideNavPages.some(page => pathname?.startsWith(page))) {
     return null
@@ -87,7 +115,7 @@ export default function GlobalNav() {
   return (
     <>
       {/* Desktop Navigation */}
-      <header className="fixed top-0 left-0 right-0 z-50">
+      <header className="brand-navigation fixed top-0 left-0 right-0 z-50">
         <div className="mx-4 mt-4">
           <div className="backdrop-blur-2xl bg-white/80 border border-gray-200/50 rounded-2xl px-4 py-3 shadow-lg shadow-gray-200/50">
             <div className="flex items-center justify-between gap-4">
@@ -182,6 +210,8 @@ export default function GlobalNav() {
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
+                    aria-label="메뉴 열기"
+                    aria-expanded={mobileMenuOpen}
                     onClick={() => setMobileMenuOpen(true)}
                     className="lg:hidden p-2 rounded-xl hover:bg-gray-100 transition-colors"
                   >
@@ -223,6 +253,8 @@ export default function GlobalNav() {
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
+                    aria-label="메뉴 열기"
+                    aria-expanded={mobileMenuOpen}
                     onClick={() => setMobileMenuOpen(true)}
                     className="lg:hidden p-2 rounded-xl hover:bg-gray-100 transition-colors"
                   >
@@ -254,6 +286,10 @@ export default function GlobalNav() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              ref={mobilePanel}
+              role="dialog"
+              aria-modal="true"
+              aria-label="주 메뉴"
               className="fixed top-0 right-0 bottom-0 w-80 bg-white shadow-2xl z-50 lg:hidden overflow-y-auto"
             >
               {/* Header */}
@@ -263,6 +299,7 @@ export default function GlobalNav() {
                   <span className="text-lg font-black tracking-tight gradient-text">블랭크</span>
                 </Link>
                 <button
+                  aria-label="메뉴 닫기"
                   onClick={() => setMobileMenuOpen(false)}
                   className="p-2 rounded-xl hover:bg-gray-100 transition-colors"
                 >
