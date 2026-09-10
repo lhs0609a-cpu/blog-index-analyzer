@@ -18,7 +18,7 @@ import os
 import sqlite3
 import sys
 from contextlib import contextmanager
-from typing import Iterable, List, Optional, Dict, Set
+from typing import Iterable, List, Optional, Dict, Set, Tuple
 import logging
 
 logger = logging.getLogger(__name__)
@@ -791,6 +791,95 @@ class KeywordPoolDB:
                 "after_pending": after,
                 "by_source": by_source,
             }
+
+    def status_of(self, account_customer_id: int, keywords: List[str]) -> Dict[str, str]:
+        """키워드 → 현재 status. 큐레이션 목록이 풀에서 어떤 상태로 죽어있는지 보려고."""
+        out: Dict[str, str] = {}
+        if not keywords:
+            return out
+        with self._conn() as conn:
+            cur = conn.cursor()
+            for i in range(0, len(keywords), 500):
+                ck = keywords[i:i + 500]
+                ph = ",".join("?" * len(ck))
+                cur.execute(
+                    f"""SELECT keyword, status FROM naverad_keyword_pool
+                        WHERE account_customer_id = ? AND keyword IN ({ph})""",
+                    [account_customer_id, *ck],
+                )
+                for r in cur.fetchall():
+                    out[r["keyword"]] = r["status"]
+        return out
+
+    def requeue_keywords(
+        self,
+        account_customer_id: int,
+        keywords: List[str],
+        from_statuses: Tuple[str, ...] = ("domain_skipped", "failed"),
+        min_volume: int = 1,
+    ) -> int:
+        """지정 키워드를 pending 으로 되돌린다 — 게이트가 바뀌어 이제는 통과할 것들.
+
+        왜 필요한가: add_candidates 는 registered/failed 행을 보존한다(이미 처리됨).
+        그런데 '처리됨'의 실체가 **우리 쪽 하드게이트에 막힌 domain_skipped** 인 경우가 있다
+        (두비전: '자격증' 이 상업 neg-token 이라 지도사 자격 키워드 전량이 여기 쌓였다).
+        게이트를 고친 뒤에는 그 행들을 다시 pending 으로 올려야 등록 워커가 집어간다.
+        registered 는 절대 건드리지 않는다 — 이미 네이버에 살아있는 광고다.
+        """
+        if not keywords:
+            return 0
+        safe = tuple(st for st in from_statuses if st != "registered")
+        if not safe:
+            return 0
+        total = 0
+        with self._conn() as conn:
+            cur = conn.cursor()
+            for i in range(0, len(keywords), 400):
+                ck = keywords[i:i + 400]
+                ph = ",".join("?" * len(ck))
+                sp = ",".join("?" * len(safe))
+                cur.execute(
+                    f"""UPDATE naverad_keyword_pool
+                        SET status = 'pending'
+                        WHERE account_customer_id = ?
+                          AND keyword IN ({ph})
+                          AND status IN ({sp})
+                          AND COALESCE(monthly_total, 0) >= ?""",
+                    [account_customer_id, *ck, *safe, min_volume],
+                )
+                total += cur.rowcount
+        return total
+
+    def park_keywords(
+        self,
+        account_customer_id: int,
+        keywords: List[str],
+    ) -> int:
+        """pending 인 키워드를 domain_skipped 로 되돌린다 — requeue 의 역방향.
+
+        왜: 발굴 드라이버가 밀어 넣은 뒤 사람이 검수해서 '아니다' 로 판단하는 흐름이 없으면
+        잘못 넣은 것이 그대로 네이버에 등록되고, 그 다음엔 삭제(=광고 이력 소멸)밖에 없다.
+        등록 전 pending 단계에서 빼는 게 훨씬 싸다.
+        registered 는 건드리지 않는다 — 이미 살아있는 광고다.
+        """
+        if not keywords:
+            return 0
+        total = 0
+        with self._conn() as conn:
+            cur = conn.cursor()
+            for i in range(0, len(keywords), 400):
+                ck = keywords[i:i + 400]
+                ph = ",".join("?" * len(ck))
+                cur.execute(
+                    f"""UPDATE naverad_keyword_pool
+                        SET status = 'domain_skipped'
+                        WHERE account_customer_id = ?
+                          AND keyword IN ({ph})
+                          AND status = 'pending'""",
+                    [account_customer_id, *ck],
+                )
+                total += cur.rowcount
+        return total
 
     def cleanup_offdomain(
         self,

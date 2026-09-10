@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 # 네이버 광고 플랫폼 제한
 # (출처: connectree.net 운영 가이드, 인터애드 가이드)
 MAX_KEYWORDS_PER_AD_GROUP = 1000       # 광고그룹당 키워드 하드 리밋
+CAMPAIGN_NAME_MAX = 30  # 네이버 제한 (code 1002: '캠페인명을 1자~30자로 설정하세요')
 DEFAULT_KEYWORDS_PER_AD_GROUP = 1000   # 10만 한도 효율 위해 1000 default
 MAX_AD_GROUPS_PER_CAMPAIGN = 1000      # 캠페인당 광고그룹 한도
 MAX_KEYWORDS_PER_ACCOUNT = 100_000     # 계정당 키워드 총합 하드 리밋
@@ -401,6 +402,10 @@ class BulkUploadOrchestrator:
 
             for c_idx in range(num_campaigns if not config.reuse_campaign_id else 0):
                 base_name = f"{config.campaign_prefix}_{c_idx + 1:03d}"
+                # 네이버 캠페인명 상한 30자. 두비전 계층명('[두비전] 창업·수익 - 지도사·자격입문_001'
+                # = 26자)에 충돌 suffix 9자가 붙으면 35자가 되어 code 1002 로 생성이 통째로 실패한다
+                # (2026-09-03 실측: register run 이 fail=8 로 그 테마를 영영 못 만듦).
+                base_name = base_name[:CAMPAIGN_NAME_MAX]
                 campaign_name = base_name
                 campaign_id: Optional[str] = None
                 last_err: Optional[Exception] = None
@@ -423,7 +428,8 @@ class BulkUploadOrchestrator:
                         last_err = e
                         # 이름 중복 (code 3506) 시 suffix 추가 후 재시도
                         if "already in use" in str(e) or "3506" in str(e):
-                            campaign_name = f"{base_name}_{run_suffix}_{attempt}"
+                            _sfx = f"_{run_suffix}_{attempt}"
+                            campaign_name = base_name[:CAMPAIGN_NAME_MAX - len(_sfx)] + _sfx
                             logger.warning(
                                 f"[Job {job_id}] 캠페인 이름 중복 → '{campaign_name}'으로 재시도"
                             )

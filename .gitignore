@@ -105,6 +105,7 @@ coverage/
 next-env.d.ts
 
 # Misc
+data/sojam-private/
 .cache/
 temp/
 tmp/

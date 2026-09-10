@@ -4567,7 +4567,10 @@ def _classify_skin_category(keyword: str):
 _DOVISION_CAT_CUSTOMERS = {4403292}  # 두비전 — 테마 등록 + 교육토큰 허용 적용 대상
 # 교육 도메인 키워드 허용 — register 하드게이트 _NEG_TOKENS 에서 이 토큰들만 (스코프 계정 한정)
 # 컷 해제. 교육업이라 학원/과외/강의/인강 이 핵심 도메인인데 기본 게이트는 이를 상업 컷으로 막음.
-_DOVISION_ALLOW_TOKENS = {"학원", "과외", "강의", "인강"}
+# "자격증": 두비전이 파는 것이 '가르치는 일' 이라 지도사 자격 검색(독서지도사자격증 2,420/월)이
+#   가맹·교사 후보 풀 그 자체다. 기본 게이트는 이걸 상업 컷으로 통째로 막았다(실측 90/447 차단).
+# "대여": 부분문자열 오탐 전용 해제 — "50대여성일자리" 안의 '대여'. 렌탈 의도가 아니다.
+_DOVISION_ALLOW_TOKENS = {"학원", "과외", "강의", "인강", "자격증", "대여"}
 # 키네스(441986) — 무관도메인 강제등록 (2026-07-10 사용자 결정: 84k 클린천장 넘어 확장).
 # register 하드게이트에서 학부모/아동 도메인(육아·교육·영양제·아동가구)을 막던 상업 neg-token 해제
 # + relevance 점수컷(≥30) 우회 → seed_explode 앵커(required_tokens 210)만 통과하면 등록.
@@ -4582,16 +4585,147 @@ _KINESS_ALLOW_TOKENS = {"학원", "과외", "강의", "인강", "영양제", "�
 # 캠페인명 = '[두비전] 대분류 - 중분류', 광고그룹명 = 소분류. 창업(B2B)을 먼저 둬
 # '유아교육창업' 류가 교육 주제 대신 창업으로 모이게 함. 교육 토큰은 창업 미매칭분만 도달.
 _DOVISION_TAXONOMY = [
+    # ── 대분류 0. 자기 브랜드 — 브랜드명을 치는 사람이 가장 간절하다. 무조건 최우선. ──
+    ("own_brand", "브랜드", "두비전", [
+        ("두비전", ("두비전", "dovision")),
+    ]),
     # ── 대분류 B. 창업·수익 (B2B, 먼저 매칭) ──
     ("biz_edu", "창업·수익", "교육창업", [
-        ("공부방·교습소창업", ("공부방창업", "공부방차리기", "공부방프랜차이즈", "공부방운영",
-                          "공부방부업", "교습소창업", "교습소차리기", "1인교습소")),
-        ("학원창업", ("학원창업", "학원차리기", "보습학원창업", "학원인수", "소형학원창업", "공부방인수")),
+        # 예체능·영어 학원 창업 — 페르소나(교육업 예비창업자)는 맞지만 두비전 과목이 아니다.
+        # 맨 앞에 둬서 광고그룹 하나만 끄면 통째로 빠지게 한다.
+        ("타업종교육창업", ("미술학원창업", "미술교습소창업", "미술학원인수", "미술학원양도",
+                       "미술홈스쿨창업", "아동미술학원창업", "미술학원창업비용",
+                       "피아노학원창업", "피아노학원인수", "피아노교습소창업",
+                       "음악학원인수", "실용음악학원창업", "영어학원창업", "영어교습소창업",
+                       "영어공부방창업", "영어공부방프랜차이즈", "영어학원창업비용",
+                       "영어교습소창업비용", "윤선생영어교실창업")),
+        ("공부방창업", ("공부방창업", "공부방차리기", "공부방프랜차이즈", "공부방부업",
+                    "공부방인수", "공부방개업", "공부방오픈", "공부방수익")),
+        ("교습소창업", ("교습소창업", "교습소차리기", "1인교습소", "교습소인수", "교습소개원",
+                    "교습소프랜차이즈")),
+        ("학원창업·인수", ("학원창업", "학원차리기", "보습학원창업", "학원인수", "소형학원창업",
+                      "학원개원", "학원양도", "학원양도양수", "학원창업컨설팅", "논술학원창업")),
         ("교육프랜차이즈", ("교육프랜차이즈", "교육창업", "교육사업", "교육가맹", "아동교육창업",
                        "유아교육창업", "초등교육창업", "사고력수학창업", "뇌교육창업", "코딩학원창업",
-                       "독서논술창업", "영어공부방창업", "수학공부방창업", "방문학습지창업", "홈스쿨창업")),
-        ("교사·원장모집", ("교사모집", "원장모집", "선생님모집", "강사모집", "방문교사", "학습지교사", "지사장")),
+                       "독서논술창업", "수학공부방창업", "방문학습지창업", "홈스쿨창업",
+                       "몬테소리창업", "한우리독서논술창업", "교육창업아이템")),
     ]),
+    # ── 학원을 '사거나 자리를 구하는' 단계 — 교육창업과 급이 같은 실행 직전 행동.
+    #    학원매매(5,220)를 필두로 지역 롱테일이 두껍다(부산학원매매·대치동학원임대).
+    ("biz_estate", "창업·수익", "학원매물·임대", [
+        ("학원매매·매물", ("학원매매", "학원매물", "학원매각", "학원거래", "학원직거래",
+                     "교습소매매", "교습소매물", "공부방매물", "학원인수매매")),
+        ("학원임대·자리", ("학원임대", "학원자리", "학원상가", "학원부동산", "학원권리금",
+                     "교습소임대", "학원용상가", "학원상가임대")),
+    ]),
+    # ── 이미 공부방·학원을 운영 중인 원장 = 두비전 브랜드 전환 타겟 ──
+    ("biz_operate", "창업·수익", "운영·원생모집", [
+        ("원생모집", ("원생모집", "학생모집", "수강생모집")),
+        ("학원홍보·마케팅", ("학원홍보", "학원마케팅", "학원전단지", "공부방홍보", "공부방전단지",
+                       "교습소홍보", "학원홍보방법", "학원홍보업체", "학원홍보대행", "학원홍보문구")),
+        ("운영실무", ("학원운영", "공부방운영", "교습소운영", "학원운영프로그램", "학원관리프로그램",
+                   "공부방커리큘럼", "학원커리큘럼")),
+        # 현직 원장 — '학원원장카페'가 '카페' 부분문자열로 업종창업/카페·디저트 에 가고 있었다.
+        ("학원경영·원장", ("학원경영", "학원원장", "학원장", "학원컨설팅", "학원세무", "학원회계",
+                     "학원행정", "학원노무", "교습소원장", "공부방원장", "원장카페", "원장모임",
+                     "학원운영노하우")),
+        # 방과후·늘봄 위탁 — 지자체/학교에 프로그램을 넣는 B2B 채널. 축 자체를 안 세웠었다.
+        ("위탁·수탁", ("위탁교육", "방과후위탁", "늘봄위탁", "돌봄위탁", "방과후업체",
+                   "방과후교육업체", "늘봄업체", "교육위탁", "수탁교육")),
+    ]),
+    # ── '가르치는 일' 자격 시장 — 두비전 교사·가맹 후보 풀 ──
+    ("biz_license", "창업·수익", "지도사·자격입문", [
+        ("독서·논술지도사", ("독서지도사", "독서논술지도사", "논술지도사", "글쓰기지도사",
+                       "독서심리지도사", "독서토론지도사", "독서교육지도사", "독서미술지도사",
+                       "아동독서지도사", "문해교육지도사", "그림책교육지도사", "역사논술지도사")),
+        ("수학·사고력지도사", ("수학지도사", "초등수학지도사", "중등수학지도사", "창의수학지도사",
+                        "연산지도사", "주산지도사", "방과후수학지도사", "스토리텔링수학지도사",
+                        "코딩지도사", "ai교육지도사", "sw코딩지도사", "인지학습지도사",
+                        "학습코칭지도사", "학습코칭자격증", "학습지도사", "자기주도학습지도사")),
+        ("유아·교구지도사", ("가베지도사", "몬테소리자격증", "교구지도사", "놀이지도사", "아동놀이지도사",
+                       "유아교육자격증", "동화구연", "구연동화", "한글지도사", "부모교육지도사",
+                       "아동발달지도사", "아동발달전문지도사", "특수아동지도사", "특수교육지도사",
+                       "인성교육지도사", "유아숲지도사", "숲지도사", "생태놀이지도사")),
+        ("방과후·아동지도사", ("방과후지도사", "방과후학교지도사", "방과후아동지도사", "방과후강사자격증",
+                        "방과후돌봄지도사", "방과후돌봄교실지도사", "방과후영어지도사",
+                        "방과후미술지도사", "방과후아동미술지도사", "초등돌봄지도사", "돌봄지도사",
+                        "아동돌봄지도사", "아동지도사", "아동교육지도사", "아동미술지도사",
+                        "아동미술심리", "미술교육지도사", "아동요리지도사", "아동베이킹지도사",
+                        "한자지도사", "아동한자지도사", "한자교육지도사", "어린이영어지도사",
+                        "초등영어지도사", "환경교육지도사", "숲체험교육지도사")),
+    ]),
+    # ── 경쟁사 교사 트래픽 포함. 페르소나가 가장 정확하다. ──
+    ("biz_teacher", "창업·수익", "교사·강사모집", [
+        ("학습지·방문교사", ("학습지교사", "학습지선생", "방문교사", "방문선생", "구몬선생", "구몬교사",
+                       "눈높이선생", "재능교육선생", "씽크빅선생", "대교선생", "한솔선생",
+                       "빨간펜선생", "홈런선생", "밀크티선생", "학습지방문교사")),
+        ("공부방·교습소교사", ("공부방선생", "공부방교사", "교습소교사", "교습소선생")),
+        ("방과후·돌봄교사", ("방과후강사", "방과후교사", "돌봄교사", "초등돌봄", "늘봄")),
+        ("출강·파견", ("출강", "강사파견", "방문교육", "방문수업", "기업출강", "출장수업")),
+        ("강사모집일반", ("교사모집", "원장모집", "선생님모집", "강사모집", "지사장", "교사부업",
+                     "유치원교사모집", "교사투잡")),
+    ]),
+    # ── 프랜차이즈를 '고르는' 단계 ──
+    ("biz_recruit", "창업·수익", "가맹모집·상담", [
+        ("교육가맹문의", ("학원프랜차이즈", "프랜차이즈학원", "교육프랜차이즈", "수학프랜차이즈",
+                     "영어프랜차이즈", "국어프랜차이즈", "독서프랜차이즈", "논술프랜차이즈",
+                     "미술프랜차이즈", "전집프랜차이즈", "초등프랜차이즈", "프랜차이즈교육",
+                     "아동미술프랜차이즈", "초등영어프랜차이즈", "초등수학프랜차이즈",
+                     "영어학원프랜차이즈", "수학학원프랜차이즈", "미술학원프랜차이즈",
+                     "독서논술프랜차이즈", "프랜차이즈영어학원")),
+        # '유학원박람회' 는 '학원박람회' 부분문자열 오탐이라 토큰에 넣지 않는다.
+        ("박람회·전시", ("창업박람회", "프랜차이즈박람회", "교육박람회", "미래교육박람회",
+                    "에듀테크박람회", "유아교육전", "교구박람회", "교육산업대전")),
+        ("가맹·설명회", ("가맹문의", "가맹상담", "가맹조건", "가맹절차", "가맹비", "가맹점모집",
+                    "가맹설명회", "창업설명회", "사업설명회", "창업박람회", "프랜차이즈박람회",
+                    "프랜차이즈설명회", "프랜차이즈문의", "정보공개서", "가맹본부", "가맹계약")),
+    ]),
+    # ── 여성 창업 지원금·소자본 — 돈 계산 단계 ──
+    ("biz_cost", "창업·수익", "창업비용·수익성", [
+        ("여성창업지원금", ("여성창업지원", "여성창업자금", "여성가장창업", "여성창업센터",
+                      "여성창업경진대회", "경력단절여성창업")),
+        ("소자본창업", ("여성소자본", "여자소자본", "소자본여성창업", "소자본주부창업",
+                    "여성창업아이템", "주부창업아이템")),
+        ("수익·비용", ("공부방수익", "교습소수익", "학원수익", "집에서돈버는")),
+    ]),
+    # ── 교습소·공부방 인허가 ──
+    ("biz_legal", "창업·수익", "인허가·절차", [
+        ("공부방·교습소신고", ("개인과외교습자", "개인과외사업자", "공부방사업자등록", "공부방신고",
+                       "교습소신고", "교습소등록", "교습소평수", "교습소면적")),
+        ("학원등록·자격", ("학원등록", "학원설립", "학원강사자격")),
+    ]),
+    # ── 40~50대 전직 페르소나 — 주부·경단녀와 다르다(남녀 무관, '다시 일을 시작'이 아니라 '갈아탐').
+    #    맨 '전직'은 쓰지 않는다 — '운전직채용'·'방재안전직인강'이 걸린다(실측).
+    ("biz_second", "창업·수익", "제2의직업·전직", [
+        ("제2의직업", ("제2의직업", "제2의인생", "인생2막", "인생이모작", "이모작", "평생직업")),
+        ("퇴직·전직", ("퇴직후", "정년퇴직", "명예퇴직", "은퇴후", "40대이직", "50대이직",
+                   "40대전직", "50대전직", "중년창업", "중년일자리", "전직지원금")),
+        ("노후준비", ("노후준비", "노후대비", "노후자금")),
+    ]),
+    # ── 경쟁 브랜드 축 — 가맹 의도(창업/가맹/본사)와 학부모 의도(공부방/러닝센터)가 섞인다.
+    #    중분류를 떼어 예산을 독립으로 조인다. gate 로 브랜드명이 있어야만 들어온다.
+    ("biz_brand", "창업·수익", "경쟁브랜드", [
+        ("브랜드가맹·창업", ("창업", "가맹", "프랜차이즈", "개원", "차리")),
+        ("브랜드본사·지사", ("본사", "지사", "가맹본부", "대리점")),
+        ("브랜드교사모집", ("선생님", "교사", "강사", "모집", "채용", "방문교사")),
+        ("브랜드공부방·학습관", ("공부방", "교습소", "러닝센터", "학습관", "학습센터", "교실")),
+    ], ("아소비", "푸르넷", "셀파", "참좋은", "생각하는황소", "눈높이", "구몬", "재능교육",
+        "대교", "빨간펜", "웅진씽크빅", "씽크빅", "아이스크림홈런", "밀크티", "한솔",
+        "기탄", "시매쓰", "소마셈", "와이즈만", "팩토", "필즈", "cms", "한우리",
+        "노벨과개미", "오르다", "가베", "프뢰벨", "몬테소리", "튼튼영어", "윤선생")),
+    # ── 볼륨 축. 캠페인을 분리해 예산을 따로 조인다. gate 로 페르소나 없는 '창업/부업'은 배제. ──
+    ("biz_mom", "창업·수익", "주부·경단녀", [
+        ("주부부업·재택", ("부업", "투잡", "재택", "집에서할수있는", "집에서하는", "집에서부업",
+                     "집에서돈버는", "집에서할만한")),
+        ("여성창업", ("창업",)),
+        ("경단녀·여성일자리", ("일자리", "직업", "할수있는일", "가할수있는", "경단녀", "경력단절",
+                        "가정교사", "재취업")),
+        ("중년·주부자격증", ("자격증",)),
+    ], ("주부", "전업맘", "경단녀", "경력단절", "엄마", "육아맘", "육아", "워킹맘", "여성", "여자",
+        "맘", "30대", "40대", "50대", "60대", "중년", "은퇴", "노후",
+        # 맨 '집에서' 는 쓰지 않는다 — '집에서키우기쉬운식물'·'집에서혼자놀기' 가 걸린다(실측).
+        "집에서할수있는", "집에서하는부업", "집에서부업", "집에서돈버는", "집에서창업",
+        "집에서할만한", "집에서일", "집에서하는일")),
     ("biz_online", "창업·수익", "무인·온라인", [
         ("무인매장", ("무인",)),
         ("온라인·스마트스토어", ("스마트스토어", "온라인창업", "온라인판매", "쇼핑몰창업", "위탁판매",
@@ -4701,7 +4835,13 @@ _DOVISION_FALLBACK = ("edu_etc", "교육", "교육일반", "교육일반")
 def _classify_dovision_category(keyword: str):
     """키워드 → (mid_key, 캠페인라벨 '대분류 - 중분류', 소분류라벨). 매칭 없으면 교육일반."""
     kw = (keyword or "").replace(" ", "").lower()
-    for mid_key, major, mid, subs in _DOVISION_TAXONOMY:
+    for _entry in _DOVISION_TAXONOMY:
+        # 5번째 원소 gate: 이 중분류에 들어오려면 반드시 있어야 하는 토큰(페르소나 앵커 등).
+        # 왜: 소분류 토큰만 보면 '부업'이 직장인부업까지 주부 캠페인으로 끌고 온다.
+        mid_key, major, mid, subs = _entry[0], _entry[1], _entry[2], _entry[3]
+        gate = _entry[4] if len(_entry) > 4 else None
+        if gate and not any(g.lower() in kw for g in gate):
+            continue
         for sub_label, toks in subs:
             if any(t.lower() in kw for t in toks):
                 return mid_key, f"{major} - {mid}", sub_label
@@ -6443,6 +6583,178 @@ async def keyword_pool_live_offdomain_scan(
     }
 
 
+class IntentBand(BaseModel):
+    tokens: List[str]
+    score: int
+    label: Optional[str] = None
+
+
+class IntentRankBidRequest(BaseModel):
+    """간절함(구매의도) 점수 → 키워드별 목표순위 → 그 순위의 실제 estimate 입찰가.
+
+    bulk-rank-bid 와 갈라놓은 이유: 그쪽 점수표는 소잠(피부 한의원) 전용으로 하드코딩돼
+    있다(질환·강남권·예약/증상). 업종이 다르면 점수표 자체가 달라야 하는데 그걸 요청으로
+    받게 고치면 기존 광고주 동작을 건드린다. 여기는 밴드를 통째로 호출자가 준다.
+    """
+    bands: List[IntentBand] = Field(..., description="점수 밴드. 토큰 하나라도 걸리면 score 가산(음수=감점)")
+    position_map: List[List[int]] = Field(..., description="[[최소점수, 목표순위], ...]")
+    est_positions: List[int] = Field(default_factory=lambda: [1, 2, 3, 5, 7, 10],
+                                     description="estimate 로 실입찰가를 뽑을 순위. 나머지는 flat_bid")
+    flat_bid: int = Field(70, ge=70, description="est_positions 밖 순위에 쓸 고정가")
+    device: str = "PC"
+    bid_cap: int = Field(3000, ge=70, le=100000)
+    bid_floor: int = Field(70, ge=70)
+    campaign_name_contains: Optional[str] = Field(None, description="이 문자열을 포함한 캠페인의 키워드만 대상")
+    dry_run: bool = True
+    max_keywords: int = 200000
+
+
+@router.post("/keyword-pool/registered/intent-rank-bid")
+async def keyword_pool_intent_rank_bid(
+    request: IntentRankBidRequest,
+    background_tasks: BackgroundTasks,
+    customer_id: Optional[str] = None,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """키워드별 간절함 점수 → 목표순위 → /estimate 실입찰가 적용. dry_run 이면 분포만."""
+    import sqlite3 as _sq
+    from services.naver_ad_service import NaverAdApiClient
+    from database.registered_keywords_db import get_registered_keywords_db
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+    dev = (request.device or "PC").upper()
+    if dev not in ("PC", "MOBILE"):
+        dev = "PC"
+    pos_map = sorted(([int(a), int(b)] for a, b in request.position_map), key=lambda x: -x[0])
+    bands = [(tuple(t.lower() for t in b.tokens if t), int(b.score)) for b in request.bands]
+
+    def _score(kw: str) -> int:
+        t = (kw or "").replace(" ", "").lower()
+        return sum(sc for toks, sc in bands if any(x in t for x in toks))
+
+    def _pos(sc: int) -> Optional[int]:
+        for lo, p in pos_map:
+            if sc >= lo:
+                return p
+        return None
+
+    client = NaverAdApiClient()
+    client.customer_id = account["customer_id"]
+    client.api_key = account["api_key"]
+    client.secret_key = account["secret_key"]
+
+    # 캠페인 필터 — registered_keywords 에는 campaign_id 만 있어 이름은 네이버에서 받아 맵핑.
+    allow_campaigns = None
+    if request.campaign_name_contains:
+        try:
+            camps = await client._request("GET", "/ncc/campaigns")
+            allow_campaigns = {
+                c.get("nccCampaignId") for c in (camps or [])
+                if request.campaign_name_contains in (c.get("name") or "")
+            }
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"캠페인 조회 실패: {type(e).__name__}: {e}")
+        if not allow_campaigns:
+            raise HTTPException(status_code=400, detail="해당 문자열을 포함한 캠페인이 없습니다")
+
+    reg = get_registered_keywords_db()
+    with _sq.connect(reg.db_path, timeout=30.0) as conn:
+        rows = conn.execute(
+            "SELECT keyword, ncc_keyword_id, ad_group_id, campaign_id FROM registered_keywords "
+            "WHERE account_customer_id=? AND ncc_keyword_id IS NOT NULL "
+            "AND ad_group_id IS NOT NULL AND removed_at IS NULL",
+            (cid,),
+        ).fetchall()
+
+    by_pos = {}
+    dist = {}
+    scanned = 0
+    for kw, nid, gid, camp in rows[: request.max_keywords]:
+        if allow_campaigns is not None and camp not in allow_campaigns:
+            continue
+        scanned += 1
+        p = _pos(_score(kw))
+        key = f"pos{p}" if p else "floor"
+        dist[key] = dist.get(key, 0) + 1
+        if p:
+            by_pos.setdefault(p, []).append((kw, nid, gid))
+
+    if request.dry_run:
+        try:
+            await client.close()
+        except Exception:
+            pass
+        samp = {f"pos{p}": [x[0] for x in lst[:10]] for p, lst in sorted(by_pos.items())}
+        return {"success": True, "dry_run": True, "customer_id": cid, "device": dev,
+                "scanned": scanned, "distribution": dict(sorted(dist.items())), "samples": samp}
+
+    EST = set(int(x) for x in request.est_positions)
+    CAP = int(request.bid_cap)
+    FLOOR = int(request.bid_floor)
+
+    async def _run():
+        from collections import defaultdict as _dd
+        total_done = 0
+        total_fail = 0
+        for pos in sorted(by_pos.keys()):
+            items_kw = by_pos[pos]
+            by_gid = _dd(list)
+            if pos in EST:
+                texts = list({k[0] for k in items_kw if k[0]})
+                bidmap = {}
+                # 해당 순위로 못 받으면 다른 순위로 폴백 — estimate 미커버 방지.
+                for cas in [pos] + [p for p in (1, 2, 3, 5, 7, 10) if p != pos]:
+                    remaining = [t for t in texts if t not in bidmap]
+                    if not remaining:
+                        break
+                    for i in range(0, len(remaining), 15):
+                        try:
+                            r = await client.get_avg_position_bids(remaining[i:i + 15], cas, device=dev)
+                            for e in (r.get("estimate") or []):
+                                kt = (e.get("keyword") or "").strip()
+                                bd = e.get("bid")
+                                if kt and bd and kt not in bidmap:
+                                    bidmap[kt] = bd
+                        except Exception:
+                            pass
+                        await asyncio.sleep(0.2)
+                for kw, nid, gid in items_kw:
+                    bd = bidmap.get((kw or "").strip())
+                    nb = min(CAP, max(FLOOR, round(int(bd) / 10) * 10)) if bd else FLOOR
+                    by_gid[gid].append({"nccKeywordId": nid, "nccAdgroupId": gid,
+                                        "bidAmt": nb, "useGroupBidAmt": False})
+            else:
+                for kw, nid, gid in items_kw:
+                    by_gid[gid].append({"nccKeywordId": nid, "nccAdgroupId": gid,
+                                        "bidAmt": max(FLOOR, int(request.flat_bid)),
+                                        "useGroupBidAmt": False})
+            done = 0
+            fail = 0
+            for gid, its in by_gid.items():
+                for i in range(0, len(its), 100):
+                    try:
+                        await client.update_keywords_bid_bulk(its[i:i + 100])
+                        done += len(its[i:i + 100])
+                    except Exception:
+                        fail += len(its[i:i + 100])
+                    await asyncio.sleep(0.1)
+            total_done += done
+            total_fail += fail
+            logger.warning(f"[intent-rank-bid] pos={pos} 완료 — {done} / 실패 {fail} (대상 {len(items_kw)})")
+        logger.warning(f"[intent-rank-bid] 전체 완료 — 적용 {total_done} / 실패 {total_fail}")
+        try:
+            await client.close()
+        except Exception:
+            pass
+
+    background_tasks.add_task(_run)
+    return {"success": True, "started": True, "customer_id": cid, "device": dev,
+            "scanned": scanned, "distribution": dict(sorted(dist.items())),
+            "message": "간절함 점수 → 목표순위 → estimate 입찰 백그라운드 시작 (로그 [intent-rank-bid])"}
+
+
 class BulkRankBidRequest(BaseModel):
     """키워드별 중요도 점수 → 개별 PC 목표순위 → 순위별 estimate 입찰. 가중치는 옵션(기본값 내장)."""
     geo_top: List[str] = Field(default_factory=list, description="최상위 지역(강남권). 비우면 기본")
@@ -7879,6 +8191,217 @@ async def keyword_pool_admin_add_seeds(
         import traceback
         logger.error(f"keyword-pool/admin/add-seeds 실패: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)[:300]}")
+
+
+class ExactInsertItem(BaseModel):
+    keyword: str
+    monthly_total: int = 0
+    monthly_pc: int = 0
+    monthly_mobile: int = 0
+    comp_idx: Optional[str] = None
+
+
+class ExactInsertRequest(BaseModel):
+    items: List[ExactInsertItem]
+    customer_id: Optional[str] = None
+    min_volume: int = 10
+    source: str = "curated"
+    requeue: bool = True  # 이미 풀에 있으나 domain_skipped/failed 로 죽은 행을 pending 으로 되돌림
+
+
+class RescoreSkippedRequest(BaseModel):
+    customer_id: Optional[str] = None
+    limit: int = Field(30000, ge=1, le=300000, description="한 번에 재평가할 domain_skipped 행 수")
+    min_volume: int = Field(10, ge=1, description="이 검색량 미만은 되살리지 않음")
+    dry_run: bool = True
+
+
+@router.post("/keyword-pool/admin/rescore-skipped")
+def keyword_pool_admin_rescore_skipped(
+    request: RescoreSkippedRequest,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """domain_skipped 를 **현재** 도메인게이트로 다시 채점해, 지금은 통과하는 것만 pending 복귀.
+
+    왜: domain_skipped 는 '영구 오프도메인'이 아니라 '그때 그 게이트에 걸린 것'이다.
+    relevance_keywords 를 넓히거나 neg-token 을 풀면(두비전: '자격증' 해제) 같은 행이
+    이제는 통과한다. 그런데 add_candidates 는 non-pending 행을 보존하므로 영원히 안 돌아온다.
+    → 등록 워커가 쓰는 것과 **같은 판정**을 여기서 재실행하고, 통과분만 되살린다.
+    게이트를 우회하는 게 아니라 게이트를 한 번 더 돌리는 것이라 정밀도는 그대로다.
+
+    dry_run=true 면 통과 예상 수와 샘플만 돌려준다.
+    """
+    import sqlite3 as _sq
+    from database.naver_ad_db import get_ad_account_relevance_keywords as _grk
+    account = _resolve_account(user_id, request.customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+
+    rel = [x for x in (_grk(user_id, str(cid)) or []) if x and len(x) >= 2]
+    if len(rel) < 3:
+        raise HTTPException(status_code=400, detail="relevance_keywords 미설정 — 재평가 불가")
+
+    # ── 등록 워커(_run_pool_register)의 게이트를 그대로 재현 ──
+    ga3, ga2 = set(), set()
+    for _s in rel:
+        if len(_s) >= 4:
+            ga3.add(_s)
+        for _n in (2, 3):
+            for _i in range(len(_s) - _n + 1):
+                _a = _s[_i:_i + _n]
+                (ga2 if len(_a) == 2 else ga3).add(_a)
+    JUNK = ("후기", "추천", "비용", "상담", "전문", "정보", "비교", "잘하는곳")
+    NEG = (
+        "침대", "매트", "매트리스", "선반", "가구", "대여", "렌탈", "렌트", "침구", "이불",
+        "베개", "소파", "책상", "의자", "수납", "옷장", "주택", "분양", "아파트", "오피스텔",
+        "인테리어", "조명", "커튼", "벽지", "그릇", "용기", "포장", "택배", "자동차", "중고차",
+        "타이어", "보험", "대출", "적금", "예금", "주식", "펀드", "코인", "비트코인", "재테크",
+        "여행", "호텔", "펜션", "리조트", "항공권", "강의", "학원", "인강", "과외", "토익",
+        "토플", "자격증", "공무원", "게임", "영화", "드라마", "웹툰", "만화", "레시피", "맛집",
+        "식당", "배달", "쇼핑몰", "직구", "운동화", "신발", "가방", "지갑", "선글라스", "안경",
+        "화장품", "향수", "립스틱", "컨실러", "쿠션", "파운데이션", "비비크림", "마스카라",
+        "유산균", "젤리", "홍삼", "영양제", "비타민제", "콜라겐젤리", "오메가3", "프로틴",
+        "노트북", "휴대폰", "에어컨", "냉장고", "세탁기", "청소기", "공기청정기",
+    )
+    if cid in _SKIN_CAT_CUSTOMERS:
+        NEG = tuple(t for t in NEG if t not in _COSMETIC_ALLOW_TOKENS)
+    elif cid in _DOVISION_CAT_CUSTOMERS:
+        NEG = tuple(t for t in NEG if t not in _DOVISION_ALLOW_TOKENS)
+    elif cid in _KINESS_FORCE_CUSTOMERS:
+        NEG = tuple(t for t in NEG if t not in _KINESS_ALLOW_TOKENS)
+    floor = 0 if cid in _KINESS_FORCE_CUSTOMERS else 30
+
+    def _passes(kw: str) -> bool:
+        c = (kw or "").replace(" ", "")
+        if len(c) >= 20 or any(c.count(t) >= 2 for t in JUNK):
+            return False
+        if any(n in c for n in NEG):
+            return False
+        sc = 0
+        for _s in rel:
+            if _s in kw:
+                sc = 100
+                break
+            if kw and kw in _s:
+                sc = 95
+                break
+        if sc == 0:
+            n3 = sum(1 for a in ga3 if a in kw)
+            n2 = sum(1 for a in ga2 if a in kw)
+            sc = min(95, min(80, n3 * 20) + min(30, n2 * 5))
+        return sc >= floor
+
+    pool = get_keyword_pool_db()
+    with _sq.connect(pool.db_path, timeout=30.0) as conn:
+        conn.row_factory = _sq.Row
+        rows = conn.execute(
+            """SELECT keyword FROM naverad_keyword_pool
+               WHERE account_customer_id = ? AND status = 'domain_skipped'
+                 AND COALESCE(monthly_total, 0) >= ?
+               ORDER BY monthly_total DESC LIMIT ?""",
+            (cid, int(request.min_volume), int(request.limit)),
+        ).fetchall()
+    cand = [r["keyword"] for r in rows if _passes(r["keyword"])]
+
+    if request.dry_run:
+        return {"success": True, "dry_run": True, "customer_id": cid,
+                "scanned": len(rows), "would_requeue": len(cand),
+                "samples": cand[:40]}
+
+    n = pool.requeue_keywords(cid, cand, from_statuses=("domain_skipped",),
+                              min_volume=int(request.min_volume))
+    logger.warning(f"[pool/rescore-skipped] cid={cid} 검사 {len(rows)} → 통과 {len(cand)} → 복귀 {n}")
+    return {"success": True, "customer_id": cid, "scanned": len(rows),
+            "passed": len(cand), "requeued": n}
+
+
+class ParkKeywordsRequest(BaseModel):
+    customer_id: Optional[str] = None
+    keywords: List[str]
+
+
+@router.post("/keyword-pool/admin/park-keywords")
+def keyword_pool_admin_park_keywords(
+    request: ParkKeywordsRequest,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """pending 인 키워드를 domain_skipped 로 되돌린다 (등록 전 취소). registered 는 불변."""
+    account = _resolve_account(user_id, request.customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    cid = int(account.get("customer_id"))
+    kws = [k.strip() for k in (request.keywords or []) if k and k.strip()]
+    pool = get_keyword_pool_db()
+    n = pool.park_keywords(cid, kws)
+    logger.warning(f"[pool/park] cid={cid} 요청 {len(kws)} → pending 에서 회수 {n}")
+    return {"success": True, "customer_id": cid, "requested": len(kws), "parked": n}
+
+
+@router.post("/keyword-pool/admin/insert-exact")
+def keyword_pool_admin_insert_exact(
+    request: ExactInsertRequest,
+    user_id: int = Depends(get_user_id_with_fallback),
+):
+    """검증된 키워드 목록을 **연관확장 없이** 그대로 pending 삽입.
+
+    왜 필요한가: seed-explode 는 시드마다 연관키워드를 1,200행씩 끌어와 검색량만 보고 넣는다.
+    넓은 시드를 주면 그 1,200칸을 편의점·닭갈비·이력서 같은 고볼륨 무관어가 먹는다
+    (두비전 '가맹·창업모집' 캠페인에 치킨프랜차이즈순위·사회복지사자소서가 들어앉은 경로).
+    이미 오프라인에서 keywordstool 로 실검색량을 재고 사람이 검수한 목록은 확장이 아니라
+    **그대로** 들어가야 한다. 검색량은 호출자가 실측한 값을 그대로 쓰되, min_volume 미만은
+    거른다 — mt=0 행은 claim_pending(min_volume≥1)에 영구 차단돼 죽은 행으로 쌓이기 때문.
+
+    도메인 게이트/테마 라우팅은 register 단계가 그대로 적용한다(우회 아님).
+    sync def — sqlite write 뿐이라 event loop 를 잡지 않는다.
+    """
+    account = _resolve_account(user_id, request.customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="네이버 광고 계정을 먼저 연동하세요")
+    customer_id = int(account.get("customer_id"))
+    min_volume = max(1, int(request.min_volume))
+
+    items, skipped_lowvol = [], 0
+    seen: Set[str] = set()
+    for it in request.items:
+        kw = (it.keyword or "").strip()
+        if not kw or kw in seen:
+            continue
+        seen.add(kw)
+        if int(it.monthly_total or 0) < min_volume:
+            skipped_lowvol += 1
+            continue
+        items.append({
+            "keyword": kw, "seed": kw, "source": request.source,
+            "monthly_total": int(it.monthly_total or 0),
+            "monthly_pc": int(it.monthly_pc or 0),
+            "monthly_mobile": int(it.monthly_mobile or 0),
+            "comp_idx": it.comp_idx,
+        })
+    if not items:
+        return {"success": True, "added": 0, "input": len(request.items),
+                "skipped_low_volume": skipped_lowvol, "customer_id": customer_id}
+
+    pool = get_keyword_pool_db()
+    kws = [i["keyword"] for i in items]
+    before = pool.status_of(customer_id, kws)
+    added = pool.add_candidates(user_id, customer_id, items)
+    requeued = 0
+    if request.requeue:
+        # 우리 하드게이트에 막혀 domain_skipped 로 죽은 행은 게이트가 바뀐 지금 되살려야 한다.
+        # registered 는 손대지 않는다(이미 살아있는 광고).
+        requeued = pool.requeue_keywords(customer_id, kws,
+                                         from_statuses=("domain_skipped", "failed",
+                                                        "skipped_existing"))
+    dist: Dict[str, int] = {}
+    for st in before.values():
+        dist[st] = dist.get(st, 0) + 1
+    dist["신규(풀에없음)"] = len(kws) - len(before)
+    logger.warning(f"[pool/insert-exact] cid={customer_id} 입력 {len(request.items)} → "
+                   f"신규 {added} / requeue {requeued} (저볼륨컷 {skipped_lowvol}) {dist}")
+    return {"success": True, "added": added, "requeued": requeued, "attempted": len(items),
+            "input": len(request.items), "skipped_low_volume": skipped_lowvol,
+            "status_before": dist, "customer_id": customer_id, "source": request.source}
 
 
 class SeedExplodeRequest(BaseModel):
@@ -15127,7 +15650,10 @@ async def keyword_pool_debug_naver_raw(
     #   /stats          단건 성과 조회
     #   /stat-reports   대량 성과 리포트(전환·확장검색어 포함) 작업 생성/조회
     #   /master-reports 계정 마스터 덤프(소재 검수상태 등) 작업 생성/조회
-    READONLY_PREFIXES = ("/stats", "/stat-reports", "/master-reports")
+    #   /estimate       순위별/최소노출 추정 입찰가 — 100개 배치 조회. 이게 막혀 있어서
+    #                   입찰가 재설정이 core-min-exposure(호출마다 registered_keywords
+    #                   전체 fetchall) 를 경유해야 했고, 6천개 요청에 앱이 20분 다운됐다.
+    READONLY_PREFIXES = ("/stats", "/stat-reports", "/master-reports", "/estimate")
     if not (path.startswith("/ncc/") or path.startswith(READONLY_PREFIXES)):
         raise HTTPException(
             status_code=400,

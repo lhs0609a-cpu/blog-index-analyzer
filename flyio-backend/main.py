@@ -253,6 +253,17 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"⚠️ Index snapshot scheduler failed to start: {e}")
 
+    # 소잠 광고 시간대 게이트 — 수요가 얕은 새벽(기본 02-06시)에 광고를 닫는다.
+    # 네이버 균등배분은 시간 가중이 없어 새벽에 수요의 2배가 나간다. API 로는
+    # 광고그룹 시간대 타겟을 만들 수 없어(쓰기 미지원) 캠페인 userLock 으로 대신한다.
+    # SOJAM_HOUR_GATE=1 일 때만 동작 — 배포만으로는 아무것도 바뀌지 않는다.
+    if RUN_SCHEDULERS:
+        try:
+            from services.sojam_hour_gate import sojam_hour_gate_scheduler
+            sojam_hour_gate_scheduler.start(interval_seconds=600)
+        except Exception as e:
+            logger.warning(f"⚠️ Sojam hour gate failed to start: {e}")
+
     # Notification DB 초기화
     try:
         from database.notification_db import get_notification_db
@@ -693,6 +704,20 @@ async def general_exception_handler(request: Request, exc: Exception):
         content={"detail": "Internal server error"},
         headers=get_cors_headers(request)
     )
+
+
+@app.get("/api/whoami-ip")
+async def whoami_ip(request: Request):
+    """호출자에게 '서버가 보는 당신의 IP' 를 돌려준다.
+
+    `user_id` 쿼리 폴백을 허용 IP 로 좁히면서 필요해졌다. 허용목록에 넣을 값을
+    알아야 하는데, 프록시 뒤라 로컬에서는 자기 출구 IP 를 알 수 없다.
+    자기 IP 만 알려주므로 남의 정보는 새지 않는다. 허용목록 내용도 보여주지 않고
+    통과 여부만 답한다.
+    """
+    from routers.auth_deps import _client_ip, _ip_allowed
+    ip = _client_ip(request)
+    return {"ip": ip, "fallback_allowed": _ip_allowed(ip)}
 
 
 # 배포 테스트 엔드포인트 v6 - 라우트 등록 확인용
