@@ -706,20 +706,6 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
-@app.get("/api/whoami-ip")
-async def whoami_ip(request: Request):
-    """호출자에게 '서버가 보는 당신의 IP' 를 돌려준다.
-
-    `user_id` 쿼리 폴백을 허용 IP 로 좁히면서 필요해졌다. 허용목록에 넣을 값을
-    알아야 하는데, 프록시 뒤라 로컬에서는 자기 출구 IP 를 알 수 없다.
-    자기 IP 만 알려주므로 남의 정보는 새지 않는다. 허용목록 내용도 보여주지 않고
-    통과 여부만 답한다.
-    """
-    from routers.auth_deps import _client_ip, _ip_allowed
-    ip = _client_ip(request)
-    return {"ip": ip, "fallback_allowed": _ip_allowed(ip)}
-
-
 # 배포 테스트 엔드포인트 v6 - 라우트 등록 확인용
 @app.get("/deployment-test-v6")
 async def deployment_test_v6():
