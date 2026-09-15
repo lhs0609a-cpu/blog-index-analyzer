@@ -9,6 +9,7 @@ import { useAuthStore } from '@/lib/stores/auth'
 import { getAllPlans, getMySubscription, preparePayment, type PlanInfo, type PlanType } from '@/lib/api/subscription'
 import { PLAN_INFO, PLAN_LIMITS, FEATURES } from '@/lib/features/featureAccess'
 import { track } from '@/lib/analytics/track'
+import { startBillingAuth } from '@/lib/payment/toss'
 import toast from 'react-hot-toast'
 
 const planIcons: Record<PlanType, React.ReactNode> = {
@@ -59,6 +60,10 @@ export default function PricingPage() {
   const [showTrialModal, setShowTrialModal] = useState(false)
   const [selectedTrialPlan, setSelectedTrialPlan] = useState<PlanType | null>(null)
   const [trialConsent, setTrialConsent] = useState(false)
+  // 청약철회 제한 고지는 별도 동의여야 한다. 전자상거래법 제17조 제3항은
+  // 이 사실을 쉽게 알 수 있는 곳에 표시하고 따로 동의를 받지 않으면
+  // 철회 제한 자체를 무효로 본다 — 약관 동의에 묶으면 요건을 못 채운다.
+  const [withdrawalConsent, setWithdrawalConsent] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -115,39 +120,68 @@ export default function PricingPage() {
     // 7일 무료 체험 동의 모달 표시
     setSelectedTrialPlan(planType)
     setTrialConsent(false)
+    setWithdrawalConsent(false)
     setShowTrialModal(true)
     track('checkout_consent_open', { userId: user?.id, props: { plan: planType, cycle: billingCycle } })
   }
 
+  /**
+   * 동의하고 누르면 **그 자리에서 결제창이 열린다.**
+   *
+   * 예전에는 여기서 /payment 로 보냈고, 그 화면이 같은 동의와 같은 결제 버튼을
+   * 한 번 더 요구했다. 결제 의사를 이미 밝힌 사람에게 "결제하고 시작하기"를
+   * 눌렀는데 결제가 시작되지 않고 똑같은 화면이 또 나오는 셈이라,
+   * 실측(2026-05~09)으로 그 구간을 통과해 결제까지 간 사람이 사실상 없었다.
+   * /payment 는 이제 토스가 돌려보내는 결과를 받는 자리다.
+   */
   const proceedWithPayment = async () => {
-    if (!selectedTrialPlan || !trialConsent) return
+    if (!selectedTrialPlan || !trialConsent || !withdrawalConsent) return
 
-    setShowTrialModal(false)
-    setProcessingPlan(selectedTrialPlan)
+    const plan = selectedTrialPlan
+    setProcessingPlan(plan)
     track('checkout_start', {
       userId: user?.id,
-      props: { plan: selectedTrialPlan, cycle: billingCycle },
+      props: { plan, cycle: billingCycle, consent_terms: true, consent_withdrawal: true },
     })
 
     try {
-      // 결제 준비
-      const paymentInfo = await preparePayment(user!.id, selectedTrialPlan, billingCycle)
+      const paymentInfo = await preparePayment(user!.id, plan, billingCycle)
 
-      // 토스페이먼츠 결제창 열기
-      router.push(`/payment?orderId=${paymentInfo.order_id}&amount=${paymentInfo.amount}&orderName=${encodeURIComponent(paymentInfo.order_name)}&planType=${selectedTrialPlan}&billingCycle=${billingCycle}`)
+      const result = await startBillingAuth({
+        userId: user!.id,
+        orderId: paymentInfo.order_id,
+        amount: paymentInfo.amount,
+        orderName: paymentInfo.order_name,
+        planType: plan,
+        billingCycle,
+      })
 
+      if (result === 'cancelled') {
+        // 스스로 닫은 사람을 실패 화면으로 끌고 가지 않는다. 모달만 닫고 돌려보낸다.
+        setShowTrialModal(false)
+        return
+      }
+      if (result === 'failed') {
+        // 결제창이 안 뜨면 사용자는 영문을 모른다. 대체 경로를 준다.
+        toast.error('결제창을 열 수 없습니다. 잠시 후 다시 시도해주세요.')
+        router.push(
+          `/payment?orderId=${encodeURIComponent(paymentInfo.order_id)}&amount=${paymentInfo.amount}` +
+          `&orderName=${encodeURIComponent(paymentInfo.order_name)}&planType=${plan}&billingCycle=${billingCycle}`
+        )
+        return
+      }
+      setShowTrialModal(false)
     } catch (error) {
       console.error('Failed to prepare payment:', error)
       const axiosError = error as { response?: { status?: number } }
       track('payment_register_fail', {
         userId: user?.id,
         reason: 'prepare_failed',
-        props: { http: axiosError.response?.status ?? 0, plan: selectedTrialPlan },
+        props: { http: axiosError.response?.status ?? 0, plan },
       })
       toast.error('결제 준비 중 오류가 발생했습니다')
     } finally {
       setProcessingPlan(null)
-      setSelectedTrialPlan(null)
     }
   }
 
@@ -984,11 +1018,36 @@ export default function PricingPage() {
                 </span>
               </label>
 
+              {/* 청약철회 제한 고지 — 전자상거래법 제17조 제3항상 **별도 동의**여야 한다.
+                  약관 동의에 묶어두면 철회 제한이 무효가 될 수 있다. */}
+              <label className={`flex items-start gap-3 mb-6 cursor-pointer p-4 rounded-xl border-2 transition-all ${
+                withdrawalConsent ? 'bg-blue-50 border-[#0064FF]' : 'bg-gray-50 border-gray-200 hover:border-gray-300'
+              }`}>
+                <input
+                  type="checkbox"
+                  checked={withdrawalConsent}
+                  onChange={(e) => setWithdrawalConsent(e.target.checked)}
+                  className="w-5 h-5 rounded border-gray-300 text-[#0064FF] focus:ring-[#0064FF] mt-0.5 flex-shrink-0"
+                />
+                <span className="text-sm text-gray-700">
+                  <strong>서비스 이용을 시작하면 청약철회가 제한됨에 동의합니다</strong>
+                  <br/>
+                  <span className="text-xs text-gray-500 mt-1 block">
+                    디지털 콘텐츠는 제공이 시작되면 법정 청약철회가 제한됩니다(전자상거래법 제17조 제2항).
+                    다만 <strong className="text-gray-700">7일 이내 서비스를 사용하지 않았다면 전액 환불</strong>해
+                    드리며, 이후에도 남은 기간은 일할 계산해 환불합니다.
+                    <Link href="/refund-policy" className="text-[#0064FF] hover:underline ml-1">
+                      환불정책 보기
+                    </Link>
+                  </span>
+                </span>
+              </label>
+
               {/* P1: 버튼 - UX 개선 */}
               <div className="space-y-3">
                 <button
                   onClick={proceedWithPayment}
-                  disabled={!trialConsent || processingPlan !== null}
+                  disabled={!trialConsent || !withdrawalConsent || processingPlan !== null}
                   className="w-full py-4 bg-[#0064FF] text-white font-bold rounded-xl hover:shadow-lg shadow-lg shadow-[#0064FF]/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none"
                 >
                   {processingPlan ? (
@@ -1000,6 +1059,14 @@ export default function PricingPage() {
                     `${PLAN_INFO[selectedTrialPlan].price.toLocaleString()}원 결제하고 시작하기`
                   )}
                 </button>
+
+                {/* 버튼을 누르면 무슨 일이 생기는지 미리 말해준다 —
+                    결제창이 갑자기 뜨면 사람은 일단 닫는다. */}
+                {!processingPlan && (
+                  <p className="text-center text-xs text-gray-500">
+                    누르면 토스페이먼츠 카드 등록창이 열립니다
+                  </p>
+                )}
 
                 {/* 신뢰 배지 */}
                 {!processingPlan && (

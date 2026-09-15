@@ -8,43 +8,10 @@ import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import { registerBilling, type PlanType } from '@/lib/api/subscription'
 import { track } from '@/lib/analytics/track'
+import { startBillingAuth } from '@/lib/payment/toss'
 import toast from 'react-hot-toast'
 import GlassIcon from '@/components/GlassIcon'
 
-// 토스페이먼츠 타입 정의
-interface TossPaymentsInstance {
-  requestBillingAuth: (method: string, options: {
-    customerKey: string
-    successUrl: string
-    failUrl: string
-  }) => Promise<void>
-}
-
-interface TossPaymentsSDK {
-  (clientKey: string): TossPaymentsInstance
-}
-
-declare global {
-  interface Window {
-    TossPayments?: TossPaymentsSDK
-  }
-}
-
-// UUID 생성 함수 (crypto.randomUUID 폴백)
-function generateUUID(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID()
-  }
-  // 폴백: 브라우저 호환성을 위한 수동 생성
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = Math.random() * 16 | 0
-    const v = c === 'x' ? r : (r & 0x3 | 0x8)
-    return v.toString(16)
-  })
-}
-
-// 토스페이먼츠 클라이언트 키 - 환경변수에서만 로드 (하드코딩 금지)
-const TOSS_CLIENT_KEY = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY || ''
 
 function PaymentContent() {
   const searchParams = useSearchParams()
@@ -68,6 +35,8 @@ function PaymentContent() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
   const [agreedToTerms, setAgreedToTerms] = useState(false)
+  // 요금제 모달과 같은 이유로 별도 동의다 (전자상거래법 제17조 제3항)
+  const [withdrawalAgreed, setWithdrawalAgreed] = useState(false)
 
   useEffect(() => {
     // 빌링키 발급 성공 콜백 처리
@@ -144,15 +113,17 @@ function PaymentContent() {
     }
   }
 
+  /**
+   * 폴백 경로.
+   *
+   * 정상 흐름에서는 요금제 모달이 곧바로 결제창을 연다. 이 화면은 결제가 실패해
+   * 돌아왔거나 주소로 직접 들어온 사람을 위한 자리다 — 그래서 동의를 여기서
+   * 한 번 더 받는 것이 중복이 아니다(모달을 거치지 않았을 수 있으므로).
+   */
   const initiateBillingPayment = async () => {
-    if (!agreedToTerms) {
-      toast.error('이용약관 및 환불정책에 동의해주세요')
+    if (!agreedToTerms || !withdrawalAgreed) {
+      toast.error('약관과 청약철회 안내에 동의해주세요')
       track('payment_widget_error', { userId: user?.id, reason: 'terms_not_agreed' })
-      return
-    }
-
-    if (!TOSS_CLIENT_KEY) {
-      toast.error('결제 시스템이 설정되지 않았습니다')
       return
     }
 
@@ -162,35 +133,20 @@ function PaymentContent() {
       return
     }
 
-    try {
-      // 토스페이먼츠 SDK 로드
-      const tossPayments = await loadTossPayments(TOSS_CLIENT_KEY)
+    track('checkout_start', {
+      userId: user.id,
+      props: { plan: planType, cycle: billingCycle, source: 'payment_page' },
+    })
 
-      // 고객 고유 키 생성 (UUID 사용으로 중복 방지)
-      const customerKey = `customer_${user.id}_${generateUUID()}`
-
-      track('payment_widget_open', {
-        userId: user.id,
-        props: { plan: planType, cycle: billingCycle, amount, method: '카드' },
-      })
-
-      // 빌링키 발급 요청 (정기결제용)
-      await tossPayments.requestBillingAuth('카드', {
-        customerKey: customerKey,
-        successUrl: `${window.location.origin}/payment?success=true&orderId=${orderId}&planType=${planType}&billingCycle=${billingCycle}&amount=${amount}&orderName=${encodeURIComponent(orderName)}`,
-        // 실패 시에도 주문정보를 유지해야 "다시 시도"가 시작 화면을 복원할 수 있음
-        failUrl: `${window.location.origin}/payment?success=false&orderId=${orderId}&planType=${planType}&billingCycle=${billingCycle}&amount=${amount}&orderName=${encodeURIComponent(orderName)}`,
-      })
-    } catch (error) {
-      console.error('Toss billing error:', error)
-      // 결제창이 아예 안 뜨는 건 우리 쪽 문제(SDK 로드·키·차단)라 사용자는 영문을 모른다
-      track('payment_widget_error', {
-        userId: user.id,
-        reason: 'sdk_or_open_failed',
-        props: { plan: planType, cycle: billingCycle },
-      })
-      toast.error('결제창을 열 수 없습니다')
-    }
+    const result = await startBillingAuth({
+      userId: user.id,
+      orderId,
+      amount,
+      orderName,
+      planType,
+      billingCycle,
+    })
+    if (result === 'failed') toast.error('결제창을 열 수 없습니다')
   }
 
   // 결제 완료 화면
@@ -438,6 +394,25 @@ function PaymentContent() {
                 에 동의합니다. 정기결제는 해지 전까지 자동으로 갱신됩니다.
               </span>
             </label>
+
+            {/* 청약철회 제한은 **별도 동의**여야 한다 (전자상거래법 제17조 제3항).
+                약관 동의에 묶으면 철회 제한 자체가 무효가 될 수 있다. */}
+            <label className="flex items-start gap-3 cursor-pointer mt-4">
+              <input
+                type="checkbox"
+                checked={withdrawalAgreed}
+                onChange={(e) => setWithdrawalAgreed(e.target.checked)}
+                className="mt-1 w-5 h-5 rounded border-gray-300 text-[#0064FF] focus:ring-[#0064FF]"
+              />
+              <span className="text-sm text-gray-600">
+                서비스 이용을 시작하면 청약철회가 제한됨에 동의합니다.
+                <span className="block text-xs text-gray-500 mt-1">
+                  디지털 콘텐츠는 제공이 시작되면 법정 청약철회가 제한됩니다. 다만{' '}
+                  <strong className="text-gray-700">7일 이내 미사용 시 전액 환불</strong>되며,
+                  이후에도 남은 기간은 일할 계산해 환불합니다.
+                </span>
+              </span>
+            </label>
           </div>
 
           {/* Security Notice */}
@@ -449,9 +424,9 @@ function PaymentContent() {
           {/* Payment Button */}
           <button
             onClick={initiateBillingPayment}
-            disabled={!agreedToTerms}
+            disabled={!agreedToTerms || !withdrawalAgreed}
             className={`w-full py-4 rounded-xl font-bold text-lg transition-all ${
-              agreedToTerms
+              agreedToTerms && withdrawalAgreed
                 ? 'instagram-gradient text-white hover:shadow-lg'
                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
@@ -498,33 +473,4 @@ export default function PaymentPage() {
       <PaymentContent />
     </Suspense>
   )
-}
-
-// 토스페이먼츠 SDK 로드 함수 (타입 안전)
-function loadTossPayments(clientKey: string): Promise<TossPaymentsInstance> {
-  return new Promise((resolve, reject) => {
-    if (typeof window === 'undefined') {
-      reject(new Error('Window is not defined'))
-      return
-    }
-
-    if (window.TossPayments) {
-      resolve(window.TossPayments(clientKey))
-      return
-    }
-
-    const script = document.createElement('script')
-    script.src = 'https://js.tosspayments.com/v1/payment'
-    script.onload = () => {
-      if (window.TossPayments) {
-        resolve(window.TossPayments(clientKey))
-      } else {
-        reject(new Error('TossPayments SDK loaded but not initialized'))
-      }
-    }
-    script.onerror = () => {
-      reject(new Error('Failed to load TossPayments SDK'))
-    }
-    document.head.appendChild(script)
-  })
 }
