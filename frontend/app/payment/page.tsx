@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState, Suspense } from 'react'
+import { useEffect, useRef, useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { CreditCard, Lock, ArrowLeft, Loader2, CheckCircle, Calendar, Shield, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import { registerBilling, type PlanType } from '@/lib/api/subscription'
+import { track } from '@/lib/analytics/track'
 import toast from 'react-hot-toast'
 import GlassIcon from '@/components/GlassIcon'
 
@@ -76,6 +77,20 @@ function PaymentContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [success, authKey, customerKey, user])
 
+  // 토스가 failUrl 로 돌려보낸 경우. code 는 토스가 주는 실패 원인이라
+  // 이걸 모아야 "카드 한도"인지 "사용자가 그냥 닫았다"인지 구분된다.
+  const failLogged = useRef(false)
+  useEffect(() => {
+    if (success !== 'false' || failLogged.current) return
+    failLogged.current = true
+    track('payment_return_fail', {
+      userId: user?.id,
+      reason: failCode || 'unknown',
+      props: { plan: planType, cycle: billingCycle, amount },
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [success, failCode])
+
   const handleBillingSuccess = async () => {
     if (!user?.id || !authKey || !customerKey) return
 
@@ -94,6 +109,10 @@ function PaymentContent() {
 
       if (result.success) {
         setIsComplete(true)
+        track('payment_success', {
+          userId: user.id,
+          props: { plan: planType, cycle: billingCycle, amount },
+        })
         toast.success('정기결제 등록이 완료되었습니다!')
 
         // 3초 후 대시보드로 이동
@@ -101,12 +120,24 @@ function PaymentContent() {
           router.push('/dashboard/subscription')
         }, 3000)
       } else {
+        // 카드 등록까지 끝낸 사람이 여기서 떨어지는 건 가장 비싼 이탈이다.
+        // 서버가 준 사유를 반드시 남긴다.
+        track('payment_register_fail', {
+          userId: user.id,
+          reason: 'register_rejected',
+          props: { plan: planType, cycle: billingCycle },
+        })
         toast.error(result.message || '정기결제 등록 중 오류가 발생했습니다')
       }
 
     } catch (error) {
-      const axiosError = error as { response?: { data?: { detail?: string } } }
+      const axiosError = error as { response?: { status?: number; data?: { detail?: string } } }
       const errorMessage = axiosError?.response?.data?.detail || '정기결제 등록 중 오류가 발생했습니다'
+      track('payment_register_fail', {
+        userId: user.id,
+        reason: axiosError?.response?.status ? `http_${axiosError.response.status}` : 'network_error',
+        props: { plan: planType, cycle: billingCycle },
+      })
       toast.error(errorMessage)
     } finally {
       setIsProcessing(false)
@@ -116,6 +147,7 @@ function PaymentContent() {
   const initiateBillingPayment = async () => {
     if (!agreedToTerms) {
       toast.error('이용약관 및 환불정책에 동의해주세요')
+      track('payment_widget_error', { userId: user?.id, reason: 'terms_not_agreed' })
       return
     }
 
@@ -137,6 +169,11 @@ function PaymentContent() {
       // 고객 고유 키 생성 (UUID 사용으로 중복 방지)
       const customerKey = `customer_${user.id}_${generateUUID()}`
 
+      track('payment_widget_open', {
+        userId: user.id,
+        props: { plan: planType, cycle: billingCycle, amount, method: '카드' },
+      })
+
       // 빌링키 발급 요청 (정기결제용)
       await tossPayments.requestBillingAuth('카드', {
         customerKey: customerKey,
@@ -146,6 +183,12 @@ function PaymentContent() {
       })
     } catch (error) {
       console.error('Toss billing error:', error)
+      // 결제창이 아예 안 뜨는 건 우리 쪽 문제(SDK 로드·키·차단)라 사용자는 영문을 모른다
+      track('payment_widget_error', {
+        userId: user.id,
+        reason: 'sdk_or_open_failed',
+        props: { plan: planType, cycle: billingCycle },
+      })
       toast.error('결제창을 열 수 없습니다')
     }
   }
@@ -169,7 +212,7 @@ function PaymentContent() {
           </motion.div>
           <h1 className="text-3xl font-bold mb-4">정기결제 등록 완료!</h1>
           <p className="text-gray-600 mb-6">
-            블랭크 프리미엄 서비스가 활성화되었습니다.
+            블스피 프리미엄 서비스가 활성화되었습니다.
             <br />
             {billingCycle === 'yearly' ? '1년 후' : '다음 달'} 같은 날짜에 자동 결제됩니다.
           </p>

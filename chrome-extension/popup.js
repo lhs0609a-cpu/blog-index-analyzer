@@ -1,5 +1,5 @@
 /**
- * Blrank 크롬 확장 - 팝업 스크립트
+ * Blspi 크롬 확장 - 팝업 스크립트
  */
 
 const API_BASE = 'https://api.blrank.co.kr';
@@ -86,7 +86,7 @@ async function searchAndExtract(keyword) {
     }
 
   } catch (error) {
-    console.error('[Blrank] Error:', error);
+    console.error('[Blspi] Error:', error);
     setStatus('오류: ' + error.message, 'error');
   } finally {
     searchBtn.disabled = false;
@@ -94,15 +94,15 @@ async function searchAndExtract(keyword) {
 }
 
 /**
- * 결과를 Blrank 서버로 전송
+ * 결과를 Blspi 서버로 전송
  */
-async function sendToBlrank() {
+async function sendToBlspi() {
   if (!currentResults || currentResults.length === 0) {
     setStatus('전송할 결과가 없습니다.', 'error');
     return;
   }
 
-  setStatus('Blrank로 전송 중...', 'loading');
+  setStatus('Blspi로 전송 중...', 'loading');
   sendBtn.disabled = true;
 
   try {
@@ -121,9 +121,9 @@ async function sendToBlrank() {
 
     if (response.ok) {
       var data = await response.json();
-      setStatus('전송 완료! Blrank에서 확인하세요.', 'success');
+      setStatus('전송 완료! Blspi에서 확인하세요.', 'success');
 
-      // Blrank 사이트 열기
+      // Blspi 사이트 열기
       chrome.tabs.create({
         url: SITE_URL + '/tools?keyword=' + encodeURIComponent(currentKeyword)
       });
@@ -132,7 +132,7 @@ async function sendToBlrank() {
     }
 
   } catch (error) {
-    console.error('[Blrank] Send error:', error);
+    console.error('[Blspi] Send error:', error);
     setStatus('전송 실패: ' + error.message, 'error');
   } finally {
     sendBtn.disabled = false;
@@ -173,7 +173,7 @@ keywordInput.addEventListener('keypress', function(e) {
 });
 
 copyBtn.addEventListener('click', copyUrls);
-sendBtn.addEventListener('click', sendToBlrank);
+sendBtn.addEventListener('click', sendToBlspi);
 
 // 저장된 키워드 복원
 chrome.storage.local.get(['lastKeyword'], function(result) {

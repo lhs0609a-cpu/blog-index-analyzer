@@ -31,7 +31,7 @@ export default function OnboardingModal({ isOpen, onClose }: OnboardingModalProp
             <div className="sticky top-0 flex items-center justify-between p-6 border-b border-gray-200 bg-white rounded-t-3xl">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">시작하기</h2>
-                <p className="text-sm text-gray-500">블랭크를 최대한 활용해보세요</p>
+                <p className="text-sm text-gray-500">블스피를 최대한 활용해보세요</p>
               </div>
               <button
                 onClick={onClose}

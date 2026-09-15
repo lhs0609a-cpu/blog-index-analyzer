@@ -1,0 +1,11 @@
+node_modules/
+.next/
+.next*/
+.vercel/
+.env*
+!.env.example
+*.log
+*.tsbuildinfo
+*.ps1
+*.bat
+*.test.*

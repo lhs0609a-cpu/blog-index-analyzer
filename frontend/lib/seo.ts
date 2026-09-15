@@ -7,9 +7,12 @@ import type { Metadata } from 'next'
  * vercel.app 을 가리켜 사이트맵 전체가 cross-domain 으로 무효화된 적이 있다.
  */
 export const SITE_URL = 'https://www.blrank.co.kr'
-export const SITE_NAME = '블랭크'
-export const SITE_TAGLINE = 'AI 블로그 분석 플랫폼'
-export const ORG_LEGAL_NAME = '플라톤마케팅'
+export const SITE_NAME = '블스피'
+export const SITE_TAGLINE = '블로그 분석·키워드 탐색'
+export const SITE_DESCRIPTION = '블스피에서 네이버 블로그 분석, 키워드 검색량과 경쟁도 조회, 발행 전 원고 진단을 시작하세요. 공개 검색 데이터와 자체 추정 지표를 구분해 블로그 운영에 필요한 정보를 제공합니다.'
+export const SITE_UPDATED = '2026-09-14'
+// Match the operator shown in the terms and business-information footer.
+export const ORG_LEGAL_NAME = '머프키치'
 
 export function absoluteUrl(path = '/'): string {
   if (!path || path === '/') return SITE_URL
@@ -77,6 +80,7 @@ export function pageMetadata({
     url,
     title: `${title} | ${SITE_NAME}`,
     description,
+    images: [{ url: absoluteUrl('/opengraph-image'), width: 1200, height: 630, alt: `${SITE_NAME} — ${SITE_TAGLINE}` }],
   }
 
   return {
@@ -96,8 +100,9 @@ export function pageMetadata({
       card: 'summary_large_image',
       title: `${title} | ${SITE_NAME}`,
       description,
+      images: [absoluteUrl('/twitter-image')],
     },
-    robots: { index: true, follow: true },
+    robots: { index: true, follow: true, googleBot: { index: true, follow: true, 'max-image-preview': 'large', 'max-snippet': -1, 'max-video-preview': -1 } },
   }
 }
 
@@ -138,6 +143,8 @@ export const PUBLIC_ROUTES: Array<{
   { path: '/ad-optimizer', changeFrequency: 'weekly', priority: 0.7 },
   { path: '/pricing', changeFrequency: 'weekly', priority: 0.8 },
   { path: '/guides', changeFrequency: 'weekly', priority: 0.9 },
+  { path: '/about', changeFrequency: 'monthly', priority: 0.8 },
+  { path: '/methodology', changeFrequency: 'monthly', priority: 0.8 },
   { path: '/terms', changeFrequency: 'yearly', priority: 0.2 },
   { path: '/privacy', changeFrequency: 'yearly', priority: 0.2 },
   { path: '/refund-policy', changeFrequency: 'yearly', priority: 0.2 },
@@ -162,7 +169,7 @@ export const organizationJsonLd = {
   '@type': 'Organization',
   '@id': `${SITE_URL}/#organization`,
   name: SITE_NAME,
-  alternateName: ['BLANK', '블랭크 블로그 분석'],
+  alternateName: ['BLSPI', '블스피 블로그 분석'],
   legalName: ORG_LEGAL_NAME,
   url: SITE_URL,
   logo: {
@@ -170,7 +177,8 @@ export const organizationJsonLd = {
     url: `${SITE_URL}/icon.svg`,
   },
   description:
-    '네이버 블로그의 품질 지수(블로그 레벨)를 6개 실측 신호로 측정하고, 상위 노출 가능성이 높은 키워드를 발굴하는 AI 분석 서비스.',
+    SITE_DESCRIPTION,
+  email: 'lhs0609c@naver.com',
   areaServed: { '@type': 'Country', name: '대한민국' },
   knowsLanguage: 'ko',
 }
@@ -181,6 +189,7 @@ export const websiteJsonLd = {
   '@id': `${SITE_URL}/#website`,
   url: SITE_URL,
   name: SITE_NAME,
+  alternateName: 'BLSPI',
   description: `${SITE_TAGLINE} — 네이버 블로그 지수 측정과 키워드 발굴`,
   inLanguage: 'ko-KR',
   publisher: { '@id': `${SITE_URL}/#organization` },
@@ -188,7 +197,7 @@ export const websiteJsonLd = {
     '@type': 'SearchAction',
     target: {
       '@type': 'EntryPoint',
-      urlTemplate: `${SITE_URL}/keyword-search?q={search_term_string}`,
+      urlTemplate: `${SITE_URL}/keyword-search?keyword={search_term_string}`,
     },
     'query-input': 'required name=search_term_string',
   },
@@ -212,11 +221,11 @@ export const softwareAppJsonLd = {
     description: '무료 플랜 제공 (블로그 분석 일 2회, 키워드 분석 일 8회)',
   },
   featureList: [
-    '네이버 블로그 품질 지수 11단계 레벨 측정',
+    '공개 데이터를 바탕으로 한 블로그 지수 추정',
     '블로그 색인·노출 6개 신호 실측',
     '키워드 검색량 및 경쟁 강도 분석',
     '블루오션 키워드 발굴',
-    '상위 노출 확률 예측',
+    '키워드별 상위 검색 문서 비교',
     '네이버 검색광고 키워드 최적화',
   ],
 }
@@ -264,6 +273,7 @@ export function articleJsonLd(input: {
     dateModified: input.modified ?? input.published,
     author: { '@id': `${SITE_URL}/#organization` },
     publisher: { '@id': `${SITE_URL}/#organization` },
+    image: absoluteUrl('/opengraph-image'),
   }
 }
 
@@ -271,6 +281,6 @@ export function articleJsonLd(input: {
 export function jsonLdScript(data: unknown) {
   return {
     type: 'application/ld+json' as const,
-    dangerouslySetInnerHTML: { __html: JSON.stringify(data) },
+    dangerouslySetInnerHTML: { __html: JSON.stringify(data).replace(/</g, '\\u003c') },
   }
 }

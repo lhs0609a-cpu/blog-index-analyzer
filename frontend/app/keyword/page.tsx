@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import {
   fetchKeywordList,
@@ -26,13 +27,16 @@ import { breadcrumbJsonLd, jsonLdScript, pageMetadata } from '@/lib/seo'
 
 export const revalidate = SITEMAP_REVALIDATE
 
-export const metadata: Metadata = pageMetadata({
-  title: '키워드별 블로그 상위노출 난이도',
+export function generateMetadata({ searchParams }: { searchParams: { page?: string } }): Metadata {
+  const page = Math.max(1, Number(searchParams.page) || 1)
+  return pageMetadata({
+  title: `키워드별 블로그 상위노출 난이도${page > 1 ? ` - ${page}페이지` : ''}`,
   description:
     '네이버 블로그 키워드별로 1페이지 경쟁 블로그를 직접 조회해 진입 난이도를 계산했습니다. 경쟁자의 휴면 여부까지 실측한 결과를 키워드마다 공개합니다.',
-  path: '/keyword',
+  path: page > 1 ? `/keyword?page=${page}` : '/keyword',
   keywords: ['블로그 키워드 분석', '상위노출 난이도', '네이버 블로그 경쟁도', '키워드 경쟁 분석'],
 })
+}
 
 const PAGE_SIZE = 300
 
@@ -78,8 +82,11 @@ export default async function KeywordHubPage({
   searchParams: { page?: string }
 }) {
   const pageNo = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1)
+  if (searchParams.page && !/^[1-9]\d*$/.test(searchParams.page)) notFound()
+  if (!Number.isSafeInteger(pageNo) || pageNo > 10000) notFound()
   const { total, items } = await fetchKeywordList((pageNo - 1) * PAGE_SIZE, PAGE_SIZE)
   const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  if (pageNo > lastPage) notFound()
 
   // 난이도별로 묶고, 구간 안에서는 점수 오름차순(= 쉬운 것부터).
   const buckets = DIFFICULTY_ORDER.map((label) => ({

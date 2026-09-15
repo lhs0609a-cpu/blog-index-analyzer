@@ -15,6 +15,7 @@ IP 를 그대로 두면 그 자체가 개인정보다. **날짜별 소금(salt)*
 (구글·네이버 크롤러가 실제로 오는지 보는 것도 SEO 관점에서 정보다).
 """
 import hashlib
+import json
 import logging
 import os
 import sqlite3
@@ -71,11 +72,35 @@ def init_analytics_db() -> None:
                 device TEXT
             )
         """)
+        # 퍼널 이벤트.
+        #
+        # 페이지뷰만으로는 "가입 페이지까지 왔는데 왜 안 했는지"를 영원히 알 수 없다.
+        # 눌렀는지·제출했는지·무엇 때문에 실패했는지는 페이지 이동을 남기지 않기 때문이다.
+        # reason 을 별도 칼럼으로 뽑아둔 이유: 실패 사유별 집계가 이 테이블의 존재 이유라
+        # JSON 안에 묻어두면 매번 파싱해야 한다.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                day TEXT NOT NULL,             -- KST 기준 YYYY-MM-DD
+                ts TIMESTAMP NOT NULL,
+                name TEXT NOT NULL,            -- signup_submit, checkout_start ...
+                path TEXT,
+                visitor_hash TEXT NOT NULL,    -- pageviews 와 같은 규칙 (날짜별 소금)
+                user_id TEXT,
+                device TEXT,
+                is_bot INTEGER NOT NULL DEFAULT 0,
+                reason TEXT,                   -- 실패 사유 코드 (성공 이벤트면 NULL)
+                props TEXT                     -- 부가 정보 JSON
+            )
+        """)
         for ddl in (
             "CREATE INDEX IF NOT EXISTS idx_pv_day ON pageviews(day)",
             "CREATE INDEX IF NOT EXISTS idx_pv_day_visitor ON pageviews(day, visitor_hash)",
             "CREATE INDEX IF NOT EXISTS idx_pv_path ON pageviews(day, path)",
             "CREATE INDEX IF NOT EXISTS idx_pv_ref ON pageviews(day, referrer_host)",
+            "CREATE INDEX IF NOT EXISTS idx_ev_day_name ON events(day, name)",
+            "CREATE INDEX IF NOT EXISTS idx_ev_day_name_visitor ON events(day, name, visitor_hash)",
+            "CREATE INDEX IF NOT EXISTS idx_ev_reason ON events(day, name, reason)",
         ):
             cur.execute(ddl)
         conn.commit()
@@ -122,6 +147,7 @@ def record_pageview(
     day = now.strftime("%Y-%m-%d")
     # 쿼리스트링은 버린다 — 경로별 집계가 목적이고, 쿼리에 개인정보가 실릴 수 있다.
     clean_path = (path or "/").split("?")[0][:200]
+    _ensure_tables()
     conn = _connect()
     try:
         conn.execute(
@@ -139,6 +165,229 @@ def record_pageview(
             ),
         )
         conn.commit()
+    finally:
+        conn.close()
+
+
+# 테이블이 있는지 프로세스당 한 번만 보장한다.
+#
+# 왜 필요한가: init_analytics_db 는 지금까지 summary() 안에서만 불렸다. 즉 새 볼륨에
+# 배포하면 관리자가 통계 화면을 한 번 열기 전까지 기록이 통째로 버려졌다(라우터가
+# 예외를 삼키므로 조용히). events 테이블은 기존 DB 에 나중에 추가된 것이라 같은
+# 문제를 그대로 물려받는다. 기록 경로에서 한 번 보장하면 둘 다 없어진다.
+_tables_ready = False
+
+
+def _ensure_tables() -> None:
+    global _tables_ready
+    if _tables_ready:
+        return
+    init_analytics_db()
+    _tables_ready = True
+
+
+# 받아줄 이벤트 이름. 화이트리스트인 이유: /event 는 인증 없이 열려 있어서
+# 아무 문자열이나 받으면 테이블이 쓰레기로 차고 집계가 의미를 잃는다.
+FUNNEL_EVENTS = {
+    # 가입
+    "signup_form_start",      # 첫 입력칸에 커서를 놓은 순간 (폼을 '보기만' 한 사람과 가른다)
+    "signup_submit",
+    "signup_success",
+    "signup_fail",
+    "login_submit",
+    "login_success",
+    "login_fail",
+    # 활성화
+    "activation_first_run",   # 가입 후 첫 분석 실행 — 가치를 한 번이라도 본 시점
+    # 결제
+    "pricing_plan_click",
+    "checkout_blocked_anonymous",  # 비로그인 상태로 요금제 버튼을 눌러 로그인으로 튕긴 경우
+    "checkout_consent_open",  # 체험 동의 모달이 열림
+    "checkout_start",         # 동의하고 결제 화면으로 넘어감
+    "payment_widget_open",    # 토스 결제창 호출
+    "payment_widget_error",   # 결제창 자체가 안 뜸
+    "payment_return_fail",    # 토스가 failUrl 로 돌려보냄 (reason = 토스 code)
+    "payment_register_fail",  # 빌링키 등록/첫 결제가 서버에서 실패
+    "payment_success",
+}
+
+
+def record_event(
+    name: str,
+    ip: str,
+    user_agent: str,
+    path: Optional[str] = None,
+    user_id: Optional[str] = None,
+    device: Optional[str] = None,
+    reason: Optional[str] = None,
+    props: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """퍼널 이벤트 1건 기록. 화이트리스트에 없는 이름은 조용히 버린다."""
+    if name not in FUNNEL_EVENTS:
+        return False
+    _ensure_tables()
+    now = datetime.now(KST)
+    day = now.strftime("%Y-%m-%d")
+    conn = _connect()
+    try:
+        conn.execute(
+            "INSERT INTO events (day, ts, name, path, visitor_hash, user_id, device, is_bot, reason, props) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (
+                day,
+                now.isoformat(),
+                name,
+                ((path or "").split("?")[0][:200] or None),
+                visitor_hash(ip, user_agent, day),
+                (user_id or None),
+                (device or None),
+                1 if is_bot(user_agent) else 0,
+                (str(reason)[:200] if reason else None),
+                json.dumps(props, ensure_ascii=False)[:1000] if props else None,
+            ),
+        )
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def count_visitors(days: int, path_prefix: Optional[str] = None) -> int:
+    """기간 내 고유 방문자 수(봇 제외). path_prefix 를 주면 그 경로를 본 사람만."""
+    _ensure_tables()
+    start = _range_days(days)[0]
+    conn = _connect()
+    try:
+        if path_prefix:
+            cur = conn.execute(
+                "SELECT COUNT(DISTINCT visitor_hash) c FROM pageviews "
+                "WHERE day >= ? AND is_bot = 0 AND path LIKE ?",
+                (start, f"{path_prefix}%"),
+            )
+        else:
+            cur = conn.execute(
+                "SELECT COUNT(DISTINCT visitor_hash) c FROM pageviews WHERE day >= ? AND is_bot = 0",
+                (start,),
+            )
+        return cur.fetchone()["c"] or 0
+    finally:
+        conn.close()
+
+
+def count_event_visitors(days: int, names: List[str]) -> Dict[str, int]:
+    """이벤트별 고유 방문자 수. 없는 이벤트도 0 으로 채워 돌려준다."""
+    _ensure_tables()
+    start = _range_days(days)[0]
+    out = {n: 0 for n in names}
+    if not names:
+        return out
+    placeholders = ",".join("?" for _ in names)
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            f"SELECT name, COUNT(DISTINCT visitor_hash) c FROM events "
+            f"WHERE day >= ? AND is_bot = 0 AND name IN ({placeholders}) GROUP BY name",
+            (start, *names),
+        )
+        for r in cur.fetchall():
+            out[r["name"]] = r["c"] or 0
+        return out
+    finally:
+        conn.close()
+
+
+def failure_reasons(days: int, name: str, limit: int = 12) -> List[Dict[str, Any]]:
+    """실패 이벤트의 사유별 건수 — '왜 안 되는지'에 직접 답하는 유일한 데이터."""
+    _ensure_tables()
+    start = _range_days(days)[0]
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            "SELECT COALESCE(reason,'(사유 미기록)') reason, COUNT(*) n, "
+            "COUNT(DISTINCT visitor_hash) people FROM events "
+            "WHERE day >= ? AND is_bot = 0 AND name = ? GROUP BY reason ORDER BY n DESC LIMIT ?",
+            (start, name, limit),
+        )
+        return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def event_daily(days: int, names: List[str]) -> List[Dict[str, Any]]:
+    """일별 이벤트 추이 — 점수가 언제 꺾였는지 보려면 추세가 있어야 한다."""
+    _ensure_tables()
+    day_list = _range_days(days)
+    start = day_list[0]
+    if not names:
+        return []
+    placeholders = ",".join("?" for _ in names)
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            f"SELECT day, name, COUNT(DISTINCT visitor_hash) c FROM events "
+            f"WHERE day >= ? AND is_bot = 0 AND name IN ({placeholders}) GROUP BY day, name",
+            (start, *names),
+        )
+        table: Dict[str, Dict[str, int]] = {}
+        for r in cur.fetchall():
+            table.setdefault(r["day"], {})[r["name"]] = r["c"] or 0
+        return [
+            {"day": d, **{n: table.get(d, {}).get(n, 0) for n in names}} for d in day_list
+        ]
+    finally:
+        conn.close()
+
+
+def device_split(days: int, names: List[str]) -> Dict[str, Dict[str, int]]:
+    """기기별 이벤트 수. 모바일에서만 결제가 깨지는 경우를 잡아내려면 필요하다."""
+    _ensure_tables()
+    start = _range_days(days)[0]
+    out: Dict[str, Dict[str, int]] = {n: {"mobile": 0, "desktop": 0} for n in names}
+    if not names:
+        return out
+    placeholders = ",".join("?" for _ in names)
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            f"SELECT name, COALESCE(device,'desktop') device, COUNT(DISTINCT visitor_hash) c "
+            f"FROM events WHERE day >= ? AND is_bot = 0 AND name IN ({placeholders}) "
+            f"GROUP BY name, device",
+            (start, *names),
+        )
+        for r in cur.fetchall():
+            bucket = "mobile" if r["device"] == "mobile" else "desktop"
+            out.setdefault(r["name"], {"mobile": 0, "desktop": 0})[bucket] = r["c"] or 0
+        return out
+    finally:
+        conn.close()
+
+
+def pageview_device_split(days: int) -> Dict[str, int]:
+    _ensure_tables()
+    start = _range_days(days)[0]
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            "SELECT COALESCE(device,'desktop') device, COUNT(DISTINCT visitor_hash) c "
+            "FROM pageviews WHERE day >= ? AND is_bot = 0 GROUP BY device",
+            (start,),
+        )
+        out = {"mobile": 0, "desktop": 0}
+        for r in cur.fetchall():
+            out["mobile" if r["device"] == "mobile" else "desktop"] = r["c"] or 0
+        return out
+    finally:
+        conn.close()
+
+
+def events_collected_since() -> Optional[str]:
+    """이벤트 수집을 언제부터 했는지. 이전 기간 숫자를 0 으로 오해하지 않기 위해 필요."""
+    _ensure_tables()
+    conn = _connect()
+    try:
+        cur = conn.execute("SELECT MIN(day) d FROM events")
+        row = cur.fetchone()
+        return row["d"] if row else None
     finally:
         conn.close()
 
@@ -231,11 +480,13 @@ def summary(days: int = 30, include_bots: bool = False) -> Dict[str, Any]:
 
 def prune(keep_days: int = 400) -> int:
     """오래된 원본 로그 정리. 디스크가 10GB 라 여유는 있지만 무한 증가는 막는다."""
+    _ensure_tables()
     cutoff = (datetime.now(KST) - timedelta(days=keep_days)).strftime("%Y-%m-%d")
     conn = _connect()
     try:
-        cur = conn.execute("DELETE FROM pageviews WHERE day < ?", (cutoff,))
+        n = conn.execute("DELETE FROM pageviews WHERE day < ?", (cutoff,)).rowcount
+        n += conn.execute("DELETE FROM events WHERE day < ?", (cutoff,)).rowcount
         conn.commit()
-        return cur.rowcount
+        return n
     finally:
         conn.close()

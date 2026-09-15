@@ -1,13 +1,12 @@
 import { MetadataRoute } from 'next'
-import { absoluteUrl, PUBLIC_ROUTES } from '@/lib/seo'
+import { absoluteUrl, PUBLIC_ROUTES, SITE_UPDATED } from '@/lib/seo'
 import { GUIDES } from '@/lib/content/guides'
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const now = new Date()
 
   const staticPages: MetadataRoute.Sitemap = PUBLIC_ROUTES.map((route) => ({
     url: absoluteUrl(route.path),
-    lastModified: now,
+    lastModified: new Date(SITE_UPDATED),
     changeFrequency: route.changeFrequency,
     priority: route.priority,
   }))

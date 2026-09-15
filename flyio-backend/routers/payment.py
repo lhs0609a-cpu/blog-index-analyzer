@@ -243,6 +243,38 @@ class BillingPaymentRequest(BaseModel):
     order_name: str
 
 
+
+# ============ 퍼널 이벤트 기록 (결제 실패의 '진짜 이유') ============
+# 프런트는 토스 메시지만 본다. 결제사 **오류 코드**(REJECT_CARD_COMPANY,
+# EXCEED_MAX_DAILY_PAYMENT_COUNT …)는 서버만 받아볼 수 있는데, 이걸 안 남기면
+# "결제가 왜 안 되냐"는 질문에 영원히 답할 수 없다.
+def _track_payment_event(
+    http_request,
+    name: str,
+    user_id=None,
+    reason: str = None,
+    props: dict = None,
+) -> None:
+    try:
+        from database import site_analytics_db as _adb
+
+        _adb.record_event(
+            name=name,
+            ip=(
+                http_request.headers.get("fly-client-ip")
+                or (http_request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+                or (http_request.client.host if http_request.client else "unknown")
+            ),
+            user_agent=http_request.headers.get("user-agent", ""),
+            path="/api/payment/billing/register",
+            user_id=str(user_id) if user_id is not None else None,
+            reason=reason,
+            props=props,
+        )
+    except Exception as e:  # 통계 기록이 결제를 막으면 본말전도다
+        logger.warning(f"[payment] 퍼널 이벤트 기록 실패: {e}")
+
+
 # ============ 결제 준비 API ============
 
 @router.post("/prepare")
@@ -276,7 +308,7 @@ async def prepare_payment(
 
     return {
         "order_id": order_id,
-        "order_name": f"블랭크 {limits['name']} 플랜 ({request.billing_cycle})",
+        "order_name": f"블스피 {limits['name']} 플랜 ({request.billing_cycle})",
         "amount": amount,
         "plan_type": request.plan_type,
         "billing_cycle": request.billing_cycle,
@@ -431,6 +463,7 @@ class BillingRegisterRequest(BaseModel):
 @router.post("/billing/register")
 async def register_billing(
     request: BillingRegisterRequest,
+    http_request: Request,
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -453,6 +486,13 @@ async def register_billing(
             if billing_response.status_code != 200:
                 error_data = billing_response.json()
                 logger.error(f"Billing key issue failed: {error_data}")
+                _track_payment_event(
+                    http_request,
+                    "payment_register_fail",
+                    user_id,
+                    reason=f"billing_key:{error_data.get('code') or billing_response.status_code}",
+                    props={"stage": "billing_key", "plan": request.plan_type},
+                )
                 raise HTTPException(
                     status_code=billing_response.status_code,
                     detail=error_data.get("message", "빌링키 발급에 실패했습니다")
@@ -464,7 +504,7 @@ async def register_billing(
 
             # 2. 빌링키로 첫 결제 진행
             plan = PlanType(request.plan_type)
-            order_name = f"블랭크 {PLAN_LIMITS[plan]['name']} 플랜 ({request.billing_cycle})"
+            order_name = f"블스피 {PLAN_LIMITS[plan]['name']} 플랜 ({request.billing_cycle})"
 
             # 항상 새로운 order_id 생성 (토스에서 중복 방지)
             new_order_id = f"BLANK_BILLING_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
@@ -484,6 +524,13 @@ async def register_billing(
             if payment_response.status_code != 200:
                 error_data = payment_response.json()
                 logger.error(f"Billing payment failed: {error_data}")
+                _track_payment_event(
+                    http_request,
+                    "payment_register_fail",
+                    user_id,
+                    reason=f"first_charge:{error_data.get('code') or payment_response.status_code}",
+                    props={"stage": "first_charge", "plan": request.plan_type, "amount": request.amount},
+                )
                 raise HTTPException(
                     status_code=payment_response.status_code,
                     detail=error_data.get("message", "결제에 실패했습니다")
@@ -506,6 +553,12 @@ async def register_billing(
             )
 
             logger.info(f"Subscription upgraded: user={user_id}, plan={request.plan_type}")
+            _track_payment_event(
+                http_request,
+                "payment_success",
+                user_id,
+                props={"plan": request.plan_type, "cycle": request.billing_cycle, "amount": request.amount},
+            )
 
             return {
                 "success": True,
@@ -525,9 +578,11 @@ async def register_billing(
         raise
     except httpx.RequestError as e:
         logger.error(f"Billing register request error: {e}")
+        _track_payment_event(http_request, "payment_register_fail", user_id, reason="toss_unreachable")
         raise HTTPException(status_code=500, detail="결제 서버 연결에 실패했습니다")
     except Exception as e:
         logger.error(f"Billing register error: {e}")
+        _track_payment_event(http_request, "payment_register_fail", user_id, reason="server_error")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -787,7 +842,7 @@ async def prepare_credits_payment(
 
     return {
         "order_id": order_id,
-        "order_name": f"블랭크 {credit_name} 크레딧 {amount}회",
+        "order_name": f"블스피 {credit_name} 크레딧 {amount}회",
         "amount": price,
         "credit_type": credit_type,
         "credit_amount": amount,

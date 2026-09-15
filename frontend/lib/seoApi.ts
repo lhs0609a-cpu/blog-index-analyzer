@@ -7,6 +7,8 @@
  * 때리게 돼 있었다. 그 기본값은 고쳤지만, 사이트맵·키워드 페이지는 조용히 404 가
  * 나면 알아채기 어려우므로 여기서는 전용 변수만 본다.
  */
+import { cache } from 'react'
+
 const API_BASE =
   process.env.SEO_API_URL?.replace(/\/$/, '') || 'https://blog-index-analyzer.fly.dev'
 
@@ -84,7 +86,8 @@ export type KeywordListItem = {
  * Fly 머신은 유휴 시 정지했다가 콜드 스타트하므로 첫 요청이 수 초 걸릴 수 있고,
  * 그동안 Vercel 함수 실행 한도를 넘기면 504 가 나간다. 크롤러에게 504 는
  * "가져올 수 없음"이다 — 사이트맵이 통째로 거부된다.
- * 끊고 빈 값으로 떨어지는 편이 낫다(빈 urlset 은 유효한 XML 이다).
+ * Failure must remain retryable; never replace existing content with an empty
+ * successful response or a fabricated 404 during an upstream outage.
  */
 const FETCH_TIMEOUT_MS = 6000
 
@@ -95,18 +98,16 @@ function withTimeout(ms = FETCH_TIMEOUT_MS): RequestInit {
 }
 
 /** 페이지 데이터. 없으면 null — 호출부가 notFound() 를 내야 한다. */
-export async function fetchKeywordPage(slug: string): Promise<KeywordPage | null> {
-  try {
+export const fetchKeywordPage = cache(async (slug: string): Promise<KeywordPage | null> => {
     const res = await fetch(
       `${API_BASE}/api/seo/keyword/${encodeURIComponent(slug)}`,
       { ...withTimeout(), next: { revalidate: KEYWORD_PAGE_REVALIDATE } }
     )
-    if (!res.ok) return null
+    if (res.status === 404) return null
+    // Preserve previously generated pages during upstream outages.
+    if (!res.ok) throw new Error(`Keyword data temporarily unavailable (${res.status})`)
     return (await res.json()) as KeywordPage
-  } catch {
-    return null
-  }
-}
+})
 
 /**
  * 발행된 페이지 수만 센다. **캐시하지 않는다.**
@@ -117,17 +118,14 @@ export async function fetchKeywordPage(slug: string): Promise<KeywordPage | null
  * 응답이 작으므로(카운트 1개) 매번 조회해도 부담 없다.
  */
 export async function fetchKeywordCount(): Promise<number> {
-  try {
     const res = await fetch(`${API_BASE}/api/seo/keywords?offset=0&limit=1`, {
       ...withTimeout(),
       cache: 'no-store',
     })
-    if (!res.ok) return 0
+    if (!res.ok) throw new Error(`Keyword count unavailable (${res.status})`)
     const data = await res.json()
-    return data.total ?? 0
-  } catch {
-    return 0
-  }
+    if (!Number.isSafeInteger(data.total) || data.total < 0) throw new Error('Invalid keyword count')
+    return data.total
 }
 
 export async function fetchKeywordList(
@@ -136,17 +134,14 @@ export async function fetchKeywordList(
   /** 'volume' 사이트맵용(검색량순) · 'recent' RSS 용(최신순) */
   order: 'volume' | 'recent' = 'volume'
 ): Promise<{ total: number; items: KeywordListItem[] }> {
-  try {
     const res = await fetch(
       `${API_BASE}/api/seo/keywords?offset=${offset}&limit=${limit}&order=${order}`,
-      { ...withTimeout(), next: { revalidate: SITEMAP_REVALIDATE } }
+      { ...withTimeout(), next: { revalidate: order === 'recent' ? 300 : SITEMAP_REVALIDATE } }
     )
-    if (!res.ok) return { total: 0, items: [] }
+    if (!res.ok) throw new Error(`Keyword list unavailable (${res.status})`)
     const data = await res.json()
-    return { total: data.total ?? 0, items: data.items ?? [] }
-  } catch {
-    return { total: 0, items: [] }
-  }
+    if (!Number.isSafeInteger(data.total) || !Array.isArray(data.items)) throw new Error('Invalid keyword list')
+    return { total: data.total, items: data.items }
 }
 
 /** 난이도 라벨 → 사람이 읽는 한국어. 백엔드 라벨을 그대로 노출하지 않는다. */

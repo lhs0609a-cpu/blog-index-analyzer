@@ -1,14 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Mail, Lock, User, Loader2, Sparkles, ArrowLeft, Check, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { register } from '@/lib/api/auth'
 import { useAuthStore } from '@/lib/stores/auth'
+import { track, signupFailReason } from '@/lib/analytics/track'
 import toast from 'react-hot-toast'
-import BlankLogo from '@/components/BlankLogo'
+import BlspiLogo from '@/components/BlspiLogo'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -20,8 +21,15 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  // 폼을 '보기만 한 사람'과 '쓰기 시작한 사람'을 가르는 유일한 신호.
+  // 페이지뷰만으로는 가입 페이지에서 손도 대지 않고 나갔는지 알 수 없다.
+  const startedRef = useRef(false)
 
-
+  const markFormStart = () => {
+    if (startedRef.current) return
+    startedRef.current = true
+    track('signup_form_start')
+  }
 
   const passwordRequirements = [
     { label: '최소 8자 이상', met: password.length >= 8 },
@@ -31,19 +39,26 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    markFormStart()
+    track('signup_submit')
 
+    // 클라이언트에서 막힌 것도 '가입 실패'다. 여기서 안 남기면 폼 규칙 때문에
+    // 되돌아간 사람이 통계상 그냥 사라진 걸로 보인다.
     if (!name || !email || !password || !confirmPassword) {
       toast.error('모든 필드를 입력해주세요')
+      track('signup_fail', { reason: 'missing_field' })
       return
     }
 
     if (password !== confirmPassword) {
       toast.error('비밀번호가 일치하지 않습니다')
+      track('signup_fail', { reason: 'password_mismatch' })
       return
     }
 
     if (!passwordRequirements.every(req => req.met)) {
       toast.error('비밀번호 요구사항을 충족하지 못했습니다')
+      track('signup_fail', { reason: 'password_rules' })
       return
     }
 
@@ -52,11 +67,17 @@ export default function RegisterPage() {
     try {
       const response = await register({ name, email, password })
       setAuth(response.user, response.access_token)
+      track('signup_success', { userId: response.user?.id })
       toast.success(`환영합니다, ${response.user.name}님!`)
       router.push('/dashboard')
     } catch (error) {
-      const axiosError = error as { response?: { data?: { detail?: string } } }
+      const axiosError = error as { response?: { status?: number; data?: { detail?: string } } }
+      const status = axiosError.response?.status
       const message = axiosError.response?.data?.detail || '회원가입에 실패했습니다'
+      track('signup_fail', {
+        reason: signupFailReason(message, status),
+        props: { http: status ?? 0 },
+      })
       toast.error(message)
     } finally {
       setIsLoading(false)
@@ -78,7 +99,7 @@ export default function RegisterPage() {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-8"
         >
-          <div className="flex justify-center mb-7"><BlankLogo markClassName="w-11 h-11" /></div>
+          <div className="flex justify-center mb-7"><BlspiLogo markClassName="w-11 h-11" /></div>
           {/*
             가입의 진짜 가치는 '기록' 이다. 진단 1회는 스냅샷이고, 계정이 있어야
             어제와 비교할 수 있다. 그리고 **과거 지수는 복원할 수 없다** —
@@ -105,7 +126,8 @@ export default function RegisterPage() {
 
 
           <div className="auth-card">
-            <form onSubmit={handleSubmit} className="space-y-5">
+            {/* focus 는 버블링되므로 폼에 한 번만 달면 어느 칸을 먼저 만지든 잡힌다 */}
+            <form onSubmit={handleSubmit} onFocus={markFormStart} className="space-y-5">
               {/* Name */}
               <div>
                 <label htmlFor="register-name" className="block text-sm font-semibold text-gray-700 mb-2">

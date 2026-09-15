@@ -9,6 +9,7 @@ import Confetti from 'react-confetti'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useWindowSize } from '@/lib/hooks/useWindowSize'
+import { track } from '@/lib/analytics/track'
 import { analyzeBlog, saveBlogToList, verifyBlogIndex, getExposureCeiling,
   type VerifyIndexResponse, type ExposureCeilingResponse } from '@/lib/api/blog'
 import { registerBlog, startRankCheck, getTrackedBlogs } from '@/lib/api/rankTracker'
@@ -1508,6 +1509,9 @@ export default function AnalyzePage() {
         setResult(analysisResult)
         // 전역 컨텍스트에 저장 (페이지 이동 시 유지)
         setAnalysisResult(analysisResult)
+        // 활성화 시점 — 가입만 하고 한 번도 값을 못 본 사람과 가른다.
+        // 이 비율이 낮으면 문제는 가입 폼이 아니라 가입 직후 화면이다.
+        track('activation_first_run', { userId: user?.id, props: { authed: !!user?.id } })
         toast.success('분석이 완료되었습니다!')
 
         // 사용량 차감은 여기서 한다. 시작할 때 미리 빼면
@@ -1628,9 +1632,9 @@ export default function AnalyzePage() {
               <GlassIcon icon={Sparkles} size={76} />
             </motion.div>
 
-            <h1 className="text-3xl font-semibold mb-3">
+            <h2 className="text-3xl font-semibold mb-3">
               <span className="gradient-text">블로그 분석</span>
-            </h1>
+            </h2>
             <p className="text-gray-600 text-lg mb-3">
               블로그 ID를 입력하고 운영 건강도를 확인하세요
             </p>

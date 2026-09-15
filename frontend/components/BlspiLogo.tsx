@@ -2,7 +2,7 @@
 import { useId } from 'react'
 
 /**
- * 블랭크 브랜드 마크 — AURORA GLASS
+ * 블스피 브랜드 마크 — AURORA GLASS
  * 상승하는 3개의 유리 슬래브 = '지수 측정'.
  * public/icon.svg 와 동일 형상이며, 여기서는 인라인이라 크기·애니메이션 제어가 가능합니다.
  *
@@ -11,11 +11,11 @@ import { useId } from 'react'
 
 
 
-interface BlankMarkProps {
+interface BlspiMarkProps {
   className?: string
 }
 
-export function BlankMark({ className = 'w-9 h-9' }: BlankMarkProps) {
+export function BlspiMark({ className = 'w-9 h-9' }: BlspiMarkProps) {
   // 인스턴스별 고유 접두사
   const uid = useId().replace(/:/g, '')
 
@@ -74,7 +74,7 @@ export function BlankMark({ className = 'w-9 h-9' }: BlankMarkProps) {
   )
 }
 
-interface BlankLogoProps {
+interface BlspiLogoProps {
   /** 마크 크기 클래스 */
   markClassName?: string
   /** 워드마크 노출 여부 */
@@ -83,17 +83,17 @@ interface BlankLogoProps {
   wordmarkClassName?: string
 }
 
-export default function BlankLogo({
+export default function BlspiLogo({
   markClassName = 'w-9 h-9',
   showWordmark = true,
   wordmarkClassName = '',
-}: BlankLogoProps) {
+}: BlspiLogoProps) {
   return (
     <span className="flex items-center gap-2">
-      <BlankMark className={markClassName} />
+      <BlspiMark className={markClassName} />
       {showWordmark && (
         <span className={`text-lg font-black tracking-tight gradient-text ${wordmarkClassName}`}>
-          블랭크
+          블스피
         </span>
       )}
     </span>

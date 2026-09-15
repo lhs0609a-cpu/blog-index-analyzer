@@ -60,6 +60,39 @@ async def collect(pv: PageviewIn, request: Request):
     return Response(status_code=204)
 
 
+class EventIn(BaseModel):
+    name: str
+    path: Optional[str] = ""
+    user_id: Optional[str] = None
+    device: Optional[str] = None
+    reason: Optional[str] = None
+    props: Optional[dict] = None
+
+
+@router.post("/event", status_code=204)
+async def collect_event(ev: EventIn, request: Request):
+    """
+    퍼널 이벤트 1건 기록 (가입 제출, 결제 시작, 결제 실패 사유 …).
+
+    /collect 과 같은 원칙: 절대 예외를 밖으로 내보내지 않고 항상 204.
+    이름은 서버 화이트리스트로 거르므로(FUNNEL_EVENTS) 임의 문자열은 조용히 버려진다.
+    """
+    try:
+        adb.record_event(
+            name=ev.name,
+            ip=_client_ip(request),
+            user_agent=request.headers.get("user-agent", ""),
+            path=ev.path or None,
+            user_id=ev.user_id,
+            device=ev.device,
+            reason=ev.reason,
+            props=ev.props,
+        )
+    except Exception as e:
+        logger.warning(f"[analytics] 이벤트 기록 실패: {e}")
+    return Response(status_code=204)
+
+
 @router.get("/summary")
 async def get_summary(
     days: int = Query(30, ge=1, le=365),

@@ -279,7 +279,7 @@ export default function Dashboard() {
             <h1 className="text-3xl md:text-4xl font-bold mb-1">
               <span className="gradient-text">대시보드</span>
             </h1>
-            <p className="text-sm md:text-base text-gray-600">블랭크에서 내 블로그를 한눈에 확인하세요</p>
+            <p className="text-sm md:text-base text-gray-600">블스피에서 내 블로그를 한눈에 확인하세요</p>
           </div>
 
           {/* 액션 버튼 - 모바일 최적화 */}
@@ -391,7 +391,7 @@ export default function Dashboard() {
                   <div className="w-24 h-24 bg-gradient-to-r from-[#0064FF] to-[#3182F6] rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-[#0064FF]/20">
                     <Sparkles className="w-12 h-12 text-white gi3d" />
                   </div>
-                  <h3 className="text-3xl font-bold mb-3">블랭크에 오신 것을 환영합니다!</h3>
+                  <h3 className="text-3xl font-bold mb-3">블스피에 오신 것을 환영합니다!</h3>
                   <p className="text-gray-600 text-lg">
                     3단계만 따라하면 블로그 성장 전략을 세울 수 있어요
                   </p>

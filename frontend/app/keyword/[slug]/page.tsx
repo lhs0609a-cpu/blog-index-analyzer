@@ -72,7 +72,7 @@ function describe(page: KeywordPage): string {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const page = await fetchKeywordPage(decodeURIComponent(params.slug))
+  const page = await fetchKeywordPage(params.slug)
   if (!page) {
     // 측정 안 된 슬러그는 색인시키지 않는다. 여기서 noindex 를 안 걸면
     // 404 페이지가 수천 개 색인 후보로 잡힌다.
@@ -169,7 +169,7 @@ function buildFaq(page: KeywordPage, dormantCount: number) {
 }
 
 export default async function KeywordDetailPage({ params }: Props) {
-  const slug = decodeURIComponent(params.slug)
+  const slug = params.slug
   const page = await fetchKeywordPage(slug)
   if (!page) notFound()
 

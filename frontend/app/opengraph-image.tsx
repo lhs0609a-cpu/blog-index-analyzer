@@ -2,7 +2,7 @@ import { ImageResponse } from 'next/og'
 
 export const runtime = 'edge'
 
-export const alt = '블랭크 - AI 블로그 분석 플랫폼'
+export const alt = '블스피 - AI 블로그 분석 플랫폼'
 export const size = {
   width: 1200,
   height: 630,
@@ -88,7 +88,7 @@ export default async function Image() {
               textAlign: 'center',
             }}
           >
-            블랭크
+            블스피
           </h1>
 
           {/* Subtitle */}
@@ -112,7 +112,7 @@ export default async function Image() {
               marginTop: 20,
             }}
           >
-            {['블로그 지수 분석', '키워드 분석', 'AI 글쓰기'].map((feature) => (
+            {['블로그 분석', '키워드 분석', '원고 진단'].map((feature) => (
               <div
                 key={feature}
                 style={{

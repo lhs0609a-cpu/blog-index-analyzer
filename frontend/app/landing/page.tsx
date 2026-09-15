@@ -362,11 +362,11 @@ function SolutionSection() {
             해결책
           </span>
           <h2 className="text-3xl md:text-5xl font-black text-white mb-6">
-            블랭크 하나면
+            블스피 하나면
             <span className="text-green-400"> 전부 해결</span>됩니다
           </h2>
           <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-            52,341명의 블로거가 블랭크로 상위 노출에 성공했습니다
+            52,341명의 블로거가 블스피로 상위 노출에 성공했습니다
           </p>
         </motion.div>
 
@@ -410,7 +410,7 @@ function ComparisonSection() {
           className="text-center mb-16"
         >
           <h2 className="text-3xl md:text-5xl font-black text-white mb-6">
-            왜 <span className="text-blue-400">블랭크</span>인가요?
+            왜 <span className="text-blue-400">블스피</span>인가요?
           </h2>
         </motion.div>
 
@@ -450,7 +450,7 @@ function ComparisonSection() {
             </div>
             <div className="flex items-center gap-2 text-green-400 mb-6">
               <CheckCircle className="w-6 h-6 gi3d" />
-              <span className="font-bold text-xl">블랭크 사용 시</span>
+              <span className="font-bold text-xl">블스피 사용 시</span>
             </div>
             <ul className="space-y-4">
               {[
@@ -480,7 +480,7 @@ function TestimonialsSection() {
     {
       name: "김민수",
       role: "뷰티 블로거 | 월 방문자 12만",
-      content: "진짜 미쳤어요. 3개월째 1페이지 유지 중입니다. 예전에는 운 좋으면 1주일 버텼는데... 블랭크 키워드 추천 그대로 따라했더니 이렇게 됐어요.",
+      content: "진짜 미쳤어요. 3개월째 1페이지 유지 중입니다. 예전에는 운 좋으면 1주일 버텼는데... 블스피 키워드 추천 그대로 따라했더니 이렇게 됐어요.",
       metric: "노출 순위 1위 → 3개월 유지",
       avatar: "MS"
     },
@@ -575,7 +575,7 @@ function PricingSection() {
             <span className="text-purple-400">마케터 1명분</span>의 효율
           </h2>
           <p className="text-gray-400 text-lg">
-            마케팅 대행료 월 100만원 vs 블랭크 월 9,900원
+            마케팅 대행료 월 100만원 vs 블스피 월 9,900원
           </p>
         </motion.div>
 
@@ -649,7 +649,7 @@ function PricingSection() {
                   <span className="text-red-400 font-bold">-₩300,000</span>
                 </div>
                 <div className="flex justify-between items-center py-3">
-                  <span className="text-white font-bold">블랭크 사용 시 절감액</span>
+                  <span className="text-white font-bold">블스피 사용 시 절감액</span>
                   <span className="text-green-400 font-bold text-xl">+₩1,790,100/월</span>
                 </div>
               </div>

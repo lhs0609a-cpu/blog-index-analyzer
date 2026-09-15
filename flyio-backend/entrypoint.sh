@@ -29,6 +29,11 @@ python -c "from database.learning_db import init_learning_tables; init_learning_
 # 세 프로세스 모두가 알아야 한다 — app/scheduler 는 이걸 보고 판정 워치독을 **안** 켠다
 # (같은 job 을 둘이 claim 하면 안 된다).
 export KWV_DEDICATED=1
+export POST_WATCH_DEDICATED=1
+
+echo "Starting post-watch worker process (nice 5)..."
+ROLE=postwatch nice -n 5 python post_watch_worker.py &
+POST_WATCH_PID=$!
 
 echo "Starting keyword-verdict worker process (nice 5)..."
 ROLE=verdict nice -n 5 python verdict_worker.py &
@@ -42,7 +47,7 @@ WORKER_PID=$!
 echo "Scheduler worker started (PID=$WORKER_PID)"
 
 # API(PID 1) 종료 시 worker 들도 함께 정리.
-trap 'kill "$WORKER_PID" "$VERDICT_PID" 2>/dev/null || true' EXIT
+trap 'kill "$WORKER_PID" "$VERDICT_PID" "$POST_WATCH_PID" 2>/dev/null || true' EXIT
 
 # API 프로세스 (public) — 스케줄러 OFF. PID 1 (fly SIGTERM 수신).
 exec env SCHEDULERS_DISABLED=1 ROLE=app uvicorn main:app \

@@ -63,8 +63,8 @@ const PLATFORM_GUIDES = {
         tips: ['시크릿 키는 한 번만 표시되므로 반드시 저장', 'API 라이선스와 시크릿 키 모두 필요']
       },
       {
-        title: '4. 블랭크에 연동',
-        content: `블랭크 통합광고 > 플랫폼 관리에서 "네이버 검색광고" 연동하기 클릭 후:
+        title: '4. 블스피에 연동',
+        content: `블스피 통합광고 > 플랫폼 관리에서 "네이버 검색광고" 연동하기 클릭 후:
 
 1. 고객 ID 입력
 2. API 라이선스 입력
@@ -142,8 +142,8 @@ https://developers.google.com/google-ads/api/docs/oauth/playground`,
         tips: ['Refresh Token은 무기한 유효 (재설정 전까지)', 'access_type=offline 파라미터 필수']
       },
       {
-        title: '5. 블랭크에 연동',
-        content: `블랭크 통합광고 > 플랫폼 관리에서 "Google Ads" 연동하기 클릭 후:
+        title: '5. 블스피에 연동',
+        content: `블스피 통합광고 > 플랫폼 관리에서 "Google Ads" 연동하기 클릭 후:
 
 1. 고객 ID 입력 (xxx-xxx-xxxx 형식)
 2. 개발자 토큰 입력
@@ -233,8 +233,8 @@ https://www.facebook.com/adsmanager/manage/campaigns?act=123456789`,
         tips: ['act_ 접두어 포함/미포함 모두 사용 가능', '여러 광고 계정이 있다면 각각 ID가 다름']
       },
       {
-        title: '5. 블랭크에 연동',
-        content: `블랭크 통합광고 > 플랫폼 관리에서 "Meta 광고" 연동하기 클릭 후:
+        title: '5. 블스피에 연동',
+        content: `블스피 통합광고 > 플랫폼 관리에서 "Meta 광고" 연동하기 클릭 후:
 
 1. 광고 계정 ID 입력 (act_123456789)
 2. 액세스 토큰 입력
@@ -281,7 +281,7 @@ https://www.facebook.com/adsmanager/manage/campaigns?act=123456789`,
         content: `Kakao Developers(https://developers.kakao.com)에서:
 
 1. "내 애플리케이션" > "애플리케이션 추가하기"
-2. 앱 이름 입력 (예: 블랭크 광고 관리)
+2. 앱 이름 입력 (예: 블스피 광고 관리)
 3. 앱 생성 후 "앱 키" 확인:
    - REST API 키 (필수)
    - JavaScript 키 (선택)`,
@@ -303,7 +303,7 @@ https://www.facebook.com/adsmanager/manage/campaigns?act=123456789`,
         title: '4. 광고 계정 연동 및 토큰 발급',
         content: `카카오 로그인을 통해 액세스 토큰 발급:
 
-1. 블랭크에서 "카카오 로그인" 클릭
+1. 블스피에서 "카카오 로그인" 클릭
 2. 카카오 계정 로그인
 3. 광고 계정 연동 권한 승인
 4. 자동으로 토큰 발급 완료
@@ -313,8 +313,8 @@ https://www.facebook.com/adsmanager/manage/campaigns?act=123456789`,
         tips: ['토큰은 자동 갱신됨', '여러 광고 계정 연동 가능']
       },
       {
-        title: '5. 블랭크에 연동',
-        content: `블랭크 통합광고 > 플랫폼 관리에서 "카카오모먼트" 연동하기 클릭 후:
+        title: '5. 블스피에 연동',
+        content: `블스피 통합광고 > 플랫폼 관리에서 "카카오모먼트" 연동하기 클릭 후:
 
 1. 앱 ID 입력 (Kakao Developers 앱 ID)
 2. 광고 계정 ID 입력
@@ -393,8 +393,8 @@ https://www.facebook.com/adsmanager/manage/campaigns?act=123456789`,
         tips: ['토큰은 1년 유효', 'Advertiser ID도 함께 확인']
       },
       {
-        title: '5. 블랭크에 연동',
-        content: `블랭크 통합광고 > 플랫폼 관리에서 "TikTok Ads" 연동하기 클릭 후:
+        title: '5. 블스피에 연동',
+        content: `블스피 통합광고 > 플랫폼 관리에서 "TikTok Ads" 연동하기 클릭 후:
 
 1. 앱 ID 입력
 2. 시크릿 입력
@@ -463,8 +463,8 @@ https://www.facebook.com/adsmanager/manage/campaigns?act=123456789`,
         tips: ['Secret Key는 한 번만 표시', '키 재발급 시 기존 키 무효화']
       },
       {
-        title: '4. 블랭크에 연동',
-        content: `블랭크 통합광고 > 플랫폼 관리에서 "쿠팡 광고" 연동하기 클릭 후:
+        title: '4. 블스피에 연동',
+        content: `블스피 통합광고 > 플랫폼 관리에서 "쿠팡 광고" 연동하기 클릭 후:
 
 1. Vendor ID 입력
 2. Access Key 입력
@@ -547,11 +547,11 @@ client_id={CLIENT_ID}
 &grant_type=client_credentials
 
 응답에서 access_token 확인 (1시간 유효)`,
-        tips: ['토큰은 자동 갱신 구현 필요', '블랭크에서 자동 처리']
+        tips: ['토큰은 자동 갱신 구현 필요', '블스피에서 자동 처리']
       },
       {
-        title: '5. 블랭크에 연동',
-        content: `블랭크 통합광고 > 플랫폼 관리에서 "크리테오" 연동하기 클릭 후:
+        title: '5. 블스피에 연동',
+        content: `블스피 통합광고 > 플랫폼 관리에서 "크리테오" 연동하기 클릭 후:
 
 1. Client ID 입력
 2. Client Secret 입력

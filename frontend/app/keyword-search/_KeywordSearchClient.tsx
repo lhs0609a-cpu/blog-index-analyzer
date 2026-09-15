@@ -1224,7 +1224,7 @@ function KeywordSearchContent() {
           <div className="flex items-center justify-between">
             <div className="w-6"></div>
             <div className="text-center">
-              <h1 className="text-lg font-semibold">키워드 검색</h1>
+              <h2 className="text-lg font-semibold">키워드 검색</h2>
               <p className="text-xs text-gray-500 mt-0.5">
                 검색 수요를 읽고, 다음 콘텐츠의 가능성을 발견하세요.
               </p>

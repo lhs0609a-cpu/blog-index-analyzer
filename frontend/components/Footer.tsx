@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { Building2, ArrowRight, Mic, Sparkles, Shield, Crown, Check } from 'lucide-react'
-import { BlankMark } from './BlankLogo'
+import { BlspiMark } from './BlspiLogo'
 
 export default function Footer() {
   return (
@@ -40,13 +40,13 @@ export default function Footer() {
           {/* Company Info */}
           <div className="md:col-span-2">
             <div className="flex items-center gap-2 mb-4">
-              <BlankMark className="w-10 h-10 drop-shadow-[0_4px_14px_rgba(0,100,255,0.4)]" />
-              <span className="text-xl font-bold text-white">블랭크</span>
+              <BlspiMark className="w-10 h-10 drop-shadow-[0_4px_14px_rgba(0,100,255,0.4)]" />
+              <span className="text-xl font-bold text-white">블스피</span>
               <span className="text-xs text-gray-600 bg-gray-800 px-2 py-0.5 rounded">v2.0</span>
             </div>
             <p className="text-sm text-gray-400 mb-4 leading-relaxed">
-              AI 기반 블로그 분석 플랫폼으로 네이버 블로그의 품질 지수를 정확하게 측정하고,
-              상위 노출을 위한 최적화 전략을 제공합니다.
+              네이버 블로그의 공개 데이터를 분석하고 키워드와 원고를 비교합니다.
+              관측한 검색 결과와 자체 추정 지표를 구분해 보여드립니다.
             </p>
           </div>
 
@@ -54,6 +54,8 @@ export default function Footer() {
           <div>
             <h3 className="text-white font-semibold mb-4">서비스</h3>
             <ul className="space-y-2 text-sm">
+              <li><Link href="/about" className="block py-1 hover:text-violet-400 transition-colors">블스피 소개</Link></li>
+              <li><Link href="/methodology" className="block py-1 hover:text-violet-400 transition-colors">분석 기준과 데이터 출처</Link></li>
               <li>
                 <Link href="/analyze" className="block py-1 hover:text-violet-400 transition-colors cursor-pointer">
                   블로그 분석

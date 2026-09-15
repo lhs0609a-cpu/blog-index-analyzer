@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import { useAuthStore } from '@/lib/stores/auth'
 import UsageIndicator from './UsageIndicator'
-import { BlankMark } from './BlankLogo'
+import { BlspiMark } from './BlspiLogo'
 import toast from 'react-hot-toast'
 
 // 네비게이션 메뉴 아이템
@@ -120,15 +120,15 @@ export default function GlobalNav() {
           <div className="backdrop-blur-2xl bg-white/80 border border-gray-200/50 rounded-2xl px-4 py-3 shadow-lg shadow-gray-200/50">
             <div className="flex items-center justify-between gap-4">
               {/* Logo */}
-              <Link href="/" className="flex items-center gap-2 flex-shrink-0">
+              <Link href="/" aria-label="블스피 홈" className="flex items-center gap-2 flex-shrink-0">
                 <motion.div
                   className="relative w-9 h-9"
                   whileHover={{ scale: 1.08, rotate: 4 }}
                   transition={{ type: 'spring', stiffness: 320, damping: 18 }}
                 >
-                  <BlankMark className="w-9 h-9 drop-shadow-[0_4px_12px_rgba(0,100,255,0.32)]" />
+                  <BlspiMark className="w-9 h-9 drop-shadow-[0_4px_12px_rgba(0,100,255,0.32)]" />
                 </motion.div>
-                <span className="text-lg font-black tracking-tight gradient-text hidden sm:block">블랭크</span>
+                <span className="text-lg font-black tracking-tight gradient-text hidden sm:block">블스피</span>
               </Link>
 
               {/* Desktop Menu */}
@@ -295,8 +295,8 @@ export default function GlobalNav() {
               {/* Header */}
               <div className="flex items-center justify-between p-4 border-b">
                 <Link href="/" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2">
-                  <BlankMark className="w-9 h-9 drop-shadow-[0_4px_12px_rgba(0,100,255,0.32)]" />
-                  <span className="text-lg font-black tracking-tight gradient-text">블랭크</span>
+                  <BlspiMark className="w-9 h-9 drop-shadow-[0_4px_12px_rgba(0,100,255,0.32)]" />
+                  <span className="text-lg font-black tracking-tight gradient-text">블스피</span>
                 </Link>
                 <button
                   aria-label="메뉴 닫기"

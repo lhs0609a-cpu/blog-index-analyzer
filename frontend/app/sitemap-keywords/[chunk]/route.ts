@@ -20,9 +20,10 @@ function escapeXml(s: string): string {
 }
 
 export async function GET(_req: Request, { params }: { params: { chunk: string } }) {
-  // '0.xml' → 0. 잘못된 값이면 빈 사이트맵을 준다(404 보다 크롤러에 안전).
-  const idx = parseInt(String(params.chunk).replace(/\.xml$/, ''), 10)
-  const safeIdx = Number.isFinite(idx) && idx >= 0 ? idx : 0
+  // Invalid aliases must not duplicate chunk zero under unlimited URLs.
+  if (!/^(0|[1-9]\d*)\.xml$/.test(params.chunk)) return new Response('Not found', { status: 404 })
+  const safeIdx = Number(params.chunk.replace(/\.xml$/, ''))
+  if (!Number.isSafeInteger(safeIdx) || safeIdx > 10000) return new Response('Not found', { status: 404 })
 
   const { items } = await fetchKeywordList(safeIdx * CHUNK_SIZE, CHUNK_SIZE)
 

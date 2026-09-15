@@ -6,6 +6,8 @@ import GlobalNav from '../components/GlobalNav'
 import ClientProviders from '../components/ClientProviders'
 import {
   SITE_URL,
+  SITE_NAME,
+  SITE_DESCRIPTION,
   jsonLdScript,
   organizationJsonLd,
   softwareAppJsonLd,
@@ -22,10 +24,11 @@ export const metadata: Metadata = {
   // 기본 메타데이터
   metadataBase: new URL(BASE_URL),
   title: {
-    default: '블랭크 - AI 블로그 분석 플랫폼 | 네이버 블로그 품질 지수 측정',
-    template: '%s | 블랭크',
+    default: '블스피 | 네이버 블로그 분석·키워드 검색',
+    template: `%s | ${SITE_NAME}`,
   },
-  description: '블랭크에서 네이버 블로그의 품질 지수를 정확하게 측정하고 분석합니다. AI 기반 키워드 분석, 블루오션 키워드 발굴, 글쓰기 가이드까지 블로그 성장에 필요한 모든 도구를 제공합니다.',
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
   keywords: [
     '블로그 분석',
     '네이버 블로그',
@@ -36,11 +39,11 @@ export const metadata: Metadata = {
     '블로그 마케팅',
     '검색 최적화',
     'SEO',
-    '블랭크',
+    '블스피',
   ],
-  authors: [{ name: '블랭크', url: BASE_URL }],
-  creator: '블랭크',
-  publisher: '블랭크',
+  authors: [{ name: '블스피', url: BASE_URL }],
+  creator: '블스피',
+  publisher: '블스피',
 
   // 검색엔진 설정
   robots: {
@@ -60,9 +63,9 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'ko_KR',
     url: BASE_URL,
-    siteName: '블랭크',
-    title: '블랭크 - AI 블로그 분석 플랫폼',
-    description: '네이버 블로그 품질 지수 측정, AI 키워드 분석, 블루오션 키워드 발굴. 블로그 성장을 위한 올인원 솔루션',
+    siteName: '블스피',
+    title: '블스피 | 네이버 블로그 분석·키워드 검색',
+    description: SITE_DESCRIPTION,
     // 이미지는 app/opengraph-image.tsx 파일 컨벤션이 자동 생성한다.
     // (예전에 /og-image.png 를 직접 가리켰으나 그 파일은 존재하지 않아 404 였다)
   },
@@ -70,9 +73,8 @@ export const metadata: Metadata = {
   // Twitter Cards
   twitter: {
     card: 'summary_large_image',
-    title: '블랭크 - AI 블로그 분석 플랫폼',
-    description: '네이버 블로그 품질 지수 측정, AI 키워드 분석, 블루오션 키워드 발굴',
-    creator: '@blank_blog',
+    title: '블스피 | 네이버 블로그 분석·키워드 검색',
+    description: SITE_DESCRIPTION,
   },
 
   // 파비콘 및 아이콘
@@ -120,7 +122,7 @@ export default function RootLayout({
       <head>
         {/* RSS 자동발견 — 네이버 서치어드바이저는 사이트맵과 RSS 를 다른 채널로
             취급한다. 사이트맵=전수 색인, RSS=새 글 빠른 발견. */}
-        <link rel="alternate" type="application/rss+xml" title="블랭크" href="/rss.xml" />
+        <link rel="alternate" type="application/rss+xml" title="블스피" href="/rss.xml" />
         {/* JSON-LD 구조화 데이터 */}
         <script {...jsonLdScript(jsonLd)} />
       </head>

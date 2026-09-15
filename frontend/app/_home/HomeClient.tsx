@@ -6,6 +6,7 @@ import GlassIcon from '@/components/GlassIcon'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import TrialExpiryBanner from '@/components/TrialExpiryBanner'
+import BookmarkPrompt from '@/components/BookmarkPrompt'
 // Social proof disabled (P0: fake data removal)
 import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
@@ -128,7 +129,7 @@ export default function Home() {
                   <span className="absolute inline-flex h-full w-full rounded-full bg-[#3182F6] opacity-70" />
                   <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#0064FF]" />
                 </span>
-                네이버 블로그 검색 노출 진단
+                블스피 · 네이버 블로그 분석
               </motion.div>
 
               {/*
@@ -138,7 +139,7 @@ export default function Home() {
                   헤드라인에 박으면 첫 화면부터 신뢰를 잃는다.
               */}
               <motion.h1
-                initial={{ opacity: 0, y: 16 }}
+                initial={false}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.05 }}
                 className="ds-display mb-5"
@@ -151,13 +152,13 @@ export default function Home() {
               </motion.h1>
 
               <motion.p
-                initial={{ opacity: 0, y: 12 }}
+                initial={false}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.45, delay: 0.12 }}
                 className="ds-lede mx-auto mb-8 max-w-xl"
               >
-                최근 글 제목을 <strong className="font-semibold text-gray-900">실제로 검색해</strong> 노출 여부를
-                확인합니다. 지수를 추측하지 않고, 검색 결과를 그대로 봅니다.
+                블스피에서 <strong className="font-semibold text-gray-900">블로그 상태와 키워드 경쟁도</strong>를
+                확인하세요. 공개 검색 데이터와 자체 추정 지표를 함께 살펴봅니다.
               </motion.p>
 
               {/* Live counter disabled - P0 blocker: fake data */}
@@ -783,10 +784,10 @@ export default function Home() {
           >
             <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gray-100 border border-gray-200 text-sm font-medium text-gray-600 mb-6">
               <Star className="w-4 h-4 gi3d" />
-              WHY BLANK
+              WHY BLSPI
             </span>
             <h2 className="text-4xl md:text-5xl font-black mb-12">
-              왜 <span className="bg-[#0064FF] bg-clip-text text-transparent">블랭크</span>인가요?
+              왜 <span className="bg-[#0064FF] bg-clip-text text-transparent">블스피</span>인가요?
             </h2>
 
             <div className="grid md:grid-cols-3 gap-6">
@@ -890,7 +891,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Stats Section - 블랭크 실제 지표 */}
+      {/* Stats Section - 블스피 실제 지표 */}
       <section className="py-20 bg-gray-900 relative overflow-hidden">
         <div className="absolute inset-0">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#0064FF]/10 rounded-full blur-[120px]" />
@@ -992,6 +993,8 @@ export default function Home() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <BookmarkPrompt />
     </div>
   )
 }

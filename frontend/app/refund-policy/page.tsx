@@ -24,7 +24,7 @@ export default function RefundPolicyPage() {
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Summary Card */}
         <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl p-6 text-white mb-8">
-          <h2 className="text-2xl font-bold mb-4">블랭크 환불 정책 요약</h2>
+          <h2 className="text-2xl font-bold mb-4">블스피 환불 정책 요약</h2>
           <div className="grid md:grid-cols-3 gap-4">
             <div className="bg-white/20 rounded-xl p-4">
               <Calendar className="w-8 h-8 mb-2 gi3d" />
@@ -59,7 +59,7 @@ export default function RefundPolicyPage() {
             </h3>
             <div className="space-y-4 text-gray-700">
               <p>
-                블랭크는 AI 기반 블로그 분석 플랫폼으로, <strong>월간 또는 연간 정기결제</strong> 방식으로 프리미엄 서비스를 제공합니다.
+                블스피는 AI 기반 블로그 분석 플랫폼으로, <strong>월간 또는 연간 정기결제</strong> 방식으로 프리미엄 서비스를 제공합니다.
               </p>
 
               <div className="bg-gray-50 rounded-lg p-4">

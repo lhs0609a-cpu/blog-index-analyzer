@@ -2,12 +2,11 @@ import { MetadataRoute } from 'next'
 import { CRAWL_BLOCKED_PATHS, SITE_URL } from '@/lib/seo'
 
 /**
- * AI 검색 크롤러(GEO). 명시적으로 허용해야 인용 후보에 들어간다.
+ * Public search access. Wildcard access also allows unnamed crawlers.
  * - OAI-SearchBot / ChatGPT-User : ChatGPT 검색·브라우징 (학습용 GPTBot 과 별개)
  * - ClaudeBot / Claude-User      : Claude 검색·인용
  * - PerplexityBot                : Perplexity 색인
- * - Google-Extended              : Gemini / AI 개요 인용
- * - Applebot-Extended            : Apple 지능형 검색
+ * Google AI Search uses Googlebot; training controls are separate from search.
  */
 const AI_CRAWLERS = [
   'OAI-SearchBot',
@@ -15,6 +14,7 @@ const AI_CRAWLERS = [
   'GPTBot',
   'ClaudeBot',
   'Claude-User',
+  'Claude-SearchBot',
   'anthropic-ai',
   'PerplexityBot',
   'Perplexity-User',
@@ -54,7 +54,6 @@ export default function robots(): MetadataRoute.Robots {
     sitemap: [
       `${SITE_URL}/sitemap-index.xml`,
       `${SITE_URL}/sitemap.xml`,
-      `${SITE_URL}/rss.xml`,
     ],
     host: SITE_URL,
   }

@@ -32,7 +32,6 @@ export async function GET() {
   // 인덱스가 청크를 통째로 빠뜨리지 않게 한다. 비어 있는 urlset 은 유효한 XML 이라
   // 크롤러가 무시할 뿐 오류가 아니다.
   const chunks = Math.max(1, Math.ceil(total / CHUNK_SIZE))
-  const now = new Date().toISOString()
 
   const entries = [
     absoluteUrl('/sitemap.xml'),
@@ -43,7 +42,7 @@ export async function GET() {
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
     entries
-      .map((loc) => `  <sitemap><loc>${loc}</loc><lastmod>${now}</lastmod></sitemap>`)
+      .map((loc) => `  <sitemap><loc>${loc}</loc></sitemap>`)
       .join('\n') +
     `\n</sitemapindex>\n`
 

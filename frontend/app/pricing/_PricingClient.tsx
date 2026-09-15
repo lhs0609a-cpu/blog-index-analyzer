@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/stores/auth'
 import { getAllPlans, getMySubscription, preparePayment, type PlanInfo, type PlanType } from '@/lib/api/subscription'
 import { PLAN_INFO, PLAN_LIMITS, FEATURES } from '@/lib/features/featureAccess'
+import { track } from '@/lib/analytics/track'
 import toast from 'react-hot-toast'
 
 const planIcons: Record<PlanType, React.ReactNode> = {
@@ -87,8 +88,16 @@ export default function PricingPage() {
   }
 
   const handleSelectPlan = async (planType: PlanType) => {
+    track('pricing_plan_click', {
+      userId: user?.id,
+      props: { plan: planType, cycle: billingCycle, authed: isAuthenticated },
+    })
+
     if (!isAuthenticated) {
       toast.error('로그인이 필요합니다')
+      // 여기서 되돌려보낸 사람은 대부분 안 돌아온다. '요금을 보고 마음먹은 순간'에
+      // 로그인 벽을 세운 것이므로, 얼마나 자주 일어나는지는 반드시 세어야 한다.
+      track('checkout_blocked_anonymous')
       router.push('/login')
       return
     }
@@ -107,6 +116,7 @@ export default function PricingPage() {
     setSelectedTrialPlan(planType)
     setTrialConsent(false)
     setShowTrialModal(true)
+    track('checkout_consent_open', { userId: user?.id, props: { plan: planType, cycle: billingCycle } })
   }
 
   const proceedWithPayment = async () => {
@@ -114,6 +124,10 @@ export default function PricingPage() {
 
     setShowTrialModal(false)
     setProcessingPlan(selectedTrialPlan)
+    track('checkout_start', {
+      userId: user?.id,
+      props: { plan: selectedTrialPlan, cycle: billingCycle },
+    })
 
     try {
       // 결제 준비
@@ -124,6 +138,12 @@ export default function PricingPage() {
 
     } catch (error) {
       console.error('Failed to prepare payment:', error)
+      const axiosError = error as { response?: { status?: number } }
+      track('payment_register_fail', {
+        userId: user?.id,
+        reason: 'prepare_failed',
+        props: { http: axiosError.response?.status ?? 0, plan: selectedTrialPlan },
+      })
       toast.error('결제 준비 중 오류가 발생했습니다')
     } finally {
       setProcessingPlan(null)
@@ -164,11 +184,11 @@ export default function PricingPage() {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-12"
         >
-          <h1 className="text-5xl font-bold mb-4">
+          <h2 className="text-5xl font-bold mb-4">
             <span className="gradient-text">정기결제 요금제</span>
-          </h1>
+          </h2>
           <p className="text-xl text-gray-600 mb-4">
-            블랭크와 함께 블로그를 성장시키세요
+            블스피와 함께 블로그를 성장시키세요
           </p>
           {/* 정기결제 안내 - 토스페이먼츠 심사용 */}
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-[#0064FF] rounded-full text-sm mb-4">
@@ -611,7 +631,7 @@ export default function PricingPage() {
             </div>
             <p className="text-xs text-gray-500 text-center mt-4">
               * 블로그 성장은 콘텐츠 품질, 포스팅 빈도, 키워드 전략 등 다양한 요소에 따라 달라집니다.<br/>
-              블랭크는 데이터 기반 인사이트를 제공하며, 특정 수익이나 방문자 수를 보장하지 않습니다.
+              블스피는 데이터 기반 인사이트를 제공하며, 특정 수익이나 방문자 수를 보장하지 않습니다.
             </p>
           </div>
         </motion.div>

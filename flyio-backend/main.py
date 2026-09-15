@@ -264,6 +264,20 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"⚠️ Sojam hour gate failed to start: {e}")
 
+    # 새 글 누락 감시 — DB 는 모든 프로세스(API 가 읽는다), 워커는 worker 전용.
+    # POST_WATCH=1 일 때만 돈다 — 배포만으로는 아무것도 바뀌지 않는다.
+    try:
+        from database.post_watch_db import init_post_watch_db
+        init_post_watch_db()
+    except Exception as e:
+        logger.warning(f"⚠️ Post watch DB init failed: {e}")
+    if RUN_SCHEDULERS:
+        try:
+            from services.post_watch_scheduler import post_watch_scheduler
+            post_watch_scheduler.start()
+        except Exception as e:
+            logger.warning(f"⚠️ Post watch scheduler failed to start: {e}")
+
     # Notification DB 초기화
     try:
         from database.notification_db import get_notification_db
@@ -760,6 +774,8 @@ from routers import notification
 from routers import winner_keywords
 from routers import profitable_keywords
 from routers import competitive_analysis
+from routers import post_watch
+from routers import growth
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
@@ -793,6 +809,10 @@ app.include_router(seo_pages.router)
 app.include_router(site_analytics.router)
 # 광고 스냅샷 — 성과 시계열·엔티티 상태·변경 이력. 수집은 CRON_TOKEN 전용
 app.include_router(ad_snapshot.router)
+# 새 글 누락 감시 — 1단계는 관리자 전용 (판정 정확도 검증 후 사용자에게 연다)
+app.include_router(post_watch.router)
+# 성장 진단 — 가입·결제 퍼널을 세계 SaaS 벤치마크와 대조한다. 관리자 전용
+app.include_router(growth.router)
 
 
 if __name__ == "__main__":

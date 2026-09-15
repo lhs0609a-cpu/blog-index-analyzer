@@ -7,8 +7,9 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { login } from '@/lib/api/auth'
 import { useAuthStore } from '@/lib/stores/auth'
+import { track, signupFailReason } from '@/lib/analytics/track'
 import toast from 'react-hot-toast'
-import BlankLogo from '@/components/BlankLogo'
+import BlspiLogo from '@/components/BlspiLogo'
 
 
 export default function LoginPage() {
@@ -31,9 +32,11 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    track('login_submit')
 
     if (!email || !password) {
       toast.error('이메일과 비밀번호를 입력해주세요')
+      track('login_fail', { reason: 'missing_field' })
       return
     }
 
@@ -42,11 +45,16 @@ export default function LoginPage() {
     try {
       const response = await login({ email, password })
       setAuth(response.user, response.access_token)
+      track('login_success', { userId: response.user?.id })
       toast.success(`환영합니다, ${response.user.name}님!`)
       router.push('/dashboard')
     } catch (error) {
-      const axiosError = error as { response?: { data?: { detail?: string } } }
+      const axiosError = error as { response?: { status?: number; data?: { detail?: string } } }
+      const status = axiosError.response?.status
       const message = axiosError.response?.data?.detail || '로그인에 실패했습니다'
+      // 로그인 실패가 쏟아지면 그건 '가입을 안 하는' 게 아니라
+      // '이미 가입했는데 못 들어오는' 문제다 — 둘은 처방이 완전히 다르다.
+      track('login_fail', { reason: signupFailReason(message, status), props: { http: status ?? 0 } })
       toast.error(message)
     } finally {
       setIsLoading(false)
@@ -68,7 +76,7 @@ export default function LoginPage() {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-10"
         >
-          <div className="flex justify-center mb-7"><BlankLogo markClassName="w-11 h-11" /></div>
+          <div className="flex justify-center mb-7"><BlspiLogo markClassName="w-11 h-11" /></div>
           {/* 로그인은 이미 결정한 사람이 오는 화면이다. 설득하지 말고 빨리 통과시킨다. */}
           <h1 className="ds-headline mb-3">다시 오셨네요</h1>
           <p className="ds-lede">그동안 쌓인 진단 기록이 기다리고 있습니다.</p>

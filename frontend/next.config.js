@@ -32,6 +32,15 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
 
+  async redirects() {
+    return [{ source: '/landing', destination: '/', permanent: true }, {
+      source: '/:path*',
+      has: [{ type: 'host', value: 'blrank.co.kr' }],
+      destination: 'https://www.blrank.co.kr/:path*',
+      permanent: true,
+    }]
+  },
+
   async headers() {
     return [
       {

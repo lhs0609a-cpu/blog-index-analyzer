@@ -21,7 +21,7 @@ export const metadata: Metadata = pageMetadata({
 const itemListJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'ItemList',
-  name: '블랭크 블로그 성장 가이드',
+  name: '블스피 블로그 성장 가이드',
   itemListElement: GUIDES.map((guide, i) => ({
     '@type': 'ListItem',
     position: i + 1,

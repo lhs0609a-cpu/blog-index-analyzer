@@ -1,7 +1,7 @@
 {
-  "name": "blank-frontend",
+  "name": "blspi-frontend",
   "version": "1.2.1",
-  "description": "블랭크 - AI 블로그 분석 플랫폼 프론트엔드",
+  "description": "블스피 - AI 블로그 분석 플랫폼 프론트엔드",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3006",

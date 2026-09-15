@@ -42,8 +42,8 @@ export default function WelcomeOnboarding({ onComplete }: WelcomeOnboardingProps
     {
       icon: <GlassIcon icon={Sparkles} size={86} />,
       iconBg: 'from-[#0064FF] to-[#3182F6]',
-      title: '블랭크에 오신 것을 환영합니다!',
-      description: 'AI 기반 블로그 분석 플랫폼 블랭크입니다.\n40개 이상의 지표로 블로그를 분석하고 성장 전략을 세워보세요.',
+      title: '블스피에 오신 것을 환영합니다!',
+      description: 'AI 기반 블로그 분석 플랫폼 블스피입니다.\n40개 이상의 지표로 블로그를 분석하고 성장 전략을 세워보세요.',
       features: [
         '무료로 블로그 분석 시작',
         '상위 노출 키워드 분석',

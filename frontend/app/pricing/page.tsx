@@ -10,7 +10,7 @@ import SeoContent, { type SeoBlock } from '@/components/seo/SeoContent'
 const blocks: SeoBlock[] = [
   {
     kind: 'p',
-    text: '블랭크는 무료 플랜으로도 블로그 분석과 키워드 조회를 사용할 수 있습니다. 유료 플랜은 하루 사용량이 늘고, 블루오션 키워드 발굴처럼 계산 비용이 큰 기능이 열립니다.',
+    text: '블스피는 무료 플랜으로도 블로그 분석과 키워드 조회를 사용할 수 있습니다. 유료 플랜은 하루 사용량이 늘고, 블루오션 키워드 발굴처럼 계산 비용이 큰 기능이 열립니다.',
   },
   {
     kind: 'table',
@@ -65,7 +65,7 @@ export default function PricingPage() {
     <>
       <PricingClient />
       <SeoContent
-        h1="블랭크 요금제"
+        h1="블스피 요금제"
         blocks={blocks}
         faq={faq}
         links={[

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import SiteAnalyticsPanel from '@/components/admin/SiteAnalyticsPanel';
+import GrowthDiagnosticsPanel from '@/components/admin/GrowthDiagnosticsPanel';
 import { getApiUrl } from '@/lib/api/apiConfig';
 import { toast } from 'react-hot-toast';
 
@@ -109,7 +110,7 @@ export default function AdminPage() {
   const [totalUsers, setTotalUsers] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [apiUrl, setApiUrlState] = useState('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'traffic' | 'users' | 'premium' | 'expiring' | 'logs' | 'payments'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'growth' | 'traffic' | 'users' | 'premium' | 'expiring' | 'logs' | 'payments'>('overview');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -811,6 +812,7 @@ export default function AdminPage() {
           <nav className="flex gap-8">
             {[
               { id: 'overview', label: '개요' },
+              { id: 'growth', label: '성장 진단' },
               { id: 'traffic', label: '방문 통계' },
               { id: 'payments', label: '결제 내역' },
               { id: 'users', label: '전체 사용자' },
@@ -857,6 +859,8 @@ export default function AdminPage() {
         ) : (
           <>
             {/* Overview Tab */}
+            {activeTab === 'growth' && <GrowthDiagnosticsPanel />}
+
             {activeTab === 'traffic' && <SiteAnalyticsPanel />}
 
             {activeTab === 'overview' && (

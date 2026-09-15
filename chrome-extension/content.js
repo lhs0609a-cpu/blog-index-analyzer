@@ -1,5 +1,5 @@
 /**
- * Blrank 크롬 확장 - 콘텐츠 스크립트
+ * Blspi 크롬 확장 - 콘텐츠 스크립트
  * 네이버 검색 페이지에서 블로그 URL 추출
  */
 
@@ -10,7 +10,7 @@
   if (window.__blrankExtensionLoaded) return;
   window.__blrankExtensionLoaded = true;
 
-  console.log('[Blrank] Content script loaded');
+  console.log('[Blspi] Content script loaded');
 
   /**
    * 페이지에서 블로그 URL 추출
@@ -111,7 +111,7 @@
 
   // 메시지 리스너 (팝업/백그라운드에서 요청 받음)
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    console.log('[Blrank] Message received:', request);
+    console.log('[Blspi] Message received:', request);
 
     if (request.action === 'extractBlogs') {
       // 스크롤 후 추출
@@ -120,7 +120,7 @@
         const keyword = getSearchKeyword();
         const tabType = getTabType();
 
-        console.log(`[Blrank] Extracted ${blogs.length} blogs for "${keyword}"`);
+        console.log(`[Blspi] Extracted ${blogs.length} blogs for "${keyword}"`);
 
         sendResponse({
           success: true,
