@@ -145,7 +145,6 @@ function buildFaq(page: KeywordPage, dormantCount: number) {
     })
   }
   const axis = axisVerdict(page.top10_avg_c_rank, page.top10_avg_dia)
-  const breakdown = difficultyParts(page.difficulty_breakdown)
   if (axis) {
     out.push({
       question: `${kw} 1페이지에 오른 블로그들은 어떤 블로그인가요?`,
@@ -182,6 +181,7 @@ export default async function KeywordDetailPage({ params }: Props) {
   const dormant = page.competitors.filter((c) => (c.days_idle ?? 0) >= 30)
   const blogTab = page.tab_ratio?.blog
   const axis = axisVerdict(page.top10_avg_c_rank, page.top10_avg_dia)
+  const breakdown = difficultyParts(page.difficulty_breakdown)
   const faq = buildFaq(page, dormant.length)
   const tabRows = ([
     ['블로그', page.tab_ratio?.blog, page.tab_ratio?.blog_count],

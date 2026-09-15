@@ -5,7 +5,7 @@ naver_ad.py 는 이미 1.5만 줄이라 새 라우터로 분리한다.
 
 경로:
   POST /api/ad-snapshot/collect        cron 전용. 연결된 전 계정 수집.
-  GET  /api/ad-snapshot/status         수집이 돌고 있는지 (사용자 인증)
+  GET  /api/ad-snapshot/status         수집이 돌고 있는지 (로그인 + 소유 광고주만)
   GET  /api/ad-snapshot/daily          일자별 성과 시계열
   GET  /api/ad-snapshot/changes        변경 이력
 """
@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from database import ad_snapshot_db as S
+from routers.auth_deps import get_current_user_optional
 from database.naver_ad_db import (
     get_ad_account_by_customer,
     list_connected_ad_accounts,
@@ -35,6 +36,33 @@ def _require_cron_token(authorization: Optional[str]) -> None:
         raise HTTPException(status_code=401, detail="Bearer 토큰 필요")
     if not hmac.compare_digest(authorization.split(" ", 1)[1].strip(), expected):
         raise HTTPException(status_code=403, detail="잘못된 cron 토큰")
+
+
+async def require_customer_access(
+    customer_id: str = Query(...),
+    authorization: Optional[str] = Header(None),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+) -> str:
+    """이 사람이 이 광고주를 볼 자격이 있는가.
+
+    ⚠️ 이 라우터의 조회 6개는 원래 **인증이 아예 없었다.** customer_id 는 6~7자리
+    숫자라, 남의 캠페인 이름·예산·일별 지출을 로그인 없이 열거해 읽을 수 있었다
+    (실측으로 확인함). 광고비는 그 자체로 영업 정보다.
+
+    cron 토큰은 통과시킨다 — 수집·감시 배치는 전 계정을 돌아야 한다.
+    """
+    expected = (os.environ.get("CRON_TOKEN") or "").strip()
+    if expected and authorization and authorization.startswith("Bearer "):
+        if hmac.compare_digest(authorization.split(" ", 1)[1].strip(), expected):
+            return customer_id
+
+    if not current_user:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다. 로그인해주세요.",
+                            headers={"WWW-Authenticate": "Bearer"})
+    if not get_ad_account_by_customer(int(current_user["id"]), str(customer_id)):
+        # 있는지 없는지도 알려주지 않는다 — 존재 여부 자체가 정보다.
+        raise HTTPException(status_code=404, detail="해당 광고주를 찾을 수 없습니다")
+    return customer_id
 
 
 def _client_for(account: Dict[str, Any]):
@@ -113,8 +141,9 @@ async def collect(
 
 
 @router.get("/status")
-async def status(customer_id: str = Query(...)):
-    """수집이 실제로 돌고 있는지. 공개 조회 — 자격증명을 노출하지 않는다."""
+async def status(customer_id: str = Query(...),
+                 _: str = Depends(require_customer_access)):
+    """수집이 실제로 돌고 있는지. 자기 광고주만 볼 수 있다."""
     last = S.last_run(customer_id, "daily-snapshot")
     totals = S.get_daily_totals(customer_id,
                                 *S.backfill_window(), entity_type="CAMPAIGN")
@@ -130,6 +159,7 @@ async def status(customer_id: str = Query(...)):
 @router.get("/daily")
 async def daily(
     customer_id: str = Query(...),
+    _: str = Depends(require_customer_access),
     since: Optional[str] = Query(None),
     until: Optional[str] = Query(None),
     entity_type: str = Query("CAMPAIGN"),
@@ -145,6 +175,7 @@ async def daily(
 @router.get("/top-spend")
 async def top_spend(
     customer_id: str = Query(...),
+    _: str = Depends(require_customer_access),
     entity_type: str = Query("SEARCHTERM",
                              description="SEARCHTERM | KEYWORD | ADGROUP | CAMPAIGN"),
     since: Optional[str] = Query(None),
@@ -174,6 +205,7 @@ async def top_spend(
 @router.get("/budget-plan")
 async def budget_plan(
     customer_id: str = Query(...),
+    _: str = Depends(require_customer_access),
     date: Optional[str] = Query(None, description="기준일. 기본은 감시와 같은 확정일(어제)"),
 ):
     """예산 재배분을 사람이 판단할 수 있게 전 캠페인을 한 표로 편다.
@@ -383,6 +415,7 @@ async def report_probe(
 @router.get("/incidents")
 async def incidents(
     customer_id: str = Query(...),
+    _: str = Depends(require_customer_access),
     date: Optional[str] = Query(None, description="기준일(YYYY-MM-DD). 기본은 오늘"),
 ):
     """이 계정에 지금 무슨 사고가 있는지.
@@ -441,6 +474,7 @@ async def watch(
 @router.get("/changes")
 async def changes(
     customer_id: str = Query(...),
+    _: str = Depends(require_customer_access),
     hours: int = Query(24, ge=1, le=24 * 30),
     entity_type: Optional[str] = Query(None),
     limit: int = Query(200, ge=1, le=2000),

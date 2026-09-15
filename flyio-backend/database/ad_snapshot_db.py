@@ -245,6 +245,35 @@ def get_entity_series(customer_id: str, entity_type: str, entity_id: str,
     return out
 
 
+def get_entity_cost_series(customer_id: str, entity_type: str,
+                          since: str, until: str) -> Dict[str, List[float]]:
+    """엔티티별 일별 비용을 **한 번의 쿼리로** 모아 준다.
+
+    왜 따로 만들었나: 사고 감시가 광고그룹마다 get_entity_series() 를 부르고
+    있었다. 그 함수는 호출마다 커넥션을 새로 열기 때문에, 그룹이 9,000개인
+    계정에서는 커넥션도 9,000번 열린다. 그룹 1,000개 절단을 고쳐 실제 그룹
+    수가 드러난 순간(6,700~9,000) 감시가 2분을 넘겨 크론 잡이 통째로
+    잘렸다 — 186그룹 계정 3.8초 vs 2,103그룹 계정 120초 초과.
+
+    0원인 날은 빼고 담는다. 중앙값을 낼 때 '집행이 없던 날'을 섞으면
+    평소 지출 규모가 실제보다 작게 보인다.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT entity_id, cost
+          FROM ad_daily_stats
+         WHERE customer_id = ? AND entity_type = ?
+           AND stat_date BETWEEN ? AND ?
+           AND cost > 0
+    """, (customer_id, entity_type, since, until))
+    out: Dict[str, List[float]] = {}
+    for r in cur.fetchall():
+        out.setdefault(r["entity_id"], []).append(r["cost"])
+    conn.close()
+    return out
+
+
 def get_top_spend(customer_id: str, entity_type: str, since: str, until: str,
                   limit: int = 50) -> List[Dict[str, Any]]:
     """돈이 실제로 어디로 나갔는지 — 비용 상위 N.

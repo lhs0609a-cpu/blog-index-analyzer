@@ -169,6 +169,46 @@ def init_seo_pages_db() -> None:
     finally:
         conn.close()
 
+    _backfill_difficulty_once()
+
+
+# 난이도 백필을 프로세스당 한 번만 돌리기 위한 플래그.
+_difficulty_backfilled = False
+
+
+def _backfill_difficulty_once() -> None:
+    """
+    난이도 눈금이 올라갔으면 저장값만으로 다시 계산한다. 프로세스당 1회.
+
+    스키마 ALTER 와 같은 성격의 마이그레이션이라 여기 둔다 — 재료(top10 지수·
+    활동성·검색량)가 이미 행에 들어 있어 네트워크 호출이 0 이고, 385행이면
+    수백 ms 다. 눈금만 바꾸고 데이터를 안 옮기면 배포는 됐는데 화면은
+    옛 점수 그대로인 상태가 된다.
+    """
+    global _difficulty_backfilled
+    if _difficulty_backfilled:
+        return
+    _difficulty_backfilled = True
+    try:
+        from services.seo_difficulty import DIFFICULTY_VERSION
+
+        conn = _connect()
+        try:
+            cur = conn.execute(
+                "SELECT COUNT(*) n FROM seo_keyword_pages "
+                "WHERE COALESCE(difficulty_version, 1) != ?",
+                (DIFFICULTY_VERSION,),
+            )
+            stale = int(cur.fetchone()["n"])
+        finally:
+            conn.close()
+        if stale:
+            logger.info(f"[seo_pages_db] difficulty v{DIFFICULTY_VERSION} backfill: {stale} stale rows")
+            recompute_difficulty(only_stale=True)
+    except Exception as e:
+        # 백필이 실패해도 앱은 떠야 한다. 옛 점수가 남을 뿐이다.
+        logger.warning(f"[seo_pages_db] difficulty backfill skipped: {e}")
+
 
 # ─────────────────────────────────────────────────────────────
 # 큐 (발굴 프론티어)

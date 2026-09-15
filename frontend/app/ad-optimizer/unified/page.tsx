@@ -8,7 +8,7 @@
  * 퍼널입찰·이상징후감지)가 전부 빈 테이블을 읽거나 가짜 캠페인을 생성해
  * 보여주고 있었다. 2026-08-20 에 전부 삭제하고 이 화면으로 대체한다.
  *
- * 여기 나오는 숫자는 전부 매일 04:00 KST 크론이 실제 계정에서 수집한 것이다.
+ * 여기 나오는 숫자는 전부 매일 06:00 KST 크론이 실제 계정에서 수집한 것이다.
  *
  * 표시 원칙:
  *  · 정상이면 조용하다. 매일 "이상 없음" 을 크게 띄우면 곧 안 읽는다.
@@ -45,8 +45,6 @@ interface Scan {
   note?: string
 }
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-
 const TOOLS = [
   { href: '/ad-optimizer/keyword-pool', label: '키워드 풀 관리', desc: '발굴 · 등록 · 정리' },
   { href: '/ad-optimizer/volume-filter', label: '검색량 필터링', desc: '볼륨 검증 후 등록' },
@@ -81,11 +79,12 @@ export default function ControlTowerPage() {
       await Promise.all(
         list.map(async (a) => {
           try {
-            const r = await fetch(
-              `${API}/api/ad-snapshot/incidents?customer_id=${encodeURIComponent(a.customer_id)}`
+            // ⚠️ 생 fetch 로 부르면 토큰이 안 실린다. 이 엔드포인트는 원래 인증이
+            // 없어서 그래도 돌아갔지만, 이제 자기 광고주만 볼 수 있다.
+            const s = await adGet<Scan>(
+              `/api/ad-snapshot/incidents?customer_id=${encodeURIComponent(a.customer_id)}`,
+              { showToast: false }
             )
-            if (!r.ok) throw new Error(`HTTP ${r.status}`)
-            const s: Scan = await r.json()
             setScans((prev) => ({ ...prev, [a.customer_id]: s }))
           } catch {
             setScans((prev) => ({
@@ -118,7 +117,7 @@ export default function ControlTowerPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">광고비 관제탑</h1>
             <p className="text-sm text-gray-500 mt-1">
-              조용히 멈춘 광고를 그날 잡습니다. 매일 새벽 4시에 전 계정을 수집합니다.
+              조용히 멈춘 광고를 그날 잡습니다. 매일 새벽 6시에 전 계정을 수집합니다.
             </p>
           </div>
           <button
