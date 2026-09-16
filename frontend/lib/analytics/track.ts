@@ -20,6 +20,8 @@ export type FunnelEvent =
   | 'login_success'
   | 'login_fail'
   | 'activation_first_run'
+  | 'limit_hit'
+  | 'limit_cta_click'
   | 'pricing_plan_click'
   | 'checkout_blocked_anonymous'
   | 'checkout_consent_open'
@@ -62,6 +64,28 @@ export function track(name: FunnelEvent, opts: TrackOptions = {}): void {
   } catch {
     // 수집 실패는 무시한다
   }
+}
+
+/**
+ * 활성화(첫 가치 경험)를 사람당 한 번만 남긴다.
+ *
+ * '가입 → 활성화' 는 가입한 사람 중 값을 한 번이라도 본 비율이다. 실행할 때마다
+ * 찍으면 분자가 분모를 넘어 비율이 성립하지 않고, 비회원까지 찍으면 분모(가입)와
+ * 모집단이 아예 달라진다. 그래서 **로그인한 사용자의 첫 성공**에만 남긴다.
+ *
+ * 브라우저를 바꾸면 한 번 더 찍힐 수 있다(localStorage 기준). 그래도 '매번'
+ * 보다 20배 이상 정확하고, 서버에 활성화 칼럼을 새로 만들 이유는 아직 없다.
+ */
+export function markActivated(userId?: number | string | null): void {
+  if (!userId || typeof window === 'undefined') return
+  const key = `activated_v1_${userId}`
+  try {
+    if (localStorage.getItem(key)) return
+    localStorage.setItem(key, '1')
+  } catch {
+    // 저장소를 못 쓰면(사생활 보호 모드 등) 그냥 남긴다 — 안 남기는 것보다 낫다
+  }
+  track('activation_first_run', { userId })
 }
 
 /**

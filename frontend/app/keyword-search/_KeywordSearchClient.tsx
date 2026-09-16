@@ -12,7 +12,8 @@ import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import { useBlogContextStore } from '@/lib/stores/blogContext'
 import { useXPStore } from '@/lib/stores/xp'
-import { incrementUsage, checkUsageLimit } from '@/lib/api/subscription'
+import { checkUsageLimit } from '@/lib/api/subscription'
+import { authHeaders, readLimitHit } from '@/lib/api/limits'
 import { useFeatureAccess } from '@/lib/features/useFeatureAccess'
 import { PLAN_INFO } from '@/lib/features/featureAccess'
 import toast from 'react-hot-toast'
@@ -397,7 +398,10 @@ function KeywordSearchContent() {
 
   // P0-4: 일일 한도 초과 시 업그레이드 모달
   const [showLimitModal, setShowLimitModal] = useState(false)
-  const [usageLimitInfo, setUsageLimitInfo] = useState<{ current: number; limit: number } | null>(null)
+  // audience 는 '다음 걸음'을 가른다 — 비회원은 가입, 회원은 요금제.
+  const [usageLimitInfo, setUsageLimitInfo] = useState<
+    { limit: number; audience: 'guest' | 'member' } | null
+  >(null)
   const [selectedBlogId, setSelectedBlogId] = useState<string | null>(null)
   const [breakdownData, setBreakdownData] = useState<any | null>(null)
   const [loadingBreakdown, setLoadingBreakdown] = useState(false)
@@ -452,17 +456,15 @@ function KeywordSearchContent() {
         const usageCheck = await checkUsageLimit(user.id, 'keyword_search')
         if (!usageCheck.allowed) {
           // P0-4: 풀스크린 업그레이드 모달 표시
-          setUsageLimitInfo({ current: usageCheck.used || usageCheck.limit, limit: usageCheck.limit })
+          setUsageLimitInfo({ limit: usageCheck.limit, audience: 'member' })
           setShowLimitModal(true)
           setLoading(false)
           setProgress(0)
           setProgressMessage('')
           return
         }
-        // 사용량 차감 (백그라운드에서 처리)
-        incrementUsage(user.id, 'keyword_search').catch(() => {
-          // 사용량 추적 실패는 무시
-        })
+        // 차감은 서버가 한다(middleware/usage_limit → consume_usage).
+        // 여기서 또 빼면 한 번 검색하고 두 번 세어진다.
       } catch {
         // 사용량 체크 실패 시에도 검색은 진행
       }
@@ -493,7 +495,7 @@ function KeywordSearchContent() {
         `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(searchKeyword)}&limit=20&analyze_content=true&quick_mode=false`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
         }
       )
 
@@ -502,6 +504,16 @@ function KeywordSearchContent() {
       setProgress(100)
       setProgressMessage('완료!')
 
+      const hit = await readLimitHit(response)
+      if (hit) {
+        // 한도는 실패가 아니라 '다음 걸음'이다. 에러 토스트 대신 안내를 띄운다.
+        setUsageLimitInfo({ limit: hit.limit, audience: hit.audience })
+        setShowLimitModal(true)
+        setLoading(false)
+        setProgress(0)
+        setProgressMessage('')
+        return
+      }
       if (!response.ok) throw new Error('검색 실패')
 
       const data: KeywordSearchResponse = await response.json()
@@ -590,16 +602,14 @@ function KeywordSearchContent() {
         const usageCheck = await checkUsageLimit(user.id, 'keyword_search')
         if (!usageCheck.allowed) {
           // P0-4: 풀스크린 업그레이드 모달 표시
-          setUsageLimitInfo({ current: usageCheck.used || usageCheck.limit, limit: usageCheck.limit })
+          setUsageLimitInfo({ limit: usageCheck.limit, audience: 'member' })
           setShowLimitModal(true)
           setIsAnalyzing(false)
           setKeywordStatuses([])
           return
         }
-        // 사용량 차감 (백그라운드에서 처리)
-        incrementUsage(user.id, 'keyword_search').catch(() => {
-          // 사용량 추적 실패는 무시
-        })
+        // 차감은 서버가 한다(middleware/usage_limit → consume_usage).
+        // 여기서 또 빼면 한 번 검색하고 두 번 세어진다.
       } catch {
         // 사용량 체크 실패 시에도 검색은 진행
       }
@@ -623,12 +633,16 @@ function KeywordSearchContent() {
           `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(keyword)}&limit=20&analyze_content=true&quick_mode=false`,
           {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
           }
         )
 
+        const hit = await readLimitHit(response)
+        if (hit) {
+          setUsageLimitInfo({ limit: hit.limit, audience: hit.audience })
+          setShowLimitModal(true)
+          throw new Error(hit.message || '하루 한도를 모두 사용했습니다')
+        }
         if (!response.ok) {
           throw new Error(`검색 실패: ${response.statusText}`)
         }
@@ -1099,13 +1113,19 @@ function KeywordSearchContent() {
         `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(clickedKeyword)}&limit=20&analyze_content=true&quick_mode=false`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
         }
       )
 
       clearInterval(progressInterval)
       setProgress(100)
 
+      const hit = await readLimitHit(response)
+      if (hit) {
+        setUsageLimitInfo({ limit: hit.limit, audience: hit.audience })
+        setShowLimitModal(true)
+        return
+      }
       if (!response.ok) {
         throw new Error('검색에 실패했습니다')
       }
@@ -3364,7 +3384,7 @@ function KeywordSearchContent() {
         isOpen={showLimitModal}
         onClose={() => setShowLimitModal(false)}
         feature="keyword_search"
-        currentUsage={usageLimitInfo?.current}
+        audience={usageLimitInfo?.audience ?? 'member'}
         maxUsage={usageLimitInfo?.limit}
       />
     </div>

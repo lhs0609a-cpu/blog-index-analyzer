@@ -1,15 +1,30 @@
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { Crown, Zap, TrendingUp, Check, X, Sparkles , Search, KeyRound, Wand2} from 'lucide-react'
+import { Crown, Check, X, Search, KeyRound, Wand2, UserPlus } from 'lucide-react'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
+import { PLAN_LIMITS, PLAN_INFO } from '@/lib/features/featureAccess'
+import { track } from '@/lib/analytics/track'
+
+/**
+ * 한도에 부딪힌 사람에게 다음 걸음을 주는 화면.
+ *
+ * 여기가 유료 퍼널의 **입구**다. 2026-09-16 실측에서 이 구간은 통째로 비어
+ * 있었다 — 서버에 한도가 없어 아무도 벽에 닿지 않았고, 닿았더라도 이 모달에는
+ * track() 이 하나도 없어 몇 명이 봤는지조차 알 수 없었다.
+ *
+ * 비회원과 회원은 다음 걸음이 다르다. 비회원에게 요금제를 들이밀면 "아직
+ * 써보지도 않았는데 돈부터"가 되고, 회원에게 가입을 권하면 말이 안 된다.
+ */
 
 interface UpgradeModalProps {
   isOpen: boolean
   onClose: () => void
   feature: 'blog_analysis' | 'keyword_search' | 'general'
-  currentUsage?: number
+  /** 비회원이면 'guest'. 서버 429 응답의 authenticated 값으로 정한다. */
+  audience?: 'guest' | 'member'
+  /** 서버가 알려준 오늘의 한도. 프런트 상수보다 이 값이 우선이다. */
   maxUsage?: number
 }
 
@@ -17,39 +32,47 @@ const featureInfo = {
   blog_analysis: {
     title: '블로그 분석',
     icon: Search,
-    freeLimit: 2,
-    proLimit: 50,
-    benefit: '무제한 블로그 분석으로 경쟁사 분석까지!'
+    freeLimit: PLAN_LIMITS.free.blogAnalysisDaily,
+    proLimit: PLAN_LIMITS.pro.blogAnalysisDaily,
   },
   keyword_search: {
     title: '키워드 검색',
     icon: KeyRound,
-    freeLimit: 8,
-    proLimit: 100,
-    benefit: '100회 검색으로 블루오션 키워드 발굴!'
+    freeLimit: PLAN_LIMITS.free.keywordSearchDaily,
+    proLimit: PLAN_LIMITS.pro.keywordSearchDaily,
   },
   general: {
     title: '프리미엄 기능',
     icon: Wand2,
     freeLimit: 0,
     proLimit: -1,
-    benefit: '모든 프리미엄 기능을 제한 없이!'
-  }
+  },
 }
 
-export default function UpgradeModal({ isOpen, onClose, feature, currentUsage, maxUsage }: UpgradeModalProps) {
-  const [showUrgency, setShowUrgency] = useState(false)
-  const info = featureInfo[feature]
+const fmt = (n: number) => (n === -1 ? '무제한' : `${n}회/일`)
 
+/** 요금제 표시용 Pro 월 가격 — 숫자의 단일 출처는 featureAccess 다 */
+const PLAN_INFO_PRO_PRICE = PLAN_INFO.pro.price
+
+export default function UpgradeModal({
+  isOpen,
+  onClose,
+  feature,
+  audience = 'member',
+  maxUsage,
+}: UpgradeModalProps) {
+  const info = featureInfo[feature]
+  const isGuest = audience === 'guest'
+
+  // 벽에 닿은 사람이 몇 명인지는 서버(middleware/usage_limit)도 세지만,
+  // 화면이 실제로 떴는지는 여기서만 알 수 있다.
   useEffect(() => {
-    if (isOpen) {
-      // 3초 후 긴급성 메시지 표시
-      const timer = setTimeout(() => setShowUrgency(true), 3000)
-      return () => clearTimeout(timer)
-    } else {
-      setShowUrgency(false)
-    }
-  }, [isOpen])
+    if (!isOpen) return
+    track('limit_hit', {
+      reason: isGuest ? 'guest' : 'free',
+      props: { feature, limit: maxUsage ?? info.freeLimit, at: 'modal' },
+    })
+  }, [isOpen, isGuest, feature, maxUsage, info.freeLimit])
 
   // ESC 키로 닫기
   useEffect(() => {
@@ -60,6 +83,21 @@ export default function UpgradeModal({ isOpen, onClose, feature, currentUsage, m
     return () => window.removeEventListener('keydown', handleEsc)
   }, [onClose])
 
+  // 비회원 → 무료회원으로 실제로 늘어나는 양. 블로그 분석은 무료회원도 하루 1회라
+  // 비회원과 같다 — 같은 숫자를 '혜택'이라고 나란히 그리면 화면이 거짓말을 한다.
+  const guestGain = isGuest ? info.freeLimit - (maxUsage ?? 1) : 0
+
+  const ctaHref = isGuest
+    ? `/register?next=${encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '/')}`
+    : '/pricing'
+
+  const onCta = () => {
+    track('limit_cta_click', {
+      reason: isGuest ? 'guest' : 'free',
+      props: { feature, to: isGuest ? 'register' : 'pricing' },
+    })
+  }
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -67,155 +105,129 @@ export default function UpgradeModal({ isOpen, onClose, feature, currentUsage, m
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-gradient-to-br from-blue-900/95 to-purple-900/95 flex items-center justify-center z-[100] p-4"
+          className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
           onClick={onClose}
         >
-          {/* 배경 파티클 효과 */}
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            {[...Array(20)].map((_, i) => (
-              <motion.div
-                key={i}
-                className="absolute w-2 h-2 bg-white/20 rounded-full"
-                initial={{
-                  x: Math.random() * window.innerWidth,
-                  y: window.innerHeight + 20
-                }}
-                animate={{
-                  y: -20,
-                  transition: {
-                    duration: 3 + Math.random() * 2,
-                    repeat: Infinity,
-                    delay: Math.random() * 2
-                  }
-                }}
-              />
-            ))}
-          </div>
-
           <motion.div
-            initial={{ scale: 0.8, opacity: 0, y: 50 }}
+            initial={{ scale: 0.9, opacity: 0, y: 24 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.8, opacity: 0, y: 50 }}
+            exit={{ scale: 0.9, opacity: 0, y: 24 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             className="relative bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* 닫기 버튼 */}
             <button
               onClick={onClose}
               className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              aria-label="닫기"
             >
               <X className="w-5 h-5 gi3d" />
             </button>
 
             {/* 헤더 */}
             <div className="text-center mb-6">
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.2, type: 'spring' }}
-                className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center shadow-lg"
-              >
+              <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-blue-50 flex items-center justify-center">
                 <info.icon className="w-10 h-10 text-[#0064FF]" strokeWidth={1.5} />
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-              >
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                  오늘의 {info.title} 완료!
-                </h2>
-                <p className="text-gray-600">
-                  {currentUsage !== undefined && maxUsage !== undefined ? (
-                    <>무료 플랜 <span className="font-bold text-blue-600">{maxUsage}회</span>를 모두 사용했어요</>
-                  ) : (
-                    <>더 많은 기능이 필요하신가요?</>
-                  )}
-                </p>
-              </motion.div>
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                오늘의 {info.title}을 모두 쓰셨어요
+              </h2>
+              <p className="text-gray-600">
+                {maxUsage !== undefined ? (
+                  <>
+                    {isGuest ? '비회원' : '무료 플랜'}은 하루{' '}
+                    <span className="font-bold text-[#0064FF]">{maxUsage}회</span>까지 쓸 수 있습니다
+                  </>
+                ) : (
+                  <>더 쓰시려면 한 걸음만 더 가시면 됩니다</>
+                )}
+              </p>
             </div>
 
-            {/* 비교 카드 */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="grid grid-cols-2 gap-4 mb-6"
-            >
-              {/* 무료 플랜 */}
-              <div className="bg-gray-50 rounded-2xl p-4 border border-gray-200 opacity-60">
-                <div className="text-sm text-gray-500 mb-2">현재 (무료)</div>
+            {/* 지금 → 다음 걸음 비교 */}
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="bg-gray-50 rounded-2xl p-4 border border-gray-200">
+                <div className="text-sm text-gray-500 mb-2">지금 ({isGuest ? '비회원' : '무료'})</div>
                 <div className="text-2xl font-bold text-gray-700 mb-1">
-                  {info.freeLimit}회/일
+                  {fmt(maxUsage ?? (isGuest ? 1 : info.freeLimit))}
                 </div>
-                <div className="text-xs text-gray-500">기본 기능만</div>
+                <div className="text-xs text-gray-500">{info.title}</div>
               </div>
 
-              {/* Pro 플랜 */}
-              <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl p-4 border-2 border-blue-400 relative">
+              <div className="bg-blue-50 rounded-2xl p-4 border-2 border-[#0064FF] relative">
                 <div className="absolute -top-2 -right-2">
-                  <span className="px-2 py-0.5 bg-blue-500 text-white text-xs font-bold rounded-full">추천</span>
+                  <span className="px-2 py-0.5 bg-[#0064FF] text-white text-xs font-bold rounded-full">
+                    {isGuest ? '무료' : '추천'}
+                  </span>
                 </div>
-                <div className="text-sm text-blue-600 mb-2">Pro 플랜</div>
-                <div className="text-2xl font-bold text-blue-700 mb-1">
-                  {info.proLimit === -1 ? '무제한' : `${info.proLimit}회/일`}
+                <div className="text-sm text-[#0064FF] mb-2">
+                  {isGuest ? '무료 회원' : 'Pro 플랜'}
                 </div>
-                <div className="text-xs text-blue-600">{info.benefit}</div>
+                <div className="text-2xl font-bold text-[#0050CC] mb-1">
+                  {isGuest
+                    ? guestGain > 0
+                      ? fmt(info.freeLimit)
+                      : '기록 저장'
+                    : fmt(info.proLimit)}
+                </div>
+                <div className="text-xs text-[#0064FF]">
+                  {isGuest
+                    ? guestGain > 0
+                      ? '가입만 하면 바로'
+                      : '분석한 블로그를 다시 볼 수 있어요'
+                    : `${PLAN_INFO_PRO_PRICE.toLocaleString()}원/월`}
+                </div>
               </div>
-            </motion.div>
+            </div>
 
-            {/* Pro 혜택 리스트 */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-              className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-4 mb-6"
-            >
-              <div className="text-sm font-bold text-emerald-800 mb-3">Pro 플랜 혜택</div>
+            {/* 다음 걸음에서 실제로 얻는 것 — 숫자는 featureAccess 단일 출처에서 온다 */}
+            <div className="bg-gray-50 rounded-xl p-4 mb-6">
+              <div className="text-sm font-bold text-gray-800 mb-3">
+                {isGuest ? '무료 회원이 되면' : 'Pro 플랜이 되면'}
+              </div>
               <div className="space-y-2">
-                {[
-                  '키워드 검색 100회/일 (12배 증가)',
-                  '블로그 분석 50회/일 (25배 증가)',
-                  '"상위 노출 가능" 키워드 필터',
-                  '순위 추적 & 알림',
-                  '엑셀 내보내기'
-                ].map((benefit, i) => (
-                  <div key={i} className="flex items-center gap-2 text-sm text-emerald-700">
+                {(isGuest
+                  ? [
+                      // 실제로 늘어나는 것만 적는다. 비회원과 같은 한도를 혜택으로
+                      // 적으면 가입한 사람이 곧바로 속았다고 느낀다.
+                      `키워드 검색 ${fmt(PLAN_LIMITS.free.keywordSearchDaily)}`,
+                      '분석한 블로그 저장 · 다시 보기',
+                      '카드 등록 없이 가입 즉시 사용',
+                    ]
+                  : [
+                      `키워드 검색 ${fmt(PLAN_LIMITS.pro.keywordSearchDaily)}`,
+                      `블로그 분석 ${fmt(PLAN_LIMITS.pro.blogAnalysisDaily)}`,
+                      `경쟁 블로그 비교 ${PLAN_LIMITS.pro.competitorCompare}개`,
+                      '순위 추적 & 알림 · 엑셀 내보내기',
+                    ]
+                ).map((benefit, i) => (
+                  <div key={i} className="flex items-center gap-2 text-sm text-gray-700">
                     <Check className="w-4 h-4 text-emerald-500 flex-shrink-0 gi3d" />
                     <span>{benefit}</span>
                   </div>
                 ))}
               </div>
-            </motion.div>
+            </div>
 
-            {/* 긴급성 메시지 */}
-            <AnimatePresence>
-              {showUrgency && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 text-center"
-                >
-                  <span className="text-amber-700 text-sm font-medium">
-                    지금 시작하면 <span className="font-bold">첫 달 20% 할인</span> · 7일 내 전액 환불 보장!
-                  </span>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* CTA 버튼 */}
+            {/* CTA */}
             <div className="space-y-3">
-              <Link href="/pricing" className="block">
+              <Link href={ctaHref} className="block" onClick={onCta}>
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-xl hover:shadow-lg shadow-lg shadow-blue-500/25 transition-all flex items-center justify-center gap-2"
+                  className="w-full py-4 bg-[#0064FF] text-white font-bold rounded-xl hover:shadow-lg shadow-lg shadow-[#0064FF]/25 transition-all flex items-center justify-center gap-2"
                 >
-                  <Crown className="w-5 h-5 gi3d" />
-                  7일 환불 보장으로 시작
+                  {isGuest ? (
+                    <>
+                      <UserPlus className="w-5 h-5 gi3d" />
+                      무료로 회원가입하고 이어서 하기
+                    </>
+                  ) : (
+                    <>
+                      <Crown className="w-5 h-5 gi3d" />
+                      요금제 보기
+                    </>
+                  )}
                 </motion.button>
               </Link>
 
@@ -227,14 +239,10 @@ export default function UpgradeModal({ isOpen, onClose, feature, currentUsage, m
               </button>
             </div>
 
-            {/* 하단 안내 - 신뢰도 강화 */}
-            <div className="mt-4 p-3 bg-green-50 rounded-xl text-center">
-              <div className="text-sm text-green-700 font-medium">
-                ✓ 클릭 한 번으로 언제든 해지
-              </div>
-              <div className="text-xs text-green-600 mt-1">
-                전화 상담 없이 마이페이지에서 즉시 해지 · 위약금 0원
-              </div>
+            <div className="mt-4 text-center text-xs text-gray-500">
+              {isGuest
+                ? '이메일과 비밀번호만 있으면 됩니다 · 카드 등록 없음'
+                : '7일 이내 미사용 시 전액 환불 · 마이페이지에서 클릭 한 번으로 해지'}
             </div>
           </motion.div>
         </motion.div>

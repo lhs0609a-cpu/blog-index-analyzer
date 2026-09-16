@@ -1,7 +1,7 @@
 """
 Blog analysis router with related keywords support
 """
-from fastapi import APIRouter, HTTPException, Query, Header, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Query, Header, BackgroundTasks, Depends
 from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
 import httpx
@@ -23,6 +23,12 @@ from database.keyword_analysis_db import get_cached_related_keywords, cache_rela
 from services.learning_engine import train_model, calculate_blog_score
 from database.blog_percentile_db import get_blog_percentile_db
 from services.blog_analyzer import get_blog_level_from_score
+from middleware.usage_limit import (
+    UsageGate,
+    blog_analysis_gate,
+    keyword_search_gate,
+    consume_usage,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -4176,11 +4182,17 @@ async def get_related_keywords_from_autocomplete(keyword: str) -> RelatedKeyword
 
 # ===== Blog Analysis Endpoint =====
 @router.post("/analyze", response_model=BlogAnalysisResponse)
-async def analyze_blog_endpoint(request: BlogAnalysisRequest):
+async def analyze_blog_endpoint(
+    request: BlogAnalysisRequest,
+    gate: UsageGate = Depends(blog_analysis_gate),
+):
     """
     Analyze a Naver blog and return its index score.
 
     This is a synchronous endpoint that returns results immediately.
+
+    한도는 여기서 막는다 — 프런트 검사는 안내용이고, 서버가 유일한 심판이다.
+    차감은 분석이 실제로 성공한 뒤에만 한다(consume_usage).
     """
     import uuid
     from datetime import datetime
@@ -4316,6 +4328,10 @@ async def analyze_blog_endpoint(request: BlogAnalysisRequest):
             await asyncio.to_thread(record_snapshot, blog_id, index, stats, "analyze")
         except Exception as e:
             logger.warning(f"[index-history] snapshot skipped for {blog_id}: {e}")
+
+        # 결과를 실제로 손에 쥔 지금 차감한다. 오타로 404 가 난 시도까지 세면
+        # 하루 1회짜리 한도에서는 사람이 제품이 아니라 자기를 탓하고 떠난다.
+        consume_usage(gate)
 
         return BlogAnalysisResponse(
             job_id=job_id,
@@ -4721,7 +4737,8 @@ async def search_keyword_with_tabs(
     keyword: str = Query(..., description="검색할 키워드"),
     limit: int = Query(10, description="결과 개수 (기본 10개)"),
     analyze_content: bool = Query(True, description="콘텐츠 분석 여부"),
-    quick_mode: bool = Query(False, description="빠른 모드 (상위 10개만 분석)")
+    quick_mode: bool = Query(False, description="빠른 모드 (상위 10개만 분석)"),
+    gate: UsageGate = Depends(keyword_search_gate),
 ):
     """
     키워드로 블로그 검색 및 분석
@@ -4730,6 +4747,10 @@ async def search_keyword_with_tabs(
 
     Args:
         quick_mode: True일 경우 상위 10개 블로그만 분석
+
+    ⚠️ 이 함수는 HTTP 말고 **파이썬으로도** 호출된다(blue_ocean 이 그대로 await
+    한다). 그래서 gate 는 기본값이 있어야 하고, 차감은 consume_usage 가
+    UsageGate 인지 확인한 뒤에만 한다 — 내부 파이프라인이 사용자 한도를 먹으면 안 된다.
     """
     # 빠른 모드: 분석할 블로그 수 제한
     effective_limit = min(limit, 10) if quick_mode else limit
@@ -5117,6 +5138,9 @@ async def search_keyword_with_tabs(
         common_patterns=[],
         monthly_search_volume=monthly_search_volume
     ) if view_results_final else None
+
+    # 결과가 실제로 나온 지금 차감한다 (위쪽 '검색 결과 0건' 반환 경로는 안 먹는다).
+    consume_usage(gate)
 
     return KeywordSearchResponse(
         keyword=keyword,

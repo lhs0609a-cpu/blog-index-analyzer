@@ -1,5 +1,13 @@
 """Middleware package"""
-from .usage_limit import check_usage_limit, get_usage_info, get_client_ip
+from .usage_limit import (
+    UsageGate,
+    usage_gate,
+    blog_analysis_gate,
+    keyword_search_gate,
+    consume_usage,
+    get_usage_info,
+    get_client_ip,
+)
 from .feature_gate import (
     require_feature,
     feature_gate,
@@ -10,7 +18,11 @@ from .feature_gate import (
 )
 
 __all__ = [
-    'check_usage_limit',
+    'UsageGate',
+    'usage_gate',
+    'blog_analysis_gate',
+    'keyword_search_gate',
+    'consume_usage',
     'get_usage_info',
     'get_client_ip',
     'require_feature',

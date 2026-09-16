@@ -9,7 +9,7 @@ import Confetti from 'react-confetti'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useWindowSize } from '@/lib/hooks/useWindowSize'
-import { track } from '@/lib/analytics/track'
+import { markActivated } from '@/lib/analytics/track'
 import { analyzeBlog, saveBlogToList, verifyBlogIndex, getExposureCeiling,
   type VerifyIndexResponse, type ExposureCeilingResponse } from '@/lib/api/blog'
 import { registerBlog, startRankCheck, getTrackedBlogs } from '@/lib/api/rankTracker'
@@ -21,7 +21,7 @@ import AnalysisEmptyState from '@/components/AnalysisEmptyState'
 import AnalysisProgress, { type ProgressStage } from '@/components/AnalysisProgress'
 import { useBlogContextStore } from '@/lib/stores/blogContext'
 import { useXPStore } from '@/lib/stores/xp'
-import { incrementUsage, checkUsageLimit } from '@/lib/api/subscription'
+import { checkUsageLimit } from '@/lib/api/subscription'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import UpgradeModal from '@/components/UpgradeModal'
 import TrialExpiryBanner from '@/components/TrialExpiryBanner'
@@ -1436,7 +1436,10 @@ export default function AnalyzePage() {
   const [pendingCanonical, setPendingCanonical] = useState<string | null>(null)
   const movedTriedRef = useRef<Set<string>>(new Set())
   const [showLimitModal, setShowLimitModal] = useState(false)
-  const [usageLimitInfo, setUsageLimitInfo] = useState<{ current: number; limit: number } | null>(null)
+  // audience 는 '다음 걸음'을 가른다 — 비회원은 가입, 회원은 요금제.
+  const [usageLimitInfo, setUsageLimitInfo] = useState<
+    { limit: number; audience: 'guest' | 'member' } | null
+  >(null)
   const { width, height } = useWindowSize()
 
   // 무료 플랜 체크 (비로그인 또는 free 플랜)
@@ -1463,8 +1466,9 @@ export default function AnalyzePage() {
       try {
         const usageCheck = await checkUsageLimit(user.id, 'blog_analysis')
         if (!usageCheck.allowed) {
-          // P0-4: 풀스크린 업그레이드 모달 표시
-          setUsageLimitInfo({ current: usageCheck.used || usageCheck.limit, limit: usageCheck.limit })
+          // 40초짜리 분석을 시작하기 전에 미리 끊어준다. 진짜 심판은 서버이고
+          // (429 DAILY_LIMIT_EXCEEDED) 이건 기다림을 아껴주는 안내일 뿐이다.
+          setUsageLimitInfo({ limit: usageCheck.limit, audience: 'member' })
           setShowLimitModal(true)
           return
         }
@@ -1511,19 +1515,17 @@ export default function AnalyzePage() {
         setAnalysisResult(analysisResult)
         // 활성화 시점 — 가입만 하고 한 번도 값을 못 본 사람과 가른다.
         // 이 비율이 낮으면 문제는 가입 폼이 아니라 가입 직후 화면이다.
-        track('activation_first_run', { userId: user?.id, props: { authed: !!user?.id } })
+        //
+        // ⚠️ '첫' 실행이어야 한다. 예전엔 분석할 때마다, 그것도 비회원까지
+        // 찍어서 2026-09-15~16 이틀간 67건이 쌓였다(같은 기간 가입은 1건).
+        // 분자가 분모를 20배 넘으니 '가입 → 활성화' 는 계산 자체가 성립하지 않았다.
+        markActivated(user?.id)
         toast.success('분석이 완료되었습니다!')
 
-        // 사용량 차감은 여기서 한다. 시작할 때 미리 빼면
-        // (2026-08-24 실측) 계정 ID를 넣어 MOVED 로 실패한 무료 사용자가 진짜 주소로
-        // 자동 재시도할 때 자기가 방금 쓴 1회에 막혀 "결과는 없는데 사용은 했다"가 된다.
-        if (isAuthenticated && user?.id) {
-          try {
-            await incrementUsage(user.id, 'blog_analysis')
-          } catch {
-            // 사용량 추적 실패는 분석 결과를 되돌릴 이유가 아니다
-          }
-        }
+        // 사용량 차감은 이제 서버가 한다(middleware/usage_limit → consume_usage).
+        // 여기서 또 빼면 같은 분석이 두 번 세어져 "1회 썼는데 한도 초과"가 된다.
+        // 성공했을 때만 차감한다는 원칙(2026-08-24 실측: MOVED 자동 재시도가
+        // 자기가 방금 쓴 1회에 막히던 문제)은 서버 쪽에 그대로 옮겨 두었다.
 
         // 일일 미션 완료
         completeMission('analyze')
@@ -1537,7 +1539,13 @@ export default function AnalyzePage() {
         toast.error('분석 결과를 받지 못했습니다.')
       }
     } catch (error) {
-      type ErrorDetail = { error_code?: string; message?: string; canonical_blog_id?: string }
+      type ErrorDetail = {
+        error_code?: string
+        message?: string
+        canonical_blog_id?: string
+        limit?: number
+        authenticated?: boolean
+      }
       const axiosError = error as {
         response?: { data?: { detail?: string | ErrorDetail } }
         message?: string
@@ -1547,6 +1555,17 @@ export default function AnalyzePage() {
       const detail: ErrorDetail = typeof rawDetail === 'object' && rawDetail !== null ? rawDetail : {}
       const errorMessage =
         (typeof rawDetail === 'string' ? rawDetail : detail.message) || axiosError?.message || ''
+
+      // 하루 한도에 부딪힌 경우. 서버가 유일한 심판이므로 비회원도 여기로 온다 —
+      // 에러 토스트 대신 "다음 걸음"을 보여준다(비회원은 가입, 회원은 요금제).
+      if (detail.error_code === 'DAILY_LIMIT_EXCEEDED') {
+        setUsageLimitInfo({
+          limit: detail.limit ?? 0,
+          audience: detail.authenticated === false ? 'guest' : 'member',
+        })
+        setShowLimitModal(true)
+        return
+      }
 
       // 계정 ID를 블로그 주소로 착각한 경우 — 진짜 주소를 알려주고 바로 재시도시킨다
       if (detail.error_code === 'MOVED' && detail.canonical_blog_id) {
@@ -2220,7 +2239,7 @@ export default function AnalyzePage() {
         isOpen={showLimitModal}
         onClose={() => setShowLimitModal(false)}
         feature="blog_analysis"
-        currentUsage={usageLimitInfo?.current}
+        audience={usageLimitInfo?.audience ?? 'member'}
         maxUsage={usageLimitInfo?.limit}
       />
     </div>

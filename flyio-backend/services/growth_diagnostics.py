@@ -141,6 +141,10 @@ NO_BENCHMARK_REASON: Dict[str, str] = {
     "reach": (
         "방문 → 특정 페이지 도달 비율은 사이트 구조에 따라 달라 외부 비교가 무의미하다."
     ),
+    "limit_funnel": (
+        "무료 한도 도달 비율은 한도를 몇으로 잡았느냐가 그대로 반영되는 값이라 "
+        "외부 비교 대상이 없다. 한도를 조인 날과 푼 날의 자체 추세로만 읽는다."
+    ),
 }
 
 
@@ -424,6 +428,26 @@ FUNNEL: List[Stage] = [
         denom_key="signups", numer_key="activation_first_run",
         benchmark="signup_to_activation", group="signup",
     ),
+    # 아래 두 구간이 "왜 결제가 없는가"의 앞쪽 절반이다.
+    #
+    # 2026-09-16 실측: 서버에 한도가 없어 비회원이 무제한으로 쓰고 있었고
+    # (guest_usage 0행 vs /analyze 페이지뷰 1,513건), 그래서 요금제를 볼 이유
+    # 자체가 생기지 않았다 — 이틀간 pricing_plan_click 0건. 한도를 서버로
+    # 옮긴 뒤 이 두 칸이 채워지기 시작해야 정상이다.
+    Stage(
+        key="visit_to_limit",
+        label="방문 → 무료 한도 도달",
+        question="쓰다가 벽에 부딪히기는 하는가? (안 부딪히면 돈 낼 이유가 생기지 않는다)",
+        denom_key="visitors", numer_key="limit_hit",
+        benchmark=None, no_benchmark_reason=NO_BENCHMARK_REASON["limit_funnel"], group="payment",
+    ),
+    Stage(
+        key="limit_to_pricing",
+        label="한도 도달 → 요금제 도달",
+        question="벽에 부딪힌 사람이 요금제를 보러 가는가? (안 가면 안내 문구·버튼 문제)",
+        denom_key="limit_hit", numer_key="pricing_views",
+        benchmark=None, no_benchmark_reason=NO_BENCHMARK_REASON["limit_funnel"], group="payment",
+    ),
     Stage(
         key="visit_to_pricing",
         label="방문 → 요금제 페이지",
@@ -484,6 +508,7 @@ def _collect(days: int) -> Dict[str, Any]:
         "signup_form_start", "signup_submit", "signup_fail",
         "login_submit", "login_fail",
         "activation_first_run",
+        "limit_hit", "limit_cta_click",
         "pricing_plan_click", "checkout_blocked_anonymous", "checkout_consent_open",
         "checkout_start", "payment_widget_open", "payment_widget_error",
         "payment_return_fail", "payment_register_fail", "payment_success",

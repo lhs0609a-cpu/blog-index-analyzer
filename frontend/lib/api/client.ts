@@ -91,7 +91,17 @@ apiClient.interceptors.response.use(
         // 단, 로그인/회원가입 요청 자체의 401은 리다이렉트 하지 않음 (에러 메시지 표시 위해)
         if (typeof window !== 'undefined' && !isAuthRequest) {
           localStorage.removeItem('auth_token')
-          window.location.href = '/login'
+          // ⚠️ 토큰만 지우면 zustand 의 persist 저장소(auth-storage)에는
+          // user/isAuthenticated 가 그대로 남아 **화면은 로그인 상태로 보이는데
+          // 모든 호출이 401 로 튕기는** 상태가 된다. 토큰 수명은 7일이라
+          // 일주일 만에 돌아온 회원이 정확히 이 상태에 빠진다.
+          localStorage.removeItem('auth-storage')
+          // 하던 자리를 실어 보낸다 — 로그인하면 그 화면으로 돌아온다.
+          const back = window.location.pathname + window.location.search
+          const next = back && back !== '/' && !back.startsWith('/login')
+            ? `?next=${encodeURIComponent(back)}`
+            : ''
+          window.location.href = `/login${next}`
         }
       } else if (!isAuthRequest && !isStructured) {
         // 인증 요청이 아니고, 화면이 직접 처리하는 구조화 오류도 아닐 때만 toast

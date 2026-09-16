@@ -199,6 +199,14 @@ FUNNEL_EVENTS = {
     "login_fail",
     # 활성화
     "activation_first_run",   # 가입 후 첫 분석 실행 — 가치를 한 번이라도 본 시점
+    # 한도 — 가입·결제를 만들어내는 자리
+    #
+    # 이 두 칸이 없어서 "무료 한도에 부딪힌 사람이 몇이고 그중 몇이 요금제로
+    # 갔는가"를 물어볼 수단 자체가 없었다(UpgradeModal 에는 track 이 0개였다).
+    # limit_hit 은 서버(middleware/usage_limit)가 남긴다 — 프런트가 무엇을
+    # 빠뜨리든 분모는 남아야 한다. reason = guest | free | basic ...
+    "limit_hit",
+    "limit_cta_click",        # 한도 안내에서 가입/요금제 버튼을 실제로 누른 경우
     # 결제
     "pricing_plan_click",
     "checkout_blocked_anonymous",  # 비로그인 상태로 요금제 버튼을 눌러 로그인으로 튕긴 경우

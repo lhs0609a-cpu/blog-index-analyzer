@@ -33,6 +33,17 @@ class UsageDB:
         'business': -1,       # 비즈니스 (-1 = 무제한)
     }
 
+    # 비회원 기능별 한도. 회원은 subscription_db.PLAN_LIMITS 를 쓴다 —
+    # 화면(UsageIndicator)이 읽는 장부가 그쪽이라 두 숫자가 어긋나면
+    # "3회 중 2회 남음" 이 거짓말이 된다.
+    #
+    # 각 기능 하루 1회 = 맛보기 한 번. 무료 회원의 분석 한도(1회)보다 크면
+    # 가입할 이유가 사라지므로 이 값은 회원 한도를 넘지 않아야 한다.
+    GUEST_FEATURE_LIMITS = {
+        'blog_analysis': 1,
+        'keyword_search': 1,
+    }
+
     def __init__(self, db_path: str = DATABASE_PATH):
         self.db_path = db_path
         self._ensure_db_exists()
@@ -67,16 +78,22 @@ class UsageDB:
             cursor = conn.cursor()
 
             # Guest usage tracking (IP-based)
+            #
+            # feature 칼럼이 있어야 '분석 1회·검색 1회'처럼 기능별로 맛보기를 줄 수 있다.
+            # 단일 카운터였을 때는 비회원이 분석을 3번 할 수 있었는데, 무료 회원의
+            # 분석 한도는 1회였다 — 가입하면 오히려 줄어드는 구조였다.
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS guest_usage (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     ip_address TEXT NOT NULL,
                     usage_date DATE NOT NULL,
+                    feature TEXT NOT NULL DEFAULT 'all',
                     usage_count INTEGER DEFAULT 0,
                     last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(ip_address, usage_date)
+                    UNIQUE(ip_address, usage_date, feature)
                 )
             """)
+            self._migrate_guest_usage_feature(cursor)
 
             # User usage tracking (User ID-based)
             cursor.execute("""
@@ -95,45 +112,78 @@ class UsageDB:
 
             logger.info("Usage tracking tables initialized")
 
-    def get_guest_usage(self, ip_address: str) -> Dict:
+    def _migrate_guest_usage_feature(self, cursor) -> None:
+        """
+        guest_usage 에 feature 칼럼을 들인다.
+
+        UNIQUE(ip_address, usage_date) 를 UNIQUE(ip_address, usage_date, feature) 로
+        바꿔야 하는데 SQLite 는 제약을 ALTER 로 못 고친다. 이 테이블은 **그날치
+        카운터**라 보존 가치가 없고(어제 값은 아무도 안 읽는다), 2026-09-16 프로덕션
+        실측으로 0행이었다 — 그래서 옛 스키마면 그냥 다시 만든다.
+        """
+        cols = {r[1] for r in cursor.execute("PRAGMA table_info(guest_usage)").fetchall()}
+        if 'feature' in cols:
+            return
+        cursor.execute("DROP TABLE IF EXISTS guest_usage")
+        cursor.execute("""
+            CREATE TABLE guest_usage (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ip_address TEXT NOT NULL,
+                usage_date DATE NOT NULL,
+                feature TEXT NOT NULL DEFAULT 'all',
+                usage_count INTEGER DEFAULT 0,
+                last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(ip_address, usage_date, feature)
+            )
+        """)
+        logger.info("[usage] guest_usage 를 feature 칼럼 스키마로 재생성")
+
+    def guest_limit(self, feature: str = 'all') -> int:
+        """비회원 한도. 기능별 값이 있으면 그걸, 없으면 옛 단일 카운터 값을 쓴다."""
+        return self.GUEST_FEATURE_LIMITS.get(feature, self.DAILY_LIMITS['guest'])
+
+    def get_guest_usage(self, ip_address: str, feature: str = 'all') -> Dict:
         """Get guest usage for today"""
         today = date.today().isoformat()
+        limit = self.guest_limit(feature)
 
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT usage_count, last_used_at FROM guest_usage WHERE ip_address = ? AND usage_date = ?",
-                (ip_address, today)
+                "SELECT usage_count, last_used_at FROM guest_usage "
+                "WHERE ip_address = ? AND usage_date = ? AND feature = ?",
+                (ip_address, today, feature)
             )
             row = cursor.fetchone()
 
             if row:
                 return {
                     'count': row['usage_count'],
-                    'limit': self.DAILY_LIMITS['guest'],
-                    'remaining': max(0, self.DAILY_LIMITS['guest'] - row['usage_count']),
+                    'limit': limit,
+                    'remaining': max(0, limit - row['usage_count']),
                     'last_used': row['last_used_at']
                 }
 
             return {
                 'count': 0,
-                'limit': self.DAILY_LIMITS['guest'],
-                'remaining': self.DAILY_LIMITS['guest'],
+                'limit': limit,
+                'remaining': limit,
                 'last_used': None
             }
 
-    def increment_guest_usage(self, ip_address: str) -> bool:
+    def increment_guest_usage(self, ip_address: str, feature: str = 'all') -> bool:
         """Increment guest usage and return True if within limit"""
         today = date.today().isoformat()
-        limit = self.DAILY_LIMITS['guest']
+        limit = self.guest_limit(feature)
 
         with self.get_connection() as conn:
             cursor = conn.cursor()
 
             # Try to get existing record
             cursor.execute(
-                "SELECT usage_count FROM guest_usage WHERE ip_address = ? AND usage_date = ?",
-                (ip_address, today)
+                "SELECT usage_count FROM guest_usage "
+                "WHERE ip_address = ? AND usage_date = ? AND feature = ?",
+                (ip_address, today, feature)
             )
             row = cursor.fetchone()
 
@@ -145,13 +195,14 @@ class UsageDB:
                 cursor.execute(
                     """UPDATE guest_usage
                        SET usage_count = usage_count + 1, last_used_at = CURRENT_TIMESTAMP
-                       WHERE ip_address = ? AND usage_date = ?""",
-                    (ip_address, today)
+                       WHERE ip_address = ? AND usage_date = ? AND feature = ?""",
+                    (ip_address, today, feature)
                 )
             else:
                 cursor.execute(
-                    "INSERT INTO guest_usage (ip_address, usage_date, usage_count) VALUES (?, ?, 1)",
-                    (ip_address, today)
+                    "INSERT INTO guest_usage (ip_address, usage_date, feature, usage_count) "
+                    "VALUES (?, ?, ?, 1)",
+                    (ip_address, today, feature)
                 )
 
             return True

@@ -1,18 +1,22 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, Suspense } from 'react'
 import { motion } from 'framer-motion'
 import { Mail, Lock, User, Loader2, Sparkles, ArrowLeft, Check, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { register } from '@/lib/api/auth'
 import { useAuthStore } from '@/lib/stores/auth'
+import { safeNextPath } from '@/lib/auth/nextPath'
 import { track, signupFailReason } from '@/lib/analytics/track'
 import toast from 'react-hot-toast'
 import BlspiLogo from '@/components/BlspiLogo'
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter()
+  // 한도 안내에서 '무료로 가입하고 이어서 하기'로 온 사람은 하던 화면으로 돌려보낸다.
+  const searchParams = useSearchParams()
+  const next = safeNextPath(searchParams.get('next'))
   const { login: setAuth } = useAuthStore()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -69,7 +73,7 @@ export default function RegisterPage() {
       setAuth(response.user, response.access_token)
       track('signup_success', { userId: response.user?.id })
       toast.success(`환영합니다, ${response.user.name}님!`)
-      router.push('/dashboard')
+      router.push(next)
     } catch (error) {
       const axiosError = error as { response?: { status?: number; data?: { detail?: string } } }
       const status = axiosError.response?.status
@@ -312,5 +316,19 @@ export default function RegisterPage() {
         </motion.p>
       </div>
     </div>
+  )
+}
+
+
+/**
+ * useSearchParams 를 쓰는 화면은 Suspense 경계가 있어야 한다.
+ * 없으면 Next 가 이 라우트를 통째로 클라이언트 렌더로 떨어뜨리고
+ * 프로덕션 빌드에서 걸린다(결제 화면도 같은 이유로 감싸져 있다).
+ */
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="auth-page min-h-screen" aria-label="회원가입 화면 불러오는 중" />}>
+      <RegisterForm />
+    </Suspense>
   )
 }

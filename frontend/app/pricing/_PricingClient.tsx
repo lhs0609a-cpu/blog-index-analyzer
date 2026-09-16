@@ -102,8 +102,10 @@ export default function PricingPage() {
       toast.error('로그인이 필요합니다')
       // 여기서 되돌려보낸 사람은 대부분 안 돌아온다. '요금을 보고 마음먹은 순간'에
       // 로그인 벽을 세운 것이므로, 얼마나 자주 일어나는지는 반드시 세어야 한다.
-      track('checkout_blocked_anonymous')
-      router.push('/login')
+      track('checkout_blocked_anonymous', { props: { plan: planType, cycle: billingCycle } })
+      // 돌아올 자리를 실어 보낸다. 예전엔 로그인 성공이 무조건 /dashboard 였고,
+      // 요금을 보고 마음먹은 사람이 거기서 요금제 화면을 잃어버렸다.
+      router.push(`/login?next=${encodeURIComponent('/pricing')}`)
       return
     }
 

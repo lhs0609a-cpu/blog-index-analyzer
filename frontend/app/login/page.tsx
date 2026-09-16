@@ -1,19 +1,24 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { motion } from 'framer-motion'
 import { Loader2, Eye, EyeOff, Mail, Lock, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { login } from '@/lib/api/auth'
 import { useAuthStore } from '@/lib/stores/auth'
 import { track, signupFailReason } from '@/lib/analytics/track'
+import { safeNextPath } from '@/lib/auth/nextPath'
 import toast from 'react-hot-toast'
 import BlspiLogo from '@/components/BlspiLogo'
 
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
+  // 결제·분석을 하려다 로그인 벽에 막힌 사람은 그 자리로 돌려보내야 한다.
+  // 무조건 /dashboard 로 보내면 '요금을 보고 마음먹은 순간'이 그대로 사라진다.
+  const searchParams = useSearchParams()
+  const next = safeNextPath(searchParams.get('next'))
   const { login: setAuth, isAuthenticated } = useAuthStore()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -24,9 +29,9 @@ export default function LoginPage() {
   useEffect(() => {
     const token = localStorage.getItem('auth_token')
     if (token && isAuthenticated) {
-      router.replace('/dashboard')
+      router.replace(next)
     }
-  }, [isAuthenticated, router])
+  }, [isAuthenticated, router, next])
 
 
 
@@ -47,7 +52,7 @@ export default function LoginPage() {
       setAuth(response.user, response.access_token)
       track('login_success', { userId: response.user?.id })
       toast.success(`환영합니다, ${response.user.name}님!`)
-      router.push('/dashboard')
+      router.push(next)
     } catch (error) {
       const axiosError = error as { response?: { status?: number; data?: { detail?: string } } }
       const status = axiosError.response?.status
@@ -195,5 +200,19 @@ export default function LoginPage() {
         </motion.p>
       </div>
     </div>
+  )
+}
+
+
+/**
+ * useSearchParams 를 쓰는 화면은 Suspense 경계가 있어야 한다.
+ * 없으면 Next 가 이 라우트를 통째로 클라이언트 렌더로 떨어뜨리고
+ * 프로덕션 빌드에서 걸린다(결제 화면도 같은 이유로 감싸져 있다).
+ */
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="auth-page min-h-screen" aria-label="로그인 화면 불러오는 중" />}>
+      <LoginForm />
+    </Suspense>
   )
 }
