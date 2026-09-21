@@ -1,5 +1,5 @@
 import { absoluteUrl } from '@/lib/seo'
-import { fetchKeywordCount } from '@/lib/seoApi'
+import { fetchKeywordCount, isBuildPhase } from '@/lib/seoApi'
 
 /**
  * 사이트맵 인덱스.
@@ -27,7 +27,16 @@ export const revalidate = 300
 export const CHUNK_SIZE = 5000
 
 export async function GET() {
-  const total = await fetchKeywordCount()
+  // 빌드 시점에 던지면 배포가 통째로 죽는다(/rss.xml 이 2026-09-17 에 그렇게 죽였다).
+  // 요청 시점에는 그대로 던져 직전 인덱스를 지키고, 빌드 시점에는 0 으로 두되
+  // 아래에서 청크를 최소 1개 싣는다 — 300초 뒤 갱신이 채운다.
+  let total = 0
+  try {
+    total = await fetchKeywordCount()
+  } catch (e) {
+    if (!isBuildPhase()) throw e
+    console.warn('[sitemap-index] 빌드 시점 카운트 조회 실패 — 청크 1개로 발행한다:', e)
+  }
   // 최소 1개는 항상 싣는다. 카운트 조회가 실패하거나(타임아웃) 아직 0 이어도
   // 인덱스가 청크를 통째로 빠뜨리지 않게 한다. 비어 있는 urlset 은 유효한 XML 이라
   // 크롤러가 무시할 뿐 오류가 아니다.

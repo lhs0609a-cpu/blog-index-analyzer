@@ -706,6 +706,11 @@ def _rollup(rows: List[Dict[str, Any]], arpu: int) -> Dict[str, Any]:
 # ⚠️ 이 값들은 실제 코드 상태다. 코드를 바꿨으면 여기도 바꿔야 한다.
 #    file 을 같이 적어둔 이유: "어디를 고치라는 건지" 를 말해주지 못하는 진단은
 #    쓸모가 없고, 값이 낡았는지 확인하려면 그 파일을 열어보면 되기 때문이다.
+# ⚠️ 아래 사실들은 **손으로 적은 것**이다. 백엔드 컨테이너에 프런트 소스가 없어
+# 코드를 읽어 확인할 수 없으므로, 고친 뒤에 여기를 같이 고치지 않으면 진단이
+# 이미 해결된 문제를 계속 보고한다. 실제로 청약철회 별도 동의(2026-09-15 완료)를
+# 엿새 동안 미해결로 띄우고 있었다 — 진단이 한 번 거짓말하면 나머지 항목까지
+# 같이 무시된다. 고칠 때마다 verified_at 을 갱신할 것.
 PRODUCT_FACTS: Dict[str, Dict[str, Any]] = {
     "signup_fields": {
         "value": "4개 (이름·이메일·비밀번호·비밀번호 확인)",
@@ -744,27 +749,31 @@ PRODUCT_FACTS: Dict[str, Dict[str, Any]] = {
         "why": "한 달만 써보고 판단할 선택지가 없다. 자동갱신 거부감이 그대로 이탈로 간다.",
     },
     "trial_naming": {
-        "value": "'7일 무료 체험'이라 부르지만 즉시 결제 후 환불 보장",
+        "value": "화면 문구를 실제 동작에 맞춤 — '월 9,900원으로 시작 / 7일 내 전액 환불 보장'(2026-09-15)",
+        "verified_at": "2026-09-15",
         "file": "frontend/app/pricing/_PricingClient.tsx",
-        "verdict": "문제",
+        "verdict": "양호",
         "why": "'무료'라 읽고 들어와 결제창을 만나면 기대가 깨진다. 동의 모달에서 결제 금액을 다시 고지하고는 있으나, 버튼 문구와 실제 동작이 다르면 그 자리가 이탈 지점이 된다.",
     },
     "pricing_requires_login": {
-        "value": "비로그인으로 요금제 버튼을 누르면 로그인으로 튕김",
+        "value": "비로그인으로 요금제 버튼을 누르면 로그인으로 보내되, next= 로 요금제에 되돌려놓음(2026-09-17)",
+        "verified_at": "2026-09-17",
         "file": "frontend/app/pricing/_PricingClient.tsx",
         "verdict": "문제",
         "why": "Baymard 이탈 사유에서 '계정을 만들라고 해서'가 18%. 요금을 보고 마음먹은 바로 그 순간에 벽을 세우는 자리다.",
     },
     "vat_disclosure": {
-        "value": "요금제 화면에 부가세 표기 없음",
+        "value": "플랜 가격과 동의 모달의 결제 금액에 '부가세 포함' 표기(2026-09-21)",
+        "verified_at": "2026-09-21",
         "file": "frontend/app/pricing/_PricingClient.tsx",
-        "verdict": "문제",
+        "verdict": "양호",
         "why": "Baymard 이탈 사유 1위가 '결제 단계에서 예상 못 한 추가 비용'(40%)이다. 게다가 B2C 대상이면 「가격표시제 실시요령」(산업부고시 2025-51호)상 부가세 포함 총액 표시가 원칙이다.",
     },
     "withdrawal_consent": {
-        "value": "이용약관+환불정책을 체크박스 하나로 묶어 동의",
+        "value": "이용약관 동의와 청약철회 제한 고지를 **별도 체크박스**로 분리함(2026-09-15)",
+        "verified_at": "2026-09-15",
         "file": "frontend/app/payment/page.tsx · frontend/app/pricing/_PricingClient.tsx",
-        "verdict": "법적 점검 필요",
+        "verdict": "양호",
         "why": "전자상거래법 제17조 제3항은 '콘텐츠 제공이 개시되면 청약철회가 제한된다'는 사실을 소비자가 쉽게 알 수 있는 곳에 표시하고 **별도 동의**를 받지 않으면 그 제한 자체를 무효로 본다. 묶음 동의는 그 요건을 충족하지 못할 수 있다.",
     },
     "free_plan_limits": {
@@ -1236,43 +1245,8 @@ def build_findings(
         files=["frontend/app/register/page.tsx", "flyio-backend/routers/auth.py"],
         confidence="가설",
     ))
-    f.append(Finding(
-        id="vat_not_shown",
-        severity="medium", group="legal",
-        title="요금제 화면에 부가세 표기가 없다",
-        evidence=PRODUCT_FACTS["vat_disclosure"]["value"],
-        world=PRODUCT_FACTS["vat_disclosure"]["why"],
-        fix="플랜 가격 옆에 '부가세 포함' 또는 '부가세 별도(+10%)'를 명시한다. 한 줄이면 끝난다.",
-        files=["frontend/app/pricing/_PricingClient.tsx"],
-        confidence="가설",
-    ))
-    f.append(Finding(
-        id="withdrawal_consent_bundled",
-        severity="medium", group="legal",
-        title="청약철회 제한 고지가 이용약관 동의에 묶여 있다",
-        evidence=PRODUCT_FACTS["withdrawal_consent"]["value"],
-        world=PRODUCT_FACTS["withdrawal_consent"]["why"],
-        fix=(
-            "결제 버튼 바로 위에 '콘텐츠 제공이 시작되면 청약철회가 제한됩니다'를 "
-            "**별도 체크박스**로 분리하고, 동의 기록을 서버에 남긴다."
-        ),
-        files=["frontend/app/payment/page.tsx", "frontend/app/pricing/_PricingClient.tsx"],
-        confidence="가설",
-    ))
-    f.append(Finding(
-        id="trial_naming_mismatch",
-        severity="medium", group="payment",
-        title="'7일 무료 체험'이라 부르는데 즉시 결제된다",
-        evidence=PRODUCT_FACTS["trial_naming"]["value"],
-        world=PRODUCT_FACTS["trial_naming"]["why"],
-        fix=(
-            "버튼 문구를 '7일 환불 보장으로 시작하기'처럼 실제 동작과 맞춘다. '무료'를 빼면 "
-            "클릭은 줄지만 결제창에서의 이탈이 준다 — 어느 쪽이 큰지는 이 화면의 "
-            "요금제→결제시작, 결제창→성공 두 구간을 같이 보고 판단한다."
-        ),
-        files=["frontend/app/pricing/_PricingClient.tsx"],
-        confidence="가설",
-    ))
+    # 청약철회 별도 동의는 2026-09-15 에 분리했다. 고친 것을 계속 띄우면
+    # 화면 전체가 "어차피 다 빨간색"이 되어 아무도 읽지 않게 된다.
 
     f.sort(key=lambda x: SEVERITY_ORDER.get(x.severity, 9))
     return f

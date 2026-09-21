@@ -24,6 +24,14 @@ function LoginForm() {
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  /**
+   * '등록되지 않은 이메일' 은 토스트로 끝낼 실패가 아니다.
+   *
+   * 실측(2026-09-15~21): 로그인 시도 9건 중 6건이 실패했고 그중 이 사유가
+   * 4명이었다. 토스트는 몇 초 뒤 사라지고 사람은 같은 폼 앞에 남는다 — 갈 곳을
+   * 주지 않으면 그 자리가 끝이다. 가입 화면으로 가는 길을 화면에 **남겨둔다**.
+   */
+  const [needsSignup, setNeedsSignup] = useState(false)
 
   // 이미 로그인된 사용자는 대시보드로 리다이렉트
   useEffect(() => {
@@ -45,6 +53,8 @@ function LoginForm() {
       return
     }
 
+    setNeedsSignup(false)
+
     setIsLoading(true)
 
     try {
@@ -59,7 +69,11 @@ function LoginForm() {
       const message = axiosError.response?.data?.detail || '로그인에 실패했습니다'
       // 로그인 실패가 쏟아지면 그건 '가입을 안 하는' 게 아니라
       // '이미 가입했는데 못 들어오는' 문제다 — 둘은 처방이 완전히 다르다.
-      track('login_fail', { reason: signupFailReason(message, status), props: { http: status ?? 0 } })
+      const reason = signupFailReason(message, status)
+      track('login_fail', { reason, props: { http: status ?? 0 } })
+      // 서버는 '등록되지 않은 이메일'과 '비밀번호 틀림'을 구분해 돌려준다.
+      // 전자는 로그인 실패가 아니라 **아직 가입하지 않은 사람**이다.
+      setNeedsSignup(reason === 'email_invalid')
       toast.error(message)
     } finally {
       setIsLoading(false)
@@ -147,6 +161,22 @@ function LoginForm() {
                 </div>
               </div>
 
+              {needsSignup && (
+                <div className="rounded-xl border border-[#0064FF]/20 bg-[#0064FF]/5 p-4 text-sm">
+                  <p className="text-gray-700 mb-3">
+                    <strong className="text-gray-900">{email}</strong> 으로 가입된 계정이 없습니다.
+                  </p>
+                  <Link
+                    href={`/register?email=${encodeURIComponent(email)}${
+                      next && next !== '/dashboard' ? `&next=${encodeURIComponent(next)}` : ''
+                    }`}
+                    className="inline-flex items-center justify-center w-full py-3 rounded-lg bg-[#0064FF] text-white font-semibold"
+                  >
+                    이 이메일로 가입하기
+                  </Link>
+                </div>
+              )}
+
               {/* Submit Button */}
               <motion.button
                 type="submit"
@@ -164,6 +194,18 @@ function LoginForm() {
                   '로그인'
                 )}
               </motion.button>
+
+              {/* 비밀번호를 잊은 사람에게 줄 것이 여기 없었다. 로그인 화면은
+                  "비밀번호가 올바르지 않습니다"만 말하고 끝났고, 그 사람은
+                  다시 들어올 방법이 없었다. */}
+              <div className="text-center">
+                <Link
+                  href={`/forgot-password${email ? `?email=${encodeURIComponent(email)}` : ''}`}
+                  className="text-sm text-gray-500 hover:text-[#0064FF] transition-colors"
+                >
+                  비밀번호를 잊으셨나요?
+                </Link>
+              </div>
             </form>
 
             {/* Divider */}

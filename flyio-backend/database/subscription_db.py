@@ -9,6 +9,7 @@
 - 설정 안되면 SQLite 사용 (로컬 개발용)
 """
 import sqlite3
+import uuid
 import os
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Any
@@ -313,9 +314,49 @@ def init_subscription_tables():
         )
     """)
 
+    _migrate_subscription_columns(cursor)
+
     conn.commit()
     conn.close()
     logger.info("✅ Subscription tables initialized")
+
+
+# 이미 존재하는 DB 에 들여야 하는 칼럼. CREATE TABLE IF NOT EXISTS 는
+# 기존 테이블을 그대로 두므로, 프로덕션 볼륨의 테이블은 여기서만 바뀜다.
+_SUBSCRIPTION_ADDED_COLUMNS = {
+    # 정기결제의 유일한 근거. 이게 없으면 다음 달에 결제할 수단이 없다.
+    "billing_key": "TEXT",
+    # 카드 재등록 없이 갱신하려면 customer_key 가 사람마다 고정돼야 한다.
+    "billing_registered_at": "TIMESTAMP",
+    # 갱신 실패를 몇 번 연속으로 맞았는가 — 카드 만료를 사람에게 알릴 근거.
+    "renewal_failures": "INTEGER DEFAULT 0",
+    "last_renewal_attempt_at": "TIMESTAMP",
+}
+
+
+def _migrate_subscription_columns(cursor) -> None:
+    """subscriptions 에 빠진 칼럼을 채운다. 이미 있으면 조용히 넘어간다."""
+    try:
+        if USE_POSTGRES:
+            cursor.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = 'subscriptions'"
+            )
+            existing = {r[0] if not isinstance(r, dict) else r['column_name'] for r in cursor.fetchall()}
+        else:
+            cursor.execute("PRAGMA table_info(subscriptions)")
+            existing = {r[1] for r in cursor.fetchall()}
+    except Exception as e:
+        logger.warning(f"subscriptions 칼럼 점검 실패: {e}")
+        return
+
+    for column, ddl in _SUBSCRIPTION_ADDED_COLUMNS.items():
+        if column in existing:
+            continue
+        try:
+            cursor.execute(f"ALTER TABLE subscriptions ADD COLUMN {column} {ddl}")
+            logger.info(f"subscriptions.{column} 칼럼을 추가했다")
+        except Exception as e:
+            logger.warning(f"subscriptions.{column} 추가 실패: {e}")
 
 
 # ============ 구독 관리 함수 ============
@@ -380,12 +421,146 @@ def create_subscription(user_id: int, plan_type: str = "free") -> Dict:
     return get_user_subscription(user_id)
 
 
+# 연속 이 횟수를 넘기면 더 긁지 않는다. 카드 만료는 재시도로 낫지 않고,
+# 실패한 승인 요청이 쌓이면 결제사 쪽에서 가맹점 평판이 깎인다.
+MAX_RENEWAL_FAILURES = 3
+
+
+def get_or_create_customer_key(user_id: int) -> str:
+    """
+    사람마다 **고정된** 토스 customerKey.
+
+    왜 고정이어야 하나: 빌링키는 customerKey 에 묶여 발급된다. 프런트가 결제
+    때마다 `customer_{id}_{randomUUID()}` 를 새로 만들어 보내던 동안은, 첫 결제가
+    성공해도 그 키로 다시 결제할 방법이 없었다 — 매달 카드를 다시 등록해야
+    하는데 화면은 "다음 달 같은 날짜에 자동 결제됩니다" 라고 말하고 있었다.
+
+    값은 추측할 수 없어야 한다(토스 권고). BLANK_USER_3 같은 순번 키는 쓰지 않는다.
+    """
+    sub = get_user_subscription(user_id)
+    existing = (sub or {}).get("customer_key")
+    if existing:
+        return existing
+
+    if not sub:
+        create_subscription(user_id, "free")
+
+    customer_key = "blspi_" + uuid.uuid4().hex
+    conn = get_connection()
+    cursor = conn.cursor()
+    ph = "%s" if USE_POSTGRES else "?"
+    cursor.execute(
+        "UPDATE subscriptions SET customer_key = {} WHERE user_id = {}".format(ph, ph),
+        (customer_key, user_id),
+    )
+    conn.commit()
+    conn.close()
+    return customer_key
+
+
+def get_billing_credentials(user_id: int) -> Optional[Dict]:
+    """저장된 빌링키/커스터머키. 정기결제는 **이 값으로만** 실행한다."""
+    sub = get_user_subscription(user_id)
+    if not sub or not sub.get("billing_key"):
+        return None
+    return {
+        "billing_key": sub["billing_key"],
+        "customer_key": sub.get("customer_key"),
+        "plan_type": sub.get("plan_type"),
+        "billing_cycle": sub.get("billing_cycle") or "monthly",
+        "expires_at": sub.get("expires_at"),
+    }
+
+
+def clear_billing_key(user_id: int) -> None:
+    """해지·카드 폐기 시 빌링키를 지운다. 남겨두면 해지한 사람에게 청구된다."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    ph = "%s" if USE_POSTGRES else "?"
+    cursor.execute(
+        "UPDATE subscriptions SET billing_key = NULL, renewal_failures = 0 "
+        "WHERE user_id = {}".format(ph),
+        (user_id,),
+    )
+    conn.commit()
+    conn.close()
+
+
+def record_renewal_attempt(user_id: int, success: bool) -> int:
+    """
+    갱신 시도 결과를 남기고 연속 실패 횟수를 돌려준다.
+
+    연속 실패를 세는 이유: 카드 만료·한도 초과는 재시도로 낫지 않는다.
+    몇 번째인지 알아야 "언제 사람에게 알리고 언제 포기하는가"를 정할 수 있다.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    ph = "%s" if USE_POSTGRES else "?"
+    now = "NOW()" if USE_POSTGRES else "CURRENT_TIMESTAMP"
+    if success:
+        cursor.execute(
+            "UPDATE subscriptions SET renewal_failures = 0, last_renewal_attempt_at = {} "
+            "WHERE user_id = {}".format(now, ph),
+            (user_id,),
+        )
+        failures = 0
+    else:
+        cursor.execute(
+            "UPDATE subscriptions SET renewal_failures = COALESCE(renewal_failures, 0) + 1, "
+            "last_renewal_attempt_at = {} WHERE user_id = {}".format(now, ph),
+            (user_id,),
+        )
+        cursor.execute(
+            "SELECT renewal_failures FROM subscriptions WHERE user_id = {}".format(ph),
+            (user_id,),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            failures = 0
+        elif isinstance(row, dict):
+            failures = row.get("renewal_failures") or 0
+        else:
+            failures = row[0] or 0
+    conn.commit()
+    conn.close()
+    return int(failures)
+
+
+def get_subscriptions_due_for_renewal(limit: int = 100) -> List[Dict]:
+    """
+    만료일이 지난 유료 구독 중 빌링키가 살아 있는 것.
+
+    만료 '전날'이 아니라 만료 시점을 기준으로 긁는다. 미리 당겨 받으면 남은
+    기간만큼 두 번 받는 셈이 되고, 그건 환불 요청이 되어 돌아온다.
+    """
+    conn = get_connection()
+    sql = (
+        "SELECT user_id, plan_type, billing_cycle, billing_key, customer_key, expires_at, "
+        "COALESCE(renewal_failures, 0) AS renewal_failures "
+        "FROM subscriptions "
+        "WHERE status = 'active' AND plan_type != 'free' AND billing_key IS NOT NULL "
+        "AND expires_at IS NOT NULL AND expires_at <= {now} "
+        "AND COALESCE(renewal_failures, 0) < {ph} "
+        "ORDER BY expires_at ASC LIMIT {ph}"
+    )
+    if USE_POSTGRES:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute(sql.format(now="NOW()", ph="%s"), (MAX_RENEWAL_FAILURES, limit))
+    else:
+        cursor = conn.cursor()
+        cursor.execute(sql.format(now="CURRENT_TIMESTAMP", ph="?"), (MAX_RENEWAL_FAILURES, limit))
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 def upgrade_subscription(
     user_id: int,
     plan_type: str,
     billing_cycle: str = "monthly",
     payment_key: str = None,
-    customer_key: str = None
+    customer_key: str = None,
+    billing_key: str = None,
 ) -> Dict:
     """구독 업그레이드"""
     conn = get_connection()
@@ -398,6 +573,9 @@ def upgrade_subscription(
 
     if USE_POSTGRES:
         cursor = conn.cursor()
+        # billing_key / customer_key 는 **넘어온 값이 있을 때만** 덮는다.
+        # 갱신 결제는 빌링키를 새로 발급하지 않으므로, 무조건 대입하면 두 번째
+        # 달에 NULL 로 지워지고 그 순간 정기결제가 영구히 끊긴다.
         cursor.execute("""
             UPDATE subscriptions
             SET plan_type = %s,
@@ -405,16 +583,20 @@ def upgrade_subscription(
                 status = 'active',
                 expires_at = %s,
                 payment_key = %s,
-                customer_key = %s,
+                customer_key = COALESCE(%s, customer_key),
+                billing_key = COALESCE(%s, billing_key),
+                billing_registered_at = CASE WHEN %s IS NULL THEN billing_registered_at ELSE NOW() END,
+                renewal_failures = 0,
                 updated_at = NOW()
             WHERE user_id = %s
-        """, (plan_type, billing_cycle, expires_at.isoformat(), payment_key, customer_key, user_id))
+        """, (plan_type, billing_cycle, expires_at.isoformat(), payment_key,
+              customer_key, billing_key, billing_key, user_id))
 
         if cursor.rowcount == 0:
             cursor.execute("""
-                INSERT INTO subscriptions (user_id, plan_type, billing_cycle, expires_at, payment_key, customer_key)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (user_id, plan_type, billing_cycle, expires_at.isoformat(), payment_key, customer_key))
+                INSERT INTO subscriptions (user_id, plan_type, billing_cycle, expires_at, payment_key, customer_key, billing_key)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (user_id, plan_type, billing_cycle, expires_at.isoformat(), payment_key, customer_key, billing_key))
     else:
         cursor = conn.cursor()
         cursor.execute("""
@@ -424,16 +606,20 @@ def upgrade_subscription(
                 status = 'active',
                 expires_at = ?,
                 payment_key = ?,
-                customer_key = ?,
+                customer_key = COALESCE(?, customer_key),
+                billing_key = COALESCE(?, billing_key),
+                billing_registered_at = CASE WHEN ? IS NULL THEN billing_registered_at ELSE CURRENT_TIMESTAMP END,
+                renewal_failures = 0,
                 updated_at = CURRENT_TIMESTAMP
             WHERE user_id = ?
-        """, (plan_type, billing_cycle, expires_at.isoformat(), payment_key, customer_key, user_id))
+        """, (plan_type, billing_cycle, expires_at.isoformat(), payment_key,
+              customer_key, billing_key, billing_key, user_id))
 
         if cursor.rowcount == 0:
             cursor.execute("""
-                INSERT INTO subscriptions (user_id, plan_type, billing_cycle, expires_at, payment_key, customer_key)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (user_id, plan_type, billing_cycle, expires_at.isoformat(), payment_key, customer_key))
+                INSERT INTO subscriptions (user_id, plan_type, billing_cycle, expires_at, payment_key, customer_key, billing_key)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (user_id, plan_type, billing_cycle, expires_at.isoformat(), payment_key, customer_key, billing_key))
 
     conn.commit()
     conn.close()
@@ -1055,6 +1241,23 @@ def get_payment_by_order_id(order_id: str) -> Optional[Dict]:
     else:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM payments WHERE order_id = ?", (order_id,))
+
+    row = cursor.fetchone()
+    conn.close()
+
+    return dict(row) if row else None
+
+
+def get_payment_by_payment_key(payment_key: str):
+    """결제 키로 결제 조회. 취소·조회 전에 소유자를 확인하는 데 쓴다."""
+    conn = get_connection()
+
+    if USE_POSTGRES:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT * FROM payments WHERE payment_key = %s", (payment_key,))
+    else:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM payments WHERE payment_key = ?", (payment_key,))
 
     row = cursor.fetchone()
     conn.close()

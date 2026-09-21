@@ -261,6 +261,100 @@ async def login(request: LoginRequest):
     )
 
 
+# ============ 비밀번호 재설정 ============
+#
+# 없던 기능이다. 비밀번호를 잊은 사람에게 우리가 줄 수 있는 것이 아무것도
+# 없었다 — /login 은 "비밀번호가 올바르지 않습니다"라고만 말하고 끝났고,
+# 재설정 페이지도 엔드포인트도 존재하지 않았다.
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(..., max_length=254)
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., min_length=16, max_length=256)
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+
+@router.post("/password/forgot")
+async def forgot_password(request: ForgotPasswordRequest):
+    """
+    재설정 링크를 메일로 보낸다.
+
+    ⚠️ 가입 여부와 무관하게 **항상 같은 응답**을 돌려준다. "등록되지 않은
+    이메일입니다"를 여기서 말하면 이 주소가 곧 회원 명부 조회기가 된다.
+    (/login 이 그렇게 말하는 것은 본인이 비밀번호까지 아는 맥락이라 다르다.)
+    """
+    from database import password_reset_db as prdb
+    from services import mailer
+
+    email = request.email.lower().strip()
+    same_answer = {
+        "success": True,
+        "message": "가입된 이메일이라면 재설정 링크를 보냈습니다. 메일함을 확인해주세요.",
+    }
+
+    user = get_user_db().get_user_by_email(email)
+    if not user:
+        logger.info(f"[password-reset] 미가입 이메일 요청: {email}")
+        return same_answer
+
+    if prdb.recently_requested(user["id"]):
+        # 쿨다운 중에도 답을 바꾸지 않는다. 답이 달라지면 그 자체가 정보다.
+        logger.info(f"[password-reset] 쿨다운: user={user['id']}")
+        return same_answer
+
+    token = prdb.create_token(user["id"])
+    base = settings.cors_origins_list[0] if settings.cors_origins_list else "https://www.blrank.co.kr"
+    reset_url = f"{base}/reset-password?token={token}"
+
+    sent = mailer.send_password_reset(email, reset_url, prdb.TOKEN_TTL_MINUTES)
+    if not sent:
+        # 발송 실패는 사용자에게 숨기지 않는다 — 메일을 기다리다 떠나게 두면
+        # 잠긴 계정이 그대로 잠긴 채로 남는다.
+        raise HTTPException(
+            status_code=503,
+            detail="메일 발송에 실패했습니다. 잠시 후 다시 시도하거나 lhs0609c@naver.com 으로 문의해주세요.",
+        )
+    return same_answer
+
+
+@router.post("/password/reset", response_model=TokenResponse)
+async def reset_password(request: ResetPasswordRequest):
+    """
+    토큰으로 비밀번호를 바꾸고 **바로 로그인시킨다.**
+
+    바꾸자마자 로그인 화면으로 돌려보내면, 방금 정한 비밀번호를 한 번 더
+    치게 하는 셈이다. 여기까지 온 사람을 한 걸음 더 걷게 할 이유가 없다.
+    """
+    from database import password_reset_db as prdb
+
+    user_id = prdb.consume_token(request.token)
+    if not user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="만료되었거나 이미 사용한 링크입니다. 재설정을 다시 요청해주세요.",
+        )
+
+    user_db = get_user_db()
+    user = user_db.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=400, detail="계정을 찾을 수 없습니다")
+
+    user_db.update_user(user_id, hashed_password=get_password_hash(request.new_password))
+    logger.info(f"[password-reset] 완료: user={user_id}")
+
+    user = user_db.get_user_by_id(user_id)
+    access_token = create_access_token(data={"sub": str(user_id)})
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        user=user_to_response(user),
+    )
+
+
 @router.post("/login/form", response_model=TokenResponse)
 async def login_form(form_data: OAuth2PasswordRequestForm = Depends()):
     """OAuth2 compatible login endpoint for form data"""

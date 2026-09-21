@@ -16,6 +16,7 @@ from datetime import datetime
 
 from config import settings
 from routers.auth import get_current_user
+from routers.admin import require_admin
 from database.subscription_db import (
     create_payment,
     update_payment,
@@ -23,6 +24,9 @@ from database.subscription_db import (
     add_extra_credits,
     get_user_subscription,
     get_payment_by_order_id,
+    get_payment_by_payment_key,
+    get_or_create_customer_key,
+    get_billing_credentials,
     PLAN_LIMITS,
     PlanType
 )
@@ -219,6 +223,28 @@ async def debug_payment_status():
     return result
 
 
+# ============ 금액의 단일 출처 ============
+#
+# 금액을 클라이언트가 보내면 그 값이 곧 청구액이 된다. /billing/register 는
+# 요청 본문의 amount 를 그대로 토스에 넘기고 있었다 — Pro 플랜을 100원에
+# 결제하는 데 개발자 도구 한 번이면 충분했다는 뜻이다.
+# 가격은 서버가 플랜·주기에서 **계산**한다. 클라이언트 값은 대조에만 쓴다.
+
+
+def plan_amount(plan_type: str, billing_cycle: str) -> tuple:
+    """(플랜, 금액). 유효하지 않으면 400 으로 끊는다."""
+    try:
+        plan = PlanType(plan_type)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="유효하지 않은 플랜입니다")
+
+    limits = PLAN_LIMITS[plan]
+    amount = limits["price_yearly"] if billing_cycle == "yearly" else limits["price_monthly"]
+    if not amount:
+        raise HTTPException(status_code=400, detail="무료 플랜은 결제가 필요하지 않습니다")
+    return plan, int(amount)
+
+
 # ============ Pydantic 모델 ============
 
 class PaymentPrepareRequest(BaseModel):
@@ -235,12 +261,6 @@ class PaymentConfirmRequest(BaseModel):
 class BillingKeyRequest(BaseModel):
     customer_key: str
     auth_key: str
-
-
-class BillingPaymentRequest(BaseModel):
-    customer_key: str
-    amount: int
-    order_name: str
 
 
 
@@ -290,15 +310,7 @@ async def prepare_payment(
         raise HTTPException(status_code=400, detail="유효하지 않은 플랜입니다")
 
     limits = PLAN_LIMITS[plan]
-
-    # 금액 결정
-    if request.billing_cycle == "yearly":
-        amount = limits["price_yearly"]
-    else:
-        amount = limits["price_monthly"]
-
-    if amount == 0:
-        raise HTTPException(status_code=400, detail="무료 플랜은 결제가 필요하지 않습니다")
+    plan, amount = plan_amount(request.plan_type, request.billing_cycle)
 
     # 주문 ID 생성
     order_id = f"BLANK_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
@@ -312,7 +324,10 @@ async def prepare_payment(
         "amount": amount,
         "plan_type": request.plan_type,
         "billing_cycle": request.billing_cycle,
-        "customer_key": f"BLANK_USER_{user_id}"
+        # 사람마다 고정된 키. 예전엔 여기서 BLANK_USER_{id} 를 주면서 프런트는
+        # 제 나름의 랜덤 UUID 로 결제창을 열었다 — 발급된 빌링키가 어느 키에
+        # 묶였는지 서버가 모르니 두 번째 달에 결제할 방법이 없었다.
+        "customer_key": get_or_create_customer_key(user_id),
     }
 
 
@@ -325,6 +340,23 @@ async def confirm_payment(
 ):
     """결제 승인 - 토스페이먼츠 결제 승인 요청 (인증 필요)"""
     user_id = current_user["id"]
+
+    # 승인 금액은 **주문할 때 서버가 적어둔 금액**이어야 한다. 요청 본문의
+    # amount 를 그대로 토스에 넘기면, 9,900원짜리 주문을 100원으로 승인시킬 수
+    # 있다(토스는 주문 금액을 모르고 우리가 보낸 값으로 승인한다).
+    order = get_payment_by_order_id(request.order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="주문을 찾을 수 없습니다")
+    if int(order.get("user_id") or 0) != int(user_id):
+        # 남의 주문을 자기 계정으로 승인시키는 경로를 막는다.
+        raise HTTPException(status_code=403, detail="본인의 주문이 아닙니다")
+    if int(order.get("amount") or 0) != int(request.amount):
+        logger.warning(
+            f"[payment] 승인 금액 불일치: order={request.order_id} "
+            f"db={order.get('amount')} req={request.amount}"
+        )
+        raise HTTPException(status_code=400, detail="주문 금액이 일치하지 않습니다")
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
@@ -390,15 +422,48 @@ async def complete_subscription_payment(
     billing_cycle: str = Query("monthly"),
     current_user: dict = Depends(get_current_user)
 ):
-    """구독 결제 완료 처리 - 결제 승인 후 호출 (인증 필요)"""
+    """
+    구독 결제 완료 처리 - 결제 승인 후 호출 (인증 필요)
+
+    ⚠️ 예전에는 여기서 **아무 확인도 하지 않고** 바로 플랜을 올렸다. 로그인한
+    사람이 plan_type=business 로 이 주소를 한 번 부르면 결제 없이 비즈니스
+    플랜이 됐다는 뜻이다. 결제 여부의 authority 는 우리 DB 가 아니라 토스이므로,
+    토스에 그 주문이 실제로 DONE 인지 묻고 금액까지 맞춰 본다.
+    """
     user_id = current_user["id"]
+
+    order = get_payment_by_order_id(order_id)
+    if not order or int(order.get("user_id") or 0) != int(user_id):
+        raise HTTPException(status_code=403, detail="본인의 주문이 아닙니다")
+
+    _plan, expected_amount = plan_amount(plan_type, billing_cycle)
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            verify = await client.get(
+                f"{TOSS_API_URL}/payments/{payment_key}", headers=get_toss_headers()
+            )
+    except httpx.RequestError as e:
+        logger.error(f"[payment] 승인 확인 실패: {e}")
+        raise HTTPException(status_code=502, detail="결제 확인에 실패했습니다")
+
+    if verify.status_code != 200:
+        raise HTTPException(status_code=400, detail="결제 내역을 확인할 수 없습니다")
+
+    paid = verify.json()
+    if paid.get("status") != "DONE":
+        raise HTTPException(status_code=400, detail="완료되지 않은 결제입니다")
+    if paid.get("orderId") != order_id:
+        raise HTTPException(status_code=400, detail="주문과 결제가 일치하지 않습니다")
+    if int(paid.get("totalAmount") or 0) < expected_amount:
+        raise HTTPException(status_code=400, detail="결제 금액이 플랜 가격에 못 미칩니다")
+
     # 구독 업그레이드
     subscription = upgrade_subscription(
         user_id=user_id,
         plan_type=plan_type,
         billing_cycle=billing_cycle,
         payment_key=payment_key,
-        customer_key=f"BLANK_USER_{user_id}"
     )
 
     logger.info(f"Subscription upgraded: user={user_id}, plan={plan_type}, cycle={billing_cycle}")
@@ -439,9 +504,18 @@ async def issue_billing_key(
 
             billing_data = response.json()
 
+            # ⚠️ billingKey 를 응답에 싣지 않는다. 이 값 하나로 그 카드에 청구할
+            # 수 있으므로 브라우저에 내려보낼 물건이 아니다. 서버에 보관한다.
+            upgrade_subscription(
+                user_id=user_id,
+                plan_type=(get_user_subscription(user_id) or {}).get("plan_type", "free"),
+                billing_cycle=(get_user_subscription(user_id) or {}).get("billing_cycle", "monthly"),
+                customer_key=request.customer_key,
+                billing_key=billing_data.get("billingKey"),
+            )
+
             return {
                 "success": True,
-                "billing_key": billing_data.get("billingKey"),
                 "card_company": billing_data.get("card", {}).get("company"),
                 "card_number": billing_data.get("card", {}).get("number")
             }
@@ -470,6 +544,27 @@ async def register_billing(
     정기결제 등록 - authKey로 빌링키 발급 후 첫 결제 및 구독 활성화 (인증 필요)
     """
     user_id = current_user["id"]
+
+    # 금액은 서버가 정한다. 요청 본문의 amount 는 대조용일 뿐이다.
+    plan, amount = plan_amount(request.plan_type, request.billing_cycle)
+    if int(request.amount or 0) != amount:
+        logger.warning(
+            f"[payment] 등록 금액 불일치: user={user_id} req={request.amount} server={amount}"
+        )
+
+    # authKey 는 결제창을 연 customerKey 에 묶여 발급된다. 그 키가 이 사용자의
+    # 것인지 확인하지 않으면, 남의 customerKey 로 빌링키를 발급받아 자기 구독에
+    # 붙이는 경로가 열린다.
+    expected_customer_key = get_or_create_customer_key(user_id)
+    if request.customer_key != expected_customer_key:
+        logger.warning(
+            f"[payment] customerKey 불일치: user={user_id} req={request.customer_key}"
+        )
+        _track_payment_event(
+            http_request, "payment_register_fail", user_id, reason="customer_key_mismatch"
+        )
+        raise HTTPException(status_code=400, detail="결제 정보가 올바르지 않습니다. 다시 시도해주세요.")
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             # 1. 빌링키 발급
@@ -503,19 +598,18 @@ async def register_billing(
             logger.info(f"Billing key issued successfully: {billing_key[:20]}...")
 
             # 2. 빌링키로 첫 결제 진행
-            plan = PlanType(request.plan_type)
             order_name = f"블스피 {PLAN_LIMITS[plan]['name']} 플랜 ({request.billing_cycle})"
 
             # 항상 새로운 order_id 생성 (토스에서 중복 방지)
             new_order_id = f"BLANK_BILLING_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
-            logger.info(f"Processing first billing payment: {request.amount}원, order_id: {new_order_id}")
+            logger.info(f"Processing first billing payment: {amount}원, order_id: {new_order_id}")
             payment_response = await client.post(
                 f"{TOSS_API_URL}/billing/{billing_key}",
                 headers=get_toss_headers(),
                 json={
                     "customerKey": request.customer_key,
-                    "amount": request.amount,
+                    "amount": amount,
                     "orderId": new_order_id,
                     "orderName": order_name
                 }
@@ -529,7 +623,7 @@ async def register_billing(
                     "payment_register_fail",
                     user_id,
                     reason=f"first_charge:{error_data.get('code') or payment_response.status_code}",
-                    props={"stage": "first_charge", "plan": request.plan_type, "amount": request.amount},
+                    props={"stage": "first_charge", "plan": request.plan_type, "amount": amount},
                 )
                 raise HTTPException(
                     status_code=payment_response.status_code,
@@ -541,15 +635,18 @@ async def register_billing(
             logger.info(f"Billing payment successful: paymentKey={payment_key}")
 
             # 3. 결제 내역 저장 (새로운 order_id로 생성)
-            create_payment(user_id, new_order_id, request.amount, payment_key, "completed")
+            create_payment(user_id, new_order_id, amount, payment_key, "completed")
 
-            # 4. 구독 업그레이드
+            # 4. 구독 업그레이드 — **빌링키를 반드시 함께 저장한다.**
+            # 이걸 빠뜨린 동안 정기결제는 이름만 정기결제였다. 첫 달만 받고
+            # 다음 달에 청구할 수단이 서버 어디에도 남지 않았다.
             subscription = upgrade_subscription(
                 user_id=user_id,
                 plan_type=request.plan_type,
                 billing_cycle=request.billing_cycle,
                 payment_key=payment_key,
-                customer_key=request.customer_key
+                customer_key=request.customer_key,
+                billing_key=billing_key,
             )
 
             logger.info(f"Subscription upgraded: user={user_id}, plan={request.plan_type}")
@@ -557,7 +654,7 @@ async def register_billing(
                 http_request,
                 "payment_success",
                 user_id,
-                props={"plan": request.plan_type, "cycle": request.billing_cycle, "amount": request.amount},
+                props={"plan": request.plan_type, "cycle": request.billing_cycle, "amount": amount},
             )
 
             return {
@@ -567,7 +664,7 @@ async def register_billing(
                 "payment": {
                     "payment_key": payment_key,
                     "order_id": new_order_id,
-                    "amount": request.amount,
+                    "amount": amount,
                     "card_company": billing_data.get("card", {}).get("company"),
                     "card_number": billing_data.get("card", {}).get("number"),
                     "approved_at": payment_data.get("approvedAt")
@@ -587,25 +684,35 @@ async def register_billing(
 
 
 @router.post("/billing/pay")
-async def billing_payment(
-    request: BillingPaymentRequest,
-    billing_key: str = Query(..., description="빌링키"),
-    current_user: dict = Depends(get_current_user)
-):
-    """정기 결제 실행 (인증 필요)"""
+async def billing_payment(current_user: dict = Depends(get_current_user)):
+    """
+    저장된 카드로 지금 한 번 결제한다 (인증 필요).
+
+    ⚠️ 예전 서명은 billing_key 와 amount 를 **클라이언트에서** 받았다. 빌링키를
+    아는 사람은 그 카드에 원하는 금액을 청구할 수 있었고, 금액도 부르는 게
+    값이었다. 두 값 모두 서버가 가진 것만 쓴다 — 빌링키는 구독 행에서,
+    금액은 플랜 정가에서.
+    """
     user_id = current_user["id"]
+
+    creds = get_billing_credentials(user_id)
+    if not creds:
+        raise HTTPException(status_code=400, detail="등록된 결제 수단이 없습니다")
+
+    plan, amount = plan_amount(creds["plan_type"], creds["billing_cycle"])
+    order_name = f"블스피 {PLAN_LIMITS[plan]['name']} 플랜 ({creds['billing_cycle']})"
     order_id = f"BLANK_BILLING_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
-                f"{TOSS_API_URL}/billing/{billing_key}",
+                f"{TOSS_API_URL}/billing/{creds['billing_key']}",
                 headers=get_toss_headers(),
                 json={
-                    "customerKey": request.customer_key,
-                    "amount": request.amount,
+                    "customerKey": creds["customer_key"],
+                    "amount": amount,
                     "orderId": order_id,
-                    "orderName": request.order_name
+                    "orderName": order_name
                 }
             )
 
@@ -619,19 +726,45 @@ async def billing_payment(
             payment_data = response.json()
 
             # 결제 내역 저장
-            create_payment(user_id, order_id, request.amount, payment_data.get("paymentKey"), "completed")
+            create_payment(user_id, order_id, amount, payment_data.get("paymentKey"), "completed")
+            upgrade_subscription(
+                user_id=user_id,
+                plan_type=creds["plan_type"],
+                billing_cycle=creds["billing_cycle"],
+                payment_key=payment_data.get("paymentKey"),
+            )
 
             return {
                 "success": True,
                 "payment_key": payment_data.get("paymentKey"),
                 "order_id": order_id,
-                "amount": request.amount,
+                "amount": amount,
                 "approved_at": payment_data.get("approvedAt")
             }
 
     except httpx.RequestError as e:
         logger.error(f"Billing payment error: {e}")
         raise HTTPException(status_code=500, detail="결제 서버 연결에 실패했습니다")
+
+
+# ============ 정기결제 갱신 (관리자) ============
+
+
+@router.post("/admin/renew-due")
+async def admin_renew_due(
+    limit: int = Query(20, ge=1, le=200),
+    admin: dict = Depends(require_admin),
+):
+    """
+    만료된 구독을 지금 갱신한다 (관리자 전용).
+
+    스케줄러(SUBSCRIPTION_RENEWAL=1)를 켜기 전에 **한 건씩 눈으로 보고** 돌릴
+    자리가 필요하다. 자동으로 남의 카드를 긁기 시작하는 스위치는 확인 없이
+    올리는 물건이 아니다.
+    """
+    from services.subscription_renewal import run_due
+
+    return await run_due(limit=limit)
 
 
 # ============ 결제 취소 API ============
@@ -644,6 +777,12 @@ async def cancel_payment(
 ):
     """결제 취소 (인증 필요)"""
     user_id = current_user["id"]
+
+    # payment_key 만 알면 **남의 결제**를 취소할 수 있었다. 내 결제인지 먼저 본다.
+    owned = get_payment_by_payment_key(payment_key)
+    if not owned or int(owned.get("user_id") or 0) != int(user_id):
+        raise HTTPException(status_code=403, detail="본인의 결제가 아닙니다")
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(

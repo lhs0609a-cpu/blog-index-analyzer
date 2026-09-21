@@ -28,16 +28,6 @@ declare global {
 
 export const TOSS_CLIENT_KEY = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY || ''
 
-/** crypto.randomUUID 가 없는 브라우저용 폴백 */
-function uuid(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0
-    const v = c === 'x' ? r : (r & 0x3) | 0x8
-    return v.toString(16)
-  })
-}
-
 export function loadTossPayments(clientKey: string): Promise<TossPaymentsInstance> {
   return new Promise((resolve, reject) => {
     if (typeof window === 'undefined') {
@@ -61,6 +51,15 @@ export function loadTossPayments(clientKey: string): Promise<TossPaymentsInstanc
 
 export type BillingAuthParams = {
   userId: number | string
+  /**
+   * 서버가 발급한 **고정** customerKey (`/api/payment/prepare` 응답).
+   *
+   * ⚠️ 여기서 만들면 안 된다. 예전에는 `customer_${userId}_${randomUUID()}` 를
+   * 결제창을 열 때마다 새로 지어 보냈다. 빌링키는 customerKey 에 묶여
+   * 발급되므로, 첫 결제가 성공해도 그 카드로 다음 달에 청구할 방법이 없었다.
+   * 화면은 그동안 "다음 달 같은 날짜에 자동 결제됩니다" 라고 말하고 있었다.
+   */
+  customerKey: string
   orderId: string
   amount: number
   orderName: string
@@ -85,6 +84,11 @@ export async function startBillingAuth(p: BillingAuthParams): Promise<BillingAut
     track('payment_widget_error', { userId: p.userId, reason: 'client_key_missing' })
     return 'failed'
   }
+  if (!p.customerKey) {
+    // 키 없이 열면 결제는 되고 갱신은 안 되는, 가장 고약한 상태가 만들어진다.
+    track('payment_widget_error', { userId: p.userId, reason: 'customer_key_missing' })
+    return 'failed'
+  }
 
   // 돌아올 주소에 주문 정보를 실어야 실패 화면에서 "다시 시도"가 복원된다.
   const back = (ok: boolean) =>
@@ -99,7 +103,7 @@ export async function startBillingAuth(p: BillingAuthParams): Promise<BillingAut
       props: { plan: p.planType, cycle: p.billingCycle, amount: p.amount, method: '카드' },
     })
     await toss.requestBillingAuth('카드', {
-      customerKey: `customer_${p.userId}_${uuid()}`,
+      customerKey: p.customerKey,
       successUrl: back(true),
       failUrl: back(false),
     })

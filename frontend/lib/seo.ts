@@ -157,7 +157,9 @@ export const PUBLIC_ROUTES: Array<{
  * 크롤링을 막으면 크롤러가 그 페이지의 noindex 를 읽지 못해, 오히려 URL 만 색인될 수 있다.
  * 그런 페이지는 크롤링은 허용하고 noindexMetadata() 로 색인만 막는다.
  */
-export const CRAWL_BLOCKED_PATHS = ['/api/', '/admin/', '/payment/']
+// /reset-password 는 주소에 재설정 토큰이 실린다. 내부 링크가 하나도 없어
+// (메일로만 도달한다) 위 단서에 걸리지 않으므로, 크롤링 자체를 막는 쪽이 맞다.
+export const CRAWL_BLOCKED_PATHS = ['/api/', '/admin/', '/payment/', '/reset-password']
 
 // ─────────────────────────────────────────────────────────────
 // JSON-LD (구조화 데이터)
@@ -169,7 +171,16 @@ export const organizationJsonLd = {
   '@type': 'Organization',
   '@id': `${SITE_URL}/#organization`,
   name: SITE_NAME,
-  alternateName: ['BLSPI', '블스피 블로그 분석'],
+  /**
+   * 옛 이름을 함께 싣는다.
+   *
+   * 2026-09-15 에 '블랭크' 에서 '블스피' 로 이름을 바꿨는데, 구글 색인에는
+   * 아직 '블랭크 - AI 블로그 분석 플랫폼' 으로 남아 있다(2026-09-21 확인).
+   * 도메인도 blrank.co.kr 이라 새 이름과 글자가 겹치지 않는다. 두 이름을
+   * 한 엔티티로 묶어 두지 않으면, 옛 이름으로 쌓은 신호는 버려지고 새 이름은
+   * 처음부터 다시 쌓아야 한다.
+   */
+  alternateName: ['BLSPI', '블스피 블로그 분석', '블랭크', 'BLRANK', 'blrank'],
   legalName: ORG_LEGAL_NAME,
   url: SITE_URL,
   logo: {
@@ -189,7 +200,7 @@ export const websiteJsonLd = {
   '@id': `${SITE_URL}/#website`,
   url: SITE_URL,
   name: SITE_NAME,
-  alternateName: 'BLSPI',
+  alternateName: ['BLSPI', '블랭크', 'BLRANK'],
   description: `${SITE_TAGLINE} — 네이버 블로그 지수 측정과 키워드 발굴`,
   inLanguage: 'ko-KR',
   publisher: { '@id': `${SITE_URL}/#organization` },

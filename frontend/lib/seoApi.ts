@@ -106,15 +106,70 @@ export type KeywordListItem = {
  */
 const FETCH_TIMEOUT_MS = 6000
 
-function withTimeout(ms = FETCH_TIMEOUT_MS): RequestInit {
+/**
+ * 빌드 시점인가.
+ *
+ * 같은 실패라도 요청 시점과 빌드 시점의 결과가 전혀 다르다.
+ * 요청 시점(ISR)에 던지는 것은 **옳다** — Next 가 직전 캐시본을 계속 내보내고
+ * 다음 요청에 다시 시도한다. 그래서 위의 "never replace existing content" 가
+ * 성립한다.
+ * 빌드 시점에는 지킬 캐시본이 없다. 던지면 프리렌더가 실패하고 **배포 전체가
+ * 죽는다**. 실제로 2026-09-17 /rss.xml 의 fetch 타임아웃 하나(TimeoutError)가
+ * 프로덕션 빌드를 exit 1 로 끝냈고, www 는 9/15 빌드에 멈춘 채 나흘을 보냈다.
+ * 그 배포에 실려 있던 것이 하필 한도·결제 퍼널 수정 전체였다 — 서버는 429 를
+ * 쏘는데 그 코드를 아는 클라이언트가 프로덕션에 없는 상태가 7일간 41건.
+ *
+ * 그래서 빌드 시점에만 ①더 오래 기다리고 ②재시도하고 ③그래도 안 되면
+ * 호출부가 '빠진 채로' 배포되게 둔다. 짧은 캐시로 스스로 회복하는 라우트에만
+ * 허용한다 — 판단은 호출부 몫이라 여기서는 위상만 알려준다.
+ */
+export function isBuildPhase(): boolean {
+  return process.env.NEXT_PHASE === 'phase-production-build'
+}
+
+/** 빌드 시점 상한. 사용자가 기다리는 요청이 아니므로 콜드 스타트를 기다려 준다. */
+const BUILD_FETCH_TIMEOUT_MS = 20000
+const BUILD_FETCH_ATTEMPTS = 3
+
+function withTimeout(ms?: number): RequestInit {
+  const limit = ms ?? (isBuildPhase() ? BUILD_FETCH_TIMEOUT_MS : FETCH_TIMEOUT_MS)
   return typeof AbortSignal?.timeout === 'function'
-    ? { signal: AbortSignal.timeout(ms) }
+    ? { signal: AbortSignal.timeout(limit) }
     : {}
+}
+
+/**
+ * 빌드 시점에만 재시도한다.
+ *
+ * 9/17 을 죽인 건 백엔드 장애가 아니라 Fly 콜드 스타트 한 번이었다. 한 번 더
+ * 두드렸으면 끝날 일이었다. 요청 시점에는 재시도하지 않는다 — 사용자를 기다리게
+ * 하느니 직전 캐시본을 내보내는 편이 낫다.
+ */
+async function fetchResilient(input: string, init: RequestInit): Promise<Response> {
+  if (!isBuildPhase()) return fetch(input, init)
+
+  let lastError: unknown
+  for (let attempt = 1; attempt <= BUILD_FETCH_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(input, { ...init, ...withTimeout() })
+      // 5xx 는 콜드 스타트/재시작일 수 있으므로 다시 두드린다. 4xx 는 우리 잘못이라 즉시 반환.
+      if (res.status >= 500 && attempt < BUILD_FETCH_ATTEMPTS) {
+        lastError = new Error(`upstream ${res.status}`)
+      } else {
+        return res
+      }
+    } catch (e) {
+      lastError = e
+      if (attempt === BUILD_FETCH_ATTEMPTS) break
+    }
+    await new Promise((r) => setTimeout(r, 1500 * attempt))
+  }
+  throw lastError
 }
 
 /** 페이지 데이터. 없으면 null — 호출부가 notFound() 를 내야 한다. */
 export const fetchKeywordPage = cache(async (slug: string): Promise<KeywordPage | null> => {
-    const res = await fetch(
+    const res = await fetchResilient(
       `${API_BASE}/api/seo/keyword/${encodeURIComponent(slug)}?e=${DATA_EPOCH}`,
       { ...withTimeout(), next: { revalidate: KEYWORD_PAGE_REVALIDATE } }
     )
@@ -133,7 +188,7 @@ export const fetchKeywordPage = cache(async (slug: string): Promise<KeywordPage 
  * 응답이 작으므로(카운트 1개) 매번 조회해도 부담 없다.
  */
 export async function fetchKeywordCount(): Promise<number> {
-    const res = await fetch(`${API_BASE}/api/seo/keywords?offset=0&limit=1&e=${DATA_EPOCH}`, {
+    const res = await fetchResilient(`${API_BASE}/api/seo/keywords?offset=0&limit=1&e=${DATA_EPOCH}`, {
       ...withTimeout(),
       cache: 'no-store',
     })
@@ -149,7 +204,7 @@ export async function fetchKeywordList(
   /** 'volume' 사이트맵용(검색량순) · 'recent' RSS 용(최신순) */
   order: 'volume' | 'recent' = 'volume'
 ): Promise<{ total: number; items: KeywordListItem[] }> {
-    const res = await fetch(
+    const res = await fetchResilient(
       `${API_BASE}/api/seo/keywords?offset=${offset}&limit=${limit}&order=${order}&e=${DATA_EPOCH}`,
       { ...withTimeout(), next: { revalidate: order === 'recent' ? 300 : SITEMAP_REVALIDATE } }
     )

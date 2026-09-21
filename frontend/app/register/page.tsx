@@ -19,7 +19,11 @@ function RegisterForm() {
   const next = safeNextPath(searchParams.get('next'))
   const { login: setAuth } = useAuthStore()
   const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
+  // 로그인에서 '등록되지 않은 이메일'로 튕긴 사람이 같은 이메일을 다시 치게 하지 않는다.
+  const [email, setEmail] = useState(() => {
+    const given = searchParams.get('email') || ''
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(given) ? given : ''
+  })
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)

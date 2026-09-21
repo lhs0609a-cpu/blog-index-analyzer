@@ -278,6 +278,22 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"⚠️ Post watch scheduler failed to start: {e}")
 
+    # 정기결제 갱신 — 저장된 빌링키로 만료된 구독을 다시 청구한다.
+    # SUBSCRIPTION_RENEWAL=1 일 때만 돈다. 배포만으로 남의 카드를 긁지 않는다.
+    if RUN_SCHEDULERS:
+        try:
+            from services.subscription_renewal import renewal_scheduler
+            renewal_scheduler.start()
+        except Exception as e:
+            logger.warning(f"⚠️ Subscription renewal scheduler failed to start: {e}")
+
+    # 비밀번호 재설정 토큰 테이블 — 없으면 재설정 요청이 첫 사용자에게서 터진다.
+    try:
+        from database.password_reset_db import init_password_reset_table
+        init_password_reset_table()
+    except Exception as e:
+        logger.warning(f"⚠️ Password reset table init failed: {e}")
+
     # Notification DB 초기화
     try:
         from database.notification_db import get_notification_db

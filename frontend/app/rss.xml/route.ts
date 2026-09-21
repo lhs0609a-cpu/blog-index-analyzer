@@ -1,5 +1,5 @@
 import { absoluteUrl, SITE_NAME } from '@/lib/seo'
-import { fetchKeywordList, difficultyKo } from '@/lib/seoApi'
+import { fetchKeywordList, difficultyKo, isBuildPhase, type KeywordListItem } from '@/lib/seoApi'
 import { GUIDES } from '@/lib/content/guides'
 
 /**
@@ -41,7 +41,24 @@ function rfc822(d: Date): string {
 
 export async function GET() {
   // 목록 fetch 는 SITEMAP_REVALIDATE(6h) 를 쓰지 않는다 — RSS 는 신선도가 목적이다.
-  const { items } = await fetchKeywordList(0, MAX_ITEMS, 'recent')
+  //
+  // ⚠️ 빌드 시점에는 여기서 던지면 안 된다.
+  // 2026-09-17, 이 한 줄의 TimeoutError 가 프리렌더를 실패시켜 프로덕션 빌드
+  // 전체를 exit 1 로 끝냈고(Vercel: "Export encountered errors on /rss.xml"),
+  // www 는 9/15 빌드에 멈춘 채 나흘을 보냈다. 그 배포에 실려 있던 것이 하필
+  // 한도·결제 퍼널 수정이라, 서버는 429 를 쏘는데 그 429 를 아는 클라이언트가
+  // 프로덕션에 없는 상태가 41건 쌓였다. **피드 하나가 결제를 막았다.**
+  //
+  // 요청 시점에는 그대로 던진다 — Next 가 직전 피드를 계속 내보내는 편이 옳다.
+  // 빌드 시점에만 가이드 항목만으로 나가고, 아래 Cache-Control 이 비었을 때
+  // 60초로 내려가므로 1분 뒤 스스로 회복한다.
+  let items: KeywordListItem[] = []
+  try {
+    ;({ items } = await fetchKeywordList(0, MAX_ITEMS, 'recent'))
+  } catch (e) {
+    if (!isBuildPhase()) throw e
+    console.warn('[rss] 빌드 시점 키워드 목록 조회 실패 — 가이드만으로 발행한다:', e)
+  }
 
   const guideItems = GUIDES.map((g) => ({
     title: g.title,

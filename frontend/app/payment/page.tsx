@@ -6,7 +6,7 @@ import { motion } from 'framer-motion'
 import { CreditCard, Lock, ArrowLeft, Loader2, CheckCircle, Calendar, Shield, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
-import { registerBilling, type PlanType } from '@/lib/api/subscription'
+import { registerBilling, preparePayment, type PlanType } from '@/lib/api/subscription'
 import { track } from '@/lib/analytics/track'
 import { startBillingAuth } from '@/lib/payment/toss'
 import toast from 'react-hot-toast'
@@ -138,11 +138,27 @@ function PaymentContent() {
       props: { plan: planType, cycle: billingCycle, source: 'payment_page' },
     })
 
+    // 주소로 들어온 사람은 customerKey 를 갖고 있지 않다. 금액도 URL 에서 온
+    // 값이라 믿을 수 없으므로, 여기서도 서버에 주문을 새로 만들어 받는다.
+    let info
+    try {
+      info = await preparePayment(user.id, planType, billingCycle)
+    } catch (e) {
+      track('payment_register_fail', {
+        userId: user.id,
+        reason: 'prepare_failed',
+        props: { plan: planType, cycle: billingCycle },
+      })
+      toast.error('결제 준비 중 오류가 발생했습니다')
+      return
+    }
+
     const result = await startBillingAuth({
       userId: user.id,
-      orderId,
-      amount,
-      orderName,
+      customerKey: info.customer_key,
+      orderId: info.order_id,
+      amount: info.amount,
+      orderName: info.order_name,
       planType,
       billingCycle,
     })

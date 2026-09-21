@@ -151,6 +151,8 @@ export default function PricingPage() {
 
       const result = await startBillingAuth({
         userId: user!.id,
+        // 서버가 준 고정 키를 그대로 쓴다 — 여기서 새로 만들면 다음 달 결제가 끊긴다.
+        customerKey: paymentInfo.customer_key,
         orderId: paymentInfo.order_id,
         amount: paymentInfo.amount,
         orderName: paymentInfo.order_name,
@@ -448,6 +450,12 @@ export default function PricingPage() {
                           연 {formatPrice(price)}원 (월 환산)
                         </div>
                       )}
+                      {/*
+                        Baymard 이탈 사유 1위가 '결제 단계에서 예상 못 한 추가 비용'(40%)이다.
+                        실제로 카드에 청구되는 금액이 이 숫자 그대로이므로 총액임을 여기서 밝힌다
+                        — 결제창에서 처음 알게 되면 그 자리가 이탈 지점이 된다.
+                      */}
+                      <div className="text-xs text-gray-400 mt-1">부가세 포함</div>
                     </>
                   )}
                 </div>
@@ -986,7 +994,9 @@ export default function PricingPage() {
               <div className="bg-gray-50 rounded-xl p-4 mb-6">
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-600">오늘 결제 금액</span>
-                  <span className="font-medium">{PLAN_INFO[selectedTrialPlan].price.toLocaleString()}원</span>
+                  <span className="font-medium">
+                    {PLAN_INFO[selectedTrialPlan].price.toLocaleString()}원 <span className="text-gray-500 font-normal">(부가세 포함)</span>
+                  </span>
                 </div>
                 <div className="flex justify-between items-center text-sm mt-2">
                   <span className="text-gray-600">전액 환불 가능 기한</span>
