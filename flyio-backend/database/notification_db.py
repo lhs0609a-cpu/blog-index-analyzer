@@ -173,12 +173,12 @@ class NotificationDB:
             {
                 'name': 'welcome',
                 'category': 'system',
-                'subject': '블랭크에 오신 것을 환영합니다!',
+                'subject': '블스피에 오신 것을 환영합니다!',
                 'html_body': '''
                     <div style="font-family: 'Noto Sans KR', sans-serif; max-width: 600px; margin: 0 auto;">
-                        <h1 style="color: #0064FF;">블랭크에 오신 것을 환영합니다!</h1>
+                        <h1 style="color: #0064FF;">블스피에 오신 것을 환영합니다!</h1>
                         <p>안녕하세요, {{name}}님!</p>
-                        <p>블랭크의 회원이 되신 것을 진심으로 환영합니다.</p>
+                        <p>블스피의 회원이 되신 것을 진심으로 환영합니다.</p>
                         <p>지금 바로 블로그 분석을 시작해보세요!</p>
                         <a href="{{cta_url}}" style="display: inline-block; background: #0064FF; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px;">분석 시작하기</a>
                     </div>
@@ -242,6 +242,18 @@ class NotificationDB:
                     VALUES (?, ?, ?, ?, ?)
                 """, (template['name'], template['category'], template['subject'],
                       template['html_body'], template['variables']))
+
+            # 서비스명 변경(블랭크 → 블스피) 소급 적용.
+            #
+            # 위가 INSERT OR IGNORE 라서 소스의 문구를 고쳐도 **이미 저장된 줄은
+            # 영원히 옛 이름 그대로**다. 실제로 프로덕션 DB 의 welcome 템플릿은
+            # '블랭크에 오신 것을 환영합니다!' 로 남아 있었다. 시드만 고치고
+            # 끝냈으면 이름이 바뀐 줄 알았지 메일은 계속 옛 이름으로 나갔을 것이다.
+            for col in ('subject', 'html_body'):
+                cursor.execute(
+                    f"UPDATE email_templates SET {col} = REPLACE({col}, '블랭크', '블스피') "
+                    f"WHERE {col} LIKE '%블랭크%'"
+                )
             conn.commit()
         finally:
             conn.close()
