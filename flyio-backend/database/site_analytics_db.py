@@ -123,8 +123,42 @@ def visitor_hash(ip: str, user_agent: str, day: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 
+# 우리 자신의 도메인.
+#
+# ⚠️ 이게 없으면 "유입 경로" 가 거짓말을 한다. 사이트 안에서 페이지를 옮기면
+# document.referrer 에 우리 도메인이 찍히는데, 그걸 그대로 세면 내부 이동이
+# 외부 유입으로 둔갑한다(실제로 blrank.co.kr 이 유입 7위로 올라와 있었다).
+# 유입이란 "밖에서 처음 들어온 것"이므로 자기 도메인은 유입이 아니다.
+_OWN_HOSTS = {
+    "blrank.co.kr",
+    "api.blrank.co.kr",
+    "blog-index-analyzer.vercel.app",
+    "vercel.com",          # Vercel 대시보드에서 우리 배포를 눌러 들어온 것
+    "localhost",
+    "127.0.0.1",
+}
+# 프리뷰 배포(blog-index-analyzer-git-*.vercel.app)까지 덮으려면 접미사도 본다.
+_OWN_SUFFIXES = (".blrank.co.kr", ".vercel.app")
+
+for _h in (os.environ.get("ANALYTICS_OWN_HOSTS") or "").split(","):
+    _h = _h.strip().lower().removeprefix("www.")
+    if _h:
+        _OWN_HOSTS.add(_h)
+
+
+def is_internal_host(host: Optional[str]) -> bool:
+    """우리 도메인인가 — 즉 유입이 아니라 내부 이동인가."""
+    if not host:
+        return False
+    h = host.lower().removeprefix("www.")
+    return h in _OWN_HOSTS or h.endswith(_OWN_SUFFIXES)
+
+
 def referrer_host(referrer: str) -> Optional[str]:
-    """전체 URL 이 아니라 호스트만 남긴다 — 유입 경로 파악에는 그걸로 충분하다."""
+    """
+    전체 URL 이 아니라 호스트만 남긴다 — 유입 경로 파악에는 그걸로 충분하다.
+    자기 도메인(내부 이동)은 유입이 아니므로 NULL 로 떨어뜨린다.
+    """
     if not referrer:
         return None
     try:
@@ -132,7 +166,9 @@ def referrer_host(referrer: str) -> Optional[str]:
     except Exception:
         return None
     host = host.lower().removeprefix("www.")
-    return host or None
+    if not host or is_internal_host(host):
+        return None
+    return host
 
 
 def record_pageview(
@@ -457,13 +493,26 @@ def summary(days: int = 30, include_bots: bool = False) -> Dict[str, Any]:
         top_paths = [dict(r) for r in cur.fetchall()]
 
         # 유입 경로 — SEO 성과를 보는 핵심 지표
+        #
+        # 자기 도메인은 빼고 센다. referrer_host() 가 이제 걸러주지만, 그 전에
+        # 쌓인 줄에는 우리 도메인이 그대로 들어 있어서 과거 구간을 보면 여전히
+        # 내부 이동이 유입 상위로 올라온다. 여기서 한 번 더 거르는 이유다.
+        # 지운 만큼은 internal_navigation 으로 따로 보여준다 — 합이 안 맞는
+        # 표를 말없이 내놓으면 그것도 거짓말이다.
         cur.execute(
             f"SELECT COALESCE(referrer_host,'(직접/북마크)') host, COUNT(*) pv, "
             f"COUNT(DISTINCT visitor_hash) uv FROM pageviews WHERE day >= ?{bot_clause} "
-            f"GROUP BY host ORDER BY pv DESC LIMIT 20",
+            f"GROUP BY host ORDER BY pv DESC LIMIT 200",
             (start,),
         )
-        top_referrers = [dict(r) for r in cur.fetchall()]
+        top_referrers: List[Dict[str, Any]] = []
+        internal_pv = 0
+        for r in cur.fetchall():
+            if is_internal_host(r["host"]):
+                internal_pv += r["pv"] or 0
+                continue
+            top_referrers.append(dict(r))
+        top_referrers = top_referrers[:20]
 
         # 봇 트래픽 — 크롤러가 실제로 오는지 (SEO 관점에서 정보)
         cur.execute(
@@ -479,6 +528,7 @@ def summary(days: int = 30, include_bots: bool = False) -> Dict[str, Any]:
             "daily": daily,
             "top_paths": top_paths,
             "top_referrers": top_referrers,
+            "internal_navigation_pv": internal_pv,
             "bot_pageviews": bot_pv,
             "generated_at": datetime.now(KST).isoformat(),
         }

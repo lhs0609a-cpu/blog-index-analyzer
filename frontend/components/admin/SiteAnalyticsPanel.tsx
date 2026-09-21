@@ -19,6 +19,7 @@ type Summary = {
   daily: Daily[]
   top_paths: Row[]
   top_referrers: Row[]
+  internal_navigation_pv?: number
   bot_pageviews: number
   generated_at: string
 }
@@ -168,6 +169,12 @@ export default function SiteAnalyticsPanel() {
                 )
               })}
             </ul>
+          )}
+          {!!data.internal_navigation_pv && (
+            <p className="text-xs text-gray-400 mt-3">
+              내부 이동 {data.internal_navigation_pv.toLocaleString()}PV 제외 (우리 도메인에서
+              넘어온 것은 유입이 아님)
+            </p>
           )}
         </div>
 

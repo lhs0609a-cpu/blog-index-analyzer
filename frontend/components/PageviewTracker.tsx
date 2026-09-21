@@ -15,19 +15,29 @@ import { useAuthStore } from '@/lib/stores/auth'
  *
  * 봇은 JS 를 실행하지 않으므로 이 방식이면 대부분 자동으로 걸러진다.
  * (서버에서 UA 로 한 번 더 거른다)
+ *
+ * ⚠️ referrer 는 랜딩(첫 페이지뷰)에서만 보낸다.
+ * Next 는 라우트가 바뀌어도 문서를 다시 읽지 않으므로 document.referrer 는
+ * 세션 내내 처음 들어온 값 그대로다. 그걸 매 이동마다 같이 보내면 한 사람이
+ * 5페이지를 보는 동안 "네이버에서 5번 들어왔다"로 기록된다 — 유입 경로 PV 가
+ * 페이지 깊이만큼 부풀려진다. 유입은 들어온 횟수이지 본 페이지 수가 아니다.
  */
 export default function PageviewTracker() {
   const pathname = usePathname()
   const { user } = useAuthStore()
   const lastSent = useRef<string | null>(null)
+  const isLanding = useRef(true)
 
   useEffect(() => {
     if (!pathname || lastSent.current === pathname) return
     lastSent.current = pathname
 
+    const landing = isLanding.current
+    isLanding.current = false
+
     const body = JSON.stringify({
       path: pathname,
-      referrer: typeof document !== 'undefined' ? document.referrer : '',
+      referrer: landing && typeof document !== 'undefined' ? document.referrer : '',
       user_id: user?.id != null ? String(user.id) : null,
       device:
         typeof navigator !== 'undefined' && /Mobi|Android|iPhone/i.test(navigator.userAgent)
