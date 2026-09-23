@@ -12,6 +12,7 @@ export type LimitHit = {
   audience: 'guest' | 'member'
   feature?: string
   message?: string
+  recentBlockDays?: number
 }
 
 /** apiClient 인터셉터와 같은 출처(localStorage.auth_token)를 쓴다. */
@@ -42,6 +43,9 @@ export async function readLimitHit(response: Response): Promise<LimitHit | null>
       audience: detail.authenticated === false ? 'guest' : 'member',
       feature: detail.feature,
       message: detail.message,
+      // 최근 7일 중 막힌 날 수. 매일 부딪히는 사람에게는 화면이 다른 말을 한다.
+      recentBlockDays:
+        typeof detail.recent_block_days === 'number' ? detail.recent_block_days : 0,
     }
   } catch {
     return null

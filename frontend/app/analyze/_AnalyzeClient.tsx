@@ -1438,7 +1438,7 @@ export default function AnalyzePage() {
   const [showLimitModal, setShowLimitModal] = useState(false)
   // audience 는 '다음 걸음'을 가른다 — 비회원은 가입, 회원은 요금제.
   const [usageLimitInfo, setUsageLimitInfo] = useState<
-    { limit: number; audience: 'guest' | 'member' } | null
+    { limit: number; audience: 'guest' | 'member'; recentBlockDays?: number } | null
   >(null)
   const { width, height } = useWindowSize()
 
@@ -1545,6 +1545,7 @@ export default function AnalyzePage() {
         canonical_blog_id?: string
         limit?: number
         authenticated?: boolean
+        recent_block_days?: number
       }
       const axiosError = error as {
         response?: { data?: { detail?: string | ErrorDetail } }
@@ -1562,6 +1563,8 @@ export default function AnalyzePage() {
         setUsageLimitInfo({
           limit: detail.limit ?? 0,
           audience: detail.authenticated === false ? 'guest' : 'member',
+          // 서버만 이 사람이 며칠째 막혔는지 안다 (비회원은 IP, 회원은 daily_usage).
+          recentBlockDays: detail.recent_block_days ?? 0,
         })
         setShowLimitModal(true)
         return
@@ -2241,6 +2244,7 @@ export default function AnalyzePage() {
         feature="blog_analysis"
         audience={usageLimitInfo?.audience ?? 'member'}
         maxUsage={usageLimitInfo?.limit}
+        recentBlockDays={usageLimitInfo?.recentBlockDays}
       />
     </div>
   )

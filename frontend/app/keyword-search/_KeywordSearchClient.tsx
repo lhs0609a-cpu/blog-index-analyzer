@@ -400,7 +400,7 @@ function KeywordSearchContent() {
   const [showLimitModal, setShowLimitModal] = useState(false)
   // audience 는 '다음 걸음'을 가른다 — 비회원은 가입, 회원은 요금제.
   const [usageLimitInfo, setUsageLimitInfo] = useState<
-    { limit: number; audience: 'guest' | 'member' } | null
+    { limit: number; audience: 'guest' | 'member'; recentBlockDays?: number } | null
   >(null)
   const [selectedBlogId, setSelectedBlogId] = useState<string | null>(null)
   const [breakdownData, setBreakdownData] = useState<any | null>(null)
@@ -507,7 +507,7 @@ function KeywordSearchContent() {
       const hit = await readLimitHit(response)
       if (hit) {
         // 한도는 실패가 아니라 '다음 걸음'이다. 에러 토스트 대신 안내를 띄운다.
-        setUsageLimitInfo({ limit: hit.limit, audience: hit.audience })
+        setUsageLimitInfo({ limit: hit.limit, audience: hit.audience, recentBlockDays: hit.recentBlockDays })
         setShowLimitModal(true)
         setLoading(false)
         setProgress(0)
@@ -639,7 +639,7 @@ function KeywordSearchContent() {
 
         const hit = await readLimitHit(response)
         if (hit) {
-          setUsageLimitInfo({ limit: hit.limit, audience: hit.audience })
+          setUsageLimitInfo({ limit: hit.limit, audience: hit.audience, recentBlockDays: hit.recentBlockDays })
           setShowLimitModal(true)
           throw new Error(hit.message || '하루 한도를 모두 사용했습니다')
         }
@@ -1122,7 +1122,7 @@ function KeywordSearchContent() {
 
       const hit = await readLimitHit(response)
       if (hit) {
-        setUsageLimitInfo({ limit: hit.limit, audience: hit.audience })
+        setUsageLimitInfo({ limit: hit.limit, audience: hit.audience, recentBlockDays: hit.recentBlockDays })
         setShowLimitModal(true)
         return
       }
@@ -3386,6 +3386,7 @@ function KeywordSearchContent() {
         feature="keyword_search"
         audience={usageLimitInfo?.audience ?? 'member'}
         maxUsage={usageLimitInfo?.limit}
+        recentBlockDays={usageLimitInfo?.recentBlockDays}
       />
     </div>
   )

@@ -26,6 +26,11 @@ interface UpgradeModalProps {
   audience?: 'guest' | 'member'
   /** 서버가 알려준 오늘의 한도. 프런트 상수보다 이 값이 우선이다. */
   maxUsage?: number
+  /**
+   * 최근 7일 중 한도를 다 써서 막힌 날 수. 서버 429 의 recent_block_days.
+   * 매일 벽에 부딪히는 사람과 오늘 처음 온 사람은 다른 말을 들어야 한다.
+   */
+  recentBlockDays?: number
 }
 
 const featureInfo = {
@@ -51,6 +56,15 @@ const featureInfo = {
 
 const fmt = (n: number) => (n === -1 ? '무제한' : `${n}회/일`)
 
+/**
+ * 며칠째 막혀야 '자주 쓰는 사람'으로 보고 다른 말을 할 것인가.
+ *
+ * 1~2회는 그냥 궁금해서 들른 사람일 수 있다. 일주일에 3일 이상 한도를 다 쓴 사람은
+ * 이 도구가 실제로 필요한 사람이고, 그 사람에게만 요금제를 앞세운다. 처음 온 사람까지
+ * 몰아붙이면 재방문 자체를 잃는다.
+ */
+const REPEAT_THRESHOLD = 3
+
 /** 요금제 표시용 Pro 월 가격 — 숫자의 단일 출처는 featureAccess 다 */
 const PLAN_INFO_PRO_PRICE = PLAN_INFO.pro.price
 
@@ -60,6 +74,7 @@ export default function UpgradeModal({
   feature,
   audience = 'member',
   maxUsage,
+  recentBlockDays = 0,
 }: UpgradeModalProps) {
   const info = featureInfo[feature]
   const isGuest = audience === 'guest'
@@ -70,9 +85,15 @@ export default function UpgradeModal({
     if (!isOpen) return
     track('limit_hit', {
       reason: isGuest ? 'guest' : 'free',
-      props: { feature, limit: maxUsage ?? info.freeLimit, at: 'modal' },
+      props: {
+        feature,
+        limit: maxUsage ?? info.freeLimit,
+        at: 'modal',
+        recent_block_days: recentBlockDays,
+        repeat: recentBlockDays >= REPEAT_THRESHOLD,
+      },
     })
-  }, [isOpen, isGuest, feature, maxUsage, info.freeLimit])
+  }, [isOpen, isGuest, feature, maxUsage, info.freeLimit, recentBlockDays])
 
   // ESC 키로 닫기
   useEffect(() => {
@@ -87,6 +108,18 @@ export default function UpgradeModal({
   // 비회원과 같다 — 같은 숫자를 '혜택'이라고 나란히 그리면 화면이 거짓말을 한다.
   const guestGain = isGuest ? info.freeLimit - (maxUsage ?? 1) : 0
 
+  // 가입해도 **오늘 이어서 할 수 없는** 경우가 있다. 블로그 분석은 비회원 1회/일,
+  // 무료회원도 1회/일이라 숫자가 그대로다(2026-09-23 기준).
+  //
+  // 그런데 버튼은 "회원가입하고 이어서 하기"라고 말하고 있었다. 벽에 부딪힌 사람이
+  // 그 말을 믿고 가입하면 곧바로 같은 벽을 다시 만난다 — 실측(9일간)으로 한도에 닿은
+  // 63명 중 CTA 를 누른 사람은 6명(9.5%)뿐이었다. 지킬 수 없는 약속은 지우고,
+  // 오늘 실제로 이어서 할 수 있는 유일한 길(Pro)을 같이 보여준다.
+  const canContinueBySigningUp = isGuest && guestGain > 0
+
+  // 일주일에 3일 이상 막힌 사람 = 이 도구가 실제로 필요한 사람.
+  const isRepeat = recentBlockDays >= REPEAT_THRESHOLD
+
   const ctaHref = isGuest
     ? `/register?next=${encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '/')}`
     : '/pricing'
@@ -94,7 +127,15 @@ export default function UpgradeModal({
   const onCta = () => {
     track('limit_cta_click', {
       reason: isGuest ? 'guest' : 'free',
-      props: { feature, to: isGuest ? 'register' : 'pricing' },
+      props: { feature, to: isGuest ? 'register' : 'pricing', can_continue: canContinueBySigningUp },
+    })
+  }
+
+  // 비회원이 가입해도 못 이어가는 경우에만 띄우는 보조 경로.
+  const onSecondaryCta = () => {
+    track('limit_cta_click', {
+      reason: isGuest ? 'guest' : 'free',
+      props: { feature, to: 'pricing', placement: 'secondary' },
     })
   }
 
@@ -130,7 +171,9 @@ export default function UpgradeModal({
                 <info.icon className="w-10 h-10 text-[#0064FF]" strokeWidth={1.5} />
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                오늘의 {info.title}을 모두 쓰셨어요
+                {isRepeat
+                  ? `최근 일주일에 ${recentBlockDays}번 한도에 걸리셨어요`
+                  : `오늘의 ${info.title}을 모두 쓰셨어요`}
               </h2>
               <p className="text-gray-600">
                 {maxUsage !== undefined ? (
@@ -211,16 +254,35 @@ export default function UpgradeModal({
 
             {/* CTA */}
             <div className="space-y-3">
+              {isRepeat && (
+                <Link href="/pricing" className="block" onClick={onSecondaryCta}>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="w-full py-4 bg-[#0064FF] text-white font-bold rounded-xl hover:shadow-lg shadow-lg shadow-[#0064FF]/25 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Crown className="w-5 h-5 gi3d" />
+                    매일 쓰신다면 Pro — {info.title} {fmt(info.proLimit)}
+                  </motion.button>
+                </Link>
+              )}
+
               <Link href={ctaHref} className="block" onClick={onCta}>
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="w-full py-4 bg-[#0064FF] text-white font-bold rounded-xl hover:shadow-lg shadow-lg shadow-[#0064FF]/25 transition-all flex items-center justify-center gap-2"
+                  className={`w-full py-4 font-bold rounded-xl transition-all flex items-center justify-center gap-2 ${
+                    isRepeat
+                      ? 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+                      : 'bg-[#0064FF] text-white hover:shadow-lg shadow-lg shadow-[#0064FF]/25'
+                  }`}
                 >
                   {isGuest ? (
                     <>
                       <UserPlus className="w-5 h-5 gi3d" />
-                      무료로 회원가입하고 이어서 하기
+                      {canContinueBySigningUp
+                        ? '무료로 회원가입하고 이어서 하기'
+                        : '무료로 가입하고 분석 기록 저장하기'}
                     </>
                   ) : (
                     <>
@@ -230,6 +292,15 @@ export default function UpgradeModal({
                   )}
                 </motion.button>
               </Link>
+
+              {isGuest && !canContinueBySigningUp && !isRepeat && (
+                <Link href="/pricing" className="block" onClick={onSecondaryCta}>
+                  <button className="w-full py-3 border border-[#0064FF] text-[#0064FF] font-bold rounded-xl hover:bg-blue-50 transition-colors text-sm flex items-center justify-center gap-2">
+                    <Crown className="w-4 h-4 gi3d" />
+                    오늘 바로 더 분석하려면 — Pro {fmt(info.proLimit)}
+                  </button>
+                </Link>
+              )}
 
               <button
                 onClick={onClose}

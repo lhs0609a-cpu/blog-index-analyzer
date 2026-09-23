@@ -736,6 +736,45 @@ def increment_usage(user_id: int, usage_type: str) -> Dict:
     return get_today_usage(user_id)
 
 
+def count_limit_days(user_id: int, usage_type: str, limit: int, days: int = 7) -> int:
+    """
+    최근 N일 중 **한도를 다 쓴 날이 며칠인지**.
+
+    반복해서 벽에 부딪히는 사람이 돈 낼 확률이 가장 높은데, 지금까지 그 사람을
+    오늘 처음 온 사람과 똑같이 대하고 있었다 — daily_usage 에 이력이 다 있는데
+    어떤 쿼리도 오늘(date = ?) 밖을 본 적이 없다.
+
+    limit 이 -1(무제한)이면 막힌 날이 있을 수 없으므로 0.
+    """
+    if limit is None or limit < 0:
+        return 0
+
+    column = {
+        "keyword_search": "keyword_searches",
+        "blog_analysis": "blog_analyses",
+    }.get(usage_type)
+    if not column:
+        return 0
+
+    cutoff = (datetime.now() - timedelta(days=days - 1)).strftime("%Y-%m-%d")
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        sql = (
+            f"SELECT COUNT(*) FROM daily_usage "
+            f"WHERE user_id = {{ph}} AND date >= {{ph}} AND {column} >= {{ph}}"
+        )
+        ph = "%s" if USE_POSTGRES else "?"
+        cursor.execute(sql.format(ph=ph), (user_id, cutoff, limit))
+        row = cursor.fetchone()
+        return int(row[0] if row else 0)
+    except Exception as e:
+        logger.warning(f"[usage] 반복 차단일 집계 실패 user={user_id}: {e}")
+        return 0
+    finally:
+        conn.close()
+
+
 def check_usage_limit(user_id: int, usage_type: str) -> Dict:
     """사용량 제한 확인"""
     # 관리자 체크 - 무제한 허용

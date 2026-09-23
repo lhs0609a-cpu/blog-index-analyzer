@@ -168,7 +168,7 @@ def _record_limit_hit(request: Request, gate_feature: str, plan: str, limit: int
 
 
 def _member_gate(request: Request, user: dict, feature: str) -> UsageGate:
-    from database.subscription_db import check_usage_limit
+    from database.subscription_db import check_usage_limit, count_limit_days
 
     result = check_usage_limit(user["id"], feature)
     plan = result.get("plan", "free")
@@ -177,6 +177,9 @@ def _member_gate(request: Request, user: dict, feature: str) -> UsageGate:
 
     if not result.get("allowed", True):
         _record_limit_hit(request, feature, plan, limit, user["id"])
+        # 최근 일주일 중 며칠이나 막혔는지. 3일 이상이면 화면이 다른 말을 한다 —
+        # 매일 벽에 부딪히는 사람에게 첫 방문자와 같은 안내를 하면 아무 일도 안 일어난다.
+        recent_block_days = count_limit_days(user["id"], feature, limit, days=7)
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail={
@@ -190,6 +193,7 @@ def _member_gate(request: Request, user: dict, feature: str) -> UsageGate:
                 "used": used,
                 "limit": limit,
                 "authenticated": True,
+                "recent_block_days": recent_block_days,
             },
         )
 
@@ -204,19 +208,32 @@ def _guest_gate(request: Request, feature: str) -> UsageGate:
 
     if usage["count"] >= limit:
         _record_limit_hit(request, feature, "guest", limit, None)
+        recent_block_days = usage_db.count_guest_limit_days(key, feature, days=7)
+
+        # 가입해도 한도가 그대로인 기능이 있다(블로그 분석: 비회원 1회 = 무료회원 1회).
+        # 거기서 "가입하면 바로 이어서 쓸 수 있습니다" 는 거짓말이고, 그 말을 믿고
+        # 가입한 사람은 같은 벽을 다시 만난다.
+        from database.subscription_db import PLAN_LIMITS
+        free_limit = (PLAN_LIMITS.get("free") or {}).get(f"{feature}_daily")
+        can_continue = isinstance(free_limit, int) and (free_limit < 0 or free_limit > limit)
+        guest_message = (
+            f"비회원은 {_FEATURE_LABEL.get(feature, feature)}을 하루 {limit}회까지 "
+            + ("쓸 수 있습니다. 무료 회원가입하면 바로 이어서 쓸 수 있습니다."
+               if can_continue else
+               "쓸 수 있습니다. 무료 회원가입하면 분석 기록이 저장됩니다.")
+        )
+
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail={
                 "error_code": "DAILY_LIMIT_EXCEEDED",
-                "message": (
-                    f"비회원은 {_FEATURE_LABEL.get(feature, feature)}을 하루 {limit}회까지 "
-                    "쓸 수 있습니다. 무료 회원가입하면 바로 이어서 쓸 수 있습니다."
-                ),
+                "message": guest_message,
                 "feature": feature,
                 "plan": "guest",
                 "used": usage["count"],
                 "limit": limit,
                 "authenticated": False,
+                "recent_block_days": recent_block_days,
             },
         )
 

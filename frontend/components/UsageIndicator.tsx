@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Search, TrendingUp, AlertCircle, Zap, Crown, ChevronDown, ChevronUp } from 'lucide-react'
 import Link from 'next/link'
+import { track } from '@/lib/analytics/track'
 import { useAuthStore } from '@/lib/stores/auth'
 import { getUsage, getMySubscription, type UsageInfo, type Subscription } from '@/lib/api/subscription'
 
@@ -238,7 +239,23 @@ export default function UsageIndicator({ compact = false, showUpgrade = true }: 
                 </button>
               </Link>
               {showUpgrade && subscription?.plan_type !== 'business' && (
-                <Link href="/pricing" className="flex-1">
+                <Link
+                  href="/pricing"
+                  className="flex-1"
+                  // 이 버튼은 track() 이 없어서 성장 진단에 **존재하지 않는 경로**였다.
+                  // 한도 모달 말고 여기로 요금제에 간 사람은 한 명도 집계되지 않았다.
+                  onClick={() =>
+                    track('limit_cta_click', {
+                      reason: subscription?.plan_type === 'free' ? 'free' : 'member',
+                      props: {
+                        to: 'pricing',
+                        placement: 'usage_indicator',
+                        low_usage: isLowUsage,
+                        plan: subscription?.plan_type ?? 'unknown',
+                      },
+                    })
+                  }
+                >
                   <button className="w-full py-2 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors">
                     업그레이드
                   </button>
