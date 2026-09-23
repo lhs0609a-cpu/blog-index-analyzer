@@ -273,23 +273,36 @@ async def get_usage_stats(admin: dict = Depends(require_admin)):
 
 @router.get("/stats/overview")
 async def get_admin_overview(admin: dict = Depends(require_admin)):
-    """Get admin dashboard overview (admin only)"""
+    """
+    관리자 대시보드 '개요' 탭이 그리는 **전부**를 한 번에 돌려준다.
+
+    개요 화면은 이 응답만 기다린다. 예전엔 개요를 띄우려고 5개 엔드포인트를 동시에
+    쏘고 그중 하나라도 늦으면 스피너가 계속 돌았는데, 그 5개 중 users/with-usage 와
+    users/expiring 은 개요가 **한 글자도 그리지 않는** 데이터였다. 백엔드가 크론
+    경합으로 수십 초 멈추는 순간이 있어서, 기다리는 요청 수를 줄이는 것 자체가
+    화면이 뜰 확률을 올린다.
+
+    health 도 같이 싣는다 — 개요의 '서버 상태' 카드가 쓰는 값이라 별도 왕복이
+    필요 없다.
+    """
     user_db = get_user_db()
     usage_db = get_usage_db()
 
     total_users = user_db.get_users_count()
-    premium_users = user_db.get_premium_users()
+    # 개수만 쓰는데 전체 행을 끌어오고 있었다(프리미엄 전원 + 모든 칼럼).
+    premium_count = user_db.get_premium_users_count()
     usage_stats = usage_db.get_usage_stats()
     subscription_stats = user_db.get_subscription_stats()
 
     return {
         "users": {
             "total": total_users,
-            "premium": len(premium_users)
+            "premium": premium_count
         },
         "usage": usage_stats,
         "limits": usage_db.DAILY_LIMITS,
-        "subscription": subscription_stats
+        "subscription": subscription_stats,
+        "health": _collect_health_status()
     }
 
 
@@ -308,12 +321,11 @@ async def get_expiring_users(
 ):
     """Get users whose subscription expires within N days (admin only)"""
     try:
-        logger.info(f"get_expiring_users called with days={days}")
         user_db = get_user_db()
         usage_db = get_usage_db()
 
         users = user_db.get_expiring_users(days=days)
-        logger.info(f"Found {len(users)} expiring users")
+        usage_by_id = usage_db.get_users_usage_bulk(users)
 
         # Add remaining days and usage for each user - with proper serialization
         from datetime import datetime
@@ -331,15 +343,9 @@ async def get_expiring_users(
                     except:
                         remaining_days = None
 
-                # Get today's usage
-                usage_today = 0
-                usage_limit = 0
-                try:
-                    usage = usage_db.get_user_usage(user['id'], user.get('plan', 'free'))
-                    usage_today = usage.get('count', 0)
-                    usage_limit = usage.get('limit', 0)
-                except Exception as e:
-                    logger.error(f"Error getting usage for user {user['id']}: {e}")
+                usage = usage_by_id.get(user['id'], {})
+                usage_today = usage.get('count', 0)
+                usage_limit = usage.get('limit', 0)
 
                 serialized_user = {
                     "id": user.get('id'),
@@ -361,7 +367,6 @@ async def get_expiring_users(
                 import traceback
                 logger.error(traceback.format_exc())
 
-        logger.info(f"Returning {len(serialized_users)} serialized expiring users")
         return {"users": serialized_users, "count": len(serialized_users), "days": days}
     except Exception as e:
         logger.error(f"Error in get_expiring_users: {e}")
@@ -383,23 +388,23 @@ async def get_users_with_usage(
     offset = max(0, offset)
 
     try:
-        logger.info(f"get_users_with_usage called with limit={limit}, offset={offset}")
         user_db = get_user_db()
         usage_db = get_usage_db()
 
-        logger.info("Fetching users from database...")
         users = user_db.get_all_users_with_usage(limit=limit, offset=offset)
-        logger.info(f"Got {len(users)} users from database")
         total = user_db.get_users_count()
-        logger.info(f"Total users count: {total}")
 
-        # Serialize users properly
-        logger.info("Starting user serialization...")
+        # 사용량은 쿼리 한 번으로 통째로. 사용자당 조회는 커넥션을 인원수만큼 열어
+        # 목록 응답시간이 사용자 수에 정비례해 자랐다(실측 ~1ms/명).
+        usage_by_id = usage_db.get_users_usage_bulk(users)
+
+        # 사용자별 logger.info 는 없앴다 — 50명이면 요청 하나가 로그 150줄을 쓰는데
+        # 그 줄마다 회원 이메일이 들어간다. 30초 자동갱신과 맞물려 로그 파이프가
+        # 분당 300줄씩 개인정보를 뱉고 있었다.
         serialized_users = []
-        for idx, user in enumerate(users):
+        for user in users:
             try:
-                logger.info(f"Processing user {idx}: id={user.get('id')}, email={user.get('email')}")
-                usage = usage_db.get_user_usage(user['id'], user.get('plan', 'free'))
+                usage = usage_by_id.get(user['id'], {})
                 serialized_user = {
                     "id": user.get('id'),
                     "email": user.get('email'),
@@ -420,21 +425,17 @@ async def get_users_with_usage(
                     "usage_limit": usage.get('limit', 0)
                 }
                 serialized_users.append(serialized_user)
-                logger.info(f"User {idx} serialized successfully")
             except Exception as e:
                 logger.error(f"Error processing user {user.get('id')}: {e}")
                 import traceback
                 logger.error(traceback.format_exc())
 
-        logger.info(f"Serialization complete. Returning {len(serialized_users)} users")
-        response = {
+        return {
             "users": serialized_users,
             "total": total,
             "limit": limit,
             "offset": offset
         }
-        logger.info(f"Response prepared: {len(response['users'])} users, total={response['total']}")
-        return response
     except Exception as e:
         logger.error(f"Error in get_users_with_usage: {e}")
         import traceback
@@ -458,9 +459,8 @@ async def check_usage(request: Request, current_user: dict = Depends(get_current
     }
 
 
-@router.get("/health")
-async def detailed_health_check(admin: dict = Depends(require_admin)):
-    """상세 헬스 체크 (admin only)"""
+def _collect_health_status() -> dict:
+    """상세 헬스 체크 본문. /health 와 /stats/overview 가 함께 쓴다."""
     from config import settings
 
     health_status = {
@@ -479,10 +479,17 @@ async def detailed_health_check(admin: dict = Depends(require_admin)):
         health_status["status"] = "degraded"
 
     # Learning DB 체크
+    #
+    # 예전엔 get_learning_statistics() 를 불렀다. 그 함수는 샘플 1,000개를 읽어
+    # numpy 로 예측 점수를 전부 다시 계산한다 — 헬스 체크가 아니라 모델 재평가다.
+    # 실측(2026-09-23) 으로 이 한 줄이 /api/admin/health 를 639ms 로 만들었고,
+    # 같은 값을 쓰는 개요 화면까지 그만큼 늦췄다(다른 집계는 각각 80ms 대).
+    # 헬스 체크가 답해야 하는 건 "DB 가 살아 있나" 하나뿐이라 COUNT 로 충분하다.
     try:
-        from database.learning_db import get_learning_statistics
-        stats = get_learning_statistics()
-        health_status["checks"]["learning_db"] = f"connected (samples: {stats['total_samples']})"
+        from database.learning_db import get_db
+        with get_db() as conn:
+            n = conn.execute("SELECT COUNT(*) c FROM learning_samples").fetchone()["c"]
+        health_status["checks"]["learning_db"] = f"connected (samples: {n})"
     except Exception as e:
         health_status["checks"]["learning_db"] = f"error: {str(e)}"
 
@@ -499,6 +506,12 @@ async def detailed_health_check(admin: dict = Depends(require_admin)):
     health_status["checks"]["mongodb"] = "not_configured"
 
     return health_status
+
+
+@router.get("/health")
+async def detailed_health_check(admin: dict = Depends(require_admin)):
+    """상세 헬스 체크 (admin only)"""
+    return _collect_health_status()
 
 
 @router.get("/system/info")

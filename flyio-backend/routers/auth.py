@@ -116,7 +116,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id: int = payload.get("sub")
-        logger.info(f"Token decoded successfully, user_id: {user_id}")
         if user_id is None:
             logger.warning("No user_id in token payload")
             raise credentials_exception
@@ -133,7 +132,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     if not user.get("is_active"):
         raise HTTPException(status_code=400, detail="Inactive user")
 
-    logger.info(f"User authenticated: {user.get('email')}, is_admin: {user.get('is_admin')}")
+    # 인증 성공은 INFO 로 남기지 않는다 — 요청마다 한 줄이고 거기 회원 이메일이 들어간다.
+    # 관리자 대시보드 한 번 새로고침이 6줄, 30초 자동갱신이면 분당 12줄이 이메일째로 쌓였다.
+    logger.debug(f"User authenticated: id={user.get('id')}, is_admin: {user.get('is_admin')}")
     return user
 
 

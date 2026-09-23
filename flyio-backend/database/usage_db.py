@@ -6,11 +6,35 @@ Usage tracking database for rate limiting
 import sqlite3
 from contextlib import contextmanager
 from typing import Optional, Dict, List
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import logging
 import os
 
 logger = logging.getLogger(__name__)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# blog_analyzer.db 는 WAL 없이 쓰이고 있었다 — 이 저장소의 다른 DB(keyword_pool,
+# naver_ad, registered_keywords)는 이미 WAL 인데 정작 **로그인·사용량·관리자 화면이
+# 읽는 DB** 만 기본 rollback journal 이었다.
+#
+# 그 모드에서는 쓰기 하나가 모든 읽기를 막는다. 그런데 /health 를 비롯한 API 는
+# `async def` 안에서 이 동기 쿼리를 직접 부른다 — 락을 기다리는 동안 그 요청만 느린 게
+# 아니라 **이벤트 루프 전체가 멈춘다**. 뒤따르는 요청이 줄줄이 같은 곳에서 5초씩
+# 기다리면 수십 초가 된다 (2026-09-23 실측: /health 54초, 프론트 배지 '연결 끊김').
+#
+# WAL 에서는 읽기가 쓰기를 기다리지 않는다. busy_timeout 은 쓰기끼리 부딪힐 때
+# 즉시 예외 대신 기다리게 한다.
+def _tune(conn: sqlite3.Connection) -> sqlite3.Connection:
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=10000")
+        # synchronous 는 기본값(FULL) 유지 — 이 DB 는 회원 계정을 담는다.
+        # WAL 만으로 읽기/쓰기 동시성 문제는 해결되므로 내구성을 낮출 이유가 없다.
+    except Exception:
+        # PRAGMA 실패로 연결 자체를 못 쓰게 만들지는 않는다.
+        pass
+    return conn
+
 
 # Windows 로컬 개발환경에서는 ./data 사용
 import sys
@@ -61,7 +85,7 @@ class UsageDB:
     @contextmanager
     def get_connection(self):
         """Get database connection context manager"""
-        conn = sqlite3.connect(self.db_path)
+        conn = _tune(sqlite3.connect(self.db_path))
         conn.row_factory = sqlite3.Row
         try:
             yield conn
@@ -170,6 +194,33 @@ class UsageDB:
                 'remaining': limit,
                 'last_used': None
             }
+
+    def count_guest_limit_days(self, ip_address: str, feature: str = 'all', days: int = 7) -> int:
+        """
+        최근 N일 중 이 비회원이 **한도를 다 쓴 날이 며칠인지**.
+
+        visitor_hash 는 날짜별 소금이라 날이 바뀌면 같은 사람을 못 알아본다. 하지만
+        guest_usage 는 IP 로 적히고 IP 는 날짜를 넘어 유지된다 — 재방문을 알 수 있는
+        유일한 통로인데 지금까지 오늘치(usage_date = ?)만 읽고 있었다.
+        """
+        limit = self.guest_limit(feature)
+        if limit is None or limit < 0:
+            return 0
+
+        cutoff = (date.today() - timedelta(days=days - 1)).isoformat()
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT COUNT(*) c FROM guest_usage "
+                    "WHERE ip_address = ? AND feature = ? AND usage_date >= ? AND usage_count >= ?",
+                    (ip_address, feature, cutoff, limit),
+                )
+                row = cursor.fetchone()
+                return int(row['c'] if row else 0)
+        except Exception as e:
+            logger.warning(f"[usage] 비회원 반복 차단일 집계 실패: {e}")
+            return 0
 
     def increment_guest_usage(self, ip_address: str, feature: str = 'all') -> bool:
         """Increment guest usage and return True if within limit"""
@@ -296,6 +347,60 @@ class UsageDB:
         usage['allowed'] = allowed
         usage['plan'] = plan
         return usage
+
+    def get_users_usage_bulk(self, users: List[Dict]) -> Dict[int, Dict]:
+        """
+        여러 사용자의 오늘치 사용량을 **쿼리 한 번**으로 읽는다.
+
+        관리자 목록은 사용자당 get_user_usage() 를 불렀다 — 50명이면 SQLite 커넥션을
+        50번 열고 닫는다(실측 ~1ms/명). 오늘은 85명이라 80ms 지만 이건 사용자 수에
+        정비례해서 자란다: 1,000명이면 목록 한 번에 1초가 붙는다. 한도는 plan 에서
+        나오는 상수라 DB 가 실제로 갖고 있는 건 usage_count 뿐 → IN 한 방이면 끝난다.
+
+        users: id 와 plan 을 가진 dict 목록. 반환: {user_id: get_user_usage() 와 동일한 dict}
+        """
+        result: Dict[int, Dict] = {}
+        if not users:
+            return result
+
+        plan_by_id = {u['id']: (u.get('plan') or 'free') for u in users if u.get('id') is not None}
+        if not plan_by_id:
+            return result
+
+        today = date.today().isoformat()
+        counts: Dict[int, Dict] = {}
+        ids = list(plan_by_id.keys())
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            # SQLITE_MAX_VARIABLE_NUMBER (기본 999) 를 넘지 않도록 끊어서 조회.
+            CHUNK = 500
+            for i in range(0, len(ids), CHUNK):
+                chunk = ids[i:i + CHUNK]
+                placeholders = ",".join("?" for _ in chunk)
+                cursor.execute(
+                    f"SELECT user_id, usage_count, last_used_at FROM user_usage "
+                    f"WHERE usage_date = ? AND user_id IN ({placeholders})",
+                    (today, *chunk)
+                )
+                for row in cursor.fetchall():
+                    counts[row['user_id']] = {
+                        'count': row['usage_count'],
+                        'last_used': row['last_used_at'],
+                    }
+
+        for user_id, plan in plan_by_id.items():
+            limit = self.DAILY_LIMITS.get(plan, self.DAILY_LIMITS['free'])
+            hit = counts.get(user_id)
+            count = hit['count'] if hit else 0
+            result[user_id] = {
+                'count': count,
+                'limit': limit,
+                'remaining': -1 if limit == -1 else max(0, limit - count),
+                'last_used': hit['last_used'] if hit else None,
+            }
+
+        return result
 
     def get_usage_stats(self, days: int = 7) -> Dict:
         """Get usage statistics for admin dashboard"""

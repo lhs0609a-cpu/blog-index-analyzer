@@ -535,6 +535,31 @@ app.add_middleware(
 )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 느린 요청 기록
+#
+# 2026-09-23 에 /health 가 54초 걸리는 걸 한 번 잡았지만(프론트 '연결 끊김' 배지도 같은
+# 사건이다), uvicorn 액세스 로그는 **소요 시간을 남기지 않아** 어느 경로가 범인인지
+# 사후에 알 방법이 없었다. 멈춤은 간헐적이라 붙잡고 기다려서는 못 본다.
+#
+# 임계 초과 요청만 한 줄씩 남긴다. 정상 트래픽은 로그를 늘리지 않는다.
+SLOW_REQUEST_MS = int(os.getenv("SLOW_REQUEST_MS", "2000"))
+
+
+class SlowRequestLogMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        start = time.perf_counter()
+        response = await call_next(request)
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        if elapsed_ms >= SLOW_REQUEST_MS:
+            logger.warning(
+                f"[slow] {elapsed_ms:.0f}ms {request.method} {request.url.path}"
+                f"{('?' + request.url.query) if request.url.query else ''} "
+                f"status={response.status_code} role={PROCESS_GROUP}"
+            )
+        return response
+
+
 # Security Headers Middleware
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """보안 응답 헤더 추가"""
@@ -552,6 +577,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(SlowRequestLogMiddleware)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

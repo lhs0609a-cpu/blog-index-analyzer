@@ -158,3 +158,4 @@ _pw_naver_p2/
 agent/_profile_*/
 agent/_state_*.json
 agent/_smoke_*.json
+.env*

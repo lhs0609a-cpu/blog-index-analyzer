@@ -100,6 +100,9 @@ interface RevenueStats {
   payment_method_stats: Record<string, { count: number; total: number }>;
 }
 
+// 이 탭들만 사용자 목록이 필요하다. 개요/성장/방문통계/결제/로그는 목록을 안 그린다.
+const TABS_NEEDING_LISTS: string[] = ['users', 'premium', 'expiring'];
+
 export default function AdminPage() {
   const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
   const [users, setUsers] = useState<User[]>([]);
@@ -108,7 +111,13 @@ export default function AdminPage() {
   const [usageStats, setUsageStats] = useState<UsageStats | null>(null);
   const [subscriptionStats, setSubscriptionStats] = useState<SubscriptionStats | null>(null);
   const [totalUsers, setTotalUsers] = useState(0);
+  // 개요는 "몇 명인지"만 그린다. 프리미엄 **목록**은 프리미엄 탭에서만 필요하므로
+  // 개요가 그것까지 기다릴 이유가 없다 — 그래서 개수를 따로 들고 있는다.
+  const [premiumCount, setPremiumCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  // 사용자/프리미엄/만료 목록은 해당 탭을 처음 열 때 받아온다.
+  const [listsLoaded, setListsLoaded] = useState(false);
+  const [isLoadingLists, setIsLoadingLists] = useState(false);
   const [apiUrl, setApiUrlState] = useState('');
   const [activeTab, setActiveTab] = useState<'overview' | 'growth' | 'traffic' | 'users' | 'premium' | 'expiring' | 'logs' | 'payments'>('overview');
   const [searchQuery, setSearchQuery] = useState('');
@@ -120,6 +129,11 @@ export default function AdminPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // 만료 임박 인원수: 목록을 받아온 탭이면 목록이 정답이고, 아직이면 개요 집계를 쓴다.
+  const expiringSoonCount = listsLoaded
+    ? expiringUsers.length
+    : (subscriptionStats?.expiring_soon ?? 0);
 
   // Grant premium modal
   const [showGrantModal, setShowGrantModal] = useState(false);
@@ -160,6 +174,12 @@ export default function AdminPage() {
   const [bulkMemo, setBulkMemo] = useState('');
 
   // Initial load
+  //
+  // 개요 화면은 /stats/overview **하나만** 기다린다. 예전엔 5개를 동시에 쏘고 그 전부가
+  // 끝나야 스피너가 사라졌는데, 그중 users/with-usage 와 users/expiring 은 개요가
+  // 그리지 않는 데이터였다 — 화면에 보이지도 않는 응답 때문에 대시보드가 멈춰 있었다.
+  // 백엔드는 크론 경합으로 가끔 수십 초 무응답이 되므로(실측 /health 54초), 기다리는
+  // 요청을 5개에서 1개로 줄이는 것만으로 그 구간에 걸릴 확률이 그만큼 내려간다.
   useEffect(() => {
     const url = getApiUrl();
     setApiUrlState(url);
@@ -169,8 +189,7 @@ export default function AdminPage() {
     setToken(savedToken);
 
     if (savedToken) {
-      fetchHealthStatus(url, savedToken);
-      fetchAdminData(url, savedToken);
+      fetchOverview(url, savedToken);
     } else {
       fetchHealthStatus(url);  // 기본 헬스체크만
       setIsLoading(false);
@@ -178,19 +197,44 @@ export default function AdminPage() {
   }, []);
 
   // Auto-refresh effect
+  //
+  // 갱신 대상은 **지금 보고 있는 탭**뿐이다. 예전엔 어느 탭에 있든 30초마다 5개를 전부
+  // 다시 쐈다 — 개요만 보고 있어도 85명치 사용자 목록(16KB)이 분당 두 번씩 왕복했다.
+  // 게다가 탭을 백그라운드에 던져놔도 계속 돌아서, 열어둔 채로 잊으면 하루 2,880회를
+  // 때린다. document.hidden 이면 쉬고, 돌아오면 즉시 한 번 갱신한다.
   useEffect(() => {
-    if (autoRefresh && token && apiUrl) {
-      refreshIntervalRef.current = setInterval(() => {
-        fetchAdminData(apiUrl, token, true);
-      }, 30000); // 30 seconds
+    if (!autoRefresh || !token || !apiUrl) return;
 
-      return () => {
-        if (refreshIntervalRef.current) {
-          clearInterval(refreshIntervalRef.current);
-        }
-      };
-    }
-  }, [autoRefresh, token, apiUrl]);
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      fetchOverview(apiUrl, token, true);
+      if (listsLoaded && TABS_NEEDING_LISTS.includes(activeTab)) {
+        fetchUserLists(apiUrl, token, true);
+      }
+    };
+
+    refreshIntervalRef.current = setInterval(tick, 30000); // 30 seconds
+
+    const onVisible = () => {
+      if (typeof document !== 'undefined' && !document.hidden) tick();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [autoRefresh, token, apiUrl, activeTab, listsLoaded]);
+
+  // 사용자 목록이 필요한 탭에 들어올 때만 목록을 받아온다.
+  useEffect(() => {
+    if (!token || !apiUrl) return;
+    if (!TABS_NEEDING_LISTS.includes(activeTab)) return;
+    if (listsLoaded || isLoadingLists) return;
+    fetchUserLists(apiUrl, token);
+  }, [activeTab, token, apiUrl, listsLoaded, isLoadingLists]);
 
   const fetchHealthStatus = async (url: string, authToken?: string) => {
     try {
@@ -228,27 +272,54 @@ export default function AdminPage() {
     window.location.href = '/login?redirect=/admin';
   }, []);
 
-  const fetchAdminData = async (url: string, authToken: string, silent: boolean = false) => {
+  // 개요 탭이 그리는 전부 — 카드/차트/서버상태 — 를 요청 하나로 받는다.
+  const fetchOverview = async (url: string, authToken: string, silent: boolean = false) => {
     if (!silent) setIsLoading(true);
+    try {
+      const res = await fetch(`${url}/api/admin/stats/overview`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (res.status === 401) {
+        handleAuthError();
+        return;
+      }
+
+      if (res.ok) {
+        const data = await res.json();
+        setTotalUsers(data.users?.total ?? 0);
+        setPremiumCount(data.users?.premium ?? 0);
+        setUsageStats(data.usage ?? null);
+        setSubscriptionStats(data.subscription ?? null);
+        if (data.health) setHealthStatus(data.health);
+        setLastUpdated(new Date());
+      }
+    } catch (error) {
+      console.error('Failed to fetch admin overview:', error);
+    } finally {
+      if (!silent) setIsLoading(false);
+    }
+  };
+
+  // 사용자/프리미엄/만료 목록. 해당 탭에서만 필요하다.
+  const fetchUserLists = async (url: string, authToken: string, silent: boolean = false) => {
+    if (!silent) setIsLoadingLists(true);
     try {
       const headers = {
         'Authorization': `Bearer ${authToken}`,
         'Content-Type': 'application/json'
       };
 
-      // Fetch all data in parallel (using new endpoints with usage info)
-      const [usersRes, premiumRes, statsRes, expiringRes, subStatsRes] = await Promise.all([
+      const [usersRes, premiumRes, expiringRes] = await Promise.all([
         fetch(`${url}/api/admin/users/with-usage?limit=50`, { headers }),
         fetch(`${url}/api/admin/users/premium`, { headers }),
-        fetch(`${url}/api/admin/usage/stats`, { headers }),
-        fetch(`${url}/api/admin/users/expiring?days=7`, { headers }),
-        fetch(`${url}/api/admin/stats/subscription`, { headers })
+        fetch(`${url}/api/admin/users/expiring?days=7`, { headers })
       ]);
 
-      // Check for 401 errors (token expired)
-      if (usersRes.status === 401 || premiumRes.status === 401 ||
-          statsRes.status === 401 || expiringRes.status === 401 ||
-          subStatsRes.status === 401) {
+      if (usersRes.status === 401 || premiumRes.status === 401 || expiringRes.status === 401) {
         handleAuthError();
         return;
       }
@@ -262,6 +333,7 @@ export default function AdminPage() {
       if (premiumRes.ok) {
         const data = await premiumRes.json();
         setPremiumUsers(data.users);
+        setPremiumCount(data.users?.length ?? 0);
       }
 
       if (expiringRes.ok) {
@@ -269,21 +341,18 @@ export default function AdminPage() {
         setExpiringUsers(data.users);
       }
 
-      if (subStatsRes.ok) {
-        const data = await subStatsRes.json();
-        setSubscriptionStats(data);
-      }
-
-      if (statsRes.ok) {
-        const data = await statsRes.json();
-        setUsageStats(data);
-      }
-      setLastUpdated(new Date());
+      setListsLoaded(true);
     } catch (error) {
-      console.error('Failed to fetch admin data:', error);
+      console.error('Failed to fetch admin user lists:', error);
     } finally {
-      if (!silent) setIsLoading(false);
+      if (!silent) setIsLoadingLists(false);
     }
+  };
+
+  // 쓰기 작업 뒤 화면을 맞춰준다 — 개요 숫자와, 이미 받아둔 목록만.
+  const refreshAdminData = (url: string, authToken: string) => {
+    fetchOverview(url, authToken, true);
+    if (listsLoaded) fetchUserLists(url, authToken, true);
   };
 
   const searchUsers = async () => {
@@ -344,7 +413,7 @@ export default function AdminPage() {
         setShowGrantModal(false);
         setSelectedUserId(null);
         setGrantMemo('');
-        fetchAdminData(apiUrl, token);
+        refreshAdminData(apiUrl, token);
       } else {
         const error = await response.json();
         toast.error(`오류: ${error.detail}`);
@@ -375,7 +444,7 @@ export default function AdminPage() {
 
       if (response.ok) {
         toast.success('프리미엄 권한이 해제되었습니다.');
-        fetchAdminData(apiUrl, token);
+        refreshAdminData(apiUrl, token);
       }
     } catch (error) {
       console.error('Revoke premium failed:', error);
@@ -442,7 +511,7 @@ export default function AdminPage() {
         setShowExtendModal(false);
         setExtendDays(30);
         setExtendMemo('');
-        fetchAdminData(apiUrl, token);
+        refreshAdminData(apiUrl, token);
         if (selectedUserId) fetchUserDetail(selectedUserId);
       } else {
         const error = await response.json();
@@ -479,7 +548,7 @@ export default function AdminPage() {
       if (response.ok) {
         toast.success(isAdmin ? '관리자 권한이 부여되었습니다.' : '관리자 권한이 해제되었습니다.');
         setShowSetAdminModal(false);
-        fetchAdminData(apiUrl, token);
+        refreshAdminData(apiUrl, token);
         if (selectedUserId) fetchUserDetail(selectedUserId);
       } else {
         const error = await response.json();
@@ -666,7 +735,7 @@ export default function AdminPage() {
         setShowBulkUpgradeModal(false);
         setSelectedUserIds([]);
         setBulkMemo('');
-        fetchAdminData(apiUrl, token);
+        refreshAdminData(apiUrl, token);
       } else {
         const error = await response.json();
         toast.error(`오류: ${error.detail}`);
@@ -796,7 +865,7 @@ export default function AdminPage() {
               </button>
               {/* Manual refresh */}
               <button
-                onClick={() => token && fetchAdminData(apiUrl, token)}
+                onClick={() => token && refreshAdminData(apiUrl, token)}
                 className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200"
               >
                 새로고침
@@ -817,7 +886,8 @@ export default function AdminPage() {
               { id: 'payments', label: '결제 내역' },
               { id: 'users', label: '전체 사용자' },
               { id: 'premium', label: '프리미엄 사용자' },
-              { id: 'expiring', label: `만료 임박 (${expiringUsers.length})`, highlight: expiringUsers.length > 0 },
+              // 목록을 아직 안 받았어도 개요 응답이 개수를 알고 있다.
+              { id: 'expiring', label: `만료 임박 (${expiringSoonCount})`, highlight: expiringSoonCount > 0 },
               { id: 'logs', label: '활동 로그' },
               { id: 'compliance', label: '법적 준수', isLink: true, href: '/admin/compliance' }
             ].map((tab) => (
@@ -858,6 +928,13 @@ export default function AdminPage() {
           </div>
         ) : (
           <>
+            {/* 목록 탭은 처음 열 때 한 번 받아온다 — 그동안만 스피너. */}
+            {isLoadingLists && !listsLoaded && TABS_NEEDING_LISTS.includes(activeTab) && (
+              <div className="flex items-center justify-center py-16">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0064FF]"></div>
+              </div>
+            )}
+
             {/* Overview Tab */}
             {activeTab === 'growth' && <GrowthDiagnosticsPanel />}
 
@@ -873,7 +950,7 @@ export default function AdminPage() {
                   </div>
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <div className="text-sm text-gray-500 mb-1">프리미엄 사용자</div>
-                    <div className="text-3xl font-bold text-[#0064FF]">{premiumUsers.length}</div>
+                    <div className="text-3xl font-bold text-[#0064FF]">{premiumCount}</div>
                   </div>
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <div className="text-sm text-gray-500 mb-1">오늘 게스트 요청</div>
@@ -1023,7 +1100,7 @@ export default function AdminPage() {
             )}
 
             {/* Users Tab */}
-            {activeTab === 'users' && (
+            {activeTab === 'users' && !(isLoadingLists && !listsLoaded) && (
               <div className="space-y-6">
                 {/* Search */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
@@ -1189,7 +1266,7 @@ export default function AdminPage() {
             )}
 
             {/* Premium Users Tab */}
-            {activeTab === 'premium' && (
+            {activeTab === 'premium' && !(isLoadingLists && !listsLoaded) && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="p-4 border-b border-gray-200">
                   <h2 className="font-semibold text-gray-900">프리미엄 사용자 ({premiumUsers.length})</h2>
@@ -1252,7 +1329,7 @@ export default function AdminPage() {
             )}
 
             {/* Expiring Users Tab */}
-            {activeTab === 'expiring' && (
+            {activeTab === 'expiring' && !(isLoadingLists && !listsLoaded) && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="p-4 border-b border-gray-200">
                   <h2 className="font-semibold text-gray-900">
