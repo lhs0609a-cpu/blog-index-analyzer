@@ -138,7 +138,9 @@ export default async function KeywordHubPage({
           <Link href="/keyword-check" className="text-[#0064FF] hover:underline">키워드 판정</Link>
           에서, 내 블로그의 현재 지수는{' '}
           <Link href="/analyze" className="text-[#0064FF] hover:underline">블로그 분석</Link>
-          에서 확인할 수 있습니다.
+          에서 확인할 수 있습니다. 난이도를 읽는 법과 지수 자체가 무엇인지는{' '}
+          <Link href="/guides" className="text-[#0064FF] hover:underline">블로그 지수 가이드</Link>
+          에 정리해 두었습니다.
         </p>
 
         {items.length === 0 ? (

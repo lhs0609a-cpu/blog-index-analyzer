@@ -16,7 +16,8 @@ import {
   Home,
   LayoutDashboard,
   Eye,
-  GitBranch
+  GitBranch,
+  BookOpen
 } from 'lucide-react'
 import { useAuthStore } from '@/lib/stores/auth'
 import UsageIndicator from './UsageIndicator'
@@ -48,6 +49,19 @@ const navItems = [
     badge: 'PREMIUM',
     badgeColor: 'bg-gradient-to-r from-amber-500 to-red-500 text-white',
     description: 'AI가 찾아주는 가성비 광고 타겟팅'
+  },
+  {
+    // 색인되는 콘텐츠(키워드 페이지·가이드)로 들어가는 유일한 상단 입구.
+    //
+    // 왜 네비에 있어야 하나: 사이트맵으로만 도달하는 페이지는 고아로 취급돼
+    // 색인 우선순위가 떨어진다. 그런데 이 두 허브는 지금까지 **푸터 링크만**
+    // 있었다 — 전 페이지에서 걸리는 내부 링크가 없으니 크롤러가 매번 맨
+    // 아래까지 내려와야 닿았다. 네비는 모든 페이지에 렌더되므로 여기 한 줄이
+    // 사이트 전체에서 허브로 가는 링크가 된다.
+    label: '키워드 사전',
+    href: '/keyword',
+    icon: BookOpen,
+    description: '키워드별 상위노출 난이도와 블로그 지수 가이드'
   },
   {
     label: '대시보드',
@@ -109,7 +123,9 @@ export default function GlobalNav() {
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/'
-    return pathname?.startsWith(href)
+    // ⚠️ 경로 경계까지 봐야 한다. 단순 startsWith 면 '/keyword' 가
+    // '/keyword-check'·'/keyword-search' 까지 삼켜 탭 두 개가 동시에 켜진다.
+    return pathname === href || !!pathname?.startsWith(`${href}/`)
   }
 
   return (

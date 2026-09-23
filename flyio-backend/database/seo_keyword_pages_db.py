@@ -292,18 +292,68 @@ DOMAIN_TOKENS_WEAK = (
 )
 
 # 강한 토큰이 있어도 이게 붙으면 제외한다 — 네이버 기능/타 서비스 이름.
-DOMAIN_EXCLUDE = ("지도검색", "이미지검색", "쇼핑검색", "통합검색", "카페", "지식인", "지식iN")
+#
+# ⚠️ 예전엔 여기에 맨 '카페' 가 있었다. 네이버 카페를 막으려던 것인데, 주제축을
+# 열고 나니 이 토큰 하나가 '성수동카페'·'카페추천' 같은 맛집축 전체를 삼킨다
+# (블로그에 글이 가장 많이 쌓이는 축이다). 서비스 이름만 정확히 막는다.
+DOMAIN_EXCLUDE = (
+    "지도검색", "이미지검색", "쇼핑검색", "통합검색",
+    "네이버카페", "다음카페", "카페가입", "지식인", "지식iN",
+)
+
+# 재고 있어도 페이지로 만들지 않는 축. 검색량이 커서 주제축 판정을 통과해도
+# 광고·색인 양쪽에서 리스크만 되는 것들이다.
+DOMAIN_UNSAFE = (
+    "토토", "카지노", "바카라", "슬롯", "베팅", "먹튀",
+    "성인", "야동", "출장마사지", "조건만남",
+    "대리운전면허", "불법", "사채", "작업대출", "개인회생브로커",
+)
+
+# 주제축 판정에서 이 카테고리는 '도메인 안'으로 치지 않는다.
+# '리뷰'·'default' 는 도메인 미매칭 키워드의 폴백이라, 이걸 통과로 치면
+# 필터가 사실상 사라진다(detect_keyword_category 주석 참고).
+_META_CATEGORIES = ("리뷰", "default")
+
+
+def _in_topic_axis(keyword: str) -> bool:
+    """
+    블로거가 실제로 글을 쓰는 주제축인가.
+
+    이 제품이 재는 것은 '이 키워드로 블로그 상위노출하려면 지수가 얼마나
+    필요한가' 다. 그 수요를 가진 사람은 맛집·여행·육아 블로거이지
+    '블로그지수' 를 검색하는 사람만이 아니다. 실측(2026-09-23): 메타축만
+    열어두면 검색량 100 이상 키워드 우주가 **371개**에서 끝난다(이미 340개
+    발행 — 즉 고갈). 주제축을 열면 같은 기준으로 **10만 개 이상**이다.
+
+    게이트는 새 토큰 목록을 만들지 않고 이미 운영 중인
+    detect_keyword_category() 를 그대로 쓴다. 그래야 판정과 페이지에 찍히는
+    카테고리·팁이 영원히 같은 값을 본다.
+
+    순환 import 회피를 위해 함수 안에서 늦게 import 한다
+    (services.category_weights 는 database 를 참조하지 않지만, 반대 방향이
+    생기면 조용히 깨지므로 여기서 미리 막는다).
+    """
+    try:
+        from services.category_weights import detect_keyword_category
+    except Exception:  # pragma: no cover - 분류기가 없으면 주제축을 닫는다
+        return False
+    return detect_keyword_category(keyword) not in _META_CATEGORIES
 
 
 def in_domain(keyword: str) -> bool:
     k = (keyword or "").lower()
+    if any(x.lower() in k for x in DOMAIN_UNSAFE):
+        return False
     if any(x.lower() in k for x in DOMAIN_EXCLUDE):
         return False
+    # ① 메타축 — 블로그 운영 자체를 검색하는 사람
     if any(t.lower() in k for t in DOMAIN_TOKENS_STRONG):
         return True
     # 약한 토큰은 2개 이상 겹쳐야 인정 ('네이버 키워드 검색' 은 통과, '이미지검색' 은 탈락)
-    weak_hits = sum(1 for t in DOMAIN_TOKENS_WEAK if t.lower() in k)
-    return weak_hits >= 2
+    if sum(1 for t in DOMAIN_TOKENS_WEAK if t.lower() in k) >= 2:
+        return True
+    # ② 주제축 — 블로그에 글을 쓰는 사람이 노리는 키워드
+    return _in_topic_axis(keyword)
 
 
 # 하위호환 (기존 참조가 있을 경우)
