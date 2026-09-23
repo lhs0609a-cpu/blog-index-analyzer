@@ -3,6 +3,7 @@
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion'
 import { Sparkles, TrendingUp, Zap, Award, BarChart3, Search, BookOpen, ArrowRight, Building2, Mic, X, PenTool, Target, Star, Flame, Crown, ChevronRight, Play, Rocket, Heart, MousePointer, ArrowUpRight, Layers, Globe, Check, Users } from 'lucide-react'
 import GlassIcon from '@/components/GlassIcon'
+import Image from 'next/image'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import TrialExpiryBanner from '@/components/TrialExpiryBanner'
@@ -113,17 +114,17 @@ export default function Home() {
       <TrialExpiryBanner compact />
 
       {/* Hero Section */}
-      <section className="home-hero relative pt-28 pb-16 md:pt-36 md:pb-24">
+      <section className="home-hero relative pt-24 pb-16 md:pt-32 md:pb-24">
         <div className="container mx-auto px-4">
-          <div className="max-w-6xl mx-auto">
+          <div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)] lg:gap-14">
             {/* Main Content */}
-            <div className="text-center mb-16">
+            <div className="text-center lg:text-left">
               {/* Eyebrow — 무엇을 하는 제품인지 한 줄. 버전 배지는 사용자에게 의미가 없다. */}
               <motion.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4 }}
-                className="ds-eyebrow mb-5"
+                className="ds-eyebrow mb-5 lg:mx-0"
               >
                 <span className="relative flex h-1.5 w-1.5">
                   <span className="absolute inline-flex h-full w-full rounded-full bg-[#3182F6] opacity-70" />
@@ -142,11 +143,11 @@ export default function Home() {
                 initial={false}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.05 }}
-                className="ds-display mb-5"
+                className="ds-display mb-5 lg:max-w-[720px] lg:text-[50px]"
               >
                 공들여 쓴 글이
                 <br />
-                <span className="text-[#0064FF]">검색에 안 나오고 있다면</span>
+                <span className="text-[#0064FF]">검색에 안 나온다면</span>
                 <br />
                 오늘 알아야 합니다
               </motion.h1>
@@ -155,7 +156,7 @@ export default function Home() {
                 initial={false}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.45, delay: 0.12 }}
-                className="ds-lede mx-auto mb-8 max-w-xl"
+                className="ds-lede mx-auto mb-8 max-w-xl lg:mx-0"
               >
                 블스피에서 <strong className="font-semibold text-gray-900">블로그 상태와 키워드 경쟁도</strong>를
                 확인하세요. 공개 검색 데이터와 자체 추정 지표를 함께 살펴봅니다.
@@ -169,10 +170,10 @@ export default function Home() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.3 }}
-                className="hero-search-panel max-w-2xl mx-auto mb-10 scroll-mt-28"
+                className="hero-search-panel max-w-2xl mx-auto mb-10 scroll-mt-28 lg:mx-0"
               >
                 {/* 탭 전환 버튼 */}
-                <div className="flex items-center justify-center gap-2 mb-4">
+                <div className="flex items-center justify-center gap-2 mb-4 lg:justify-start">
                   <button
                     aria-pressed={searchMode === 'blog'}
                     onClick={() => setSearchMode('blog')}
@@ -241,7 +242,7 @@ export default function Home() {
                         </button>
                       </div>
                     </form>
-                    <p className="text-xs text-gray-400 mt-2 text-center">
+                    <p className="text-xs text-gray-400 mt-2 text-center lg:text-left">
                       블로그 URL 또는 ID를 입력하면 11단계 레벨과 6개 실측 신호를 분석합니다
                     </p>
                   </motion.div>
@@ -289,14 +290,14 @@ export default function Home() {
                         </button>
                       </div>
                     </form>
-                    <p className="text-xs text-gray-400 mt-2 text-center">
+                    <p className="text-xs text-gray-400 mt-2 text-center lg:text-left">
                       키워드를 입력하면 상위 10개 블로그와 경쟁력을 분석합니다
                     </p>
                   </motion.div>
                 )}
 
                 {/* 추가 기능 바로가기 */}
-                <div className="mt-6 flex items-center justify-center gap-6 text-sm">
+                <div className="mt-6 flex items-center justify-center gap-6 text-sm lg:justify-start">
                   <Link
                     href="/blue-ocean"
                     className="text-gray-500 hover:text-amber-500 transition-colors inline-flex items-center gap-1"
@@ -313,7 +314,7 @@ export default function Home() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.4 }}
-                className="flex flex-wrap items-center justify-center gap-8 md:gap-16"
+                className="flex flex-wrap items-center justify-center gap-7 md:gap-10 lg:justify-start"
               >
                 {[
                   { value: '상위 10개', label: '블로그 분석', color: 'from-[#0064FF] to-[#3182F6]' },
@@ -330,6 +331,51 @@ export default function Home() {
                 ))}
               </motion.div>
             </div>
+
+            <motion.div
+              initial={{ opacity: 0, x: 24, scale: 0.98 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              transition={{ duration: 0.65, delay: 0.12 }}
+              className="relative mx-auto w-full max-w-[520px] lg:mx-0"
+            >
+              <div className="absolute -inset-8 rounded-[48px] bg-[radial-gradient(circle_at_50%_40%,rgba(0,100,255,0.18),transparent_66%)] blur-2xl" aria-hidden />
+              <div className="relative aspect-[4/5] overflow-hidden rounded-[34px] border border-white/80 bg-blue-50 shadow-[0_32px_90px_rgba(20,72,150,0.20)]">
+                <Image
+                  src="/images/home/blspi-creator-hero-v1.png"
+                  alt="블로그 성과를 확인하는 콘텐츠 크리에이터"
+                  fill
+                  priority
+                  sizes="(max-width: 1024px) 90vw, 42vw"
+                  className="object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#071B3C]/20 via-transparent to-white/5" />
+              </div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.45, delay: 0.55 }}
+                className="absolute -bottom-5 left-3 right-3 rounded-2xl border border-white/80 bg-white/90 p-4 shadow-2xl shadow-blue-950/15 backdrop-blur-xl sm:left-[-26px] sm:right-8"
+              >
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">BLOG SIGNAL</p>
+                    <p className="mt-1 text-sm font-bold text-gray-900">검색에 잡히는 글부터 확인</p>
+                  </div>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-[#0064FF]">
+                    <TrendingUp className="h-5 w-5" />
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  {['색인률', '지수 변화', '경쟁도'].map((label, index) => (
+                    <div key={label} className="rounded-xl bg-gray-50 px-2 py-2.5">
+                      <div className={`mx-auto mb-1 h-1.5 rounded-full ${index === 1 ? 'w-10 bg-sky-400' : index === 2 ? 'w-7 bg-indigo-400' : 'w-12 bg-[#0064FF]'}`} />
+                      <span className="text-[11px] font-medium text-gray-600">{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            </motion.div>
           </div>
         </div>
       </section>
@@ -566,6 +612,40 @@ export default function Home() {
               그대로 보여 드립니다.
             </p>
           </div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.55 }}
+            className="relative mx-auto mb-8 max-w-5xl overflow-hidden rounded-[32px] border border-gray-200 bg-white shadow-[0_28px_80px_rgba(21,55,104,0.14)]"
+          >
+            <div className="relative aspect-[16/10] sm:aspect-[16/8]">
+              <Image
+                src="/images/home/blspi-creator-workspace-v2.png"
+                alt="블로그 데이터를 살펴보며 콘텐츠를 계획하는 크리에이터"
+                fill
+                sizes="(max-width: 1024px) 92vw, 1024px"
+                className="object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-white/90" aria-hidden />
+              <div className="absolute bottom-4 left-4 rounded-full border border-white/70 bg-white/85 px-3 py-1.5 text-[11px] font-semibold text-gray-700 shadow-lg backdrop-blur-md sm:bottom-6 sm:left-6">
+                감이 아닌 관측 데이터로
+              </div>
+            </div>
+            <div className="border-t border-gray-100 bg-white p-5 sm:absolute sm:bottom-6 sm:right-6 sm:top-6 sm:flex sm:w-[35%] sm:flex-col sm:justify-center sm:rounded-2xl sm:border sm:border-white/80 sm:bg-white/[0.88] sm:p-6 sm:shadow-xl sm:backdrop-blur-xl">
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#0064FF]">CLEAR NEXT STEP</p>
+              <h3 className="mt-2 text-xl font-bold leading-snug text-gray-900">무엇을 고칠지<br className="hidden sm:block" /> 한눈에 보이도록</h3>
+              <p className="mt-3 text-sm leading-relaxed text-gray-600">
+                검색 누락 글과 지수 변화를 나눠 보여줘, 다음 콘텐츠의 우선순위를 빠르게 정할 수 있습니다.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {['누락 글 확인', '변화 추적', '경쟁 비교'].map((item) => (
+                  <span key={item} className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-[#0064FF]">{item}</span>
+                ))}
+              </div>
+            </div>
+          </motion.div>
 
           <div className="mx-auto grid max-w-4xl gap-4 md:grid-cols-2">
             {[
@@ -829,8 +909,8 @@ export default function Home() {
 
       {/* CTA Section */}
       <section className="py-20 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-violet-600 via-pink-600 to-orange-500" />
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[size:60px_60px]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,#3182F6_0%,#0064FF_35%,#08275C_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[size:60px_60px]" />
 
         <div className="relative container mx-auto px-4 text-center text-white">
           <motion.div
