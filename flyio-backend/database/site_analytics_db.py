@@ -340,6 +340,26 @@ def count_event_visitors(days: int, names: List[str]) -> Dict[str, int]:
         conn.close()
 
 
+def event_user_ids(days: int, name: str) -> List[str]:
+    """기간 내 그 이벤트를 발생시킨 로그인 사용자들의 id.
+
+    코호트 계산에 필요하다 — "이 기간에 가입한 사람 중 첫 분석까지 간 사람" 은
+    visitor_hash 로는 못 센다(해시는 날짜마다 바뀐다). user_id 가 있어야 한다.
+    """
+    _ensure_tables()
+    start = _range_days(days)[0]
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            "SELECT DISTINCT user_id FROM events "
+            "WHERE day >= ? AND is_bot = 0 AND name = ? AND user_id IS NOT NULL AND user_id != ''",
+            (start, name),
+        )
+        return [r["user_id"] for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
 def failure_reasons(days: int, name: str, limit: int = 12) -> List[Dict[str, Any]]:
     """실패 이벤트의 사유별 건수 — '왜 안 되는지'에 직접 답하는 유일한 데이터."""
     _ensure_tables()
@@ -430,6 +450,19 @@ def events_collected_since() -> Optional[str]:
     conn = _connect()
     try:
         cur = conn.execute("SELECT MIN(day) d FROM events")
+        row = cur.fetchone()
+        return row["d"] if row else None
+    finally:
+        conn.close()
+
+
+def pageviews_collected_since() -> Optional[str]:
+    """페이지뷰 수집 시작일. 이벤트와 시작일이 달라서 따로 필요하다 —
+    둘이 다른데 한 분수의 분자·분모로 쓰면 비율이 통째로 거짓이 된다."""
+    _ensure_tables()
+    conn = _connect()
+    try:
+        cur = conn.execute("SELECT MIN(day) d FROM pageviews")
         row = cur.fetchone()
         return row["d"] if row else None
     finally:

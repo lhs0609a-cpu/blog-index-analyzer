@@ -255,6 +255,34 @@ def _signup_daily(days: int) -> Dict[str, int]:
         return {}
 
 
+def _activated_signups(days: int) -> int:
+    """
+    **이 기간에 가입한 사람 중** 첫 분석까지 간 사람 수.
+
+    예전엔 activation_first_run 이벤트 수를 그대로 분자로 썼다. 그 이벤트는 기존 회원이
+    분석을 돌려도 찍히므로, 실측(2026-09-23)에서 분자 156 / 분모 28 이 되어 화면에
+    "측정 축 불일치" 만 뜨고 활성화율은 끝내 못 봤다. 코호트로 교집합을 내야 한다.
+    """
+    try:
+        from database import site_analytics_db as adb
+        from database.user_db import get_user_db
+
+        activated = {str(x) for x in adb.event_user_ids(days, "activation_first_run")}
+        if not activated:
+            return 0
+
+        cutoff = (datetime.now(KST) - timedelta(days=days - 1)).strftime("%Y-%m-%d")
+        with get_user_db().get_connection() as conn:
+            rows = conn.execute(
+                "SELECT id FROM users WHERE date(created_at) >= ?", (cutoff,)
+            ).fetchall()
+        cohort = {str(r["id"]) for r in rows}
+        return len(cohort & activated)
+    except Exception as e:
+        logger.warning(f"[growth] 활성화 코호트 집계 실패: {e}")
+        return 0
+
+
 def _payments_in_window(days: int) -> Dict[str, Any]:
     """기간 내 결제. 성공뿐 아니라 실패·대기 건수도 본다."""
     out = {"completed": 0, "payers": 0, "revenue": 0, "failed": 0, "pending": 0}
@@ -425,7 +453,7 @@ FUNNEL: List[Stage] = [
         key="signup_to_activation",
         label="가입 → 첫 분석 실행 (활성화)",
         question="가입만 하고 값을 한 번도 못 본 사람이 얼마나 되는가?",
-        denom_key="signups", numer_key="activation_first_run",
+        denom_key="signups", numer_key="activated_signups",
         benchmark="signup_to_activation", group="signup",
     ),
     # 아래 두 구간이 "왜 결제가 없는가"의 앞쪽 절반이다.
@@ -455,12 +483,32 @@ FUNNEL: List[Stage] = [
         denom_key="visitors", numer_key="pricing_views",
         benchmark=None, no_benchmark_reason=NO_BENCHMARK_REASON["reach"], group="payment",
     ),
+    # 요금제 → 결제시작을 한 덩어리로 두면 "플랜 버튼을 안 누른 것"과 "동의 모달에서
+    # 샌 것"이 구분되지 않는다. 고칠 곳이 정반대인데 같은 0% 로 보인다. 두 이벤트는
+    # 이미 수집 중이었고 화면에만 없었다 — 실측(2026-09-23) 결과 pricing_plan_click 이
+    # 0 이라, 사람들은 동의 모달을 보기도 전에 떠난다.
+    Stage(
+        key="pricing_to_plan_click",
+        label="요금제 → 플랜 선택",
+        question="요금을 보고 플랜 버튼을 누르기는 하는가?",
+        denom_key="pricing_views", numer_key="pricing_plan_click",
+        benchmark=None, no_benchmark_reason=NO_BENCHMARK_REASON["pricing_to_checkout"],
+        group="payment",
+    ),
+    Stage(
+        key="plan_click_to_consent",
+        label="플랜 선택 → 동의 모달",
+        question="플랜을 고른 뒤 동의 화면까지 가는가?",
+        denom_key="pricing_plan_click", numer_key="checkout_consent_open",
+        benchmark=None, no_benchmark_reason=NO_BENCHMARK_REASON["form_funnel"],
+        group="payment",
+    ),
     Stage(
         key="pricing_to_checkout",
-        label="요금제 → 결제 시작",
-        question="요금을 보고 결제로 넘어가는가? (안 넘어가면 가격·플랜 구성 문제)",
-        denom_key="pricing_views", numer_key="checkout_start",
-        benchmark=None, no_benchmark_reason=NO_BENCHMARK_REASON["pricing_to_checkout"],
+        label="동의 모달 → 결제 시작",
+        question="약관 두 개에 체크하고 결제를 누르는가?",
+        denom_key="checkout_consent_open", numer_key="checkout_start",
+        benchmark=None, no_benchmark_reason=NO_BENCHMARK_REASON["form_funnel"],
         group="payment",
     ),
     Stage(
@@ -523,6 +571,7 @@ def _collect(days: int) -> Dict[str, Any]:
         "pricing_views": adb.count_visitors(days, "/pricing"),
         "payment_views": adb.count_visitors(days, "/payment"),
         "signups": _signups_in_window(days),
+        "activated_signups": _activated_signups(days),
         "payers": pay["payers"],
         "payments_completed": pay["completed"],
         "payments_failed": pay["failed"],
@@ -1276,9 +1325,69 @@ def _device_block(days: int) -> Dict[str, Any]:
     return out
 
 
+def _effective_days(requested: int) -> Dict[str, Any]:
+    """
+    퍼널 전체가 쓸 **하나의 시계**를 정한다.
+
+    지금까지 한 분수 안에서 서로 다른 기간이 섞이고 있었다:
+      · visitors / *_views  → pageviews 테이블 (오래됨)
+      · signup_form_start, limit_hit, checkout_start ... → events 테이블 (2026-09-15 시작)
+      · signups / payments  → users·payments 테이블 (전체 기록)
+
+    그래서 "방문 → 한도 도달 = limit_hit(8일치) / visitors(30일치)" 같은 계산이 나왔다.
+    실측(2026-09-23)으로 이 값은 3.6% 로 표시됐지만 같은 기간으로 맞추면 14.2% 였다 —
+    4배 저평가다. 기존 방어는 분자가 분모를 **넘을 때만** '측정 불가'를 띄웠기 때문에,
+    분자가 더 작은 이 경우들은 그냥 처참한 전환율로 조용히 읽혔다.
+
+    고치는 방법은 하나뿐이다: 가장 늦게 시작한 소스에 전부를 맞춘다. 기간은 짧아지지만
+    그 안의 숫자는 서로 비교할 수 있고, 세계 벤치마크와도 같은 의미가 된다.
+    """
+    from database import site_analytics_db as adb
+
+    today = datetime.now(KST).date()
+    requested_start = today - timedelta(days=requested - 1)
+
+    starts = {}
+    for label, fn in (("events", adb.events_collected_since),
+                      ("pageviews", adb.pageviews_collected_since)):
+        try:
+            v = fn()
+        except Exception as e:
+            logger.warning(f"[growth] {label} 수집 시작일 조회 실패: {e}")
+            v = None
+        if v:
+            starts[label] = v
+
+    effective_start = requested_start
+    limited_by = None
+    for label, v in starts.items():
+        try:
+            d = datetime.strptime(v, "%Y-%m-%d").date()
+        except ValueError:
+            continue
+        if d > effective_start:
+            effective_start = d
+            limited_by = label
+
+    eff_days = (today - effective_start).days + 1
+    return {
+        "days": max(1, eff_days),
+        "start": effective_start.strftime("%Y-%m-%d"),
+        "requested_days": requested,
+        "limited_by": limited_by,
+        "source_starts": starts,
+        "truncated": limited_by is not None,
+    }
+
+
 def diagnose(days: int = 30) -> Dict[str, Any]:
     """관리자 화면이 부르는 단 하나의 함수."""
     from database import site_analytics_db as adb
+
+    # 요청 기간이 아니라 **모든 소스가 데이터를 갖고 있는 기간**으로 집계한다.
+    # 그래야 분자와 분모가 같은 시계 위에 놓인다.
+    window = _effective_days(days)
+    days = window["days"]
 
     c = _collect(days)
     arpu = _arpu_monthly()
@@ -1308,6 +1417,8 @@ def diagnose(days: int = 30) -> Dict[str, Any]:
 
     return {
         "period_days": days,
+        "requested_days": window["requested_days"],
+        "window": window,
         "generated_at": datetime.now(KST).isoformat(),
         "overall": overall,
         "counts": c,
@@ -1332,19 +1443,25 @@ def diagnose(days: int = 30) -> Dict[str, Any]:
         "data_health": {
             "events_since": events_since,
             "event_collection_started": bool(events_since),
-            # 이벤트 수집을 시작한 날보다 기간이 길면 앞쪽 날짜는 구조적으로 0 이다.
-            # 그걸 '전환이 없었다'로 읽으면 안 되므로 명시한다.
+            # 이제 집계 자체를 실효기간으로 자르므로 이 값은 항상 True 여야 한다.
+            # False 로 남으면 _effective_days 가 제 일을 못한 것이다.
             "window_covered_by_events": (
-                events_since is not None
-                and events_since <= (datetime.now(KST) - timedelta(days=days - 1)).strftime("%Y-%m-%d")
+                events_since is not None and events_since <= window["start"]
             ),
+            "window_note": (
+                f"요청 {window['requested_days']}일 중 실제 채점 기간은 "
+                f"{window['start']} 이후 {window['days']}일이다. "
+                f"{window['limited_by']} 수집이 그날 시작됐기 때문이며, 그보다 긴 기간을 쓰면 "
+                f"분자와 분모가 서로 다른 기간이 되어 비율이 거짓이 된다."
+            ) if window["truncated"] else None,
             "caveats": [
                 "방문자 식별자는 개인정보 보호상 날짜마다 바뀐다. 구간 비율은 '사람'이 "
                 "아니라 '방문자-일' 기준이며, 며칠 고민 후 결제한 사람은 후반 구간을 "
                 "아주 약간 낙관적으로 만든다.",
-                "가입 수는 users 테이블, 결제 수는 payments 테이블이 출처다. 이벤트보다 "
-                "정확하지만 수집 시작 이전 기록까지 포함되므로 분자가 분모를 넘을 수 있다 — "
-                "그런 구간은 '측정 불가'로 표시한다.",
+                "가입 수는 users 테이블, 결제 수는 payments 테이블, 방문은 pageviews, "
+                "나머지는 events 가 출처다. 출처마다 데이터 시작일이 달라서, 집계 기간은 "
+                "가장 늦게 시작한 소스에 맞춰 자른다 — 그래야 한 구간의 분자와 분모가 "
+                "같은 기간을 가리킨다.",
                 f"전환 {MIN_CONVERSIONS}건 미만 또는 분모 {MIN_DENOM}명 미만 구간은 "
                 "점수를 내지 않고 총점에서도 뺀다.",
             ],
