@@ -165,6 +165,10 @@ async def enrich_volumes(limit: int = 200) -> Dict[str, Any]:
     from services.naver_ad_service import NaverAdApiClient
 
     seo_db.init_seo_pages_db()
+    # ⚠️ 되살리기가 먼저다. skip_off_domain 은 한 방향(pending→skipped)이라
+    # in_domain 을 넓혀도 예전에 걸러진 행은 영원히 죽어 있는다. 광고축을 연
+    # 직후 '네이버광고'(월 226,600)·'검색광고'(48,100) 가 이 상태였다.
+    reclaimed = seo_db.reclaim_in_domain_skipped()
     # 기준(MIN_QUEUE_VOLUME)이 올라갔다면 예전 기준으로 통과한 행을 먼저 걸러낸다.
     reclassified = seo_db.reclassify_by_volume()
     off_domain = seo_db.skip_off_domain()
@@ -174,6 +178,7 @@ async def enrich_volumes(limit: int = 200) -> Dict[str, Any]:
     if not todo:
         return {
             "checked": 0, "kept": 0, "skipped": 0, "reclassified": reclassified,
+            "reclaimed": reclaimed,
         "off_domain_skipped": off_domain,
         "unpublished": unpublished[:10],
         "unpublished_count": len(unpublished),
@@ -224,6 +229,7 @@ async def enrich_volumes(limit: int = 200) -> Dict[str, Any]:
         "skipped": skipped,
         "discovered": discovered,
         "reclassified": reclassified,
+        "reclaimed": reclaimed,
         "off_domain_skipped": off_domain,
         "unpublished": unpublished[:10],
         "unpublished_count": len(unpublished),

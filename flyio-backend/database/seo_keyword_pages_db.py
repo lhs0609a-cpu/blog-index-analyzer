@@ -542,6 +542,54 @@ def skip_off_domain() -> int:
         conn.close()
 
 
+def reclaim_in_domain_skipped() -> Dict[str, Any]:
+    """
+    'off_domain' 으로 내려간 행 중 **지금 판정으로는 도메인 안**인 것을 되살린다.
+
+    왜 필요한가 (2026-09-24 실측):
+    skip_off_domain() 은 pending → skipped 한 방향뿐이고 되돌리는 경로가 없었다.
+    그래서 in_domain() 을 넓혀도 예전에 걸러진 행은 영원히 죽어 있는다.
+    광고축을 연 직후 확인해 보니 '네이버광고'(월 226,600) · '검색광고'(48,100) ·
+    '네이버광고관리시스템'(21,990) · '네이버파워링크'(8,170) 가 전부 이 상태였다 —
+    축을 열어놓고 정작 그 축의 제일 큰 키워드들을 못 재고 있었다.
+
+    축을 넓힐 때마다 같은 일이 생기므로, enrich 사이클에서 매번 돌린다.
+    검색량 기준은 그대로 적용한다(그건 도메인 판정과 무관하게 유효한 기준이다).
+    """
+    now = datetime.now(KST).isoformat()
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            "SELECT keyword, search_volume FROM seo_keyword_queue "
+            "WHERE state = 'skipped' AND last_error = 'off_domain'"
+        )
+        rows = cur.fetchall()
+        revived = []
+        for r in rows:
+            kw = r["keyword"]
+            if not in_domain(kw):
+                continue
+            vol = r["search_volume"]
+            # 검색량을 모르면 pending 으로 돌려 enrich 가 다시 재게 한다.
+            if vol is not None and int(vol) < MIN_QUEUE_VOLUME:
+                continue
+            conn.execute(
+                "UPDATE seo_keyword_queue SET state='pending', last_error=NULL, "
+                "attempts=0, updated_at=? WHERE keyword=?",
+                (now, kw),
+            )
+            revived.append((kw, vol))
+        conn.commit()
+        revived.sort(key=lambda x: -(x[1] or 0))
+        return {
+            "checked": len(rows),
+            "revived": len(revived),
+            "top": [k for k, _ in revived[:15]],
+        }
+    finally:
+        conn.close()
+
+
 def reclassify_by_volume() -> int:
     """
     MIN_QUEUE_VOLUME 을 올렸을 때 이미 통과 처리된 행을 다시 걸러낸다.
