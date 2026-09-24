@@ -118,6 +118,135 @@ function pct(v?: number | null): string | null {
   return v == null ? null : `${(v * 100).toFixed(0)}%`
 }
 
+/**
+ * 같은 문단이 10만 번 반복되면 유사문서·scaled content 판정에 걸린다.
+ *
+ * 실측(2026-09-24, 라이브 표본 14개): 본문 5-gram 의 **47.4%가 전 페이지 공통**,
+ * 글자 기준으로는 50.9%가 동일했다. 페이지마다 숫자는 전부 다른데
+ * 그 숫자를 감싸는 설명 문단이 고정이라 그렇다. 374개일 때는 문제가 아니지만
+ * 큐에 10만 개가 대기 중이므로 지금 고쳐야 한다.
+ *
+ * 해결은 문구를 무작위로 섞는 게 아니다 — 그건 값만 바뀐 같은 글이라
+ * 판정에도 안 통하고 독자에게도 쓸모없다. **실측값 구간에 따라 실제로 다른
+ * 말을 하게** 가른다. 구간이 같아 문장이 겹칠 때만 키워드 해시로 표현을
+ * 나눈다(아래 variantOf). 어느 변형이든 내용은 그 페이지의 실측에 맞다.
+ */
+function variantOf<T>(seed: string, options: T[]): T {
+  let h = 2166136261
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return options[(h >>> 0) % options.length]
+}
+
+/** 난이도 구간 → 리드 문단의 뒷문장. 구간마다 실제로 다른 판단을 말한다. */
+function leadVerdict(page: KeywordPage): string {
+  const min = page.top10_min_score
+  const alive = page.alive_ratio
+  if (min == null) {
+    return ' 상위 블로그의 지수를 아직 못 잰 키워드라 난이도는 말하지 않습니다.'
+  }
+  const dormant = alive != null && alive <= 0.7
+  if (min < 25) {
+    return dormant
+      ? ` 1페이지 마지막 자리의 지수가 ${min.toFixed(1)}로 낮고, 경쟁자 상당수가 최근 글이 없습니다. 이 축에서 드물게 열려 있는 자리입니다.`
+      : ` 1페이지 마지막 자리의 지수가 ${min.toFixed(1)}로 낮습니다. 지수를 크게 올리지 않아도 진입할 수 있는 구간입니다.`
+  }
+  if (min < 45) {
+    return dormant
+      ? ` 진입선은 ${min.toFixed(1)}이고 1페이지에 멈춰 있는 블로그가 섞여 있습니다. 같은 주제를 몇 편 쌓으면 자리가 납니다.`
+      : ` 진입선은 ${min.toFixed(1)}입니다. 최하위 자리를 노리면 가능성이 있는 구간입니다.`
+  }
+  if (min < 60) {
+    return ` 진입선이 ${min.toFixed(1)}로 높은 편입니다. 글 한 편으로는 닿기 어렵고, 그 주제의 누적이 먼저 필요합니다.`
+  }
+  return dormant
+    ? ` 진입선이 ${min.toFixed(1)}로 높습니다. 다만 1페이지 경쟁자 일부가 멈춰 있어 시간을 두면 자리가 비어갑니다.`
+    : ` 진입선이 ${min.toFixed(1)}이고 경쟁자도 활발합니다. 정면으로는 권하지 않는 키워드입니다.`
+}
+
+/**
+ * C-Rank / D.I.A. 축 설명의 앞문장.
+ *
+ * 예전엔 두 축이 무엇인지 정의하는 153자 문단이 **모든 페이지에 똑같이** 박혀
+ * 있었다. 정의는 /guides/naver-crank-dia 한 곳에 두고 여기서는 이 키워드가
+ * 어느 쪽인지만 말한다 — 중복을 없애면서 문단도 짧아진다.
+ */
+function axisLead(axis: 'crank' | 'dia' | 'mixed', keyword: string): string {
+  if (axis === 'crank') {
+    return variantOf(keyword, [
+      '이 키워드의 1페이지는 출처 신뢰(C-Rank) 쪽으로 기울어 있습니다.',
+      '이 자리를 지키는 것은 글의 완성도보다 누적된 출처 신뢰(C-Rank)입니다.',
+    ])
+  }
+  if (axis === 'dia') {
+    return variantOf(keyword, [
+      '이 키워드의 1페이지는 문서 품질(D.I.A.) 쪽으로 기울어 있습니다.',
+      '이 자리는 누적보다 글 한 편의 완성도(D.I.A.)가 만들고 있습니다.',
+    ])
+  }
+  return variantOf(keyword, [
+    '이 키워드의 1페이지는 두 축이 비슷하게 섞여 있습니다.',
+    '이 자리는 출처 신뢰와 문서 품질 어느 한쪽으로 기울어 있지 않습니다.',
+  ])
+}
+
+/**
+ * 이 키워드의 실측에서 바로 나오는 조언 한 줄.
+ *
+ * 카테고리 팁은 백엔드가 주는 고정 5줄이고 카테고리가 16종뿐이라, 10만
+ * 페이지가 16가지 목록을 돌려 쓰게 된다. 목록 맨 앞에 그 페이지의 측정값에서
+ * 도출한 줄을 넣어 목록 자체를 다르게 만든다. 꾸며낸 문장이 아니라
+ * 위 표에 이미 나와 있는 숫자가 말하는 내용이다.
+ */
+function measuredTip(
+  page: KeywordPage,
+  dormantCount: number,
+  blogTab?: number,
+  axis?: 'crank' | 'dia' | 'mixed' | null
+): string | null {
+  if (dormantCount >= 3) {
+    return `📉 1페이지 경쟁자 ${dormantCount}개가 30일 넘게 새 글이 없습니다 — 꾸준히 발행하는 것만으로 자리가 납니다.`
+  }
+  if (typeof blogTab === 'number' && blogTab < 0.15) {
+    return `🔍 이 검색어는 블로그 자리가 ${(blogTab * 100).toFixed(0)}%뿐입니다 — 순위보다 먼저 이 키워드를 쓸지부터 판단하세요.`
+  }
+  if (axis === 'crank' && page.top10_avg_posts) {
+    return `📚 상위권 평균 발행 글이 ${page.top10_avg_posts.toLocaleString()}개입니다 — 한 편이 아니라 누적으로 붙어야 하는 키워드입니다.`
+  }
+  if (axis === 'dia') {
+    return '✍️ 누적이 적은 블로그도 올라와 있습니다 — 글 한 편의 완성도로 승부가 나는 키워드입니다.'
+  }
+  if (page.top10_min_score != null && page.top10_min_score < 25) {
+    return `🎯 진입선이 ${page.top10_min_score.toFixed(1)}로 낮습니다 — 지수를 올리기 전에 먼저 이 자리를 잡아두세요.`
+  }
+  if (page.alive_ratio != null && page.alive_ratio >= 0.95) {
+    return '⏱️ 1페이지 경쟁자가 전원 활발합니다 — 한 번 올리고 두면 밀립니다. 갱신을 전제로 쓰세요.'
+  }
+  return null
+}
+
+/** 탭 비중 설명의 앞문장. 비중 구간에 따라 다른 말을 한다. */
+function tabLead(blogTab: number, keyword: string): string {
+  if (blogTab < 0.15) {
+    return variantOf(keyword, [
+      '이 검색어는 답이 블로그 밖에서 소비됩니다.',
+      '검색 결과에서 블로그가 차지한 몫이 작은 키워드입니다.',
+    ])
+  }
+  if (blogTab >= 0.4) {
+    return variantOf(keyword, [
+      '이 검색어는 답을 블로그에서 찾는 사람이 많습니다.',
+      '검색 결과의 중심이 블로그 쪽에 있는 키워드입니다.',
+    ])
+  }
+  return variantOf(keyword, [
+    '블로그가 검색 결과의 일부를 차지하는 키워드입니다.',
+    '이 검색어에서 블로그 자리는 있지만 전부는 아닙니다.',
+  ])
+}
+
 /** 키워드별 FAQ. 값이 없는 항목은 아예 만들지 않는다 — 빈 답변은 얇은 페이지다. */
 function buildFaq(page: KeywordPage, dormantCount: number) {
   const out: Array<{ question: string; answer: string }> = []
@@ -159,10 +288,14 @@ function buildFaq(page: KeywordPage, dormantCount: number) {
             : '출처 신뢰와 문서 품질이 섞여 있습니다. 주제를 좁혀 쌓으면서 글의 완성도도 같이 올리는 접근이 맞습니다.'),
     })
   }
+  // ⚠️ 이 고지는 빼지 않는다 — 네이버 공식 값이 아니라는 점을 페이지마다 밝혀야 한다.
+  // 다만 문장은 이 키워드의 측정 조건으로 바꿔 쓴다. 예전엔 173자가 전 페이지에
+  // 똑같이 박혀 FAQPage 구조화 데이터까지 그대로 복제되고 있었다.
   out.push({
-    question: '여기 나온 지수는 네이버 공식 값인가요?',
+    question: `${kw} 난이도 점수는 네이버 공식 값인가요?`,
     answer:
-      '아닙니다. 네이버는 블로그별 점수를 공개하지 않으며, 2016년 공식 블로그에서 "블로그지수"가 자사 개념이 아니라고 밝혔습니다. 이 페이지의 점수는 검색 결과에 실제로 올라와 있는 블로그를 조회해 외부 관측값으로 계산한 추정치입니다.',
+      `아닙니다. 네이버는 블로그별 점수를 공개하지 않습니다. 이 점수는 ${kw} 검색 결과 1페이지에 ` +
+      `실제로 올라와 있는 블로그 ${page.competitors_scanned ?? 0}개를 조회해 외부 관측값으로 계산한 추정치입니다.`,
   })
   return out
 }
@@ -232,9 +365,11 @@ export default async function KeywordDetailPage({ params }: Props) {
           {page.keyword} — 블로그 상위노출 난이도
         </h1>
         <p className="text-gray-700 leading-[1.9] mb-2">
-          네이버에서 <strong>{page.keyword}</strong> 를 검색했을 때 1페이지에 올라와 있는 블로그들을
-          직접 조회해 경쟁 강도를 계산한 결과입니다.
-          {measuredKo && ` ${measuredKo} 측정 기준이며, 검색 결과는 매일 바뀌므로 시점에 따라 달라질 수 있습니다.`}
+          네이버에서 <strong>{page.keyword}</strong> 를 검색했을 때 1페이지에 올라와 있는 블로그
+          {page.competitors_scanned ? ` ${page.competitors_scanned}개` : '들'}를 직접 조회해 계산한
+          결과입니다.
+          {leadVerdict(page)}
+          {measuredKo && ` ${measuredKo} 측정 기준입니다.`}
         </p>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 my-8">
@@ -323,10 +458,11 @@ export default async function KeywordDetailPage({ params }: Props) {
               상위권은 무엇으로 버티고 있나
             </h2>
             <p className="text-gray-700 leading-[1.9] mb-4">
-              네이버 검색은 크게 두 축으로 문서를 봅니다. 하나는 이 블로그가 그 주제의 믿을 만한
-              출처인지 보는 C-Rank이고, 다른 하나는 글 한 편이 검색 의도에 얼마나 충실한지 보는
-              D.I.A.입니다. 두 축은 대응이 정반대라 — 앞은 누적, 뒤는 완성도 — 어느 쪽이 통하는
-              키워드인지 먼저 갈라야 합니다.
+              {axisLead(axis, page.keyword)}{' '}
+              <Link href="/guides/naver-crank-dia" className="text-[#0064FF] hover:underline">
+                두 축이 무엇인지
+              </Link>
+              는 따로 정리해 두었습니다.
             </p>
             <p className="text-gray-700 leading-[1.9] mb-4">
               이 키워드의 상위권은 C-Rank 평균 {page.top10_avg_c_rank!.toFixed(1)}점, D.I.A. 평균{' '}
@@ -381,9 +517,7 @@ export default async function KeywordDetailPage({ params }: Props) {
               이 키워드는 어디에서 소비되나
             </h2>
             <p className="text-gray-700 leading-[1.9] mb-4">
-              같은 검색어라도 사람들이 답을 찾는 자리는 다릅니다. 블로그 자리가 좁은 키워드는
-              1위를 해도 유입이 크지 않고, 반대로 블로그 비중이 높은 키워드는 순위 하나가 그대로
-              방문자로 옵니다. 이 키워드의 검색 결과는 블로그가{' '}
+              {tabLead(blogTab, page.keyword)} 검색 결과에서 블로그가{' '}
               {(blogTab * 100).toFixed(0)}%를 차지합니다.
               {blogTab < 0.15
                 ? ' 블로그 노출 자리가 좁습니다. 상위노출 자체보다, 같은 주제의 다른 키워드로 우회하는 편이 나을 수 있습니다.'
@@ -454,7 +588,14 @@ export default async function KeywordDetailPage({ params }: Props) {
               {page.category_label ?? '이 주제'} 글을 쓸 때
             </h2>
             <ul className="space-y-2 mb-4">
-              {(page.tips ?? []).map((t, i) => (
+              {/* 맨 앞 한 줄은 이 키워드의 실측에서 나온다 — 아래 카테고리 팁은 16종뿐이라
+                  그것만 두면 10만 페이지가 같은 목록을 돌려 쓰게 된다. */}
+              {[
+                ...(measuredTip(page, dormant.length, blogTab, axis)
+                  ? [measuredTip(page, dormant.length, blogTab, axis) as string]
+                  : []),
+                ...(page.tips ?? []),
+              ].map((t, i) => (
                 <li key={i} className="flex gap-3 text-gray-700 leading-[1.8]">
                   <span className="text-[#0064FF] font-bold shrink-0">·</span>
                   <span>{t}</span>
@@ -515,12 +656,15 @@ export default async function KeywordDetailPage({ params }: Props) {
           </>
         )}
 
+        {/*
+          2016년 네이버 공식 입장 인용(163자)은 모든 페이지에 똑같이 박혀 있었다.
+          그 설명은 /guides/naver-blog-index-truth 한 곳에 두고 여기서는 가리키기만 한다.
+        */}
         <p className="text-xs text-gray-500 mt-10 leading-relaxed">
-          여기 쓰인 지수는 네이버가 공개하는 공식 값이 아니라 외부에서 관측 가능한 지표로 계산한
-          추정치입니다. 네이버 검색 공식 블로그는 2016년에 &quot;최적화 블로그, 저품질 블로그,
-          블로그지수 등은 네이버에서 만든 개념이 아닙니다&quot;라고 밝혔습니다.{' '}
+          {measuredKo ? `${measuredKo} 기준 관측값입니다. ` : ''}
+          네이버 공식 값이 아니라 외부 관측으로 계산한 추정치입니다 —{' '}
           <Link href="/guides/naver-blog-index-truth" className="text-[#0064FF] hover:underline">
-            자세히 보기
+            왜 그런지
           </Link>
         </p>
       </div>
