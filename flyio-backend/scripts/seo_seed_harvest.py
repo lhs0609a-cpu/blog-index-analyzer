@@ -75,11 +75,13 @@ def to_int(v):
         return 0
 
 
-async def harvest(target: int, budget_s: float, expand_min_vol: int):
+async def harvest(target: int, budget_s: float, expand_min_vol: int, extra_seeds=None,
+                  frontier_cap: int = 6000):
     client = NaverAdApiClient()
     harvested: dict = {}          # in_domain 통과 + 검색량 >= MIN_QUEUE_VOLUME
     rejected_sample: list = []    # 게이트 탈락 표본 (사람이 눈으로 확인할 용도)
-    frontier, visited = list(SEEDS), set()
+    frontier = list(SEEDS) + list(extra_seeds or [])
+    visited = set()
     calls = 0
     t0 = time.time()
 
@@ -117,7 +119,7 @@ async def harvest(target: int, budget_s: float, expand_min_vol: int):
                 continue
             harvested[kw] = vol
             # 수요가 큰 것의 이웃만 다시 캔다. 무제한 확장하면 도메인에서 멀어진다.
-            if vol >= expand_min_vol and kw not in visited and len(frontier) < 6000:
+            if vol >= expand_min_vol and kw not in visited and len(frontier) < frontier_cap:
                 frontier.append(kw)
 
         if calls % 50 == 0:
@@ -134,14 +136,27 @@ async def main():
     ap.add_argument("--target", type=int, default=12000)
     ap.add_argument("--budget", type=float, default=900.0)
     ap.add_argument("--expand-min-vol", type=int, default=1000)
+    ap.add_argument("--frontier-cap", type=int, default=6000,
+                    help="탐색 대기열 상한. 10만 규모에서는 6000이 조기에 막는다.")
     ap.add_argument("--apply", action="store_true")
+    ap.add_argument(
+        "--expand-from-queue", type=int, default=0,
+        help="큐에 이미 있는 키워드 중 검색량 상위 N개를 시드로 삼는다. "
+             "같은 시드로 다시 돌리면 같은 동네만 파게 되므로, 회차를 거듭할 때 쓴다.",
+    )
     args = ap.parse_args()
 
     seo_db.init_seo_pages_db()
     before = seo_db.stats()
 
+    extra = []
+    if args.expand_from_queue:
+        extra = seo_db.queue_frontier(limit=args.expand_from_queue)
+        print(f"[seed] 큐에서 시드 {len(extra)}개를 이어받는다", flush=True)
+
     harvested, rejected, calls, elapsed = await harvest(
-        args.target, args.budget, args.expand_min_vol
+        args.target, args.budget, args.expand_min_vol, extra_seeds=extra,
+        frontier_cap=args.frontier_cap,
     )
 
     rnd = random.Random(20260923)

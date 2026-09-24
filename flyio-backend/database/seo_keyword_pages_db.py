@@ -394,6 +394,30 @@ def enqueue_with_volume(items: Dict[str, int], source: str = "keywordstool", dep
     return added
 
 
+def queue_frontier(limit: int = 2000) -> List[str]:
+    """
+    수확을 **이어서** 하기 위한 시드. 큐에 이미 있는 키워드 중 검색량 상위 N개.
+
+    왜 필요한가: 수확기를 같은 SEEDS 로 다시 돌리면 BFS 가 매번 같은 동네를
+    판다(2회차 실측: 20,059개에서 사실상 정체). 이미 캐낸 것의 바깥으로
+    나가려면 frontier 자체를 갱신해야 한다. 검색량이 큰 것의 이웃이
+    가장 생산적이므로 그 순서로 준다.
+
+    아직 측정 안 된 것(pending)만 준다 — done 은 이미 그 이웃까지 캤을 확률이 높다.
+    """
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            "SELECT keyword FROM seo_keyword_queue "
+            "WHERE state = 'pending' AND search_volume IS NOT NULL "
+            "ORDER BY search_volume DESC LIMIT ?",
+            (limit,),
+        )
+        return [r["keyword"] for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
 def pending_without_volume(limit: int = 200) -> List[str]:
     """검색량을 아직 안 재본 대기 키워드. 얕은 깊이부터(시드에 가까울수록 유망)."""
     conn = _connect()
