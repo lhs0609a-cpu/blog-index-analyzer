@@ -418,7 +418,7 @@ def enqueue_with_volume(items: Dict[str, int], source: str = "keywordstool", dep
     return added
 
 
-def queue_frontier(limit: int = 2000) -> List[str]:
+def queue_frontier(limit: int = 2000, offset: int = 0) -> List[str]:
     """
     수확을 **이어서** 하기 위한 시드. 큐에 이미 있는 키워드 중 검색량 상위 N개.
 
@@ -428,14 +428,18 @@ def queue_frontier(limit: int = 2000) -> List[str]:
     가장 생산적이므로 그 순서로 준다.
 
     아직 측정 안 된 것(pending)만 준다 — done 은 이미 그 이웃까지 캤을 확률이 높다.
+
+    offset 이 필요한 이유: 검색량 순서는 회차가 바뀌어도 그대로라, limit 만
+    쓰면 매 회차가 **같은 상위 시드**부터 다시 시작한다(3회차 실측: 순증이
+    36,000 → 15,000 → 5,500 으로 주저앉았다). 회차마다 구간을 옮겨야 한다.
     """
     conn = _connect()
     try:
         cur = conn.execute(
             "SELECT keyword FROM seo_keyword_queue "
             "WHERE state = 'pending' AND search_volume IS NOT NULL "
-            "ORDER BY search_volume DESC LIMIT ?",
-            (limit,),
+            "ORDER BY search_volume DESC LIMIT ? OFFSET ?",
+            (limit, offset),
         )
         return [r["keyword"] for r in cur.fetchall()]
     finally:

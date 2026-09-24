@@ -144,6 +144,10 @@ async def main():
         help="큐에 이미 있는 키워드 중 검색량 상위 N개를 시드로 삼는다. "
              "같은 시드로 다시 돌리면 같은 동네만 파게 되므로, 회차를 거듭할 때 쓴다.",
     )
+    ap.add_argument(
+        "--queue-offset", type=int, default=0,
+        help="큐 시드를 몇 개 건너뛰고 가져올지. 회차마다 옮겨야 중복 탐색을 피한다.",
+    )
     args = ap.parse_args()
 
     seo_db.init_seo_pages_db()
@@ -151,7 +155,7 @@ async def main():
 
     extra = []
     if args.expand_from_queue:
-        extra = seo_db.queue_frontier(limit=args.expand_from_queue)
+        extra = seo_db.queue_frontier(limit=args.expand_from_queue, offset=args.queue_offset)
         print(f"[seed] 큐에서 시드 {len(extra)}개를 이어받는다", flush=True)
 
     harvested, rejected, calls, elapsed = await harvest(
