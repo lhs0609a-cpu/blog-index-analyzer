@@ -167,10 +167,36 @@ async function fetchResilient(input: string, init: RequestInit): Promise<Respons
   throw lastError
 }
 
+/**
+ * 슬러그를 '디코딩된 원형' 으로 되돌린다.
+ *
+ * ⚠️ 이게 없으면 키워드 페이지가 **한 장도** 안 뜬다.
+ * Next App Router 의 `params.slug` 는 URL 세그먼트를 **인코딩된 채로** 준다.
+ * 거기에 encodeURIComponent 를 한 번 더 걸면 '%' 가 '%25' 가 되어
+ * 백엔드에는 이런 게 도착한다:
+ *
+ *   GET /api/seo/keyword/%25EB%25B8%2594%25EB%25A1%259C%25EA%25B7%25B8...  → 404
+ *
+ * 백엔드가 404 를 주면 fetchKeywordPage 는 null 을 돌려주고, 페이지는
+ * generateMetadata 에서 noindex 를 단 '키워드를 찾을 수 없습니다' 가 된다.
+ * 즉 **사이트맵에 올린 URL 전부가 색인 거부 껍데기**였다(2026-09-24 실측:
+ * 발행 342개 전수, 오래된 '블로그지수' 까지 포함).
+ *
+ * 슬러그가 이미 디코딩돼 있으면 decodeURIComponent 는 그대로 돌려준다.
+ * 키워드에 진짜 '%' 가 들어 있어 디코딩이 실패하는 경우만 원본을 쓴다.
+ */
+function decodeSlug(slug: string): string {
+  try {
+    return decodeURIComponent(slug)
+  } catch {
+    return slug
+  }
+}
+
 /** 페이지 데이터. 없으면 null — 호출부가 notFound() 를 내야 한다. */
 export const fetchKeywordPage = cache(async (slug: string): Promise<KeywordPage | null> => {
     const res = await fetchResilient(
-      `${API_BASE}/api/seo/keyword/${encodeURIComponent(slug)}?e=${DATA_EPOCH}`,
+      `${API_BASE}/api/seo/keyword/${encodeURIComponent(decodeSlug(slug))}?e=${DATA_EPOCH}`,
       { ...withTimeout(), next: { revalidate: KEYWORD_PAGE_REVALIDATE } }
     )
     if (res.status === 404) return null
