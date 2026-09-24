@@ -305,6 +305,17 @@ DOMAIN_TOKENS_AD = (
     "플레이스광고", "쇼핑검색광고", "광고대행", "광고단가", "광고비용",
     "구글애즈", "애드워즈", "확장소재", "제외키워드", "광고그룹",
     "품질지수", "roas", "입찰가", "광고관리시스템",
+    # 이 축의 머리어. '네이버' + '광고' 가 붙은 형태만 인정한다 —
+    # 맨 '광고' 는 넣지 않는다(AD_EXCLUDE 참고).
+    "네이버광고",
+)
+
+# 블로그 플랫폼축. 티스토리는 DOMAIN_TOKENS_STRONG 에 이미 있는데 나머지가
+# 빠져 있어 '워드프레스'·'애드센스' 가 off_domain 으로 죽어 있었다.
+# 우리 독자는 네이버 블로그 운영자지만, 플랫폼 비교는 그 사람들이 실제로
+# 검색하는 주제다(티스토리 월 65,200).
+DOMAIN_TOKENS_PLATFORM = (
+    "워드프레스", "블로그스팟", "애드센스", "에드센스", "브런치스토리",
 )
 
 # 광고를 '없애려는' 검색어. 광고축 토큰이 있어도 이쪽이면 뺀다.
@@ -372,6 +383,9 @@ def in_domain(keyword: str) -> bool:
         return True
     # ①-b 광고축 — 파워링크·검색광고를 집행하려는 사람
     if any(t.lower() in k for t in DOMAIN_TOKENS_AD):
+        return True
+    # ①-c 플랫폼축 — 티스토리·워드프레스 등 블로그 플랫폼 비교
+    if any(t.lower() in k for t in DOMAIN_TOKENS_PLATFORM):
         return True
     # 약한 토큰은 2개 이상 겹쳐야 인정 ('네이버 키워드 검색' 은 통과, '이미지검색' 은 탈락)
     if sum(1 for t in DOMAIN_TOKENS_WEAK if t.lower() in k) >= 2:
