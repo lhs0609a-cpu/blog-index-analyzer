@@ -2865,7 +2865,9 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
             resp = await client.get(rss_url, headers=headers, timeout=5.0)
 
             if resp.status_code == 200 and '<item>' in resp.text:
-                soup = BeautifulSoup(resp.text, 'xml')
+                # analyze_post 와 같은 이유로 생성만 스레드로 (2026-09-25).
+                # analyze_blog 도 키워드 하나당 상위 10개 블로그에 대해 불린다.
+                soup = await asyncio.to_thread(BeautifulSoup, resp.text, 'xml')
                 items = soup.find_all('item')
 
                 # RSS channel에서 블로그명 추출
