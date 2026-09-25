@@ -58,6 +58,24 @@ def _vitality_from_gap(days_idle: Optional[int]) -> float:
     return 0.15
 
 
+def _parse_rss_dates(xml_text: str) -> list:
+    """RSS 본문에서 발행일만 뽑는다. **동기 함수다 — 스레드에서 부른다.**
+
+    분리해 둔 이유는 하나뿐이다: BeautifulSoup 이 CPU 를 쓰므로 이벤트루프
+    밖에서 돌려야 한다. 로직 자체는 예전과 동일하다.
+    """
+    soup = BeautifulSoup(xml_text, "xml")
+    dates = []
+    for it in soup.find_all("item"):
+        p = it.find("pubDate")
+        if p:
+            try:
+                dates.append(parsedate_to_datetime(p.get_text()))
+            except Exception:
+                pass
+    return dates
+
+
 async def _measure_blog_vitality(client: httpx.AsyncClient, blog_id: str) -> Dict:
     """경쟁 블로그 하나의 활동성을 RSS로 가볍게 측정."""
     out = {"blog_id": blog_id, "days_idle": None, "posts_90d": None, "vitality": 0.6}
@@ -69,16 +87,12 @@ async def _measure_blog_vitality(client: httpx.AsyncClient, blog_id: str) -> Dic
         )
         if resp.status_code != 200 or "<item>" not in resp.text:
             return out
-        soup = BeautifulSoup(resp.text, "xml")
+        # ⚠️ BeautifulSoup 파싱은 CPU 작업이다. 이벤트루프에서 돌리면 그동안
+        # /health 를 포함한 모든 요청이 막힌다. 키워드 하나당 이 함수가 10번
+        # 불리므로 영향이 크다 — 측정 동시성을 3으로 올렸을 때 /health 가
+        # 30초 타임아웃까지 갔다(2026-09-25 실측). 스레드로 내보낸다.
+        dates = await asyncio.to_thread(_parse_rss_dates, resp.text)
         now = datetime.now(timezone.utc)
-        dates = []
-        for it in soup.find_all("item"):
-            p = it.find("pubDate")
-            if p:
-                try:
-                    dates.append(parsedate_to_datetime(p.get_text()))
-                except Exception:
-                    pass
         if not dates:
             return out
         dates.sort(reverse=True)

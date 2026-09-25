@@ -1969,7 +1969,13 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
 
             if resp.status_code == 200:
                 html = resp.text
-                soup = BeautifulSoup(html, 'html.parser')
+                # ⚠️ 파서 생성이 이 경로에서 가장 무거운 CPU 작업이다. 이벤트루프에서
+                # 돌리면 그동안 /health 를 포함한 모든 요청이 막힌다 — SEO 측정 동시성을
+                # 3으로 올렸을 때 /health 가 30초 타임아웃까지 갔다(2026-09-25 실측).
+                # 이 함수는 키워드 하나당 상위 10개 글에 대해 불린다.
+                # 뒤따르는 select_one 들은 이미 만들어진 트리를 훑는 것이라 훨씬 싸므로
+                # 생성만 스레드로 내보낸다(동작은 동일).
+                soup = await asyncio.to_thread(BeautifulSoup, html, 'html.parser')
 
                 # 모바일 버전 셀렉터들
                 # 제목 (JSON에서 이미 추출한 경우 스킵)
