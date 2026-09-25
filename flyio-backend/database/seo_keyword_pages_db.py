@@ -48,11 +48,27 @@ MIN_COMPETITORS_FOR_PUBLISH = 5
 
 # 이 검색량 미만이면 아예 측정하지 않는다(state='skipped').
 #
-# ⚠️ 처음엔 10 으로 잡았는데 실측에서 200개 중 9개(4%)만 걸러졌다. 자동완성이
-# 만든 '블로그종류' 같은 조합도 월 10~50 은 나와서 통과해버린 것이다. 월 30회짜리
-# 페이지는 만들어봐야 유입이 없고, 그런 게 수천 개면 scaled content abuse 로 보인다.
-# 100 으로 올려 실제로 수요가 있는 것만 남긴다.
-MIN_QUEUE_VOLUME = 100
+# 연혁:
+#   10  →  처음 값. 실측에서 200개 중 9개(4%)만 걸러졌다.
+#   100 →  자동완성이 만든 '블로그종류' 같은 조합도 월 10~50 은 나와 통과해버려서
+#          올렸다. 월 30회짜리 페이지는 유입이 없고, 그런 게 수천 개면
+#          scaled content abuse 로 보인다는 판단이었다.
+#   10  →  2026-09-25. 운영자 결정으로 되돌린다.
+#
+# ⚠️ 되돌린 이유와 남는 위험을 여기 적어둔다.
+# 100 기준으로는 수확이 12만에서 천장을 쳤다(103,882 → 109,724 → 118,114 →
+# 121,867 로 증가폭이 꺾임). 목표는 20만이고, 전수 프로브 기준 발견 키워드
+# 197,737개 중 검색량 100 이상은 102,150개 — **절반이 100 미만**이다.
+# 즉 20만은 이 게이트를 열어야만 닿는다.
+#
+# 대신 얇은 페이지가 **색인되는 것**은 다른 게이트가 막는다:
+#   MIN_COMPETITORS_FOR_PUBLISH — 1페이지 경쟁자를 5개 미만밖에 못 잰 키워드는
+#   측정은 해도 published=0 이라 사이트맵·RSS 에 나가지 않는다.
+# 검색량이 작아도 실제로 측정이 되는 키워드는 페이지로서 성립한다는 판단이다.
+#
+# 10 미만은 계속 막는다. 네이버가 '< 10' 으로 주는 값은 실수요가 아니라
+# 표시용 placeholder 라, 그걸 열면 후보가 조용히 두 배로 부풀어오른다.
+MIN_QUEUE_VOLUME = 10
 
 # 이 검색량 이상인 키워드에서만 연관 키워드로 큐를 확장한다.
 # 확장을 무제한 허용하면 측정 1건당 연관 28개가 들어와 큐가 영원히 안 줄고
@@ -606,19 +622,36 @@ def reclaim_in_domain_skipped() -> Dict[str, Any]:
 
 def reclassify_by_volume() -> int:
     """
-    MIN_QUEUE_VOLUME 을 올렸을 때 이미 통과 처리된 행을 다시 걸러낸다.
-    기준만 바꾸고 이걸 안 돌리면 예전 기준으로 통과한 저볼륨 키워드가
-    계속 측정 대상으로 남는다. 멱등이라 매번 호출해도 안전하다.
+    MIN_QUEUE_VOLUME 이 바뀌었을 때 큐를 현재 기준에 맞춘다. **양방향이다.**
+
+    올렸을 때: 예전 기준으로 통과한 저볼륨 키워드를 skipped 로 내린다.
+    내렸을 때: 저볼륨으로 걸러졌던 행을 pending 으로 되살린다.
+
+    ⚠️ 예전엔 내리는 방향만 있었다. 그래서 기준을 낮춰도 이미 걸러진 행은
+    영원히 죽어 있었다 — off_domain 쪽에서 똑같은 함정을 이미 한 번 밟았다
+    (reclaim_in_domain_skipped 주석 참고). 되살릴 때 off_domain 으로 걸러진
+    행은 건드리지 않는다. 그건 검색량이 아니라 도메인 판정 문제다.
+
+    멱등이라 매번 호출해도 안전하다.
     """
+    now = datetime.now(KST).isoformat()
     conn = _connect()
     try:
-        cur = conn.execute(
-            "UPDATE seo_keyword_queue SET state='skipped' "
+        demoted = conn.execute(
+            "UPDATE seo_keyword_queue SET state='skipped', last_error='low_volume' "
             "WHERE state='pending' AND volume_checked_at IS NOT NULL AND search_volume < ?",
             (MIN_QUEUE_VOLUME,),
-        )
+        ).rowcount
+        revived = conn.execute(
+            "UPDATE seo_keyword_queue SET state='pending', last_error=NULL, attempts=0, updated_at=? "
+            "WHERE state='skipped' AND COALESCE(last_error,'') != 'off_domain' "
+            "  AND volume_checked_at IS NOT NULL AND search_volume >= ?",
+            (now, MIN_QUEUE_VOLUME),
+        ).rowcount
         conn.commit()
-        return cur.rowcount
+        if revived:
+            logger.info(f"[seo_pages_db] 기준 하향으로 {revived}행 되살림 (MIN={MIN_QUEUE_VOLUME})")
+        return demoted
     finally:
         conn.close()
 
