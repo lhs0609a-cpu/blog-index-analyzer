@@ -15,11 +15,29 @@ SERP 파싱은 1 CPU 머신에서 이벤트루프를 굶긴다. winner_keywords 
 """
 import asyncio
 import logging
+import os
+import time
 from typing import Any, Dict, List, Optional
 
 from database import seo_keyword_pages_db as seo_db
 
 logger = logging.getLogger(__name__)
+
+# 한 배치 안에서 동시에 측정할 키워드 수.
+#
+# 왜 올릴 수 있나: 키워드당 155초의 대부분이 **네트워크 대기**다
+# (네이버 SERP 요청 + 상위 10개 글 요청). 순차로 돌면 그 대기 시간에
+# CPU 가 논다. 머신은 shared-cpu-2x 다 — 코드 곳곳의 '1 CPU' 주석은 낡았다.
+#
+# ⚠️ 그래도 무한정 올리면 안 된다. 두 가지가 막는다:
+#   ① 파싱은 이벤트루프에서 돈다. 동시 수를 올리면 파싱이 겹쳐 /health 가 밀린다
+#      (winner_keywords 가 이 방식으로 서비스를 멈춘 전례).
+#   ② 네이버 스로틀링. 같은 IP 에서 동시 요청이 늘면 키워드당 시간이 오히려
+#      늘어난다 — enrich 직후 측정을 돌렸을 때 53초가 300초까지 늘어진 전례.
+#
+# 기본값 1 = 기존 동작 그대로. 배포만으로는 아무것도 안 바뀐다.
+# 올릴 때는 반드시 /health 응답시간과 per_keyword_s 를 같이 보고 판단한다.
+MEASURE_CONCURRENCY = max(1, int(os.environ.get("SEO_MEASURE_CONCURRENCY", "1")))
 
 # 키워드 하나를 재는 데 붙이는 상한. 이걸 넘기면 그 키워드는 건너뛴다 —
 # 한 키워드가 배치 전체를 잡아먹는 것을 막는다.
@@ -271,46 +289,70 @@ async def build_batch(limit: int = 10, expand: bool = True) -> Dict[str, Any]:
 
     ok = failed = enqueued = 0
     errors: List[str] = []
+    started = time.monotonic()
 
-    for item in items:
+    # 결과 반영(DB 쓰기)은 순차로 한다. SQLite 이고, 동시에 써서 얻을 게 없다.
+    async def _finish(item: Dict[str, Any], data: Optional[Dict[str, Any]]) -> int:
         kw = item["keyword"]
         depth = int(item.get("depth") or 0)
-        try:
-            data = await asyncio.wait_for(_measure_one(kw), timeout=PER_KEYWORD_TIMEOUT_S)
-            if not data:
-                raise RuntimeError("no data")
-            seo_db.upsert_page(data)
-            seo_db.mark_queue(kw, "done")
-            ok += 1
+        seo_db.upsert_page(data)
+        seo_db.mark_queue(kw, "done")
+        # 확장은 **수요가 큰 키워드에서만**. 무제한 확장하면 측정 1건당
+        # 연관 28개가 들어와 큐가 영원히 안 줄고(실측: 15분에 3개 측정하는
+        # 동안 큐 +77), 깊이가 깊어질수록 도메인 밖으로 새어 질이 떨어진다.
+        kw_vol = int(item.get("search_volume") or 0)
+        if expand and depth < MAX_DEPTH and kw_vol >= seo_db.EXPAND_MIN_VOLUME:
+            cand = [r["keyword"] for r in (data.get("related") or [])]
+            if cand:
+                return seo_db.enqueue_keywords(cand, source=f"related:{kw}", depth=depth + 1)
+        return 0
 
-            # 확장은 **수요가 큰 키워드에서만**. 무제한 확장하면 측정 1건당
-            # 연관 28개가 들어와 큐가 영원히 안 줄고(실측: 15분에 3개 측정하는
-            # 동안 큐 +77), 깊이가 깊어질수록 도메인 밖으로 새어 질이 떨어진다.
-            kw_vol = int(item.get("search_volume") or 0)
-            if expand and depth < MAX_DEPTH and kw_vol >= seo_db.EXPAND_MIN_VOLUME:
-                cand = [r["keyword"] for r in (data.get("related") or [])]
-                if cand:
-                    enqueued += seo_db.enqueue_keywords(
-                        cand, source=f"related:{kw}", depth=depth + 1
-                    )
-        except asyncio.TimeoutError:
+    sem = asyncio.Semaphore(MEASURE_CONCURRENCY)
+
+    async def _one(item: Dict[str, Any]):
+        kw = item["keyword"]
+        async with sem:
+            try:
+                data = await asyncio.wait_for(_measure_one(kw), timeout=PER_KEYWORD_TIMEOUT_S)
+                if not data:
+                    raise RuntimeError("no data")
+                return item, data, None
+            except asyncio.TimeoutError:
+                return item, None, f"timeout>{PER_KEYWORD_TIMEOUT_S}s"
+            except Exception as e:
+                return item, None, str(e)[:120]
+            finally:
+                # 이벤트루프 양보 — 이게 없으면 배치 도는 동안 서비스가 멈춘다.
+                # 동시 실행에서도 각 태스크가 끝날 때마다 틈을 준다.
+                await asyncio.sleep(YIELD_BETWEEN_S)
+
+    results = await asyncio.gather(*[_one(it) for it in items])
+
+    for item, data, err in results:
+        kw = item["keyword"]
+        if err is not None:
             failed += 1
-            errors.append(f"{kw}: timeout>{PER_KEYWORD_TIMEOUT_S}s")
-            seo_db.mark_queue(kw, "pending", "timeout")
+            errors.append(f"{kw}: {err}")
+            seo_db.mark_queue(kw, "pending", err)
+            continue
+        try:
+            enqueued += await _finish(item, data)
+            ok += 1
         except Exception as e:
             failed += 1
-            errors.append(f"{kw}: {str(e)[:120]}")
+            errors.append(f"{kw}: save {str(e)[:100]}")
             seo_db.mark_queue(kw, "pending", str(e))
 
-        # 이벤트루프 양보 — 이게 없으면 배치 도는 동안 서비스가 멈춘다
-        await asyncio.sleep(YIELD_BETWEEN_S)
-
+    elapsed = round(time.monotonic() - started, 1)
     return {
         "taken": len(items),
         "ok": ok,
         "failed": failed,
         "enqueued": enqueued,
         "enriched": enriched,
+        "elapsed_s": elapsed,
+        "per_keyword_s": round(elapsed / max(1, len(items)), 1),
+        "concurrency": MEASURE_CONCURRENCY,
         "errors": errors[:10],
         "stats": seo_db.stats(),
     }
