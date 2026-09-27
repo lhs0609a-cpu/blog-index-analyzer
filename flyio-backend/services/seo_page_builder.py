@@ -46,6 +46,10 @@ MEASURE_LOOP_BATCH = max(1, int(os.environ.get("SEO_MEASURE_LOOP_BATCH", "5")))
 MEASURE_LOOP_REST_S = max(10, int(os.environ.get("SEO_MEASURE_LOOP_REST", "120")))
 MEASURE_LOOP_EMPTY_REST_S = max(60, int(os.environ.get("SEO_MEASURE_LOOP_EMPTY_REST", "900")))
 MEASURE_LOOP_WARMUP_S = max(5, int(os.environ.get("SEO_MEASURE_LOOP_WARMUP", "90")))
+# 배치 전체 상한. 키워드별 300초 × 배치수보다 넉넉히 잡되, 묶여도 이 시간 뒤엔 푼다.
+MEASURE_LOOP_BATCH_TIMEOUT_S = max(
+    300, int(os.environ.get("SEO_MEASURE_LOOP_BATCH_TIMEOUT", str(MEASURE_LOOP_BATCH * 330)))
+)
 
 # 키워드 하나를 재는 데 붙이는 상한. 이걸 넘기면 그 키워드는 건너뛴다 —
 # 한 키워드가 배치 전체를 잡아먹는 것을 막는다.
@@ -294,7 +298,16 @@ async def seo_measure_loop() -> None:
             if _measure_loop_paused():
                 await asyncio.sleep(MEASURE_LOOP_REST_S)
                 continue
-            res = await build_batch(limit=MEASURE_LOOP_BATCH, expand=False)
+            # ⚠️ 배치 전체에 상한을 건다. 키워드별 타임아웃(300초)만으로는 부족했다 —
+            # 실측(2026-09-27)에서 배치 5개가 40분 넘게 'running' 에 묶여 루프가
+            # 통째로 멈췄다. 원인은 머신이 네이버에 못 닿는 것(ConnectTimeout)과
+            # 다른 스케줄러(키워드풀 BFS·시드 제안)와의 경합이 겹친 것이다.
+            # 그 상황에서도 루프는 살아 있어야 한다 — 다음 배치의 requeue_stuck 이
+            # 묶인 행을 되돌려준다.
+            res = await asyncio.wait_for(
+                build_batch(limit=MEASURE_LOOP_BATCH, expand=False),
+                timeout=MEASURE_LOOP_BATCH_TIMEOUT_S,
+            )
             taken = res.get("taken", 0)
             if taken == 0:
                 # 큐가 비었거나 검색량 미확인뿐이다. 길게 쉰다.
@@ -304,6 +317,9 @@ async def seo_measure_loop() -> None:
                 f"[seo] 자체 배치: ok={res.get('ok')} fail={res.get('failed')} "
                 f"{res.get('per_keyword_s')}s/키워드"
             )
+        except asyncio.TimeoutError:
+            # 묶인 행은 다음 배치의 requeue_stuck 이 되돌린다. 루프는 계속 산다.
+            logger.warning(f"[seo] 배치가 {MEASURE_LOOP_BATCH_TIMEOUT_S}초를 넘겨 건너뛴다")
         except Exception as e:
             logger.exception(f"[seo] 자체 측정 루프 오류: {e}")
         # 네이버 쪽 부하를 낮추기 위한 휴식. 이 값을 줄이면 빨라지지만
