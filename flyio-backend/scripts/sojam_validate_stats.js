@@ -1,0 +1,8 @@
+const fs=require('fs'),path=require('path');const OUT=path.resolve(__dirname,'../../reports/sojam-20260909');
+(async()=>{
+ if(process.argv.includes('--profile')){const all={};for(const p of ['/keyword-pool/domain-profile','/settings']){const r=await fetch('https://blog-index-analyzer.fly.dev/api/naver-ad'+p+'?user_id=1&customer_id=1858907');if(!r.ok)throw Error('profile '+r.status);all[p]=await r.json();}fs.writeFileSync(path.join(OUT,'plan/automation_profile.json'),JSON.stringify(all));console.log(JSON.stringify(all));return;}
+ const cs=JSON.parse(fs.readFileSync(path.join(OUT,'full/sojam-full-20260909/campaigns.json'))),out=[];const enc=x=>encodeURIComponent(JSON.stringify(x));
+ for(let i=0;i<cs.length;i+=50){const p='/stats?ids='+encodeURIComponent(cs.slice(i,i+50).map(c=>c.nccCampaignId).join(','))+'&fields='+enc(['impCnt','clkCnt','salesAmt'])+'&timeRange='+enc({since:'2026-09-01',until:'2026-09-08'});
+ const r=await fetch('https://blog-index-analyzer.fly.dev/api/naver-ad/keyword-pool/debug/naver-raw?user_id=1&customer_id=1858907',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({customer_id:'1858907',method:'GET',path:p,body:null}),signal:AbortSignal.timeout(30000)});const d=await r.json();if(!d.success)throw Error('stats rejected');out.push(d.response);}
+ fs.writeFileSync(path.join(OUT,'plan/campaign_stats_check.json'),JSON.stringify(out));const total={impCnt:0,clkCnt:0,salesAmt:0};for(const x of out)for(const r of x.data||[])for(const k in total)total[k]+=r[k]||0;console.log(total);
+})().catch(e=>{console.error(e.message);process.exitCode=1});

@@ -1,0 +1,20 @@
+const fs=require('fs'),path=require('path'),P=n=>path.join(__dirname,n);
+const st=JSON.parse(fs.readFileSync(P('_sojam_f0901_research.json'),'utf8'));
+const inv=JSON.parse(fs.readFileSync(P('_sojam_e0831_live.json'),'utf8'));
+const have=new Set(inv.map(r=>r.kw));
+const won=n=>Math.round(n||0).toLocaleString('ko-KR');
+const AREA=/고환|음낭|음경|귀두|(?<![만여남악양급독다])성기|사타구니|서혜|회음|항문|외음|음부|유두|유륜|겨드랑이|엉덩이|팬티라인|비키니라인|허벅지안쪽|배꼽|고간|불두덩|가랑이/;
+const SKIN=/습진|가려움|간지러움|소양|따가|화끈|쓰라|진물|각질|물집|수포|발진|홍반|염증|피부염|건선|태선|백선|완선|무좀|칸디다|곰팡이|모낭염|한선염|종기|뾰루지|여드름|좁쌀|알갱이|돌기|사마귀|곤지름|포진|헤르페스|착색|색소침착|백반|짓무름|트러블|갈라짐|껍질|각화|냄새|땀|다한|축축|딱지|멍울|혹|낭종|피지|간찰|기저귀|땀띠|두드러기|아토피|건조|가렵|따갑|피부/;
+// 부위명이 없어도 은밀부위 질환인 것
+const COND=/완선|간찰진|화농성한선염|한선염|모소낭|모소동|경화성태선|진주양음경구진|음부백선|서혜부백선|고간습진|샅백선|음선|낭습|가랑이습진|비키니라인|사타구니백선|음부소양증|외음부소양증|항문소양증|귀두염|귀두포피염|포피염|칸디다증|칸디다감염|사면발이|음슬|옴진드기/;
+const OUT=/치질|치핵|치루|치열|직장암|대장암|용종|내시경|탈장|정관|포경수술|음경확대|확대술|필러|보형물|성형|왁싱|제모|청결제|세정제|비누|바디워시|물티슈|팬티|속옷|드로즈|라이너|생리대|탐폰|면도|쉐이빙|비데|좌욕|의자|쿠션|방석|패드|패치|억제제|윤활제|영양제|유산균|보험|병원비|수술비|실비|보건소|검사키트|자가진단|성병검사|임질|매독|클라미디아|에이즈|HIV|피임|임신테스트|정력|발기|조루|불임|정자|전립선|요실금|방광|요도염|신장|결석|생리통|생리불순|난소|자궁|착상|배란|질건조|보톡스|수술|시술|레이저|크림추천|연고추천|제품|추천템|가격비교|후기블로그/;
+const all=Object.entries(st.kw).map(([k,v])=>({kw:k,pc:v.pc,mo:v.mo,tot:v.pc+v.mo,comp:v.comp}));
+const rows=all.filter(r=>((AREA.test(r.kw)&&SKIN.test(r.kw))||COND.test(r.kw))&&!OUT.test(r.kw)&&r.tot>=30);
+const neu=rows.filter(r=>!have.has(r.kw)).sort((a,b)=>b.tot-a.tot);
+const old=rows.filter(r=>have.has(r.kw));
+console.log(`필터 통과 ${won(rows.length)}개 (월 30회 이상) — 보유 ${won(old.length)} · 신규 ${won(neu.length)}`);
+console.log(`신규 검색량 합 ${won(neu.reduce((s,r)=>s+r.tot,0))}회/월\n`);
+console.log('=== 신규 발굴 전체 ===');
+console.log('  키워드                          월검색량   PC    모바일  경쟁도');
+neu.forEach(r=>console.log(`  ${r.kw.slice(0,28).padEnd(30)}${won(r.tot).padStart(7)}${won(r.pc).padStart(7)}${won(r.mo).padStart(8)}  ${r.comp}`));
+fs.writeFileSync(P('_sojam_f0901_new_kw.json'),JSON.stringify(neu,null,1));
