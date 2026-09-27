@@ -30,6 +30,10 @@ python -c "from database.learning_db import init_learning_tables; init_learning_
 # (같은 job 을 둘이 claim 하면 안 된다).
 export KWV_DEDICATED=1
 export POST_WATCH_DEDICATED=1
+# SEO 측정도 같은 이유로 전담 프로세스에 맡긴다 — 자세한 근거는 seo_measure_worker.py 상단.
+# 요약: 스케줄러 프로세스 안에서는 측정이 **한 건도 완료되지 않았다**(키워드 풀 크론이
+# 이벤트루프를 점유). 같은 코드를 별도 프로세스에서 돌리면 220초에 끝난다.
+export SEO_LOOP_DEDICATED=1
 
 echo "Starting post-watch worker process (nice 5)..."
 ROLE=postwatch nice -n 5 python post_watch_worker.py &
@@ -40,6 +44,13 @@ ROLE=verdict nice -n 5 python verdict_worker.py &
 VERDICT_PID=$!
 echo "Keyword-verdict worker started (PID=$VERDICT_PID)"
 
+# nice 10 — API(0)·판정(5) 뒤, 키워드 풀 크론(19) 앞. 측정은 사용자가 기다리는
+# 작업이 아니지만, 크론에 밀려 굶으면 안 된다(그게 지금까지의 상태였다).
+echo "Starting SEO measure worker process (nice 10)..."
+ROLE=seo nice -n 10 python seo_measure_worker.py &
+SEO_PID=$!
+echo "SEO measure worker started (PID=$SEO_PID)"
+
 echo "Starting scheduler worker process (internal :8001, nice 19)..."
 SCHEDULERS_DISABLED=0 ROLE=worker nice -n 19 uvicorn main:app \
   --host 127.0.0.1 --port 8001 --log-level warning &
@@ -47,7 +58,7 @@ WORKER_PID=$!
 echo "Scheduler worker started (PID=$WORKER_PID)"
 
 # API(PID 1) 종료 시 worker 들도 함께 정리.
-trap 'kill "$WORKER_PID" "$VERDICT_PID" "$POST_WATCH_PID" 2>/dev/null || true' EXIT
+trap 'kill "$WORKER_PID" "$VERDICT_PID" "$POST_WATCH_PID" "$SEO_PID" 2>/dev/null || true' EXIT
 
 # API 프로세스 (public) — 스케줄러 OFF. PID 1 (fly SIGTERM 수신).
 exec env SCHEDULERS_DISABLED=1 ROLE=app uvicorn main:app \

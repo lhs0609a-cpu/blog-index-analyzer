@@ -339,7 +339,9 @@ async def lifespan(app: FastAPI):
         try:
             from services.seo_page_builder import MEASURE_LOOP_ENABLED, seo_measure_loop
 
-            if MEASURE_LOOP_ENABLED:
+            # SEO_LOOP_DEDICATED=1 이면 전용 프로세스(seo_measure_worker.py)가 맡는다.
+            # 여기서 또 띄우면 같은 큐를 둘이 claim 한다 — KWV_DEDICATED 와 같은 규약.
+            if MEASURE_LOOP_ENABLED and os.getenv("SEO_LOOP_DEDICATED") != "1":
                 asyncio.create_task(seo_measure_loop())
                 logger.info("✅ SEO 자체 측정 루프 started")
         except Exception as e:
