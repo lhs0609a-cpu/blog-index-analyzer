@@ -333,6 +333,18 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"⚠️ Ceiling backtest resume failed: {e}")
 
+        # SEO 측정 자체 루프 — GitHub 크론이 매시로 설정돼 있는데 실제로는
+        # 3~6시간 간격으로만 뜬다(2026-09-27 실측). 그래서 큐에 26만 개를 쌓고도
+        # 발행이 하루 17~85개였다. 기본은 꺼져 있고 SEO_MEASURE_LOOP=1 로 켠다.
+        try:
+            from services.seo_page_builder import MEASURE_LOOP_ENABLED, seo_measure_loop
+
+            if MEASURE_LOOP_ENABLED:
+                asyncio.create_task(seo_measure_loop())
+                logger.info("✅ SEO 자체 측정 루프 started")
+        except Exception as e:
+            logger.warning(f"⚠️ SEO 측정 루프 기동 실패: {e}")
+
         # seed-explode 큐 워치독 — app 이 남긴 실행요청을 worker 가 집어 실행한다.
         # HTTP 오프로드는 8s ReadTimeout 으로 신뢰 불가라 이게 유일한 실행 트리거다.
         try:

@@ -39,6 +39,14 @@ logger = logging.getLogger(__name__)
 # 올릴 때는 반드시 /health 응답시간과 per_keyword_s 를 같이 보고 판단한다.
 MEASURE_CONCURRENCY = max(1, int(os.environ.get("SEO_MEASURE_CONCURRENCY", "1")))
 
+# 자체 측정 루프 설정. 전부 환경변수로 바꿀 수 있게 둔다 — 네이버 쪽 반응을
+# 보면서 조정할 값이지, 코드에 박아둘 값이 아니다.
+MEASURE_LOOP_ENABLED = os.environ.get("SEO_MEASURE_LOOP", "0") == "1"
+MEASURE_LOOP_BATCH = max(1, int(os.environ.get("SEO_MEASURE_LOOP_BATCH", "5")))
+MEASURE_LOOP_REST_S = max(10, int(os.environ.get("SEO_MEASURE_LOOP_REST", "120")))
+MEASURE_LOOP_EMPTY_REST_S = max(60, int(os.environ.get("SEO_MEASURE_LOOP_EMPTY_REST", "900")))
+MEASURE_LOOP_WARMUP_S = max(5, int(os.environ.get("SEO_MEASURE_LOOP_WARMUP", "90")))
+
 # 키워드 하나를 재는 데 붙이는 상한. 이걸 넘기면 그 키워드는 건너뛴다 —
 # 한 키워드가 배치 전체를 잡아먹는 것을 막는다.
 #
@@ -254,6 +262,58 @@ async def enrich_volumes(limit: int = 200) -> Dict[str, Any]:
         "errors": errors[:5],
         "stats": seo_db.stats(),
     }
+
+
+async def seo_measure_loop() -> None:
+    """
+    측정을 머신에서 **스스로** 돈다. GitHub 크론을 기다리지 않는다.
+
+    왜 필요한가 (2026-09-27 실측):
+    크론은 매시(`17 * * * *`)로 설정돼 있는데 GitHub Actions 가 실제로는
+    3~6시간 간격으로만 띄운다(01:30 → 22:54 → 19:55 → 17:13 → 13:09).
+    일부는 실패한다. 그래서 실제 발행이 하루 **17~85개**였다 — 설정값(360개)의
+    5분의 1이다. 큐에 266,297개를 쌓아놨는데 그게 나가질 못하고 있었다.
+
+    스케줄러를 밖에 두는 것 자체가 문제였다. 안에서 돌면
+      - 간격이 보장되고
+      - 배치가 끝나는 즉시 다음 배치가 시작되며
+      - 워크플로 타임아웃과 무관해진다.
+
+    ⚠️ 그래도 쉬지 않고 돌리면 안 된다. 네이버가 느려진다 — 순차 실행인데도
+    연속 측정하면 키워드당 67초 → 152 → 190 → 194초로 늘어났고, 5분을 쉬어도
+    회복되지 않았다(220초). 우리 CPU 나 동시성 문제가 아니라 상대 쪽 제한이다.
+    그래서 배치 사이에 반드시 쉰다. 그 간격이 이 루프의 핵심 손잡이다.
+    """
+    # 부팅 직후엔 다른 워치독들이 먼저 자리잡게 둔다.
+    await asyncio.sleep(MEASURE_LOOP_WARMUP_S)
+    logger.info(
+        f"[seo] 자체 측정 루프 시작 (배치 {MEASURE_LOOP_BATCH}개 / 간격 {MEASURE_LOOP_REST_S}초)"
+    )
+    while True:
+        try:
+            if _measure_loop_paused():
+                await asyncio.sleep(MEASURE_LOOP_REST_S)
+                continue
+            res = await build_batch(limit=MEASURE_LOOP_BATCH, expand=False)
+            taken = res.get("taken", 0)
+            if taken == 0:
+                # 큐가 비었거나 검색량 미확인뿐이다. 길게 쉰다.
+                await asyncio.sleep(MEASURE_LOOP_EMPTY_REST_S)
+                continue
+            logger.info(
+                f"[seo] 자체 배치: ok={res.get('ok')} fail={res.get('failed')} "
+                f"{res.get('per_keyword_s')}s/키워드"
+            )
+        except Exception as e:
+            logger.exception(f"[seo] 자체 측정 루프 오류: {e}")
+        # 네이버 쪽 부하를 낮추기 위한 휴식. 이 값을 줄이면 빨라지지만
+        # 키워드당 시간이 늘어 순이득이 사라진다 — 반드시 실측하고 조정한다.
+        await asyncio.sleep(MEASURE_LOOP_REST_S)
+
+
+def _measure_loop_paused() -> bool:
+    """운영 중 껐다 켤 수 있게 파일 하나로 제어한다(재배포 없이)."""
+    return os.path.exists(os.path.join(os.environ.get("DATA_DIR", "/data"), "_seo_loop_off"))
 
 
 async def build_batch(limit: int = 10, expand: bool = True) -> Dict[str, Any]:
