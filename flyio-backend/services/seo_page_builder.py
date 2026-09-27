@@ -290,8 +290,15 @@ async def seo_measure_loop() -> None:
     """
     # 부팅 직후엔 다른 워치독들이 먼저 자리잡게 둔다.
     await asyncio.sleep(MEASURE_LOOP_WARMUP_S)
+
+    lock = _acquire_loop_lock()
+    if lock is None:
+        logger.info("[seo] 측정 루프: 다른 프로세스가 이미 잡고 있어 이 프로세스는 쉰다")
+        return
+
     logger.info(
-        f"[seo] 자체 측정 루프 시작 (배치 {MEASURE_LOOP_BATCH}개 / 간격 {MEASURE_LOOP_REST_S}초)"
+        f"[seo] 자체 측정 루프 시작 pid={os.getpid()} "
+        f"(배치 {MEASURE_LOOP_BATCH}개 / 간격 {MEASURE_LOOP_REST_S}초)"
     )
     while True:
         try:
@@ -330,6 +337,31 @@ async def seo_measure_loop() -> None:
 def _measure_loop_paused() -> bool:
     """운영 중 껐다 켤 수 있게 파일 하나로 제어한다(재배포 없이)."""
     return os.path.exists(os.path.join(os.environ.get("DATA_DIR", "/data"), "_seo_loop_off"))
+
+
+def _acquire_loop_lock():
+    """
+    루프를 **한 프로세스에서만** 돌린다. 못 잡으면 None.
+
+    ⚠️ 이 머신은 uvicorn 을 2개 띄운다(8000 API / 8001 worker). 그리고
+    RUN_SCHEDULERS 가 두 프로세스 모두에서 참이라, 루프를 그냥 create_task 하면
+    **양쪽에서 동시에 돈다**(2026-09-27 실측 — 그래서 같은 SQLite 큐를 두고
+    경합하고 배치가 40분씩 묶였다).
+
+    파일락(flock)으로 막는다. 프로세스가 죽으면 OS 가 락을 자동 해제하므로
+    좀비 락이 남지 않는다 — PID 파일 방식보다 안전하다.
+    """
+    try:
+        import fcntl
+
+        path = os.path.join(os.environ.get("DATA_DIR", "/data"), "_seo_loop.lock")
+        fh = open(path, "w")
+        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fh.write(str(os.getpid()))
+        fh.flush()
+        return fh  # 열어 둔 채로 유지해야 락이 살아 있다
+    except Exception:
+        return None
 
 
 async def build_batch(limit: int = 10, expand: bool = True) -> Dict[str, Any]:
