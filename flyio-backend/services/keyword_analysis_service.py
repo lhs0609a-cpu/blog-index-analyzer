@@ -3,6 +3,7 @@
 """
 import re
 import asyncio
+import os as _os
 import logging
 from typing import List, Dict, Any, Optional, Tuple
 from collections import defaultdict
@@ -24,6 +25,11 @@ from database.keyword_analysis_db import (
 from config import settings
 
 logger = logging.getLogger(__name__)
+
+
+# 경쟁도 분석(상위 10개 블로그 실측) 상한(초).
+# main.py 요청 데드라인(180s)보다 짧게 잡아, 못 재면 504 대신 '측정 실패'로 응답한다.
+COMPETITION_BUDGET_S = float(_os.getenv("COMPETITION_BUDGET_S", "90"))
 
 
 class KeywordClassifier:
@@ -476,7 +482,15 @@ class KeywordAnalysisService:
         from routers.blogs import search_keyword_with_tabs
 
         try:
-            search_result = await search_keyword_with_tabs(keyword, limit=10, analyze_content=True)
+            # ⚠️ 이 한 줄이 상위 10개 블로그를 전부 분석한다(각각 RSS+스크래핑).
+            # 네이버가 느려지면 끝나지 않는다 — 2026-10-01 실측에서 이 경로를 쓰는
+            # /keyword-analysis/{kw}/competition 은 유휴 상태에서도 280초 안에 응답한
+            # 적이 없었다. 상한을 걸고, 넘기면 '경쟁도 측정 실패'로 내려간다
+            # (아래 except 가 받아 unmeasured 기본값을 돌려준다).
+            search_result = await asyncio.wait_for(
+                search_keyword_with_tabs(keyword, limit=10, analyze_content=True),
+                timeout=COMPETITION_BUDGET_S,
+            )
 
             # 학습 샘플 적재 (선택). 이미 뽑아온 결과를 그대로 쓰므로
             # 네트워크 비용이 0 이다. SEO 키워드 페이지 크론이 2시간마다

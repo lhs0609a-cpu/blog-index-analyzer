@@ -3,7 +3,7 @@
 """
 from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends, UploadFile, File, Form
 from pydantic import BaseModel, Field
-from routers.auth_deps import get_user_id_with_fallback
+from routers.auth_deps import get_user_id_with_fallback, get_current_user_optional
 from routers.admin import require_admin
 from typing import Optional, List, Dict, Any, Tuple, Set, Union
 from datetime import datetime, timedelta
@@ -139,6 +139,52 @@ class BulkKeywordWithBidRequest(BaseModel):
 
 # ============ 대시보드 ============
 
+def require_connected_ad_account(
+    user_id: int = Depends(get_user_id_with_fallback),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+) -> int:
+    """광고 계정을 연동한 사용자(또는 관리자)만 통과시킨다.
+
+    왜 필요한가: 이 라우터의 상당수가 `get_optimizer()` 를 쓰는데, 그 옵티마이저는
+    **서버 환경변수의 운영 계정**(settings.NAVER_AD_*)으로 만들어진다. user_id 를
+    인자로 받아도 쓰지 않으므로, 연동한 적 없는 아무 회원이나 운영 계정을 읽고
+    (POST 라우트의 경우) **쓸 수 있었다**.
+
+    관리자는 통과시킨다 — 운영자의 기존 스크립트·도구가 env 자격증명으로 도는 것을
+    깨뜨리지 않기 위해서다. 일반 사용자는 자기 계정을 연동해야만 쓴다.
+    """
+    if current_user and current_user.get("is_admin"):
+        return user_id
+    account = _resolve_account(user_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    return user_id
+
+
+def _account_client(user_id: int, customer_id: Optional[str] = None):
+    """연동된 광고 계정의 자격증명으로 만든 클라이언트.
+
+    ⚠️ `NaverAdApiClient()` 는 생성자에서 **서버 환경변수**(settings.NAVER_AD_*)를 읽는다.
+    그래서 user_id 를 받고도 그냥 `get_optimizer()` 를 쓰면, 광고 계정을 연동한 적 없는
+    사용자에게 **운영 계정(env 의 NAVER_AD_CUSTOMER_ID)** 데이터가 그대로 나간다.
+    2026-10-01 실측: 방금 가입한 무료 회원이 /campaigns 로 cid 3808925 의 캠페인명과
+    일예산 50,000원을 읽었다. account/status 는 같은 순간 "연동된 광고 계정이 없습니다"
+    였다 — 두 라우트가 서로 다른 출처를 봐서 누수가 눈에 안 띄었다.
+
+    연동 계정이 없으면 빈 결과가 아니라 **거부**한다. 이 백엔드는 광고주 여러 곳을
+    한 프로세스에서 돌리므로, 폴백은 곧 광고주 간 데이터 유출이다.
+    """
+    from services.naver_ad_service import NaverAdApiClient
+    account = _resolve_account(user_id, customer_id)
+    if not account or not account.get("is_connected"):
+        raise HTTPException(status_code=400, detail="광고 계정 미연결")
+    client = NaverAdApiClient()
+    client.customer_id = account.get("customer_id")
+    client.api_key = account.get("api_key")
+    client.secret_key = account.get("secret_key")
+    return client
+
+
 @router.get("/dashboard")
 async def get_dashboard(user_id: int = Depends(get_user_id_with_fallback)):
     """대시보드 통계 조회"""
@@ -154,7 +200,7 @@ async def get_dashboard(user_id: int = Depends(get_user_id_with_fallback)):
 
 
 @router.get("/dashboard/realtime")
-async def get_realtime_status(user_id: int = Depends(get_user_id_with_fallback)):
+async def get_realtime_status(user_id: int = Depends(require_connected_ad_account)):
     """실시간 최적화 상태"""
     try:
         optimizer = get_optimizer()
@@ -195,7 +241,7 @@ async def get_settings(user_id: int = Depends(get_user_id_with_fallback)):
 @router.post("/settings")
 async def update_settings(
     request: OptimizationSettingsRequest,
-    user_id: int = Depends(get_user_id_with_fallback)
+    user_id: int = Depends(require_connected_ad_account)
 ):
     """최적화 설정 저장"""
     try:
@@ -253,7 +299,7 @@ async def update_settings(
 @router.post("/optimization/start")
 async def start_optimization(
     background_tasks: BackgroundTasks,
-    user_id: int = Depends(get_user_id_with_fallback),
+    user_id: int = Depends(require_connected_ad_account),
     ad_group_ids: Optional[List[str]] = Query(None, description="광고그룹 ID 목록")
 ):
     """자동 최적화 시작"""
@@ -285,7 +331,7 @@ async def start_optimization(
 
 
 @router.post("/optimization/stop")
-async def stop_optimization(user_id: int = Depends(get_user_id_with_fallback)):
+async def stop_optimization(user_id: int = Depends(require_connected_ad_account)):
     """자동 최적화 중지"""
     try:
         optimizer = get_optimizer()
@@ -305,7 +351,7 @@ async def stop_optimization(user_id: int = Depends(get_user_id_with_fallback)):
 
 @router.post("/optimization/run-once")
 async def run_optimization_once(
-    user_id: int = Depends(get_user_id_with_fallback),
+    user_id: int = Depends(require_connected_ad_account),
     ad_group_ids: Optional[List[str]] = Query(None, description="광고그룹 ID 목록")
 ):
     """입찰 최적화 1회 실행"""
@@ -366,7 +412,7 @@ async def run_optimization_once(
 @router.post("/keywords/discover")
 async def discover_keywords(
     request: KeywordDiscoveryRequest,
-    user_id: int = Depends(get_user_id_with_fallback)
+    user_id: int = Depends(require_connected_ad_account)
 ):
     """연관 키워드 발굴"""
     try:
@@ -452,7 +498,7 @@ async def discover_keywords(
 @router.post("/keywords/discover-conversion")
 async def discover_conversion_keywords(
     request: KeywordDiscoveryRequest,
-    user_id: int = Depends(get_user_id_with_fallback)
+    user_id: int = Depends(require_connected_ad_account)
 ):
     """전환 키워드만 집중 발굴 (구매의도 높은 키워드)"""
     try:
@@ -550,7 +596,7 @@ async def get_discovered(
 @router.post("/keywords/bulk-add")
 async def bulk_add_keywords(
     request: BulkKeywordAddRequest,
-    user_id: int = Depends(get_user_id_with_fallback)
+    user_id: int = Depends(require_connected_ad_account)
 ):
     """키워드 대량 추가"""
     try:
@@ -589,7 +635,7 @@ async def bulk_add_keywords(
 @router.post("/keywords/bulk-add-with-bids")
 async def bulk_add_keywords_with_bids(
     request: BulkKeywordWithBidRequest,
-    user_id: int = Depends(get_user_id_with_fallback)
+    user_id: int = Depends(require_connected_ad_account)
 ):
     """키워드별 개별 입찰가로 대량 추가"""
     try:
@@ -1523,7 +1569,7 @@ async def upload_keywords_excel(
     ad_group_id: Optional[str] = Form(default=None),
     auto_register: bool = Form(default=False),
     force_default_bid: bool = Form(default=True, description="엑셀 입찰가 무시하고 default_bid 전체 적용"),
-    user_id: int = Depends(get_user_id_with_fallback),
+    user_id: int = Depends(require_connected_ad_account),
 ):
     """엑셀/CSV 업로드로 키워드+입찰가 파싱.
     - force_default_bid=true(기본): 엑셀 내용과 무관하게 default_bid를 모든 키워드에 일괄 적용
@@ -1628,7 +1674,7 @@ async def get_bids_summary(
 @router.post("/bids/update")
 async def update_bid_manual(
     request: ManualBidUpdateRequest,
-    user_id: int = Depends(get_user_id_with_fallback)
+    user_id: int = Depends(require_connected_ad_account)
 ):
     """수동 입찰가 변경"""
     try:
@@ -1667,7 +1713,7 @@ async def update_bid_manual(
 
 @router.post("/keywords/evaluate")
 async def evaluate_keywords(
-    user_id: int = Depends(get_user_id_with_fallback),
+    user_id: int = Depends(require_connected_ad_account),
     ad_group_ids: Optional[List[str]] = Query(None, description="광고그룹 ID 목록")
 ):
     """비효율 키워드 평가 및 제외"""
@@ -1730,7 +1776,7 @@ async def get_excluded_list(
 @router.post("/keywords/restore/{keyword_id}")
 async def restore_keyword(
     keyword_id: str,
-    user_id: int = Depends(get_user_id_with_fallback)
+    user_id: int = Depends(require_connected_ad_account)
 ):
     """제외된 키워드 복원"""
     try:
@@ -1826,57 +1872,80 @@ async def get_logs(
 # ============ 캠페인/광고그룹 조회 ============
 
 @router.get("/campaigns")
-async def get_campaigns(user_id: int = Depends(get_user_id_with_fallback)):
-    """캠페인 목록 조회"""
+async def get_campaigns(
+    user_id: int = Depends(get_user_id_with_fallback),
+    customer_id: Optional[str] = Query(None, description="광고주 customer_id (다중 광고주)"),
+):
+    """캠페인 목록 조회 — 연동된 본인 계정만."""
+    client = _account_client(user_id, customer_id)
     try:
-        optimizer = get_optimizer()
-        campaigns = await optimizer.api.get_campaigns()
+        campaigns = await client.get_campaigns()
         return {
             "success": True,
             "count": len(campaigns),
             "campaigns": campaigns
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Get campaigns error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        await client.close()
 
 
 @router.get("/adgroups")
 async def get_ad_groups(
     user_id: int = Depends(get_user_id_with_fallback),
-    campaign_id: Optional[str] = Query(None, description="캠페인 ID")
+    campaign_id: Optional[str] = Query(None, description="캠페인 ID"),
+    customer_id: Optional[str] = Query(None, description="광고주 customer_id (다중 광고주)"),
 ):
-    """광고그룹 목록 조회"""
+    """광고그룹 목록 조회 — 연동된 본인 계정만."""
+    client = _account_client(user_id, customer_id)
     try:
-        optimizer = get_optimizer()
-        ad_groups = await optimizer.api.get_ad_groups(campaign_id)
+        ad_groups = await client.get_ad_groups(campaign_id)
         return {
             "success": True,
             "count": len(ad_groups),
             "ad_groups": ad_groups
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Get ad groups error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        await client.close()
 
 
 @router.get("/keywords")
 async def get_keywords(
     user_id: int = Depends(get_user_id_with_fallback),
-    ad_group_id: Optional[str] = Query(None, description="광고그룹 ID")
+    ad_group_id: Optional[str] = Query(None, description="광고그룹 ID"),
+    customer_id: Optional[str] = Query(None, description="광고주 customer_id (다중 광고주)"),
 ):
-    """키워드 목록 조회"""
+    """키워드 목록 조회 — 연동된 본인 계정만.
+
+    ad_group_id 없이 부르면 네이버가 400 을 낸다(ids / nccLabelId / nccAdgroupId 중
+    하나는 필수). 500 으로 감싸 올리면 원인을 못 찾으므로 여기서 먼저 막는다.
+    """
+    if not ad_group_id:
+        raise HTTPException(status_code=400, detail="ad_group_id 가 필요합니다 (네이버 API 필수 조건)")
+    client = _account_client(user_id, customer_id)
     try:
-        optimizer = get_optimizer()
-        keywords = await optimizer.api.get_keywords(ad_group_id)
+        keywords = await client.get_keywords(ad_group_id)
         return {
             "success": True,
             "count": len(keywords),
             "keywords": keywords
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Get keywords error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        await client.close()
 
 
 # ============ 광고 계정 연동 ============
@@ -2048,7 +2117,7 @@ async def get_trending_keyword_recommendations(
 
 @router.post("/trending/refresh")
 async def refresh_trending_keywords(
-    user_id: int = Depends(get_user_id_with_fallback),
+    user_id: int = Depends(require_connected_ad_account),
     seed_keywords: List[str] = Query(default=[], description="시드 키워드")
 ):
     """트렌드 키워드 새로고침 - 네이버 광고 API에서 최신 키워드 가져오기"""
@@ -2120,7 +2189,7 @@ class AddTrendingKeywordRequest(BaseModel):
 @router.post("/trending/add-to-campaign")
 async def add_trending_to_campaign(
     req: AddTrendingKeywordRequest,
-    user_id: int = Depends(get_user_id_with_fallback),
+    user_id: int = Depends(require_connected_ad_account),
 ):
     """트렌드 키워드를 광고에 추가"""
     try:
@@ -6297,7 +6366,7 @@ async def keyword_pool_set_userlock_by_ids(
 async def keyword_pool_keyword_inspect(
     group_ids: str = Query(..., description="광고그룹 ID 쉼표구분 (최대 20)"),
     customer_id: Optional[str] = None,
-    user_id: int = Depends(get_user_id_with_fallback),
+    user_id: int = Depends(require_connected_ad_account),
 ):
     """광고그룹의 키워드 원본(bidAmt/useGroupBidAmt/userLock)을 그대로 조회 — 변경 검증용.
     기존 /api/naver-ad/keywords 는 get_optimizer() 의 전역 자격증명을 써서 광고주 계정에

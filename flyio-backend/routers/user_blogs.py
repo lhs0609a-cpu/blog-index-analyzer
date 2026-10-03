@@ -128,12 +128,12 @@ async def save_blog(
             blog_name=request.blog_name or f"{request.blog_id}의 블로그",
             blog_url=f"https://blog.naver.com/{request.blog_id}",
             avatar=request.avatar or '📝',
-            level=index.get("level", 0),
+            level=index.get("level") or 0,
             grade=index.get("grade", ""),
-            total_score=index.get("total_score", 0),
-            total_posts=stats.get("total_posts", 0),
-            total_visitors=stats.get("total_visitors", 0),
-            neighbor_count=stats.get("neighbor_count", 0),
+            total_score=index.get("total_score") or 0,
+            total_posts=stats.get("total_posts") or 0,
+            total_visitors=stats.get("total_visitors") or 0,
+            neighbor_count=stats.get("neighbor_count") or 0,
             score_breakdown=score_breakdown
         )
 
@@ -221,12 +221,12 @@ async def refresh_blog_analysis(
             blog_name=existing.get('blog_name'),
             blog_url=existing.get('blog_url'),
             avatar=existing.get('avatar', '📝'),
-            level=index.get("level", 0),
+            level=index.get("level") or 0,
             grade=index.get("grade", ""),
-            total_score=index.get("total_score", 0),
-            total_posts=stats.get("total_posts", 0),
-            total_visitors=stats.get("total_visitors", 0),
-            neighbor_count=stats.get("neighbor_count", 0),
+            total_score=index.get("total_score") or 0,
+            total_posts=stats.get("total_posts") or 0,
+            total_visitors=stats.get("total_visitors") or 0,
+            neighbor_count=stats.get("neighbor_count") or 0,
             score_breakdown=score_breakdown
         )
 

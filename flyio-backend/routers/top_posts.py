@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
 from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
 import logging
+import os as _os
 import asyncio
 from datetime import datetime
 
@@ -31,6 +32,12 @@ from database.top_posts_db import (
 
 # blogs.py의 분석 함수 import
 from routers.blogs import analyze_post, fetch_naver_search_results
+
+# 라우트 작업 상한(초). main.py 요청 데드라인(180s)보다 짧게 잡아
+# 504 대신 뜻이 있는 응답을 돌려준다.
+TOP_POSTS_SEARCH_BUDGET_S = float(_os.getenv("TOP_POSTS_SEARCH_BUDGET_S", "90"))
+TOP_POSTS_POST_BUDGET_S = float(_os.getenv("TOP_POSTS_POST_BUDGET_S", "25"))
+
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -125,7 +132,23 @@ async def analyze_top_posts(request: AnalyzeTopPostsRequest, background_tasks: B
 
     try:
         # 1. 네이버 검색 결과 가져오기
-        search_results = await fetch_naver_search_results(keyword, limit=top_n)
+        # ⚠️ 이 호출은 playwright 블로그탭 스크래핑(기본 30 스크롤)이다.
+        # 네이버가 느려지면 끝나지 않는다 — 2026-10-01 실측에서 이 라우트는
+        # 유휴 상태에서도 280초 안에 응답한 적이 없었다. 상한을 건다.
+        try:
+            search_results = await asyncio.wait_for(
+                fetch_naver_search_results(keyword, limit=top_n),
+                timeout=TOP_POSTS_SEARCH_BUDGET_S,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"[top-posts] 검색 {TOP_POSTS_SEARCH_BUDGET_S}s 초과: {keyword}")
+            return AnalyzeTopPostsResponse(
+                keyword=keyword,
+                category=category,
+                analyzed_count=0,
+                results=[],
+                message="네이버 검색 결과를 제한 시간 안에 가져오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+            )
 
         if not search_results:
             return AnalyzeTopPostsResponse(
@@ -140,8 +163,11 @@ async def analyze_top_posts(request: AnalyzeTopPostsRequest, background_tasks: B
         results = []
         for item in search_results[:top_n]:
             try:
-                # 개별 포스트 분석
-                post_analysis = await analyze_post(item['post_url'], keyword)
+                # 개별 포스트 분석 — 글 하나가 전체를 붙잡지 않게 상한을 건다.
+                post_analysis = await asyncio.wait_for(
+                    analyze_post(item['post_url'], keyword),
+                    timeout=TOP_POSTS_POST_BUDGET_S,
+                )
 
                 # 분석 결과 구성
                 analysis_data = {

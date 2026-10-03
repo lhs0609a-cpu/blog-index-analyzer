@@ -378,6 +378,11 @@ export interface ExposureCeilingResponse {
   disclaimer: string | null
   error: string | null
   cached?: boolean
+  /** 'measuring' 이면 백그라운드 측정 중 — 숫자가 아직 없다. */
+  status?: 'ready' | 'measuring'
+  measuring?: boolean
+  message?: string
+  retry_after_seconds?: number
 }
 
 export async function getExposureCeiling(

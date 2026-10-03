@@ -383,12 +383,34 @@ function ExposureCeilingCard({ blogId }: { blogId: string }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // 서버는 더 이상 요청 안에서 측정하지 않는다.
+  // 캐시가 없으면 백그라운드 측정을 띄우고 status:'measuring' 을 즉시 돌려준다
+  // (측정 한 번이 키워드 수십 개를 실제로 검색하는 작업이라 수 분 걸린다 —
+  //  예전에는 그 시간을 요청이 그대로 물고 있다가 280초를 넘겨도 안 끝났다).
+  // 그래서 여기서 폴링한다.
   const measure = async () => {
     setLoading(true); setError(null)
+    const deadline = Date.now() + 6 * 60 * 1000
     try {
-      const res = await getExposureCeiling(blogId)
-      setData(res)
-      if (!res.ok) setError(res.error === 'no_posts_via_rss' ? '글을 찾을 수 없어 측정할 수 없습니다.' : '상위노출 실적이 부족해 천장을 측정하지 못했습니다.')
+      for (;;) {
+        const res = await getExposureCeiling(blogId)
+        if (res.status !== 'measuring') {
+          setData(res)
+          if (!res.ok) {
+            setError(
+              res.error === 'no_posts_via_rss'
+                ? '글을 찾을 수 없어 측정할 수 없습니다.'
+                : '상위노출 실적이 부족해 천장을 측정하지 못했습니다.'
+            )
+          }
+          return
+        }
+        if (Date.now() > deadline) {
+          setError('측정이 아직 끝나지 않았습니다. 잠시 후 다시 시도하세요.')
+          return
+        }
+        await new Promise((r) => setTimeout(r, (res.retry_after_seconds ?? 30) * 1000))
+      }
     } catch {
       setError('측정 중 오류가 발생했습니다. 잠시 후 다시 시도하세요.')
     } finally {

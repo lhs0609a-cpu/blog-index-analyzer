@@ -574,6 +574,134 @@ class SlowRequestLogMiddleware(BaseHTTPMiddleware):
         return response
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 요청 데드라인
+#
+# 2026-10-01 실측: `GET /api/blue-ocean/recommend` 한 건이 `[slow] 1202000ms` —
+# 클라이언트가 300초에 끊고 간 뒤에도 서버는 **20분을 더 돌았다**. 그 20분 동안
+# shared-cpu-2x 한 대의 이벤트루프가 막혀 /health 가 29~76초가 됐고, 프론트의
+# SEO 라우트(백엔드 예산 6초)가 줄줄이 500 을 냈다. 동시 연결 4개로 재현된다.
+#
+# 핵심은 '느린 요청을 기록한다'가 아니라 **포기한 일을 실제로 멈춘다**는 것이다.
+# BaseHTTPMiddleware 에서 asyncio.wait_for 로 감싸면 타임아웃 시 하위 태스크에
+# CancelledError 가 전파되어 체인 전체가 정리된다 — 로깅만으로는 아무것도 안 멈춘다.
+#
+# 경로별 상한을 둔다: 측정/스크래핑 라우트는 본래 오래 걸리므로 넉넉히,
+# 나머지는 짧게. 0 이면 끄는 것(비상 탈출구).
+REQUEST_TIMEOUT_S = float(os.getenv("REQUEST_TIMEOUT_S", "60"))
+# 네이버를 긁어야 끝나는 라우트 — 정상적으로도 수십 초가 걸린다.
+SLOW_PATH_TIMEOUT_S = float(os.getenv("SLOW_PATH_TIMEOUT_S", "180"))
+SLOW_PATH_PREFIXES = (
+    "/api/blogs/analyze",
+    "/api/blogs/verify-index",
+    "/api/blogs/search-health",
+    "/api/blogs/serp-difficulty",
+    "/api/blogs/debug/",
+    "/api/blue-ocean/",
+    "/api/winner-keywords/",
+    "/api/top-posts/analyze",
+    "/api/keyword-analysis/",
+    "/api/keyword-verdict/",
+    "/api/comprehensive/",
+    "/api/competitive-analysis/",
+    "/api/content-lifespan/",
+    "/api/seo/",
+    "/api/naver-ad/",
+    "/api/rank-tracker/",
+    "/api/batch-learning/",
+    "/api/learning/",
+    "/api/ad-snapshot/",
+    "/api/post-watch/",
+)
+# 데드라인을 걸면 안 되는 것 — 운영자/크론이 돌리는 장시간 작업.
+# 이걸 안 빼두면 데드라인이 기존 운영 도구를 끊는다. 예: 천장 백테스트는
+# fly.toml 의 BACKTEST_SCRAPE_TIMEOUT=420 이 전제다(키워드당 2분 이상).
+# 사용자 트래픽이 아니라 운영자가 의도적으로 돌리는 것이므로 상한을 두지 않는다.
+LONG_JOB_PREFIXES = (
+    "/api/blogs/debug/",                  # 천장 백테스트·순위 정확도 측정
+    "/api/naver-ad/keyword-pool/admin/",  # 풀 재구축 등 대량 작업
+    "/api/naver-ad/keyword-pool/cron/",
+    "/api/naver-ad/keywords/scale-register",
+    "/api/naver-ad/keywords/volume-filter",
+    "/api/seo/precompute",
+    "/api/seo/enrich-volumes",
+    "/api/seo/recompute-difficulty",
+    "/api/batch-learning/",
+    "/api/backup/",
+    "/api/supabase/",
+    "/api/rank-tracker/admin/",
+    "/api/post-watch/admin/",
+)
+DEADLINE_EXEMPT_PREFIXES = LONG_JOB_PREFIXES + tuple(
+    x.strip() for x in (os.getenv("DEADLINE_EXEMPT_PREFIXES") or "").split(",") if x.strip()
+)
+
+
+def _deadline_for(path: str) -> float:
+    # 면제가 먼저다 — SLOW_PATH_PREFIXES 와 겹치는 경로가 있다
+    # (예: /api/blogs/debug/ 는 /api/blogs/ 하위이고, /api/seo/precompute 도 /api/seo/ 하위다).
+    if any(path.startswith(p) for p in DEADLINE_EXEMPT_PREFIXES):
+        return 0.0
+    if any(path.startswith(p) for p in SLOW_PATH_PREFIXES):
+        return SLOW_PATH_TIMEOUT_S
+    return REQUEST_TIMEOUT_S
+
+
+class RequestDeadlineMiddleware:
+    """순수 ASGI 미들웨어.
+
+    ⚠️ BaseHTTPMiddleware 로 구현하면 안 된다. starlette 0.27(= fastapi 0.104.1 이
+    고정하는 버전)에서 `asyncio.wait_for(call_next(request))` 는 **교착한다** —
+    call_next 가 anyio task group 위에 서 있어서, 밖에서 취소하면 그룹의 __aexit__ 가
+    자식 태스크를 기다리며 멈춘다. 로컬 실측에서 정상 요청조차 응답이 돌아오지 않았다.
+    ASGI 레벨에서 감싸면 task group 이 끼지 않아 취소가 그대로 전파된다.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            return await self.app(scope, receive, send)
+
+        limit = _deadline_for(scope.get("path", ""))
+        if limit <= 0:
+            return await self.app(scope, receive, send)
+
+        started = False
+
+        async def send_wrapper(message):
+            nonlocal started
+            if message.get("type") == "http.response.start":
+                started = True
+            await send(message)
+
+        try:
+            await asyncio.wait_for(self.app(scope, receive, send_wrapper), timeout=limit)
+        except asyncio.TimeoutError:
+            path = scope.get("path", "")
+            qs = (scope.get("query_string") or b"").decode("latin-1")
+            logger.error(
+                f"[deadline] {limit:.0f}s 초과로 취소 {scope.get('method')} {path}"
+                f"{('?' + qs) if qs else ''} role={PROCESS_GROUP}"
+            )
+            if started:
+                # 헤더가 이미 나갔으면 상태코드를 바꿀 수 없다. 여기서 끝낸다.
+                return
+            response = JSONResponse(
+                status_code=504,
+                content={
+                    "detail": (
+                        "처리 시간이 한도를 넘어 중단했습니다. "
+                        "범위를 좁혀 다시 시도해 주세요."
+                    ),
+                    "error_code": "REQUEST_DEADLINE_EXCEEDED",
+                    "limit_seconds": limit,
+                },
+            )
+            await response(scope, receive, send)
+
+
 # Security Headers Middleware
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """보안 응답 헤더 추가"""
@@ -712,6 +840,11 @@ class WorkerOffloadMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(WorkerOffloadMiddleware)
+
+# ⚠️ 가장 마지막에 add = 가장 바깥 레이어.
+# 데드라인은 모든 미들웨어(워커 위임·레이트리밋 포함)를 감싸야 의미가 있다.
+# 이 줄 아래에 add_middleware 를 추가하면 그 미들웨어는 데드라인 밖으로 나간다.
+app.add_middleware(RequestDeadlineMiddleware)
 
 
 # CORS 헤더 헬퍼 함수 (에러 응답용 - 미들웨어가 처리하지 못하는 경우)

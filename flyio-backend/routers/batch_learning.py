@@ -1096,9 +1096,9 @@ async def run_batch_learning(
                         "depth_score": dia_detail.get("depth", 50),
                         "information_score": dia_detail.get("information", 50),
                         "accuracy_score": dia_detail.get("accuracy", 50),
-                        "post_count": stats.get("total_posts", 0),
-                        "neighbor_count": stats.get("neighbor_count", 0),
-                        "visitor_count": stats.get("total_visitors", 0),
+                        "post_count": stats.get("total_posts") or 0,
+                        "neighbor_count": stats.get("neighbor_count") or 0,
+                        "visitor_count": stats.get("total_visitors") or 0,
                         # 개별 글 특성 추가
                         **post_features
                     }
@@ -1107,7 +1107,7 @@ async def run_batch_learning(
                         keyword=keyword,
                         blog_id=blog_id,
                         actual_rank=actual_rank,
-                        predicted_score=index.get("total_score", 0),
+                        predicted_score=index.get("total_score") or 0,
                         blog_features=blog_features
                     )
 
@@ -1118,10 +1118,10 @@ async def run_batch_learning(
                         "post_title": post_title,
                         "post_url": post_url,
                         "actual_rank": actual_rank,
-                        "predicted_score": round(index.get("total_score", 0), 1),
+                        "predicted_score": round(index.get("total_score") or 0, 1),
                         "c_rank": round(breakdown.get("c_rank", 0), 1),
                         "dia": round(breakdown.get("dia", 0), 1),
-                        "post_count": stats.get("total_posts", 0),
+                        "post_count": stats.get("total_posts") or 0,
                         "blog_url": f"https://blog.naver.com/{blog_id}",
                         # 글 분석 결과 추가
                         "post_analysis": {

@@ -161,6 +161,42 @@ _LIST_SELECTORS = (
 _TITLE_NOISE = re.compile(r"새\s*창\s*열림\s*$")
 
 
+# 정상 블로그탭 응답의 최소 크기. 2026-10-01 실측:
+#   · 집(한국 가정회선)에서 받은 PC 블로그탭 = 512KB / 포스트 링크 294개
+#   · Fly(nrt 데이터센터)에서 받은 **같은 URL** = 78KB / 포스트 링크 0개
+# 둘 다 HTTP 200 이고 캡차 문구도 없다. 즉 네이버는 차단 페이지를 주는 게 아니라
+# **결과가 빠진 축약 페이지**를 준다. 기존 looks_blocked(캡차 문구 검사)로는 못 잡는다.
+_SERP_MIN_BYTES = 120_000
+
+
+def classify_serp_html(html: str) -> str:
+    """받은 HTML 이 쓸 수 있는 블로그탭 응답인지 판정.
+
+    반환값:
+      "ok"       — 포스트 링크가 들어 있다(파싱 가능)
+      "blocked"  — 캡차/비정상 검색 안내
+      "degraded" — 200 인데 포스트 링크가 **하나도** 없다(축약 응답)
+      "empty"    — 본문은 왔는데 결과가 0건(희귀하지만 가능)
+
+    왜 "degraded" 를 따로 두나: 이걸 "결과 0건"으로 보고하면 그 위에 올라탄 모든
+    판정이 조용히 틀린다 — 경쟁자 0명 → 난이도 낮음 → "뚫을 수 있다". 못 쟀으면
+    못 쟀다고 해야 한다.
+    """
+    if not html:
+        return "degraded"
+    if any(t in html for t in ("비정상적인 검색", "captcha", "자동입력 방지")):
+        return "blocked"
+    if _POST_RE.search(html):
+        return "ok"
+    # 포스트 링크가 0개다. 본문 컨테이너가 있고 문서도 충분히 크면 진짜 0건일 수 있다.
+    has_container = any(
+        t in html for t in ("fds-ugc-single-intention-item-list", "검색결과가 없습니다")
+    )
+    if has_container and len(html) >= _SERP_MIN_BYTES:
+        return "empty"
+    return "degraded"
+
+
 def _parse_serp_html(html: str) -> Tuple[List[Dict], str]:
     """검색 HTML → 순위 보존 파싱. (rows, parse_mode) 반환.
 
@@ -410,6 +446,7 @@ async def _fetch_serp_pages(keyword: str, limit: int) -> Tuple[List[Dict], Optio
         ("mobile", f"https://m.search.naver.com/search.naver?ssc=tab.m_blog.all&query={encoded}&start=1", True),
     ]
 
+    degraded = False
     for source, url, mobile in attempts:
         headers = get_random_headers(mobile=mobile)
         headers["Referer"] = ("https://m.search.naver.com/" if mobile
@@ -422,8 +459,17 @@ async def _fetch_serp_pages(keyword: str, limit: int) -> Tuple[List[Dict], Optio
         if resp.status_code != 200:
             logger.warning(f"[kwv] serp {source} HTTP {resp.status_code} {keyword!r}")
             continue
+        kind = classify_serp_html(resp.text)
+        if kind != "ok":
+            # 축약/차단 응답을 '결과 0건'으로 흘려보내면 그 위 판정이 전부 틀린다.
+            logger.warning(
+                f"[kwv] serp {source} {kind} {keyword!r} "
+                f"({len(resp.text)}B, post_links=0) — 결과 없음으로 취급하지 않는다"
+            )
+            degraded = True
+            continue
         rows, mode = _parse_serp_html(resp.text)
-        if rows:
+        if rows and mode == "list":
             return rows[:limit], source, mode
 
     # HTTP 로 한 줄도 못 얻었다 → 브라우저로 재시도 (프로덕션의 정상 경로)
@@ -431,7 +477,8 @@ async def _fetch_serp_pages(keyword: str, limit: int) -> Tuple[List[Dict], Optio
     if rows:
         return rows, "playwright", "list"
 
-    return [], None, "none"
+    # 아무것도 못 얻었다. HTTP 응답이 축약본이었다면 '0건'이 아니라 '측정 실패'다.
+    return [], None, ("unavailable" if degraded else "none")
 
 
 async def serp_snapshot(keyword: str, limit: int = SERP_LIMIT,
@@ -461,7 +508,13 @@ async def serp_snapshot(keyword: str, limit: int = SERP_LIMIT,
         "parse_mode": parse_mode,   # "list"=본문 목록(신뢰) / "regex"=폴백(순위 신뢰 낮음)
         "measured_at": time.time(),
         "cached": False,
-        "error": None if rows else "serp_fetch_failed",
+        # parse_mode == "unavailable" 은 네이버가 축약 응답을 준 경우다.
+        # "결과 0건"과 섞어 쓰면 경쟁자 0명 → 난이도 낮음으로 둔갑한다.
+        "error": (
+            None if rows
+            else ("serp_unavailable" if parse_mode == "unavailable" else "serp_fetch_failed")
+        ),
+        "unavailable": (not rows) and parse_mode == "unavailable",
     }
     if rows:
         _serp_cache_set(keyword, data)

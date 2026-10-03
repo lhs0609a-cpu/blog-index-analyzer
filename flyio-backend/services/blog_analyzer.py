@@ -112,8 +112,8 @@ async def get_blog_info(blog_id: str) -> Optional[Dict]:
 
     return {
         "blog_id": blog_id,
-        "level": index.get("level", 0),
-        "score": index.get("total_score", 0),
+        "level": index.get("level") or 0,
+        "score": index.get("total_score") or 0,
         "grade": index.get("grade", ""),
         "name": result.get("analysis", {}).get("blog_name"),
         "stats": result.get("stats", {})
@@ -165,13 +165,13 @@ async def get_blog_level(blog_id: str, use_cache: bool = True) -> int:
 
     # 캐시 확인
     if use_cache and blog_id in _blog_info_cache:
-        return _blog_info_cache[blog_id].get("level", 0)
+        return _blog_info_cache[blog_id].get("level") or 0
 
     # 분석 수행
     info = await get_blog_info(blog_id)
 
     if info:
         _blog_info_cache[blog_id] = info
-        return info.get("level", 0)
+        return info.get("level") or 0
 
     return 0

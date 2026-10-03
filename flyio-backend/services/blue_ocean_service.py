@@ -18,6 +18,7 @@ Where:
 """
 import math
 import asyncio
+import os as _os
 import logging
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
@@ -106,6 +107,11 @@ class BlueOceanAnalysis:
     silver_keywords: List[BlueOceanKeyword]  # BOS 60-79
     total_analyzed: int
     analysis_summary: Dict[str, Any]
+
+
+# 블루오션 분석 전체 작업 예산(초). main.py 의 요청 데드라인(180s)보다 짧게 잡아
+# 부분 결과라도 정상 응답으로 내보낸다. 0 이면 무제한(권장하지 않음).
+BLUE_OCEAN_BUDGET_S = float(_os.getenv("BLUE_OCEAN_BUDGET_S", "120"))
 
 
 class BlueOceanService:
@@ -297,10 +303,13 @@ class BlueOceanService:
 
             if my_blog_id:
                 try:
+                    # analyze_blog 은 **dict** 를 돌려준다. 예전 코드는 .index 로
+                    # 속성 접근을 해서 매번 AttributeError 였고, 바로 아래 except 가
+                    # 그걸 삼켜 '내 블로그 맞춤 분석'이 조용히 한 번도 동작하지 않았다.
                     my_blog_data = await analyze_blog(my_blog_id)
-                    if my_blog_data and my_blog_data.index:
-                        my_blog_score = my_blog_data.index.total_score
-                        my_blog_level = my_blog_data.index.level
+                    _idx = (my_blog_data or {}).get("index") or {}
+                    my_blog_score = _idx.get("total_score")
+                    my_blog_level = _idx.get("level")
                 except Exception as e:
                     logger.warning(f"Failed to get my blog info: {e}")
 
@@ -511,11 +520,29 @@ class BlueOceanService:
                         logger.error(f"Error analyzing keyword '{kw_data.keyword}': {e}")
                         return None
 
-            # 병렬 분석 실행
+            # 병렬 분석 실행 — **작업 예산을 건다.**
+            # 키워드 하나당 상위 10개 블로그를 전부 분석한다(각각 RSS+스크래핑).
+            # 네이버 응답이 느려지면 키워드 20개 × 블로그 10개가 그대로 쌓여,
+            # 2026-10-01 실측에서는 유휴 상태에서도 280초 안에 끝난 적이 없었고
+            # 클라이언트가 끊은 뒤에도 서버에서 20분을 더 돌았다.
+            # 전부 못 재면 **잰 것까지만** 돌려준다 — 영원히 기다리는 것보다 낫다.
             tasks = [analyze_single_keyword(kw) for kw in keywords_to_analyze[:max_keywords]]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            for result in results:
+            done, pending = await asyncio.wait(
+                [asyncio.ensure_future(t) for t in tasks],
+                timeout=BLUE_OCEAN_BUDGET_S,
+            )
+            for t in pending:
+                t.cancel()
+            if pending:
+                logger.warning(
+                    f"[blue-ocean] {main_keyword!r}: 예산 {BLUE_OCEAN_BUDGET_S}s 초과 — "
+                    f"{len(done)}/{len(tasks)} 키워드만 측정하고 나머지는 취소"
+                )
+            for t in done:
+                try:
+                    result = t.result()
+                except Exception:
+                    continue
                 if isinstance(result, BlueOceanKeyword):
                     blue_ocean_keywords.append(result)
 

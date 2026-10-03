@@ -3631,15 +3631,38 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
         # 실측 신호가 하나도 없으면 레벨을 만들어내지 않는다.
         # 예전에는 이 경우에도 기본 25점 → 백분위 → "준최1"을 출력해서,
         # 측정 실패를 낮은 등급으로 오인하게 만들었다.
-        measurable = ("scrape" in analysis_data["data_sources"]) or ("rss" in analysis_data["data_sources"])
+        has_source = ("scrape" in analysis_data["data_sources"]) or ("rss" in analysis_data["data_sources"])
+
+        # 출처가 잡혔다고 값을 얻은 것은 아니다.
+        # 2026-10-01 실측: 글 50개가 멀쩡히 있는 blog_id 가 RSS 일시 실패로
+        # total_posts=0 이 됐는데 data_sources 에는 출처가 남아 measurable=True 로
+        # 통과했고 "준최4 / 65.6점" 이 그대로 나갔다. 같은 10분 안에 다른 라우트는
+        # 같은 블로그를 "최적2", 또 다른 라우트는 "level 1" 로 불렀다.
+        # 입력이 비면 0점이 아니라 '측정 못 함' 이어야 한다 — 그래야 사용자가
+        # "지수가 떨어졌다"와 "오늘 못 쟀다"를 구분한다.
+        _core_unmeasured = {"total_posts", "neighbor_count", "total_visitors"} & set(
+            analysis_data.get("unmeasured", [])
+        )
+        collected_nothing = (not stats.get("total_posts")) and bool(_core_unmeasured)
+
+        measurable = has_source and not collected_nothing
         if not measurable:
             index["level"] = None
             index["grade"] = "측정 불가"
             index["level_category"] = "측정 불가"
             index["percentile"] = None
             index["level_source"] = "unavailable"
-            index["unmeasurable_reason"] = "네이버에서 블로그 지표를 가져오지 못했습니다."
-            logger.warning(f"Blog {blog_id}: 실측 신호 없음 — 레벨 판정 생략")
+            index["unmeasurable_reason"] = (
+                "글 목록을 가져오지 못해 지수를 계산하지 않았습니다. "
+                "낮은 점수가 아니라 측정 실패입니다. 잠시 후 다시 시도해 주세요."
+                if collected_nothing
+                else "네이버에서 블로그 지표를 가져오지 못했습니다."
+            )
+            logger.warning(
+                f"Blog {blog_id}: 레벨 판정 생략 "
+                f"(has_source={has_source}, collected_nothing={collected_nothing}, "
+                f"unmeasured={sorted(_core_unmeasured)})"
+            )
 
         # ===== 레벨 판정 =====
         # 원칙: 백분위는 '같은 자로 잰' 실측 모집단이 충분할 때만 쓴다.
@@ -3841,8 +3864,12 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
         "estimated_fields": estimated_fields,
         "unmeasured": unmeasured,
         "rss_empty": analysis_data.get("rss_empty", False),
+        # 수집이 비었는지 호출부가 한 눈에 보게 한다 (index.grade == "측정 불가" 의 이유).
+        "measured": (index or {}).get("level_source") != "unavailable",
     }
-    set_blog_analysis_cache(blog_id, result)
+    # 측정 실패본을 캐시에 넣으면 TTL 동안 같은 실패를 재생한다 — 넣지 않는다.
+    if result["measured"]:
+        set_blog_analysis_cache(blog_id, result)
     return result
 
 
@@ -4271,7 +4298,7 @@ async def analyze_blog_endpoint(
             level=index.get("level"),
             grade=index.get("grade", ""),
             level_category=index.get("level_category", ""),
-            total_score=index.get("total_score", 0),
+            total_score=index.get("total_score") or 0,
             percentile=index.get("percentile"),
             level_basis=index.get("level_basis"),
             level_source=index.get("level_source"),
@@ -4296,7 +4323,7 @@ async def analyze_blog_endpoint(
         recommendations = []
 
         # Add warnings based on score
-        if index.get("total_score", 0) < 30:
+        if index.get("total_score") or 0 < 30:
             warnings.append(WarningResponse(
                 type="low_score",
                 severity="high",
@@ -4521,10 +4548,10 @@ async def get_blog_index(blog_id: str):
                 "posting_frequency": None
             },
             "index": {
-                "level": index.get("level", 0),
+                "level": index.get("level") or 0,
                 "grade": index.get("grade", ""),
                 "level_category": index.get("level_category", ""),
-                "total_score": index.get("total_score", 0),
+                "total_score": index.get("total_score") or 0,
                 "percentile": index.get("percentile", 0),
                 "score_breakdown": {
                     "c_rank": score_breakdown.get("c_rank", 0),
@@ -4917,8 +4944,8 @@ async def search_keyword_with_tabs(
             results.append(blog_result)
 
             if index:
-                total_score += index.get("total_score", 0)
-                total_level += index.get("level", 0)
+                total_score += index.get("total_score") or 0
+                total_level += index.get("level") or 0
                 analyzed_count += 1
 
             if stats:
@@ -5778,6 +5805,9 @@ async def search_health(request: SearchHealthRequest, refresh: bool = Query(Fals
         raise HTTPException(status_code=500, detail=f"진단 실패: {e}")
 
     health = diagnose(result if isinstance(result, dict) else result.dict())
+    # verify 결과에는 blog_id 가 없다 — 여기서 채운다. 비워 두면 응답이
+    # {"blog_id": null} 로 나가 호출부가 어느 블로그의 진단인지 못 가린다.
+    health["blog_id"] = blog_id
 
     # 잰 값을 남긴다. 대시보드 첫 화면은 6초를 기다릴 수 없으므로 여기 남은
     # 것만 읽는다 — 남은 게 없으면 '아직 확인 안 함' 이지 '정상' 이 아니다.
@@ -5880,19 +5910,37 @@ async def get_exposure_ceiling(
     직접 던져 몇 위에 뜨는지 확인하고, 1페이지 진입한 키워드들의 검색량 분포를
     낸다. 호출당 검색 API를 여러 번 사용하므로 24h 캐시된다.
     """
-    from services.exposure_ceiling import measure_exposure_ceiling
+    from services.exposure_ceiling import (
+        peek_cached_ceiling, start_ceiling_measurement, ceiling_is_measuring,
+    )
 
     blog_id = (blog_id or "").strip()
     if not blog_id:
         raise HTTPException(status_code=400, detail="blog_id is required")
 
-    try:
-        result = await measure_exposure_ceiling(blog_id, use_cache=not refresh)
-    except Exception as e:
-        logger.exception(f"exposure_ceiling failed for {blog_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"ceiling_measurement_failed: {e}")
+    # ⚠️ 요청 안에서 측정하지 않는다.
+    # 측정 한 번은 playwright 로 키워드 수십 개를 긁는다(키워드당 최대 30 스크롤).
+    # 2026-10-01 실측: 이 라우트가 유휴 상태에서도 280초 안에 응답한 적이 없고,
+    # 클라이언트가 포기한 뒤에도 서버에서 계속 돌아 /health 가 14초가 됐다.
+    # 캐시가 있으면 즉시 주고, 없으면 백그라운드로 돌린 뒤 '측정 중'을 알린다.
+    cached = None if refresh else peek_cached_ceiling(blog_id)
+    if cached is not None:
+        return {"blog_id": blog_id, "status": "ready", **cached}
 
-    return {"blog_id": blog_id, **result}
+    started = start_ceiling_measurement(blog_id)
+    return {
+        "blog_id": blog_id,
+        "status": "measuring",
+        "ok": False,
+        "measuring": True,
+        "started": started,
+        "already_running": not started and ceiling_is_measuring(blog_id),
+        "message": (
+            "노출 천장을 측정하고 있습니다. 키워드 수십 개를 실제로 검색해 보는 작업이라 "
+            "몇 분 걸립니다. 잠시 후 다시 불러 주세요."
+        ),
+        "retry_after_seconds": 60,
+    }
 
 
 @router.get("/serp-difficulty")

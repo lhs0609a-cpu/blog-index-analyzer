@@ -59,8 +59,8 @@ async def comprehensive_analyze(request: ComprehensiveAnalysisRequest):
         index = basic_analysis.get("index", {})
         blog_info = basic_analysis.get("blog", {})
 
-        total_score = index.get("total_score", 0)
-        level = index.get("level", 0)
+        total_score = index.get("total_score") or 0
+        level = index.get("level") or 0
 
         # 추천사항 생성
         recommendations = []
@@ -68,7 +68,7 @@ async def comprehensive_analyze(request: ComprehensiveAnalysisRequest):
         weaknesses = []
 
         # 포스팅 수 분석
-        total_posts = stats.get("total_posts", 0)
+        total_posts = stats.get("total_posts") or 0
         if total_posts < 50:
             weaknesses.append("포스팅 수가 부족합니다")
             recommendations.append({
@@ -82,7 +82,7 @@ async def comprehensive_analyze(request: ComprehensiveAnalysisRequest):
             strengths.append(f"풍부한 콘텐츠 ({total_posts}개 포스트)")
 
         # 방문자 수 분석
-        total_visitors = stats.get("total_visitors", 0)
+        total_visitors = stats.get("total_visitors") or 0
         if total_visitors < 1000:
             weaknesses.append("방문자 수가 적습니다")
             recommendations.append({
@@ -96,7 +96,7 @@ async def comprehensive_analyze(request: ComprehensiveAnalysisRequest):
             strengths.append(f"높은 방문자 수 ({total_visitors:,}명)")
 
         # 이웃 수 분석
-        neighbor_count = stats.get("neighbor_count", 0)
+        neighbor_count = stats.get("neighbor_count") or 0
         if neighbor_count < 100:
             weaknesses.append("이웃 수가 부족합니다")
             recommendations.append({
