@@ -37,15 +37,20 @@ interface BlogIndexResult {
   is_influencer?: boolean  // Influencer badge
   smart_block_keyword?: string  // Keyword for smart block
   index: {
-    level: number
+    // 측정 실패·부분 측정이면 등급 판정을 보류하고 null 로 온다
+    level: number | null
     grade: string
     level_category: string
     total_score: number
-    percentile: number
+    percentile: number | null
     score_breakdown: {
-      c_rank: number
-      dia: number
+      c_rank: number | null
+      dia: number | null
     }
+    measurement_complete?: boolean | null
+    unmeasured_dimensions?: string[] | null
+    partial_dimensions?: string[] | null
+    unmeasurable_reason?: string | null
   } | null
   stats: {
     total_posts: number
@@ -1270,8 +1275,9 @@ function KeywordSearchContent() {
             <div className="flex-1">
               <h3 className="text-sm font-semibold text-blue-900 mb-1">통계 수집 안내</h3>
               <p className="text-xs text-blue-700">
-                일부 통계(포스트 수, 방문자 수)는 네이버의 접근 제한으로 인해 수집이 제한될 수 있습니다.
-                이웃 수와 블로그 지수는 정상적으로 분석되며, 경쟁 분석에는 영향이 없습니다.
+                포스트 수·방문자 수·이웃 수는 네이버의 접근 제한으로 수집이 비는 경우가 있습니다.
+                지표를 끝까지 읽지 못한 블로그는 등급을 매기지 않고 <strong>측정 불가</strong>로 표시합니다 —
+                낮은 등급이 아니라 이번 측정이 불완전했다는 뜻이고, 잠시 후 다시 검색하면 채워집니다.
               </p>
             </div>
           </div>
@@ -1894,9 +1900,18 @@ function KeywordSearchContent() {
                                     {blog.index ? (
                                       <>
                                         <td className="px-3 py-3 text-center">
-                                          <span className={`inline-flex px-2 py-0.5 rounded-full text-white text-xs font-bold ${getLevelColor(blog.index.level)}`}>
-                                            Lv.{blog.index.level}
-                                          </span>
+                                          {blog.index.level == null ? (
+                                            <span
+                                              className="inline-flex px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 text-xs font-bold cursor-help"
+                                              title={blog.index.unmeasurable_reason || '이번 측정에서 지표를 끝까지 읽지 못해 등급을 보류했습니다.'}
+                                            >
+                                              측정 불가
+                                            </span>
+                                          ) : (
+                                            <span className={`inline-flex px-2 py-0.5 rounded-full text-white text-xs font-bold ${getLevelColor(blog.index.level)}`}>
+                                              Lv.{blog.index.level}
+                                            </span>
+                                          )}
                                         </td>
                                         <td className="px-3 py-3 text-center">
                                           <span className={`text-lg font-bold ${getScoreColor(blog.index?.total_score || 0)}`}>
@@ -2384,9 +2399,18 @@ function KeywordSearchContent() {
                             {/* Level */}
                             <td className="px-3 py-3 text-center">
                               <div className="flex flex-col items-center gap-0.5">
-                                <span className={`inline-flex px-2 py-0.5 rounded-full text-white text-xs font-bold ${getLevelColor(blog.index.level)}`}>
-                                  Lv.{blog.index.level}
-                                </span>
+                                {blog.index.level == null ? (
+                                  <span
+                                    className="inline-flex px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 text-xs font-bold cursor-help"
+                                    title={blog.index.unmeasurable_reason || '이번 측정에서 지표를 끝까지 읽지 못해 등급을 보류했습니다.'}
+                                  >
+                                    측정 불가
+                                  </span>
+                                ) : (
+                                  <span className={`inline-flex px-2 py-0.5 rounded-full text-white text-xs font-bold ${getLevelColor(blog.index.level)}`}>
+                                    Lv.{blog.index.level}
+                                  </span>
+                                )}
                                 
                               </div>
                             </td>
