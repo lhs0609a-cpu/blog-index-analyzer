@@ -23,8 +23,43 @@ from database.subscription_db import (
     PlanType
 )
 from database.user_db import get_user_db
+from routers.auth import get_current_user
 
 logger = logging.getLogger(__name__)
+
+
+def _enforce_owner(user_id: int, current_user: dict) -> None:
+    """요청한 user_id 가 토큰 주인(또는 관리자)인지 확인한다.
+
+    예전엔 이 라우터 전체가 인증 없이 user_id 쿼리만 믿었다. 그래서 토큰 없이
+    /me?user_id=1 로 **관리자 구독을 읽거나**, /upgrade?user_id=X 로 **결제 없이
+    비즈니스 플랜**을 받을 수 있었다(payment.py 가 이미 막은 그 구멍과 동일한 것이
+    여기에 그대로 남아 있었다). user_id 는 더 이상 신원이 아니라 조회 대상일 뿐이고,
+    신원은 토큰에서만 온다.
+    """
+    try:
+        token_uid = int(current_user.get("id"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="인증이 필요합니다")
+    if current_user.get("is_admin"):
+        return
+    if token_uid != int(user_id):
+        raise HTTPException(status_code=403, detail="본인의 구독 정보만 조회·변경할 수 있습니다")
+
+
+def _require_admin(current_user: dict) -> None:
+    """결제 검증 없이 플랜/크레딧을 직접 부여하는 경로는 관리자만 호출할 수 있다.
+
+    일반 사용자의 정상 업그레이드는 payment.py(/api/payment/subscription/complete)가
+    토스 결제 DONE·금액을 확인한 뒤 upgrade_subscription 을 부른다. 이 라우터의
+    /upgrade·/credits/purchase 는 그 확인이 전혀 없으므로 외부에 열어두면 공짜
+    업그레이드가 된다 — 수동 보정용으로 관리자에게만 남긴다.
+    """
+    if not current_user.get("is_admin"):
+        raise HTTPException(
+            status_code=403,
+            detail="이 경로는 관리자 전용입니다. 결제를 통한 업그레이드는 결제 페이지에서 진행됩니다",
+        )
 
 
 def verify_subscription_ownership(user_id: int, subscription: dict) -> dict:
@@ -167,13 +202,17 @@ async def get_plan_info(plan_type: str):
 # ============ 구독 관리 API ============
 
 @router.get("/me")
-def get_my_subscription(user_id: int = Query(..., description="사용자 ID")):
+def get_my_subscription(
+    user_id: int = Query(..., description="사용자 ID"),
+    current_user: dict = Depends(get_current_user),
+):
     """내 구독 정보 조회.
 
     sync def — FastAPI 가 자동으로 threadpool 에 dispatch.
     cron 이 event loop 점유 중이어도 threadpool worker 가 sqlite 읽고 즉시 응답.
     (async def 였을 때 /usage 45s timeout 폭주 사고 차단)
     """
+    _enforce_owner(user_id, current_user)
     # 관리자 체크 - business 플랜으로 반환
     try:
         user_db_inst = get_user_db()
@@ -219,9 +258,15 @@ def get_my_subscription(user_id: int = Query(..., description="사용자 ID")):
 @router.post("/upgrade")
 async def upgrade_plan(
     request: UpgradeRequest,
-    user_id: int = Query(..., description="사용자 ID")
+    user_id: int = Query(..., description="사용자 ID"),
+    current_user: dict = Depends(get_current_user),
 ):
-    """구독 업그레이드 (결제 완료 후 호출)"""
+    """구독 업그레이드 — 관리자 수동 보정용.
+
+    일반 결제 업그레이드는 /api/payment/subscription/complete 가 토스 결제를
+    검증한 뒤 처리한다. 이 경로는 결제 확인이 없으므로 관리자만 쓸 수 있다.
+    """
+    _require_admin(current_user)
     try:
         plan = PlanType(request.plan_type)
     except ValueError:
@@ -243,8 +288,12 @@ async def upgrade_plan(
 
 
 @router.post("/cancel")
-async def cancel_plan(user_id: int = Query(..., description="사용자 ID")):
+async def cancel_plan(
+    user_id: int = Query(..., description="사용자 ID"),
+    current_user: dict = Depends(get_current_user),
+):
     """구독 취소 (만료일까지 유지)"""
+    _enforce_owner(user_id, current_user)
     success = cancel_subscription(user_id)
 
     if not success:
@@ -259,11 +308,15 @@ async def cancel_plan(user_id: int = Query(..., description="사용자 ID")):
 # ============ 사용량 API ============
 
 @router.get("/usage")
-def get_usage(user_id: int = Query(..., description="사용자 ID")):
+def get_usage(
+    user_id: int = Query(..., description="사용자 ID"),
+    current_user: dict = Depends(get_current_user),
+):
     """오늘 사용량 조회.
 
     sync def — threadpool dispatch. event loop 무관하게 즉시 응답.
     """
+    _enforce_owner(user_id, current_user)
     subscription = get_user_subscription(user_id)
 
     # 고아 구독 검증
@@ -297,9 +350,11 @@ def get_usage(user_id: int = Query(..., description="사용자 ID")):
 @router.get("/usage/check")
 def check_limit(
     user_id: int = Query(..., description="사용자 ID"),
-    usage_type: str = Query(..., description="사용 유형 (keyword_search, blog_analysis)")
+    usage_type: str = Query(..., description="사용 유형 (keyword_search, blog_analysis)"),
+    current_user: dict = Depends(get_current_user),
 ):
     """사용량 제한 확인 — sync def → threadpool."""
+    _enforce_owner(user_id, current_user)
     if usage_type not in ["keyword_search", "blog_analysis"]:
         raise HTTPException(status_code=400, detail="유효하지 않은 사용 유형입니다")
 
@@ -319,9 +374,11 @@ def check_limit(
 @router.post("/usage/increment")
 async def record_usage(
     user_id: int = Query(..., description="사용자 ID"),
-    usage_type: str = Query(..., description="사용 유형 (keyword_search, blog_analysis)")
+    usage_type: str = Query(..., description="사용 유형 (keyword_search, blog_analysis)"),
+    current_user: dict = Depends(get_current_user),
 ):
     """사용량 기록 (내부용)"""
+    _enforce_owner(user_id, current_user)
     if usage_type not in ["keyword_search", "blog_analysis"]:
         raise HTTPException(status_code=400, detail="유효하지 않은 사용 유형입니다")
 
@@ -360,9 +417,11 @@ async def record_usage(
 @router.get("/payments")
 async def get_payments(
     user_id: int = Query(..., description="사용자 ID"),
-    limit: int = Query(10, description="조회 개수")
+    limit: int = Query(10, description="조회 개수"),
+    current_user: dict = Depends(get_current_user),
 ):
     """결제 내역 조회"""
+    _enforce_owner(user_id, current_user)
     payments = get_payment_history(user_id, limit)
     return {
         "payments": payments,
@@ -373,8 +432,12 @@ async def get_payments(
 # ============ 추가 크레딧 API ============
 
 @router.get("/credits")
-async def get_credits(user_id: int = Query(..., description="사용자 ID")):
+async def get_credits(
+    user_id: int = Query(..., description="사용자 ID"),
+    current_user: dict = Depends(get_current_user),
+):
     """추가 크레딧 잔여량 조회"""
+    _enforce_owner(user_id, current_user)
     credits = get_extra_credits(user_id)
     return {
         "credits": credits
@@ -385,9 +448,14 @@ async def get_credits(user_id: int = Query(..., description="사용자 ID")):
 async def purchase_credits(
     user_id: int = Query(..., description="사용자 ID"),
     credit_type: str = Query(..., description="크레딧 유형 (keyword, analysis)"),
-    amount: int = Query(..., description="구매 수량")
+    amount: int = Query(..., description="구매 수량"),
+    current_user: dict = Depends(get_current_user),
 ):
-    """추가 크레딧 구매 (결제 완료 후 호출)"""
+    """추가 크레딧 지급 — 관리자 수동 보정용(결제 확인은 결제 경로에서).
+
+    /upgrade 와 같은 이유로 관리자 전용이다. 결제 없이 크레딧을 그냥 더해 준다.
+    """
+    _require_admin(current_user)
     if credit_type not in ["keyword", "analysis"]:
         raise HTTPException(status_code=400, detail="유효하지 않은 크레딧 유형입니다")
 

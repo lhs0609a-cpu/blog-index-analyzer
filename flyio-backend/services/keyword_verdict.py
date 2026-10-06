@@ -57,12 +57,10 @@ logger = logging.getLogger(__name__)
 PAGE1_CUTOFF = 10          # 1페이지 = 상위 10위
 SERP_LIMIT = 20            # 조회 범위 (2페이지) — 11~30위 색인 신호까지 본다
 SERP_TTL = 6 * 3600        # 공용 SERP 캐시 6시간
-# 경쟁자 동시 채점. 5 는 nice 19 워커에 얹혀 있을 때의 보수치였다. 전용 프로세스(nice 5)로
-# 옮긴 뒤로는 8 이 안전하다 — 대부분 네이버 응답 대기(I/O)라 CPU 가 아니라 봇탐지가 상한이다.
-SCORE_CONCURRENCY = int(os.environ.get("KWV_SCORE_CONCURRENCY", "8"))
-# 프로덕션 worker 는 nice 19 + 공유 2vCPU 라 로컬(4.3s)보다 훨씬 느리다. 20초로 잘랐더니
-# 10명 중 4명이 미채점으로 남아 confidence 가 medium 으로 떨어졌다(2026-08-13 실측).
-PER_BLOG_TIMEOUT = 32.0    # 경쟁자 1개 채점 상한
+# 공유 2 vCPU / 3GB에서 8개 동시 분석은 브라우저 메모리·CPU 경합을 만든다.
+# 판정의 필수 조건인 내 블로그를 먼저 시작하고 동시 분석을 3개로 제한한다.
+SCORE_CONCURRENCY = max(1, int(os.environ.get("KWV_SCORE_CONCURRENCY", "3")))
+PER_BLOG_TIMEOUT = 45.0    # 블로그 1개 채점 상한
 RETRY_MISSING = 6          # 1차에서 못 잰 경쟁자 재시도 상한 (캐시가 채워져 대부분 즉답)
 SERP_PAGE_TIMEOUT = 12.0
 # 브라우저 기동~파싱 전체 상한. 75초로는 worker(nice 19 + 공유 2vCPU + 크론 경합)에서
@@ -116,12 +114,12 @@ def _serp_cache_get(keyword: str) -> Optional[Dict]:
     k = _cache_key(keyword)
     now = time.time()
     hit = _MEM_SERP.get(k)
-    if hit and now - hit.get("measured_at", 0) < SERP_TTL:
+    if hit and hit.get("parse_mode") == "list" and now - hit.get("measured_at", 0) < SERP_TTL:
         return hit
     try:
         with open(_serp_path(keyword), "r", encoding="utf-8") as f:
             data = json.load(f)
-        if now - float(data.get("measured_at") or 0) < SERP_TTL:
+        if data.get("parse_mode") == "list" and now - float(data.get("measured_at") or 0) < SERP_TTL:
             _MEM_SERP[k] = data
             return data
     except Exception:
@@ -372,6 +370,12 @@ async def _playwright_serp_guarded(keyword: str, limit: int) -> List[Dict]:
         # 매달린 브라우저는 다음 요청에 재사용하면 안 된다. 정리를 기다리지는 않는다.
         asyncio.create_task(_close_browser("hard-timeout"))
         return []
+    except asyncio.CancelledError:
+        # 상위 job의 단계 타임아웃도 shield 안쪽 작업을 정리해야 한다.
+        # 그렇지 않으면 사용자가 떠난 뒤에도 브라우저 작업이 자원을 점유한다.
+        task.cancel()
+        asyncio.create_task(_close_browser("job-cancelled"))
+        raise
     except Exception as e:
         logger.warning(f"[kwv] playwright serp error {keyword!r}: {e}")
         return []
@@ -379,52 +383,65 @@ async def _playwright_serp_guarded(keyword: str, limit: int) -> List[Dict]:
 
 async def _playwright_serp_inner(keyword: str, limit: int) -> List[Dict]:
     from urllib.parse import quote
+    from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
     url = f"https://search.naver.com/search.naver?ssc=tab.blog.all&query={quote(keyword)}&start=1"
-    context = None
     t0 = time.time()
-    try:
-        browser = await _get_browser()
-        context = await browser.new_context(
-            viewport={"width": 1280, "height": 900},
-            user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"),
-            locale="ko-KR",
-        )
-        # 이미지·폰트·미디어 차단. 우리가 필요한 건 링크 목록 DOM 뿐인데, SERP 는 썸네일이
-        # 수십 개라 worker(nice 19, 공유 2vCPU)에서는 이게 시간을 지배한다
-        # (2026-08-13 실측: 차단 없이 stage1 이 90초 타임아웃).
-        async def _block(route, request):
-            if request.resource_type in ("image", "font", "media", "stylesheet"):
-                await route.abort()
-            else:
-                await route.continue_()
-        await context.route("**/*", _block)
-
-        page = await context.new_page()
-        await page.goto(url, wait_until="domcontentloaded", timeout=25000)
+    # 한 번의 느린 탐색/빈 응답으로 끝내지 않는다. 전체 시간은 바깥의
+    # PLAYWRIGHT_TIMEOUT으로 제한하고, 재시도는 새 컨텍스트에서 한 번만 한다.
+    for attempt in range(2):
+        context = None
         try:
-            await page.wait_for_selector(
-                'div[class*="fds-ugc-single-intention-item-list"]', timeout=12000)
-        except Exception:
-            logger.warning(f"[kwv] playwright: list container not found {keyword!r}")
-        rows, mode = _parse_serp_html(await page.content())
-        logger.warning(f"[kwv] playwright serp {keyword!r}: {len(rows)} rows mode={mode} "
-                       f"in {round(time.time() - t0, 1)}s")
-        if mode != "list":
-            return []
-        return rows[:limit]
-    except Exception as e:
-        logger.warning(f"[kwv] playwright serp failed {keyword!r} "
-                       f"after {round(time.time() - t0, 1)}s: {e}")
-        return []
-    finally:
-        # 브라우저는 상주시키고 컨텍스트만 닫는다(요청 간 쿠키·캐시 격리는 유지).
-        if context:
+            browser = await _get_browser()
+            context = await browser.new_context(
+                viewport={"width": 1280, "height": 900},
+                user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                            "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"),
+                locale="ko-KR",
+            )
+            # 모든 요청을 Python으로 왕복시키면 공유 CPU에서 문서/스크립트까지
+            # 지연된다. 무거운 정적 파일만 가로채고 검색 렌더링은 그대로 둔다.
+            async def _block_asset(route):
+                await route.abort()
+            await context.route(
+                re.compile(r"\.(?:png|jpe?g|gif|webp|ico|woff2?|ttf|mp4)(?:\?.*)?$", re.I),
+                _block_asset,
+            )
+
+            page = await context.new_page()
             try:
-                await context.close()
-            except Exception:
-                pass
+                response = await page.goto(url, wait_until="commit", timeout=30000)
+                if response is not None and response.status != 200:
+                    logger.warning(f"[kwv] browser HTTP {response.status} {keyword!r}")
+                    continue
+            except PlaywrightTimeoutError:
+                # 탐색 타임아웃이어도 이미 도착한 검색 DOM이 있을 수 있다.
+                logger.warning(f"[kwv] navigation slow; checking results {keyword!r}")
+            try:
+                await page.wait_for_selector(
+                    'div[class*="fds-ugc-single-intention-item-list"] a[href*="blog.naver.com/"]',
+                    state="attached", timeout=30000,
+                )
+            except PlaywrightTimeoutError:
+                logger.warning(f"[kwv] result links not ready {keyword!r}")
+            rows, mode = _parse_serp_html(await page.content())
+            logger.warning(f"[kwv] playwright serp {keyword!r}: {len(rows)} rows mode={mode} "
+                           f"attempt={attempt + 1} in {round(time.time() - t0, 1)}s")
+            if rows and mode == "list":
+                return rows[:limit]
+        except Exception as e:
+            logger.warning(f"[kwv] playwright serp attempt={attempt + 1} failed {keyword!r}: {e}")
+        finally:
+            if context:
+                # 컨텍스트 정리가 매달려도 얻은 검색 결과를 버리지 않는다.
+                close_task = asyncio.create_task(context.close())
+                try:
+                    await asyncio.wait_for(asyncio.shield(close_task), timeout=5)
+                except asyncio.TimeoutError:
+                    close_task.cancel()
+                except Exception:
+                    pass
+    return []
 
 
 async def _fetch_serp_pages(keyword: str, limit: int) -> Tuple[List[Dict], Optional[str], str]:
@@ -547,6 +564,36 @@ async def stage1_facts(blog_id: str, keyword: str, use_cache: bool = True,
                     "already_page1": False, "volume": 0, "volume_measured": False,
                     "serp_source": None, "serp_parse_mode": None, "serp_cached": False,
                     "serp_measured_at": None, "serp_size": 0}
+
+    if not cache_only:
+        # 계정 아이디와 블로그 주소가 다를 수 있다. 존재하지 않는 블로그를
+        # 비교하려고 SERP + 경쟁자 10개를 모두 수집한 뒤 일반 오류로 끝내지 않는다.
+        # 통신 실패는 부재로 단정하지 않고 기존 측정 경로로 진행한다.
+        from routers.blogs import scrape_blog_stats_fast
+        try:
+            stats = await asyncio.wait_for(scrape_blog_stats_fast(blog_id), timeout=15)
+        except Exception:
+            stats = {}
+        code = stats.get("error_code")
+        messages = {
+            "NOT_FOUND": "입력한 주소에서 네이버 블로그를 찾을 수 없습니다. 네이버 로그인 아이디가 아닌 실제 블로그 주소(URL)를 확인해 주세요.",
+            "PRIVATE_BLOG": "비공개 블로그는 비교할 수 없습니다. 블로그 공개 설정과 실제 주소를 확인해 주세요.",
+            "MOVED": "입력한 아이디와 실제 블로그 주소가 다릅니다. 변경된 블로그 주소로 다시 시도해 주세요.",
+        }
+        if code in messages:
+            canonical = stats.get("canonical_blog_id")
+            message = messages[code]
+            if code == "MOVED" and canonical:
+                message += f" 확인된 블로그 ID: {canonical}"
+            return {
+                "ok": False, "blog_id": blog_id, "keyword": keyword,
+                "error": f"blog_{code.lower()}", "error_message": message,
+                "canonical_blog_id": canonical,
+                "page1": [], "my_rank": None, "already_page1": False,
+                "volume": 0, "volume_measured": False, "serp_size": 0,
+                "serp_source": None, "serp_parse_mode": None,
+                "serp_cached": False, "serp_measured_at": None,
+            }
 
     serp_task = serp_snapshot(keyword, use_cache=use_cache)
     vol_task = _fetch_volumes([keyword])
@@ -883,8 +930,8 @@ async def stage2_deep(blog_id: str, keyword: str,
             "ok": False, "blog_id": blog_id, "keyword": keyword,
             "error": facts.get("error") or "serp_unavailable",
             "verdict": "unknown", "probability": None, "confidence": "low",
-            "reasons": ["네이버 검색 결과를 가져오지 못했습니다(일시적 차단 가능). "
-                        "잠시 후 다시 시도해 주세요."],
+            "reasons": [facts.get("error_message") or
+                        "네이버 검색 결과를 가져오지 못했습니다(일시적 차단 가능). 잠시 후 다시 시도해 주세요."],
             "facts": facts, "elapsed": round(time.time() - t0, 1),
             "disclaimer": DISCLAIMER,
         }
@@ -919,9 +966,13 @@ async def stage2_deep(blog_id: str, keyword: str,
 
     targets = [r["blog_id"] for r in serp_rows_all[:PAGE1_CUTOFF]]
     prog["total"] = len(targets) + 1   # 경쟁자 + 내 블로그
-    scored_list, my, topical, ceiling, idle = await asyncio.gather(
-        asyncio.gather(*[_bounded(b) for b in targets]),
+
+    async def _score_competitors():
+        return await asyncio.gather(*[_bounded(b) for b in targets])
+
+    my, scored_list, topical, ceiling, idle = await asyncio.gather(
         _bounded(blog_id, use_cache=False),   # 내 점수는 항상 새로 잰다
+        _score_competitors(),
         _topical_fit(blog_id, keyword),
         _cached_ceiling(blog_id),
         _measure_idle_days(targets),

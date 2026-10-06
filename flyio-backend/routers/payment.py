@@ -27,6 +27,7 @@ from database.subscription_db import (
     get_payment_by_payment_key,
     get_or_create_customer_key,
     get_billing_credentials,
+    settle_prepared_payment,
     PLAN_LIMITS,
     PlanType
 )
@@ -147,12 +148,15 @@ def get_toss_headers():
 # ============ 결제 진단 (실카드 없이 점검) ============
 
 @router.get("/debug/status")
-async def debug_payment_status():
+async def debug_payment_status(_admin: dict = Depends(require_admin)):
     """결제 시스템 진단: 토스 키 유효성 + 정기결제 엔드포인트 응답 + pending 주문 실제 대조.
 
     실카드 결제는 못 하지만, 토스 API 응답코드로 (1)키가 유효한지 (2)정기결제 통신이 되는지
     판별하고, (3)DB의 pending 주문들이 토스에 '진짜 결제'로 존재하는지 대조한다.
     스크래핑 없음 — 토스 HTTP 호출 몇 번뿐이라 안전.
+
+    ⚠️ 관리자 전용. 응답에 토스 키 모드와 **실제 order_id** 가 그대로 담긴다.
+    인증 없이 열어둔 동안은 누구나 긁어갈 수 있었다.
     """
     key_mode = ("live" if TOSS_SECRET_KEY.startswith("live_")
                 else "test" if TOSS_SECRET_KEY.startswith("test_")
@@ -634,8 +638,16 @@ async def register_billing(
             payment_key = payment_data.get("paymentKey")
             logger.info(f"Billing payment successful: paymentKey={payment_key}")
 
-            # 3. 결제 내역 저장 (새로운 order_id로 생성)
-            create_payment(user_id, new_order_id, amount, payment_key, "completed")
+            # 3. 결제 내역 저장
+            #
+            # /prepare 가 만들어 둔 pending 행을 **덮어쓴다**. 새 행을 만들면
+            # 결제 한 건이 행 두 개(완료 1 + 영원한 대기중 1)가 되어, 관리자
+            # 화면의 '대기중'이 이탈자와 성공자가 섞인 더미가 된다.
+            if not settle_prepared_payment(
+                user_id, request.order_id, new_order_id, amount, payment_key
+            ):
+                # 덮어쓸 행이 없는 경우(주소로 직접 들어온 흐름 등)만 새로 만든다.
+                create_payment(user_id, new_order_id, amount, payment_key, "completed")
 
             # 4. 구독 업그레이드 — **빌링키를 반드시 함께 저장한다.**
             # 이걸 빠뜨린 동안 정기결제는 이름만 정기결제였다. 첫 달만 받고
@@ -725,8 +737,12 @@ async def billing_payment(current_user: dict = Depends(get_current_user)):
 
             payment_data = response.json()
 
-            # 결제 내역 저장
-            create_payment(user_id, order_id, amount, payment_data.get("paymentKey"), "completed")
+            # 결제 내역 저장. 저장된 카드로 바로 긁는 경로라 체크아웃 퍼널이
+            # 아니다 — 성공률의 분자로 세면 지표가 부풀어오른다.
+            create_payment(
+                user_id, order_id, amount, payment_data.get("paymentKey"),
+                "completed", kind="renewal",
+            )
             upgrade_subscription(
                 user_id=user_id,
                 plan_type=creds["plan_type"],
