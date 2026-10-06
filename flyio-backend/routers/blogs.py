@@ -365,8 +365,13 @@ def estimate_from_successful_results(blog_id: str, successful_results: list) -> 
         if idx.get("level"):
             levels.append(idx["level"])
         if idx.get("score_breakdown"):
-            c_ranks.append(idx["score_breakdown"].get("c_rank", 0))
-            dias.append(idx["score_breakdown"].get("dia", 0))
+            # None(미측정)은 평균에 넣지 않는다 — 0 으로 바꾸면 동료 평균을 끌어내린다
+            _cr = idx["score_breakdown"].get("c_rank")
+            _di = idx["score_breakdown"].get("dia")
+            if _cr is not None:
+                c_ranks.append(_cr)
+            if _di is not None:
+                dias.append(_di)
         st = result.get("stats") or {}
         if st.get("total_posts"):
             posts.append(st["total_posts"])
@@ -573,9 +578,10 @@ class SimpleScoreBreakdown(BaseModel):
     content_factors 가 빠져 있어 "3.1 + 25.9 인데 총점 92.1" 처럼
     합이 맞지 않는 화면이 나갔다.
     """
-    c_rank: float = 0
-    dia: float = 0
-    # 측정 불가일 수 있다 (None = 이 축을 못 쟀다는 뜻, 0점이 아니다)
+    # 세 항 모두 측정 불가일 수 있다 (None = 이 축을 못 쟀다는 뜻, 0점이 아니다).
+    # c_rank/dia 는 예전엔 하위점수가 중립 50 으로 채워져 늘 값이 있었다.
+    c_rank: Optional[float] = None
+    dia: Optional[float] = None
     content_factors: Optional[float] = None
     # 누적 지표 보너스 (글수·이웃수·방문자)
     extra_bonus: float = 0
@@ -2741,6 +2747,20 @@ async def scrape_blog_stats(blog_id: str) -> Dict:
     return stats
 
 
+def _normalize_measured_parts(parts) -> Optional[float]:
+    """측정된 하위항목만으로 차원 점수를 만든다. 하나도 없으면 None.
+
+    못 쟀을 때 중립 50 을 집어넣으면 그 50 이 점수가 되어 "측정 실패"가
+    "평범한 블로그"로 보인다. content_factors 가 쓰던 방식과 같게 맞춘다.
+    """
+    if not parts:
+        return None
+    w_sum = sum(w for _, w in parts)
+    if w_sum > 0:
+        return sum(s * w for s, w in parts) / w_sum
+    return sum(s for s, _ in parts) / len(parts)
+
+
 async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = False) -> Dict:
     """Analyze a single blog - FAST version using API only (no Playwright)"""
     # 캐시 확인 (성능 개선)
@@ -3156,7 +3176,13 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
 
         # Context Score (주제 집중도) - 0~100
         # A-2 보강: 카테고리 엔트로피 우선 사용. 엔트로피가 낮을수록 = 한 카테고리에 글이 몰림 = 주제 집중도 ↑
-        context_score = 50  # Base
+        # ⚠️ 아래 하위점수들의 "Base = 50" 은 측정값이 아니라 **못 쟀다는 표시**다.
+        # 예전에는 그 50 이 가중합에 그대로 들어가 c_rank·dia 를 만들어냈고,
+        # 방문자·이웃·글 수가 전부 null 인 블로그가 "준최2 / 50.8점"으로 나갔다
+        # (2026-10-06 프로덕션 실측: 100행 중 34행). 측정된 하위항목만 정규화한다 —
+        # content_factors 가 이미 쓰는 방식 그대로다.
+        context_score = 50  # Base (미측정)
+        context_measured = False
         entropy = analysis_data.get("category_entropy")
         cats = analysis_data.get("category_count") or 0
         if entropy is not None and cats > 0:
@@ -3166,6 +3192,7 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
             normalized = entropy / max_entropy if max_entropy > 0 else 0
             # normalized 0 → 95점, 1 → 35점 (선형)
             context_score = max(35, min(95, round(95 - normalized * 60)))
+            context_measured = True
         elif cats > 0:
             # 엔트로피 못 구한 경우: 기존 카테고리 개수 휴리스틱 폴백
             if cats <= 3:
@@ -3176,10 +3203,14 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
                 context_score = 60
             else:
                 context_score = 40
+            context_measured = True
 
         # Content Score (콘텐츠 품질) - 0~100
         # A-2 보강: 글 길이 + 이미지 개수 + 단어 수를 결합
-        content_score = 50  # Base
+        content_score = 50  # Base (미측정)
+        # RSS 를 못 읽으면 avg_len=0 → length_score 35 가 되는데, 그건 '짧은 글'이
+        # 아니라 '글을 못 봤다'는 뜻이다. 길이 신호가 없으면 측정 안 된 것으로 둔다.
+        content_measured = bool(analysis_data.get("avg_post_length"))
         avg_len = analysis_data.get("avg_post_length") or 0
         if avg_len > 0 and avg_len < 500:
             avg_len = avg_len * 7
@@ -3231,10 +3262,12 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
 
         # Chain Score (연결성/공감 연쇄) - 0~100
         # A-2 보강: 풀파싱 공감/댓글 우선, 없으면 이웃수 폴백
-        chain_score = 50  # Base
+        chain_score = 50  # Base (미측정)
+        chain_measured = False
         avg_likes = analysis_data.get("fullparse_avg_likes")
         avg_comments = analysis_data.get("fullparse_avg_comments")
         if avg_likes is not None or avg_comments is not None:
+            chain_measured = True
             # 진짜 신호: 공감 + 댓글*2 (댓글이 더 강한 engagement 신호)
             engagement = (avg_likes or 0) + (avg_comments or 0) * 2
             if engagement >= 100:
@@ -3252,6 +3285,7 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
             else:
                 chain_score = 30
         elif stats["neighbor_count"]:
+            chain_measured = True
             neighbors = stats["neighbor_count"]
             if neighbors >= 5000:
                 chain_score = 95
@@ -3280,13 +3314,25 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
         else:
             context_w, content_w, chain_w = 0.40, 0.50, 0.10
 
-        c_rank_score = (context_score * context_w + content_score * content_w + chain_score * chain_w)
+        c_rank_parts = []
+        c_rank_detail = {}
+        if context_measured:
+            c_rank_parts.append((context_score, context_w))
+            c_rank_detail["context"] = round(context_score, 1)
+        if content_measured:
+            c_rank_parts.append((content_score, content_w))
+            c_rank_detail["content"] = round(content_score, 1)
+        if chain_measured:
+            c_rank_parts.append((chain_score, chain_w))
+            c_rank_detail["chain"] = round(chain_score, 1)
+        c_rank_score = _normalize_measured_parts(c_rank_parts)
 
         # ===== D.I.A. SCORE CALCULATION =====
         # D.I.A.: Depth(깊이) + Information(정보성) + Accuracy(정확성)
 
         # Depth Score (분석 깊이) - 0~100
-        depth_score = 50  # Base (미측정 시 중립)
+        depth_score = 50  # Base (미측정)
+        depth_measured = stats["total_posts"] is not None
         if stats["total_posts"] is not None:
             posts = stats["total_posts"]
             if posts >= 2000:
@@ -3306,7 +3352,11 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
 
         # Information Score (정보성) - 0~100
         # A-2 보강: 최근 활동일 + 평균 발행 간격을 함께 본다 (꾸준함 측정)
-        info_score = 50  # Base
+        info_score = 50  # Base (미측정)
+        info_measured = (
+            analysis_data["recent_activity"] is not None
+            or analysis_data.get("posting_interval_days") is not None
+        )
         if analysis_data["recent_activity"] is not None:
             days = analysis_data["recent_activity"]
             if days <= 1:
@@ -3351,10 +3401,12 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
             info_score = recency_score
 
         # Accuracy Score (신뢰도/정확성) - 0~100
-        accuracy_score = 50  # Base
+        accuracy_score = 50  # Base (미측정)
+        accuracy_measured = False
         # 우선순위 1: 실측 일별 방문자(NVisitorgp) — 조작값이 아닌 진짜 트래픽 신호
         # 일 방문 기준 컷 (누적 아님): 1000+ 강한 활성, 10 미만 사실상 방치
         if stats.get("visitor_measured") and stats.get("daily_visitors") is not None:
+            accuracy_measured = True
             dv = stats.get("recent_avg_visitors") or stats["daily_visitors"]
             if dv >= 3000:
                 accuracy_score = 95
@@ -3374,6 +3426,7 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
                 accuracy_score = 25
         # 우선순위 2: 스크랩된 누적 방문자(실측 HTML). 조작값(get_consistent_value)은 제외.
         elif stats["total_visitors"] and "scrape" in analysis_data["data_sources"]:
+            accuracy_measured = True
             visitors = stats["total_visitors"]
             if visitors >= 10000000:
                 accuracy_score = 95
@@ -3406,7 +3459,18 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
         else:
             depth_w, info_w, acc_w = 0.20, 0.50, 0.30
 
-        dia_score = (depth_score * depth_w + info_score * info_w + accuracy_score * acc_w)
+        dia_parts = []
+        dia_detail = {}
+        if depth_measured:
+            dia_parts.append((depth_score, depth_w))
+            dia_detail["depth"] = round(depth_score, 1)
+        if info_measured:
+            dia_parts.append((info_score, info_w))
+            dia_detail["information"] = round(info_score, 1)
+        if accuracy_measured:
+            dia_parts.append((accuracy_score, acc_w))
+            dia_detail["accuracy"] = round(accuracy_score, 1)
+        dia_score = _normalize_measured_parts(dia_parts)
 
         # ===== FINAL SCORE — B 검증 결과 기반 가중치 =====
         # 측정 ρ: c_rank +0.032, dia +0.015, content_factors(외부 측정 raw) > 둘
@@ -3512,11 +3576,18 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
         #    블로그가 준최6→준최2로 떨어진 것으로 보였다.
         #    → 어떤 차원을 못 쟀는지 기록하고, 핵심 차원이 빠지면 '불완전 측정'
         #      으로 표시한다. 시계열 적재는 그 표시를 보고 거른다.
-        dimensions = [
-            (c_rank_score, c_rank_weight),
-            (dia_score, dia_weight),
-        ]
+        dimensions = []
         unmeasured_dimensions = []
+        # c_rank·dia 도 하위항목을 하나도 못 쟀으면 None 이다(예전엔 중립 50 의
+        # 가중합이 들어와 언제나 값이 있었다). 못 쟨 차원은 정규화에서 뺀다.
+        if c_rank_score is not None:
+            dimensions.append((c_rank_score, c_rank_weight))
+        else:
+            unmeasured_dimensions.append("c_rank")
+        if dia_score is not None:
+            dimensions.append((dia_score, dia_weight))
+        else:
+            unmeasured_dimensions.append("dia")
         if content_factor_score is not None:
             dimensions.append((content_factor_score, content_weight))
         else:
@@ -3772,22 +3843,22 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
         # 총점과 자릿수를 맞추기 위해 정규화된 기여분으로 보고한다
         # (c_rank + dia = base_score 가 성립해야 사용자가 합을 검산할 수 있다)
         index["score_breakdown"] = {
-            "c_rank": round(c_rank_score * c_rank_weight / weight_sum, 1),
-            "dia": round(dia_score * dia_weight / weight_sum, 1),
+            "c_rank": (
+                round(c_rank_score * c_rank_weight / weight_sum, 1)
+                if c_rank_score is not None else None
+            ),
+            "dia": (
+                round(dia_score * dia_weight / weight_sum, 1)
+                if dia_score is not None else None
+            ),
             "content_factors": (
                 round(content_factor_score * content_weight / weight_sum, 1)
                 if content_factor_score is not None else None
             ),
-            "c_rank_detail": {
-                "context": round(context_score, 1),
-                "content": round(content_score, 1),
-                "chain": round(chain_score, 1)
-            },
-            "dia_detail": {
-                "depth": round(depth_score, 1),
-                "information": round(info_score, 1),
-                "accuracy": round(accuracy_score, 1)
-            },
+            # 실제로 측정한 하위항목만 (못 쟨 항목은 아예 키가 없다 — 50 을
+            # 넣으면 화면에서 실측값과 구분이 안 된다)
+            "c_rank_detail": c_rank_detail,
+            "dia_detail": dia_detail,
             # 실제로 측정한 콘텐츠 항목만 (측정 못 한 항목은 아예 키가 없다)
             "content_detail": content_factor_detail,
             "weights_used": {
@@ -4272,8 +4343,8 @@ async def analyze_blog_endpoint(
 
         # Get score breakdown — 총점을 검산할 수 있는 모든 항을 그대로 통과시킨다
         score_breakdown = index.get("score_breakdown", {})
-        c_rank = score_breakdown.get("c_rank", 0)
-        dia = score_breakdown.get("dia", 0)
+        c_rank = score_breakdown.get("c_rank")
+        dia = score_breakdown.get("dia")
         content_factors = score_breakdown.get("content_factors")
         weights_used = score_breakdown.get("weights_used")
 
@@ -4554,8 +4625,8 @@ async def get_blog_index(blog_id: str):
                 "total_score": index.get("total_score") or 0,
                 "percentile": index.get("percentile", 0),
                 "score_breakdown": {
-                    "c_rank": score_breakdown.get("c_rank", 0),
-                    "dia": score_breakdown.get("dia", 0)
+                    "c_rank": score_breakdown.get("c_rank"),
+                    "dia": score_breakdown.get("dia")
                 }
             },
             "warnings": [],
