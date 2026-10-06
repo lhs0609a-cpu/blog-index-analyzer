@@ -488,6 +488,13 @@ class BlogIndex(BaseModel):
     level_category: str = ""
     percentile: Optional[float] = None
     score_breakdown: Optional[Dict[str, Any]] = None
+    # ===== 측정 상태 =====
+    # 화면이 "낮은 등급"과 "이번에 제대로 못 쟀다"를 구분할 수 있어야 한다.
+    # 예전에는 이 정보가 계산만 되고 응답에 실리지 않아 UI 가 알 길이 없었다.
+    measurement_complete: Optional[bool] = None
+    unmeasured_dimensions: Optional[List[str]] = None
+    partial_dimensions: Optional[List[str]] = None
+    unmeasurable_reason: Optional[str] = None
 
 
 class BlogResult(BaseModel):
@@ -2747,6 +2754,30 @@ async def scrape_blog_stats(blog_id: str) -> Dict:
     return stats
 
 
+def _visible_results_limit(gate) -> Optional[int]:
+    """플랜이 볼 수 있는 검색 결과 행 수. None 이면 제한 없음.
+
+    비회원은 무료 플랜과 같은 칸을 쓴다(가격 페이지의 '무료 5개'가 그 줄이다).
+    내부 파이썬 호출(gate=None)은 파이프라인이므로 자르지 않는다.
+    """
+    if gate is None:
+        return None
+    try:
+        from database.subscription_db import PLAN_LIMITS, PlanType
+    except Exception:
+        return None
+    plan = (getattr(gate, "plan", None) or "guest").lower()
+    if plan in ("guest", ""):
+        plan = "free"
+    for pt, limits in PLAN_LIMITS.items():
+        if (pt.value if hasattr(pt, "value") else str(pt)).lower() == plan:
+            n = limits.get("search_results_count")
+            if isinstance(n, int) and n > 0:
+                return n
+            return None
+    return None
+
+
 def _normalize_measured_parts(parts) -> Optional[float]:
     """측정된 하위항목만으로 차원 점수를 만든다. 하나도 없으면 None.
 
@@ -3588,14 +3619,28 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
             dimensions.append((dia_score, dia_weight))
         else:
             unmeasured_dimensions.append("dia")
+        # 콘텐츠를 '쟀다'와 '제대로 쟀다'는 다르다. 소제목·문단은 본문 풀파싱에서만
+        # 나오고, 풀파싱이 실패하면 content_factors 가 3항목(길이·이미지·최신성)으로
+        # 줄어든 채 완전 측정인 것처럼 재정규화된다.
+        # 2026-10-06 실측(부산맛집, v531→v532 같은 키워드 재호출):
+        #   alik1982  70.3 → 83.2 (준최5 → 최적2)   content_detail 3항목 → 5항목
+        #   autumn_eve 70.2 → 86.2 (준최5 → 최적1+)
+        # 블로그는 그대로인데 등급이 2~3단계 움직인다. 같은 자로 잰 게 아니다.
+        content_fullparsed = "fullparse" in analysis_data["data_sources"]
+        partial_dimensions = []
         if content_factor_score is not None:
             dimensions.append((content_factor_score, content_weight))
+            if not content_fullparsed:
+                partial_dimensions.append("content_factors")
         else:
             unmeasured_dimensions.append("content_factors")
 
         index["unmeasured_dimensions"] = unmeasured_dimensions
-        # 콘텐츠는 가중치 절반이다. 이게 없으면 그 점수는 다른 날과 비교할 수 없다.
-        index["measurement_complete"] = not unmeasured_dimensions
+        index["partial_dimensions"] = partial_dimensions
+        index["content_fullparsed"] = content_fullparsed
+        # 콘텐츠는 가중치 절반이다. 이게 없으면(또는 반만 쟀으면) 그 점수는
+        # 다른 날·다른 블로그와 같은 선에 올릴 수 없다.
+        index["measurement_complete"] = not unmeasured_dimensions and not partial_dimensions
 
         weight_sum = sum(w for _, w in dimensions)
         if weight_sum <= 0:
@@ -3716,23 +3761,32 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
         )
         collected_nothing = (not stats.get("total_posts")) and bool(_core_unmeasured)
 
-        measurable = has_source and not collected_nothing
+        # 부분 측정도 등급을 내지 않는다. 점수(total_score)는 그대로 내보내되
+        # 레벨·등급·백분위는 보류한다 — 흔들리는 등급을 보여주는 것보다
+        # "이 블로그는 이번에 제대로 못 쟀다"가 정직하다.
+        measurable = has_source and not collected_nothing and not partial_dimensions
         if not measurable:
             index["level"] = None
             index["grade"] = "측정 불가"
             index["level_category"] = "측정 불가"
             index["percentile"] = None
             index["level_source"] = "unavailable"
-            index["unmeasurable_reason"] = (
-                "글 목록을 가져오지 못해 지수를 계산하지 않았습니다. "
-                "낮은 점수가 아니라 측정 실패입니다. 잠시 후 다시 시도해 주세요."
-                if collected_nothing
-                else "네이버에서 블로그 지표를 가져오지 못했습니다."
-            )
+            if collected_nothing:
+                index["unmeasurable_reason"] = (
+                    "글 목록을 가져오지 못해 지수를 계산하지 않았습니다. "
+                    "낮은 점수가 아니라 측정 실패입니다. 잠시 후 다시 시도해 주세요."
+                )
+            elif partial_dimensions:
+                index["unmeasurable_reason"] = (
+                    "본문을 끝까지 읽지 못해(소제목·문단 수 누락) 등급 판정을 보류했습니다. "
+                    "낮은 등급이 아니라 불완전 측정입니다. 잠시 후 다시 시도해 주세요."
+                )
+            else:
+                index["unmeasurable_reason"] = "네이버에서 블로그 지표를 가져오지 못했습니다."
             logger.warning(
                 f"Blog {blog_id}: 레벨 판정 생략 "
                 f"(has_source={has_source}, collected_nothing={collected_nothing}, "
-                f"unmeasured={sorted(_core_unmeasured)})"
+                f"partial={partial_dimensions}, unmeasured={sorted(_core_unmeasured)})"
             )
 
         # ===== 레벨 판정 =====
@@ -4899,6 +4953,7 @@ async def search_keyword_with_tabs(
     results = []
     total_score = 0
     total_level = 0
+    leveled_count = 0
     total_posts = 0
     total_neighbors = 0
     analyzed_count = 0
@@ -5016,8 +5071,12 @@ async def search_keyword_with_tabs(
 
             if index:
                 total_score += index.get("total_score") or 0
-                total_level += index.get("level") or 0
                 analyzed_count += 1
+                # 등급 보류(level=None) 를 0 레벨로 더하면 "평균 레벨"이
+                # 측정 실패 개수에 끌려 내려간다. 레벨이 나온 행만 센다.
+                if index.get("level") is not None:
+                    total_level += index["level"]
+                    leveled_count += 1
 
             if stats:
                 if stats.get("total_posts"):
@@ -5091,10 +5150,11 @@ async def search_keyword_with_tabs(
 
     insights = SearchInsights(
         average_score=round(total_score / analyzed_count, 1) if analyzed_count > 0 else 0,
-        average_level=round(total_level / analyzed_count, 1) if analyzed_count > 0 else 0,
+        average_level=round(total_level / leveled_count, 1) if leveled_count > 0 else 0,
         average_posts=round(total_posts / count, 0) if count > 0 else 0,
         average_neighbors=round(total_neighbors / count, 0) if count > 0 else 0,
-        top_level=max([r.index.level for r in results if r.index], default=0),
+        # level=None(등급 보류) 은 집계에서 뺀다 — 0 으로 바꾸면 평균을 끌어내린다
+        top_level=max([r.index.level for r in results if r.index and r.index.level is not None], default=0),
         top_score=max([r.index.total_score for r in results if r.index], default=0),
         score_distribution={},
         common_patterns=[],
@@ -5110,6 +5170,10 @@ async def search_keyword_with_tabs(
     # KEY: 실제 네이버 검색 순위(rank)를 학습 데이터로 저장
     samples_collected = 0
     for r in results:
+        # 불완전 측정(본문 미파싱 등)은 학습에 넣지 않는다. 등급을 보류한 행을
+        # '정답'으로 쓰면 그 50 들이 다시 가중치를 학습한다.
+        if r.index is not None and r.index.measurement_complete is False:
+            continue
         if r.index and r.stats:
             try:
                 # score_breakdown에서 C-Rank, D.I.A. 세부 점수 추출
@@ -5126,13 +5190,15 @@ async def search_keyword_with_tabs(
                         "c_rank_score": breakdown.get("c_rank", 0),
                         "dia_score": breakdown.get("dia", 0),
                         # C-Rank 세부 점수
-                        "context_score": c_rank_detail.get("context", 50),
-                        "content_score": c_rank_detail.get("content", 50),
-                        "chain_score": c_rank_detail.get("chain", 50),
+                        # 못 쟨 하위점수는 50 으로 메우지 않는다 — 그 50 이
+                        # 학습 입력이 되면 측정 실패가 '평범한 블로그'로 학습된다.
+                        "context_score": c_rank_detail.get("context"),
+                        "content_score": c_rank_detail.get("content"),
+                        "chain_score": c_rank_detail.get("chain"),
                         # D.I.A. 세부 점수
-                        "depth_score": dia_detail.get("depth", 50),
-                        "information_score": dia_detail.get("information", 50),
-                        "accuracy_score": dia_detail.get("accuracy", 50),
+                        "depth_score": dia_detail.get("depth"),
+                        "information_score": dia_detail.get("information"),
+                        "accuracy_score": dia_detail.get("accuracy"),
                         # 기타 요소
                         "post_count": r.stats.total_posts or 0,
                         "neighbor_count": r.stats.neighbor_count or 0,
@@ -5233,17 +5299,35 @@ async def search_keyword_with_tabs(
 
     # VIEW 탭 인사이트 계산
     view_analyzed = [r for r in view_results_final if r.index]
+    # 등급 보류(level=None) 행은 레벨 집계에서 빼야 한다 — sum(None) 은 터지고,
+    # 0 으로 치면 "평균 레벨"이 측정 실패 개수에 끌려 내려간다.
+    _view_leveled = [r for r in view_analyzed if r.index.level is not None]
     view_insights = SearchInsights(
         average_score=round(sum(r.index.total_score for r in view_analyzed) / len(view_analyzed), 1) if view_analyzed else 0,
-        average_level=round(sum(r.index.level for r in view_analyzed) / len(view_analyzed), 1) if view_analyzed else 0,
+        average_level=(
+            round(sum(r.index.level for r in _view_leveled) / len(_view_leveled), 1)
+            if _view_leveled else 0
+        ),
         average_posts=0,
         average_neighbors=0,
-        top_level=max([r.index.level for r in view_analyzed], default=0),
+        top_level=max([r.index.level for r in _view_leveled], default=0),
         top_score=max([r.index.total_score for r in view_analyzed], default=0),
         score_distribution={},
         common_patterns=[],
         monthly_search_volume=monthly_search_volume
     ) if view_results_final else None
+
+    # ===== 플랜별 결과 개수 제한 =====
+    # PLAN_LIMITS 의 search_results_count(무료 5 / 베이직 10 / 프로 20 / 비즈 50)는
+    # 가격 페이지에만 쓰이고 서버에서 자르는 코드가 없었다 — 비회원도 20개를 다 받아
+    # 유료 플랜이 이 축에서 파는 게 없었다(2026-10-06 실측).
+    # 인사이트·학습 수집은 분석한 전체(20개)로 계산한 뒤 **표시만** 자른다.
+    # gate 가 없으면(blue_ocean 등 내부 파이썬 호출) 자르지 않는다.
+    visible = _visible_results_limit(gate)
+    if visible is not None:
+        results = results[:visible]
+        view_results_final = view_results_final[:visible]
+        blog_results_final = blog_results_final[:visible]
 
     # 결과가 실제로 나온 지금 차감한다 (위쪽 '검색 결과 0건' 반환 경로는 안 먹는다).
     consume_usage(gate)
