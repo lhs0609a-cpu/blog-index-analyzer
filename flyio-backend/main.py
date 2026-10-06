@@ -593,6 +593,14 @@ REQUEST_TIMEOUT_S = float(os.getenv("REQUEST_TIMEOUT_S", "60"))
 SLOW_PATH_TIMEOUT_S = float(os.getenv("SLOW_PATH_TIMEOUT_S", "180"))
 SLOW_PATH_PREFIXES = (
     "/api/blogs/analyze",
+    # 2026-10-06 실측: 홈의 '키워드 검색'이 바로 이 경로다. 콜드 호출이 45~61초라
+    # 일반 데드라인(60s)에 걸려 사용자가 60초를 기다린 끝에 504 를 받았다.
+    # 데드라인의 목적은 폭주를 멈추는 것이고, 정상적으로 느린 측정을 끊는 게 아니다.
+    "/api/blogs/search-keyword",
+    "/api/blogs/related-keywords",
+    "/api/blogs/analyze-post",
+    "/api/blogs/draft-check",
+    "/api/blogs/judge-keyword",
     "/api/blogs/verify-index",
     "/api/blogs/search-health",
     "/api/blogs/serp-difficulty",
@@ -637,12 +645,27 @@ DEADLINE_EXEMPT_PREFIXES = LONG_JOB_PREFIXES + tuple(
 )
 
 
+# /api/blogs/{blog_id}/... 형태라 접두어로는 못 잡는다. 전부 analyze_blog 또는
+# 네이버 스크래핑을 거치는 측정 경로다 — 접미어로 잡는다.
+SLOW_PATH_SUFFIXES = (
+    "/index",
+    "/index-history",
+    "/score-breakdown",
+    "/diagnosis",
+    "/exposure-ceiling",
+    "/post-exposure",
+    "/posting-history",
+)
+
+
 def _deadline_for(path: str) -> float:
     # 면제가 먼저다 — SLOW_PATH_PREFIXES 와 겹치는 경로가 있다
     # (예: /api/blogs/debug/ 는 /api/blogs/ 하위이고, /api/seo/precompute 도 /api/seo/ 하위다).
     if any(path.startswith(p) for p in DEADLINE_EXEMPT_PREFIXES):
         return 0.0
     if any(path.startswith(p) for p in SLOW_PATH_PREFIXES):
+        return SLOW_PATH_TIMEOUT_S
+    if path.startswith("/api/blogs/") and path.endswith(SLOW_PATH_SUFFIXES):
         return SLOW_PATH_TIMEOUT_S
     return REQUEST_TIMEOUT_S
 
