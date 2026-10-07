@@ -96,6 +96,7 @@ class KeywordPoolDB:
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
         self._init_table()
+        self._ensure_optional_indexes()
 
     @contextmanager
     def _conn(self):
@@ -112,6 +113,32 @@ class KeywordPoolDB:
             raise
         finally:
             conn.close()
+
+    def _ensure_optional_indexes(self):
+        """나중에 추가된 **성능용** 인덱스. 실패해도 기능은 돈다 — 절대 올리지 않는다.
+
+        ⚠️ 2026-10-07 사고: 이걸 `_init_table` 안에 그냥 넣었더니 10만 행 테이블에
+        인덱스를 만드느라 쓰기 락을 오래 잡고, 동시에 도는 키워드 풀 크론과 겹쳐
+        `sqlite3.OperationalError: database is locked` 가 났다(busy_timeout 30초를
+        그대로 다 쓰고 터졌다). `_init_table` 은 `KeywordPoolDB()` 생성마다 돌고
+        그 객체는 풀 관련 **모든** 엔드포인트가 쓰므로, 거기서 예외가 나면 광고
+        기능 전체가 500 이 된다. 성능 최적화가 기능을 죽이면 안 된다.
+
+        그래서 (1) 본 초기화와 분리하고 (2) 실패를 삼키고 (3) 인덱스는 조용한 때
+        한 번 만들어 두면 이후 호출은 IF NOT EXISTS 로 즉시 no-op 이 된다.
+        """
+        ddls = (
+            # list_user_seeds 의 `source = 'user_seed'` — 인덱스가 없어 계정당 전체
+            # row(최대 10만)를 훑었다. keyword 를 뒤에 붙여 covering index 로 만든다.
+            "CREATE INDEX IF NOT EXISTS idx_pool_source "
+            "ON naverad_keyword_pool(account_customer_id, source, keyword)",
+        )
+        for ddl in ddls:
+            try:
+                with self._conn() as conn:
+                    conn.execute(ddl)
+            except Exception as e:
+                logger.warning(f"[pool] 성능 인덱스 생성 보류 ({type(e).__name__}: {e}) — 기능에는 영향 없음")
 
     def _init_table(self):
         with self._conn() as conn:
@@ -153,13 +180,6 @@ class KeywordPoolDB:
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS idx_pool_recent
                 ON naverad_keyword_pool(account_customer_id, id DESC)
-            """)
-            # list_user_seeds 의 `source = 'user_seed'` — 인덱스가 없어서 계정당 전체
-            # row(최대 10만)를 훑고 있었다. keyword 를 뒤에 붙여 covering index 로 만든다
-            # (DISTINCT keyword 까지 인덱스만으로 끝낸다).
-            cur.execute("""
-                CREATE INDEX IF NOT EXISTS idx_pool_source
-                ON naverad_keyword_pool(account_customer_id, source, keyword)
             """)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS naverad_pool_runs (

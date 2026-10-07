@@ -186,10 +186,18 @@ def init_seo_pages_db() -> None:
         # volume_checked_at / attempts 를 보려고 **row 본문을 읽었다**. pending 이 26만
         # 이므로 호출마다 26만 번의 row lookup 이고, /api/seo/stats 가 유휴 상태에서도
         # 20초 걸린 원인이다(실측). 네 컬럼을 다 담아 인덱스만으로 끝내게 한다.
-        cur.execute(
-            "CREATE INDEX IF NOT EXISTS idx_seo_queue_ready "
-            "ON seo_keyword_queue(state, volume_checked_at, search_volume, attempts)"
-        )
+        # ⚠️ 성능용 인덱스는 **실패를 삼킨다**. 26만 행에 인덱스를 만드는 동안 쓰기 락을
+        # 잡으므로, 측정 워커가 쓰는 중이면 `database is locked` 가 날 수 있다.
+        # init_seo_pages_db() 는 seo 엔드포인트마다 불리므로 여기서 예외가 올라가면
+        # SEO 기능 전체가 500 이 된다(같은 실수를 keyword_pool 에서 먼저 했다).
+        # 한 번 만들어지면 IF NOT EXISTS 가 즉시 no-op 이다.
+        try:
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_seo_queue_ready "
+                "ON seo_keyword_queue(state, volume_checked_at, search_volume, attempts)"
+            )
+        except sqlite3.OperationalError as e:
+            logger.warning(f"[seo_pages_db] 성능 인덱스 생성 보류 ({e}) — 기능에는 영향 없음")
         conn.commit()
         logger.info(f"[seo_pages_db] initialized at {SEO_PAGES_DB_PATH}")
     finally:
