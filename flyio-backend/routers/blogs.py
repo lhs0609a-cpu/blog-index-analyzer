@@ -1823,6 +1823,42 @@ async def fetch_display_ranks(keyword: str, blog_results: List[Dict]) -> Dict[st
     return display_info
 
 
+class _PostFetchUnreachable(Exception):
+    """네이버 본문 수집을 시도하지 않고 건너뛴다는 신호(실패가 아니라 회피)."""
+
+
+# 네이버가 서버 IP 를 막으면 연결 자체가 타임아웃된다(connect 3s). 그 상태에서
+# analyze_post 는 글 하나당 폴백 3단계를 다 던지고, 키워드 하나는 SERP 20개 ×
+# 풀파싱 표본까지 100회 넘게 analyze_post 를 부른다. 2026-10-07 실측:
+# 그래서 요청이 180초 데드라인을 넘겨 504 가 됐다(186.8s) — 사용자는 3분을
+# 기다린 끝에 아무것도 받지 못한다.
+# 연결이 막힌 게 확인되면 쿨다운 동안 본문 수집을 건너뛴다. 측정 불가 행이 나오는
+# 건 어쩔 수 없지만, 그건 '등급 보류'로 정직하게 표시되고 결과는 받을 수 있다.
+_POST_FETCH_FAIL_THRESHOLD = 3     # 연속 연결 실패 몇 번에 차단할지
+_POST_FETCH_COOLDOWN_S = 60.0      # 차단 유지 시간
+_post_fetch_breaker = {"until": 0.0, "fails": 0}
+
+
+def _post_fetch_blocked() -> bool:
+    return time.time() < _post_fetch_breaker["until"]
+
+
+def _note_post_connect_fail(post_url: str) -> None:
+    _post_fetch_breaker["fails"] += 1
+    if _post_fetch_breaker["fails"] >= _POST_FETCH_FAIL_THRESHOLD:
+        _post_fetch_breaker["until"] = time.time() + _POST_FETCH_COOLDOWN_S
+        _post_fetch_breaker["fails"] = 0
+        logger.warning(
+            f"[post-fetch] 네이버 연결 실패 {_POST_FETCH_FAIL_THRESHOLD}회 연속 — "
+            f"{_POST_FETCH_COOLDOWN_S:.0f}초간 본문 수집을 건너뛴다 (마지막: {post_url})"
+        )
+
+
+def _note_post_connect_ok() -> None:
+    if _post_fetch_breaker["fails"]:
+        _post_fetch_breaker["fails"] = 0
+
+
 async def analyze_post(post_url: str, keyword: str) -> Dict:
     """
     개별 블로그 글 분석 - 상위 노출 글의 특성 파악 (강화 버전)
@@ -1872,6 +1908,11 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
         if not blog_id or not post_no:
             logger.warning(f"Could not extract blog_id/post_no from: {post_url}")
             return post_analysis
+
+        # 네이버 연결이 막힌 구간이면 시도 자체를 하지 않는다(타임아웃 적립 방지).
+        if _post_fetch_blocked():
+            post_analysis["skipped_reason"] = "naver_unreachable"
+            raise _PostFetchUnreachable()
 
         # 다양한 User-Agent로 시도
         user_agents = [
@@ -1966,6 +2007,12 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
                         except Exception as je:
                             logger.debug(f"JSON parse failed: {je}")
 
+            except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as ce:
+                # 호스트에 못 닿는 것이다 — 같은 호스트에 폴백을 또 던지면
+                # 타임아웃을 한 번 더 먹을 뿐이다.
+                _note_post_connect_fail(post_url)
+                post_analysis["skipped_reason"] = "naver_unreachable"
+                raise _PostFetchUnreachable() from ce
             except Exception as e1:
                 logger.debug(f"PostView method failed: {e1}")
 
@@ -1978,7 +2025,12 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
                     "Accept-Language": "ko-KR,ko;q=0.9",
                     "Referer": "https://m.search.naver.com/",
                 }
-                resp = await client.get(mobile_url, headers=headers)
+                try:
+                    resp = await client.get(mobile_url, headers=headers)
+                except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as ce:
+                    _note_post_connect_fail(post_url)
+                    post_analysis["skipped_reason"] = "naver_unreachable"
+                    raise _PostFetchUnreachable() from ce
 
             if resp.status_code == 200:
                 html = resp.text
@@ -2227,10 +2279,18 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
             else:
                 logger.warning(f"Failed to fetch post: {blog_id}/{post_no} - status {resp.status_code}")
 
+    except _PostFetchUnreachable:
+        # 실패가 아니라 '시도하지 않음'이다. 트레이스백으로 로그를 채우지 않는다.
+        logger.debug(f"[post-fetch] 건너뜀(네이버 연결 불가): {post_url}")
     except Exception as e:
         logger.error(f"Error analyzing post {post_url}: {e}")
         import traceback
         logger.error(traceback.format_exc())
+
+    # 본문을 실제로 받아왔다면 연속 실패 카운터를 되돌린다 — 일시적 실패 몇 건으로
+    # 브레이커가 열리면 멀쩡한 구간에서도 측정을 건너뛰게 된다.
+    if post_analysis.get("data_fetched"):
+        _note_post_connect_ok()
 
     # ===== 포스트 단위 6신호 점수 (D.I.A.+ 문서 평가 모방) =====
     # 블로그 평균 점수가 SERP 순위와 무관(ρ≈0.04)이라는 검증 결과 → 포스트 단위로 전환
