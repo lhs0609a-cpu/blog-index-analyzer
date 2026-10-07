@@ -31,9 +31,17 @@ _playwright = None
 # (`_close_browser` + `_reaper_loop`). 새로 설계한 게 아니다.
 _browser_last_use: float = 0.0
 _reaper_task: Optional["asyncio.Task"] = None
-# 유휴 브라우저를 닫기까지의 시간(초). 측정 배치 간격(기본 120s)보다 넉넉히 길게 —
-# 짧으면 배치마다 콜드 기동을 다시 치러 키워드당 시간이 늘어난다.
-BROWSER_IDLE_CLOSE_S = max(60, int(os.environ.get("SCRAPER_BROWSER_IDLE_CLOSE", "300")))
+# 유휴 브라우저를 닫기까지의 시간(초).
+#
+# 하한이 두 개다. (1) 측정 배치 간격(기본 120s)보다 길어야 한다 — 짧으면 배치마다
+# 콜드 기동을 다시 치러 키워드당 시간이 늘어난다. (2) **단일 작업 상한보다 길어야
+# 한다.** seo_page_builder 의 PER_KEYWORD_TIMEOUT_S 가 300초이므로, 300초로 두면
+# 리퍼가 아직 측정 중인 브라우저를 닫아 "Target page, context or browser has been
+# closed" 를 유발할 수 있다. `_active_contexts` 가드가 있지만 그 카운터는
+# scrape_blog_stats 한 경로에서만 올라가고 blog-tab 스크래핑 경로는 세지 않는다.
+# 그래서 600초 — 어떤 단일 작업보다 확실히 길다. 고아 회수가 목적이고, 몇 분 늦게
+# 회수해도 목적은 달성된다(누수는 93분씩 남는 것이 문제였다).
+BROWSER_IDLE_CLOSE_S = max(60, int(os.environ.get("SCRAPER_BROWSER_IDLE_CLOSE", "600")))
 
 
 async def _discard_browser(reason: str) -> None:
