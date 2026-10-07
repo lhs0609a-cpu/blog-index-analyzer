@@ -94,7 +94,10 @@ async def recompute_difficulty_endpoint(
 
 
 @router.get("/stats")
-async def get_seo_stats():
+def get_seo_stats():
+    """⚠️ `async def` 가 아니다 — 안쪽이 동기 SQLite 집계라 async 로 두면 그 시간만큼
+    이벤트루프가 멈춘다(큐 26만 행, 실측 20초). `def` 면 FastAPI 가 스레드풀로 돌린다.
+    집계 자체는 idx_seo_queue_ready 로 줄였다."""
     seo_db.init_seo_pages_db()
     return seo_db.stats()
 

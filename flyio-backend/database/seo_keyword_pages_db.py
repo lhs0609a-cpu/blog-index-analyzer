@@ -180,6 +180,16 @@ def init_seo_pages_db() -> None:
             "CREATE INDEX IF NOT EXISTS idx_seo_queue_volume "
             "ON seo_keyword_queue(state, search_volume DESC)"
         )
+        # 큐 집계용 covering index (2026-10-07).
+        #
+        # stats() 의 volume_unchecked 와 volume_ready_count() 는 state 로만 좁힌 뒤
+        # volume_checked_at / attempts 를 보려고 **row 본문을 읽었다**. pending 이 26만
+        # 이므로 호출마다 26만 번의 row lookup 이고, /api/seo/stats 가 유휴 상태에서도
+        # 20초 걸린 원인이다(실측). 네 컬럼을 다 담아 인덱스만으로 끝내게 한다.
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_seo_queue_ready "
+            "ON seo_keyword_queue(state, volume_checked_at, search_volume, attempts)"
+        )
         conn.commit()
         logger.info(f"[seo_pages_db] initialized at {SEO_PAGES_DB_PATH}")
     finally:

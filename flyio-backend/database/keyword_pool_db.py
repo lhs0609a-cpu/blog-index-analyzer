@@ -154,6 +154,13 @@ class KeywordPoolDB:
                 CREATE INDEX IF NOT EXISTS idx_pool_recent
                 ON naverad_keyword_pool(account_customer_id, id DESC)
             """)
+            # list_user_seeds 의 `source = 'user_seed'` — 인덱스가 없어서 계정당 전체
+            # row(최대 10만)를 훑고 있었다. keyword 를 뒤에 붙여 covering index 로 만든다
+            # (DISTINCT keyword 까지 인덱스만으로 끝낸다).
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_pool_source
+                ON naverad_keyword_pool(account_customer_id, source, keyword)
+            """)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS naverad_pool_runs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1351,6 +1358,25 @@ class KeywordPoolDB:
                      last_run_at = CURRENT_TIMESTAMP""",
                 (account_customer_id,),
             )
+
+    def status_breakdown(self, account_customer_id: int) -> Dict[str, int]:
+        """status 별 개수만. `stats()` 의 첫 질의와 같지만 **나머지를 안 돈다.**
+
+        `stats()` 는 MIN/MAX(discovered_at, registered_at) 를 같이 구하는데, 그 컬럼은
+        어느 인덱스에도 없어서 해당 계정의 전체 row 를 본문까지 읽는다(계정당 최대 10만).
+        by_status 만 필요한 호출자가 `stats()` 를 부르면 버릴 결과를 위해 그 값을 다 치른다
+        — diagnostics/accounts-list 가 계정마다 그렇게 해서 237초에 504 로 끝났다.
+        이 질의는 idx_pool_status(account_customer_id, status, ...) 로 인덱스만 훑는다.
+        """
+        with self._conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT status, COUNT(*) AS n FROM naverad_keyword_pool
+                   WHERE account_customer_id = ?
+                   GROUP BY status""",
+                (account_customer_id,),
+            )
+            return {row["status"]: row["n"] for row in cur.fetchall()}
 
     def stats(self, account_customer_id: int) -> Dict:
         with self._conn() as conn:

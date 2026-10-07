@@ -7471,11 +7471,17 @@ async def keyword_pool_empty_campaign_cleanup(
 
 
 @router.get("/keyword-pool/diagnostics/accounts-list")
-async def keyword_pool_diagnostics_accounts_list():
+def keyword_pool_diagnostics_accounts_list():
     """진단 — 모든 활성 광고주 + user_seed 샘플 (인증 없음).
 
     한의원 광고주 customer_id 식별용. cid 자체는 민감 정보 아님 (네이버 광고
     조회 가능). user_seed 샘플 5개로 도메인 식별 가능.
+
+    ⚠️ `async def` 가 아니다. 안쪽이 전부 **동기 SQLite** 라서 async 로 두면 계정 수만큼의
+    집계가 이벤트루프 위에서 돌고, 그 동안 서버 전체가 멈춘다(2026-10-07 실측: 이 요청
+    하나가 돌 때 /health 가 8.5초, 전수 스윕에서 21개 엔드포인트가 한꺼번에 타임아웃으로
+    보였는데 재측정하니 19개는 정상 — 전부 이 하나의 그림자였다). `def` 로 두면 FastAPI 가
+    스레드풀에서 돌려 루프를 막지 않는다. 비용도 같이 줄였다 — 아래 status_breakdown 참고.
     """
     from database.naver_ad_db import list_connected_ad_accounts
     pool = get_keyword_pool_db()
@@ -7491,8 +7497,9 @@ async def keyword_pool_diagnostics_accounts_list():
         except Exception:
             seeds = []
         try:
-            stats = pool.stats(cid) or {}
-            by_status = stats.get("by_status") or {}
+            # stats() 가 아니라 status_breakdown(). 여기서 쓰는 건 by_status 하나인데
+            # stats() 는 MIN/MAX(discovered_at) 때문에 계정 row 를 본문까지 전부 읽는다.
+            by_status = pool.status_breakdown(cid)
         except Exception:
             by_status = {}
         out.append({

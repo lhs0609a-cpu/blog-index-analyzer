@@ -4,7 +4,9 @@ Uses headless browser to bypass API restrictions
 Memory optimized for low-resource servers (2GB RAM)
 """
 import asyncio
+import os
 import re
+import time
 import logging
 from typing import Dict, Optional, Tuple
 from playwright.async_api import async_playwright, Browser, Page, TimeoutError as PlaywrightTimeout
@@ -15,6 +17,75 @@ logger = logging.getLogger(__name__)
 _browser: Optional[Browser] = None
 _playwright = None
 
+# 상주 브라우저를 **마지막으로 쓴 시각**과 회수 루프.
+#
+# ⚠️ 2026-10-07 프로덕션 실측으로 들어온 것. 이 모듈은 브라우저를 버릴 때
+# `_browser = None` 으로 참조만 끊고 `close()` 를 부르지 않았다. 그래서 네이버가
+# 서버 IP 를 막아 SERP 측정이 90초 타임아웃을 낼 때마다 chromium 트리 하나가
+# 고아로 남았다 — 실측: headless_shell 15개 중 4개 트리가 **93분째** CPU 0% 로
+# 살아 ~600MB 를 쥐고 있었고(머신 3072MB), available 이 332MB 까지 떨어져
+# /health 조차 20초 타임아웃을 냈다. headless_shell 하나가 362MB 까지 가므로
+# 그 상태에서 브라우저가 한 번 더 뜨면 OOM 이다.
+#
+# 패턴은 `services/keyword_verdict.py` 가 이미 쓰고 있는 것을 그대로 가져왔다
+# (`_close_browser` + `_reaper_loop`). 새로 설계한 게 아니다.
+_browser_last_use: float = 0.0
+_reaper_task: Optional["asyncio.Task"] = None
+# 유휴 브라우저를 닫기까지의 시간(초). 측정 배치 간격(기본 120s)보다 넉넉히 길게 —
+# 짧으면 배치마다 콜드 기동을 다시 치러 키워드당 시간이 늘어난다.
+BROWSER_IDLE_CLOSE_S = max(60, int(os.environ.get("SCRAPER_BROWSER_IDLE_CLOSE", "300")))
+
+
+async def _discard_browser(reason: str) -> None:
+    """상주 브라우저를 **닫고** 버린다.
+
+    `_browser = None` 만으로는 OS 프로세스가 죽지 않는다 — chromium 과 node 드라이버가
+    남는다. `browser.close()` 와 `playwright.stop()` 을 **둘 다** 불러야 회수된다.
+    실패는 삼키되(이미 죽은 브라우저를 닫는 건 정상 경로다) 조용히 넘기지 않고 남긴다 —
+    예전엔 bare except 였고, 그래서 누수가 로그에 흔적을 남기지 않았다.
+    """
+    global _browser, _playwright
+    browser, pw = _browser, _playwright
+    _browser = _playwright = None
+    if browser is None and pw is None:
+        return
+    logger.info(f"[Playwright] 공용 브라우저 정리 ({reason})")
+    if browser is not None:
+        try:
+            await browser.close()
+        except Exception as e:
+            logger.warning(f"[Playwright] browser.close() 실패 ({reason}): {e}")
+    if pw is not None:
+        try:
+            await pw.stop()
+        except Exception as e:
+            logger.warning(f"[Playwright] playwright.stop() 실패 ({reason}): {e}")
+
+
+async def _reaper_loop() -> None:
+    """오래 안 쓰인 상주 브라우저를 닫아 머신 RAM 을 돌려준다."""
+    while True:
+        await asyncio.sleep(60)
+        try:
+            if _browser is None:
+                continue
+            if time.time() - _browser_last_use <= BROWSER_IDLE_CLOSE_S:
+                continue
+            if _active_contexts > 0:
+                continue  # 아직 쓰는 중 — 다음 틱에 다시 본다
+            await _discard_browser("idle")
+        except Exception as e:
+            logger.warning(f"[Playwright] reaper 오류: {e}")
+
+
+def _ensure_reaper() -> None:
+    global _reaper_task
+    if _reaper_task is None or _reaper_task.done():
+        try:
+            _reaper_task = asyncio.create_task(_reaper_loop())
+        except RuntimeError:
+            _reaper_task = None  # 루프 없는 컨텍스트 — 다음 호출에서 다시 시도
+
 # 동시 Playwright 요청 제한 (메모리 보호)
 _active_contexts = 0
 _MAX_CONTEXTS = 5  # 최대 동시 컨텍스트 수 (2 → 5로 증가)
@@ -22,7 +93,7 @@ _MAX_CONTEXTS = 5  # 최대 동시 컨텍스트 수 (2 → 5로 증가)
 
 async def get_browser() -> Browser:
     """Get or create browser instance"""
-    global _browser, _playwright
+    global _browser, _playwright, _browser_last_use
 
     # Check if we need to create a new browser
     need_new_browser = False
@@ -37,15 +108,8 @@ async def get_browser() -> Browser:
             need_new_browser = True
 
     if need_new_browser:
-        # Close existing playwright instance if any
-        if _playwright:
-            try:
-                await _playwright.stop()
-            except Exception:
-                pass
-            _playwright = None
-
-        _browser = None
+        # 끊긴 브라우저도 **닫아서** 버린다. 참조만 끊으면 chromium 이 남는다.
+        await _discard_browser("disconnected")
 
         _playwright = await async_playwright().start()
         _browser = await _playwright.chromium.launch(
@@ -71,6 +135,8 @@ async def get_browser() -> Browser:
         )
         logger.info("Browser instance created (memory optimized)")
 
+    _browser_last_use = time.time()
+    _ensure_reaper()
     return _browser
 
 
@@ -548,23 +614,14 @@ async def get_full_blog_analysis(blog_id: str) -> Dict:
     return stats
 
 
-async def close_browser():
-    """Close browser instance"""
-    global _browser, _playwright
+async def close_browser(reason: str = "explicit"):
+    """Close browser instance.
 
-    if _browser:
-        try:
-            await _browser.close()
-        except:
-            pass
-        _browser = None
-
-    if _playwright:
-        try:
-            await _playwright.stop()
-        except:
-            pass
-        _playwright = None
+    정의만 있고 **부르는 곳이 한 곳도 없었다**(2026-10-07 확인). 그래서 공용
+    브라우저를 의도적으로 닫는 경로가 아예 없었다 — 지금은 `_reaper_loop` 가
+    유휴 시 `_discard_browser` 로 같은 일을 한다. 수동 호출용으로 남겨 둔다.
+    """
+    await _discard_browser(reason)
 
 
 async def scrape_view_tab_results(keyword: str, limit: int = 20) -> list:
@@ -597,14 +654,8 @@ async def scrape_view_tab_results(keyword: str, limit: int = 20) -> list:
             break  # Success, exit retry loop
         except Exception as e:
             logger.warning(f"[Playwright] Browser context error (attempt {attempt + 1}/{max_retries}): {e}")
-            # Reset browser for next attempt
-            _browser = None
-            if _playwright:
-                try:
-                    await _playwright.stop()
-                except:
-                    pass
-                _playwright = None
+            # Reset browser for next attempt — 반드시 **닫고** 버린다(고아 chromium 방지)
+            await _discard_browser("context-error")
             if attempt == max_retries - 1:
                 logger.error(f"[Playwright] Failed to create browser context after {max_retries} attempts")
                 return []
@@ -836,13 +887,8 @@ async def scrape_blog_tab_results(keyword: str, limit: int = 20,
             break
         except Exception as e:
             logger.warning(f"[Playwright] Browser context error (attempt {attempt + 1}/{max_retries}): {e}")
-            _browser = None
-            if _playwright:
-                try:
-                    await _playwright.stop()
-                except:
-                    pass
-                _playwright = None
+            # 반드시 **닫고** 버린다 — 참조만 끊으면 chromium 이 고아로 남는다
+            await _discard_browser("context-error")
             if attempt == max_retries - 1:
                 logger.error(f"[Playwright] Failed to create browser context after {max_retries} attempts")
                 return []
