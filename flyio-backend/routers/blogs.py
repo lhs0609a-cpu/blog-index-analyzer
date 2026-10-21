@@ -5169,16 +5169,50 @@ async def search_keyword_with_tabs(
 
     if analyze_content:
         # 모든 블로그를 동시에 분석 (병렬 처리 + 재시도)
+        def _report_blog(item, analysis):
+            if progress is None:
+                return
+            _ix = analysis.get("index") or {}
+            progress["blogs"][item["blog_id"]] = {
+                "level": _ix.get("level"),
+                "grade": _ix.get("grade"),
+                "total_score": _ix.get("total_score"),
+                "partial_dimensions": _ix.get("partial_dimensions"),
+                "unmeasurable_reason": _ix.get("unmeasurable_reason"),
+                "stats": analysis.get("stats") or {},
+            }
+
+        async def _serp_post(post_url: str) -> Dict:
+            # 순위에 걸린 글 자체의 분석은 키워드에 따라 달라진다(제목·본문 키워드 수).
+            # url+키워드로 하루 캐시한다 — 2026-10-21 운영 실측: 블로그 분석이 전부 캐시
+            # 적중(0.0s)이어도 이 20건이 동시 4개 줄을 서서 14초가 걸렸다.
+            from database import post_analysis_cache as PAC
+            key = f"{post_url}#kw={keyword}"
+            hit = (await asyncio.to_thread(PAC.get_many, [key], 1)).get(key)
+            if hit is not None:
+                return hit
+            r = await analyze_post(post_url, keyword)
+            if isinstance(r, dict) and r.get("data_fetched"):
+                await asyncio.to_thread(PAC.put_many, item_blog_of.get(post_url, ""), {key: r})
+            return r
+
+        item_blog_of = {it["post_url"]: it["blog_id"] for it in search_results}
+
         async def analyze_single(item, retry_count=0):
             max_retries = 2
+            # 블로그 분석과 글 분석을 동시에 돌리되, 블로그 등급은 끝나는 즉시 화면에
+            # 알린다(글 분석은 등급과 무관 — 기다릴 이유가 없다).
+            blog_task = asyncio.create_task(analyze_blog(item["blog_id"], keyword))
+            post_task = asyncio.create_task(_serp_post(item["post_url"]))
             try:
-                # 블로그 분석 + 포스트 분석을 동시에 실행 (성능 개선)
-                analysis, post_analysis_result = await asyncio.gather(
-                    analyze_blog(item["blog_id"], keyword),
-                    analyze_post(item["post_url"], keyword)
-                )
+                analysis = await blog_task
+                _report_blog(item, analysis)
+                post_analysis_result = await post_task
                 return item, analysis, post_analysis_result
             except Exception as e:
+                for _t in (blog_task, post_task):
+                    if not _t.done():
+                        _t.cancel()
                 if retry_count < max_retries:
                     # 재시도 전 짧은 대기 (지수 백오프)
                     await asyncio.sleep(0.5 * (retry_count + 1))
@@ -5198,16 +5232,7 @@ async def search_keyword_with_tabs(
                     _bt = time.monotonic()
                     out = await analyze_single(item)
                     _blog_times.append(time.monotonic() - _bt)
-                    if progress is not None:
-                        _ix = out[1].get("index") or {}
-                        progress["blogs"][item["blog_id"]] = {
-                            "level": _ix.get("level"),
-                            "grade": _ix.get("grade"),
-                            "total_score": _ix.get("total_score"),
-                            "partial_dimensions": _ix.get("partial_dimensions"),
-                            "unmeasurable_reason": _ix.get("unmeasurable_reason"),
-                            "stats": out[1].get("stats") or {},
-                        }
+                    _report_blog(item, out[1])
                     return out
 
         # 빠른 모드: 상위 N개만 분석, 나머지는 기본 정보만 표시
