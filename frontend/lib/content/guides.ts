@@ -19,6 +19,16 @@ import { MEDICAL_MARKETING_GUIDES } from './guide-batches/medical-marketing'
 import { BUSINESS_MARKETING_GUIDES } from './guide-batches/business-marketing'
 import { AGENCY_GUIDES } from './guide-batches/agency'
 import { SEARCH_ADS_GUIDES } from './guide-batches/search-ads'
+import { NAVER_PLACE_GUIDES } from './guide-batches/naver-place'
+import { REVIEWS_GUIDES } from './guide-batches/reviews'
+import { NAVER_ADS_GUIDES } from './guide-batches/naver-ads'
+import { PLATFORM_ADS_GUIDES } from './guide-batches/platform-ads'
+import { MARKETING_OPS_GUIDES } from './guide-batches/marketing-ops'
+import { PROFESSIONAL_MARKETING_GUIDES } from './guide-batches/professional-marketing'
+import { LOCAL_BUSINESS_GUIDES } from './guide-batches/local-business'
+import { SEO_GUIDES } from './guide-batches/seo'
+import { NICHE_EXPERIENCE_GUIDES } from './guide-batches/niche-experience'
+import { BLOG_NICHES_GUIDES } from './guide-batches/blog-niches'
 
 export const GUIDE_CATEGORIES = [
   '블로그 지수',
@@ -28,6 +38,8 @@ export const GUIDE_CATEGORIES = [
   '수익화',
   '체험단·인플루언서',
   '업종별 마케팅',
+  '플레이스·리뷰',
+  'SEO',
   '마케팅 대행',
   '광고',
 ] as const
@@ -1532,6 +1544,16 @@ export const GUIDES: Guide[] = [
   ...BUSINESS_MARKETING_GUIDES,
   ...AGENCY_GUIDES,
   ...SEARCH_ADS_GUIDES,
+  ...NAVER_PLACE_GUIDES,
+  ...REVIEWS_GUIDES,
+  ...NAVER_ADS_GUIDES,
+  ...PLATFORM_ADS_GUIDES,
+  ...MARKETING_OPS_GUIDES,
+  ...PROFESSIONAL_MARKETING_GUIDES,
+  ...LOCAL_BUSINESS_GUIDES,
+  ...SEO_GUIDES,
+  ...NICHE_EXPERIENCE_GUIDES,
+  ...BLOG_NICHES_GUIDES,
 ]
 
 export function getGuide(slug: string): Guide | undefined {

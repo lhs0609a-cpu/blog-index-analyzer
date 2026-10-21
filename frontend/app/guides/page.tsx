@@ -65,12 +65,12 @@ export default function GuidesIndexPage() {
             </p>
           </header>
 
-          {GUIDE_CATEGORIES.map((category) => {
+          {GUIDE_CATEGORIES.map((category, index) => {
             const items = GUIDES.filter((guide) => guide.category === category)
             if (items.length === 0) return null
 
             return (
-              <section key={category} className="mb-12">
+              <section key={category} id={`category-${index}`} className="mb-12 scroll-mt-28">
                 <h2 className="text-sm font-semibold text-[#0064FF] tracking-wide uppercase mb-4">
                   {category}
                 </h2>
