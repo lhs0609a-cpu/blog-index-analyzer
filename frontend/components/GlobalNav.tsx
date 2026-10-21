@@ -13,6 +13,7 @@ import {
   LogOut,
   CreditCard,
   Shield,
+  ShieldCheck,
   Home,
   LayoutDashboard,
   Eye,
@@ -33,6 +34,14 @@ const navItems = [
     badge: 'FREE',
     badgeColor: 'bg-[#0064FF] text-white',
     description: '40개 이상의 지표로 블로그 분석'
+  },
+  {
+    label: '저품질 확인',
+    href: '/blog-check',
+    icon: ShieldCheck,
+    badge: 'FREE',
+    badgeColor: 'bg-[#0064FF] text-white',
+    description: '최근 글이 검색에 나오는지 실제 색인 결과로 진단'
   },
   {
     label: '키워드 판정',
