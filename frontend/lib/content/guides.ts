@@ -8,6 +8,30 @@
  *  4. 서버 렌더링 전용(클라이언트 컴포넌트 금지) — 크롤러가 본문 전체를 본다.
  */
 
+import { BLOG_INDEX_GUIDES } from './guide-batches/blog-index'
+import { LOW_QUALITY_GUIDES } from './guide-batches/low-quality'
+import { KEYWORD_TOOLS_GUIDES } from './guide-batches/keyword-tools'
+import { BLOG_GROWTH_GUIDES } from './guide-batches/blog-growth'
+import { MONETIZATION_GUIDES } from './guide-batches/monetization'
+import { EXPERIENCE_GROUP_GUIDES } from './guide-batches/experience-group'
+import { INFLUENCER_GUIDES } from './guide-batches/influencer'
+import { MEDICAL_MARKETING_GUIDES } from './guide-batches/medical-marketing'
+import { BUSINESS_MARKETING_GUIDES } from './guide-batches/business-marketing'
+import { AGENCY_GUIDES } from './guide-batches/agency'
+import { SEARCH_ADS_GUIDES } from './guide-batches/search-ads'
+
+export const GUIDE_CATEGORIES = [
+  '블로그 지수',
+  '네이버 검색',
+  '키워드',
+  '블로그 운영',
+  '수익화',
+  '체험단·인플루언서',
+  '업종별 마케팅',
+  '마케팅 대행',
+  '광고',
+] as const
+
 export type GuideSection = {
   heading: string
   paragraphs?: string[]
@@ -15,6 +39,10 @@ export type GuideSection = {
   table?: { headers: string[]; rows: string[][] }
   note?: string
 }
+
+export type GuideCategory = (typeof GUIDE_CATEGORIES)[number]
+
+export type GuideTool = 'analyze' | 'blog-check' | 'keyword-check' | 'keyword-search' | 'ad-optimizer'
 
 export type Guide = {
   slug: string
@@ -25,7 +53,9 @@ export type Guide = {
   keywords: string[]
   published: string
   updated: string
-  category: '블로그 지수' | '키워드' | '네이버 검색' | '광고'
+  category: GuideCategory
+  /** 글 끝 CTA 가 가리킬 도구. 없으면 블로그 분석 + 키워드 검색 */
+  tool?: GuideTool
   /** AI 인용용 자립형 요약 — 이 문단만 떼어 읽어도 말이 되어야 한다 */
   summary: string
   /** 핵심 사실 목록 (발췌 인용 대상) */
@@ -36,7 +66,7 @@ export type Guide = {
   related: string[]
 }
 
-export const GUIDES: Guide[] = [
+const CORE_GUIDES: Guide[] = [
   // ─────────────────────────────────────────────────────────
   {
     slug: 'naver-blog-index-truth',
@@ -45,12 +75,11 @@ export const GUIDES: Guide[] = [
     description:
       '네이버는 2016년 공식 블로그에서 "블로그 지수", "최적화 블로그", "저품질 블로그"가 자사가 만든 개념이 아니라고 명시적으로 부정했습니다. 그렇다면 지수 측정 서비스는 무엇을 재고 있는지 정확히 설명합니다.',
     keywords: [
-      '블로그 지수',
       '네이버 블로그 지수',
-      '블로그 지수 조회',
+      '블로그 지수 공식',
+      '블로그 지수 진실',
       '최적화 블로그',
       '저품질 블로그',
-      '블로그 지수 확인',
     ],
     published: '2026-08-13',
     updated: '2026-08-13',
@@ -643,12 +672,11 @@ export const GUIDES: Guide[] = [
     description:
       '"체험단"이 붙은 검색어 82개의 1페이지 경쟁 블로그를 직접 조회해 진입 난이도를 계산했습니다. 68개 중 49개가 어려움 이상이었고, 진입선이 낮은 것은 7개였습니다.',
     keywords: [
-      '블로그 체험단',
+      '체험단 키워드 난이도',
+      '체험단 블로그 지수',
       '체험단 사이트',
-      '체험단 신청',
       '블로그 협찬',
       '체험단 선정',
-      '체험단 블로그 지수',
     ],
     published: '2026-09-24',
     updated: '2026-09-24',
@@ -854,11 +882,10 @@ export const GUIDES: Guide[] = [
     description:
       '인플루언서가 들어간 키워드 49개를 측정했습니다. 난이도가 계산된 46개 중 42개가 "어려움" 이상이었고 진입선 중앙값은 63.6으로, 측정한 축 가운데 가장 높았습니다.',
     keywords: [
-      '네이버 인플루언서',
+      '인플루언서 키워드 난이도',
       '인플루언서 되는법',
       '인플루언서 센터',
       '인플루언서 키워드',
-      '블로그 인플루언서',
       '인플루언서 선정',
     ],
     published: '2026-09-24',
@@ -1222,10 +1249,9 @@ export const GUIDES: Guide[] = [
     description:
       '블로그 대행·제작·기자단 키워드 16개를 측정했습니다. 진입선은 6.6부터 71.8까지 벌어졌고, "블로그대행"은 1페이지 경쟁자의 절반이 휴면 상태였습니다.',
     keywords: [
-      '블로그 대행',
+      '블로그 대행 키워드 난이도',
       '블로그 제작',
       '블로그 기자단',
-      '블로그 운영대행',
       '브랜드 블로그',
       '블로그 관리',
     ],
@@ -1492,8 +1518,23 @@ export const GUIDES: Guide[] = [
   },
 ]
 
+// 주제 묶음별 가이드. 파일 하나에 다 넣으면 수천 줄이 되어 묶음 단위로 나눴다.
+export const GUIDES: Guide[] = [
+  ...CORE_GUIDES,
+  ...BLOG_INDEX_GUIDES,
+  ...LOW_QUALITY_GUIDES,
+  ...KEYWORD_TOOLS_GUIDES,
+  ...BLOG_GROWTH_GUIDES,
+  ...MONETIZATION_GUIDES,
+  ...EXPERIENCE_GROUP_GUIDES,
+  ...INFLUENCER_GUIDES,
+  ...MEDICAL_MARKETING_GUIDES,
+  ...BUSINESS_MARKETING_GUIDES,
+  ...AGENCY_GUIDES,
+  ...SEARCH_ADS_GUIDES,
+]
+
 export function getGuide(slug: string): Guide | undefined {
   return GUIDES.find((guide) => guide.slug === slug)
 }
 
-export const GUIDE_CATEGORIES = ['블로그 지수', '네이버 검색', '키워드', '광고'] as const

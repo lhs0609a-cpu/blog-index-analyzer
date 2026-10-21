@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
-import { GUIDES, getGuide, type Guide, type GuideSection } from '@/lib/content/guides'
+import { GUIDES, getGuide, type Guide, type GuideSection, type GuideTool } from '@/lib/content/guides'
 import {
   articleJsonLd,
   breadcrumbJsonLd,
@@ -11,6 +11,38 @@ import {
 } from '@/lib/seo'
 
 type Params = { params: { slug: string } }
+
+/**
+ * 글 끝 CTA. 글이 다루는 문제를 바로 풀어주는 도구로 보낸다 —
+ * 저품질 글 끝에서 '블로그 분석'을 권하면 독자가 원하던 답과 한 칸 어긋난다.
+ */
+const TOOL_CTA: Record<GuideTool, { heading: string; body: string; primary: { label: string; href: string } }> = {
+  analyze: {
+    heading: '내 블로그에 적용하면 어떻게 나올까',
+    body: '블로그 주소만 입력하면 6개 신호를 실측해 현재 위치를 추정하고, 지금 뚫을 수 있는 키워드를 찾아줍니다.',
+    primary: { label: '블로그 무료 분석', href: '/analyze' },
+  },
+  'blog-check': {
+    heading: '내 글이 지금 검색에 나오는지 확인',
+    body: '최근 글 제목을 그대로 검색해 노출 여부를 보여주고, 검색에서 빠진 글을 목록으로 알려줍니다. 가입 없이 무료입니다.',
+    primary: { label: '저품질 무료 확인', href: '/blog-check' },
+  },
+  'keyword-check': {
+    heading: '이 키워드로 1페이지에 갈 수 있을까',
+    body: '키워드를 넣으면 지금 1페이지에 있는 블로그들을 실측해, 내 블로그로 들어갈 자리가 있는지 판정합니다.',
+    primary: { label: '키워드 무료 판정', href: '/keyword-check' },
+  },
+  'keyword-search': {
+    heading: '검색량과 경쟁을 한 번에',
+    body: '키워드를 넣으면 월 검색량과 연관 키워드, 상위 노출 경쟁 정도를 함께 보여줍니다.',
+    primary: { label: '키워드 검색', href: '/keyword-search' },
+  },
+  'ad-optimizer': {
+    heading: '광고비가 새는 키워드부터 찾기',
+    body: '네이버 검색광고 계정을 연결하면 전환 없이 돈만 쓰는 키워드와, 싸게 살 수 있는 관련 키워드를 찾아줍니다.',
+    primary: { label: '광고 최적화 보기', href: '/ad-optimizer' },
+  },
+}
 
 export function generateStaticParams() {
   return GUIDES.map((guide) => ({ slug: guide.slug }))
@@ -101,6 +133,7 @@ export default function GuidePage({ params }: Params) {
   const related = guide.related
     .map((slug) => getGuide(slug))
     .filter((item): item is Guide => Boolean(item))
+  const cta = TOOL_CTA[guide.tool ?? 'analyze']
 
   return (
     <>
@@ -210,24 +243,31 @@ export default function GuidePage({ params }: Params) {
           )}
 
           <aside className="p-6 rounded-xl bg-[#0064FF] text-white mb-10">
-            <h2 className="text-lg font-bold mb-2">내 블로그에 적용하면 어떻게 나올까</h2>
-            <p className="text-sm text-blue-100 mb-4 leading-relaxed">
-              블로그 주소만 입력하면 6개 신호를 실측해 현재 위치를 추정하고, 지금 뚫을 수 있는 키워드를
-              찾아줍니다.
-            </p>
+            <h2 className="text-lg font-bold mb-2">{cta.heading}</h2>
+            <p className="text-sm text-blue-100 mb-4 leading-relaxed">{cta.body}</p>
             <div className="flex flex-wrap gap-3">
               <Link
-                href="/analyze"
+                href={cta.primary.href}
                 className="px-5 py-2.5 bg-white text-[#0064FF] text-sm font-bold rounded-lg hover:bg-blue-50 transition-colors"
               >
-                블로그 무료 분석
+                {cta.primary.label}
               </Link>
-              <Link
-                href="/keyword-search"
-                className="px-5 py-2.5 bg-white/15 text-white text-sm font-bold rounded-lg hover:bg-white/25 transition-colors"
-              >
-                키워드 검색
-              </Link>
+              {cta.primary.href !== '/analyze' && (
+                <Link
+                  href="/analyze"
+                  className="px-5 py-2.5 bg-white/15 text-white text-sm font-bold rounded-lg hover:bg-white/25 transition-colors"
+                >
+                  블로그 무료 분석
+                </Link>
+              )}
+              {cta.primary.href === '/analyze' && (
+                <Link
+                  href="/keyword-search"
+                  className="px-5 py-2.5 bg-white/15 text-white text-sm font-bold rounded-lg hover:bg-white/25 transition-colors"
+                >
+                  키워드 검색
+                </Link>
+              )}
             </div>
           </aside>
 
