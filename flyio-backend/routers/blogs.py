@@ -1836,7 +1836,9 @@ class _PostFetchUnreachable(Exception):
 # 연결이 막힌 게 확인되면 쿨다운 동안 본문 수집을 건너뛴다. 측정 불가 행이 나오는
 # 건 어쩔 수 없지만, 그건 '등급 보류'로 정직하게 표시되고 결과는 받을 수 있다.
 _POST_FETCH_FAIL_THRESHOLD = 3     # 연속 연결 실패 몇 번에 차단할지
-_POST_FETCH_COOLDOWN_S = 60.0      # 차단 유지 시간
+# 60초는 길었다 — 차단은 수십 초 단위로 풀리는데 그동안 들어온 키워드 결과가
+# 통째로 '부분 측정'이 됐다(2026-10-21 운영). 30초 뒤 다시 시도한다.
+_POST_FETCH_COOLDOWN_S = 30.0      # 차단 유지 시간
 _post_fetch_breaker = {"until": 0.0, "fails": 0}
 
 
@@ -1879,7 +1881,8 @@ class _PostViewSkip(Exception):
 # 모바일로 돌리자 모바일도 연달아 연결 실패 → 브레이커 → 전 행 '측정 불가'.
 # 단건은 멀쩡히 1초에 온다(같은 날 서버에서 실측). 문제는 버스트다.
 # 같은 날 로컬에서도 버스트 직후 m.blog 가 Akamai 403(Access Denied)을 줬다.
-_POST_FETCH_SEM = asyncio.Semaphore(int(os.getenv("POST_FETCH_CONCURRENCY", "6")))
+# 6 으로도 같은 날 버스트 구간에 모바일까지 연달아 막혔다(3분에 37개 블로그 부분 측정) → 4.
+_POST_FETCH_SEM = asyncio.Semaphore(int(os.getenv("POST_FETCH_CONCURRENCY", "4")))
 
 
 async def analyze_post(post_url: str, keyword: str) -> Dict:
@@ -1958,12 +1961,15 @@ async def _analyze_post_unlimited(post_url: str, keyword: str) -> Dict:
             # 읽는다. 2026-10-21 실측: PostView 에는 __PRELOADED_STATE__ 가 더는 없어서
             # JSON 경로가 늘 비고, 그 탓에 모든 글이 모바일을 한 번 더 불렀다(글당 2요청).
             postview_has_body = False
+            # 이번 호출에서 PostView 를 실제로 쳐 봤는지(쿨다운으로 건너뛰면 False).
+            postview_tried = False
 
             # ===== 방법 1: PostView API로 직접 접근 =====
             try:
                 if time.time() < _postview_breaker["until"]:
                     raise _PostViewSkip()
                 postview_url = f"https://blog.naver.com/PostView.naver?blogId={blog_id}&logNo={post_no}&redirect=Dlog"
+                postview_tried = True
                 headers1 = {
                     "User-Agent": user_agents[0],
                     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -2070,9 +2076,28 @@ async def _analyze_post_unlimited(post_url: str, keyword: str) -> Dict:
                 try:
                     resp = await client.get(mobile_url, headers=headers)
                 except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as ce:
-                    _note_post_connect_fail(post_url)
-                    post_analysis["skipped_reason"] = "naver_unreachable"
-                    raise _PostFetchUnreachable() from ce
+                    # 막히는 호스트가 번갈아 바뀐다(2026-10-21 운영: PostView 가 막힌 동안
+                    # 모바일이 되다가, 잠시 뒤엔 반대). PostView 를 쿨다운으로 건너뛰었다면
+                    # 포기하기 전에 한 번만 다시 쳐 본다 — 그새 풀렸을 수 있다.
+                    resp = None
+                    if not postview_tried:
+                        try:
+                            resp = await client.get(
+                                f"https://blog.naver.com/PostView.naver?blogId={blog_id}&logNo={post_no}&redirect=Dlog",
+                                headers={
+                                    "User-Agent": user_agents[0],
+                                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                                    "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+                                    "Referer": "https://search.naver.com/",
+                                },
+                            )
+                            _postview_breaker["until"] = 0.0
+                        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout):
+                            resp = None
+                    if resp is None:
+                        _note_post_connect_fail(post_url)
+                        post_analysis["skipped_reason"] = "naver_unreachable"
+                        raise _PostFetchUnreachable() from ce
 
             if resp.status_code == 200:
                 html = resp.text
@@ -3884,11 +3909,21 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
         )
         collected_nothing = (not stats.get("total_posts")) and bool(_core_unmeasured)
 
-        # 부분 측정도 등급을 내지 않는다. 점수(total_score)는 그대로 내보내되
-        # 레벨·등급·백분위는 보류한다 — 흔들리는 등급을 보여주는 것보다
-        # "이 블로그는 이번에 제대로 못 쟀다"가 정직하다.
+        # 부분 측정(본문 풀파싱 실패)은 예전엔 등급을 통째로 보류했다. 그런데 네이버가
+        # 서버 IP 의 본문 요청을 막는 구간에는 키워드 결과 20행이 전부 '측정 불가'가 돼
+        # 화면이 쓸모없어졌다(2026-10-21 운영: 3분 사이 37개 블로그).
+        # 이제는 절대 기준표로 '추정' 등급을 내되 level_source="estimated" 로 표시하고,
+        # 백분위 모집단에는 넣지 않으며 캐시하지도 않는다(다음 측정이 덮어쓴다).
+        # 흔들릴 수 있는 등급이라는 건 화면에 '추정' 으로 드러낸다.
+        estimated_only = bool(partial_dimensions)
         measurable = has_source and not collected_nothing and not partial_dimensions
-        if not measurable:
+        if has_source and not collected_nothing and estimated_only:
+            index["unmeasurable_reason"] = (
+                "본문을 끝까지 읽지 못해(소제목·문단 수 누락) 나머지 지표로 추정한 등급입니다. "
+                "잠시 후 다시 분석하면 정확한 등급이 나옵니다."
+            )
+            logger.info(f"Blog {blog_id}: 부분 측정 — 추정 등급 (partial={partial_dimensions})")
+        elif not measurable:
             index["level"] = None
             index["grade"] = "측정 불가"
             index["level_category"] = "측정 불가"
@@ -3898,11 +3933,6 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
                 index["unmeasurable_reason"] = (
                     "글 목록을 가져오지 못해 지수를 계산하지 않았습니다. "
                     "낮은 점수가 아니라 측정 실패입니다. 잠시 후 다시 시도해 주세요."
-                )
-            elif partial_dimensions:
-                index["unmeasurable_reason"] = (
-                    "본문을 끝까지 읽지 못해(소제목·문단 수 누락) 등급 판정을 보류했습니다. "
-                    "낮은 등급이 아니라 불완전 측정입니다. 잠시 후 다시 시도해 주세요."
                 )
             else:
                 index["unmeasurable_reason"] = "네이버에서 블로그 지표를 가져오지 못했습니다."
@@ -3916,7 +3946,17 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
         # 원칙: 백분위는 '같은 자로 잰' 실측 모집단이 충분할 때만 쓴다.
         # 모집단이 얇으면(초기 운영/스코어링 버전 교체 직후) 절대 기준표로 판정한다.
         try:
+            if not measurable and not (has_source and not collected_nothing and estimated_only):
+                raise _LevelJudgementSkipped()
+
             if not measurable:
+                # 추정 등급: 모집단을 오염시키지 않도록 절대 기준표만 쓴다.
+                level, grade = get_blog_level_from_score(index["total_score"])
+                index["level"], index["grade"] = level, grade
+                index["percentile"] = None
+                index["level_basis"] = "absolute"
+                index["level_source"] = "estimated"
+                index["level_category"] = "최적+" if level >= 12 else "최적" if level >= 9 else "준최" if level >= 2 else "일반"
                 raise _LevelJudgementSkipped()
 
             percentile_db = get_blog_percentile_db()
@@ -4002,7 +4042,7 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
                 index["level_source"] = "heuristic"
 
         except _LevelJudgementSkipped:
-            # 측정 불가 — 위에서 이미 "측정 불가"로 표시했다. 등급을 지어내지 않는다.
+            # 측정 불가(위에서 "측정 불가" 표시) 또는 추정 등급(위에서 기록) — 더 할 일 없다.
             pass
 
         except Exception as percentile_error:
@@ -4113,7 +4153,8 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
         "unmeasured": unmeasured,
         "rss_empty": analysis_data.get("rss_empty", False),
         # 수집이 비었는지 호출부가 한 눈에 보게 한다 (index.grade == "측정 불가" 의 이유).
-        "measured": (index or {}).get("level_source") != "unavailable",
+        # 추정 등급도 캐시하지 않는다 — 다음 요청이 본문까지 읽어 정확한 등급으로 덮게.
+        "measured": (index or {}).get("level_source") not in ("unavailable", "estimated"),
     }
     # 측정 실패본을 캐시에 넣으면 TTL 동안 같은 실패를 재생한다 — 넣지 않는다.
     if result["measured"]:

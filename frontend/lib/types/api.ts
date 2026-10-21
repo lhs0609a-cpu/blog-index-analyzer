@@ -59,7 +59,7 @@ export interface BlogIndexResult {
     percentile: number | null
     /** 레벨 판정 근거: 실측 모집단 백분위 vs 절대 기준표 */
     level_basis?: 'percentile' | 'absolute'
-    /** 측정 불가 사유 (level === null 일 때) */
+    /** 측정 불가 사유 (level === null) 또는 추정 등급 안내 (level_source === 'estimated') */
     unmeasurable_reason?: string
     /** 활동성 계수 (0.10~1.0). 최종 점수에 곱해진다 */
     vitality?: number
@@ -69,8 +69,8 @@ export interface BlogIndexResult {
     days_since_last_post?: number | null
     posts_last_90d?: number | null
     rss_truncated?: boolean
-    /** 레벨 산출 근거: 실측 색인 검증 vs 휴리스틱 vs 측정 불가 */
-    level_source?: 'measured' | 'heuristic' | 'unavailable'
+    /** 레벨 산출 근거: 실측 색인 검증 vs 휴리스틱 vs 부분 측정 추정 vs 측정 불가 */
+    level_source?: 'measured' | 'heuristic' | 'estimated' | 'unavailable'
     confidence?: 'high' | 'medium' | 'low'
     score_breakdown: {
       c_rank: number  // C-Rank (출처 신뢰도) 50%

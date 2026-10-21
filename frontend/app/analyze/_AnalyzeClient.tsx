@@ -1794,6 +1794,13 @@ export default function AnalyzePage() {
                 exit={{ opacity: 0, y: -20 }}
                 className="space-y-6"
               >
+                {/* 부분 측정 — 본문을 못 읽어 나머지 지표로 낸 추정 등급 */}
+                {result.index.level_source === 'estimated' && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    <strong>추정 등급</strong> · {result.index.unmeasurable_reason || '본문을 끝까지 읽지 못해 나머지 지표로 추정한 등급입니다. 잠시 후 다시 분석하면 정확한 등급이 나옵니다.'}
+                  </div>
+                )}
+
                 {/* Score Card */}
                 <div className="glass-3d p-8 relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-64 h-64 bg-[#0064FF]/10 rounded-full blur-3xl" />

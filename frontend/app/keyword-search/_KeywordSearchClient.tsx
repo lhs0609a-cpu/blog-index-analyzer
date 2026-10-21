@@ -37,7 +37,7 @@ interface BlogIndexResult {
   is_influencer?: boolean  // Influencer badge
   smart_block_keyword?: string  // Keyword for smart block
   index: {
-    // 측정 실패·부분 측정이면 등급 판정을 보류하고 null 로 온다
+    // 측정 실패면 null 로 온다. 부분 측정(partial_dimensions)이면 '추정' 등급이 온다
     level: number | null
     grade: string
     level_category: string
@@ -1276,8 +1276,8 @@ function KeywordSearchContent() {
               <h3 className="text-sm font-semibold text-blue-900 mb-1">통계 수집 안내</h3>
               <p className="text-xs text-blue-700">
                 포스트 수·방문자 수·이웃 수는 네이버의 접근 제한으로 수집이 비는 경우가 있습니다.
-                지표를 끝까지 읽지 못한 블로그는 등급을 매기지 않고 <strong>측정 불가</strong>로 표시합니다 —
-                낮은 등급이 아니라 이번 측정이 불완전했다는 뜻이고, 잠시 후 다시 검색하면 채워집니다.
+                본문을 끝까지 읽지 못한 블로그는 나머지 지표로 낸 등급에 <strong>추정</strong>을 붙이고,
+                지표를 거의 못 읽은 블로그는 <strong>측정 불가</strong>로 표시합니다 — 잠시 후 다시 검색하면 채워집니다.
               </p>
             </div>
           </div>
@@ -1912,6 +1912,14 @@ function KeywordSearchContent() {
                                               Lv.{blog.index.level}
                                             </span>
                                           )}
+                                          {blog.index.level != null && (blog.index.partial_dimensions?.length ?? 0) > 0 && (
+                                            <span
+                                              className="block mt-0.5 text-[10px] text-amber-600 font-semibold cursor-help"
+                                              title={blog.index.unmeasurable_reason || '본문을 끝까지 읽지 못해 나머지 지표로 추정한 등급입니다.'}
+                                            >
+                                              추정
+                                            </span>
+                                          )}
                                         </td>
                                         <td className="px-3 py-3 text-center">
                                           <span className={`text-lg font-bold ${getScoreColor(blog.index?.total_score || 0)}`}>
@@ -2409,6 +2417,14 @@ function KeywordSearchContent() {
                                 ) : (
                                   <span className={`inline-flex px-2 py-0.5 rounded-full text-white text-xs font-bold ${getLevelColor(blog.index.level)}`}>
                                     Lv.{blog.index.level}
+                                  </span>
+                                )}
+                                {blog.index.level != null && (blog.index.partial_dimensions?.length ?? 0) > 0 && (
+                                  <span
+                                    className="text-[10px] text-amber-600 font-semibold cursor-help"
+                                    title={blog.index.unmeasurable_reason || '본문을 끝까지 읽지 못해 나머지 지표로 추정한 등급입니다.'}
+                                  >
+                                    추정
                                   </span>
                                 )}
                                 
