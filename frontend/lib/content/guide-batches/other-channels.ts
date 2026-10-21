@@ -14,6 +14,7 @@ const SRC = {
   adsenseElig: { label: 'Google 애드센스 고객센터 — 애드센스 자격 요건 (2026년 10월 확인)', url: 'https://support.google.com/adsense/answer/9724?hl=ko' },
   adsensePay: { label: 'Google 애드센스 고객센터 — 지급 기준액·확인 기준액 (2026년 10월 확인)', url: 'https://support.google.com/adsense/answer/1709871?hl=ko' },
   bloggerAds: { label: 'Blogger 고객센터 — 블로그에 광고 게재하기 (2026년 10월 확인)', url: 'https://support.google.com/blogger/answer/1269077?hl=ko' },
+  bloggerCreate: { label: 'Blogger 고객센터 — 블로그 만들기 (2026년 10월 확인)', url: 'https://support.google.com/blogger/answer/1623800?hl=ko' },
   internettrend: { label: '인터넷트렌드(BizSpring) — 검색엔진 유입 구성비 (2026-09-20~10-19)', url: 'https://www.internettrend.co.kr/trendForward.tsp' },
   wpSitemap: { label: 'WordPress Core — New XML Sitemaps Functionality in WordPress 5.5', url: 'https://make.wordpress.org/core/2020/07/22/new-xml-sitemaps-functionality-in-wordpress-5-5/' },
   wpReading: { label: 'WordPress.org 문서 — Settings Reading screen (피드 전체 텍스트·검색엔진 노출 설정)', url: 'https://wordpress.org/documentation/article/settings-reading-screen/' },
@@ -143,6 +144,11 @@ export const OTHER_CHANNELS_GUIDES: Guide[] = [
         answer:
           '2026년 2월 23일부터 웹 에디터에서 동영상 파일을 직접 올릴 수 없습니다. 티스토리 공지는 유튜브 같은 외부 플랫폼에 올린 뒤 주소를 붙여 넣는 방식을 안내합니다. 외부에서 삽입한 유튜브 영상은 영향을 받지 않습니다.',
       },
+      {
+        question: '티스토리와 네이버 블로그는 무엇이 다른가요? 차이를 한 번에 알고 싶어요.',
+        answer:
+          '가장 큰 차이는 에디터가 아니라 독자가 들어오는 길과 광고가 붙는 길입니다. 네이버 블로그 글은 네이버 검색의 블로그 영역에서 C-Rank·D.I.A. 기준으로 경쟁하고, 수익은 개설 90일 뒤 심사를 받는 애드포스트로 붙습니다. 티스토리는 외부 검색엔진에 하나의 웹사이트로 수집되어 구글과 네이버 웹 영역에서 유입을 받고, 수익은 애드센스 같은 외부 광고 플랫폼에 의존합니다. 티스토리는 2026년 6월 29일부터 카카오 애드핏 신규 연동을 받지 않습니다.',
+      },
     ],
     sources: [SRC.adpost, SRC.tistoryAdfit, SRC.tistoryVideo, SRC.adsenseElig, SRC.internettrend, SRC.measure, SRC.tabCount],
     related: ['platform-keyword-difficulty', 'adpost-signup-requirements', 'blogger-adsense-requirements', 'korea-search-engine-market-share'],
@@ -245,8 +251,18 @@ export const OTHER_CHANNELS_GUIDES: Guide[] = [
         answer:
           '두 곳 모두 애드센스를 연동할 수 있고, 자격 요건도 같습니다. 차이는 운영 환경입니다. Blogger는 구글이 직접 운영하는 호스트 파트너이고, 티스토리는 [수익] 메뉴에서 외부 광고 플랫폼을 연동하는 구조입니다. 승인 여부는 플랫폼보다 콘텐츠가 좌우합니다.',
       },
+      {
+        question: '구글 블로그로 수익을 내려면 어떻게 하나요? 부업으로 할 만한가요?',
+        answer:
+          '구글 블로그(Blogger) 수익화의 기본 경로는 "수입" 메뉴에서 애드센스 계정을 만들어 승인을 받는 것입니다. 승인 뒤 "레이아웃"에서 광고 위치를 설정하고, 수익은 "수입 보기"에서 확인합니다. 다만 잔액이 지급 기준액 100달러에 도달해야 실제로 지급되므로, 방문이 적은 블로그는 첫 지급까지 여러 달이 걸릴 수 있습니다. 부업으로 볼 때는 승인보다 100달러까지 가는 시간을 기준으로 판단하는 편이 현실적입니다.',
+      },
+      {
+        question: '구글 블로그는 어떻게 시작하나요? 만드는 법이 궁금해요.',
+        answer:
+          'Blogger 고객센터 안내에 따르면 Google 계정으로 Blogger에 로그인한 뒤 왼쪽 아래 화살표를 눌러 "새 블로그"를 고르고, 블로그 이름과 주소(URL)를 정해 저장하면 만들어집니다. 수익화를 생각한다면 애드센스 자격 요건(나이 기준, 정책을 지키는 자체 콘텐츠)을 처음부터 염두에 두세요. 한국어 생활 정보 주제는 구글 유입만으로는 한계가 있을 수 있어, 주제를 정할 때 어느 검색엔진에서 찾는 주제인지 먼저 따져 보는 것이 좋습니다.',
+      },
     ],
-    sources: [SRC.adsenseElig, SRC.adsensePay, SRC.bloggerAds, SRC.adpost, SRC.internettrend, SRC.measure],
+    sources: [SRC.adsenseElig, SRC.adsensePay, SRC.bloggerAds, SRC.bloggerCreate, SRC.adpost, SRC.internettrend, SRC.measure],
     related: ['tistory-vs-naver-blog-difference', 'platform-keyword-difficulty', 'google-search-console-setup', 'blog-monetization-roadmap'],
   },
 
@@ -332,6 +348,11 @@ export const OTHER_CHANNELS_GUIDES: Guide[] = [
         question: 'WordPress.com 무료 요금제로도 네이버 소유확인이 되나요?',
         answer:
           'WordPress.com의 공식 사이트 인증 지원 목록에는 네이버가 없습니다(2026년 10월 확인). 네이버 메타 태그를 넣거나 HTML 파일을 올릴 수 있어야 하는데, 플러그인 설치는 유료 요금제에서 지원됩니다. 무료 요금제라면 이 부분을 먼저 WordPress.com 지원에 확인하세요.',
+      },
+      {
+        question: '워드프레스 블로그는 어떻게 개설하나요?',
+        answer:
+          '먼저 웹호스팅에 워드프레스를 직접 설치하는 설치형으로 할지, 호스팅까지 맡기는 WordPress.com으로 할지 정합니다. 설치형은 메타 태그나 HTML 파일로 네이버 소유확인을 하기 쉽고, WordPress.com은 플러그인 설치가 유료 요금제에서만 지원되니 요금제를 확인해야 합니다. 개설 뒤에는 설정 > 읽기의 검색엔진 차단 옵션을 끄고, 피드를 전체 텍스트로 둔 다음 서치어드바이저에 사이트맵(/wp-sitemap.xml)과 RSS(/feed/)를 제출하는 순서로 검색 노출을 준비합니다.',
       },
     ],
     sources: [SRC.wpReading, SRC.wpSitemap, SRC.wpcomVerify, SRC.wpcomPlugins, SRC.saRegister, SRC.saFeed, SRC.measure, SRC.tabCount],
@@ -436,6 +457,11 @@ export const OTHER_CHANNELS_GUIDES: Guide[] = [
         answer:
           '없습니다. 당근 광고비는 CPC로만 과금되고 CPA 과금은 지원하지 않습니다. 외부 업체와 "리드 1건당 보상" 계약을 맺고 당근 광고를 집행하더라도 당근은 그 계약의 당사자가 아니라고 고객센터가 안내합니다.',
       },
+      {
+        question: '당근마켓 광고는 어떻게 하나요?',
+        answer:
+          '무료인 비즈프로필로 가게를 만든 뒤, 비즈프로필과 별개인 광고계정을 만들고 캐시를 충전해 광고를 집행합니다. 광고는 홈과 검색 결과에 노출되는 간편 모드, 캠페인·광고그룹·소재 단위로 설정하고 관심사 타겟팅과 총예산을 쓸 수 있는 전문가 모드 중에서 고릅니다. 소재를 등록하면 승인까지 보통 영업일 기준 최대 1~2일이 걸리고, 의료업처럼 심의필이 필요한 업종은 사전 등록한 심의 내용과 같은 문구를 써야 합니다.',
+      },
     ],
     sources: [SRC.daangnFaq, SRC.daangnSchool, SRC.daangnReview],
     related: ['naver-local-small-business-ad', 'small-business-free-online-channels', 'ad-billing-cpc-cpm-cpa', 'choose-ad-platform-by-budget'],
@@ -521,6 +547,11 @@ export const OTHER_CHANNELS_GUIDES: Guide[] = [
         question: '한국에서 쓰던 광고 문구를 번역해서 써도 되나요?',
         answer:
           '그대로 쓰면 위험합니다. 중국 《광고법》 제9조는 "국가급", "최고급", "최고" 등 절대적 표현을 금지합니다. 한국 광고에서 흔한 "1위", "최고의" 같은 표현은 중국 기준으로 다시 검토해야 합니다.',
+      },
+      {
+        question: '샤오홍슈 마케팅은 어떻게 시작하나요?',
+        answer:
+          '게시물을 맡기기 전에 중국 소비자가 실제로 살 수 있는 판매 경로(현지 전자상거래, 역직구, 방한 구매)부터 정합니다. 구매 경로가 없으면 체험 후기형 게시물(种草)은 관심만 만들고 끝나기 쉽습니다. 구매 링크를 붙일 게시물은 중국 《인터넷광고관리방법》 제9조에 따라 "광고" 표시를 전제로 기획하고, "최고", "1위" 같은 절대적 표현은 중국 《광고법》 제9조 기준으로 다시 검수합니다. 성과는 게시물 조회수보다 브랜드명·매장명 검색량과 판매 채널 유입으로 보는 편이 낫습니다.',
       },
     ],
     sources: [SRC.cnAdRule, SRC.cnAdLaw, SRC.volume],
@@ -624,6 +655,31 @@ export const OTHER_CHANNELS_GUIDES: Guide[] = [
         answer:
           '서울시가 보유 홍보매체를 소상공인·비영리단체에 개방하는 공모를 하고 있습니다. 2026년 공모는 인쇄 매체 약 5천여 면과 영상 매체 100여 대를 대상으로 15개 내외 단체를 선정했습니다. 회차마다 자격과 일정이 다르니 서울시 고시공고를 확인하세요.',
       },
+      {
+        question: 'DID(디지털 사이니지) 광고는 어떻게 신청하고 설정하나요?',
+        answer:
+          '엘리베이터 모니터나 지하철역 미디어보드 같은 DID 광고는 광고주가 화면을 직접 설정하는 방식이 아니라, 그 매체를 운영하는 매체사와 계약하고 영상 소재를 넘기면 매체사가 송출하는 구조입니다. 계약 전에 1회 소재 길이, 하루 송출 횟수, 다른 광고주와의 순환 비율, 최소 계약 기간을 확인하세요. 게재 증빙으로 송출 로그를 받을 수 있는지도 함께 물어보는 것이 좋습니다. 의료·금융처럼 업종별 사전 심의가 필요한 업종은 매체사 자체 심의가 따로 걸릴 수 있습니다.',
+      },
+      {
+        question: '버스 광고 비용은 얼마인가요? 버스정류장 광고 단가도 궁금해요.',
+        answer:
+          '운영기관이 공개한 공식 단가표는 없습니다. 버스 외부 광고는 허가를 받은 매체사가 노선·대수·기간 단위로 판매하므로 가격은 매체사 견적으로 정해집니다. 버스정류장 광고도 시·도가 같은 모양으로 설치한 공공시설물 광고라 운영 사업자를 통해 견적을 받는 구조입니다. 견적을 비교할 때는 래핑·인쇄 제작비와 부착·철거비 포함 여부, 최소 계약 단위를 함께 확인하세요.',
+      },
+      {
+        question: '아파트 엘리베이터 광고 비용은 얼마인가요?',
+        answer:
+          '공식 공개 단가표는 없습니다. 아파트 잡수입 계약은 관리주체가 경쟁입찰 등으로 매체사를 선정하고, 그 매체사가 여러 단지를 묶어 광고 상품으로 판매하므로 가격은 매체사 견적에 따라 달라집니다. 견적을 받을 때는 단지 수·세대 수·모니터 대수, 영상이라면 소재 길이와 하루 송출 횟수, 제작비 포함 여부를 같은 기준으로 맞춰 비교하세요.',
+      },
+      {
+        question: '버스정류장 광고는 어떻게 신청하나요?',
+        answer:
+          '광고주가 정류장 광고물을 직접 허가받는 경우는 드물고, 보통 그 정류장 매체를 운영하는 매체사에 신청합니다. 시·도가 같은 모양으로 설치한 정류장 광고는 옥외광고물법 제3조의2에 따라 시·도지사 허가·신고 대상이며, 매체사가 이 절차를 포함해 운영합니다. 광고주는 계약 전에 해당 매체가 허가·신고된 매체인지와 원하는 정류장·기간을 확인하면 됩니다.',
+      },
+      {
+        question: '옥외광고·전광판 광고 비용은 어떻게 정해지나요?',
+        answer:
+          '공식 공개 단가표는 없고, 매체를 판매하는 매체사의 견적으로 정해집니다. 가격을 가르는 것은 노출 단위(위치·면 수·대수), 영상 매체의 소재 길이와 하루 송출 횟수, 다른 광고주와의 순환 비율, 계약 기간, 제작·부착·철거비 포함 여부입니다. 같은 기준으로 여러 견적을 받아 비교하고, 해당 매체가 옥외광고물법상 허가·신고된 매체인지도 확인하세요.',
+      },
     ],
     sources: [SRC.line4, SRC.aptDecree, SRC.outdoor, SRC.outdoorDecree, SRC.seoulFree, SRC.volume],
     related: ['outdoor-ad-signage-permit-report', 'vehicle-wrap-ad-rules', 'brand-marketing-search-demand', 'choose-ad-platform-by-budget'],
@@ -709,6 +765,11 @@ export const OTHER_CHANNELS_GUIDES: Guide[] = [
         question: '차량에 LED 광고판을 달 수 있나요?',
         answer:
           '원칙적으로 안 됩니다. 시행령 제19조제6항은 교통수단 이용 광고물에 전기를 사용하거나 발광 방식의 조명을 하지 못하게 합니다. 영업 중인 음식판매자동차, 대중교통 이용 정보 표시, 긴급자동차 용도 안내 등 일부만 예외입니다.',
+      },
+      {
+        question: '택배 차량에 광고를 붙이려면 비용이 얼마나 드나요?',
+        answer:
+          '택배차 광고 비용에 관한 공식 공개 단가는 없습니다. 영업용으로 등록된 택배 차량은 사업용 화물자동차에 해당하고, 다른 회사 광고를 붙이는 것은 옥외광고물법 시행령 제4조의 허가 대상이며 창문을 뺀 차체 각 면의 절반 이내로만 표시할 수 있습니다. 견적을 받을 때는 제작·부착비와 함께 허가 절차를 누가 맡는지 확인하세요. 자가용 차량이라면 남의 광고를 붙일 수 없고 소유자 자신의 정보만 표시할 수 있습니다.',
       },
     ],
     sources: [SRC.outdoor, SRC.outdoorDecree, SRC.volume],
@@ -811,6 +872,21 @@ export const OTHER_CHANNELS_GUIDES: Guide[] = [
         question: '보험 블로그 광고에서 "하루 커피 한 잔 값" 같은 표현을 써도 되나요?',
         answer:
           '보험료를 일 단위로 표시하는 것은 금소법 제22조제4항제1호와 시행령 제20조가 금지하는 표현입니다. 보험료가 저렴한 것으로 오인하게 할 수 있기 때문입니다.',
+      },
+      {
+        question: '보험 광고 심의필은 어떻게 받나요?',
+        answer:
+          '소속 보험사·GA의 준법감시인(없으면 감사)에게 광고 심의를 받는 것이 기본 절차입니다. 금소법 시행령 제19조제2항이 이 심의를 의무로 정합니다. 설계사라면 그 전에 소속 보험사가 광고를 허용했는지부터 확인해야 하고, 신청 경로와 심의필 표기 형식은 회사 내부 절차를 따르므로 회사 준법감시 부서에 문의하세요. 매체에 따라 생명보험협회·손해보험협회 심의가 추가로 걸리는 경우도 있습니다.',
+      },
+      {
+        question: '보험 광고 심의 수수료는 얼마인가요?',
+        answer:
+          '공개된 공식 수치는 확인되지 않습니다. 보험 광고 심의는 소속 회사 준법감시인의 사전 심의가 법정 의무이고, 협회 확인 절차가 더해지기도 하지만, 수수료나 소요 기간은 회사·협회 내부 기준으로 운영됩니다. 정확한 금액은 소속 회사 준법감시 부서나 해당 협회에 직접 확인해야 합니다.',
+      },
+      {
+        question: '보험 블로그는 어떻게 운영해야 하나요?',
+        answer:
+          '정보 글과 광고 글을 분리하는 것이 기본입니다. 보험금 청구 절차, 약관 용어 풀이처럼 공공 자료에 근거한 정보 글은 상담 유도 없이 쓰고, 상품 소개나 연락처·상담 링크가 들어가는 글은 회사의 광고 허용과 준법감시인 심의를 거쳐 게시합니다. 키워드 면에서는 블스피 측정상 태아보험·치아보험 같은 일반 상품명 검색어의 진입선 중앙값이 41.5로, 회사명 검색어(25.2)보다 높았습니다. 보험료 일 단위 표시나 보장 제한 누락 같은 금지 표현은 과거 글까지 점검해 두세요.',
       },
     ],
     sources: [SRC.fcpa, SRC.fcpaDecree, SRC.insLaw, SRC.fssGa, SRC.measure],

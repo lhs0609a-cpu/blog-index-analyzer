@@ -165,6 +165,11 @@ export const SEO_GUIDES: Guide[] = [
         answer:
           '정리하는 것이 좋습니다. 서치어드바이저는 www 유무를 포함해 같은 내용을 여러 주소로 제공하면 한쪽 대표 주소로 HTTP 301 리다이렉트하라고 안내합니다. 자바스크립트 리다이렉트는 권장하지 않습니다.',
       },
+      {
+        question: '네이버 SEO란 무슨 뜻인가요?',
+        answer:
+          '네이버 SEO(검색엔진 최적화)는 네이버 서치어드바이저의 정의로 "사이트 내 콘텐츠 정보를 검색엔진이 잘 이해할 수 있도록 정리하는 작업"입니다. 첫 목적은 순위를 끌어올리는 기술보다 콘텐츠가 검색 결과에서 누락되지 않게 하는 데 있습니다. 구체적으로는 네이버 검색로봇(Yeti)의 수집을 막지 않고, 페이지마다 고유한 제목·설명과 대표 주소 하나를 두는 일이 출발점입니다.',
+      },
     ],
     sources: [SA.intro, SA.create, SA.robots, SA.markup, SA.structure, SA.js, SA.url, SA.check, SA.indexing, G.starter, { label: '블스피 키워드 난이도 측정 (2026-08, 키워드 2개)' }],
     related: ['naver-search-advisor-setup-sitemap-rss', 'seo-technical-failures-blspi-case', 'homepage-vs-blog-seo', 'content-marketing-vs-seo-marketing'],
@@ -457,6 +462,11 @@ export const SEO_GUIDES: Guide[] = [
         question: 'E-E-A-T가 순위 요인이 아니라면 신경 쓰지 않아도 되나요?',
         answer:
           'E-E-A-T 자체가 점수로 계산되는 요인은 아니라는 뜻입니다. 구글 콘텐츠 가이드는 작성자가 누구인지 밝히고, 직접 경험과 근거를 보여주는 콘텐츠가 사람들이 신뢰를 판단하는 데 도움이 된다고 설명합니다. 점수를 올리는 작업이 아니라 독자가 신뢰할 근거를 페이지에 남기는 작업으로 이해하면 됩니다.',
+      },
+      {
+        question: '구글 SEO(구글 SEO 최적화)란 무슨 뜻인가요?',
+        answer:
+          'SEO는 검색엔진 최적화의 줄임말로, 구글 SEO 기본 가이드는 이를 "검색엔진이 콘텐츠를 이해하도록 돕고, 사용자가 사이트를 찾고, 검색엔진을 통해 사이트를 방문할지 여부를 결정하도록 돕는" 일로 설명합니다. 구글이 중요하게 꼽는 것은 크롤링 가능한 구조, 설명적인 URL과 제목, 사용자에게 유용한 고유 콘텐츠이고, 키워드 메타 태그나 글자 수 같은 통념은 순위와 관련이 없다고 밝힙니다. 결과는 Search Console로 확인합니다.',
       },
     ],
     sources: [G.starter, G.helpful, G.canonical, G.needSeo, G.updates, ETC.blspiSite],
