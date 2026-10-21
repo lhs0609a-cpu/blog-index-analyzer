@@ -1859,6 +1859,19 @@ def _note_post_connect_ok() -> None:
         _post_fetch_breaker["fails"] = 0
 
 
+# 데스크톱 PostView 만 막히는 구간이 따로 있다. 2026-10-21 실측(Fly 서버):
+#   blog.naver.com/PostView.naver → ReadTimeout(10s)
+#   m.blog.naver.com/{id}/{no}    → 200, 1.1s
+# 예전엔 PostView 타임아웃을 '네이버 전체 불가'로 보고 글을 통째로 포기했고,
+# 그게 위 브레이커까지 열어 키워드 분석 결과가 전부 '측정 불가'가 됐다.
+# PostView 실패는 이 호스트만 쿨다운 동안 건너뛰고 모바일로 넘어간다.
+_postview_breaker = {"until": 0.0}
+
+
+class _PostViewSkip(Exception):
+    """PostView 쿨다운 중 — 모바일로 바로 넘어간다."""
+
+
 async def analyze_post(post_url: str, keyword: str) -> Dict:
     """
     개별 블로그 글 분석 - 상위 노출 글의 특성 파악 (강화 버전)
@@ -1928,6 +1941,8 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
 
             # ===== 방법 1: PostView API로 직접 접근 =====
             try:
+                if time.time() < _postview_breaker["until"]:
+                    raise _PostViewSkip()
                 postview_url = f"https://blog.naver.com/PostView.naver?blogId={blog_id}&logNo={post_no}&redirect=Dlog"
                 headers1 = {
                     "User-Agent": user_agents[0],
@@ -2007,12 +2022,18 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
                         except Exception as je:
                             logger.debug(f"JSON parse failed: {je}")
 
+            except _PostViewSkip:
+                pass
             except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as ce:
-                # 호스트에 못 닿는 것이다 — 같은 호스트에 폴백을 또 던지면
-                # 타임아웃을 한 번 더 먹을 뿐이다.
-                _note_post_connect_fail(post_url)
-                post_analysis["skipped_reason"] = "naver_unreachable"
-                raise _PostFetchUnreachable() from ce
+                # PostView 호스트만 막힌 것일 수 있다(모바일은 다른 호스트).
+                # 글을 포기하지 않고 PostView 만 쿨다운에 넣은 뒤 모바일로 간다.
+                # 모바일까지 막히면 그때 아래에서 전체 브레이커가 판단한다.
+                if time.time() >= _postview_breaker["until"]:
+                    logger.warning(
+                        f"[post-fetch] PostView 연결 실패({type(ce).__name__}) — "
+                        f"{_POST_FETCH_COOLDOWN_S:.0f}초간 모바일로만 수집 (마지막: {post_url})"
+                    )
+                _postview_breaker["until"] = time.time() + _POST_FETCH_COOLDOWN_S
             except Exception as e1:
                 logger.debug(f"PostView method failed: {e1}")
 
