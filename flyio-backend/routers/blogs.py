@@ -3233,10 +3233,17 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
                             cached = await asyncio.to_thread(PAC.get_many, post_links)
                             todo = [u for u in post_links if u not in cached]
 
-                            tasks = [
-                                asyncio.create_task(analyze_post(url, post_keyword))
-                                for url in todo
-                            ]
+                            # 블로그당 동시 2개까지만 줄을 세운다. 전역 상한(4)은 선착순이라,
+                            # 키워드 하나가 블로그 20개 × 15글을 한꺼번에 넣으면 앞 블로그 몇 개가
+                            # 상한 시간을 다 쓰고 나머지는 0글이 됐다(2026-10-21 운영: 20개 중 16개).
+                            # 블로그별로 끊어 넣으면 모든 블로그가 돌아가며 몇 글씩 읽힌다.
+                            blog_sem = asyncio.Semaphore(2)
+
+                            async def _fetch_one(url: str) -> Dict:
+                                async with blog_sem:
+                                    return await analyze_post(url, post_keyword)
+
+                            tasks = [asyncio.create_task(_fetch_one(url)) for url in todo]
                             if tasks:
                                 done, pending = await asyncio.wait(tasks, timeout=FULLPARSE_BUDGET_S)
                                 for t in pending:
