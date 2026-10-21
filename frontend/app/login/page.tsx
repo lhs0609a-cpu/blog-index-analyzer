@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { Loader2, Eye, EyeOff, Mail, Lock, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
+import SocialLoginButtons from '@/components/SocialLoginButtons'
 import { login } from '@/lib/api/auth'
 import { useAuthStore } from '@/lib/stores/auth'
 import { track, signupFailReason } from '@/lib/analytics/track'
@@ -112,6 +113,14 @@ function LoginForm() {
 
 
           <div className="auth-card">
+            {searchParams.get('social_error') && (
+              <p className="mb-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+                {searchParams.get('social_error') === 'cancelled'
+                  ? '소셜 로그인을 취소했습니다.'
+                  : '소셜 로그인을 마치지 못했습니다. 다시 시도해 주세요.'}
+              </p>
+            )}
+            <SocialLoginButtons next={next} at="login" />
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Email */}
               <div>

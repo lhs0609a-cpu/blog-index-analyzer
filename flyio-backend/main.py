@@ -1002,8 +1002,10 @@ from routers import profitable_keywords
 from routers import competitive_analysis
 from routers import post_watch
 from routers import growth
+from routers import oauth
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
+app.include_router(oauth.router, prefix="/api/auth", tags=["소셜로그인"])
 app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
 app.include_router(compliance.router, prefix="/api/compliance", tags=["법적준수"])
 app.include_router(blogs.router, prefix="/api/blogs", tags=["블로그"])

@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { Mail, Lock, User, Loader2, Sparkles, ArrowLeft, Check, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
+import SocialLoginButtons from '@/components/SocialLoginButtons'
 import { register } from '@/lib/api/auth'
 import { useAuthStore } from '@/lib/stores/auth'
 import { safeNextPath } from '@/lib/auth/nextPath'
@@ -134,6 +135,7 @@ function RegisterForm() {
 
 
           <div className="auth-card">
+            <SocialLoginButtons next={next} at="register" />
             {/* focus 는 버블링되므로 폼에 한 번만 달면 어느 칸을 먼저 만지든 잡힌다 */}
             <form onSubmit={handleSubmit} onFocus={markFormStart} className="space-y-5">
               {/* Name */}
