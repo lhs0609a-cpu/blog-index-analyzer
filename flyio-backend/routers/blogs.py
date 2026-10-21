@@ -72,6 +72,11 @@ BLOG_CACHE_TTL = 3600  # 1시간 (4시간 → 1시간 메모리 절약)
 # 글 단위 캐시가 생겨 "성능 제약" 이 사라졌으므로 3 → 15 로 올린다.
 # 15면 하루 6~7개 올리는 블로그도 표본의 절반 이상이 어제와 겹친다.
 FULLPARSE_SAMPLE_SIZE = 15
+# 풀파싱 표본을 읽는 데 쓰는 시간 상한(블로그 1개당). 본문 요청은 서버 전체에서
+# 동시 4개로 묶여 있어서, 캐시가 빈 키워드(블로그 20개 × 15글)는 2026-10-21 운영
+# 실측 278.7초 — 요청 데드라인 180초를 넘겨 사용자는 결과를 못 받는다.
+# 상한 안에 읽힌 글로만 평균을 낸다. 못 읽은 글은 다음 분석 때 캐시 미스로 다시 읽힌다.
+FULLPARSE_BUDGET_S = float(os.getenv("FULLPARSE_BUDGET_S", "45"))
 
 
 def get_cached_blog_analysis(blog_id: str) -> Optional[Dict]:
@@ -3228,10 +3233,24 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
                             cached = await asyncio.to_thread(PAC.get_many, post_links)
                             todo = [u for u in post_links if u not in cached]
 
-                            fresh_results = await asyncio.gather(
-                                *[analyze_post(url, post_keyword) for url in todo],
-                                return_exceptions=True,
-                            )
+                            tasks = [
+                                asyncio.create_task(analyze_post(url, post_keyword))
+                                for url in todo
+                            ]
+                            if tasks:
+                                done, pending = await asyncio.wait(tasks, timeout=FULLPARSE_BUDGET_S)
+                                for t in pending:
+                                    t.cancel()
+                                if pending:
+                                    await asyncio.gather(*pending, return_exceptions=True)
+                                    logger.info(
+                                        f"Fullparse {blog_id}: {FULLPARSE_BUDGET_S:.0f}초 상한 — "
+                                        f"{len(done)}/{len(tasks)}개만 읽음"
+                                    )
+                            fresh_results = [
+                                t.result() if (not t.cancelled() and t.exception() is None) else None
+                                for t in tasks
+                            ]
                             fresh: Dict[str, Any] = {}
                             for url, r in zip(todo, fresh_results):
                                 if isinstance(r, dict) and r.get("data_fetched"):
