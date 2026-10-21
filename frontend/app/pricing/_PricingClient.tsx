@@ -189,6 +189,18 @@ export default function PricingPage() {
     }
   }
 
+  // 동의 모달에 띄우는 금액은 **실제로 결제될 금액**이어야 한다. 서버(payment.py)는
+  // 연간이면 price_yearly 를 청구하는데, 모달은 월 가격을 보여주고 있었다.
+  // 서버가 내려준 플랜 값을 우선 쓰고, 없으면 featureAccess 상수로 떨어진다.
+  const chargeAmountOf = (planType: PlanType) => {
+    const fromServer = plans.find(p => p.type === planType)
+    if (billingCycle === 'yearly') {
+      return fromServer?.price_yearly ?? PLAN_INFO[planType].priceYearly
+    }
+    return fromServer?.price_monthly ?? PLAN_INFO[planType].price
+  }
+  const chargeUnit = billingCycle === 'yearly' ? '년' : '월'
+
   const formatPrice = (price: number) => {
     return price.toLocaleString('ko-KR')
   }
@@ -284,7 +296,7 @@ export default function PricingPage() {
               <br className="sm:hidden" /> 계속 지켜봅니다
             </h2>
             <p className="ds-lede">
-              무료로도 진단은 됩니다. 유료는 <strong className="font-semibold text-gray-900">횟수 제한 없이</strong>,
+              무료로도 진단은 됩니다. 유료는 <strong className="font-semibold text-gray-900">하루 횟수를 넉넉하게</strong>,
               그리고 <strong className="font-semibold text-gray-900">변화를 놓치지 않게</strong> 해 줍니다.
             </p>
           </div>
@@ -292,8 +304,8 @@ export default function PricingPage() {
           <div className="mx-auto grid max-w-4xl gap-4 md:grid-cols-3">
             {[
               {
-                t: '진단 무제한',
-                d: '고치고 다시 재고, 또 고치고 다시 잽니다. 하루 2회 제한에 막히지 않습니다.',
+                t: `진단 하루 ${PLAN_LIMITS.pro.blogAnalysisDaily}회`,
+                d: `고치고 다시 재고, 또 고치고 다시 잽니다. 무료 하루 ${PLAN_LIMITS.free.blogAnalysisDaily}회 제한에 막히지 않습니다(Pro 기준).`,
               },
               {
                 t: '안 잡히는 글 목록',
@@ -333,11 +345,11 @@ export default function PricingPage() {
               <p className="text-xs md:text-sm text-gray-600">실측<br/>노출 신호</p>
             </div>
             <div className="text-center p-4 rounded-2xl bg-white border border-green-100">
-              <div className="text-3xl md:text-4xl font-black text-green-600 mb-1">무제한</div>
-              <p className="text-xs md:text-sm text-gray-600">블로그<br/>진단 횟수</p>
+              <div className="text-3xl md:text-4xl font-black text-green-600 mb-1">{PLAN_LIMITS.pro.blogAnalysisDaily}회</div>
+              <p className="text-xs md:text-sm text-gray-600">일일<br/>블로그 진단</p>
             </div>
             <div className="text-center p-4 rounded-2xl bg-white border border-purple-100">
-              <div className="text-3xl md:text-4xl font-black text-purple-600 mb-1">200회</div>
+              <div className="text-3xl md:text-4xl font-black text-purple-600 mb-1">{PLAN_LIMITS.pro.keywordSearchDaily}회</div>
               <p className="text-xs md:text-sm text-gray-600">일일<br/>키워드 검색</p>
             </div>
             <div className="text-center p-4 rounded-2xl bg-white border border-amber-100">
@@ -573,7 +585,7 @@ export default function PricingPage() {
                 <Search className="w-6 h-6 w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center gi3d" strokeWidth={1.75} />
                 <div>
                   <div className="font-bold text-gray-900">경쟁도 분석</div>
-                  <div className="text-xs text-gray-500">일 200회 검색</div>
+                  <div className="text-xs text-gray-500">일 {PLAN_LIMITS.pro.keywordSearchDaily}회 검색</div>
                 </div>
               </div>
               <div className="space-y-3 mb-4">
@@ -583,7 +595,7 @@ export default function PricingPage() {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">검색 결과</span>
-                  <span className="text-[#0064FF] font-bold">50개</span>
+                  <span className="text-[#0064FF] font-bold">{PLAN_LIMITS.pro.searchResultsCount}개</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">히스토리 저장</span>
@@ -629,13 +641,13 @@ export default function PricingPage() {
                 <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center"><Swords className="w-6 h-6 text-purple-600 gi3d" strokeWidth={1.75} /></div>
                 <div>
                   <div className="font-bold text-gray-900">경쟁사 비교</div>
-                  <div className="text-xs text-gray-500">최대 10개 블로그</div>
+                  <div className="text-xs text-gray-500">최대 {PLAN_LIMITS.pro.competitorCompare}개 블로그</div>
                 </div>
               </div>
               <div className="space-y-3 mb-4">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">비교 가능</span>
-                  <span className="text-purple-600 font-bold">10개</span>
+                  <span className="text-purple-600 font-bold">{PLAN_LIMITS.pro.competitorCompare}개</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">엑셀 내보내기</span>
@@ -643,7 +655,7 @@ export default function PricingPage() {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">팀 멤버</span>
-                  <span className="text-purple-600 font-bold">3명</span>
+                  <span className="text-purple-600 font-bold">{PLAN_LIMITS.pro.teamMembers}명</span>
                 </div>
               </div>
               <div className="bg-purple-50 rounded-xl p-3 text-sm text-purple-700">
@@ -661,7 +673,7 @@ export default function PricingPage() {
                 <div className="text-xs text-gray-500">실측 노출 신호</div>
               </div>
               <div className="p-4 bg-blue-50 rounded-xl">
-                <div className="text-2xl font-bold text-blue-600">200회/일</div>
+                <div className="text-2xl font-bold text-blue-600">{PLAN_LIMITS.pro.keywordSearchDaily}회/일</div>
                 <div className="text-xs text-gray-500">키워드 검색</div>
               </div>
               <div className="p-4 bg-green-50 rounded-xl">
@@ -703,10 +715,18 @@ export default function PricingPage() {
               </thead>
               <tbody>
                 <tr className="border-b border-gray-100">
-                  <td className="py-4 px-4 font-medium">일일 사용량</td>
+                  <td className="py-4 px-4 font-medium">일일 키워드 검색</td>
                   {plans.map(plan => (
                     <td key={plan.type} className="text-center py-4 px-4">
                       {plan.features.keyword_search_daily === -1 ? '무제한' : `${plan.features.keyword_search_daily}회`}
+                    </td>
+                  ))}
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-4 px-4 font-medium">일일 블로그 분석</td>
+                  {plans.map(plan => (
+                    <td key={plan.type} className="text-center py-4 px-4">
+                      {plan.features.blog_analysis_daily === -1 ? '무제한' : `${plan.features.blog_analysis_daily}회`}
                     </td>
                   ))}
                 </tr>
@@ -995,7 +1015,7 @@ export default function PricingPage() {
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-600">오늘 결제 금액</span>
                   <span className="font-medium">
-                    {PLAN_INFO[selectedTrialPlan].price.toLocaleString()}원 <span className="text-gray-500 font-normal">(부가세 포함)</span>
+                    {chargeAmountOf(selectedTrialPlan).toLocaleString()}원/{chargeUnit} <span className="text-gray-500 font-normal">(부가세 포함)</span>
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-sm mt-2">
@@ -1022,7 +1042,7 @@ export default function PricingPage() {
                   <strong>이용약관 및 환불정책에 동의합니다</strong>
                   <br/>
                   <span className="text-xs text-gray-500 mt-1 block">
-                    지금 {PLAN_INFO[selectedTrialPlan].price.toLocaleString()}원이 결제되며 이후 자동 갱신됩니다. 7일 이내 미사용 시 전액 환불되고, 언제든 마이페이지에서 클릭 한 번으로 해지할 수 있습니다.
+                    지금 {chargeAmountOf(selectedTrialPlan).toLocaleString()}원({billingCycle === 'yearly' ? '1년' : '1개월'}분)이 결제되며 이후 {billingCycle === 'yearly' ? '매년' : '매월'} 자동 갱신됩니다. 7일 이내 미사용 시 전액 환불되고, 언제든 마이페이지에서 클릭 한 번으로 해지할 수 있습니다.
                     <Link href="/terms" className="text-[#0064FF] hover:underline ml-1">
                       전문 보기
                     </Link>
@@ -1068,7 +1088,7 @@ export default function PricingPage() {
                       처리 중...
                     </span>
                   ) : (
-                    `${PLAN_INFO[selectedTrialPlan].price.toLocaleString()}원 결제하고 시작하기`
+                    `${chargeAmountOf(selectedTrialPlan).toLocaleString()}원/${chargeUnit} 결제하고 시작하기`
                   )}
                 </button>
 

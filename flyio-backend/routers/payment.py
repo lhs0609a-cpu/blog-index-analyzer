@@ -28,6 +28,7 @@ from database.subscription_db import (
     get_or_create_customer_key,
     get_billing_credentials,
     settle_prepared_payment,
+    extract_toss_payment_details,
     PLAN_LIMITS,
     PlanType
 )
@@ -86,10 +87,7 @@ async def retry_webhook_verification(order_id: str, payment_key: str, max_retrie
                             order_id=order_id,
                             payment_key=payment_key,
                             status="completed",
-                            payment_method=payment_data.get("method"),
-                            card_company=payment_data.get("card", {}).get("company"),
-                            card_number=payment_data.get("card", {}).get("number"),
-                            receipt_url=payment_data.get("receipt", {}).get("url")
+                            **extract_toss_payment_details(payment_data),
                         )
 
                         # 성공 시 실패 목록에서 제거
@@ -382,16 +380,14 @@ async def confirm_payment(
                 )
 
             payment_data = response.json()
+            details = extract_toss_payment_details(payment_data)
 
             # 결제 내역 업데이트
             update_payment(
                 order_id=request.order_id,
                 payment_key=request.payment_key,
                 status="completed",
-                payment_method=payment_data.get("method"),
-                card_company=payment_data.get("card", {}).get("company"),
-                card_number=payment_data.get("card", {}).get("number"),
-                receipt_url=payment_data.get("receipt", {}).get("url")
+                **details,
             )
 
             # 주문 ID에서 플랜 정보 추출 (또는 별도 저장)
@@ -407,7 +403,7 @@ async def confirm_payment(
                     "amount": request.amount,
                     "method": payment_data.get("method"),
                     "approved_at": payment_data.get("approvedAt"),
-                    "receipt_url": payment_data.get("receipt", {}).get("url")
+                    "receipt_url": details["receipt_url"]
                 }
             }
 
@@ -643,11 +639,20 @@ async def register_billing(
             # /prepare 가 만들어 둔 pending 행을 **덮어쓴다**. 새 행을 만들면
             # 결제 한 건이 행 두 개(완료 1 + 영원한 대기중 1)가 되어, 관리자
             # 화면의 '대기중'이 이탈자와 성공자가 섞인 더미가 된다.
+            # 결제수단도 함께 남긴다. 빌링 결제 응답에 card 가 비어 있으면
+            # 빌링키 발급 응답(cardCompany/cardNumber)으로 채운다.
+            details = extract_toss_payment_details(
+                payment_data,
+                default_method="카드",
+                fallback_card_company=billing_data.get("cardCompany"),
+                fallback_card_number=billing_data.get("cardNumber"),
+            )
             if not settle_prepared_payment(
-                user_id, request.order_id, new_order_id, amount, payment_key
+                user_id, request.order_id, new_order_id, amount, payment_key,
+                **details,
             ):
                 # 덮어쓸 행이 없는 경우(주소로 직접 들어온 흐름 등)만 새로 만든다.
-                create_payment(user_id, new_order_id, amount, payment_key, "completed")
+                create_payment(user_id, new_order_id, amount, payment_key, "completed", **details)
 
             # 4. 구독 업그레이드 — **빌링키를 반드시 함께 저장한다.**
             # 이걸 빠뜨린 동안 정기결제는 이름만 정기결제였다. 첫 달만 받고
@@ -742,6 +747,7 @@ async def billing_payment(current_user: dict = Depends(get_current_user)):
             create_payment(
                 user_id, order_id, amount, payment_data.get("paymentKey"),
                 "completed", kind="renewal",
+                **extract_toss_payment_details(payment_data, default_method="카드"),
             )
             upgrade_subscription(
                 user_id=user_id,
@@ -884,10 +890,13 @@ async def payment_webhook(request: Request, background_tasks: BackgroundTasks):
 
                 # 결제 내역 업데이트
                 try:
+                    # 웹훅 data 는 토스 Payment 객체다. 결제수단을 같이 넘긴다
+                    # (없으면 None → update_payment 가 기존 값을 유지한다).
                     update_payment(
                         order_id=order_id,
                         payment_key=payment_key,
-                        status="completed"
+                        status="completed",
+                        **extract_toss_payment_details(data.get("data")),
                     )
                 except Exception as update_error:
                     logger.error(f"Failed to update payment in webhook: {update_error}")

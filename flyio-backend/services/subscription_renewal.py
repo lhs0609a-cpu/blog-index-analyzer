@@ -29,6 +29,7 @@ from database.subscription_db import (
     PLAN_LIMITS,
     PlanType,
     create_payment,
+    extract_toss_payment_details,
     get_subscriptions_due_for_renewal,
     record_renewal_attempt,
     upgrade_subscription,
@@ -136,7 +137,10 @@ async def renew_one(sub: dict) -> dict:
     payment_key = data.get("paymentKey")
     # kind='renewal' — 자동 갱신은 사람이 결제창을 통과한 게 아니다.
     # 체크아웃 성공률의 분자로 세면 지표가 조용히 부풀어오른다.
-    create_payment(user_id, order_id, amount, payment_key, "completed", kind="renewal")
+    create_payment(
+        user_id, order_id, amount, payment_key, "completed", kind="renewal",
+        **extract_toss_payment_details(data, default_method="카드"),
+    )
     # billing_key 는 넘기지 않는다 — 갱신은 새 키를 발급하지 않으므로 기존 값이 남아야 한다.
     upgrade_subscription(
         user_id=user_id,

@@ -924,6 +924,31 @@ async def check_feature_access(user_id: int, feature: str) -> Dict:
 
 # ============ 결제 내역 함수 ============
 
+def extract_toss_payment_details(
+    payment_data: Optional[Dict],
+    default_method: Optional[str] = None,
+    fallback_card_company: Optional[str] = None,
+    fallback_card_number: Optional[str] = None,
+) -> Dict:
+    """토스 Payment 응답에서 payments 테이블에 남길 결제수단 정보를 뽑는다.
+
+    빌링(자동결제) 경로는 이 값을 하나도 저장하지 않아 관리자 화면 '결제수단'이
+    전부 '-' 였고, 결제수단별 매출 통계(payment_method IS NOT NULL)에서도 빠졌다.
+
+    토스는 카드가 아닌 결제에서 "card": null 을 준다 — `.get("card", {})` 는
+    None 을 돌려주므로 그대로 `.get` 을 이어 부르면 승인된 결제가 500 으로 끝난다.
+    """
+    data = payment_data or {}
+    card = data.get("card") or {}
+    receipt = data.get("receipt") or {}
+    return {
+        "payment_method": data.get("method") or default_method,
+        "card_company": card.get("company") or fallback_card_company or card.get("issuerCode"),
+        "card_number": card.get("number") or fallback_card_number,
+        "receipt_url": receipt.get("url"),
+    }
+
+
 def create_payment(
     user_id: int,
     order_id: str,
@@ -931,6 +956,10 @@ def create_payment(
     payment_key: str = None,
     status: str = "pending",
     kind: str = "checkout",
+    payment_method: str = None,
+    card_company: str = None,
+    card_number: str = None,
+    receipt_url: str = None,
 ) -> Dict:
     """결제 내역 생성.
 
@@ -946,18 +975,22 @@ def create_payment(
     if USE_POSTGRES:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute("""
-            INSERT INTO payments (user_id, order_id, amount, payment_key, status, kind, paid_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO payments (user_id, order_id, amount, payment_key, status, kind, paid_at,
+                                  payment_method, card_company, card_number, receipt_url)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
-        """, (user_id, order_id, amount, payment_key, status, kind, paid_at))
+        """, (user_id, order_id, amount, payment_key, status, kind, paid_at,
+              payment_method, card_company, card_number, receipt_url))
         result = cursor.fetchone()
         payment_id = result['id'] if result else None
     else:
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO payments (user_id, order_id, amount, payment_key, status, kind, paid_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (user_id, order_id, amount, payment_key, status, kind, paid_at))
+            INSERT INTO payments (user_id, order_id, amount, payment_key, status, kind, paid_at,
+                                  payment_method, card_company, card_number, receipt_url)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, order_id, amount, payment_key, status, kind, paid_at,
+              payment_method, card_company, card_number, receipt_url))
         payment_id = cursor.lastrowid
 
     conn.commit()
@@ -972,6 +1005,10 @@ def settle_prepared_payment(
     new_order_id: str,
     amount: int,
     payment_key: str,
+    payment_method: str = None,
+    card_company: str = None,
+    card_number: str = None,
+    receipt_url: str = None,
 ) -> bool:
     """`/prepare` 가 만들어 둔 pending 행을 실제 결제로 **덮어쓴다**.
 
@@ -999,12 +1036,18 @@ def settle_prepared_payment(
                amount = {ph},
                status = 'completed',
                kind = 'checkout',
-               paid_at = {now}
+               paid_at = {now},
+               payment_method = {ph},
+               card_company = {ph},
+               card_number = {ph},
+               receipt_url = {ph}
          WHERE order_id = {ph}
            AND user_id = {ph}
            AND status = 'pending'
         """,
-        (new_order_id, payment_key, amount, prepare_order_id, user_id),
+        (new_order_id, payment_key, amount,
+         payment_method, card_company, card_number, receipt_url,
+         prepare_order_id, user_id),
     )
     settled = cursor.rowcount > 0
     conn.commit()
@@ -1021,7 +1064,12 @@ def update_payment(
     card_number: str = None,
     receipt_url: str = None
 ) -> bool:
-    """결제 내역 업데이트"""
+    """결제 내역 업데이트
+
+    결제수단 필드는 None 이면 **기존 값을 유지**한다(COALESCE). 승인(confirm)이
+    method 를 저장한 뒤 결제수단 없이 status 만 보내는 웹훅이 도착하면, 예전에는
+    그 값을 NULL 로 덮어써 관리자 화면 '결제수단'이 비었다.
+    """
     conn = get_connection()
 
     if USE_POSTGRES:
@@ -1030,10 +1078,10 @@ def update_payment(
             UPDATE payments
             SET payment_key = %s,
                 status = %s,
-                payment_method = %s,
-                card_company = %s,
-                card_number = %s,
-                receipt_url = %s,
+                payment_method = COALESCE(%s, payment_method),
+                card_company = COALESCE(%s, card_company),
+                card_number = COALESCE(%s, card_number),
+                receipt_url = COALESCE(%s, receipt_url),
                 paid_at = CASE WHEN %s = 'completed' THEN NOW() ELSE paid_at END
             WHERE order_id = %s
         """, (payment_key, status, payment_method, card_company, card_number, receipt_url, status, order_id))
@@ -1043,10 +1091,10 @@ def update_payment(
             UPDATE payments
             SET payment_key = ?,
                 status = ?,
-                payment_method = ?,
-                card_company = ?,
-                card_number = ?,
-                receipt_url = ?,
+                payment_method = COALESCE(?, payment_method),
+                card_company = COALESCE(?, card_company),
+                card_number = COALESCE(?, card_number),
+                receipt_url = COALESCE(?, receipt_url),
                 paid_at = CASE WHEN ? = 'completed' THEN CURRENT_TIMESTAMP ELSE paid_at END
             WHERE order_id = ?
         """, (payment_key, status, payment_method, card_company, card_number, receipt_url, status, order_id))

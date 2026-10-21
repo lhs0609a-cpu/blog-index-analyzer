@@ -11,7 +11,7 @@ import SeoContent, { type SeoBlock } from '@/components/seo/SeoContent'
 const blocks: SeoBlock[] = [
   {
     kind: 'p',
-    text: '키워드를 입력하면 네이버 검색광고 기준 월간 검색수, 경쟁 강도, 그리고 그 키워드로 상위에 노출되고 있는 문서를 함께 확인할 수 있습니다. 무료 플랜에서 하루 8회까지 조회할 수 있습니다.',
+    text: '키워드를 입력하면 네이버 검색광고 기준 월간 검색수, 경쟁 강도, 그리고 그 키워드로 상위에 노출되고 있는 문서를 함께 확인할 수 있습니다. 무료 플랜에서 하루 3회까지 조회할 수 있습니다.',
   },
   {
     kind: 'p',
