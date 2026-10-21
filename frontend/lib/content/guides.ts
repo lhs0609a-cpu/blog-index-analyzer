@@ -29,6 +29,10 @@ import { LOCAL_BUSINESS_GUIDES } from './guide-batches/local-business'
 import { SEO_GUIDES } from './guide-batches/seo'
 import { NICHE_EXPERIENCE_GUIDES } from './guide-batches/niche-experience'
 import { BLOG_NICHES_GUIDES } from './guide-batches/blog-niches'
+import { AD_OPS_REFUND_GUIDES } from './guide-batches/ad-ops-refund'
+import { MARKETING_GLOSSARY_GUIDES } from './guide-batches/marketing-glossary'
+import { OTHER_CHANNELS_GUIDES } from './guide-batches/other-channels'
+import { BLOG_FEATURES_GUIDES } from './guide-batches/blog-features'
 
 export const GUIDE_CATEGORIES = [
   '블로그 지수',
@@ -1554,6 +1558,10 @@ export const GUIDES: Guide[] = [
   ...SEO_GUIDES,
   ...NICHE_EXPERIENCE_GUIDES,
   ...BLOG_NICHES_GUIDES,
+  ...AD_OPS_REFUND_GUIDES,
+  ...MARKETING_GLOSSARY_GUIDES,
+  ...OTHER_CHANNELS_GUIDES,
+  ...BLOG_FEATURES_GUIDES,
 ]
 
 export function getGuide(slug: string): Guide | undefined {
