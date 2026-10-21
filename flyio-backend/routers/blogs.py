@@ -15,6 +15,8 @@ import re
 import random
 import asyncio
 import os
+import uuid
+from contextvars import ContextVar
 from bs4 import BeautifulSoup
 
 from config import settings
@@ -80,14 +82,19 @@ FULLPARSE_BUDGET_S = float(os.getenv("FULLPARSE_BUDGET_S", "45"))
 
 
 def get_cached_blog_analysis(blog_id: str) -> Optional[Dict]:
-    """캐시된 블로그 분석 결과 조회"""
+    """캐시된 블로그 분석 결과 조회 — 메모리 → DB(database/blog_analysis_cache) 순"""
     if blog_id in BLOG_ANALYSIS_CACHE:
         cached = BLOG_ANALYSIS_CACHE[blog_id]
         if time.time() - cached["timestamp"] < BLOG_CACHE_TTL:
             return cached["data"]
         else:
             del BLOG_ANALYSIS_CACHE[blog_id]
-    return None
+    # 메모리는 100개·배포 때 초기화라 금방 빈다. DB 는 PK 조회 한 번(ms 미만)이다.
+    from database import blog_analysis_cache as BAC
+    data = BAC.get(blog_id)
+    if data is not None:
+        set_blog_analysis_cache(blog_id, data)
+    return data
 
 def set_blog_analysis_cache(blog_id: str, data: Dict):
     """블로그 분석 결과 캐시 저장"""
@@ -4185,6 +4192,8 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
     # 측정 실패본을 캐시에 넣으면 TTL 동안 같은 실패를 재생한다 — 넣지 않는다.
     if result["measured"]:
         set_blog_analysis_cache(blog_id, result)
+        from database import blog_analysis_cache as BAC
+        await asyncio.to_thread(BAC.put, blog_id, result)
     return result
 
 
@@ -5113,8 +5122,15 @@ async def search_keyword_with_tabs(
     except Exception as e:
         logger.debug(f"Could not add user search keyword: {e}")
 
+    # 백그라운드 작업(/search-keyword-with-tabs/start)이면 진행 상황을 여기에 적는다.
+    progress = _KW_PROGRESS.get()
+    _t0 = time.monotonic()
+    _blog_times: List[float] = []
+    _t_blogs = 0.0
+
     # Fetch search results from both VIEW and BLOG tabs
     both_tabs_results = await fetch_naver_search_results_both_tabs(keyword, limit)
+    _t_serp = time.monotonic() - _t0
     view_search_results = both_tabs_results.get("view_results", [])
     blog_search_results = both_tabs_results.get("blog_results", [])
 
@@ -5179,15 +5195,41 @@ async def search_keyword_with_tabs(
             async with GLOBAL_SEMAPHORE:
                 async with local_semaphore:
                     # 지연 제거 - 세마포어로 충분히 제어됨 (성능 개선)
-                    return await analyze_single(item)
+                    _bt = time.monotonic()
+                    out = await analyze_single(item)
+                    _blog_times.append(time.monotonic() - _bt)
+                    if progress is not None:
+                        _ix = out[1].get("index") or {}
+                        progress["blogs"][item["blog_id"]] = {
+                            "level": _ix.get("level"),
+                            "grade": _ix.get("grade"),
+                            "total_score": _ix.get("total_score"),
+                            "partial_dimensions": _ix.get("partial_dimensions"),
+                            "unmeasurable_reason": _ix.get("unmeasurable_reason"),
+                            "stats": out[1].get("stats") or {},
+                        }
+                    return out
 
         # 빠른 모드: 상위 N개만 분석, 나머지는 기본 정보만 표시
         items_to_analyze = search_results[:effective_limit]
         items_to_skip = search_results[effective_limit:]
 
+        if progress is not None:
+            _vis = _visible_results_limit(gate)
+            _rows = items_to_analyze if _vis is None else items_to_analyze[:_vis]
+            progress["preview"] = [
+                {k: it.get(k) for k in (
+                    "rank", "blog_id", "blog_name", "blog_url", "post_title",
+                    "post_url", "post_date", "thumbnail", "tab_type",
+                )}
+                for it in _rows
+            ]
+            progress["total"] = len(items_to_analyze)
+
         # 분석 대상 병렬 실행
         analysis_tasks = [analyze_with_limit(item) for item in items_to_analyze]
         analysis_results = await asyncio.gather(*analysis_tasks)
+        _t_blogs = time.monotonic() - _t0 - _t_serp
 
         # 분석 제외 항목은 기본 정보만 추가 (빠른 응답)
         for item in items_to_skip:
@@ -5522,6 +5564,17 @@ async def search_keyword_with_tabs(
     # 결과가 실제로 나온 지금 차감한다 (위쪽 '검색 결과 0건' 반환 경로는 안 먹는다).
     consume_usage(gate)
 
+    # 구간별 소요 시간 — 어디를 줄여야 하는지 숫자로 보려고 남긴다.
+    try:
+        _bts = sorted(_blog_times)
+        logger.info(
+            f"[kw-timing] {keyword}: total={time.monotonic() - _t0:.1f}s serp={_t_serp:.1f}s "
+            f"blogs={_t_blogs:.1f}s n={len(_bts)} "
+            f"blog_p50={(_bts[len(_bts) // 2] if _bts else 0):.1f}s blog_max={(_bts[-1] if _bts else 0):.1f}s"
+        )
+    except Exception:
+        pass
+
     return KeywordSearchResponse(
         keyword=keyword,
         total_found=count,
@@ -5545,6 +5598,100 @@ class ScoreBreakdownResponse(BaseModel):
     grade: str
     breakdown: Dict[str, Any]
     stats: Optional[Dict[str, Any]] = None
+
+
+# ===== 키워드 분석 2단 응답 =====
+# 동기 엔드포인트는 블로그 20개 분석이 다 끝나야 응답한다(캐시가 비면 40~60초, 예전엔
+# 180초 데드라인을 넘기기도 했다). /start 는 바로 작업 번호를 돌려주고 같은 파이프라인을
+# 백그라운드로 돌린다. 화면은 /jobs/{id} 를 폴링해 순위 목록(수 초)부터 그리고,
+# 블로그 등급은 끝나는 대로 채운다. 머신 1대(fly.toml)라 메모리 저장소로 충분하다 —
+# 재시작되면 작업이 사라지고, 화면은 404 를 받아 다시 시도하라고 안내한다.
+_KW_PROGRESS: ContextVar[Optional[Dict[str, Any]]] = ContextVar("_KW_PROGRESS", default=None)
+_KW_JOBS: Dict[str, Dict[str, Any]] = {}
+_KW_JOB_TTL_S = 900
+_KW_JOBS_PER_OWNER = 3
+
+
+def _kw_job_owner(gate: Any) -> str:
+    uid = getattr(gate, "user_id", None)
+    return f"u:{uid}" if uid is not None else f"g:{getattr(gate, 'ip', '')}"
+
+
+def _kw_jobs_gc() -> None:
+    now = time.time()
+    for jid in [j for j, v in _KW_JOBS.items() if now - v["created"] > _KW_JOB_TTL_S]:
+        _KW_JOBS.pop(jid, None)
+
+
+@router.post("/search-keyword-with-tabs/start")
+async def start_keyword_search_job(
+    keyword: str = Query(..., description="검색할 키워드"),
+    limit: int = Query(10, description="결과 개수 (기본 10개)"),
+    analyze_content: bool = Query(True, description="콘텐츠 분석 여부"),
+    quick_mode: bool = Query(False, description="빠른 모드 (상위 10개만 분석)"),
+    gate: UsageGate = Depends(keyword_search_gate),
+):
+    """키워드 분석을 백그라운드로 시작하고 작업 번호를 돌려준다(한도 검사는 여기서, 차감은 완료 시)."""
+    _kw_jobs_gc()
+    owner = _kw_job_owner(gate)
+    running = [
+        (jid, j) for jid, j in _KW_JOBS.items()
+        if j["owner"] == owner and j["status"] == "running"
+    ]
+    # 같은 키워드를 두 번 누르면 같은 작업을 돌려준다(네이버 요청이 두 배가 되지 않게).
+    for jid, j in running:
+        if j["keyword"] == keyword:
+            return {"job_id": jid}
+    if len(running) >= _KW_JOBS_PER_OWNER:
+        raise HTTPException(status_code=429, detail={
+            "error_code": "TOO_MANY_JOBS",
+            "message": "진행 중인 키워드 분석이 끝난 뒤 다시 시도해 주세요.",
+        })
+
+    job_id = uuid.uuid4().hex
+    job: Dict[str, Any] = {
+        "owner": owner, "keyword": keyword, "status": "running", "created": time.time(),
+        "preview": None, "total": 0, "blogs": {}, "result": None, "error": None,
+    }
+    _KW_JOBS[job_id] = job
+
+    async def _run():
+        from fastapi.encoders import jsonable_encoder
+        _KW_PROGRESS.set(job)
+        try:
+            res = await search_keyword_with_tabs(
+                keyword=keyword, limit=limit, analyze_content=analyze_content,
+                quick_mode=quick_mode, gate=gate,
+            )
+            job["result"] = jsonable_encoder(res)
+            job["status"] = "done"
+        except Exception as e:
+            logger.warning(f"[kw-job] {keyword} 실패: {e}")
+            job["error"] = "키워드 분석에 실패했습니다. 잠시 후 다시 시도해 주세요."
+            job["status"] = "error"
+
+    job["task"] = asyncio.create_task(_run())
+    return {"job_id": job_id}
+
+
+@router.get("/search-keyword-with-tabs/jobs/{job_id}")
+async def get_keyword_search_job(job_id: str):
+    """진행 상황. done 이면 result 에 동기 엔드포인트와 같은 응답이 들어 있다."""
+    job = _KW_JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다. 다시 검색해 주세요.")
+    out = {
+        "status": job["status"],
+        "keyword": job["keyword"],
+        "preview": job["preview"],
+        "total": job["total"],
+        "done": len(job["blogs"]),
+        "blogs": job["blogs"],
+        "error": job["error"],
+    }
+    if job["status"] == "done":
+        out["result"] = job["result"]
+    return out
 
 
 @router.get("/{blog_id}/score-breakdown", response_model=ScoreBreakdownResponse)
