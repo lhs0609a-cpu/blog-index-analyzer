@@ -5249,7 +5249,8 @@ async def search_keyword_with_tabs(
                 )}
                 for it in _rows
             ]
-            progress["total"] = len(items_to_analyze)
+            # 같은 블로그가 두 순위에 걸리면 진행 칸은 하나다(blogs 는 blog_id 키).
+            progress["total"] = len({it["blog_id"] for it in items_to_analyze})
 
         # 분석 대상 병렬 실행
         analysis_tasks = [analyze_with_limit(item) for item in items_to_analyze]
