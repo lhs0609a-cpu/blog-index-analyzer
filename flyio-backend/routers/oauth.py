@@ -10,7 +10,7 @@
 
 키가 설정된 제공자만 켜진다(/providers). 키가 없으면 화면에 버튼이 안 보인다.
   KAKAO_REST_API_KEY, KAKAO_CLIENT_SECRET(선택)
-  NAVER_LOGIN_CLIENT_ID, NAVER_LOGIN_CLIENT_SECRET  (검색 API 용 NAVER_CLIENT_ID 와 따로 — 같은 이름을 쓰면 로그인 권한 없는 검색 앱 키로 버튼이 켜진다)
+  NAVER_CLIENT_ID, NAVER_CLIENT_SECRET
   OAUTH_BACKEND_URL (기본 https://blog-index-analyzer.fly.dev)
   OAUTH_FRONTEND_URL (기본 https://www.blrank.co.kr)
 
@@ -53,7 +53,7 @@ def _frontend_url() -> str:
 def _configured() -> Dict[str, bool]:
     return {
         "kakao": bool(os.getenv("KAKAO_REST_API_KEY")),
-        "naver": bool(os.getenv("NAVER_LOGIN_CLIENT_ID") and os.getenv("NAVER_LOGIN_CLIENT_SECRET")),
+        "naver": bool(os.getenv("NAVER_CLIENT_ID") and os.getenv("NAVER_CLIENT_SECRET")),
     }
 
 
@@ -111,7 +111,7 @@ async def oauth_start(provider: str, next: Optional[str] = None):
         })
     else:
         url = "https://nid.naver.com/oauth2.0/authorize?" + urlencode({
-            "client_id": os.getenv("NAVER_LOGIN_CLIENT_ID"),
+            "client_id": os.getenv("NAVER_CLIENT_ID"),
             "redirect_uri": _redirect_uri("naver"),
             "response_type": "code",
             "state": state,
@@ -151,8 +151,8 @@ async def _naver_profile(code: str, state: str) -> Dict:
     async with httpx.AsyncClient(timeout=10) as c:
         tok = (await c.post("https://nid.naver.com/oauth2.0/token", data={
             "grant_type": "authorization_code",
-            "client_id": os.getenv("NAVER_LOGIN_CLIENT_ID"),
-            "client_secret": os.getenv("NAVER_LOGIN_CLIENT_SECRET"),
+            "client_id": os.getenv("NAVER_CLIENT_ID"),
+            "client_secret": os.getenv("NAVER_CLIENT_SECRET"),
             "code": code,
             "state": state,
         })).json()
