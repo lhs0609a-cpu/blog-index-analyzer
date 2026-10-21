@@ -14,6 +14,7 @@ import logging
 import re
 import random
 import asyncio
+import os
 from bs4 import BeautifulSoup
 
 from config import settings
@@ -1872,7 +1873,22 @@ class _PostViewSkip(Exception):
     """PostView 쿨다운 중 — 모바일로 바로 넘어간다."""
 
 
+# 본문 수집 동시성 상한(서버 전체). 키워드 1회는 SERP 20개 블로그를 동시에 분석하고
+# 블로그마다 풀파싱 표본 15개 + SERP 글 1개를 읽으니, 제한이 없으면 네이버에
+# 한꺼번에 ~320개 요청이 나간다. 2026-10-21 운영 로그: 그 순간 PostView 가 막히고,
+# 모바일로 돌리자 모바일도 연달아 연결 실패 → 브레이커 → 전 행 '측정 불가'.
+# 단건은 멀쩡히 1초에 온다(같은 날 서버에서 실측). 문제는 버스트다.
+# 같은 날 로컬에서도 버스트 직후 m.blog 가 Akamai 403(Access Denied)을 줬다.
+_POST_FETCH_SEM = asyncio.Semaphore(int(os.getenv("POST_FETCH_CONCURRENCY", "6")))
+
+
 async def analyze_post(post_url: str, keyword: str) -> Dict:
+    """analyze_post 를 동시성 상한 안에서 실행한다(위 _POST_FETCH_SEM 참고)."""
+    async with _POST_FETCH_SEM:
+        return await _analyze_post_unlimited(post_url, keyword)
+
+
+async def _analyze_post_unlimited(post_url: str, keyword: str) -> Dict:
     """
     개별 블로그 글 분석 - 상위 노출 글의 특성 파악 (강화 버전)
 
@@ -1938,6 +1954,10 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, limits=httpx.Limits(max_connections=30)) as client:
             content_text = ""
             title_text = ""
+            # PostView HTML 에 본문(se-main-container)이 있으면 아래 공용 파서가 그대로
+            # 읽는다. 2026-10-21 실측: PostView 에는 __PRELOADED_STATE__ 가 더는 없어서
+            # JSON 경로가 늘 비고, 그 탓에 모든 글이 모바일을 한 번 더 불렀다(글당 2요청).
+            postview_has_body = False
 
             # ===== 방법 1: PostView API로 직접 접근 =====
             try:
@@ -1954,6 +1974,7 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
 
                 if resp.status_code == 200:
                     html = resp.text
+                    postview_has_body = "se-main-container" in html
 
                     # JSON 데이터 추출 시도 (네이버 블로그 내부 데이터)
                     json_match = re.search(r'__PRELOADED_STATE__\s*=\s*(\{.+?\});?\s*</script>', html, re.DOTALL)
@@ -2038,7 +2059,7 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
                 logger.debug(f"PostView method failed: {e1}")
 
             # ===== 방법 2: 모바일 버전 (기존 방식 개선) =====
-            if not content_text or len(content_text) < 100:
+            if (not content_text or len(content_text) < 100) and not postview_has_body:
                 mobile_url = f"https://m.blog.naver.com/{blog_id}/{post_no}"
                 headers = {
                     "User-Agent": user_agents[1],
