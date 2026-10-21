@@ -55,8 +55,8 @@ PLAN_LIMITS = {
         "name": "무료",
         "price_monthly": 0,
         "price_yearly": 0,
-        "keyword_search_daily": 3,      # 8 → 3 (맛보기만)
-        "blog_analysis_daily": 1,       # 2 → 1 (한 번만)
+        "keyword_search_daily": 5,      # 3 → 5 (2026-10-21: 가입할 이유를 만든다 — 비회원 1회와 같으면 아무도 가입 안 한다)
+        "blog_analysis_daily": 5,       # 1 → 5 (같은 이유. 가입률 2.4%, 무료 한도가 비회원과 같았다)
         "search_results_count": 5,      # 10 → 5 (제한된 결과)
         "history_days": 0,
         "competitor_compare": 0,

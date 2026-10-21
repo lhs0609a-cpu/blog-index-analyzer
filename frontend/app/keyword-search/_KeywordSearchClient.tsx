@@ -2927,7 +2927,7 @@ function KeywordSearchContent() {
       {/* Breakdown Modal */}
       {showBreakdownModal && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
           onClick={closeBreakdownModal}
         >
           <div

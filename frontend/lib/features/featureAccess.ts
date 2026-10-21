@@ -55,8 +55,8 @@ export interface PlanLimits {
 
 export const PLAN_LIMITS: Record<Exclude<Plan, 'guest'>, PlanLimits> = {
   free: {
-    keywordSearchDaily: 3,  // P0: 8→3 유료 전환 유도
-    blogAnalysisDaily: 1,   // P0: 2→1 유료 전환 유도
+    keywordSearchDaily: 5,  // 3→5 (2026-10-21) — 서버 PLAN_LIMITS 와 같아야 한다
+    blogAnalysisDaily: 5,   // 1→5 (2026-10-21) — 비회원(1회)보다 커야 가입할 이유가 생긴다
     searchResultsCount: 5,  // P0: 10→5 결과 제한
     historyDays: 0,
     competitorCompare: 0,

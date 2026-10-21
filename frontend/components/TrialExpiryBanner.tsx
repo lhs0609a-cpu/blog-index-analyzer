@@ -157,7 +157,7 @@ export default function TrialExpiryBanner({ dismissible = true, compact = false 
               )}
             </div>
             <p className="text-amber-700 text-sm mb-3">
-              체험 기간이 끝나면 무료 플랜으로 전환되어 하루 1회만 분석할 수 있어요.
+              체험 기간이 끝나면 무료 플랜으로 전환되어 하루 5회까지 분석할 수 있어요.
               <br className="hidden md:block" />
               지금 구독하면 <strong>첫 달 20% 할인</strong> 혜택을 드려요!
             </p>

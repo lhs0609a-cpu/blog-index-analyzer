@@ -231,7 +231,7 @@ export const softwareAppJsonLd = {
     '@type': 'Offer',
     price: '0',
     priceCurrency: 'KRW',
-    description: '무료 플랜 제공 (블로그 분석 일 1회, 키워드 분석 일 3회)',
+    description: '무료 플랜 제공 (블로그 분석 일 5회, 키워드 분석 일 5회)',
   },
   featureList: [
     '공개 데이터를 바탕으로 한 블로그 지수 추정',
