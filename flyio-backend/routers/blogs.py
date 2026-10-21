@@ -2481,14 +2481,35 @@ async def resolve_canonical_blog_id(blog_id: str) -> Optional[str]:
     """
     입력값이 실제 블로그 주소가 아닐 때 진짜 주소를 찾아준다.
 
-    네이버 RSS는 계정 ID나 옛 주소로 요청하면 현재 블로그 주소로 302를 준다.
-        rss.blog.naver.com/leegustjr9.xml → http://rss.blog.naver.com/goodspolice
-    사용자가 로그인 ID를 블로그 주소로 착각하는 경우가 잦아 이 힌트가 유용하다.
+    사용자가 로그인 ID를 블로그 주소로 착각하는 경우가 잦다. 블로그 주소를 바꾼
+    계정은 계정 ID로는 블로그가 안 열리지만, 모바일 블로그 API는 계정 ID를 받아
+    그 계정의 현재 블로그 주소를 돌려준다(Referer 없으면 에러).
+        m.blog.naver.com/api/blogs/lhs0609c   → result.blogId = "platonmarketing"
+        m.blog.naver.com/api/blogs/leegustjr9 → result.blogId = "goodspolice"
+        없는 ID → 400 blog_id_invalidate
+    예전엔 RSS가 같은 정보를 302로 줬으나(2026-10 실측) 지금은 빈 XML 200이라
+    API를 먼저 보고 RSS는 예비로만 남긴다.
 
     Returns: 다른 주소를 찾으면 그 blog_id, 아니면 None
     """
+    client = await get_http_client()
     try:
-        client = await get_http_client()
+        resp = await client.get(
+            f"https://m.blog.naver.com/api/blogs/{blog_id}",
+            headers={
+                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
+                "Referer": "https://m.blog.naver.com/",
+            },
+            follow_redirects=False,
+            timeout=5.0,
+        )
+        if resp.status_code == 200:
+            real_id = ((resp.json() or {}).get("result") or {}).get("blogId")
+            if real_id and real_id != blog_id:
+                return real_id
+    except Exception as e:
+        logger.debug(f"canonical id resolve (api) failed for {blog_id}: {e}")
+    try:
         resp = await client.get(
             f"https://rss.blog.naver.com/{blog_id}.xml",
             follow_redirects=False,
