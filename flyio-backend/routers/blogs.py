@@ -6241,6 +6241,63 @@ class DraftCheckRequest(BaseModel):
     content: str
     keyword: str
     image_count: Optional[int] = 0
+    # 의료광고 표현 점검. None 이면 원고에 병·의원 단어가 있을 때 자동으로 켠다.
+    medical: Optional[bool] = None
+
+
+# 학습 샘플에 그 키워드가 없으면 실제 상위 글을 바로 읽어 기준을 만든다.
+# 예전엔 곧장 '전체 평균'으로 떨어졌다 — 맛집 글과 병원 글을 같은 자로 잰 셈이다.
+# draft-check 는 한도가 없는 화면이라 네이버 요청이 남용되지 않게 시간당 상한을 둔다.
+_DRAFT_LIVE = {"window": 0.0, "count": 0}
+_DRAFT_LIVE_PER_HOUR = int(os.getenv("DRAFT_LIVE_BASELINE_PER_HOUR", "30"))
+_DRAFT_LIVE_TOP_N = 7
+
+
+async def _live_keyword_baseline(kw: str) -> Optional[Dict]:
+    now = time.time()
+    if now - _DRAFT_LIVE["window"] > 3600:
+        _DRAFT_LIVE["window"], _DRAFT_LIVE["count"] = now, 0
+    if _DRAFT_LIVE["count"] >= _DRAFT_LIVE_PER_HOUR:
+        return None
+    _DRAFT_LIVE["count"] += 1
+
+    tabs = await fetch_naver_search_results_both_tabs(kw, _DRAFT_LIVE_TOP_N)
+    items = (tabs.get("blog_results") or tabs.get("view_results") or [])[:_DRAFT_LIVE_TOP_N]
+    if not items:
+        return None
+
+    # 키워드 분석(_serp_post)과 같은 캐시 키 — 같은 키워드를 이미 분석했다면 네이버를 다시 안 친다.
+    from database import post_analysis_cache as PAC
+    keys = {it["post_url"]: f"{it['post_url']}#kw={kw}" for it in items if it.get("post_url")}
+    cached = await asyncio.to_thread(PAC.get_many, list(keys.values()), 1)
+
+    async def _one(url: str) -> Optional[Dict]:
+        hit = cached.get(keys[url])
+        if hit is not None:
+            return hit
+        r = await analyze_post(url, kw)
+        if isinstance(r, dict) and r.get("data_fetched"):
+            await asyncio.to_thread(PAC.put_many, "", {keys[url]: r})
+        return r
+
+    tasks = [asyncio.create_task(_one(u)) for u in keys]
+    done, pending = await asyncio.wait(tasks, timeout=40)
+    for t in pending:
+        t.cancel()
+    results = [t.result() for t in done if not t.cancelled() and t.exception() is None]
+    valid = [r for r in results if isinstance(r, dict) and r.get("data_fetched") and r.get("content_length")]
+    if len(valid) < 3:
+        return None
+    n = len(valid)
+    avg = lambda k: sum((r.get(k) or 0) for r in valid) / n
+    return {
+        "keyword": kw,
+        "samples": n,
+        "avg_content_length": round(avg("content_length")),
+        "avg_image_count": round(avg("image_count"), 1),
+        "avg_heading_count": round(avg("heading_count"), 1),
+        "avg_paragraph_count": round(avg("paragraph_count"), 1),
+    }
 
 
 @router.post("/draft-check")
@@ -6268,15 +6325,27 @@ async def draft_check(request: DraftCheckRequest):
 
     baseline = None
     is_global = False
+    source = "none"
     try:
         baseline = get_keyword_content_baseline(kw)
-        if not baseline:
-            baseline = get_global_content_baseline()
-            is_global = baseline is not None
+        if baseline:
+            source = "learning"
+        else:
+            try:
+                baseline = await _live_keyword_baseline(kw)
+            except Exception as e:
+                logger.warning(f"draft-check live baseline failed for {kw}: {e}")
+                baseline = None
+            if baseline:
+                source = "live"
+            else:
+                baseline = get_global_content_baseline()
+                is_global = baseline is not None
+                source = "global" if is_global else "none"
     except Exception as e:
         logger.warning(f"draft-check baseline failed for {kw}: {e}")
 
-    return diagnose_draft(
+    result = diagnose_draft(
         title=request.title or "",
         content=request.content,
         keyword=kw,
@@ -6284,6 +6353,15 @@ async def draft_check(request: DraftCheckRequest):
         baseline=baseline,
         baseline_is_global=is_global,
     )
+    result["baseline_source"] = source
+
+    from services.medical_ad_checker import check_medical_ad, looks_medical
+    medical = request.medical
+    if medical is None:
+        medical = looks_medical(kw, request.title or "", request.content)
+    if medical:
+        result["medical_check"] = check_medical_ad(request.title or "", request.content)
+    return result
 
 
 class SearchHealthRequest(BaseModel):

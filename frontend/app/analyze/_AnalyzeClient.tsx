@@ -27,6 +27,7 @@ import UpgradeModal from '@/components/UpgradeModal'
 import TrialExpiryBanner from '@/components/TrialExpiryBanner'
 import { AnimatedScore, AnimatedLevel, CircularProgress } from '@/components/AnimatedScore'
 import ShareResult from '@/components/ShareResult'
+import GradeCardActions from '@/components/GradeCardActions'
 import BlogIndexHistoryChart from '@/components/BlogIndexHistoryChart'
 import KeywordVerdictWidget from '@/components/KeywordVerdictWidget'
 import { getLevelGrade, getGradeBadgeStyle, getLevelsToNextGrade, getPointsToNextLevel } from '@/lib/utils/levelGrade'
@@ -1823,6 +1824,14 @@ export default function AnalyzePage() {
                           neighbors: result.stats.neighbor_count
                         }}
                       />
+                      {/* 등급 증명 카드 — 체험단 지원용 공유 (저장된 결과만 읽는 공개 카드) */}
+                      <div className="mt-3">
+                        <GradeCardActions
+                          blogId={result.blog.blog_id}
+                          level={result.index.level}
+                          estimated={result.index.level_source === 'estimated'}
+                        />
+                      </div>
                     </div>
 
                     <motion.div

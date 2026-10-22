@@ -26,6 +26,24 @@ type Result = {
   verdict: 'ready' | 'almost' | 'not_ready'
   verdict_label: string
   note: string
+  // learning: 쌓인 실측 / live: 지금 상위 글을 직접 읽음 / global: 전체 평균
+  baseline_source?: 'learning' | 'live' | 'global' | 'none'
+  medical_check?: MedicalCheck
+}
+type MedicalHit = {
+  category: string
+  label: string
+  level: 'high' | 'medium'
+  phrase: string
+  snippet: string
+  law: string
+  advice: string
+}
+type MedicalCheck = {
+  risk: 'high' | 'medium' | 'none'
+  summary: string
+  hits: MedicalHit[]
+  disclaimer: string
 }
 
 const FIELD_LABEL: Record<string, string> = {
@@ -47,6 +65,8 @@ export default function DraftCheckClient() {
   const [content, setContent] = useState('')
   const [keyword, setKeyword] = useState('')
   const [images, setImages] = useState<number | ''>('')
+  // 체크하면 의료광고 점검을 강제로 켠다. 끄면 원고에 병·의원 단어가 있을 때만 서버가 켠다.
+  const [medical, setMedical] = useState(false)
   const [busy, setBusy] = useState(false)
   const [res, setRes] = useState<Result | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -65,6 +85,7 @@ export default function DraftCheckClient() {
           content,
           keyword: keyword.trim(),
           image_count: Number(images) || 0,
+          medical: medical ? true : null,
         }),
       })
       const data = await r.json()
@@ -146,6 +167,22 @@ export default function DraftCheckClient() {
             />
           </div>
 
+          <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={medical}
+              onChange={(e) => setMedical(e.target.checked)}
+              className="mt-0.5 w-4 h-4"
+              disabled={busy}
+            />
+            <span>
+              병·의원 글입니다 — <b>의료광고 위험 표현</b>도 점검
+              <span className="block text-xs text-gray-500">
+                치료경험담·전후 사진·최상급 표현·할인 유인·대가성 후기. 원고에 병원·시술 단어가 있으면 자동으로 켜집니다.
+              </span>
+            </span>
+          </label>
+
           <button
             onClick={run}
             disabled={busy || !content.trim() || !keyword.trim()}
@@ -154,7 +191,7 @@ export default function DraftCheckClient() {
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : '진단하기'}
           </button>
           <p className="text-xs text-gray-500">
-            원고는 진단에만 쓰이고 저장하지 않습니다. 결과는 즉시 나옵니다.
+            원고는 진단에만 쓰이고 저장하지 않습니다. 처음 보는 키워드는 1페이지 글을 직접 읽느라 최대 40초쯤 걸립니다.
           </p>
         </div>
 
@@ -184,6 +221,11 @@ export default function DraftCheckClient() {
                       <b>{res.keyword}</b> 는 아직 측정 전이라 <b>전체 1페이지 평균</b>과
                       비교했습니다.
                     </>
+                  ) : res.baseline_source === 'live' ? (
+                    <>
+                      지금 <b>{res.keyword}</b> 1페이지 상위 글 {res.baseline.samples}개를 직접 읽어
+                      비교했습니다.
+                    </>
                   ) : (
                     <>
                       <b>{res.keyword}</b> 1페이지 글 {res.baseline.samples}개의 실측 평균과
@@ -193,6 +235,45 @@ export default function DraftCheckClient() {
                 </p>
               )}
             </div>
+
+            {/* 의료광고 위험 표현 — 원장이 처벌받는 영역이라 맨 앞에 둔다 */}
+            {res.medical_check && (
+              <div
+                className={`rounded-2xl border-2 p-6 ${
+                  res.medical_check.risk === 'high'
+                    ? 'border-red-300 bg-red-50'
+                    : res.medical_check.risk === 'medium'
+                      ? 'border-amber-300 bg-amber-50'
+                      : 'border-emerald-300 bg-emerald-50'
+                }`}
+              >
+                <h2 className="font-bold mb-1">의료광고 위험 표현</h2>
+                <p className="text-sm text-gray-700 mb-4">{res.medical_check.summary}</p>
+                {res.medical_check.hits.length > 0 && (
+                  <ul className="space-y-3">
+                    {res.medical_check.hits.map((h, i) => (
+                      <li key={i} className="rounded-xl bg-white/80 p-3 text-sm">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[11px] font-bold ${
+                              h.level === 'high' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                            }`}
+                          >
+                            {h.level === 'high' ? '위반 소지 큼' : '확인 필요'}
+                          </span>
+                          <span className="font-semibold text-gray-900">{h.label}</span>
+                          <span className="text-gray-500">「{h.phrase}」</span>
+                        </div>
+                        <p className="text-xs text-gray-500 break-words">{h.snippet}</p>
+                        <p className="text-xs text-gray-700 mt-1">→ {h.advice}</p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">{h.law}</p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="text-[11px] text-gray-500 mt-3 leading-relaxed">{res.medical_check.disclaimer}</p>
+              </div>
+            )}
 
             {/* 항목별 대조 */}
             <div className="glass-3d p-6">

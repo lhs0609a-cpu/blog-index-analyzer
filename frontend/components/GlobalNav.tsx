@@ -17,7 +17,9 @@ import {
   LayoutDashboard,
   Eye,
   GitBranch,
-  BookOpen
+  BookOpen,
+  SearchCheck,
+  FileCheck
 } from 'lucide-react'
 import { useAuthStore } from '@/lib/stores/auth'
 import UsageIndicator from './UsageIndicator'
@@ -41,6 +43,18 @@ const navItems = [
     badge: 'NEW',
     badgeColor: 'bg-emerald-500 text-white',
     description: '이 키워드로 1페이지 가능한지 실제 검색결과로 판정'
+  },
+  {
+    label: '누락 진단',
+    href: '/blog-check',
+    icon: SearchCheck,
+    description: '내 글이 검색에서 빠졌는지, 왜 빠졌는지, 어떻게 할지'
+  },
+  {
+    label: '원고 점검',
+    href: '/draft-check',
+    icon: FileCheck,
+    description: '발행 전에 상위 글과 비교 · 의료광고 위험 표현 점검'
   },
   {
     label: '광고 최적화',

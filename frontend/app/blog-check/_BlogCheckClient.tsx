@@ -11,6 +11,21 @@ type Post = {
   indexed: boolean
   blog_tab_rank: number | null
   view_tab_rank: number | null
+  age_hours?: number | null
+  // 글별 상태와 처방 (서버 search_health._post_verdict)
+  status?: 'ok' | 'buried' | 'pending' | 'delayed' | 'missing'
+  status_label?: string
+  causes?: string[]
+  advice?: string[]
+  recheck_after_hours?: number | null
+}
+
+const STATUS_STYLE: Record<string, string> = {
+  ok: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  buried: 'bg-amber-50 text-amber-700 border-amber-200',
+  pending: 'bg-gray-50 text-gray-600 border-gray-200',
+  delayed: 'bg-orange-50 text-orange-700 border-orange-200',
+  missing: 'bg-red-50 text-red-700 border-red-200',
 }
 
 type Result = {
@@ -29,6 +44,8 @@ type Result = {
   reasons?: string[]
   actions?: string[]
   posts?: Post[]
+  pending_posts?: number
+  prescription_note?: string
   level_label?: string
   disclaimer?: string
   error?: string
@@ -162,32 +179,51 @@ export default function BlogCheckClient() {
               </p>
               <ul className="space-y-2">
                 {res.posts?.map((p, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm">
-                    {p.indexed ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                    ) : (
-                      <XCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                  <li key={i} className="text-sm">
+                    <div className="flex items-start gap-2">
+                      {p.indexed ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                      ) : (
+                        <XCircle className={`w-4 h-4 shrink-0 mt-0.5 ${p.status === 'pending' ? 'text-gray-400' : 'text-red-500'}`} />
+                      )}
+                      <span className="flex-1 min-w-0">
+                        <a
+                          href={p.url}
+                          target="_blank"
+                          rel="noopener noreferrer nofollow"
+                          className="text-gray-800 hover:underline break-words"
+                        >
+                          {p.title}
+                        </a>
+                      </span>
+                      <span className="text-xs text-gray-500 shrink-0 whitespace-nowrap flex items-center gap-1.5">
+                        {p.indexed && p.blog_tab_rank ? `블로그탭 ${p.blog_tab_rank}위` : null}
+                        {p.status_label ? (
+                          <span className={`px-1.5 py-0.5 rounded border text-[11px] font-semibold ${STATUS_STYLE[p.status || 'ok']}`}>
+                            {p.status_label}
+                          </span>
+                        ) : (
+                          !p.indexed && '검색 안 됨'
+                        )}
+                      </span>
+                    </div>
+                    {/* 누락·지연·밀림·대기 글은 원인 후보와 처방을 바로 아래에 */}
+                    {p.status && p.status !== 'ok' && ((p.causes?.length ?? 0) > 0 || (p.advice?.length ?? 0) > 0) && (
+                      <div className="ml-6 mt-1.5 rounded-lg bg-gray-50 px-3 py-2 space-y-1">
+                        {p.causes?.map((c, j) => (
+                          <p key={`c${j}`} className="text-xs text-red-700 leading-relaxed">원인 후보 · {c}</p>
+                        ))}
+                        {p.advice?.map((a, j) => (
+                          <p key={`a${j}`} className="text-xs text-gray-600 leading-relaxed">→ {a}</p>
+                        ))}
+                      </div>
                     )}
-                    <span className="flex-1 min-w-0">
-                      <a
-                        href={p.url}
-                        target="_blank"
-                        rel="noopener noreferrer nofollow"
-                        className="text-gray-800 hover:underline break-words"
-                      >
-                        {p.title}
-                      </a>
-                    </span>
-                    <span className="text-xs text-gray-500 shrink-0 whitespace-nowrap">
-                      {p.indexed
-                        ? p.blog_tab_rank
-                          ? `블로그탭 ${p.blog_tab_rank}위`
-                          : '노출'
-                        : '검색 안 됨'}
-                    </span>
                   </li>
                 ))}
               </ul>
+              {res.prescription_note && (
+                <p className="mt-3 text-[11px] text-gray-400 leading-relaxed">{res.prescription_note}</p>
+              )}
             </div>
 
             {/* 조치 */}

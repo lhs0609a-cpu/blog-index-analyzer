@@ -1002,6 +1002,7 @@ from routers import profitable_keywords
 from routers import competitive_analysis
 from routers import post_watch
 from routers import growth
+from routers import blog_card
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
@@ -1039,6 +1040,8 @@ app.include_router(ad_snapshot.router)
 app.include_router(post_watch.router)
 # 성장 진단 — 가입·결제 퍼널을 세계 SaaS 벤치마크와 대조한다. 관리자 전용
 app.include_router(growth.router)
+# 블로그 등급 증명 카드 — 저장된 결과만 읽는 공개 요약 (/api/blog-card/{blog_id})
+app.include_router(blog_card.router, prefix="/api/blog-card", tags=["등급카드"])
 
 
 if __name__ == "__main__":
