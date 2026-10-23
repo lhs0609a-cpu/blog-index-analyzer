@@ -76,6 +76,10 @@ PLAN_LIMITS = {
         # 확인 시점(게시 후 시간). 유료는 1·6시간을 더 받아 "빨리 아는 것"을 산다.
         "post_watch_checkpoints": [24, 72],
         "post_watch_recheck_daily": 0,
+        # 전수 노출 감사 — 글 하나에 검색 요청 최대 2회라 플랜으로 묶는다.
+        # 무료는 "내 블로그 하나, 최근 10글"까지. 그걸로도 안 보이는 글이 있으면 보인다.
+        "audit_posts_per_blog": 10,
+        "audit_daily": 1,
     },
     PlanType.BASIC: {
         "name": "베이직",
@@ -97,6 +101,8 @@ PLAN_LIMITS = {
         # 블루오션 기능
         "blue_ocean_daily": 5,          # 일 5회
         "post_watch_blogs": 3,
+        "audit_posts_per_blog": 20,
+        "audit_daily": 3,
         "post_watch_checkpoints": [1, 6, 24, 72],
         "post_watch_recheck_daily": 5,
     },
@@ -120,6 +126,8 @@ PLAN_LIMITS = {
         # 블루오션 기능
         "blue_ocean_daily": 30,         # 일 30회
         "post_watch_blogs": 10,
+        "audit_posts_per_blog": 30,
+        "audit_daily": 5,
         "post_watch_checkpoints": [1, 6, 24, 72],
         "post_watch_recheck_daily": 5,
     },
@@ -143,6 +151,8 @@ PLAN_LIMITS = {
         # 블루오션 기능
         "blue_ocean_daily": -1,      # 무제한
         "post_watch_blogs": 30,
+        "audit_posts_per_blog": 30,
+        "audit_daily": 20,
         "post_watch_checkpoints": [1, 6, 24, 72],
         "post_watch_recheck_daily": 20,
     },

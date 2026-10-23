@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Bell, Download, ExternalLink, Layers, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/lib/stores/auth'
+import ExposureAuditPanel from '@/components/ExposureAuditPanel'
 import {
   addWatch,
   addWatchesBulk,
@@ -200,8 +201,9 @@ export default function PostWatchClient() {
         <p className="text-xs text-gray-400 mb-8">
           확인 시점: 게시 후{' '}
           {(data?.checkpoints_hours ?? [24, 72]).map((h) => `${h}시간`).join(' · ')}.
-          검색에서 찾으면 ‘노출 확인’, 못 찾으면 ‘지연’·‘확인 불가’로 남깁니다 — 못 찾은
-          것을 누락으로 단정하지 않습니다.
+          검색에서 찾으면 ‘노출 확인’, 검색 결과에 없으면 ‘검색결과에서 못 찾음’,
+          페이지를 제대로 못 봤으면 ‘측정 실패’로 남깁니다 — 못 찾은 것을 누락으로
+          단정하지 않습니다.
         </p>
 
         {/* 등록 */}
@@ -300,6 +302,10 @@ export default function PostWatchClient() {
             </p>
           )}
         </div>
+
+        {/* 전수 노출 감사 — 등록 카드 다음, 글 목록 앞.
+            "지금 몇 개가 안 보이나"가 "앞으로 올라올 글"보다 먼저 궁금한 질문이다. */}
+        <ExposureAuditPanel blogCount={data?.blogs.length ?? 0} />
 
         {/* 블로그별 글 상태 */}
         {(data?.blogs.length ?? 0) === 0 ? (

@@ -54,6 +54,29 @@ def init_post_watch_db() -> None:
             CREATE TABLE IF NOT EXISTS watch_runtime (
                 kind TEXT PRIMARY KEY, updated_at TEXT NOT NULL, payload TEXT NOT NULL
             );
+            /*
+              전수 노출 감사 작업.
+
+              왜 작업(job)인가 — 블로그 10개 × 최근 30글이면 글 300개이고 글 하나에
+              검색 요청이 최대 2회다. 동기 요청으로 처리하면 10분 넘게 워커를 잡고
+              있게 되는데, 이 박스는 동시 4명에서 무너진 전력이 있다. 그래서 큐에
+              넣고 하나씩 돌리고 진행률을 따로 읽는다.
+            */
+            CREATE TABLE IF NOT EXISTS audit_jobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                blog_ids TEXT NOT NULL,          -- JSON 배열
+                status TEXT DEFAULT 'queued',    -- queued|running|done|failed
+                total INTEGER DEFAULT 0,         -- 잴 글 수 (RSS 수집 후 확정)
+                checked INTEGER DEFAULT 0,
+                result TEXT,                     -- JSON (블로그별 집계 + 미발견 목록)
+                error TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT,
+                finished_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_jobs(user_id, created_at);
+
             CREATE TABLE IF NOT EXISTS watched_blogs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
@@ -295,6 +318,155 @@ def posts_for_blog(blog_id: str, limit: int = 30) -> List[Dict]:
             (blog_id, limit),
         ).fetchall()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+# ===== 전수 노출 감사 작업 =====
+
+def create_audit_job(user_id: int, blog_ids: List[str]) -> int:
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            "INSERT INTO audit_jobs (user_id, blog_ids, created_at) VALUES (?, ?, ?)",
+            (user_id, json.dumps(blog_ids, ensure_ascii=False), _iso(datetime.now(timezone.utc))),
+        )
+        conn.commit()
+        return int(cur.lastrowid)
+    finally:
+        conn.close()
+
+
+def get_audit_job(job_id: int) -> Optional[Dict]:
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT * FROM audit_jobs WHERE id = ?", (job_id,)).fetchone()
+        if not row:
+            return None
+        job = dict(row)
+        job["blog_ids"] = json.loads(job["blog_ids"] or "[]")
+        job["result"] = json.loads(job["result"]) if job.get("result") else None
+        return job
+    finally:
+        conn.close()
+
+
+def latest_audit_job(user_id: int) -> Optional[Dict]:
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT id FROM audit_jobs WHERE user_id = ? ORDER BY id DESC LIMIT 1", (user_id,)
+        ).fetchone()
+        return get_audit_job(row["id"]) if row else None
+    finally:
+        conn.close()
+
+
+def update_audit_job(job_id: int, **fields) -> None:
+    """status/total/checked/result/error/finished_at 만 받는다."""
+    allowed = {"status", "total", "checked", "result", "error", "finished_at"}
+    sets, vals = [], []
+    for k, v in fields.items():
+        if k not in allowed:
+            continue
+        if k == "result" and v is not None and not isinstance(v, str):
+            v = json.dumps(v, ensure_ascii=False)
+        sets.append(f"{k} = ?")
+        vals.append(v)
+    if not sets:
+        return
+    sets.append("updated_at = ?")
+    vals.append(_iso(datetime.now(timezone.utc)))
+    vals.append(job_id)
+    conn = _connect()
+    try:
+        conn.execute(f"UPDATE audit_jobs SET {', '.join(sets)} WHERE id = ?", vals)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+#: 이 시간 넘게 아무 진척이 없는 작업은 죽은 것으로 본다.
+#  글 하나에 최대 2초인데 5개마다 진척을 기록하므로 정상이면 분 단위로 갱신된다.
+AUDIT_STALE_MINUTES = 20
+
+
+def running_audit_count() -> int:
+    """
+    동시 실행을 막는 근거.
+
+    ⚠️ 고아 작업을 세면 안 된다. 감사는 API 프로세스의 asyncio 태스크로 도는데
+    배포·재시작이 나면 그 태스크가 사라지고 행은 'running' 으로 남는다. 그걸
+    그대로 세면 **기능이 영구히 막힌다**(이 레포는 고아 chromium·고아 루프로
+    같은 방식으로 서비스가 멈춘 전력이 있다). 그래서 진척이 멈춘 행은 제외한다.
+    """
+    conn = _connect()
+    try:
+        cutoff = _iso(datetime.now(timezone.utc) - timedelta(minutes=AUDIT_STALE_MINUTES))
+        return conn.execute(
+            "SELECT COUNT(*) FROM audit_jobs WHERE status IN ('queued','running') "
+            "AND COALESCE(updated_at, created_at) >= ?",
+            (cutoff,),
+        ).fetchone()[0]
+    finally:
+        conn.close()
+
+
+def reap_stale_audits() -> int:
+    """
+    진척이 멈춘 감사 작업을 failed 로 닫는다. 기동 시 한 번 부른다.
+
+    이게 없으면 사용자는 영원히 진행률 막대를 보고 있게 된다 — 서버에는 그 작업을
+    이어서 돌릴 주체가 없다.
+    """
+    conn = _connect()
+    try:
+        cutoff = _iso(datetime.now(timezone.utc) - timedelta(minutes=AUDIT_STALE_MINUTES))
+        cur = conn.execute(
+            "UPDATE audit_jobs SET status = 'failed', "
+            "error = '서버가 재시작되어 중단됐습니다. 다시 시도해주세요.', "
+            "finished_at = ?, updated_at = ? "
+            "WHERE status IN ('queued','running') "
+            "AND COALESCE(updated_at, created_at) < ?",
+            (_iso(datetime.now(timezone.utc)), _iso(datetime.now(timezone.utc)), cutoff),
+        )
+        conn.commit()
+        if cur.rowcount:
+            logger.warning(f"[audit] 고아 작업 {cur.rowcount}건을 failed 로 닫았다")
+        return cur.rowcount
+    finally:
+        conn.close()
+
+
+def audit_jobs_today(user_id: int) -> int:
+    conn = _connect()
+    try:
+        today = _today_kst()
+        return conn.execute(
+            "SELECT COUNT(*) FROM audit_jobs WHERE user_id = ? AND substr(created_at,1,10) >= ?",
+            (user_id, today),
+        ).fetchone()[0]
+    finally:
+        conn.close()
+
+
+def observed_status(blog_id: str, log_no: str) -> Optional[str]:
+    """
+    이 글을 이미 관측한 적이 있는가. 감사에서 **재측정을 피하는 유일한 수단**이다.
+
+    감시(post_watch)가 이미 indexed 로 확인한 글을 감사가 다시 검색하면 예산을
+    두 번 쓰고 결과는 같다. terminal 상태만 재사용한다 — pending/delayed 는
+    아직 확정이 아니라 지금 다시 보는 게 맞다.
+    """
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT status FROM watched_posts WHERE blog_id = ? AND log_no = ?",
+            (blog_id, log_no),
+        ).fetchone()
+        if row and row["status"] in ("indexed", "absent_in_search", "removed"):
+            return row["status"]
+        return None
     finally:
         conn.close()
 

@@ -267,8 +267,12 @@ async def lifespan(app: FastAPI):
     # 새 글 누락 감시 — DB 는 모든 프로세스(API 가 읽는다), 워커는 worker 전용.
     # POST_WATCH=1 일 때만 돈다 — 배포만으로는 아무것도 바뀌지 않는다.
     try:
-        from database.post_watch_db import init_post_watch_db
+        from database.post_watch_db import init_post_watch_db, reap_stale_audits
         init_post_watch_db()
+        # 전수 감사는 API 프로세스의 asyncio 태스크로 돈다. 재시작하면 그 태스크가
+        # 사라지고 행만 'running' 으로 남아 진행률 막대가 영원히 돌고, 동시 실행
+        # 제한에도 걸려 기능이 막힌다. 기동 때 한 번 닫아 준다.
+        reap_stale_audits()
     except Exception as e:
         logger.warning(f"⚠️ Post watch DB init failed: {e}")
     if RUN_SCHEDULERS:

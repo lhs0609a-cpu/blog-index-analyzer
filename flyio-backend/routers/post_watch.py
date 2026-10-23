@@ -17,7 +17,7 @@ import asyncio
 import csv
 import io as _io
 import re
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -40,6 +40,11 @@ class WatchRequest(BaseModel):
 class BulkWatchRequest(BaseModel):
     # 대행사는 블로그를 한 개씩 등록하지 않는다. 20개는 한 번에 붙이고 시작한다.
     blog_ids: List[str]
+
+
+class AuditRequest(BaseModel):
+    # 비우면 내 감시 블로그 전체를 잰다 — 가장 많이 쓰는 경로라 기본값으로 둔다.
+    blog_ids: Optional[List[str]] = None
 
 
 def _normalize(blog_id: str) -> str:
@@ -357,3 +362,103 @@ async def export_my_watches_csv(user: dict = Depends(get_current_user)):
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="blrank-post-watch.csv"'},
     )
+
+
+# ============ 전수 노출 감사 ============
+#
+# "블로그 N개의 최근 글 전부를 실제로 검색했습니다. M개가 안 보입니다."
+#
+# 경쟁 도구 10곳은 전부 점수(지수 0~100, 준최/최적)를 준다. 이건 관측을 준다.
+# 그 차이가 돈이 되는 자리였다 — 2026-10-23 실측에서 베이직 결제자(블로그 10개)의
+# 글 12개가 전부 미발견이었는데(대조군 5/6 노출로 측정기 검증) 아무도, 우리조차
+# 그걸 말해주지 않고 있었다.
+
+
+@router.post("/audit")
+async def start_audit_job(req: AuditRequest, user: dict = Depends(get_current_user)):
+    from services.exposure_audit import start_audit
+
+    limits = _plan_limits(user)
+    mine = _my_blog_ids(user["id"])
+
+    if req.blog_ids:
+        requested = []
+        for raw in req.blog_ids[:50]:
+            try:
+                requested.append(_normalize(raw))
+            except HTTPException:
+                continue
+        # 남의 블로그를 재주지 않는다. 감사는 비싼 작업이라 그게 곧 자원 남용이 된다.
+        targets = [b for b in dict.fromkeys(requested) if b in mine]
+        if not targets:
+            raise HTTPException(status_code=400, detail="감시 중인 블로그만 감사할 수 있습니다")
+    else:
+        targets = sorted(mine)
+
+    if not targets:
+        raise HTTPException(
+            status_code=400,
+            detail="감사할 블로그가 없습니다. 먼저 감시할 블로그를 등록해주세요.",
+        )
+
+    cap = limits.get("post_watch_blogs", 1)
+    if cap != -1:
+        targets = targets[:cap]
+
+    daily = limits.get("audit_daily", 1)
+    if daily != -1 and await asyncio.to_thread(db.audit_jobs_today, user["id"]) >= daily:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error_code": "AUDIT_LIMIT_EXCEEDED",
+                "message": f"전수 감사는 하루 {daily}회까지 할 수 있습니다.",
+                "limit": daily,
+            },
+        )
+
+    # 동시 실행 차단. 큐를 길게 받으면 박스가 먼저 죽는다(동시 4명에서 무너진 전력).
+    if await asyncio.to_thread(db.running_audit_count) >= 2:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error_code": "AUDIT_BUSY",
+                "message": "지금 다른 감사가 돌고 있습니다. 잠시 후 다시 시도해주세요.",
+            },
+        )
+
+    job_id = await asyncio.to_thread(db.create_audit_job, user["id"], targets)
+    start_audit(job_id, posts_per_blog=limits.get("audit_posts_per_blog", 10))
+    return {
+        "job_id": job_id,
+        "blog_ids": targets,
+        "posts_per_blog": limits.get("audit_posts_per_blog", 10),
+        "status": "queued",
+    }
+
+
+def _audit_view(job: dict) -> dict:
+    return {
+        "job_id": job["id"],
+        "status": job["status"],
+        "total": job.get("total") or 0,
+        "checked": job.get("checked") or 0,
+        "blog_ids": job.get("blog_ids") or [],
+        "result": job.get("result"),
+        "error": job.get("error"),
+        "created_at": job.get("created_at"),
+        "finished_at": job.get("finished_at"),
+    }
+
+
+@router.get("/audit/latest")
+async def my_latest_audit(user: dict = Depends(get_current_user)):
+    job = await asyncio.to_thread(db.latest_audit_job, user["id"])
+    return _audit_view(job) if job else {"status": "none"}
+
+
+@router.get("/audit/{job_id}")
+async def get_audit(job_id: int, user: dict = Depends(get_current_user)):
+    job = await asyncio.to_thread(db.get_audit_job, job_id)
+    if not job or job["user_id"] != user["id"]:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다")
+    return _audit_view(job)

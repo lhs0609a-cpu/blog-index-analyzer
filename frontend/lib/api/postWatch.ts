@@ -172,3 +172,90 @@ export function isExportNotInPlan(error: unknown): boolean {
     e?.response?.data?.detail?.error_code === 'EXPORT_NOT_IN_PLAN'
   )
 }
+
+/**
+ * 전수 노출 감사.
+ *
+ * "블로그 N개의 최근 글을 전부 실제로 검색했습니다. M개가 안 보입니다."
+ *
+ * ⚠️ `absent` 는 **누락 판정이 아니다.** 제목을 검색했을 때 그 글이 결과에
+ * 없었다는 관측이고, 페이지를 제대로 못 본 경우는 `unmeasurable` 로 따로 센다.
+ * 두 숫자를 합쳐 "누락 N건"으로 쓰면 우리가 주장하지 않는 말이 된다.
+ */
+export interface AuditBlogResult {
+  blog_id: string
+  checked: number
+  indexed: number
+  absent: number
+  unmeasurable: number
+  reused: number
+  absent_posts: Array<{
+    title: string
+    url: string
+    published_at: string | null
+    source: 'watch' | 'audit'
+  }>
+}
+
+export interface AuditResult {
+  blogs: AuditBlogResult[]
+  rss_failed: string[]
+  totals: {
+    posts: number
+    checked: number
+    indexed: number
+    absent: number
+    unmeasurable: number
+    reused: number
+  }
+  caveat: string
+  stopped_reason: string | null
+  measured_at: string
+}
+
+export interface AuditJob {
+  job_id?: number
+  status: 'none' | 'queued' | 'running' | 'done' | 'failed'
+  total?: number
+  checked?: number
+  blog_ids?: string[]
+  result?: AuditResult | null
+  error?: string | null
+  created_at?: string
+  finished_at?: string | null
+}
+
+export async function startAudit(blogIds?: string[]): Promise<{
+  job_id: number
+  blog_ids: string[]
+  posts_per_blog: number
+}> {
+  const res = await apiClient.post('/api/post-watch/audit', {
+    blog_ids: blogIds ?? null,
+  })
+  return res.data
+}
+
+export async function getAudit(jobId: number): Promise<AuditJob> {
+  const res = await apiClient.get(`/api/post-watch/audit/${jobId}`)
+  return res.data
+}
+
+export async function getLatestAudit(): Promise<AuditJob> {
+  const res = await apiClient.get('/api/post-watch/audit/latest')
+  return res.data
+}
+
+/** 402/429 를 구분해 사람이 읽을 말로 바꾼다. */
+export function readAuditError(error: unknown): string | null {
+  const e = error as {
+    response?: { status?: number; data?: { detail?: unknown } }
+  }
+  const status = e?.response?.status
+  const detail = e?.response?.data?.detail
+  if (typeof detail === 'string') return detail
+  const d = detail as { error_code?: string; message?: string } | undefined
+  if (d?.message) return d.message
+  if (status === 429) return '지금 다른 감사가 돌고 있습니다. 잠시 후 다시 시도해주세요.'
+  return null
+}
