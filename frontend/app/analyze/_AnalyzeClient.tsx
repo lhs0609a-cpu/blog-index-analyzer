@@ -30,6 +30,7 @@ import ShareResult from '@/components/ShareResult'
 import GradeCardActions from '@/components/GradeCardActions'
 import BlogIndexHistoryChart from '@/components/BlogIndexHistoryChart'
 import KeywordVerdictWidget from '@/components/KeywordVerdictWidget'
+import PostWatchToggle from '@/components/PostWatchToggle'
 import { getLevelGrade, getGradeBadgeStyle, getLevelsToNextGrade, getPointsToNextLevel } from '@/lib/utils/levelGrade'
 import TermTooltip from '@/components/TermTooltip'
 
@@ -2003,6 +2004,16 @@ export default function AnalyzePage() {
                   "아코디언 안에 묻혀 있어 사실상 아무도 못 쓰던 기능".
                 */}
                 <IndexVerificationCard blogId={result.blog.blog_id} />
+
+                {/*
+                  감시 켜기 — 색인 검증 **바로 다음** 자리다.
+                  방금 "이 글이 검색에 나오는지"를 본 사람에게 "다음 글도 대신
+                  봐줄까요"를 묻는 것이고, 이 제품에서 유일하게 매주 다시 쓸
+                  이유다(회원 72%가 하루만 쓰고 떠난다). 기존 순위 추적은
+                  키워드를 사람이 등록해야 해서 6개월간 등록 0건이었다 —
+                  그래서 이 카드는 블로그 ID 하나로 끝난다.
+                */}
+                <PostWatchToggle blogId={result.blog.blog_id} />
 
                 {/* 지수 변화 추이 — "언제, 어떻게 올랐나"는 현재 점수만큼 중요하다 */}
                 <BlogIndexHistoryChart blogId={result.blog.blog_id} />

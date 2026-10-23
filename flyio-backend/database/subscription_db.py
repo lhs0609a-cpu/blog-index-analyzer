@@ -70,6 +70,12 @@ PLAN_LIMITS = {
         "rank_history_days": 0,         # 7 → 0 (유료 전용)
         # 블루오션 기능 - 무료는 비활성화
         "blue_ocean_daily": 0,          # 유료 전용
+        # 새 글 누락 감시 — 블로그 ID 하나로 끝나는 설정이라 무료에도 1개를 준다.
+        # 이 기능의 목적은 재방문이고, 재방문은 무료 사용자에게서 나온다.
+        "post_watch_blogs": 1,
+        # 확인 시점(게시 후 시간). 유료는 1·6시간을 더 받아 "빨리 아는 것"을 산다.
+        "post_watch_checkpoints": [24, 72],
+        "post_watch_recheck_daily": 0,
     },
     PlanType.BASIC: {
         "name": "베이직",
@@ -90,6 +96,9 @@ PLAN_LIMITS = {
         "rank_history_days": 30,
         # 블루오션 기능
         "blue_ocean_daily": 5,          # 일 5회
+        "post_watch_blogs": 3,
+        "post_watch_checkpoints": [1, 6, 24, 72],
+        "post_watch_recheck_daily": 5,
     },
     PlanType.PRO: {
         "name": "프로",
@@ -110,6 +119,9 @@ PLAN_LIMITS = {
         "rank_history_days": 90,
         # 블루오션 기능
         "blue_ocean_daily": 30,         # 일 30회
+        "post_watch_blogs": 10,
+        "post_watch_checkpoints": [1, 6, 24, 72],
+        "post_watch_recheck_daily": 5,
     },
     PlanType.BUSINESS: {
         "name": "비즈니스",
@@ -130,6 +142,9 @@ PLAN_LIMITS = {
         "rank_history_days": -1,     # 무제한
         # 블루오션 기능
         "blue_ocean_daily": -1,      # 무제한
+        "post_watch_blogs": 30,
+        "post_watch_checkpoints": [1, 6, 24, 72],
+        "post_watch_recheck_daily": 20,
     },
 }
 

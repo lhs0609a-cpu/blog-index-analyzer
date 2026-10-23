@@ -253,6 +253,10 @@ FUNNEL_EVENTS = {
     "payment_return_fail",    # 토스가 failUrl 로 돌려보냄 (reason = 토스 code)
     "payment_register_fail",  # 빌링키 등록/첫 결제가 서버에서 실패
     "payment_success",
+    # 감시(새 글 누락 감시) — 재방문을 만들기 위해 만든 기능이라, 켠 사람이
+    # 실제로 다시 오는지를 보려면 '켠 순간'이 분모로 남아 있어야 한다.
+    "post_watch_on",
+    "post_watch_off",
 }
 
 

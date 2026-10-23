@@ -299,6 +299,46 @@ def posts_for_blog(blog_id: str, limit: int = 30) -> List[Dict]:
         conn.close()
 
 
+def post_by_id(post_id: int) -> Optional[Dict]:
+    """글 한 건. 소유권 검사(이 글의 블로그를 내가 감시하는지)를 하려면 blog_id 가 필요하다."""
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT * FROM watched_posts WHERE id = ?", (post_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def checks_for_post(post_id: int, limit: int = 20) -> List[Dict]:
+    """확인 이력. 사용자에게 '언제 확인했고 무엇이 나왔는지'를 보여주는 근거다."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT checked_at, found, rank, error FROM post_checks WHERE post_id = ? "
+            "ORDER BY checked_at DESC LIMIT ?",
+            (post_id, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def user_status_summary(user_id: int) -> Dict:
+    """내가 감시하는 블로그들의 글 상태 집계. baseline(등록 전 글)은 세지 않는다."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT p.status AS status, COUNT(*) AS n FROM watched_posts p "
+            "WHERE p.status != 'baseline' AND p.blog_id IN ("
+            "  SELECT blog_id FROM watched_blogs WHERE user_id = ? AND is_active = 1"
+            ") GROUP BY p.status",
+            (user_id,),
+        ).fetchall()
+        return {r["status"]: r["n"] for r in rows}
+    finally:
+        conn.close()
+
+
 def status_summary() -> Dict:
     conn = _connect()
     try:

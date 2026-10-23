@@ -31,6 +31,9 @@ export type FunnelEvent =
   | 'payment_return_fail'
   | 'payment_register_fail'
   | 'payment_success'
+  // 감시 — 이 제품에서 유일하게 '다시 오는 이유'라 전환 분모로 따로 센다
+  | 'post_watch_on'
+  | 'post_watch_off'
 
 type TrackOptions = {
   /** 실패 사유 **코드**. 사람이 읽는 문장이 아니라 집계 가능한 짧은 키. */
