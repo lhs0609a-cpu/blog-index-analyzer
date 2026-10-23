@@ -77,6 +77,16 @@ async def admin_run_once(_: dict = Depends(require_admin)):
     return {"rss": rss, "check": check}
 
 
+@router.post("/admin/relabel-absent")
+async def admin_relabel_absent(apply: bool = False, _: dict = Depends(require_admin)):
+    """
+    옛 `unmeasurable` 중 근거가 전부 serp_not_found 인 글을 `absent_in_search` 로.
+
+    기본은 미적용(dry-run)이다 — 숫자를 먼저 보고 사람이 결정한다.
+    """
+    return await asyncio.to_thread(db.relabel_absent_in_search, not apply)
+
+
 @router.get("/admin/report")
 async def admin_report(_: dict = Depends(require_admin)):
     from services.post_watch import DAILY_API_CAP
@@ -126,7 +136,10 @@ _STATUS_LABEL = {
     "pending": "확인 중",
     "indexed": "노출 확인",
     "delayed": "24시간 지나도 미확인",
-    "unmeasurable": "확인 불가",
+    # '검색에서 못 찾음'과 '못 봤음'은 다른 사실이다. 운영 실측에서 '확인 불가'의
+    # 대부분(3,273/4,073)은 사실 전자였고, 한 이름으로 접혀 정보를 0으로 만들었다.
+    "absent_in_search": "검색결과에서 못 찾음",
+    "unmeasurable": "측정 실패",
     "removed": "삭제·비공개",
     "baseline": "감시 전 글",
 }

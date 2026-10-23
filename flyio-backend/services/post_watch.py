@@ -93,14 +93,42 @@ def _next_checkpoint(published_at: datetime, elapsed: timedelta) -> datetime:
     return published_at + MISSING_AFTER
 
 
+def terminal_unfound_status(error: Optional[str]) -> str:
+    """
+    확인을 포기할 때 남길 이름. '못 찾았다'와 '못 봤다'는 다른 사실이다.
+
+    두 경우가 `found=None` 으로 같이 들어오지만 뜻이 전혀 다르다:
+
+      serp_not_found              검색 페이지를 정상으로 받아 링크까지 파싱했는데
+                                  그 글이 그 안에 없었다 → **관측된 부재**
+      serp_unrecognized_or_blocked / serp_http_* / serp_request:* / title_too_short
+                                  페이지를 제대로 못 봤거나 아예 못 쟀다 → **측정 실패**
+
+    운영 실측(2026-10-23, post_checks 4,661건): serp_not_found 3,273 ·
+    차단/타임아웃 약 800. 즉 '확인 불가 1,351건'의 대부분은 사실 관측이었는데
+    한 이름으로 접혀 사용자에게 아무 정보도 주지 못했다(스펙 출시 전 검증 2번의
+    '판정 불가 10%' 기준의 7배).
+
+    그래도 `missing`(누락)은 여기서도 만들지 않는다. 검색에 안 보이는 것과
+    색인에서 빠진 것은 다르고, 그 판정에는 스펙의 정확도 검증이 아직 필요하다.
+    """
+    if not error:
+        return "unmeasurable"
+    tokens = {t for t in error.split(";") if t}
+    if tokens and tokens <= {"serp_not_found"}:
+        return "absent_in_search"
+    return "unmeasurable"
+
+
 def transition(post: Dict, published_at: datetime, now: datetime,
-               found: Optional[bool], rank: Optional[int]) -> Dict:
-    """한 번 확인한 결과로 바뀔 필드. found=None 은 API 오류(판정 없음)."""
+               found: Optional[bool], rank: Optional[int],
+               error: Optional[str] = None) -> Dict:
+    """한 번 확인한 결과로 바뀔 필드. found=None 은 판정 없음(미발견 또는 오류)."""
     if found is None:
         fails = (post.get("fail_count") or 0) + 1
         if fails >= MAX_FAILS:
-            return {"fail_count": fails, "status": "unmeasurable", "next_check_at": None,
-                    "last_checked_at": now}
+            return {"fail_count": fails, "status": terminal_unfound_status(error),
+                    "next_check_at": None, "last_checked_at": now}
         return {"fail_count": fails, "next_check_at": now + RETRY_AFTER, "last_checked_at": now}
 
     update = {"checks_done": (post.get("checks_done") or 0) + 1, "fail_count": 0,
@@ -287,10 +315,12 @@ async def _check_due(now: Optional[datetime] = None) -> Dict:
         for post in due:
             found, rank, error = await check_post_indexed(post["title"], post["blog_id"], post["log_no"], client)
             checked_at = datetime.now(timezone.utc)
-            update = transition(post, _parse_iso(post["published_at"]), checked_at, found, rank)
+            update = transition(post, _parse_iso(post["published_at"]), checked_at, found, rank, error)
             await asyncio.to_thread(db.log_check, post["id"], found, rank, error)
             await asyncio.to_thread(db.apply_update, post["id"], update)
             counts["checked"] += 1
+            if update.get("status") == "absent_in_search":
+                counts["absent"] = counts.get("absent", 0) + 1
             if found is None:
                 counts["errors"] += 1
             elif update.get("status") in ("indexed", "delayed", "missing"):

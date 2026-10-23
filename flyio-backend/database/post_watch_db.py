@@ -299,6 +299,46 @@ def posts_for_blog(blog_id: str, limit: int = 30) -> List[Dict]:
         conn.close()
 
 
+def relabel_absent_in_search(dry_run: bool = True) -> Dict:
+    """
+    이미 `unmeasurable` 로 끝난 글 중, 확인 이력이 전부 `serp_not_found` 인 것을
+    `absent_in_search` 로 되살린다.
+
+    왜 필요한가 — 라벨을 가른 건 2026-10-23 이고 그 전에 끝난 글은 terminal 이라
+    다시 확인되지 않는다(`due_posts` 는 pending/delayed 만 꺼낸다). 그대로 두면
+    사용자 화면에서 1,351건이 영원히 '확인 불가'로 남는다. 새로 재지 않고
+    **이미 남아 있는 근거(post_checks.error)** 만으로 이름을 바꾼다.
+
+    섞인 이력(차단·타임아웃이 한 번이라도 있던 글)은 건드리지 않는다 — 그건
+    실제로 못 본 것이다. 기본은 dry_run 이다.
+    """
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT p.id AS id, GROUP_CONCAT(COALESCE(c.error, '')) AS errs, COUNT(c.id) AS n "
+            "FROM watched_posts p JOIN post_checks c ON c.post_id = p.id "
+            "WHERE p.status = 'unmeasurable' GROUP BY p.id"
+        ).fetchall()
+
+        targets = []
+        for r in rows:
+            if not r["n"]:
+                continue
+            tokens = {t for t in (r["errs"] or "").replace(",", ";").split(";") if t}
+            if tokens and tokens <= {"serp_not_found"}:
+                targets.append(r["id"])
+
+        if not dry_run and targets:
+            conn.executemany(
+                "UPDATE watched_posts SET status = 'absent_in_search' WHERE id = ?",
+                [(i,) for i in targets],
+            )
+            conn.commit()
+        return {"scanned": len(rows), "candidates": len(targets), "applied": (not dry_run)}
+    finally:
+        conn.close()
+
+
 def post_by_id(post_id: int) -> Optional[Dict]:
     """글 한 건. 소유권 검사(이 글의 블로그를 내가 감시하는지)를 하려면 blog_id 가 필요하다."""
     conn = _connect()

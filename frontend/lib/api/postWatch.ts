@@ -13,6 +13,9 @@ export type WatchStatus =
   | 'pending'
   | 'indexed'
   | 'delayed'
+  /** 검색 페이지는 정상으로 봤는데 그 안에 글이 없었다 — 관측된 부재 */
+  | 'absent_in_search'
+  /** 페이지를 제대로 못 봤다(차단·타임아웃) — 측정 실패 */
   | 'unmeasurable'
   | 'removed'
   | 'baseline'
@@ -119,7 +122,10 @@ export const STATUS_TONE: Record<WatchStatus, string> = {
   indexed: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   pending: 'bg-blue-50 text-blue-700 border-blue-200',
   delayed: 'bg-amber-50 text-amber-800 border-amber-200',
-  unmeasurable: 'bg-gray-100 text-gray-600 border-gray-200',
+  // 관측된 부재는 측정 실패보다 진한 색을 쓴다 — 사용자가 손을 쓸 수 있는 신호다.
+  // 그래도 빨강은 쓰지 않는다: 누락 판정이 아니다.
+  absent_in_search: 'bg-orange-50 text-orange-800 border-orange-200',
+  unmeasurable: 'bg-gray-100 text-gray-500 border-gray-200',
   removed: 'bg-gray-100 text-gray-500 border-gray-200',
   baseline: 'bg-gray-50 text-gray-400 border-gray-200',
 }
