@@ -36,6 +36,36 @@ from database.subscription_db import (
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+
+def _public_subscription(subscription: Optional[Dict]) -> Optional[Dict]:
+    """
+    구독 정보를 클라이언트에 줄 형태로 깎는다.
+
+    `billing_key` 는 카드로 돈을 빼는 토큰이다(시크릿 키가 같이 있어야 쓰이긴
+    하지만). 화면이 쓰지도 않는 값을 응답에 실어 보낼 이유가 없다.
+    """
+    if not subscription:
+        return subscription
+    return {k: v for k, v in subscription.items() if k not in ("billing_key", "customer_key")}
+
+
+def _registered_within(registered_at, minutes: int) -> bool:
+    """billing_registered_at 이 지금부터 `minutes` 안인가. 못 읽으면 False."""
+    if not registered_at:
+        return False
+    if isinstance(registered_at, str):
+        try:
+            registered_at = datetime.fromisoformat(registered_at.replace("Z", "+00:00"))
+        except ValueError:
+            return False
+    try:
+        if registered_at.tzinfo is not None:
+            registered_at = registered_at.replace(tzinfo=None)
+        return (datetime.now() - registered_at).total_seconds() < minutes * 60
+    except Exception:
+        return False
+
+
 # ============ 웹훅 실패 추적 및 재시도 시스템 ============
 # 실패한 웹훅을 추적하고 재시도하기 위한 인메모리 큐
 _failed_webhooks: Dict[str, Dict] = {}
@@ -565,6 +595,33 @@ async def register_billing(
         )
         raise HTTPException(status_code=400, detail="결제 정보가 올바르지 않습니다. 다시 시도해주세요.")
 
+    # 같은 등록 요청이 두 번 들어온 경우를 **성공으로** 돌려준다.
+    #
+    # authKey 는 1회용이다. 두 번째 호출은 토스에서 404 NOT_FOUND 로 떨어지는데,
+    # 그때 등록은 이미 첫 호출에서 끝나 있다. 2026-10-20 실측: 제품 역사상 유일한
+    # 결제자 2명이 **둘 다** 이걸 맞았다(payment_register_fail
+    # reason=billing_key:NOT_FOUND 와 http_404 가 사람마다 한 쌍). 구독은 정상
+    # 활성화됐고 billing_key 도 박혔는데 두 사람 다 실패 토스트를 봤다 —
+    # 결제창까지 통과한 사람을 에러 화면으로 보내는 건 이 퍼널에서 가장 비싼 이탈이다.
+    #
+    # 창을 10분으로 둔 이유: 더 길게 잡으면 같은 플랜을 다시 결제하려는 사람
+    # (해지 후 재가입 등)의 요청을 조용히 먹는다. 중복 제출은 몇 초 안에 온다.
+    existing = get_user_subscription(user_id) or {}
+    if (
+        existing.get("status") == "active"
+        and existing.get("plan_type") == request.plan_type
+        and existing.get("billing_key")
+        and _registered_within(existing.get("billing_registered_at"), minutes=10)
+    ):
+        logger.info(f"[payment] 이미 등록된 정기결제 — 중복 요청을 성공으로 반환: user={user_id}")
+        return {
+            "success": True,
+            "message": f"{PLAN_LIMITS[plan]['name']} 플랜이 활성화되었습니다",
+            "subscription": _public_subscription(existing),
+            "payment": None,
+            "already_registered": True,
+        }
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             # 1. 빌링키 발급
@@ -677,7 +734,7 @@ async def register_billing(
             return {
                 "success": True,
                 "message": f"{PLAN_LIMITS[plan]['name']} 플랜이 활성화되었습니다",
-                "subscription": subscription,
+                "subscription": _public_subscription(subscription),
                 "payment": {
                     "payment_key": payment_key,
                     "order_id": new_order_id,
