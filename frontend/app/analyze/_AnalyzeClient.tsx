@@ -31,6 +31,7 @@ import GradeCardActions from '@/components/GradeCardActions'
 import BlogIndexHistoryChart from '@/components/BlogIndexHistoryChart'
 import KeywordVerdictWidget from '@/components/KeywordVerdictWidget'
 import PostWatchToggle from '@/components/PostWatchToggle'
+import SelectionOutlookCard from '@/components/SelectionOutlookCard'
 import { getLevelGrade, getGradeBadgeStyle, getLevelsToNextGrade, getPointsToNextLevel } from '@/lib/utils/levelGrade'
 import TermTooltip from '@/components/TermTooltip'
 
@@ -366,6 +367,13 @@ function IndexVerificationCard({ blogId }: { blogId: string }) {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+          {/* "그래서 체험단에 뽑히냐" — 측정이 끝난 바로 그 자리에서 답한다.
+              추가 측정 비용은 없다(같은 결과를 서버가 재해석한 값). */}
+          {data.selection && (
+            <div className="mt-4">
+              <SelectionOutlookCard data={data.selection} />
             </div>
           )}
         </>

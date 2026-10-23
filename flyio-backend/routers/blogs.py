@@ -701,6 +701,9 @@ class VerifyIndexResponse(BaseModel):
     confidence: str = "low"
     method: str = "multi_signal_v2"
     disclaimer: Optional[str] = None
+    # 체험단 선정 관점의 해석 — 측정값을 시장가로 번역한다.
+    # services/campaign_selection.py 참고. 추가 측정 비용은 없다(같은 결과를 재해석).
+    selection: Optional[Dict[str, Any]] = None
     cached: bool = False
     error: Optional[str] = None
 
@@ -6445,6 +6448,7 @@ async def verify_blog_index_endpoint(
     호출당 평균 5~15초 소요 (sample_size에 비례).
     """
     from services.blog_index_verifier import verify_blog_index_level
+    from services.campaign_selection import selection_outlook
 
     blog_id = request.blog_id.strip()
     if not blog_id:
@@ -6453,7 +6457,18 @@ async def verify_blog_index_endpoint(
     if not refresh:
         cached = get_cached_verify_index(blog_id)
         if cached:
-            return VerifyIndexResponse(**{**cached, "cached": True})
+            # selection 은 캐시된 값에서 바로 파생되므로, 이 필드가 없던 시절의
+            # 캐시(=대부분)도 여기서 채워 준다. 재측정하지 않는다.
+            return VerifyIndexResponse(**{
+                **cached,
+                "selection": cached.get("selection") or selection_outlook(
+                    cached.get("level_category"),
+                    cached.get("weighted_score"),
+                    cached.get("signal_scores"),
+                    cached.get("confidence", "low"),
+                ),
+                "cached": True,
+            })
 
     # 가능하면 기존 분석 캐시에서 stats 가져와 Signal F (체인) 활성화
     blog_stats = None
@@ -6484,6 +6499,12 @@ async def verify_blog_index_endpoint(
         "confidence": result.get("confidence", "low"),
         "method": result.get("method", "multi_signal_v2"),
         "disclaimer": result.get("disclaimer"),
+        "selection": selection_outlook(
+            result.get("level_category"),
+            result.get("weighted_score"),
+            result.get("signal_scores"),
+            result.get("confidence", "low"),
+        ),
         "cached": False,
         "error": result.get("error"),
     }
