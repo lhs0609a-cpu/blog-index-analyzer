@@ -12,9 +12,13 @@
 스펙의 출시 전 검증(최근 글 100개 비교, 불일치 5% 이하)이 아직 안 끝났다.
 """
 import asyncio
+import csv
+import io as _io
 import re
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from database import post_watch_db as db
@@ -29,6 +33,11 @@ _BLOG_ID = re.compile(r"^[A-Za-z0-9_-]{3,50}$")
 
 class WatchRequest(BaseModel):
     blog_id: str
+
+
+class BulkWatchRequest(BaseModel):
+    # 대행사는 블로그를 한 개씩 등록하지 않는다. 20개는 한 번에 붙이고 시작한다.
+    blog_ids: List[str]
 
 
 def _normalize(blog_id: str) -> str:
@@ -228,3 +237,99 @@ async def my_summary(user: dict = Depends(get_current_user)):
         "blog_ids": [w["blog_id"] for w in watches],
         "summary": await asyncio.to_thread(db.user_status_summary, user["id"]),
     }
+
+
+# ============ 블로그를 여러 개 다루는 사람 ============
+#
+# 시장가의 근거: 블로그매트릭스는 같은 범주(누락검사+지수)를 44,000~132,000원에
+# 팔고, 플랜 차이는 **하루 검사 횟수(100·200·500)** 뿐이다. 그 숫자는 취미
+# 블로거의 숫자가 아니라 블로그를 여러 개 다루는 사람의 숫자다.
+# 다만 블스피 사용자 99명 중 블로그 3개 이상을 분석한 사람은 6명뿐이다 —
+# 이 세그먼트는 우리 안에 거의 없고, 그래서 '가격'보다 '도구'를 먼저 만든다.
+
+
+@router.post("/blogs/bulk")
+async def add_my_watches_bulk(req: BulkWatchRequest, user: dict = Depends(get_current_user)):
+    """
+    여러 블로그를 한 번에 등록한다.
+
+    한도에 걸린 것은 **거기서 멈추고 나머지를 알려준다** — 앞의 몇 개만 조용히
+    등록하고 성공처럼 끝내면 대행사는 뭐가 빠졌는지 모른 채 운영한다.
+    """
+    limits = _plan_limits(user["id"])
+    cap = limits.get("post_watch_blogs", 1)
+    mine = _my_blog_ids(user["id"])
+
+    seen, added, skipped, invalid = set(), [], [], []
+    for raw in req.blog_ids[:200]:  # 입력 폭주 방지
+        try:
+            bid = _normalize(raw)
+        except HTTPException:
+            invalid.append(raw[:60])
+            continue
+        if bid in seen:
+            continue
+        seen.add(bid)
+        if bid in mine:
+            skipped.append({"blog_id": bid, "reason": "already_watching"})
+            continue
+        if cap != -1 and len(mine) >= cap:
+            skipped.append({"blog_id": bid, "reason": "limit_exceeded"})
+            continue
+        await asyncio.to_thread(db.add_watch, user["id"], bid)
+        mine.add(bid)
+        added.append(bid)
+
+    # RSS 는 등록이 끝난 뒤 한 번만 돌린다. 블로그마다 즉시 호출하면 20개를
+    # 붙이는 요청 하나가 수십 초를 먹는다.
+    return {
+        "added": added,
+        "skipped": skipped,
+        "invalid": invalid,
+        "used": len(mine),
+        "limit": cap,
+        "note": "등록한 블로그의 새 글은 다음 RSS 순회(최대 60분) 부터 잡힙니다.",
+    }
+
+
+@router.get("/export.csv")
+async def export_my_watches_csv(user: dict = Depends(get_current_user)):
+    """
+    감시 현황을 CSV 로 내려준다 — 대행사가 광고주에게 보고하는 데 쓰는 형태다.
+
+    요금제 표가 '엑셀 내보내기'를 프로·비즈니스 기능으로 **팔고 있었는데 구현이
+    어디에도 없었다**(2026-10-23 확인). 이 엔드포인트가 그 약속의 실체다.
+    """
+    limits = _plan_limits(user["id"])
+    if not limits.get("excel_export"):
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error_code": "EXPORT_NOT_IN_PLAN",
+                "message": "내보내기는 프로 플랜부터 사용할 수 있습니다.",
+            },
+        )
+
+    watches = await asyncio.to_thread(db.list_watches, user["id"])
+    buf = _io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["블로그", "글 제목", "주소", "게시시각", "상태", "확인횟수",
+                "노출확인시각", "검색결과순위", "마지막확인"])
+    for watch in watches:
+        posts = await asyncio.to_thread(db.posts_for_blog, watch["blog_id"], 200)
+        for p in posts:
+            w.writerow([
+                watch["blog_id"], p["title"], p["url"], p["published_at"],
+                _STATUS_LABEL.get(p["status"], p["status"]), p.get("checks_done") or 0,
+                p.get("indexed_at") or "", p.get("first_rank") or "",
+                p.get("last_checked_at") or "",
+            ])
+
+    # 엑셀이 한글을 깨뜨리지 않도록 BOM 을 붙인다 — 이게 없으면 받는 사람 화면에서
+    # 전부 깨져 보이고, 보고용 파일에서 그건 치명적이다.
+    data = "﻿" + buf.getvalue()
+    return StreamingResponse(
+        _io.BytesIO(data.encode("utf-8")),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="blrank-post-watch.csv"'},
+    )

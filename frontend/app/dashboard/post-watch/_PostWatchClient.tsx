@@ -3,12 +3,15 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Bell, ExternalLink, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Bell, Download, ExternalLink, Layers, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/lib/stores/auth'
 import {
   addWatch,
+  addWatchesBulk,
+  downloadWatchCsv,
   getMyWatches,
+  isExportNotInPlan,
   removeWatch,
   readWatchLimitError,
   STATUS_TONE,
@@ -77,6 +80,8 @@ export default function PostWatchClient() {
   const [loading, setLoading] = useState(true)
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkText, setBulkText] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -112,6 +117,49 @@ export default function PostWatchClient() {
         return
       }
       toast.error('등록하지 못했습니다. 블로그 주소나 아이디를 확인해주세요.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** 줄바꿈·쉼표로 붙여넣은 목록을 그대로 받는다 — 대행사는 스프레드시트에서 복사해 온다. */
+  const onBulk = async () => {
+    const ids = bulkText
+      .split(/[\s,]+/)
+      .map((x) => x.trim())
+      .filter(Boolean)
+    if (ids.length === 0) return
+    setBusy(true)
+    try {
+      const r = await addWatchesBulk(ids)
+      // 무엇이 빠졌는지 반드시 말한다. 조용히 앞의 몇 개만 등록되면 운영이 틀어진다.
+      const over = r.skipped.filter((x) => x.reason === 'limit_exceeded').length
+      const dup = r.skipped.filter((x) => x.reason === 'already_watching').length
+      const parts = [`${r.added.length}개 등록`]
+      if (dup) parts.push(`${dup}개는 이미 감시 중`)
+      if (over) parts.push(`${over}개는 한도 초과`)
+      if (r.invalid.length) parts.push(`${r.invalid.length}개는 주소 인식 실패`)
+      toast.success(parts.join(' · '))
+      setBulkText('')
+      await load()
+    } catch {
+      toast.error('일괄 등록에 실패했습니다')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const onExport = async () => {
+    setBusy(true)
+    try {
+      await downloadWatchCsv()
+    } catch (error) {
+      if (isExportNotInPlan(error)) {
+        toast.error('내보내기는 프로 플랜부터 사용할 수 있습니다')
+        router.push('/pricing')
+        return
+      }
+      toast.error('내보내지 못했습니다')
     } finally {
       setBusy(false)
     }
@@ -195,6 +243,52 @@ export default function PostWatchClient() {
             >
               내 블로그({user.blog_id}) 바로 등록
             </button>
+          )}
+
+          {/* 블로그를 여러 개 다루는 사람용. 한도가 1개인 플랜에는 의미가 없어 숨긴다. */}
+          {data && data.limit !== 1 && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setBulkOpen((v) => !v)}
+                  className="text-sm text-gray-600 hover:text-gray-900 inline-flex items-center gap-1.5"
+                >
+                  <Layers className="w-4 h-4" />
+                  여러 개 붙여넣기
+                </button>
+                <button
+                  onClick={onExport}
+                  disabled={busy}
+                  className="text-sm text-gray-600 hover:text-gray-900 inline-flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4" />
+                  CSV 내보내기
+                </button>
+              </div>
+
+              {bulkOpen && (
+                <div className="mt-3">
+                  <textarea
+                    value={bulkText}
+                    onChange={(e) => setBulkText(e.target.value)}
+                    rows={4}
+                    placeholder={[
+                      '블로그 아이디를 줄바꿈이나 쉼표로 구분해 붙여넣으세요',
+                      'naver_id_1',
+                      'blog.naver.com/naver_id_2',
+                    ].join('\n')}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-mono focus:outline-none focus:border-[#0064FF]"
+                  />
+                  <button
+                    onClick={onBulk}
+                    disabled={busy || !bulkText.trim()}
+                    className="mt-2 px-4 py-2 rounded-xl bg-gray-900 text-white font-bold text-sm hover:bg-gray-800 disabled:opacity-50"
+                  >
+                    한 번에 등록
+                  </button>
+                </div>
+              )}
+            </div>
           )}
 
           {full && (

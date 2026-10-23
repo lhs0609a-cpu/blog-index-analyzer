@@ -123,3 +123,46 @@ export const STATUS_TONE: Record<WatchStatus, string> = {
   removed: 'bg-gray-100 text-gray-500 border-gray-200',
   baseline: 'bg-gray-50 text-gray-400 border-gray-200',
 }
+
+/**
+ * 여러 블로그를 한 번에 등록. 한도에 걸린 것은 skipped 로 돌아온다 —
+ * 앞의 몇 개만 조용히 등록하고 성공처럼 보이면 안 된다.
+ */
+export async function addWatchesBulk(blogIds: string[]): Promise<{
+  added: string[]
+  skipped: Array<{ blog_id: string; reason: 'already_watching' | 'limit_exceeded' }>
+  invalid: string[]
+  used: number
+  limit: number
+  note: string
+}> {
+  const res = await apiClient.post('/api/post-watch/blogs/bulk', { blog_ids: blogIds })
+  return res.data
+}
+
+/**
+ * 감시 현황 CSV. 프로 플랜부터.
+ *
+ * ⚠️ 브라우저가 파일을 받게 하려면 blob 으로 받아야 한다. 평소처럼 JSON 으로
+ * 받으면 본문이 문자열이 되어 저장된 파일이 깨진다.
+ */
+export async function downloadWatchCsv(): Promise<void> {
+  const res = await apiClient.get('/api/post-watch/export.csv', { responseType: 'blob' })
+  const url = URL.createObjectURL(res.data as Blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'blrank-post-watch.csv'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+/** 402 = 플랜에 내보내기가 없음. */
+export function isExportNotInPlan(error: unknown): boolean {
+  const e = error as { response?: { status?: number; data?: { detail?: { error_code?: string } } } }
+  return (
+    e?.response?.status === 402 &&
+    e?.response?.data?.detail?.error_code === 'EXPORT_NOT_IN_PLAN'
+  )
+}

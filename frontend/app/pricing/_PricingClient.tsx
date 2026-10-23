@@ -38,6 +38,7 @@ const DEFAULT_PLANS: PlanInfo[] = (['free', 'basic', 'pro', 'business'] as const
     features: {
       keyword_search_daily: limits.keywordSearchDaily,
       blog_analysis_daily: limits.blogAnalysisDaily,
+      post_watch_blogs: limits.postWatchBlogs,
       search_results_count: limits.searchResultsCount,
       history_days: limits.historyDays,
       competitor_compare: limits.competitorCompare,
@@ -484,6 +485,17 @@ export default function PricingPage() {
                     <Check className="w-5 h-5 text-green-500 flex-shrink-0 gi3d" />
                     <span className="text-sm">
                       블로그 분석 {plan.features.blog_analysis_daily === -1 ? '무제한' : `${plan.features.blog_analysis_daily}회/일`}
+                    </span>
+                  </li>
+                  {/* 감시는 '횟수'가 아니라 '계속 봐주는 것'이라 이 표에서 성격이 다르다.
+                      횟수만 파는 플랜에서 유일하게 반복 가치를 가진 항목이므로 분석 바로 뒤에 둔다. */}
+                  <li className="flex items-center gap-3">
+                    <Check className="w-5 h-5 text-green-500 flex-shrink-0 gi3d" />
+                    <span className="text-sm">
+                      새 글 감시{' '}
+                      {plan.features.post_watch_blogs === -1
+                        ? '무제한'
+                        : `블로그 ${plan.features.post_watch_blogs ?? 1}개`}
                     </span>
                   </li>
                   <li className="flex items-center gap-3">

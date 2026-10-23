@@ -12,6 +12,8 @@ export interface PlanInfo {
   features: {
     keyword_search_daily: number
     blog_analysis_daily: number
+    /** 새 글 감시 블로그 수 (서버 PLAN_LIMITS.post_watch_blogs) */
+    post_watch_blogs?: number
     search_results_count: number
     history_days: number
     competitor_compare: number

@@ -44,6 +44,8 @@ export const PLAN_INFO: Record<Plan, { name: string; price: number; priceYearly:
 export interface PlanLimits {
   keywordSearchDaily: number
   blogAnalysisDaily: number
+  /** 새 글 감시 블로그 수. 서버 PLAN_LIMITS.post_watch_blogs 와 같아야 한다. */
+  postWatchBlogs: number
   searchResultsCount: number
   historyDays: number
   competitorCompare: number
@@ -56,6 +58,7 @@ export interface PlanLimits {
 export const PLAN_LIMITS: Record<Exclude<Plan, 'guest'>, PlanLimits> = {
   free: {
     keywordSearchDaily: 5,  // 3→5 (2026-10-21) — 서버 PLAN_LIMITS 와 같아야 한다
+    postWatchBlogs: 1,
     blogAnalysisDaily: 5,   // 1→5 (2026-10-21) — 비회원(1회)보다 커야 가입할 이유가 생긴다
     searchResultsCount: 5,  // P0: 10→5 결과 제한
     historyDays: 0,
@@ -67,6 +70,7 @@ export const PLAN_LIMITS: Record<Exclude<Plan, 'guest'>, PlanLimits> = {
   },
   basic: {
     keywordSearchDaily: 30,
+    postWatchBlogs: 3,
     blogAnalysisDaily: 10,
     searchResultsCount: 10,
     historyDays: 30,
@@ -78,6 +82,7 @@ export const PLAN_LIMITS: Record<Exclude<Plan, 'guest'>, PlanLimits> = {
   },
   pro: {
     keywordSearchDaily: 100,
+    postWatchBlogs: 10,
     blogAnalysisDaily: 50,
     searchResultsCount: 20,
     historyDays: 90,
@@ -89,6 +94,7 @@ export const PLAN_LIMITS: Record<Exclude<Plan, 'guest'>, PlanLimits> = {
   },
   business: {
     keywordSearchDaily: -1,
+    postWatchBlogs: 30,
     blogAnalysisDaily: -1,
     searchResultsCount: 50,
     historyDays: -1,
