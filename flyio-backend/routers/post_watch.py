@@ -7,9 +7,11 @@
 ⚠️ **누락(`missing`)은 이 버전이 확정하지 않는다.** 2026-09-14 판정 수정에서
 "실제 검색에서 링크를 확인한 경우만 indexed, 미발견은 재시도 후 unmeasurable" 로
 정했기 때문이다(docs/POST_EXPOSURE_WATCH_SPEC.md). 그래서 사용자 화면도
-"누락됐습니다" 라고 말하지 않는다 — `delayed`/`unmeasurable` 까지만 보여주고
-단어도 '지연'·'확인 불가'를 쓴다. 오탐 알림이 이 기능에서 가장 비싼 손실이고,
-스펙의 출시 전 검증(최근 글 100개 비교, 불일치 5% 이하)이 아직 안 끝났다.
+"누락됐습니다" 라고 말하지 않는다 — 보여주는 가장 센 말이 '검색결과에서 못 찾음'
+(`absent_in_search`, 검색 페이지는 정상으로 봤는데 그 글이 없었다)이고, 페이지를
+제대로 못 본 경우는 '측정 실패'(`unmeasurable`)로 따로 둔다. 오탐 알림이 이
+기능에서 가장 비싼 손실이고, 스펙의 출시 전 검증(최근 글 100개 비교, 불일치 5%
+이하)이 아직 안 끝났다.
 """
 import asyncio
 import csv
@@ -117,10 +119,19 @@ async def admin_report(_: dict = Depends(require_admin)):
 # 키워드를 사람이 등록해야 해서 운영 6개월간 등록 0건이었다.
 
 
-def _plan_limits(user_id: int) -> dict:
-    """이 사용자의 플랜 한도. 구독을 못 읽으면 무료로 본다(막는 쪽이 안전)."""
+def _plan_limits(user: dict) -> dict:
+    """
+    이 사용자의 플랜 한도. 구독을 못 읽으면 무료로 본다(막는 쪽이 안전).
+
+    관리자는 비즈니스로 본다 — `middleware/usage_limit.usage_gate` 도,
+    `subscription_db.check_usage_limit` 도 관리자를 무제한으로 취급한다. 여기서만
+    플랜 한도를 적용하면 관리자가 자기 점검용으로 등록해 둔 블로그 11개가
+    "한도 1개 초과" 상태로 보인다(2026-10-23 실측에서 실제로 그랬다).
+    """
+    if user.get("is_admin"):
+        return PLAN_LIMITS[PlanType.BUSINESS]
     try:
-        sub = get_user_subscription(user_id) or {}
+        sub = get_user_subscription(user["id"]) or {}
         plan = PlanType(sub.get("plan_type") or "free")
     except Exception:
         plan = PlanType.FREE
@@ -165,7 +176,7 @@ def _post_view(post: dict) -> dict:
 @router.get("/blogs")
 async def my_watches(user: dict = Depends(get_current_user)):
     """내 감시 블로그와 블로그별 최근 글 상태."""
-    limits = _plan_limits(user["id"])
+    limits = _plan_limits(user)
     watches = await asyncio.to_thread(db.list_watches, user["id"])
     blogs = []
     for w in watches:
@@ -193,7 +204,7 @@ async def add_my_watch(req: WatchRequest, user: dict = Depends(get_current_user)
     from services.post_watch import poll_blog
 
     bid = _normalize(req.blog_id)
-    limits = _plan_limits(user["id"])
+    limits = _plan_limits(user)
     cap = limits.get("post_watch_blogs", 1)
     mine = _my_blog_ids(user["id"])
     # 이미 감시 중인 블로그를 다시 누른 건 한도 초과가 아니다 — 멱등으로 둔다.
@@ -242,7 +253,7 @@ async def my_blog_posts(blog_id: str, user: dict = Depends(get_current_user)):
 @router.get("/summary")
 async def my_summary(user: dict = Depends(get_current_user)):
     """대시보드 카드용 — 블로그 수와 상태 집계만."""
-    limits = _plan_limits(user["id"])
+    limits = _plan_limits(user)
     watches = await asyncio.to_thread(db.list_watches, user["id"])
     return {
         "watching": len(watches),
@@ -269,7 +280,7 @@ async def add_my_watches_bulk(req: BulkWatchRequest, user: dict = Depends(get_cu
     한도에 걸린 것은 **거기서 멈추고 나머지를 알려준다** — 앞의 몇 개만 조용히
     등록하고 성공처럼 끝내면 대행사는 뭐가 빠졌는지 모른 채 운영한다.
     """
-    limits = _plan_limits(user["id"])
+    limits = _plan_limits(user)
     cap = limits.get("post_watch_blogs", 1)
     mine = _my_blog_ids(user["id"])
 
@@ -313,7 +324,7 @@ async def export_my_watches_csv(user: dict = Depends(get_current_user)):
     요금제 표가 '엑셀 내보내기'를 프로·비즈니스 기능으로 **팔고 있었는데 구현이
     어디에도 없었다**(2026-10-23 확인). 이 엔드포인트가 그 약속의 실체다.
     """
-    limits = _plan_limits(user["id"])
+    limits = _plan_limits(user)
     if not limits.get("excel_export"):
         raise HTTPException(
             status_code=402,
