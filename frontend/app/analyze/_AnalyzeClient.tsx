@@ -32,6 +32,7 @@ import BlogIndexHistoryChart from '@/components/BlogIndexHistoryChart'
 import KeywordVerdictWidget from '@/components/KeywordVerdictWidget'
 import PostWatchToggle from '@/components/PostWatchToggle'
 import SelectionOutlookCard from '@/components/SelectionOutlookCard'
+import AiCitationCard from '@/components/AiCitationCard'
 import { getLevelGrade, getGradeBadgeStyle, getLevelsToNextGrade, getPointsToNextLevel } from '@/lib/utils/levelGrade'
 import TermTooltip from '@/components/TermTooltip'
 
@@ -2022,6 +2023,11 @@ export default function AnalyzePage() {
                   그래서 이 카드는 블로그 ID 하나로 끝난다.
                 */}
                 <PostWatchToggle blogId={result.blog.blog_id} />
+
+                {/* AI 답변 인용 점검 — 2026년 네이버가 블로그를 'AI가 인용할 답변
+                    단위'로 재정의했다. 거기 인용되지 않으면 순위가 좋아도 먼저
+                    읽히지 않는데, 지금 이걸 알려주는 도구가 없다. */}
+                <AiCitationCard blogId={result.blog.blog_id} />
 
                 {/* 지수 변화 추이 — "언제, 어떻게 올랐나"는 현재 점수만큼 중요하다 */}
                 <BlogIndexHistoryChart blogId={result.blog.blog_id} />

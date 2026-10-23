@@ -1001,6 +1001,7 @@ from routers import winner_keywords
 from routers import profitable_keywords
 from routers import competitive_analysis
 from routers import post_watch
+from routers import ai_citation as ai_citation_router
 from routers import growth
 from routers import blog_card
 
@@ -1038,6 +1039,7 @@ app.include_router(site_analytics.router)
 app.include_router(ad_snapshot.router)
 # 새 글 누락 감시 — 1단계는 관리자 전용 (판정 정확도 검증 후 사용자에게 연다)
 app.include_router(post_watch.router)
+app.include_router(ai_citation_router.router)
 # 성장 진단 — 가입·결제 퍼널을 세계 SaaS 벤치마크와 대조한다. 관리자 전용
 app.include_router(growth.router)
 # 블로그 등급 증명 카드 — 저장된 결과만 읽는 공개 요약 (/api/blog-card/{blog_id})
