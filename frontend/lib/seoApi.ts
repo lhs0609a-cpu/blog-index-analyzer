@@ -104,7 +104,22 @@ export type KeywordListItem = {
  * Failure must remain retryable; never replace existing content with an empty
  * successful response or a fabricated 404 during an upstream outage.
  */
-const FETCH_TIMEOUT_MS = 6000
+const FETCH_TIMEOUT_MS = Number(process.env.SEO_FETCH_TIMEOUT_MS || 15000)
+
+/**
+ * 요청 시점 재시도.
+ *
+ * 2026-10-01 실측: 백엔드가 **6초를 자주 넘긴다**. 무거운 요청 하나가 2 vCPU 한 대의
+ * 이벤트루프를 잡으면 /health 조차 29~76초가 되고, 그 창에서 이 모듈의 fetch 가
+ * 전부 throw 해 키워드 랜딩 100장 중 78장과 /sitemap-index.xml 이 500 을 냈다.
+ * (같은 측정을 유휴에 다시 하면 0/25 실패 — 즉 기능 고장이 아니라 상한이 짧았던 것이다.)
+ *
+ * 그래서 ①상한을 15초로 올리고 ②짧은 간격으로 한 번 더 두드린다. 그래도 안 되면
+ * 종전처럼 throw 한다 — ISR 은 직전 캐시본을 계속 내보내고 다음 요청에 다시 시도한다.
+ * 던지는 것 자체는 옳다. 다만 **첫 실패에 바로** 던질 이유가 없었다.
+ */
+const REQUEST_RETRY_ATTEMPTS = 2
+const REQUEST_RETRY_DELAY_MS = 400
 
 /**
  * 빌드 시점인가.
@@ -146,7 +161,25 @@ function withTimeout(ms?: number): RequestInit {
  * 하느니 직전 캐시본을 내보내는 편이 낫다.
  */
 async function fetchResilient(input: string, init: RequestInit): Promise<Response> {
-  if (!isBuildPhase()) return fetch(input, init)
+  if (!isBuildPhase()) {
+    // 요청 시점: 짧게 한 번 더. 실패를 삼키지는 않는다(마지막 시도는 그대로 던진다).
+    let lastErr: unknown
+    for (let attempt = 1; attempt <= REQUEST_RETRY_ATTEMPTS; attempt++) {
+      try {
+        const res = await fetch(input, { ...init, ...withTimeout() })
+        if (res.status >= 500 && attempt < REQUEST_RETRY_ATTEMPTS) {
+          lastErr = new Error(`upstream ${res.status}`)
+        } else {
+          return res
+        }
+      } catch (e) {
+        lastErr = e
+        if (attempt === REQUEST_RETRY_ATTEMPTS) break
+      }
+      await new Promise((r) => setTimeout(r, REQUEST_RETRY_DELAY_MS * attempt))
+    }
+    throw lastErr
+  }
 
   let lastError: unknown
   for (let attempt = 1; attempt <= BUILD_FETCH_ATTEMPTS; attempt++) {

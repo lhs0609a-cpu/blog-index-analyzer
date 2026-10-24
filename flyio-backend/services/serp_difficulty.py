@@ -24,6 +24,7 @@ SERP 난이도(Competitor Strength) 스캐너
 
 import asyncio
 import logging
+import os as _os
 import statistics
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -118,6 +119,10 @@ def _difficulty_label(score: float) -> str:
     return "very_easy"
 
 
+# 상한(초). main.py 요청 데드라인(180s)보다 짧게.
+SERP_DIFFICULTY_BUDGET_S = float(_os.getenv("SERP_DIFFICULTY_BUDGET_S", "90"))
+
+
 async def measure_serp_difficulty(keyword: str, top_n: int = TOP_N) -> Dict:
     """키워드 1페이지 경쟁자들의 체력으로 SERP 난이도를 측정.
 
@@ -146,7 +151,16 @@ async def measure_serp_difficulty(keyword: str, top_n: int = TOP_N) -> Dict:
     }
 
     try:
-        results = await fetch_naver_search_results(keyword, limit=top_n)
+        # playwright 블로그탭 스크래핑이라 네이버가 느려지면 끝나지 않는다.
+        # 2026-10-01 실측: 이 경로를 쓰는 /api/blogs/serp-difficulty 는 유휴
+        # 상태에서도 280초 안에 응답한 적이 없었다. 상한을 걸고 실패로 내려간다.
+        results = await asyncio.wait_for(
+            fetch_naver_search_results(keyword, limit=top_n),
+            timeout=SERP_DIFFICULTY_BUDGET_S,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(f"[serp] search timed out ({SERP_DIFFICULTY_BUDGET_S}s) for {keyword!r}")
+        return {**base, "error": "search_timeout"}
     except Exception as e:
         logger.warning(f"[serp] search failed for {keyword!r}: {e}")
         return {**base, "error": f"search_failed: {e}"}

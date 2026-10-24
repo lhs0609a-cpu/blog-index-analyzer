@@ -14,6 +14,7 @@ import { useBlogContextStore } from '@/lib/stores/blogContext'
 import { useXPStore } from '@/lib/stores/xp'
 import { checkUsageLimit } from '@/lib/api/subscription'
 import { authHeaders, readLimitHit } from '@/lib/api/limits'
+import { runKeywordSearch, type KeywordJobProgress } from '@/lib/api/keywordSearchJob'
 import { useFeatureAccess } from '@/lib/features/useFeatureAccess'
 import { PLAN_INFO } from '@/lib/features/featureAccess'
 import toast from 'react-hot-toast'
@@ -37,15 +38,20 @@ interface BlogIndexResult {
   is_influencer?: boolean  // Influencer badge
   smart_block_keyword?: string  // Keyword for smart block
   index: {
-    level: number
+    // 측정 실패면 null 로 온다. 부분 측정(partial_dimensions)이면 '추정' 등급이 온다
+    level: number | null
     grade: string
     level_category: string
     total_score: number
-    percentile: number
+    percentile: number | null
     score_breakdown: {
-      c_rank: number
-      dia: number
+      c_rank: number | null
+      dia: number | null
     }
+    measurement_complete?: boolean | null
+    unmeasured_dimensions?: string[] | null
+    partial_dimensions?: string[] | null
+    unmeasurable_reason?: string | null
   } | null
   stats: {
     total_posts: number
@@ -317,6 +323,8 @@ function KeywordSearchContent() {
   const [results, setResults] = useState<KeywordSearchResponse | null>(null)
   const [progress, setProgress] = useState(0)
   const [progressMessage, setProgressMessage] = useState('')
+  // 2단 응답: 순위 목록이 먼저 오고 블로그 등급이 하나씩 채워진다
+  const [jobProgress, setJobProgress] = useState<KeywordJobProgress | null>(null)
 
   // P2-3: 최근 검색어 저장 기능
   const [recentKeywords, setRecentKeywords] = useState<string[]>([])
@@ -472,40 +480,24 @@ function KeywordSearchContent() {
 
     setProgressMessage('블로그 검색 중...')
 
+    setJobProgress(null)
     try {
-      const progressInterval = setInterval(() => {
-        setProgress(prev => {
-          if (prev >= 90) return 90
-          return prev + 2
-        })
-      }, 1000)
-
-      const messageInterval = setInterval(() => {
-        setProgress(prev => {
-          if (prev < 20) setProgressMessage('블로그 검색 중...')
-          else if (prev < 40) setProgressMessage('블로그 목록 수집 중...')
-          else if (prev < 60) setProgressMessage('블로그 분석 준비 중...')
-          else if (prev < 80) setProgressMessage('블로그 상세 분석 중...')
-          else setProgressMessage('결과 정리 중...')
-          return prev
-        })
-      }, 3000)
-
-      const response = await fetch(
-        `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(searchKeyword)}&limit=20&analyze_content=true&quick_mode=false`,
-        {
-          method: 'POST',
-          headers: authHeaders({ 'Content-Type': 'application/json' }),
+      setProgress(5)
+      const outcome = await runKeywordSearch<KeywordSearchResponse>(searchKeyword, (p) => {
+        setJobProgress(p)
+        if (p.preview && p.total > 0) {
+          setProgress(Math.min(95, 15 + Math.round((80 * p.done) / p.total)))
+          setProgressMessage(`블로그 등급 분석 중 (${p.done}/${p.total})`)
+        } else {
+          setProgressMessage('네이버 검색 결과 가져오는 중...')
         }
-      )
+      })
 
-      clearInterval(progressInterval)
-      clearInterval(messageInterval)
       setProgress(100)
       setProgressMessage('완료!')
 
-      const hit = await readLimitHit(response)
-      if (hit) {
+      if (outcome.kind === 'limit') {
+        const hit = outcome.hit
         // 한도는 실패가 아니라 '다음 걸음'이다. 에러 토스트 대신 안내를 띄운다.
         setUsageLimitInfo({ limit: hit.limit, audience: hit.audience, recentBlockDays: hit.recentBlockDays })
         setShowLimitModal(true)
@@ -514,9 +506,8 @@ function KeywordSearchContent() {
         setProgressMessage('')
         return
       }
-      if (!response.ok) throw new Error('검색 실패')
 
-      const data: KeywordSearchResponse = await response.json()
+      const data = outcome.data
       setResults(data)
       fetchRelatedKeywords(searchKeyword)
       collectLearningData(searchKeyword, data)
@@ -530,6 +521,7 @@ function KeywordSearchContent() {
       setError(err instanceof Error ? err.message : '검색 중 오류가 발생했습니다')
     } finally {
       setLoading(false)
+      setJobProgress(null)
       setTimeout(() => {
         setProgress(0)
         setProgressMessage('')
@@ -629,25 +621,23 @@ function KeywordSearchContent() {
           )
         )
 
-        const response = await fetch(
-          `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(keyword)}&limit=20&analyze_content=true&quick_mode=false`,
-          {
-            method: 'POST',
-            headers: authHeaders({ 'Content-Type': 'application/json' }),
+        const outcome = await runKeywordSearch<KeywordSearchResponse>(keyword, (p) => {
+          if (p.total > 0) {
+            const pct = Math.min(95, 15 + Math.round((80 * p.done) / p.total))
+            setKeywordStatuses(prev =>
+              prev.map((status, i) => (i === index ? { ...status, progress: pct } : status))
+            )
           }
-        )
+        })
 
-        const hit = await readLimitHit(response)
-        if (hit) {
+        if (outcome.kind === 'limit') {
+          const hit = outcome.hit
           setUsageLimitInfo({ limit: hit.limit, audience: hit.audience, recentBlockDays: hit.recentBlockDays })
           setShowLimitModal(true)
           throw new Error(hit.message || '하루 한도를 모두 사용했습니다')
         }
-        if (!response.ok) {
-          throw new Error(`검색 실패: ${response.statusText}`)
-        }
 
-        const data: KeywordSearchResponse = await response.json()
+        const data = outcome.data
 
         // 완료 상태로 업데이트
         setKeywordStatuses(prev =>
@@ -1109,29 +1099,22 @@ function KeywordSearchContent() {
         setProgress(prev => Math.min(prev + Math.random() * 15, 90))
       }, 500)
 
-      const response = await fetch(
-        `${getApiUrl()}/api/blogs/search-keyword-with-tabs?keyword=${encodeURIComponent(clickedKeyword)}&limit=20&analyze_content=true&quick_mode=false`,
-        {
-          method: 'POST',
-          headers: authHeaders({ 'Content-Type': 'application/json' }),
-        }
-      )
-
-      clearInterval(progressInterval)
+      let outcome
+      try {
+        outcome = await runKeywordSearch<KeywordSearchResponse>(clickedKeyword, (p) => setJobProgress(p))
+      } finally {
+        clearInterval(progressInterval)
+      }
       setProgress(100)
 
-      const hit = await readLimitHit(response)
-      if (hit) {
+      if (outcome.kind === 'limit') {
+        const hit = outcome.hit
         setUsageLimitInfo({ limit: hit.limit, audience: hit.audience, recentBlockDays: hit.recentBlockDays })
         setShowLimitModal(true)
         return
       }
-      if (!response.ok) {
-        throw new Error('검색에 실패했습니다')
-      }
 
-      const data = await response.json()
-      setResults(data)
+      setResults(outcome.data)
 
       // 연관 키워드도 새로 조회
       fetchRelatedKeywords(clickedKeyword)
@@ -1139,6 +1122,7 @@ function KeywordSearchContent() {
       setError(err instanceof Error ? err.message : '검색 중 오류가 발생했습니다')
     } finally {
       setLoading(false)
+      setJobProgress(null)
     }
   }
 
@@ -1270,8 +1254,9 @@ function KeywordSearchContent() {
             <div className="flex-1">
               <h3 className="text-sm font-semibold text-blue-900 mb-1">통계 수집 안내</h3>
               <p className="text-xs text-blue-700">
-                일부 통계(포스트 수, 방문자 수)는 네이버의 접근 제한으로 인해 수집이 제한될 수 있습니다.
-                이웃 수와 블로그 지수는 정상적으로 분석되며, 경쟁 분석에는 영향이 없습니다.
+                포스트 수·방문자 수·이웃 수는 네이버의 접근 제한으로 수집이 비는 경우가 있습니다.
+                본문을 끝까지 읽지 못한 블로그는 나머지 지표로 낸 등급에 <strong>추정</strong>을 붙이고,
+                지표를 거의 못 읽은 블로그는 <strong>측정 불가</strong>로 표시합니다 — 잠시 후 다시 검색하면 채워집니다.
               </p>
             </div>
           </div>
@@ -1894,9 +1879,26 @@ function KeywordSearchContent() {
                                     {blog.index ? (
                                       <>
                                         <td className="px-3 py-3 text-center">
-                                          <span className={`inline-flex px-2 py-0.5 rounded-full text-white text-xs font-bold ${getLevelColor(blog.index.level)}`}>
-                                            Lv.{blog.index.level}
-                                          </span>
+                                          {blog.index.level == null ? (
+                                            <span
+                                              className="inline-flex px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 text-xs font-bold cursor-help"
+                                              title={blog.index.unmeasurable_reason || '이번 측정에서 지표를 끝까지 읽지 못해 등급을 보류했습니다.'}
+                                            >
+                                              측정 불가
+                                            </span>
+                                          ) : (
+                                            <span className={`inline-flex px-2 py-0.5 rounded-full text-white text-xs font-bold ${getLevelColor(blog.index.level)}`}>
+                                              Lv.{blog.index.level}
+                                            </span>
+                                          )}
+                                          {blog.index.level != null && (blog.index.partial_dimensions?.length ?? 0) > 0 && (
+                                            <span
+                                              className="block mt-0.5 text-[10px] text-amber-600 font-semibold cursor-help"
+                                              title={blog.index.unmeasurable_reason || '본문을 끝까지 읽지 못해 나머지 지표로 추정한 등급입니다.'}
+                                            >
+                                              추정
+                                            </span>
+                                          )}
                                         </td>
                                         <td className="px-3 py-3 text-center">
                                           <span className={`text-lg font-bold ${getScoreColor(blog.index?.total_score || 0)}`}>
@@ -2138,7 +2140,7 @@ function KeywordSearchContent() {
                 {progressMessage || '블로그 분석 중...'}
               </p>
               <p className="text-sm text-gray-500">
-                상위 13개 블로그를 분석합니다
+                상위 블로그 20개를 분석합니다 — 순위 목록이 먼저 나오고 등급은 끝나는 대로 채워집니다
               </p>
             </div>
 
@@ -2160,14 +2162,48 @@ function KeywordSearchContent() {
               </div>
             </div>
 
-            {/* Estimated Time */}
-            <div className="text-center">
-              <p className="text-xs text-gray-400">
-                예상 소요 시간: 약 10초
-              </p>
-            </div>
-
-            {/* P3-1: 스켈레톤 미리보기 */}
+            {/* 2단 응답: 순위 목록을 먼저 보여주고 등급을 채운다 */}
+            {jobProgress?.preview && jobProgress.preview.length > 0 ? (
+              <div className="mt-6 pt-6 border-t border-gray-100">
+                <p className="text-xs text-gray-500 mb-3 text-center">
+                  현재 네이버 상위 노출 순위 · 등급 분석 {jobProgress.done}/{jobProgress.total}
+                </p>
+                <div className="space-y-2">
+                  {jobProgress.preview.map((row) => {
+                    const b = jobProgress.blogs[row.blog_id]
+                    return (
+                      <div key={`${row.rank}-${row.blog_id}`} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                        <div className="w-8 h-8 flex items-center justify-center rounded-full bg-white border border-gray-200 text-sm font-bold text-gray-700 shrink-0">
+                          {row.rank}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-800 truncate">{row.post_title}</p>
+                          <p className="text-xs text-gray-500 truncate">{row.blog_name}</p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          {!b ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-gray-400">
+                              <Loader2 className="w-3 h-3 animate-spin" /> 분석 중
+                            </span>
+                          ) : b.level == null ? (
+                            <span className="inline-flex px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 text-xs font-bold">측정 불가</span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1">
+                              <span className={`inline-flex px-2 py-0.5 rounded-full text-white text-xs font-bold ${getLevelColor(b.level)}`}>
+                                Lv.{b.level}
+                              </span>
+                              {(b.partial_dimensions?.length ?? 0) > 0 && (
+                                <span className="text-[10px] text-amber-600 font-semibold">추정</span>
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : (
             <div className="mt-6 pt-6 border-t border-gray-100">
               <p className="text-xs text-gray-500 mb-3 text-center">분석 결과 미리보기</p>
               <div className="space-y-2 opacity-50">
@@ -2183,6 +2219,7 @@ function KeywordSearchContent() {
                 ))}
               </div>
             </div>
+            )}
           </div>
         )}
 
@@ -2384,9 +2421,26 @@ function KeywordSearchContent() {
                             {/* Level */}
                             <td className="px-3 py-3 text-center">
                               <div className="flex flex-col items-center gap-0.5">
-                                <span className={`inline-flex px-2 py-0.5 rounded-full text-white text-xs font-bold ${getLevelColor(blog.index.level)}`}>
-                                  Lv.{blog.index.level}
-                                </span>
+                                {blog.index.level == null ? (
+                                  <span
+                                    className="inline-flex px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 text-xs font-bold cursor-help"
+                                    title={blog.index.unmeasurable_reason || '이번 측정에서 지표를 끝까지 읽지 못해 등급을 보류했습니다.'}
+                                  >
+                                    측정 불가
+                                  </span>
+                                ) : (
+                                  <span className={`inline-flex px-2 py-0.5 rounded-full text-white text-xs font-bold ${getLevelColor(blog.index.level)}`}>
+                                    Lv.{blog.index.level}
+                                  </span>
+                                )}
+                                {blog.index.level != null && (blog.index.partial_dimensions?.length ?? 0) > 0 && (
+                                  <span
+                                    className="text-[10px] text-amber-600 font-semibold cursor-help"
+                                    title={blog.index.unmeasurable_reason || '본문을 끝까지 읽지 못해 나머지 지표로 추정한 등급입니다.'}
+                                  >
+                                    추정
+                                  </span>
+                                )}
                                 
                               </div>
                             </td>
@@ -2873,7 +2927,7 @@ function KeywordSearchContent() {
       {/* Breakdown Modal */}
       {showBreakdownModal && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
           onClick={closeBreakdownModal}
         >
           <div

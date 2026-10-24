@@ -104,12 +104,12 @@ export default function UpgradeModal({
     return () => window.removeEventListener('keydown', handleEsc)
   }, [onClose])
 
-  // 비회원 → 무료회원으로 실제로 늘어나는 양. 블로그 분석은 무료회원도 하루 1회라
-  // 비회원과 같다 — 같은 숫자를 '혜택'이라고 나란히 그리면 화면이 거짓말을 한다.
+  // 비회원 → 무료회원으로 실제로 늘어나는 양. 같은 숫자를 '혜택'이라고 나란히
+  // 그리면 화면이 거짓말을 한다(2026-09 에는 블로그 분석이 둘 다 1회였다).
   const guestGain = isGuest ? info.freeLimit - (maxUsage ?? 1) : 0
 
-  // 가입해도 **오늘 이어서 할 수 없는** 경우가 있다. 블로그 분석은 비회원 1회/일,
-  // 무료회원도 1회/일이라 숫자가 그대로다(2026-09-23 기준).
+  // 가입해도 **오늘 이어서 할 수 없는** 경우가 있다(무료 한도가 비회원과 같을 때 —
+  // 2026-09-23 엔 블로그 분석이 그랬고, 2026-10-21 무료 5회로 올렸다).
   //
   // 그런데 버튼은 "회원가입하고 이어서 하기"라고 말하고 있었다. 벽에 부딪힌 사람이
   // 그 말을 믿고 가입하면 곧바로 같은 벽을 다시 만난다 — 실측(9일간)으로 한도에 닿은
@@ -146,7 +146,7 @@ export default function UpgradeModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
+          className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm flex items-start sm:items-center justify-center z-[100] p-4 overflow-y-auto"
           onClick={onClose}
         >
           <motion.div
@@ -154,7 +154,7 @@ export default function UpgradeModal({
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 24 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="relative bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl"
+            className="relative bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl my-4 sm:my-0"
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -233,6 +233,7 @@ export default function UpgradeModal({
                   ? [
                       // 실제로 늘어나는 것만 적는다. 비회원과 같은 한도를 혜택으로
                       // 적으면 가입한 사람이 곧바로 속았다고 느낀다.
+                      `블로그 분석 ${fmt(PLAN_LIMITS.free.blogAnalysisDaily)}`,
                       `키워드 검색 ${fmt(PLAN_LIMITS.free.keywordSearchDaily)}`,
                       '분석한 블로그 저장 · 다시 보기',
                       '카드 등록 없이 가입 즉시 사용',

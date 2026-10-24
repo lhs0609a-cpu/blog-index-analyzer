@@ -55,8 +55,8 @@ PLAN_LIMITS = {
         "name": "무료",
         "price_monthly": 0,
         "price_yearly": 0,
-        "keyword_search_daily": 3,      # 8 → 3 (맛보기만)
-        "blog_analysis_daily": 1,       # 2 → 1 (한 번만)
+        "keyword_search_daily": 5,      # 3 → 5 (2026-10-21: 가입할 이유를 만든다 — 비회원 1회와 같으면 아무도 가입 안 한다)
+        "blog_analysis_daily": 5,       # 1 → 5 (같은 이유. 가입률 2.4%, 무료 한도가 비회원과 같았다)
         "search_results_count": 5,      # 10 → 5 (제한된 결과)
         "history_days": 0,
         "competitor_compare": 0,
@@ -70,6 +70,16 @@ PLAN_LIMITS = {
         "rank_history_days": 0,         # 7 → 0 (유료 전용)
         # 블루오션 기능 - 무료는 비활성화
         "blue_ocean_daily": 0,          # 유료 전용
+        # 새 글 누락 감시 — 블로그 ID 하나로 끝나는 설정이라 무료에도 1개를 준다.
+        # 이 기능의 목적은 재방문이고, 재방문은 무료 사용자에게서 나온다.
+        "post_watch_blogs": 1,
+        # 확인 시점(게시 후 시간). 유료는 1·6시간을 더 받아 "빨리 아는 것"을 산다.
+        "post_watch_checkpoints": [24, 72],
+        "post_watch_recheck_daily": 0,
+        # 전수 노출 감사 — 글 하나에 검색 요청 최대 2회라 플랜으로 묶는다.
+        # 무료는 "내 블로그 하나, 최근 10글"까지. 그걸로도 안 보이는 글이 있으면 보인다.
+        "audit_posts_per_blog": 10,
+        "audit_daily": 1,
     },
     PlanType.BASIC: {
         "name": "베이직",
@@ -90,6 +100,11 @@ PLAN_LIMITS = {
         "rank_history_days": 30,
         # 블루오션 기능
         "blue_ocean_daily": 5,          # 일 5회
+        "post_watch_blogs": 3,
+        "audit_posts_per_blog": 20,
+        "audit_daily": 3,
+        "post_watch_checkpoints": [1, 6, 24, 72],
+        "post_watch_recheck_daily": 5,
     },
     PlanType.PRO: {
         "name": "프로",
@@ -110,6 +125,11 @@ PLAN_LIMITS = {
         "rank_history_days": 90,
         # 블루오션 기능
         "blue_ocean_daily": 30,         # 일 30회
+        "post_watch_blogs": 10,
+        "audit_posts_per_blog": 30,
+        "audit_daily": 5,
+        "post_watch_checkpoints": [1, 6, 24, 72],
+        "post_watch_recheck_daily": 5,
     },
     PlanType.BUSINESS: {
         "name": "비즈니스",
@@ -130,6 +150,11 @@ PLAN_LIMITS = {
         "rank_history_days": -1,     # 무제한
         # 블루오션 기능
         "blue_ocean_daily": -1,      # 무제한
+        "post_watch_blogs": 30,
+        "audit_posts_per_blog": 30,
+        "audit_daily": 20,
+        "post_watch_checkpoints": [1, 6, 24, 72],
+        "post_watch_recheck_daily": 20,
     },
 }
 
@@ -292,6 +317,7 @@ def init_subscription_tables():
             card_company TEXT,
             card_number TEXT,
             receipt_url TEXT,
+            kind TEXT DEFAULT 'checkout',
             paid_at TIMESTAMP,
             cancelled_at TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -315,6 +341,7 @@ def init_subscription_tables():
     """)
 
     _migrate_subscription_columns(cursor)
+    _migrate_payment_columns(cursor)
 
     conn.commit()
     conn.close()
@@ -334,29 +361,51 @@ _SUBSCRIPTION_ADDED_COLUMNS = {
 }
 
 
-def _migrate_subscription_columns(cursor) -> None:
-    """subscriptions 에 빠진 칼럼을 채운다. 이미 있으면 조용히 넘어간다."""
+# payments 에 뒤늦게 들인 칼럼.
+_PAYMENT_ADDED_COLUMNS = {
+    # 결제 행이 '사람이 결제창을 통과한 건'인지 '자동 갱신'인지.
+    #
+    # 왜 필요한가: 결제 성공률은 체크아웃 퍼널 지표인데, 자동 갱신 결제가
+    # 같은 테이블에 completed 로 쌓이면 분자만 늘어난다. 분모(사람이 시도한
+    # 횟수)와 분자(완료)가 다른 모집단이 되는 순간 지표는 조용히 거짓말을
+    # 시작한다. order_id 접두사로 구분하는 건 포맷을 바꾸는 날 깨지므로
+    # 칼럼으로 못박는다.
+    "kind": "TEXT DEFAULT 'checkout'",
+}
+
+
+def _migrate_columns(cursor, table: str, columns: Dict[str, str]) -> None:
+    """테이블에 빠진 칼럼을 채운다. 이미 있으면 조용히 넘어간다."""
     try:
         if USE_POSTGRES:
             cursor.execute(
-                "SELECT column_name FROM information_schema.columns WHERE table_name = 'subscriptions'"
+                "SELECT column_name FROM information_schema.columns WHERE table_name = %s",
+                (table,),
             )
             existing = {r[0] if not isinstance(r, dict) else r['column_name'] for r in cursor.fetchall()}
         else:
-            cursor.execute("PRAGMA table_info(subscriptions)")
+            cursor.execute(f"PRAGMA table_info({table})")
             existing = {r[1] for r in cursor.fetchall()}
     except Exception as e:
-        logger.warning(f"subscriptions 칼럼 점검 실패: {e}")
+        logger.warning(f"{table} 칼럼 점검 실패: {e}")
         return
 
-    for column, ddl in _SUBSCRIPTION_ADDED_COLUMNS.items():
+    for column, ddl in columns.items():
         if column in existing:
             continue
         try:
-            cursor.execute(f"ALTER TABLE subscriptions ADD COLUMN {column} {ddl}")
-            logger.info(f"subscriptions.{column} 칼럼을 추가했다")
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+            logger.info(f"{table}.{column} 칼럼을 추가했다")
         except Exception as e:
-            logger.warning(f"subscriptions.{column} 추가 실패: {e}")
+            logger.warning(f"{table}.{column} 추가 실패: {e}")
+
+
+def _migrate_subscription_columns(cursor) -> None:
+    _migrate_columns(cursor, "subscriptions", _SUBSCRIPTION_ADDED_COLUMNS)
+
+
+def _migrate_payment_columns(cursor) -> None:
+    _migrate_columns(cursor, "payments", _PAYMENT_ADDED_COLUMNS)
 
 
 # ============ 구독 관리 함수 ============
@@ -900,37 +949,135 @@ async def check_feature_access(user_id: int, feature: str) -> Dict:
 
 # ============ 결제 내역 함수 ============
 
+def extract_toss_payment_details(
+    payment_data: Optional[Dict],
+    default_method: Optional[str] = None,
+    fallback_card_company: Optional[str] = None,
+    fallback_card_number: Optional[str] = None,
+) -> Dict:
+    """토스 Payment 응답에서 payments 테이블에 남길 결제수단 정보를 뽑는다.
+
+    빌링(자동결제) 경로는 이 값을 하나도 저장하지 않아 관리자 화면 '결제수단'이
+    전부 '-' 였고, 결제수단별 매출 통계(payment_method IS NOT NULL)에서도 빠졌다.
+
+    토스는 카드가 아닌 결제에서 "card": null 을 준다 — `.get("card", {})` 는
+    None 을 돌려주므로 그대로 `.get` 을 이어 부르면 승인된 결제가 500 으로 끝난다.
+    """
+    data = payment_data or {}
+    card = data.get("card") or {}
+    receipt = data.get("receipt") or {}
+    return {
+        "payment_method": data.get("method") or default_method,
+        "card_company": card.get("company") or fallback_card_company or card.get("issuerCode"),
+        "card_number": card.get("number") or fallback_card_number,
+        "receipt_url": receipt.get("url"),
+    }
+
+
 def create_payment(
     user_id: int,
     order_id: str,
     amount: int,
     payment_key: str = None,
-    status: str = "pending"
+    status: str = "pending",
+    kind: str = "checkout",
+    payment_method: str = None,
+    card_company: str = None,
+    card_number: str = None,
+    receipt_url: str = None,
 ) -> Dict:
-    """결제 내역 생성"""
+    """결제 내역 생성.
+
+    ⚠️ status='completed' 로 바로 꽂는 경로(빌링 첫 결제·수동 결제·자동 갱신)는
+    paid_at 을 **여기서** 채운다. 이걸 안 채우던 동안, 매출 집계가 전부
+    `WHERE paid_at >= …` 로 걸려 있어서 실제로 받은 돈이 오늘·이번 달·일별
+    매출 어디에도 나타나지 않았다. 전체 매출에만 잡히고 나머지는 0 —
+    "돈은 들어왔는데 대시보드는 비어 있는" 가장 헷갈리는 상태다.
+    """
+    paid_at = datetime.now().isoformat(sep=" ", timespec="seconds") if status == "completed" else None
     conn = get_connection()
 
     if USE_POSTGRES:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute("""
-            INSERT INTO payments (user_id, order_id, amount, payment_key, status)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO payments (user_id, order_id, amount, payment_key, status, kind, paid_at,
+                                  payment_method, card_company, card_number, receipt_url)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
-        """, (user_id, order_id, amount, payment_key, status))
+        """, (user_id, order_id, amount, payment_key, status, kind, paid_at,
+              payment_method, card_company, card_number, receipt_url))
         result = cursor.fetchone()
         payment_id = result['id'] if result else None
     else:
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO payments (user_id, order_id, amount, payment_key, status)
-            VALUES (?, ?, ?, ?, ?)
-        """, (user_id, order_id, amount, payment_key, status))
+            INSERT INTO payments (user_id, order_id, amount, payment_key, status, kind, paid_at,
+                                  payment_method, card_company, card_number, receipt_url)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, order_id, amount, payment_key, status, kind, paid_at,
+              payment_method, card_company, card_number, receipt_url))
         payment_id = cursor.lastrowid
 
     conn.commit()
     conn.close()
 
     return {"id": payment_id, "order_id": order_id, "status": status}
+
+
+def settle_prepared_payment(
+    user_id: int,
+    prepare_order_id: str,
+    new_order_id: str,
+    amount: int,
+    payment_key: str,
+    payment_method: str = None,
+    card_company: str = None,
+    card_number: str = None,
+    receipt_url: str = None,
+) -> bool:
+    """`/prepare` 가 만들어 둔 pending 행을 실제 결제로 **덮어쓴다**.
+
+    왜 새 행을 만들지 않나: 빌링 결제는 토스 중복 방지 때문에 orderId 를 새로
+    지어야 한다. 그래서 예전에는 결제가 성공할 때마다 completed 행이 하나 더
+    생기고, 원래 주문 행은 영원히 pending 으로 남았다. 결제 한 건이 행 두 개가
+    되니 관리자 화면의 '대기중'은 이탈자와 성공자가 섞인 쓰레기통이 됐다.
+
+    소유자(user_id)와 pending 상태를 함께 조건에 거는 이유: order_id 는
+    클라이언트가 보내온 값이다. 남의 주문 행을 자기 결제로 덮어쓰는 길을
+    열어두면 안 된다.
+
+    반환값 False = 덮어쓸 행이 없었다(주소로 직접 들어온 경우 등). 호출부는
+    그때만 새 행을 만든다.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    ph = "%s" if USE_POSTGRES else "?"
+    now = "NOW()" if USE_POSTGRES else "CURRENT_TIMESTAMP"
+    cursor.execute(
+        f"""
+        UPDATE payments
+           SET order_id = {ph},
+               payment_key = {ph},
+               amount = {ph},
+               status = 'completed',
+               kind = 'checkout',
+               paid_at = {now},
+               payment_method = {ph},
+               card_company = {ph},
+               card_number = {ph},
+               receipt_url = {ph}
+         WHERE order_id = {ph}
+           AND user_id = {ph}
+           AND status = 'pending'
+        """,
+        (new_order_id, payment_key, amount,
+         payment_method, card_company, card_number, receipt_url,
+         prepare_order_id, user_id),
+    )
+    settled = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return settled
 
 
 def update_payment(
@@ -942,7 +1089,12 @@ def update_payment(
     card_number: str = None,
     receipt_url: str = None
 ) -> bool:
-    """결제 내역 업데이트"""
+    """결제 내역 업데이트
+
+    결제수단 필드는 None 이면 **기존 값을 유지**한다(COALESCE). 승인(confirm)이
+    method 를 저장한 뒤 결제수단 없이 status 만 보내는 웹훅이 도착하면, 예전에는
+    그 값을 NULL 로 덮어써 관리자 화면 '결제수단'이 비었다.
+    """
     conn = get_connection()
 
     if USE_POSTGRES:
@@ -951,10 +1103,10 @@ def update_payment(
             UPDATE payments
             SET payment_key = %s,
                 status = %s,
-                payment_method = %s,
-                card_company = %s,
-                card_number = %s,
-                receipt_url = %s,
+                payment_method = COALESCE(%s, payment_method),
+                card_company = COALESCE(%s, card_company),
+                card_number = COALESCE(%s, card_number),
+                receipt_url = COALESCE(%s, receipt_url),
                 paid_at = CASE WHEN %s = 'completed' THEN NOW() ELSE paid_at END
             WHERE order_id = %s
         """, (payment_key, status, payment_method, card_company, card_number, receipt_url, status, order_id))
@@ -964,10 +1116,10 @@ def update_payment(
             UPDATE payments
             SET payment_key = ?,
                 status = ?,
-                payment_method = ?,
-                card_company = ?,
-                card_number = ?,
-                receipt_url = ?,
+                payment_method = COALESCE(?, payment_method),
+                card_company = COALESCE(?, card_company),
+                card_number = COALESCE(?, card_number),
+                receipt_url = COALESCE(?, receipt_url),
                 paid_at = CASE WHEN ? = 'completed' THEN CURRENT_TIMESTAMP ELSE paid_at END
             WHERE order_id = ?
         """, (payment_key, status, payment_method, card_company, card_number, receipt_url, status, order_id))
@@ -1225,6 +1377,36 @@ def get_revenue_stats(period: str = "30d") -> Dict:
     status_rows = cursor.fetchall()
     status_stats = {row[0]: {"count": row[1], "total": row[2]} for row in status_rows}
 
+    # ---- 결제 성공률: 분모와 분자를 같은 모집단에서 센다 ----
+    #
+    # 화면은 `completed / total_transactions` 를 성공률이라 부르고 있었다.
+    # 그런데 total_transactions 는 **completed 의 개수**다. 즉 completed/completed —
+    # 결제가 한 건이라도 있으면 영원히 100%, 없으면 0%. 비율처럼 생겼을 뿐
+    # 실제로는 "결제가 있었나 없었나"를 묻는 불리언이었다.
+    #
+    # 성공률의 분모는 '사람이 결제를 시도한 횟수'여야 한다. 결제 행은 체크아웃을
+    # 시작할 때(/prepare) 하나 생기므로 checkout 행의 개수가 곧 시도 횟수다.
+    # 자동 갱신(kind='renewal')은 사람이 시도한 적이 없으니 양쪽에서 모두 뺀다.
+    cursor.execute("""
+        SELECT COALESCE(kind, 'checkout') AS k,
+               COUNT(*) AS attempts,
+               SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS done
+        FROM payments
+        GROUP BY COALESCE(kind, 'checkout')
+    """)
+    kind_rows = cursor.fetchall()
+    kind_stats = {row[0]: {"attempts": row[1], "completed": row[2] or 0} for row in kind_rows}
+
+    checkout = kind_stats.get("checkout", {"attempts": 0, "completed": 0})
+    checkout_attempts = checkout["attempts"]
+    checkout_completed = checkout["completed"]
+    # 시도가 0이면 성공률은 0%가 아니라 '아직 모른다'. 0% 로 적으면 멀쩡한
+    # 결제 경로가 고장난 것처럼 보인다 — 실제로 그렇게 읽혔다.
+    success_rate = (
+        round(checkout_completed / checkout_attempts * 100, 1)
+        if checkout_attempts else None
+    )
+
     # 결제 수단별 통계
     cursor.execute("""
         SELECT payment_method, COUNT(*) as count, COALESCE(SUM(amount), 0) as total
@@ -1249,7 +1431,12 @@ def get_revenue_stats(period: str = "30d") -> Dict:
         "period": period,
         "daily_revenue": daily_revenue,
         "status_stats": status_stats,
-        "payment_method_stats": method_stats
+        "payment_method_stats": method_stats,
+        # 체크아웃 퍼널 (자동 갱신 제외)
+        "checkout_attempts": checkout_attempts,
+        "checkout_completed": checkout_completed,
+        "success_rate": success_rate,
+        "renewal_completed": kind_stats.get("renewal", {}).get("completed", 0),
     }
 
 

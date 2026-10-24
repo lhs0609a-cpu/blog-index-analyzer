@@ -326,9 +326,9 @@ async def run_single_learning_cycle():
                             "depth_score": dia_detail.get("depth", 50),
                             "information_score": dia_detail.get("information", 50),
                             "accuracy_score": dia_detail.get("accuracy", 50),
-                            "post_count": stats.get("total_posts", 0),
-                            "neighbor_count": stats.get("neighbor_count", 0),
-                            "visitor_count": stats.get("total_visitors", 0),
+                            "post_count": stats.get("total_posts") or 0,
+                            "neighbor_count": stats.get("neighbor_count") or 0,
+                            "visitor_count": stats.get("total_visitors") or 0,
                             **post_features
                         }
 
@@ -336,7 +336,7 @@ async def run_single_learning_cycle():
                             keyword=keyword,
                             blog_id=blog_id,
                             actual_rank=actual_rank,
-                            predicted_score=index.get("total_score", 0),
+                            predicted_score=index.get("total_score") or 0,
                             blog_features=blog_features
                         )
 

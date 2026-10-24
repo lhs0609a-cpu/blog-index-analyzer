@@ -89,6 +89,47 @@ def _cache_set(blog_id: str, data: Dict):
     _CACHE[blog_id] = {"data": data, "ts": time.time()}
 
 
+# 진행 중인 측정 — blog_id 당 하나만 돈다.
+# 측정 한 번이 playwright 로 키워드 수십 개를 긁으므로(키워드당 최대 30 스크롤),
+# 요청마다 새로 띄우면 머신이 그걸로 끝난다. 2026-10-01 실측: 이 라우트가
+# 280초 안에 응답한 적이 없고, 포기한 요청이 서버에서 계속 돌아 /health 가 14초였다.
+_INFLIGHT: Dict[str, "asyncio.Task"] = {}
+
+
+def peek_cached_ceiling(blog_id: str) -> Optional[Dict]:
+    """측정하지 않고 캐시만 본다 (HTTP 핸들러가 블로킹 없이 응답하려고 쓴다)."""
+    return _cache_get(blog_id)
+
+
+def ceiling_is_measuring(blog_id: str) -> bool:
+    t = _INFLIGHT.get(blog_id)
+    return bool(t and not t.done())
+
+
+def start_ceiling_measurement(blog_id: str, *, max_keywords: int = None) -> bool:
+    """백그라운드 측정을 시작한다. 이미 돌고 있으면 False.
+
+    요청-응답 주기 밖으로 빼는 것이 핵심이다. 클라이언트가 끊어도 측정은 이어지고,
+    다음 요청은 캐시에서 즉시 답을 받는다.
+    """
+    if ceiling_is_measuring(blog_id):
+        return False
+    kw = MAX_KEYWORDS if max_keywords is None else max_keywords
+
+    async def _run():
+        try:
+            await measure_exposure_ceiling(blog_id, use_cache=False, max_keywords=kw)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning(f"[ceiling] background measure failed for {blog_id}: {e}")
+        finally:
+            _INFLIGHT.pop(blog_id, None)
+
+    _INFLIGHT[blog_id] = asyncio.create_task(_run())
+    return True
+
+
 async def _fetch_volumes(keywords: List[str]) -> Dict[str, int]:
     """검색광고 /keywordstool 로 키워드별 월 검색량(PC+모바일) 조회.
 

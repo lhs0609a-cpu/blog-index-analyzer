@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { TrendingUp, TrendingDown, Heart, MessageCircle, Eye, Sparkles, Plus, Search, Brain, Target, RefreshCw, Trash2, Zap, BarChart3, Wallet, Globe, HelpCircle, MoreHorizontal, ChevronDown , BookOpen, Star, Users} from 'lucide-react'
+import { TrendingUp, TrendingDown, Heart, MessageCircle, Eye, Sparkles, Plus, Search, Brain, Target, RefreshCw, Trash2, Zap, BarChart3, Wallet, Globe, HelpCircle, MoreHorizontal, ChevronDown , BookOpen, Star, Users, Bell} from 'lucide-react'
 import Link from 'next/link'
 import { getUserBlogs, deleteBlogFromList } from '@/lib/api/blog'
 import { refreshBlogAnalysis } from '@/lib/api/userBlogs'
@@ -125,6 +125,7 @@ function DropdownMenu({ user }: DropdownMenuProps) {
 
   const menuItems = [
     { href: '/keyword-search', icon: Search, label: '키워드 검색', color: 'text-[#0064FF]' },
+    { href: '/dashboard/post-watch', icon: Bell, label: '새 글 감시', color: 'text-[#0064FF]' },
     { href: '/dashboard/rank-tracker', icon: Target, label: '순위 추적', color: 'text-[#0064FF]' },
     ...(user?.is_admin ? [
       { href: '/dashboard/learning', icon: Brain, label: 'AI 학습 엔진', color: 'text-green-600' },
@@ -678,6 +679,36 @@ export default function Dashboard() {
                   <span className="font-medium text-sm">노출 로직 파악</span>
                 </div>
                 <p className="text-xs text-gray-500">전략 수립을 위한 분석</p>
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          {/* 새 글 감시 — 순위 추적보다 위에 둔다.
+              순위 추적은 키워드를 사람이 등록해야 해서 운영 6개월간 등록 0건이었다.
+              감시는 블로그 ID 하나로 끝나고, 글을 쓸 때마다 다시 볼 이유가 된다. */}
+          <CollapsibleSection
+            title="새 글 감시"
+            subtitle="새 글이 검색에 실제로 나오는지 대신 확인합니다"
+            icon={<Bell className="w-5 h-5 text-white gi3d" />}
+            iconBgColor="bg-gradient-to-r from-[#0064FF] to-[#3182F6]"
+            actionButton={
+              <Link href="/dashboard/post-watch" className="px-4 py-1.5 rounded-full bg-[#0064FF] text-white text-sm font-medium hover:bg-[#0050CC] transition-colors">
+                열기
+              </Link>
+            }
+          >
+            <div className="grid md:grid-cols-3 gap-3">
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="text-sm font-medium text-gray-900 mb-1">설정은 블로그 ID 하나</div>
+                <p className="text-xs text-gray-500">키워드를 따로 등록하지 않습니다</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="text-sm font-medium text-gray-900 mb-1">게시 후 24·72시간 확인</div>
+                <p className="text-xs text-gray-500">제목을 그대로 검색해 관측합니다</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="text-sm font-medium text-gray-900 mb-1">못 찾으면 ‘지연’</div>
+                <p className="text-xs text-gray-500">누락으로 단정하지 않습니다</p>
               </div>
             </div>
           </CollapsibleSection>

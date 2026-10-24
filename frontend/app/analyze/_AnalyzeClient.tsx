@@ -27,8 +27,12 @@ import UpgradeModal from '@/components/UpgradeModal'
 import TrialExpiryBanner from '@/components/TrialExpiryBanner'
 import { AnimatedScore, AnimatedLevel, CircularProgress } from '@/components/AnimatedScore'
 import ShareResult from '@/components/ShareResult'
+import GradeCardActions from '@/components/GradeCardActions'
 import BlogIndexHistoryChart from '@/components/BlogIndexHistoryChart'
 import KeywordVerdictWidget from '@/components/KeywordVerdictWidget'
+import PostWatchToggle from '@/components/PostWatchToggle'
+import SelectionOutlookCard from '@/components/SelectionOutlookCard'
+import AiCitationCard from '@/components/AiCitationCard'
 import { getLevelGrade, getGradeBadgeStyle, getLevelsToNextGrade, getPointsToNextLevel } from '@/lib/utils/levelGrade'
 import TermTooltip from '@/components/TermTooltip'
 
@@ -366,6 +370,13 @@ function IndexVerificationCard({ blogId }: { blogId: string }) {
               )}
             </div>
           )}
+          {/* "그래서 체험단에 뽑히냐" — 측정이 끝난 바로 그 자리에서 답한다.
+              추가 측정 비용은 없다(같은 결과를 서버가 재해석한 값). */}
+          {data.selection && (
+            <div className="mt-4">
+              <SelectionOutlookCard data={data.selection} />
+            </div>
+          )}
         </>
       )}
 
@@ -383,12 +394,34 @@ function ExposureCeilingCard({ blogId }: { blogId: string }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // 서버는 더 이상 요청 안에서 측정하지 않는다.
+  // 캐시가 없으면 백그라운드 측정을 띄우고 status:'measuring' 을 즉시 돌려준다
+  // (측정 한 번이 키워드 수십 개를 실제로 검색하는 작업이라 수 분 걸린다 —
+  //  예전에는 그 시간을 요청이 그대로 물고 있다가 280초를 넘겨도 안 끝났다).
+  // 그래서 여기서 폴링한다.
   const measure = async () => {
     setLoading(true); setError(null)
+    const deadline = Date.now() + 6 * 60 * 1000
     try {
-      const res = await getExposureCeiling(blogId)
-      setData(res)
-      if (!res.ok) setError(res.error === 'no_posts_via_rss' ? '글을 찾을 수 없어 측정할 수 없습니다.' : '상위노출 실적이 부족해 천장을 측정하지 못했습니다.')
+      for (;;) {
+        const res = await getExposureCeiling(blogId)
+        if (res.status !== 'measuring') {
+          setData(res)
+          if (!res.ok) {
+            setError(
+              res.error === 'no_posts_via_rss'
+                ? '글을 찾을 수 없어 측정할 수 없습니다.'
+                : '상위노출 실적이 부족해 천장을 측정하지 못했습니다.'
+            )
+          }
+          return
+        }
+        if (Date.now() > deadline) {
+          setError('측정이 아직 끝나지 않았습니다. 잠시 후 다시 시도하세요.')
+          return
+        }
+        await new Promise((r) => setTimeout(r, (res.retry_after_seconds ?? 30) * 1000))
+      }
     } catch {
       setError('측정 중 오류가 발생했습니다. 잠시 후 다시 시도하세요.')
     } finally {
@@ -1215,7 +1248,7 @@ function DetailedMetricsSection({ result, isFreeUser }: { result: any; isFreeUse
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black/50 flex items-start sm:items-center justify-center z-50 p-4 overflow-y-auto"
             onClick={() => setShowUpgradeModal(false)}
           >
             <motion.div
@@ -1772,6 +1805,13 @@ export default function AnalyzePage() {
                 exit={{ opacity: 0, y: -20 }}
                 className="space-y-6"
               >
+                {/* 부분 측정 — 본문을 못 읽어 나머지 지표로 낸 추정 등급 */}
+                {result.index.level_source === 'estimated' && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    <strong>추정 등급</strong> · {result.index.unmeasurable_reason || '본문을 끝까지 읽지 못해 나머지 지표로 추정한 등급입니다. 잠시 후 다시 분석하면 정확한 등급이 나옵니다.'}
+                  </div>
+                )}
+
                 {/* Score Card */}
                 <div className="glass-3d p-8 relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-64 h-64 bg-[#0064FF]/10 rounded-full blur-3xl" />
@@ -1794,6 +1834,14 @@ export default function AnalyzePage() {
                           neighbors: result.stats.neighbor_count
                         }}
                       />
+                      {/* 등급 증명 카드 — 체험단 지원용 공유 (저장된 결과만 읽는 공개 카드) */}
+                      <div className="mt-3">
+                        <GradeCardActions
+                          blogId={result.blog.blog_id}
+                          level={result.index.level}
+                          estimated={result.index.level_source === 'estimated'}
+                        />
+                      </div>
                     </div>
 
                     <motion.div
@@ -1965,6 +2013,21 @@ export default function AnalyzePage() {
                   "아코디언 안에 묻혀 있어 사실상 아무도 못 쓰던 기능".
                 */}
                 <IndexVerificationCard blogId={result.blog.blog_id} />
+
+                {/*
+                  감시 켜기 — 색인 검증 **바로 다음** 자리다.
+                  방금 "이 글이 검색에 나오는지"를 본 사람에게 "다음 글도 대신
+                  봐줄까요"를 묻는 것이고, 이 제품에서 유일하게 매주 다시 쓸
+                  이유다(회원 72%가 하루만 쓰고 떠난다). 기존 순위 추적은
+                  키워드를 사람이 등록해야 해서 6개월간 등록 0건이었다 —
+                  그래서 이 카드는 블로그 ID 하나로 끝난다.
+                */}
+                <PostWatchToggle blogId={result.blog.blog_id} />
+
+                {/* AI 답변 인용 점검 — 2026년 네이버가 블로그를 'AI가 인용할 답변
+                    단위'로 재정의했다. 거기 인용되지 않으면 순위가 좋아도 먼저
+                    읽히지 않는데, 지금 이걸 알려주는 도구가 없다. */}
+                <AiCitationCard blogId={result.blog.blog_id} />
 
                 {/* 지수 변화 추이 — "언제, 어떻게 올랐나"는 현재 점수만큼 중요하다 */}
                 <BlogIndexHistoryChart blogId={result.blog.blog_id} />

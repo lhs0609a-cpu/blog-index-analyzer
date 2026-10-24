@@ -15,6 +15,9 @@
 측정 자체는 blog_index_verifier 를 그대로 재사용한다(글 10개 기준 약 6초).
 """
 import logging
+import math
+import re
+from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -33,6 +36,89 @@ LATENCY_WARN_HOURS = 48
 # 제목을 정확히 검색했는데 이 순위 밖이면 이상 신호.
 # (자기 글 제목 검색은 보통 1위다)
 RANK_WARN = 5
+
+# 발행 후 이 시간 안에 안 잡힌 글은 '누락'이 아니라 '대기'다. 판정에서 뺀다 —
+# 방금 올린 글 하나가 색인률을 깎아 '관찰 필요'로 떨어뜨리던 것.
+PENDING_HOURS = 24
+# 이 시간까지는 '지연'으로 본다. 넘기면 누락으로 판정한다(블로거 경험칙: 72시간).
+DELAYED_HOURS = 72
+
+# 제목 도배 신호 — 네이버가 금칙어를 공개하지 않으므로 '의심'으로만 쓴다.
+_DECOR = re.compile(r"[★☆♥♡♪◆◇■□▶▷●○※→←↑↓✔✅🔥💯❤️]|!{2,}|\?{2,}")
+
+
+def _norm_title(t: str) -> str:
+    return re.sub(r"[^0-9A-Za-z가-힣]", "", t or "").lower()
+
+
+def _title_causes(title: str, others: List[str]) -> List[str]:
+    """제목만 보고 짚을 수 있는 원인 후보(관측 가능한 것만)."""
+    causes: List[str] = []
+    me = _norm_title(title)
+    for o in others:
+        on = _norm_title(o)
+        if me and on and me != on and SequenceMatcher(None, me, on).ratio() >= 0.85:
+            causes.append(f"내 다른 글 「{o[:30]}」과 제목이 거의 같습니다 — 같은 블로그 글끼리 겹치면 하나만 노출되는 경우가 많습니다.")
+            break
+        if me and me == on:
+            causes.append(f"내 다른 글과 제목이 똑같습니다 — 같은 제목은 하나만 노출되는 경우가 많습니다.")
+            break
+    words = re.findall(r"[가-힣A-Za-z0-9]{2,}", title or "")
+    for w in set(words):
+        if words.count(w) >= 3:
+            causes.append(f"제목에 '{w}' 단어가 {words.count(w)}번 반복됩니다 — 키워드 반복은 도배로 보일 수 있습니다.")
+            break
+    if _DECOR.search(title or ""):
+        causes.append("제목에 장식 기호나 느낌표·물음표 반복이 있습니다 — 광고성 글로 보일 수 있습니다.")
+    return causes
+
+
+def _post_verdict(p: Dict[str, Any], others: List[str]) -> Dict[str, Any]:
+    """글 한 개의 상태와 처방. 상태: ok / buried / pending / delayed / missing"""
+    indexed = bool(p.get("indexed_blog_tab") or p.get("indexed_view_tab"))
+    rank = p.get("blog_tab_rank")
+    age = p.get("age_hours")
+    title = p.get("title") or ""
+    out: Dict[str, Any] = {"recheck_after_hours": None, "causes": [], "advice": []}
+
+    if indexed and (rank or 0) <= RANK_WARN:
+        out.update(status="ok", status_label="노출")
+        return out
+    if indexed:
+        out.update(status="buried", status_label="밀림")
+        out["causes"] = _title_causes(title, others)
+        out["advice"] = [
+            f"제목을 그대로 검색했는데 {rank}위입니다. 자기 글 제목 검색은 보통 1위라 확인이 필요합니다.",
+            "같은 주제의 내 다른 글과 제목·도입부가 겹치지 않게 구분해 보세요.",
+        ]
+        return out
+    if age is not None and age < PENDING_HOURS:
+        wait = max(1, math.ceil(PENDING_HOURS - age))
+        out.update(status="pending", status_label="대기", recheck_after_hours=wait)
+        out["advice"] = [
+            f"발행 {age:.0f}시간 된 글입니다. 보통 수 시간~하루 안에 검색에 잡히므로 아직 누락으로 보지 않습니다.",
+            f"약 {wait}시간 뒤 다시 확인해 보세요.",
+        ]
+        return out
+    if age is not None and age < DELAYED_HOURS:
+        wait = max(1, math.ceil(DELAYED_HOURS - age))
+        out.update(status="delayed", status_label="지연", recheck_after_hours=wait)
+        out["causes"] = _title_causes(title, others)
+        out["advice"] = [
+            f"발행 {age:.0f}시간이 지났지만 아직 안 잡힙니다. 72시간까지는 늦게 잡히는 경우가 있습니다.",
+            f"약 {wait}시간 뒤에도 안 잡히면 누락으로 보고 수정을 검토하세요. 그 전에 지우거나 다시 올리지 마세요.",
+        ]
+        return out
+
+    out.update(status="missing", status_label="누락")
+    out["causes"] = _title_causes(title, others)
+    out["advice"] = [
+        "위 원인 후보가 있다면 먼저 고치세요.",
+        "본문을 실제로 손본 뒤(문단 추가·이미지 교체·도입부 재작성) 수정 발행하는 방법이 블로거들 사이에서 쓰입니다. "
+        "네이버 공식 방법은 아니며 효과를 보장하지 않습니다.",
+        "같은 내용을 지우고 그대로 다시 올리면 유사문서로 또 누락될 수 있습니다.",
+    ]
+    return out
 
 
 def _grade(rate: float):
@@ -61,9 +147,17 @@ def diagnose(verify_result: Dict[str, Any]) -> Dict[str, Any]:
             ),
         }
 
+    titles = [p.get("title") or "" for p in posts]
+    verdicts = [
+        _post_verdict(p, [t for j, t in enumerate(titles) if j != i])
+        for i, p in enumerate(posts)
+    ]
     indexed = [p for p in posts if p.get("indexed_blog_tab") or p.get("indexed_view_tab")]
-    missing = [p for p in posts if not (p.get("indexed_blog_tab") or p.get("indexed_view_tab"))]
-    rate = len(indexed) / checked
+    # 방금 올린 글(대기)은 판정에서 뺀다. 지연·누락만 '안 잡힌 글'로 센다.
+    pending = [p for p, v in zip(posts, verdicts) if v["status"] == "pending"]
+    missing = [p for p, v in zip(posts, verdicts) if v["status"] in ("missing", "delayed")]
+    judged = checked - len(pending)
+    rate = len(indexed) / judged if judged > 0 else len(indexed) / checked
 
     # 제목 정확검색인데 순위가 낮은 글 — 색인은 됐지만 밀린 경우
     buried = [
@@ -83,9 +177,13 @@ def diagnose(verify_result: Dict[str, Any]) -> Dict[str, Any]:
 
     # 진단 근거를 사람이 읽을 수 있게 — "왜 그렇게 판정했는지"를 숨기지 않는다
     reasons: List[str] = [
-        f"최근 글 {checked}개 중 {len(indexed)}개가 검색에 노출됩니다 "
+        f"최근 글 {judged if judged > 0 else checked}개 중 {len(indexed)}개가 검색에 노출됩니다 "
         f"(색인률 {rate * 100:.0f}%)."
     ]
+    if pending:
+        reasons.append(
+            f"발행 {PENDING_HOURS}시간이 안 된 글 {len(pending)}개는 아직 색인 전일 수 있어 판정에서 뺐습니다."
+        )
     if missing:
         reasons.append(
             f"{len(missing)}개는 제목을 그대로 검색해도 나오지 않습니다. "
@@ -128,6 +226,7 @@ def diagnose(verify_result: Dict[str, Any]) -> Dict[str, Any]:
         "checked_posts": checked,
         "indexed_posts": len(indexed),
         "missing_posts": len(missing),
+        "pending_posts": len(pending),
         "buried_posts": len(buried),
         "indexing_latency_score": latency,
         "latency_warning": bool(
@@ -145,9 +244,16 @@ def diagnose(verify_result: Dict[str, Any]) -> Dict[str, Any]:
                 "indexed": bool(p.get("indexed_blog_tab") or p.get("indexed_view_tab")),
                 "blog_tab_rank": p.get("blog_tab_rank"),
                 "view_tab_rank": p.get("view_tab_rank"),
+                "age_hours": p.get("age_hours"),
+                # 글별 상태와 처방 — 누락을 '표시'만 하고 끝내지 않는다
+                **v,
             }
-            for p in posts
+            for p, v in zip(posts, verdicts)
         ],
+        "prescription_note": (
+            "네이버는 누락 기준을 공개하지 않습니다. 원인 후보는 제목에서 관측되는 신호이고, "
+            "처방은 블로거들이 쓰는 경험칙입니다."
+        ),
         # 참고용 — 기존 레벨 판정도 같이 준다
         "level_label": verify_result.get("detailed_label"),
         "level_score": verify_result.get("weighted_score"),

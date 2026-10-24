@@ -30,7 +30,9 @@ class VerdictRequest(BaseModel):
 
 
 def _clean(request: VerdictRequest):
-    blog_id = (request.blog_id or "").strip().replace("blog.naver.com/", "").strip("/")
+    from services.keyword_verdict import normalize_blog_id
+
+    blog_id = normalize_blog_id(request.blog_id)
     keyword = (request.keyword or "").strip()
     if not blog_id or not keyword:
         raise HTTPException(status_code=400, detail="blog_id와 keyword를 입력하세요")
@@ -146,7 +148,7 @@ async def debug_serp(keyword: str, ua: Optional[str] = None):
     """
     from urllib.parse import quote
     from routers.blogs import get_http_client, get_random_headers
-    from services.keyword_verdict import _parse_serp_html
+    from services.keyword_verdict import _parse_serp_html, classify_serp_html
 
     encoded = quote(keyword.strip())
     client = await get_http_client()
@@ -174,7 +176,10 @@ async def debug_serp(keyword: str, ua: Optional[str] = None):
                 "bytes": len(html),
                 "has_list_container": "fds-ugc-single-intention-item-list" in html,
                 "has_blog_link": "blog.naver.com/" in html,
+                # looks_blocked 는 캡차 문구만 본다 — Fly 에서 오는 축약 응답은 못 잡는다.
+                # verdict 는 classify_serp_html 판정(ok/blocked/degraded/empty)을 쓴다.
                 "looks_blocked": any(t in html for t in ("비정상적인 검색", "captcha", "자동입력 방지")),
+                "verdict": classify_serp_html(html),
                 "parse_mode": mode,
                 "rows": len(rows),
                 "top3": [r["blog_id"] for r in rows[:3]],

@@ -267,8 +267,12 @@ async def lifespan(app: FastAPI):
     # 새 글 누락 감시 — DB 는 모든 프로세스(API 가 읽는다), 워커는 worker 전용.
     # POST_WATCH=1 일 때만 돈다 — 배포만으로는 아무것도 바뀌지 않는다.
     try:
-        from database.post_watch_db import init_post_watch_db
+        from database.post_watch_db import init_post_watch_db, reap_stale_audits
         init_post_watch_db()
+        # 전수 감사는 API 프로세스의 asyncio 태스크로 돈다. 재시작하면 그 태스크가
+        # 사라지고 행만 'running' 으로 남아 진행률 막대가 영원히 돌고, 동시 실행
+        # 제한에도 걸려 기능이 막힌다. 기동 때 한 번 닫아 준다.
+        reap_stale_audits()
     except Exception as e:
         logger.warning(f"⚠️ Post watch DB init failed: {e}")
     if RUN_SCHEDULERS:
@@ -332,6 +336,20 @@ async def lifespan(app: FastAPI):
             logger.info("✅ Ceiling backtest watchdog started (every 5 min)")
         except Exception as e:
             logger.warning(f"⚠️ Ceiling backtest resume failed: {e}")
+
+        # SEO 측정 자체 루프 — GitHub 크론이 매시로 설정돼 있는데 실제로는
+        # 3~6시간 간격으로만 뜬다(2026-09-27 실측). 그래서 큐에 26만 개를 쌓고도
+        # 발행이 하루 17~85개였다. 기본은 꺼져 있고 SEO_MEASURE_LOOP=1 로 켠다.
+        try:
+            from services.seo_page_builder import MEASURE_LOOP_ENABLED, seo_measure_loop
+
+            # SEO_LOOP_DEDICATED=1 이면 전용 프로세스(seo_measure_worker.py)가 맡는다.
+            # 여기서 또 띄우면 같은 큐를 둘이 claim 한다 — KWV_DEDICATED 와 같은 규약.
+            if MEASURE_LOOP_ENABLED and os.getenv("SEO_LOOP_DEDICATED") != "1":
+                asyncio.create_task(seo_measure_loop())
+                logger.info("✅ SEO 자체 측정 루프 started")
+        except Exception as e:
+            logger.warning(f"⚠️ SEO 측정 루프 기동 실패: {e}")
 
         # seed-explode 큐 워치독 — app 이 남긴 실행요청을 worker 가 집어 실행한다.
         # HTTP 오프로드는 8s ReadTimeout 으로 신뢰 불가라 이게 유일한 실행 트리거다.
@@ -560,6 +578,160 @@ class SlowRequestLogMiddleware(BaseHTTPMiddleware):
         return response
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 요청 데드라인
+#
+# 2026-10-01 실측: `GET /api/blue-ocean/recommend` 한 건이 `[slow] 1202000ms` —
+# 클라이언트가 300초에 끊고 간 뒤에도 서버는 **20분을 더 돌았다**. 그 20분 동안
+# shared-cpu-2x 한 대의 이벤트루프가 막혀 /health 가 29~76초가 됐고, 프론트의
+# SEO 라우트(백엔드 예산 6초)가 줄줄이 500 을 냈다. 동시 연결 4개로 재현된다.
+#
+# 핵심은 '느린 요청을 기록한다'가 아니라 **포기한 일을 실제로 멈춘다**는 것이다.
+# BaseHTTPMiddleware 에서 asyncio.wait_for 로 감싸면 타임아웃 시 하위 태스크에
+# CancelledError 가 전파되어 체인 전체가 정리된다 — 로깅만으로는 아무것도 안 멈춘다.
+#
+# 경로별 상한을 둔다: 측정/스크래핑 라우트는 본래 오래 걸리므로 넉넉히,
+# 나머지는 짧게. 0 이면 끄는 것(비상 탈출구).
+REQUEST_TIMEOUT_S = float(os.getenv("REQUEST_TIMEOUT_S", "60"))
+# 네이버를 긁어야 끝나는 라우트 — 정상적으로도 수십 초가 걸린다.
+SLOW_PATH_TIMEOUT_S = float(os.getenv("SLOW_PATH_TIMEOUT_S", "180"))
+SLOW_PATH_PREFIXES = (
+    "/api/blogs/analyze",
+    # 2026-10-06 실측: 홈의 '키워드 검색'이 바로 이 경로다. 콜드 호출이 45~61초라
+    # 일반 데드라인(60s)에 걸려 사용자가 60초를 기다린 끝에 504 를 받았다.
+    # 데드라인의 목적은 폭주를 멈추는 것이고, 정상적으로 느린 측정을 끊는 게 아니다.
+    "/api/blogs/search-keyword",
+    "/api/blogs/related-keywords",
+    "/api/blogs/analyze-post",
+    "/api/blogs/draft-check",
+    "/api/blogs/judge-keyword",
+    "/api/blogs/verify-index",
+    "/api/blogs/search-health",
+    "/api/blogs/serp-difficulty",
+    "/api/blogs/debug/",
+    "/api/blue-ocean/",
+    "/api/winner-keywords/",
+    "/api/top-posts/analyze",
+    "/api/keyword-analysis/",
+    "/api/keyword-verdict/",
+    "/api/comprehensive/",
+    "/api/competitive-analysis/",
+    "/api/content-lifespan/",
+    "/api/seo/",
+    "/api/naver-ad/",
+    "/api/rank-tracker/",
+    "/api/batch-learning/",
+    "/api/learning/",
+    "/api/ad-snapshot/",
+    "/api/post-watch/",
+)
+# 데드라인을 걸면 안 되는 것 — 운영자/크론이 돌리는 장시간 작업.
+# 이걸 안 빼두면 데드라인이 기존 운영 도구를 끊는다. 예: 천장 백테스트는
+# fly.toml 의 BACKTEST_SCRAPE_TIMEOUT=420 이 전제다(키워드당 2분 이상).
+# 사용자 트래픽이 아니라 운영자가 의도적으로 돌리는 것이므로 상한을 두지 않는다.
+LONG_JOB_PREFIXES = (
+    "/api/blogs/debug/",                  # 천장 백테스트·순위 정확도 측정
+    "/api/naver-ad/keyword-pool/admin/",  # 풀 재구축 등 대량 작업
+    "/api/naver-ad/keyword-pool/cron/",
+    "/api/naver-ad/keywords/scale-register",
+    "/api/naver-ad/keywords/volume-filter",
+    "/api/seo/precompute",
+    "/api/seo/enrich-volumes",
+    "/api/seo/recompute-difficulty",
+    "/api/batch-learning/",
+    "/api/backup/",
+    "/api/supabase/",
+    "/api/rank-tracker/admin/",
+    "/api/post-watch/admin/",
+    # 매일 GitHub cron 이 부르는 예측 채점. 예측마다 블로그탭을 브라우저로 조회해 50건이면
+    # 수 분이 걸린다 — 60초 상한에 걸려 2026-10-10 부터 매일 504 로 한 건도 채점되지 않았다.
+    "/api/blogs/predictions/verify-pending",
+)
+DEADLINE_EXEMPT_PREFIXES = LONG_JOB_PREFIXES + tuple(
+    x.strip() for x in (os.getenv("DEADLINE_EXEMPT_PREFIXES") or "").split(",") if x.strip()
+)
+
+
+# /api/blogs/{blog_id}/... 형태라 접두어로는 못 잡는다. 전부 analyze_blog 또는
+# 네이버 스크래핑을 거치는 측정 경로다 — 접미어로 잡는다.
+SLOW_PATH_SUFFIXES = (
+    "/index",
+    "/index-history",
+    "/score-breakdown",
+    "/diagnosis",
+    "/exposure-ceiling",
+    "/post-exposure",
+    "/posting-history",
+)
+
+
+def _deadline_for(path: str) -> float:
+    # 면제가 먼저다 — SLOW_PATH_PREFIXES 와 겹치는 경로가 있다
+    # (예: /api/blogs/debug/ 는 /api/blogs/ 하위이고, /api/seo/precompute 도 /api/seo/ 하위다).
+    if any(path.startswith(p) for p in DEADLINE_EXEMPT_PREFIXES):
+        return 0.0
+    if any(path.startswith(p) for p in SLOW_PATH_PREFIXES):
+        return SLOW_PATH_TIMEOUT_S
+    if path.startswith("/api/blogs/") and path.endswith(SLOW_PATH_SUFFIXES):
+        return SLOW_PATH_TIMEOUT_S
+    return REQUEST_TIMEOUT_S
+
+
+class RequestDeadlineMiddleware:
+    """순수 ASGI 미들웨어.
+
+    ⚠️ BaseHTTPMiddleware 로 구현하면 안 된다. starlette 0.27(= fastapi 0.104.1 이
+    고정하는 버전)에서 `asyncio.wait_for(call_next(request))` 는 **교착한다** —
+    call_next 가 anyio task group 위에 서 있어서, 밖에서 취소하면 그룹의 __aexit__ 가
+    자식 태스크를 기다리며 멈춘다. 로컬 실측에서 정상 요청조차 응답이 돌아오지 않았다.
+    ASGI 레벨에서 감싸면 task group 이 끼지 않아 취소가 그대로 전파된다.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            return await self.app(scope, receive, send)
+
+        limit = _deadline_for(scope.get("path", ""))
+        if limit <= 0:
+            return await self.app(scope, receive, send)
+
+        started = False
+
+        async def send_wrapper(message):
+            nonlocal started
+            if message.get("type") == "http.response.start":
+                started = True
+            await send(message)
+
+        try:
+            await asyncio.wait_for(self.app(scope, receive, send_wrapper), timeout=limit)
+        except asyncio.TimeoutError:
+            path = scope.get("path", "")
+            qs = (scope.get("query_string") or b"").decode("latin-1")
+            logger.error(
+                f"[deadline] {limit:.0f}s 초과로 취소 {scope.get('method')} {path}"
+                f"{('?' + qs) if qs else ''} role={PROCESS_GROUP}"
+            )
+            if started:
+                # 헤더가 이미 나갔으면 상태코드를 바꿀 수 없다. 여기서 끝낸다.
+                return
+            response = JSONResponse(
+                status_code=504,
+                content={
+                    "detail": (
+                        "처리 시간이 한도를 넘어 중단했습니다. "
+                        "범위를 좁혀 다시 시도해 주세요."
+                    ),
+                    "error_code": "REQUEST_DEADLINE_EXCEEDED",
+                    "limit_seconds": limit,
+                },
+            )
+            await response(scope, receive, send)
+
+
 # Security Headers Middleware
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """보안 응답 헤더 추가"""
@@ -699,6 +871,11 @@ class WorkerOffloadMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(WorkerOffloadMiddleware)
 
+# ⚠️ 가장 마지막에 add = 가장 바깥 레이어.
+# 데드라인은 모든 미들웨어(워커 위임·레이트리밋 포함)를 감싸야 의미가 있다.
+# 이 줄 아래에 add_middleware 를 추가하면 그 미들웨어는 데드라인 밖으로 나간다.
+app.add_middleware(RequestDeadlineMiddleware)
+
 
 # CORS 헤더 헬퍼 함수 (에러 응답용 - 미들웨어가 처리하지 못하는 경우)
 def get_cors_headers(request: Request = None):
@@ -831,7 +1008,9 @@ from routers import winner_keywords
 from routers import profitable_keywords
 from routers import competitive_analysis
 from routers import post_watch
+from routers import ai_citation as ai_citation_router
 from routers import growth
+from routers import blog_card
 
 app.include_router(auth.router, prefix="/api/auth", tags=["인증"])
 app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
@@ -867,8 +1046,11 @@ app.include_router(site_analytics.router)
 app.include_router(ad_snapshot.router)
 # 새 글 누락 감시 — 1단계는 관리자 전용 (판정 정확도 검증 후 사용자에게 연다)
 app.include_router(post_watch.router)
+app.include_router(ai_citation_router.router)
 # 성장 진단 — 가입·결제 퍼널을 세계 SaaS 벤치마크와 대조한다. 관리자 전용
 app.include_router(growth.router)
+# 블로그 등급 증명 카드 — 저장된 결과만 읽는 공개 요약 (/api/blog-card/{blog_id})
+app.include_router(blog_card.router, prefix="/api/blog-card", tags=["등급카드"])
 
 
 if __name__ == "__main__":

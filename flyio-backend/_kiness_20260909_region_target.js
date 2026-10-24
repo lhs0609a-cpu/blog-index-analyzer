@@ -1,0 +1,20 @@
+const fs=require('fs'),path=require('path');const {req,pool}=require('./_sojam_naver');
+const D=path.join(__dirname,'reports','kiness_bidreset_20260909');
+const rows=JSON.parse(fs.readFileSync(path.join(D,'region_clinic_measurable.json'),'utf8'));
+const gids=[...new Set(rows.map(r=>r.gid))];
+(async()=>{
+ const batches=[];for(let i=0;i<gids.length;i+=20)batches.push(gids.slice(i,i+20));
+ const out=await pool(batches,4,b=>req('GET','/ncc/targets?ownerIds='+encodeURIComponent(b.join(',')),null,441986,4));
+ if(out.some(x=>!Array.isArray(x)))throw Error('타게팅 조회 실패');
+ const t=out.flat();fs.writeFileSync(path.join(D,'region_targeting.json'),JSON.stringify(t));
+ const kinds={};for(const x of t)kinds[x.targetTp]=(kinds[x.targetTp]||0)+1;
+ console.log('그룹',gids.length,'| 타게팅 항목',t.length,JSON.stringify(kinds));
+ const region=t.filter(x=>/REGION|AREA|LOCATION/i.test(x.targetTp||''));
+ console.log('지역 타게팅 걸린 그룹',new Set(region.map(x=>x.ownerId)).size);
+ if(region.length)console.log(JSON.stringify(region.slice(0,3)));
+ const sched=t.filter(x=>/TIME|SCHEDULE/i.test(x.targetTp||''));
+ console.log('요일·시간 타게팅 그룹',new Set(sched.map(x=>x.ownerId)).size);
+ if(sched.length)console.log(JSON.stringify(sched[0]).slice(0,400));
+ const media=t.filter(x=>/MEDIA/i.test(x.targetTp||''));
+ console.log('매체 제한 그룹',new Set(media.map(x=>x.ownerId)).size);
+})().catch(e=>{console.error(e);process.exitCode=1;});

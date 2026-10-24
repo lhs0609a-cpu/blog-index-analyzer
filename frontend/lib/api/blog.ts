@@ -332,6 +332,32 @@ export type VerifyIndexSignalKey =
   | 'content_quality'
   | 'engagement'
 
+/**
+ * 체험단 선정 관점의 해석. 서버 services/campaign_selection.py 가 만든다.
+ *
+ * `advertiser_premium_krw` 는 **광고주가 이 구간 블로거 한 명을 고를 때 더 내는
+ * 금액**이고 블로거의 수입이 아니다. 화면에서 이 둘을 섞으면 거짓이 된다.
+ */
+export interface SelectionOutlook {
+  tier: '일반' | '준최' | '최적' | '최적+'
+  is_selection_candidate: boolean
+  is_optimized: boolean
+  advertiser_premium_krw: number
+  next_tier: string | null
+  points_to_next: number | null
+  best_moves: Array<{
+    signal: VerifyIndexSignalKey
+    label: string
+    score: number
+    weight: number
+    max_total_gain: number
+    move: string
+  }>
+  confidence: 'high' | 'medium' | 'low'
+  source: { name: string; url: string; checked_at: string }
+  caveat: string
+}
+
 export interface VerifyIndexResponse {
   ok: boolean
   blog_id: string
@@ -345,6 +371,7 @@ export interface VerifyIndexResponse {
   confidence: 'high' | 'medium' | 'low'
   method: string
   disclaimer: string | null
+  selection: SelectionOutlook | null
   cached: boolean
   error: string | null
 }
@@ -378,6 +405,11 @@ export interface ExposureCeilingResponse {
   disclaimer: string | null
   error: string | null
   cached?: boolean
+  /** 'measuring' 이면 백그라운드 측정 중 — 숫자가 아직 없다. */
+  status?: 'ready' | 'measuring'
+  measuring?: boolean
+  message?: string
+  retry_after_seconds?: number
 }
 
 export async function getExposureCeiling(
@@ -580,7 +612,12 @@ export interface KeywordFactsResponse {
   serp_source: 'http' | 'mobile' | null
   serp_parse_mode: 'list' | 'regex' | 'none' | null
   serp_cached: boolean
+  serp_measured_at: number | null
   serp_size: number
+  /** 읽어 낸 마지막 글 위치 — 미노출일 때 '상위 N위 밖'의 N */
+  serp_depth?: number
+  /** 계정 ID 를 입력해 서버가 실제 블로그 주소로 바꿨을 때 원래 입력값 */
+  input_blog_id?: string
   page1: SerpRow[]
   error: string | null
 }

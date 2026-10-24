@@ -1,0 +1,10 @@
+const fs=require('fs'),path=require('path');
+const D=path.join(__dirname,'reports','kiness_20260921');
+const out=JSON.parse(fs.readFileSync(path.join(D,'live_tiered.json')));
+const A=out.filter(x=>x.t[0]==='A');
+fs.writeFileSync(path.join(D,'need_vol.json'),JSON.stringify(A.map(x=>x.kw)));
+console.log('A등급(내원의도) 라이브 고유어',A.length,'/ 라이브',out.length);
+console.log(' 7일 노출 0 :',A.filter(x=>x.imp===0).length);
+console.log(' 7일 노출>0 :',A.filter(x=>x.imp>0).length);
+console.log(' 7일 비용>0 :',A.filter(x=>x.cost>0).length);
+const h={};for(const x of A)h[x.t]=(h[x.t]||0)+1;console.log(JSON.stringify(h));

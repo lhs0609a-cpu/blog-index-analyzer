@@ -19,11 +19,13 @@ interface BlogData {
   blog_name: string
   rank: number
   index: {
-    level: number
+    // 측정 실패·부분 측정이면 등급 판정이 보류돼 null 로 온다.
+    // 이 컴포넌트는 이미 `|| 0` 으로 받아내지만 타입이 그 사실을 숨기고 있었다.
+    level: number | null
     total_score: number
     score_breakdown: {
-      c_rank: number
-      dia: number
+      c_rank: number | null
+      dia: number | null
     }
   } | null
   stats: {
@@ -288,7 +290,11 @@ export default function CompetitorRadarChart({ competitors, myBlog, keyword }: C
                     <p className="text-sm text-green-700">
                       {(() => {
                         const myLevel = myBlog.index?.level || 0
-                        const avgLevel = topCompetitors.reduce((sum, c) => sum + (c.index?.level || 0), 0) / topCompetitors.length
+                        // 등급 보류(level=null)는 0 으로 세면 경쟁자 평균을 끌어내린다
+                        const leveled = topCompetitors.filter(c => c.index?.level != null)
+                        const avgLevel = leveled.length
+                          ? leveled.reduce((sum, c) => sum + (c.index!.level as number), 0) / leveled.length
+                          : 0
 
                         if (myLevel > avgLevel) {
                           return `블로그 레벨이 경쟁자 평균보다 ${(myLevel - avgLevel).toFixed(1)} 높습니다!`

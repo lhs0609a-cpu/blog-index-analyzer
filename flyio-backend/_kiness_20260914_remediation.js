@@ -1,0 +1,15 @@
+const fs=require('fs'),path=require('path');const {req,pool}=require('./_sojam_naver');const D=path.join(__dirname,'reports','kiness_20260914');
+const read=n=>JSON.parse(fs.readFileSync(path.join(D,n+'.json'),'utf8')),save=(n,v)=>fs.writeFileSync(path.join(D,n+'.json'),JSON.stringify(v,null,1));
+const call=async(m,p,b)=>{const r=await req(m,p,b,441986,3);if(r===undefined)throw Error('No response');return r;};
+(async()=>{const rows=read('delivery_plan'),obs=fs.readFileSync(path.join(D,'serp_before.jsonl'),'utf8').split('\n').filter(Boolean).map(JSON.parse),latest=new Map();for(const o of obs)latest.set(o.keyword+'|'+o.device,o);
+const missing=new Set([...latest.values()].filter(x=>x.status==='관측_미노출').map(x=>x.keyword));const selected=rows.filter(x=>missing.has(x.keyword)&&x.usable);const gaps=read('missing_pairs');
+const jobs=[];for(const device of ['PC','MOBILE']){jobs.push({device,type:'id',items:selected.map(x=>({key:x.id,position:1}))});jobs.push({device,type:'keyword',items:gaps.map(x=>({key:x.keyword,position:3}))});}
+const est=await pool(jobs,3,async j=>({...j,response:await call('POST','/estimate/average-position-bid/'+j.type,{device:j.device,items:j.items})}));if(est.some(x=>!Array.isArray(x.response?.estimate)))throw Error('est');save('remediation_estimates',est);
+const idEst=new Map(),kwEst=new Map();for(const b of est)for(const e of b.response.estimate){const m=b.type==='id'?idEst:kwEst,key=b.type==='id'?e.nccKeywordId:(e.keyword||e.key);const x=m.get(key)||{};x[b.device]=e.bid;m.set(key,x);}
+const changes=new Map();for(const r of rows.filter(x=>x.proposedBid>x.bid)){const shown=['PC','MOBILE'].every(d=>(latest.get(r.keyword+'|'+d)?.rank||999)<=5);if(!shown)changes.set(r.id,{...r,to:r.proposedBid,actionReason:'3위 예상입찰가 부족 보완; 실제 순위와 별개'});}
+for(const r of selected){const e=idEst.get(r.id)||{};const need=Math.ceil(Math.max((e.PC||0)*100/r.pcWeight,(e.MOBILE||0)*100/r.moWeight)*1.15/10)*10;
+// A bounded visibility recovery step. Preserve the 200,000 KRW daily budget.
+const cap=r.keyword==='부산성장클리닉'?70000:Math.max(r.bid,40000);const to=Math.min(cap,Math.max(need,Math.ceil(r.bid*1.25/10)*10));if(to>r.bid)changes.set(r.id,{...r,to,actionReason:'실제 검색화면 미노출: 1위 추정가 및 현재입찰 25% 상향 중 큰 값',pc1:e.PC,mo1:e.MOBILE,cap});}
+const creates=[];for(const gap of gaps){const counterpart=gap.region+'성장클리닉';const r=rows.find(x=>x.keyword===counterpart&&x.usable);if(!r)throw Error('No serving counterpart '+gap.keyword);const e=kwEst.get(gap.keyword)||{};const need=Math.ceil(Math.max((e.PC||0)*100/r.pcWeight,(e.MOBILE||0)*100/r.moWeight)*1.1/10)*10;creates.push({...gap,gid:r.gid,counterpart,bid:Math.min(30000,Math.max(700,need)),pc3:e.PC,mo3:e.MOBILE});}
+save('remediation_plan',{preparedAt:new Date().toISOString(),dailySearchBudget:200000,changes:[...changes.values()],creates,pausedNotChanged:rows.filter(x=>!x.usable),note:'전 키워드 노출 보장 아님. 실제 미노출 복구 시도 후 별도 재관측 필요.'});console.log(JSON.stringify({changes:[...changes.values()].map(x=>({keyword:x.keyword,from:x.bid,to:x.to})),creates}));
+})().catch(e=>{console.error(e);process.exitCode=1;});

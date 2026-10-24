@@ -56,13 +56,17 @@ logger = logging.getLogger(__name__)
 # ── 상수 ──────────────────────────────────────────────────────────
 PAGE1_CUTOFF = 10          # 1페이지 = 상위 10위
 SERP_LIMIT = 20            # 조회 범위 (2페이지) — 11~30위 색인 신호까지 본다
-SERP_TTL = 6 * 3600        # 공용 SERP 캐시 6시간
-# 경쟁자 동시 채점. 5 는 nice 19 워커에 얹혀 있을 때의 보수치였다. 전용 프로세스(nice 5)로
-# 옮긴 뒤로는 8 이 안전하다 — 대부분 네이버 응답 대기(I/O)라 CPU 가 아니라 봇탐지가 상한이다.
-SCORE_CONCURRENCY = int(os.environ.get("KWV_SCORE_CONCURRENCY", "8"))
-# 프로덕션 worker 는 nice 19 + 공유 2vCPU 라 로컬(4.3s)보다 훨씬 느리다. 20초로 잘랐더니
-# 10명 중 4명이 미채점으로 남아 confidence 가 medium 으로 떨어졌다(2026-08-13 실측).
-PER_BLOG_TIMEOUT = 32.0    # 경쟁자 1개 채점 상한
+SERP_TTL = 6 * 3600        # 공용 SERP 캐시 6시간 (즉답·표시용 상한)
+# 사용자가 판정을 **요청**했을 때 허용하는 SERP 나이. 6시간짜리를 그대로 쓰면 글을 막
+# 발행하고 다시 재보는 사람에게 발행 전 순위를 보여준다. 경쟁자 채점은 따로 캐시되므로
+# 비싼 건 SERP 1회 조회(브라우저 1페이지)뿐이다.
+SERP_FRESH_TTL = float(os.environ.get("KWV_SERP_FRESH_TTL", str(20 * 60)))
+SERP_PARSE_VERSION = "v2"
+SERP_CACHE_ROWS = 60       # 캐시에 싣는 행 상한 — 첫 렌더 전부(실측 블로그 27개/글 30개)
+# 공유 2 vCPU / 3GB에서 8개 동시 분석은 브라우저 메모리·CPU 경합을 만든다.
+# 판정의 필수 조건인 내 블로그를 먼저 시작하고 동시 분석을 3개로 제한한다.
+SCORE_CONCURRENCY = max(1, int(os.environ.get("KWV_SCORE_CONCURRENCY", "3")))
+PER_BLOG_TIMEOUT = 45.0    # 블로그 1개 채점 상한
 RETRY_MISSING = 6          # 1차에서 못 잰 경쟁자 재시도 상한 (캐시가 채워져 대부분 즉답)
 SERP_PAGE_TIMEOUT = 12.0
 # 브라우저 기동~파싱 전체 상한. 75초로는 worker(nice 19 + 공유 2vCPU + 크론 경합)에서
@@ -105,23 +109,26 @@ _GENERIC_PARTS = {
 # ══════════════════════════════════════════════════════════════════
 
 def _cache_key(keyword: str) -> str:
-    return hashlib.md5(keyword.strip().lower().encode("utf-8")).hexdigest()[:16]
+    # 접두 버전은 rank 의미가 바뀔 때 올린다(v2: 블로그 순번 → 글 위치). 옛 캐시를 읽으면
+    # 같은 키워드에 순위가 두 기준으로 섞여 나간다.
+    raw = f"{SERP_PARSE_VERSION}:{keyword.strip().lower()}"
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
 
 
 def _serp_path(keyword: str) -> str:
     return os.path.join(_SERP_DIR, f"{_cache_key(keyword)}.json")
 
 
-def _serp_cache_get(keyword: str) -> Optional[Dict]:
+def _serp_cache_get(keyword: str, max_age: float = SERP_TTL) -> Optional[Dict]:
     k = _cache_key(keyword)
     now = time.time()
     hit = _MEM_SERP.get(k)
-    if hit and now - hit.get("measured_at", 0) < SERP_TTL:
+    if hit and hit.get("parse_mode") == "list" and now - hit.get("measured_at", 0) < max_age:
         return hit
     try:
         with open(_serp_path(keyword), "r", encoding="utf-8") as f:
             data = json.load(f)
-        if now - float(data.get("measured_at") or 0) < SERP_TTL:
+        if data.get("parse_mode") == "list" and now - float(data.get("measured_at") or 0) < max_age:
             _MEM_SERP[k] = data
             return data
     except Exception:
@@ -161,15 +168,80 @@ _LIST_SELECTORS = (
 _TITLE_NOISE = re.compile(r"새\s*창\s*열림\s*$")
 
 
+# 정상 블로그탭 응답의 최소 크기. 2026-10-01 실측:
+#   · 집(한국 가정회선)에서 받은 PC 블로그탭 = 512KB / 포스트 링크 294개
+#   · Fly(nrt 데이터센터)에서 받은 **같은 URL** = 78KB / 포스트 링크 0개
+# 둘 다 HTTP 200 이고 캡차 문구도 없다. 즉 네이버는 차단 페이지를 주는 게 아니라
+# **결과가 빠진 축약 페이지**를 준다. 기존 looks_blocked(캡차 문구 검사)로는 못 잡는다.
+_SERP_MIN_BYTES = 120_000
+
+
+def classify_serp_html(html: str) -> str:
+    """받은 HTML 이 쓸 수 있는 블로그탭 응답인지 판정.
+
+    반환값:
+      "ok"       — 포스트 링크가 들어 있다(파싱 가능)
+      "blocked"  — 캡차/비정상 검색 안내
+      "degraded" — 200 인데 포스트 링크가 **하나도** 없다(축약 응답)
+      "empty"    — 본문은 왔는데 결과가 0건(희귀하지만 가능)
+
+    왜 "degraded" 를 따로 두나: 이걸 "결과 0건"으로 보고하면 그 위에 올라탄 모든
+    판정이 조용히 틀린다 — 경쟁자 0명 → 난이도 낮음 → "뚫을 수 있다". 못 쟀으면
+    못 쟀다고 해야 한다.
+    """
+    if not html:
+        return "degraded"
+    if any(t in html for t in ("비정상적인 검색", "captcha", "자동입력 방지")):
+        return "blocked"
+    if _POST_RE.search(html):
+        return "ok"
+    # 포스트 링크가 0개다. 본문 컨테이너가 있고 문서도 충분히 크면 진짜 0건일 수 있다.
+    has_container = any(
+        t in html for t in ("fds-ugc-single-intention-item-list", "검색결과가 없습니다")
+    )
+    if has_container and len(html) >= _SERP_MIN_BYTES:
+        return "empty"
+    return "degraded"
+
+
+class _RankedRows:
+    """글 순서대로 순위를 매기되, 행은 블로그당 첫 글 하나만 남긴다.
+
+    rank 는 **블로그 순번이 아니라 글 위치**다. 한 블로그가 글 두 개로 1페이지에 앉으면
+    블로그 순번은 실제 위치보다 앞당겨진다(2026-10-24 '다이어트 식단' 실측: 중복 3건 →
+    블로그 순번 10위가 실제 11번째 글). 결과 한 칸 = 글 하나라는 것도 같은 날 확인했다.
+    """
+
+    def __init__(self):
+        self.rows: List[Dict] = []
+        self._posts: set = set()
+        self._blogs: set = set()
+
+    def add(self, blog_id: str, post_id: str, title: str = "") -> None:
+        blog_id = blog_id.lower()
+        if post_id in self._posts:      # 같은 글의 제목·썸네일 링크
+            return
+        self._posts.add(post_id)
+        if blog_id in self._blogs:      # 같은 블로그의 두 번째 글 — 자리는 차지한다
+            return
+        self._blogs.add(blog_id)
+        self.rows.append({
+            "rank": len(self._posts),
+            "blog_id": blog_id,
+            "blog_name": blog_id,
+            "post_title": title or f"포스팅 #{post_id}",
+            "post_url": f"https://blog.naver.com/{blog_id}/{post_id}",
+        })
+
+
 def _parse_serp_html(html: str) -> Tuple[List[Dict], str]:
     """검색 HTML → 순위 보존 파싱. (rows, parse_mode) 반환.
 
+    rows 는 블로그당 1행(그 블로그의 가장 높은 글), rank 는 글 위치(_RankedRows 참고).
     parse_mode: "list"(본문 목록 컨테이너 = 신뢰) | "regex"(폴백 = 순위 신뢰 낮음)
     """
     from bs4 import BeautifulSoup
 
-    rows: List[Dict] = []
-    seen: set = set()
     try:
         soup = BeautifulSoup(html, "html.parser")
         containers = []
@@ -177,40 +249,60 @@ def _parse_serp_html(html: str) -> Tuple[List[Dict], str]:
             containers = soup.select(sel)
             if containers:
                 break
+        ranked = _RankedRows()
         for c in containers:
             for a in c.select('a[href*="blog.naver.com"]'):
                 m = _POST_RE.search(a.get("href", ""))
                 if not m:
                     continue
-                blog_id, post_id = m.group(1), m.group(2)
-                if blog_id in seen:
-                    continue
-                seen.add(blog_id)
                 title = _TITLE_NOISE.sub("", a.get_text(strip=True) or "").strip()
-                rows.append({
-                    "rank": len(rows) + 1,
-                    "blog_id": blog_id,
-                    "blog_name": blog_id,
-                    "post_title": title or f"포스팅 #{post_id}",
-                    "post_url": f"https://blog.naver.com/{blog_id}/{post_id}",
-                })
-        if rows:
-            return rows, "list"
+                ranked.add(m.group(1), m.group(2), title)
+        if ranked.rows:
+            return ranked.rows, "list"
     except Exception as e:
         logger.warning(f"[kwv] dom parse failed: {e}")
 
     # 폴백: 목록 컨테이너를 못 찾았다(마크업 변경 또는 차단). 순위 신뢰도가 낮으므로
     # 호출부가 parse_mode 로 구분할 수 있게 표시한다.
+    ranked = _RankedRows()
     for blog_id, post_id in _POST_RE.findall(html):
-        if blog_id in seen:
-            continue
-        seen.add(blog_id)
-        rows.append({
-            "rank": len(rows) + 1, "blog_id": blog_id, "blog_name": blog_id,
-            "post_title": f"포스팅 #{post_id}",
-            "post_url": f"https://blog.naver.com/{blog_id}/{post_id}",
-        })
-    return rows, "regex"
+        ranked.add(blog_id, post_id)
+    return ranked.rows, "regex"
+
+
+def normalize_blog_id(raw: str) -> str:
+    """사용자 입력(주소·모바일 주소·글 주소·대문자) → 블로그 ID.
+
+    네이버 ID 는 소문자만 허용하고 대소문자가 다르면 다른 ID 로 취급된다(모바일 블로그
+    API 에 'Cococo93' → blog_id_invalidate, 2026-10-24). SERP 의 ID 는 항상 소문자다.
+    """
+    s = (raw or "").strip()
+    s = re.sub(r"^https?://", "", s, flags=re.I)
+    s = re.sub(r"^(m\.)?blog\.naver\.com/", "", s, flags=re.I)
+    m = re.search(r"[?&]blogId=([A-Za-z0-9_-]+)", s)
+    if m:
+        return m.group(1).lower()
+    return re.split(r"[/?#]", s, 1)[0].strip().lower()
+
+
+async def resolve_my_blog_id(raw: str) -> Tuple[str, Optional[str]]:
+    """(판정에 쓸 블로그 ID, 바뀌기 전 입력값 또는 None).
+
+    로그인 ID 를 블로그 주소로 넣는 경우가 잦다. 그대로 두면 SERP 에서 내 순위를 못
+    찾고(주소가 다름), 3~6분 채점 끝에 analyze_blog 가 MOVED 를 내 '채점 실패'로 끝난다.
+    네트워크 1콜이라 SERP·채점보다 앞에서 한 번만 한다(워커에서).
+    """
+    from routers.blogs import resolve_canonical_blog_id
+
+    blog_id = normalize_blog_id(raw)
+    try:
+        canonical = await resolve_canonical_blog_id(blog_id)
+    except Exception as e:
+        logger.debug(f"[kwv] canonical resolve failed {blog_id}: {e}")
+        canonical = None
+    if canonical and canonical.lower() != blog_id:
+        return canonical.lower(), blog_id
+    return blog_id, None
 
 
 async def _fetch_serp_playwright(keyword: str, limit: int) -> List[Dict]:
@@ -336,6 +428,12 @@ async def _playwright_serp_guarded(keyword: str, limit: int) -> List[Dict]:
         # 매달린 브라우저는 다음 요청에 재사용하면 안 된다. 정리를 기다리지는 않는다.
         asyncio.create_task(_close_browser("hard-timeout"))
         return []
+    except asyncio.CancelledError:
+        # 상위 job의 단계 타임아웃도 shield 안쪽 작업을 정리해야 한다.
+        # 그렇지 않으면 사용자가 떠난 뒤에도 브라우저 작업이 자원을 점유한다.
+        task.cancel()
+        asyncio.create_task(_close_browser("job-cancelled"))
+        raise
     except Exception as e:
         logger.warning(f"[kwv] playwright serp error {keyword!r}: {e}")
         return []
@@ -343,52 +441,65 @@ async def _playwright_serp_guarded(keyword: str, limit: int) -> List[Dict]:
 
 async def _playwright_serp_inner(keyword: str, limit: int) -> List[Dict]:
     from urllib.parse import quote
+    from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
     url = f"https://search.naver.com/search.naver?ssc=tab.blog.all&query={quote(keyword)}&start=1"
-    context = None
     t0 = time.time()
-    try:
-        browser = await _get_browser()
-        context = await browser.new_context(
-            viewport={"width": 1280, "height": 900},
-            user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"),
-            locale="ko-KR",
-        )
-        # 이미지·폰트·미디어 차단. 우리가 필요한 건 링크 목록 DOM 뿐인데, SERP 는 썸네일이
-        # 수십 개라 worker(nice 19, 공유 2vCPU)에서는 이게 시간을 지배한다
-        # (2026-08-13 실측: 차단 없이 stage1 이 90초 타임아웃).
-        async def _block(route, request):
-            if request.resource_type in ("image", "font", "media", "stylesheet"):
-                await route.abort()
-            else:
-                await route.continue_()
-        await context.route("**/*", _block)
-
-        page = await context.new_page()
-        await page.goto(url, wait_until="domcontentloaded", timeout=25000)
+    # 한 번의 느린 탐색/빈 응답으로 끝내지 않는다. 전체 시간은 바깥의
+    # PLAYWRIGHT_TIMEOUT으로 제한하고, 재시도는 새 컨텍스트에서 한 번만 한다.
+    for attempt in range(2):
+        context = None
         try:
-            await page.wait_for_selector(
-                'div[class*="fds-ugc-single-intention-item-list"]', timeout=12000)
-        except Exception:
-            logger.warning(f"[kwv] playwright: list container not found {keyword!r}")
-        rows, mode = _parse_serp_html(await page.content())
-        logger.warning(f"[kwv] playwright serp {keyword!r}: {len(rows)} rows mode={mode} "
-                       f"in {round(time.time() - t0, 1)}s")
-        if mode != "list":
-            return []
-        return rows[:limit]
-    except Exception as e:
-        logger.warning(f"[kwv] playwright serp failed {keyword!r} "
-                       f"after {round(time.time() - t0, 1)}s: {e}")
-        return []
-    finally:
-        # 브라우저는 상주시키고 컨텍스트만 닫는다(요청 간 쿠키·캐시 격리는 유지).
-        if context:
+            browser = await _get_browser()
+            context = await browser.new_context(
+                viewport={"width": 1280, "height": 900},
+                user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                            "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"),
+                locale="ko-KR",
+            )
+            # 모든 요청을 Python으로 왕복시키면 공유 CPU에서 문서/스크립트까지
+            # 지연된다. 무거운 정적 파일만 가로채고 검색 렌더링은 그대로 둔다.
+            async def _block_asset(route):
+                await route.abort()
+            await context.route(
+                re.compile(r"\.(?:png|jpe?g|gif|webp|ico|woff2?|ttf|mp4)(?:\?.*)?$", re.I),
+                _block_asset,
+            )
+
+            page = await context.new_page()
             try:
-                await context.close()
-            except Exception:
-                pass
+                response = await page.goto(url, wait_until="commit", timeout=30000)
+                if response is not None and response.status != 200:
+                    logger.warning(f"[kwv] browser HTTP {response.status} {keyword!r}")
+                    continue
+            except PlaywrightTimeoutError:
+                # 탐색 타임아웃이어도 이미 도착한 검색 DOM이 있을 수 있다.
+                logger.warning(f"[kwv] navigation slow; checking results {keyword!r}")
+            try:
+                await page.wait_for_selector(
+                    'div[class*="fds-ugc-single-intention-item-list"] a[href*="blog.naver.com/"]',
+                    state="attached", timeout=30000,
+                )
+            except PlaywrightTimeoutError:
+                logger.warning(f"[kwv] result links not ready {keyword!r}")
+            rows, mode = _parse_serp_html(await page.content())
+            logger.warning(f"[kwv] playwright serp {keyword!r}: {len(rows)} rows mode={mode} "
+                           f"attempt={attempt + 1} in {round(time.time() - t0, 1)}s")
+            if rows and mode == "list":
+                return rows[:limit]
+        except Exception as e:
+            logger.warning(f"[kwv] playwright serp attempt={attempt + 1} failed {keyword!r}: {e}")
+        finally:
+            if context:
+                # 컨텍스트 정리가 매달려도 얻은 검색 결과를 버리지 않는다.
+                close_task = asyncio.create_task(context.close())
+                try:
+                    await asyncio.wait_for(asyncio.shield(close_task), timeout=5)
+                except asyncio.TimeoutError:
+                    close_task.cancel()
+                except Exception:
+                    pass
+    return []
 
 
 async def _fetch_serp_pages(keyword: str, limit: int) -> Tuple[List[Dict], Optional[str], str]:
@@ -410,6 +521,7 @@ async def _fetch_serp_pages(keyword: str, limit: int) -> Tuple[List[Dict], Optio
         ("mobile", f"https://m.search.naver.com/search.naver?ssc=tab.m_blog.all&query={encoded}&start=1", True),
     ]
 
+    degraded = False
     for source, url, mobile in attempts:
         headers = get_random_headers(mobile=mobile)
         headers["Referer"] = ("https://m.search.naver.com/" if mobile
@@ -422,8 +534,17 @@ async def _fetch_serp_pages(keyword: str, limit: int) -> Tuple[List[Dict], Optio
         if resp.status_code != 200:
             logger.warning(f"[kwv] serp {source} HTTP {resp.status_code} {keyword!r}")
             continue
+        kind = classify_serp_html(resp.text)
+        if kind != "ok":
+            # 축약/차단 응답을 '결과 0건'으로 흘려보내면 그 위 판정이 전부 틀린다.
+            logger.warning(
+                f"[kwv] serp {source} {kind} {keyword!r} "
+                f"({len(resp.text)}B, post_links=0) — 결과 없음으로 취급하지 않는다"
+            )
+            degraded = True
+            continue
         rows, mode = _parse_serp_html(resp.text)
-        if rows:
+        if rows and mode == "list":
             return rows[:limit], source, mode
 
     # HTTP 로 한 줄도 못 얻었다 → 브라우저로 재시도 (프로덕션의 정상 경로)
@@ -431,11 +552,12 @@ async def _fetch_serp_pages(keyword: str, limit: int) -> Tuple[List[Dict], Optio
     if rows:
         return rows, "playwright", "list"
 
-    return [], None, "none"
+    # 아무것도 못 얻었다. HTTP 응답이 축약본이었다면 '0건'이 아니라 '측정 실패'다.
+    return [], None, ("unavailable" if degraded else "none")
 
 
 async def serp_snapshot(keyword: str, limit: int = SERP_LIMIT,
-                        use_cache: bool = True) -> Dict:
+                        use_cache: bool = True, max_age: float = SERP_TTL) -> Dict:
     """키워드의 실제 블로그탭 SERP 스냅샷 (공용 캐시).
 
     Returns:
@@ -447,12 +569,14 @@ async def serp_snapshot(keyword: str, limit: int = SERP_LIMIT,
         return {"ok": False, "keyword": keyword, "rows": [], "source": None,
                 "measured_at": None, "cached": False, "error": "empty_keyword"}
 
+    # 캐시에는 첫 렌더에서 읽은 행을 **전부** 싣고 호출부 limit 은 꺼낼 때 자른다. 캐시는
+    # 키워드 단위라, 판정(20행)이 먼저 채운 캐시를 채점(30위까지)이 읽으면 20행에서 끊긴다.
     if use_cache:
-        hit = _serp_cache_get(keyword)
+        hit = _serp_cache_get(keyword, max_age=max_age)
         if hit and hit.get("rows"):
-            return {**hit, "cached": True}
+            return {**hit, "rows": hit["rows"][:limit], "cached": True}
 
-    rows, source, parse_mode = await _fetch_serp_pages(keyword, limit)
+    rows, source, parse_mode = await _fetch_serp_pages(keyword, SERP_CACHE_ROWS)
     data = {
         "ok": bool(rows),
         "keyword": keyword,
@@ -461,11 +585,17 @@ async def serp_snapshot(keyword: str, limit: int = SERP_LIMIT,
         "parse_mode": parse_mode,   # "list"=본문 목록(신뢰) / "regex"=폴백(순위 신뢰 낮음)
         "measured_at": time.time(),
         "cached": False,
-        "error": None if rows else "serp_fetch_failed",
+        # parse_mode == "unavailable" 은 네이버가 축약 응답을 준 경우다.
+        # "결과 0건"과 섞어 쓰면 경쟁자 0명 → 난이도 낮음으로 둔갑한다.
+        "error": (
+            None if rows
+            else ("serp_unavailable" if parse_mode == "unavailable" else "serp_fetch_failed")
+        ),
+        "unavailable": (not rows) and parse_mode == "unavailable",
     }
     if rows:
         _serp_cache_set(keyword, data)
-    return data
+    return {**data, "rows": rows[:limit]}
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -473,17 +603,18 @@ async def serp_snapshot(keyword: str, limit: int = SERP_LIMIT,
 # ══════════════════════════════════════════════════════════════════
 
 async def stage1_facts(blog_id: str, keyword: str, use_cache: bool = True,
-                       cache_only: bool = False) -> Dict:
+                       cache_only: bool = False, serp_max_age: float = SERP_TTL) -> Dict:
     """반박 불가능한 사실만: 내 현재 순위 + 1페이지 점유자 + 검색량.
 
     판정(확률)은 하지 않는다. 여기서 이미 노출 중이면 판정 자체가 불필요하다.
 
     cache_only=True 면 SERP 를 새로 조회하지 않는다. public API 프로세스에서 호출할 때
     쓴다 — 프로덕션에서 SERP 조회는 브라우저 경로라 API 이벤트루프에서 돌리면 안 된다.
+    serp_max_age: 이보다 오래된 캐시는 버리고 새로 잰다(판정 요청은 SERP_FRESH_TTL).
     """
     from services.exposure_ceiling import _fetch_volumes
 
-    blog_id = (blog_id or "").strip()
+    blog_id = normalize_blog_id(blog_id)
     keyword = (keyword or "").strip()
 
     if cache_only:
@@ -495,11 +626,46 @@ async def stage1_facts(blog_id: str, keyword: str, use_cache: bool = True,
                     "serp_source": None, "serp_parse_mode": None, "serp_cached": False,
                     "serp_measured_at": None, "serp_size": 0}
 
-    serp_task = serp_snapshot(keyword, use_cache=use_cache)
+    if not cache_only:
+        # 계정 아이디와 블로그 주소가 다를 수 있다. 존재하지 않는 블로그를
+        # 비교하려고 SERP + 경쟁자 10개를 모두 수집한 뒤 일반 오류로 끝내지 않는다.
+        # 통신 실패는 부재로 단정하지 않고 기존 측정 경로로 진행한다.
+        from routers.blogs import scrape_blog_stats_fast
+        try:
+            stats = await asyncio.wait_for(scrape_blog_stats_fast(blog_id), timeout=15)
+        except Exception:
+            stats = {}
+        code = stats.get("error_code")
+        messages = {
+            "NOT_FOUND": "입력한 주소에서 네이버 블로그를 찾을 수 없습니다. 네이버 로그인 아이디가 아닌 실제 블로그 주소(URL)를 확인해 주세요.",
+            "PRIVATE_BLOG": "비공개 블로그는 비교할 수 없습니다. 블로그 공개 설정과 실제 주소를 확인해 주세요.",
+            "MOVED": "입력한 아이디와 실제 블로그 주소가 다릅니다. 변경된 블로그 주소로 다시 시도해 주세요.",
+        }
+        if code in messages:
+            canonical = stats.get("canonical_blog_id")
+            message = messages[code]
+            if code == "MOVED" and canonical:
+                message += f" 확인된 블로그 ID: {canonical}"
+            return {
+                "ok": False, "blog_id": blog_id, "keyword": keyword,
+                "error": f"blog_{code.lower()}", "error_message": message,
+                "canonical_blog_id": canonical,
+                "page1": [], "my_rank": None, "already_page1": False,
+                "volume": 0, "volume_measured": False, "serp_size": 0,
+                "serp_source": None, "serp_parse_mode": None,
+                "serp_cached": False, "serp_measured_at": None,
+            }
+
+    serp_task = serp_snapshot(keyword, use_cache=use_cache, max_age=serp_max_age)
     vol_task = _fetch_volumes([keyword])
     serp, vols = await asyncio.gather(serp_task, vol_task)
 
-    volume = vols.get(keyword.replace(" ", ""), 0)
+    # 검색광고 API 는 영문을 대문자로 돌려준다('iphone' → 'IPHONE'). 대소문자를 무시하고
+    # 맞춰야 영문 키워드가 0 으로 떨어지지 않는다. 응답에 그 키워드 자체가 없으면
+    # '측정됨'이 아니다 — 연관키워드만 왔다고 0 을 실측값처럼 내면 안 된다.
+    vol_key = keyword.replace(" ", "").upper()
+    vol_hit = next((v for k, v in vols.items() if k.upper() == vol_key), None)
+    volume = vol_hit or 0
     rows = serp.get("rows") or []
     my_rank = next((r["rank"] for r in rows if r["blog_id"] == blog_id), None)
 
@@ -508,7 +674,7 @@ async def stage1_facts(blog_id: str, keyword: str, use_cache: bool = True,
         "blog_id": blog_id,
         "keyword": keyword,
         "volume": volume,
-        "volume_measured": bool(vols),
+        "volume_measured": vol_hit is not None,
         "my_rank": my_rank,
         "already_page1": my_rank is not None and my_rank <= PAGE1_CUTOFF,
         "serp_source": serp.get("source"),
@@ -516,7 +682,9 @@ async def stage1_facts(blog_id: str, keyword: str, use_cache: bool = True,
         "serp_cached": serp.get("cached", False),
         "serp_measured_at": serp.get("measured_at"),
         "serp_size": len(rows),
-        "page1": rows[:PAGE1_CUTOFF],
+        "serp_depth": rows[-1]["rank"] if rows else 0,
+        # rank 는 글 위치라 블로그 행 10개가 곧 1페이지가 아니다 — rank 로 자른다.
+        "page1": [r for r in rows if r["rank"] <= PAGE1_CUTOFF],
         "error": serp.get("error"),
     }
 
@@ -817,11 +985,11 @@ async def stage2_deep(blog_id: str, keyword: str,
     화면에 추정치가 아니라 실제 진척을 보여주기 위한 것이다(큐가 job 파일에 실어 준다).
     """
     t0 = time.time()
-    blog_id = (blog_id or "").strip()
+    blog_id = normalize_blog_id(blog_id)
     keyword = (keyword or "").strip()
 
     if facts is None:
-        facts = await stage1_facts(blog_id, keyword)
+        facts = await stage1_facts(blog_id, keyword, serp_max_age=SERP_FRESH_TTL)
     rows = (facts.get("page1") or [])
     serp_rows_all = rows
 
@@ -830,18 +998,26 @@ async def stage2_deep(blog_id: str, keyword: str,
             "ok": False, "blog_id": blog_id, "keyword": keyword,
             "error": facts.get("error") or "serp_unavailable",
             "verdict": "unknown", "probability": None, "confidence": "low",
-            "reasons": ["네이버 검색 결과를 가져오지 못했습니다(일시적 차단 가능). "
-                        "잠시 후 다시 시도해 주세요."],
+            "reasons": [facts.get("error_message") or
+                        "네이버 검색 결과를 가져오지 못했습니다(일시적 차단 가능). 잠시 후 다시 시도해 주세요."],
             "facts": facts, "elapsed": round(time.time() - t0, 1),
             "disclaimer": DISCLAIMER,
         }
 
-    # 이미 1페이지면 판정 불필요 — 사실이 예측을 이긴다.
+    # 이미 1페이지면 판정 불필요 — 사실이 예측을 이긴다. 단 그 '사실'이 폴백 파싱(목록
+    # 컨테이너를 못 찾고 페이지 전체를 긁음 → 인기주제 캐러셀이 순위로 섞임)에서 나왔으면
+    # 사실이 아니다. 다른 판정과 같은 기준으로 확신을 깎는다.
     if facts.get("already_page1"):
+        reliable = facts.get("serp_parse_mode") == "list"
+        reasons = [f"이미 이 키워드로 블로그탭 {facts['my_rank']}위에 노출 중입니다."]
+        if not reliable:
+            reasons.append("⚠️ 검색 결과 목록 파싱이 폴백 경로여서 순위 정확도가 낮습니다 "
+                           "— 블로그탭에서 직접 확인해 보세요.")
         return {
             "ok": True, "blog_id": blog_id, "keyword": keyword,
-            "verdict": "already_ranked", "probability": 1.0, "confidence": "high",
-            "reasons": [f"이미 이 키워드로 블로그탭 {facts['my_rank']}위에 노출 중입니다."],
+            "verdict": "already_ranked", "probability": 1.0,
+            "confidence": "high" if reliable else "low",
+            "reasons": reasons,
             "facts": facts, "competitors": [], "cut_line": None,
             "elapsed": round(time.time() - t0, 1), "disclaimer": DISCLAIMER,
         }
@@ -866,9 +1042,13 @@ async def stage2_deep(blog_id: str, keyword: str,
 
     targets = [r["blog_id"] for r in serp_rows_all[:PAGE1_CUTOFF]]
     prog["total"] = len(targets) + 1   # 경쟁자 + 내 블로그
-    scored_list, my, topical, ceiling, idle = await asyncio.gather(
-        asyncio.gather(*[_bounded(b) for b in targets]),
+
+    async def _score_competitors():
+        return await asyncio.gather(*[_bounded(b) for b in targets])
+
+    my, scored_list, topical, ceiling, idle = await asyncio.gather(
         _bounded(blog_id, use_cache=False),   # 내 점수는 항상 새로 잰다
+        _score_competitors(),
         _topical_fit(blog_id, keyword),
         _cached_ceiling(blog_id),
         _measure_idle_days(targets),
@@ -935,6 +1115,64 @@ async def stage2_deep(blog_id: str, keyword: str,
         "disclaimer": DISCLAIMER,
         **verdict,
     }
+
+
+# ══════════════════════════════════════════════════════════════════
+# 4. 채점 — 예측을 실측 순위로 맞춰 본다 (정답지 원장)
+# ══════════════════════════════════════════════════════════════════
+
+GRADE_SERP_LIMIT = 30      # 원장의 actual_indexed 기준(상위 30)
+GRADE_SERP_MAX_AGE = 3600
+
+
+def _title_mentions(title: str, keyword: str) -> bool:
+    """제목에 키워드의 유의미 파트가 전부 들어 있는가 (띄어쓰기 무시)."""
+    t = re.sub(r"\s+", "", (title or "").lower())
+    return all(p.replace(" ", "") in t for p in _significant_parts(keyword))
+
+
+async def measure_actual_rank(blog_id: str, keyword: str) -> Dict:
+    """채점용 실측. **판정과 같은 SERP 파서**를 쓴다(예측·라벨 소스가 다르면 보정이 왜곡된다).
+
+    Returns: {measured, rank, attempted, reason}
+      measured=False — SERP 를 못 읽었거나, 1페이지 밖인데 글 작성 여부를 못 확인했다.
+                       채점하지 말고 다음에 다시 잰다.
+      rank=None      — 조회는 성공했고 읽은 범위 안에 없다(진짜 미노출).
+      attempted      — 그 키워드 글을 쓴 흔적이 있는가. 순위에 있으면 당연히 True,
+                       아니면 RSS 최근 글 제목으로 본다.
+    """
+    # 옛 원장에는 로그인 ID 로 쌓인 예측이 있다 — 실제 블로그 주소로 재야 순위·RSS 가 맞는다.
+    blog_id, _ = await resolve_my_blog_id(blog_id)
+    serp = await serp_snapshot(keyword, limit=GRADE_SERP_LIMIT, max_age=GRADE_SERP_MAX_AGE)
+    if not serp.get("ok"):
+        return {"measured": False, "rank": None, "attempted": None,
+                "reason": serp.get("error") or "serp_fetch_failed"}
+    if serp.get("parse_mode") != "list":
+        return {"measured": False, "rank": None, "attempted": None,
+                "reason": "serp_fallback_parse"}
+
+    rank = next((r["rank"] for r in serp["rows"] if r["blog_id"] == blog_id), None)
+    if rank is not None:
+        return {"measured": True, "rank": rank, "attempted": True, "reason": None}
+
+    from services.competitive_analysis_v2 import fetch_blog_rss_posts
+    import httpx
+    try:
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            posts = await fetch_blog_rss_posts(blog_id, client)
+    except Exception as e:
+        logger.warning(f"[kwv] grade rss failed {blog_id}: {e}")
+        posts = []
+    if not posts:
+        return {"measured": False, "rank": None, "attempted": None, "reason": "rss_unavailable"}
+    attempted = any(_title_mentions(p.get("title", ""), keyword) for p in posts)
+    return {"measured": True, "rank": None, "attempted": attempted, "reason": None}
+
+
+async def release_browser() -> None:
+    """상주 브라우저를 바로 닫는다. 채점처럼 판정 워커 밖에서 몰아 쓴 뒤 RAM 을 돌려줄 때."""
+    async with _browser_lock():
+        await _close_browser("released")
 
 
 async def _cached_ceiling(blog_id: str) -> Optional[Dict]:

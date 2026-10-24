@@ -103,6 +103,23 @@ interface RevenueStats {
 // 이 탭들만 사용자 목록이 필요하다. 개요/성장/방문통계/결제/로그는 목록을 안 그린다.
 const TABS_NEEDING_LISTS: string[] = ['users', 'premium', 'expiring'];
 
+/**
+ * 서버 타임스탬프를 KST 로 보여준다.
+ *
+ * payments.paid_at/created_at, admin_audit_logs.created_at 은 SQLite
+ * CURRENT_TIMESTAMP·Postgres NOW()·Fly 머신(UTC)의 datetime.now() 로 채워져
+ * **시간대 표기 없는 UTC** 로 온다("2026-10-21 03:00:00"). 그대로 new Date() 에
+ * 넣으면 브라우저 로컬 시각으로 읽혀 9시간 이르게 보였다. 시간대가 없으면 UTC 로
+ * 간주하고, 표시는 항상 Asia/Seoul 로 한다.
+ */
+function formatServerTimeKST(value?: string | null): string {
+  if (!value) return '-';
+  const hasTz = /([zZ]|[+-]\d{2}:?\d{2})$/.test(value);
+  const d = new Date(hasTz ? value : value.replace(' ', 'T') + 'Z');
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+}
+
 export default function AdminPage() {
   const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
   const [users, setUsers] = useState<User[]>([]);
@@ -1537,7 +1554,7 @@ export default function AdminPage() {
                         {payments.map((payment) => (
                           <tr key={payment.id} className="hover:bg-gray-50">
                             <td className="px-4 py-3 text-sm text-gray-500">
-                              {new Date(payment.paid_at || payment.created_at).toLocaleString('ko-KR')}
+                              {formatServerTimeKST(payment.paid_at || payment.created_at)}
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-900">
                               <div>{payment.user_email || 'Unknown'}</div>
@@ -1638,7 +1655,7 @@ export default function AdminPage() {
                         {auditLogs.map((log) => (
                           <tr key={log.id} className="hover:bg-gray-50">
                             <td className="px-4 py-3 text-sm text-gray-500">
-                              {new Date(log.created_at).toLocaleString('ko-KR')}
+                              {formatServerTimeKST(log.created_at)}
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-900">{log.admin_email}</td>
                             <td className="px-4 py-3">
@@ -1715,8 +1732,8 @@ export default function AdminPage() {
                   onChange={(e) => setGrantPlan(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="basic">Basic (일일 50회)</option>
-                  <option value="pro">Pro (일일 200회)</option>
+                  <option value="basic">Basic (키워드 30회/일)</option>
+                  <option value="pro">Pro (키워드 100회/일)</option>
                   <option value="business">Business (비즈니스)</option>
                 </select>
               </div>
@@ -2072,8 +2089,8 @@ export default function AdminPage() {
                   onChange={(e) => setBulkPlan(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="basic">Basic (일일 50회)</option>
-                  <option value="pro">Pro (일일 200회)</option>
+                  <option value="basic">Basic (키워드 30회/일)</option>
+                  <option value="pro">Pro (키워드 100회/일)</option>
                   <option value="business">Business (비즈니스)</option>
                 </select>
               </div>

@@ -205,6 +205,10 @@ class RankTrackerDB:
             existing = {r[1] for r in cursor.execute("PRAGMA table_info(keyword_predictions)").fetchall()}
             if "predicted_prob" not in existing:
                 cursor.execute("ALTER TABLE keyword_predictions ADD COLUMN predicted_prob REAL")
+            # 채점 시도 횟수 — SERP 조회 실패·글 작성 여부 미확인은 채점하지 않고 다음으로
+            # 미루는데, 영영 안 되는 건(블로그 결과가 없는 키워드 등) 상한에서 정리한다.
+            if "verify_attempts" not in existing:
+                cursor.execute("ALTER TABLE keyword_predictions ADD COLUMN verify_attempts INTEGER DEFAULT 0")
 
             logger.info("Rank tracker tables initialized")
 
@@ -473,12 +477,19 @@ class RankTrackerDB:
                   predicted_prob))
             return cursor.lastrowid
 
-    def record_prediction_actual(self, prediction_id: int, actual_rank: int = None) -> Dict:
+    def record_prediction_actual(self, prediction_id: int, actual_rank: int = None,
+                                 attempted: bool = True) -> Dict:
         """예측을 실측 순위로 검증하고 hit/miss 판정.
+
+        **actual_rank=None 은 '조회 성공 + 순위 안에 없음'일 때만 넘겨야 한다.** 조회
+        실패는 record_prediction_unmeasured 로 보낸다(실패를 미노출로 적으면 unlikely 는
+        전부 적중, likely 는 전부 빗나감이 돼 정확도가 오염된다).
 
         판정 규칙:
           - likely/contested 예측: 실제 상위10 노출되면 hit
           - unlikely 예측: 실제 상위10 밖(또는 미노출)이면 hit
+          - 1페이지 밖인데 그 키워드 글을 쓴 흔적이 없으면(attempted=False) no_attempt —
+            '써 보면 들어가나'의 예측이라 안 쓴 경우는 맞고 틀림이 없다. 채점에서 빠진다.
           - unknown: 채점 제외 (outcome='pending' 유지)
         """
         indexed = 1 if (actual_rank is not None and actual_rank <= 30) else 0
@@ -493,7 +504,9 @@ class RankTrackerDB:
                 return {"error": "prediction_not_found"}
             verdict = row["predicted_verdict"]
 
-            if verdict in ("likely", "contested"):
+            if not page1 and not attempted and verdict in ("likely", "contested", "unlikely"):
+                outcome = "no_attempt"
+            elif verdict in ("likely", "contested"):
                 outcome = "hit" if page1 else "miss"
             elif verdict == "unlikely":
                 outcome = "hit" if not page1 else "miss"
@@ -508,6 +521,46 @@ class RankTrackerDB:
             """, (actual_rank, indexed, page1, outcome, prediction_id))
             return {"id": prediction_id, "verdict": verdict, "actual_rank": actual_rank,
                     "actual_page1": bool(page1), "outcome": outcome}
+
+    def record_prediction_unmeasured(self, prediction_id: int, reason: str,
+                                     max_attempts: int = 5) -> Dict:
+        """이번엔 채점하지 못했다(SERP 조회 실패·RSS 실패). pending 으로 두고 시도만 센다.
+
+        max_attempts 를 넘기면 outcome='unmeasurable' 로 닫는다 — 안 그러면 영영 못 재는
+        건이 predicted_at 순 앞자리를 차지해 새 예측이 채점 대기열에 못 들어온다.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE keyword_predictions SET verify_attempts = COALESCE(verify_attempts, 0) + 1 "
+                "WHERE id = ?", (prediction_id,))
+            row = cursor.execute(
+                "SELECT verify_attempts FROM keyword_predictions WHERE id = ?",
+                (prediction_id,)).fetchone()
+            attempts = row["verify_attempts"] if row else 0
+            closed = attempts >= max_attempts
+            if closed:
+                cursor.execute(
+                    "UPDATE keyword_predictions SET outcome = 'unmeasurable', "
+                    "actual_checked_at = CURRENT_TIMESTAMP WHERE id = ?", (prediction_id,))
+            return {"id": prediction_id, "outcome": "unmeasurable" if closed else "pending",
+                    "reason": reason, "attempts": attempts}
+
+    def reopen_unranked_predictions(self) -> int:
+        """과거에 '순위 없음'으로 채점된 건을 다시 pending 으로 연다. 반환: 다시 연 건수.
+
+        2026-10-24 이전 채점기는 SERP 조회 실패도 순위 없음(None)으로 적었고 글 작성 여부도
+        보지 않았다. 순위가 있는(=조회 성공이 확실한) 건은 두고, 둘이 섞인 None 만 되돌린다.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE keyword_predictions
+                SET outcome = 'pending', actual_checked_at = NULL, actual_rank = NULL,
+                    actual_indexed = NULL, actual_page1 = NULL, verify_attempts = 0
+                WHERE actual_rank IS NULL AND outcome IN ('hit', 'miss')
+            """)
+            return cursor.rowcount
 
     def get_pending_predictions(self, min_age_hours: int = 0, limit: int = 100) -> List[Dict]:
         """아직 실측 검증 안 된 예측들. min_age_hours 로 '발행 후 색인될 시간' 확보."""

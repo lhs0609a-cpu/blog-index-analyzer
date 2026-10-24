@@ -31,14 +31,14 @@ const planFeatures = [
     description: '인기 키워드 검색 및 분석',
     free: '5회/일',
     basic: '30회/일',
-    pro: '무제한',
+    pro: '100회/일',
   },
   {
     name: '블로그 분석',
     description: '블로그 순위 예측 분석',
-    free: '3회/일',
-    basic: '20회/일',
-    pro: '무제한',
+    free: '5회/일',
+    basic: '10회/일',
+    pro: '50회/일',
   },
   {
     name: '순위 추적',

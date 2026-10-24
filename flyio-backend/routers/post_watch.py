@@ -1,18 +1,32 @@
 """
-새 글 누락 감시 — 1단계는 관리자 전용.
+새 글 감시 — 발행한 글이 검색에 실제로 나오는지 대신 확인한다.
 
-판정 정확도를 운영에서 확인하기 전에는 사용자에게 열지 않는다
-(docs/POST_EXPOSURE_WATCH_SPEC.md "출시 전 검증"). 여기서 내부 테스트 블로그를
-등록하고, 한 주기를 즉시 돌리고, 판정 결과를 본다.
+관리자 엔드포인트(`/admin/*`)는 판정 정확도를 운영에서 보기 위한 것이고,
+사용자 엔드포인트는 그 위에 얹는다.
+
+⚠️ **누락(`missing`)은 이 버전이 확정하지 않는다.** 2026-09-14 판정 수정에서
+"실제 검색에서 링크를 확인한 경우만 indexed, 미발견은 재시도 후 unmeasurable" 로
+정했기 때문이다(docs/POST_EXPOSURE_WATCH_SPEC.md). 그래서 사용자 화면도
+"누락됐습니다" 라고 말하지 않는다 — 보여주는 가장 센 말이 '검색결과에서 못 찾음'
+(`absent_in_search`, 검색 페이지는 정상으로 봤는데 그 글이 없었다)이고, 페이지를
+제대로 못 본 경우는 '측정 실패'(`unmeasurable`)로 따로 둔다. 오탐 알림이 이
+기능에서 가장 비싼 손실이고, 스펙의 출시 전 검증(최근 글 100개 비교, 불일치 5%
+이하)이 아직 안 끝났다.
 """
 import asyncio
+import csv
+import io as _io
 import re
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from database import post_watch_db as db
+from database.subscription_db import PLAN_LIMITS, PlanType, get_user_subscription
 from routers.admin import require_admin
+from routers.auth_deps import get_current_user
 
 router = APIRouter(prefix="/api/post-watch", tags=["새글누락감시"])
 
@@ -21,6 +35,16 @@ _BLOG_ID = re.compile(r"^[A-Za-z0-9_-]{3,50}$")
 
 class WatchRequest(BaseModel):
     blog_id: str
+
+
+class BulkWatchRequest(BaseModel):
+    # 대행사는 블로그를 한 개씩 등록하지 않는다. 20개는 한 번에 붙이고 시작한다.
+    blog_ids: List[str]
+
+
+class AuditRequest(BaseModel):
+    # 비우면 내 감시 블로그 전체를 잰다 — 가장 많이 쓰는 경로라 기본값으로 둔다.
+    blog_ids: Optional[List[str]] = None
 
 
 def _normalize(blog_id: str) -> str:
@@ -60,6 +84,16 @@ async def admin_run_once(_: dict = Depends(require_admin)):
     return {"rss": rss, "check": check}
 
 
+@router.post("/admin/relabel-absent")
+async def admin_relabel_absent(apply: bool = False, _: dict = Depends(require_admin)):
+    """
+    옛 `unmeasurable` 중 근거가 전부 serp_not_found 인 글을 `absent_in_search` 로.
+
+    기본은 미적용(dry-run)이다 — 숫자를 먼저 보고 사람이 결정한다.
+    """
+    return await asyncio.to_thread(db.relabel_absent_in_search, not apply)
+
+
 @router.get("/admin/report")
 async def admin_report(_: dict = Depends(require_admin)):
     from services.post_watch import DAILY_API_CAP
@@ -82,3 +116,349 @@ async def admin_report(_: dict = Depends(require_admin)):
         "api_budget": {"used_today": await asyncio.to_thread(db.budget_used_today), "cap": DAILY_API_CAP},
         "blogs": blogs,
     }
+
+
+# ============ 사용자 API ============
+#
+# 스펙의 제1원칙: **블로그 ID 하나로 설정이 끝나야 한다.** 기존 순위 추적은
+# 키워드를 사람이 등록해야 해서 운영 6개월간 등록 0건이었다.
+
+
+def _plan_limits(user: dict) -> dict:
+    """
+    이 사용자의 플랜 한도. 구독을 못 읽으면 무료로 본다(막는 쪽이 안전).
+
+    관리자는 비즈니스로 본다 — `middleware/usage_limit.usage_gate` 도,
+    `subscription_db.check_usage_limit` 도 관리자를 무제한으로 취급한다. 여기서만
+    플랜 한도를 적용하면 관리자가 자기 점검용으로 등록해 둔 블로그 11개가
+    "한도 1개 초과" 상태로 보인다(2026-10-23 실측에서 실제로 그랬다).
+    """
+    if user.get("is_admin"):
+        return PLAN_LIMITS[PlanType.BUSINESS]
+    try:
+        sub = get_user_subscription(user["id"]) or {}
+        plan = PlanType(sub.get("plan_type") or "free")
+    except Exception:
+        plan = PlanType.FREE
+    return PLAN_LIMITS.get(plan, PLAN_LIMITS[PlanType.FREE])
+
+
+def _my_blog_ids(user_id: int) -> set:
+    return {w["blog_id"] for w in db.list_watches(user_id)}
+
+
+# 사용자에게 보여줄 말. status 원문을 그대로 쓰면 '누락'으로 읽히는 단어가 생긴다.
+_STATUS_LABEL = {
+    "pending": "확인 중",
+    "indexed": "노출 확인",
+    "delayed": "24시간 지나도 미확인",
+    # '검색에서 못 찾음'과 '못 봤음'은 다른 사실이다. 운영 실측에서 '확인 불가'의
+    # 대부분(3,273/4,073)은 사실 전자였고, 한 이름으로 접혀 정보를 0으로 만들었다.
+    "absent_in_search": "검색결과에서 못 찾음",
+    "unmeasurable": "측정 실패",
+    "removed": "삭제·비공개",
+    "baseline": "감시 전 글",
+}
+
+
+def _post_view(post: dict) -> dict:
+    return {
+        "id": post["id"],
+        "log_no": post["log_no"],
+        "title": post["title"],
+        "url": post["url"],
+        "published_at": post["published_at"],
+        "status": post["status"],
+        "status_label": _STATUS_LABEL.get(post["status"], post["status"]),
+        "checks_done": post.get("checks_done"),
+        "indexed_at": post.get("indexed_at"),
+        "first_rank": post.get("first_rank"),
+        "last_checked_at": post.get("last_checked_at"),
+        "next_check_at": post.get("next_check_at"),
+    }
+
+
+@router.get("/blogs")
+async def my_watches(user: dict = Depends(get_current_user)):
+    """내 감시 블로그와 블로그별 최근 글 상태."""
+    limits = _plan_limits(user)
+    watches = await asyncio.to_thread(db.list_watches, user["id"])
+    blogs = []
+    for w in watches:
+        posts = await asyncio.to_thread(db.posts_for_blog, w["blog_id"], 10)
+        blogs.append({
+            "blog_id": w["blog_id"],
+            "rss_state": w["rss_state"],
+            "last_rss_at": w["last_rss_at"],
+            "created_at": w["created_at"],
+            "posts": [_post_view(p) for p in posts],
+        })
+    return {
+        "blogs": blogs,
+        "limit": limits.get("post_watch_blogs", 1),
+        "used": len(watches),
+        "checkpoints_hours": limits.get("post_watch_checkpoints", [24, 72]),
+        "summary": await asyncio.to_thread(db.user_status_summary, user["id"]),
+        # 화면이 '누락'이라고 쓰지 않도록 서버가 먼저 말해 둔다
+        "asserts_missing": False,
+    }
+
+
+@router.post("/blogs")
+async def add_my_watch(req: WatchRequest, user: dict = Depends(get_current_user)):
+    from services.post_watch import poll_blog
+
+    bid = _normalize(req.blog_id)
+    limits = _plan_limits(user)
+    cap = limits.get("post_watch_blogs", 1)
+    mine = _my_blog_ids(user["id"])
+    # 이미 감시 중인 블로그를 다시 누른 건 한도 초과가 아니다 — 멱등으로 둔다.
+    if bid not in mine and cap != -1 and len(mine) >= cap:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error_code": "WATCH_LIMIT_EXCEEDED",
+                "message": f"현재 플랜은 블로그 {cap}개까지 감시할 수 있습니다.",
+                "limit": cap,
+                "used": len(mine),
+            },
+        )
+
+    created = await asyncio.to_thread(db.add_watch, user["id"], bid)
+    # 등록 즉시 RSS 를 읽어 72시간 안의 글은 감시에, 나머지는 baseline 으로.
+    # 이걸 안 하면 다음 순회(60분)까지 화면이 비어 있어 등록이 실패한 것처럼 보인다.
+    try:
+        poll = await poll_blog(bid)
+    except Exception as e:  # RSS 실패가 등록 자체를 막지는 않는다
+        poll = {"error": str(e)[:200]}
+    return {"blog_id": bid, "created": created, "poll": poll, "used": len(mine | {bid}), "limit": cap}
+
+
+@router.delete("/blogs/{blog_id}")
+async def remove_my_watch(blog_id: str, user: dict = Depends(get_current_user)):
+    removed = await asyncio.to_thread(db.remove_watch, user["id"], _normalize(blog_id))
+    return {"removed": removed}
+
+
+@router.get("/blogs/{blog_id}/posts")
+async def my_blog_posts(blog_id: str, user: dict = Depends(get_current_user)):
+    """글별 상태와 확인 이력. 내가 감시하는 블로그만 볼 수 있다."""
+    bid = _normalize(blog_id)
+    if bid not in _my_blog_ids(user["id"]):
+        raise HTTPException(status_code=404, detail="감시 중인 블로그가 아닙니다")
+    posts = await asyncio.to_thread(db.posts_for_blog, bid, 30)
+    out = []
+    for p in posts:
+        view = _post_view(p)
+        view["checks"] = await asyncio.to_thread(db.checks_for_post, p["id"], 10)
+        out.append(view)
+    return {"blog_id": bid, "posts": out, "asserts_missing": False}
+
+
+@router.get("/summary")
+async def my_summary(user: dict = Depends(get_current_user)):
+    """대시보드 카드용 — 블로그 수와 상태 집계만."""
+    limits = _plan_limits(user)
+    watches = await asyncio.to_thread(db.list_watches, user["id"])
+    return {
+        "watching": len(watches),
+        "limit": limits.get("post_watch_blogs", 1),
+        "blog_ids": [w["blog_id"] for w in watches],
+        "summary": await asyncio.to_thread(db.user_status_summary, user["id"]),
+    }
+
+
+# ============ 블로그를 여러 개 다루는 사람 ============
+#
+# 시장가의 근거: 블로그매트릭스는 같은 범주(누락검사+지수)를 44,000~132,000원에
+# 팔고, 플랜 차이는 **하루 검사 횟수(100·200·500)** 뿐이다. 그 숫자는 취미
+# 블로거의 숫자가 아니라 블로그를 여러 개 다루는 사람의 숫자다.
+# 다만 블스피 사용자 99명 중 블로그 3개 이상을 분석한 사람은 6명뿐이다 —
+# 이 세그먼트는 우리 안에 거의 없고, 그래서 '가격'보다 '도구'를 먼저 만든다.
+
+
+@router.post("/blogs/bulk")
+async def add_my_watches_bulk(req: BulkWatchRequest, user: dict = Depends(get_current_user)):
+    """
+    여러 블로그를 한 번에 등록한다.
+
+    한도에 걸린 것은 **거기서 멈추고 나머지를 알려준다** — 앞의 몇 개만 조용히
+    등록하고 성공처럼 끝내면 대행사는 뭐가 빠졌는지 모른 채 운영한다.
+    """
+    limits = _plan_limits(user)
+    cap = limits.get("post_watch_blogs", 1)
+    mine = _my_blog_ids(user["id"])
+
+    seen, added, skipped, invalid = set(), [], [], []
+    for raw in req.blog_ids[:200]:  # 입력 폭주 방지
+        try:
+            bid = _normalize(raw)
+        except HTTPException:
+            invalid.append(raw[:60])
+            continue
+        if bid in seen:
+            continue
+        seen.add(bid)
+        if bid in mine:
+            skipped.append({"blog_id": bid, "reason": "already_watching"})
+            continue
+        if cap != -1 and len(mine) >= cap:
+            skipped.append({"blog_id": bid, "reason": "limit_exceeded"})
+            continue
+        await asyncio.to_thread(db.add_watch, user["id"], bid)
+        mine.add(bid)
+        added.append(bid)
+
+    # RSS 는 등록이 끝난 뒤 한 번만 돌린다. 블로그마다 즉시 호출하면 20개를
+    # 붙이는 요청 하나가 수십 초를 먹는다.
+    return {
+        "added": added,
+        "skipped": skipped,
+        "invalid": invalid,
+        "used": len(mine),
+        "limit": cap,
+        "note": "등록한 블로그의 새 글은 다음 RSS 순회(최대 60분) 부터 잡힙니다.",
+    }
+
+
+@router.get("/export.csv")
+async def export_my_watches_csv(user: dict = Depends(get_current_user)):
+    """
+    감시 현황을 CSV 로 내려준다 — 대행사가 광고주에게 보고하는 데 쓰는 형태다.
+
+    요금제 표가 '엑셀 내보내기'를 프로·비즈니스 기능으로 **팔고 있었는데 구현이
+    어디에도 없었다**(2026-10-23 확인). 이 엔드포인트가 그 약속의 실체다.
+    """
+    limits = _plan_limits(user)
+    if not limits.get("excel_export"):
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error_code": "EXPORT_NOT_IN_PLAN",
+                "message": "내보내기는 프로 플랜부터 사용할 수 있습니다.",
+            },
+        )
+
+    watches = await asyncio.to_thread(db.list_watches, user["id"])
+    buf = _io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["블로그", "글 제목", "주소", "게시시각", "상태", "확인횟수",
+                "노출확인시각", "검색결과순위", "마지막확인"])
+    for watch in watches:
+        posts = await asyncio.to_thread(db.posts_for_blog, watch["blog_id"], 200)
+        for p in posts:
+            w.writerow([
+                watch["blog_id"], p["title"], p["url"], p["published_at"],
+                _STATUS_LABEL.get(p["status"], p["status"]), p.get("checks_done") or 0,
+                p.get("indexed_at") or "", p.get("first_rank") or "",
+                p.get("last_checked_at") or "",
+            ])
+
+    # 엑셀이 한글을 깨뜨리지 않도록 BOM 을 붙인다 — 이게 없으면 받는 사람 화면에서
+    # 전부 깨져 보이고, 보고용 파일에서 그건 치명적이다.
+    data = "﻿" + buf.getvalue()
+    return StreamingResponse(
+        _io.BytesIO(data.encode("utf-8")),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="blrank-post-watch.csv"'},
+    )
+
+
+# ============ 전수 노출 감사 ============
+#
+# "블로그 N개의 최근 글 전부를 실제로 검색했습니다. M개가 안 보입니다."
+#
+# 경쟁 도구 10곳은 전부 점수(지수 0~100, 준최/최적)를 준다. 이건 관측을 준다.
+# 그 차이가 돈이 되는 자리였다 — 2026-10-23 실측에서 베이직 결제자(블로그 10개)의
+# 글 12개가 전부 미발견이었는데(대조군 5/6 노출로 측정기 검증) 아무도, 우리조차
+# 그걸 말해주지 않고 있었다.
+
+
+@router.post("/audit")
+async def start_audit_job(req: AuditRequest, user: dict = Depends(get_current_user)):
+    from services.exposure_audit import start_audit
+
+    limits = _plan_limits(user)
+    mine = _my_blog_ids(user["id"])
+
+    if req.blog_ids:
+        requested = []
+        for raw in req.blog_ids[:50]:
+            try:
+                requested.append(_normalize(raw))
+            except HTTPException:
+                continue
+        # 남의 블로그를 재주지 않는다. 감사는 비싼 작업이라 그게 곧 자원 남용이 된다.
+        targets = [b for b in dict.fromkeys(requested) if b in mine]
+        if not targets:
+            raise HTTPException(status_code=400, detail="감시 중인 블로그만 감사할 수 있습니다")
+    else:
+        targets = sorted(mine)
+
+    if not targets:
+        raise HTTPException(
+            status_code=400,
+            detail="감사할 블로그가 없습니다. 먼저 감시할 블로그를 등록해주세요.",
+        )
+
+    cap = limits.get("post_watch_blogs", 1)
+    if cap != -1:
+        targets = targets[:cap]
+
+    daily = limits.get("audit_daily", 1)
+    if daily != -1 and await asyncio.to_thread(db.audit_jobs_today, user["id"]) >= daily:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error_code": "AUDIT_LIMIT_EXCEEDED",
+                "message": f"전수 감사는 하루 {daily}회까지 할 수 있습니다.",
+                "limit": daily,
+            },
+        )
+
+    # 동시 실행 차단. 큐를 길게 받으면 박스가 먼저 죽는다(동시 4명에서 무너진 전력).
+    if await asyncio.to_thread(db.running_audit_count) >= 2:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error_code": "AUDIT_BUSY",
+                "message": "지금 다른 감사가 돌고 있습니다. 잠시 후 다시 시도해주세요.",
+            },
+        )
+
+    job_id = await asyncio.to_thread(db.create_audit_job, user["id"], targets)
+    start_audit(job_id, posts_per_blog=limits.get("audit_posts_per_blog", 10))
+    return {
+        "job_id": job_id,
+        "blog_ids": targets,
+        "posts_per_blog": limits.get("audit_posts_per_blog", 10),
+        "status": "queued",
+    }
+
+
+def _audit_view(job: dict) -> dict:
+    return {
+        "job_id": job["id"],
+        "status": job["status"],
+        "total": job.get("total") or 0,
+        "checked": job.get("checked") or 0,
+        "blog_ids": job.get("blog_ids") or [],
+        "result": job.get("result"),
+        "error": job.get("error"),
+        "created_at": job.get("created_at"),
+        "finished_at": job.get("finished_at"),
+    }
+
+
+@router.get("/audit/latest")
+async def my_latest_audit(user: dict = Depends(get_current_user)):
+    job = await asyncio.to_thread(db.latest_audit_job, user["id"])
+    return _audit_view(job) if job else {"status": "none"}
+
+
+@router.get("/audit/{job_id}")
+async def get_audit(job_id: int, user: dict = Depends(get_current_user)):
+    job = await asyncio.to_thread(db.get_audit_job, job_id)
+    if not job or job["user_id"] != user["id"]:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다")
+    return _audit_view(job)

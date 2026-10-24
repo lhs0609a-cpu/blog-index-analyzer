@@ -7,6 +7,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/stores/auth'
 import TrialExpiryBanner from '@/components/TrialExpiryBanner'
+import { PLAN_LIMITS } from '@/lib/features/featureAccess'
 import BookmarkPrompt from '@/components/BookmarkPrompt'
 // Social proof disabled (P0: fake data removal)
 import toast from 'react-hot-toast'
@@ -441,7 +442,7 @@ export default function Home() {
                       <Search className="w-8 h-8 text-white gi3d" />
                     </div>
                     <div className="flex items-center gap-2 mb-3">
-                      <span className="px-2 py-1 text-xs font-bold bg-[#0064FF] text-white rounded-full">무료 (일 8회)</span>
+                      <span className="px-2 py-1 text-xs font-bold bg-[#0064FF] text-white rounded-full">무료 (일 {PLAN_LIMITS.free.keywordSearchDaily}회)</span>
                       <span className="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-full border border-gray-200">상위 10개 분석</span>
                     </div>
                     <h3 className="text-2xl font-bold text-gray-900 mb-2">키워드 분석</h3>
@@ -468,7 +469,7 @@ export default function Home() {
                       <Zap className="w-8 h-8 text-white gi3d" />
                     </div>
                     <div className="flex items-center gap-2 mb-3">
-                      <span className="px-2 py-1 text-xs font-bold bg-purple-500 text-white rounded-full">무료 (일 2회)</span>
+                      <span className="px-2 py-1 text-xs font-bold bg-purple-500 text-white rounded-full">무료 (일 {PLAN_LIMITS.free.blogAnalysisDaily}회)</span>
                       <span className="px-2 py-1 text-xs font-medium bg-white text-gray-600 rounded-full border border-gray-200">11단계 레벨</span>
                     </div>
                     <h3 className="text-2xl font-bold text-gray-900 mb-2">블로그 분석</h3>
@@ -784,8 +785,8 @@ export default function Home() {
                 </div>
                 <ul className="space-y-3">
                   {[
-                    '블로그 진단 2회/일',
-                    '키워드 검색 8회/일',
+                    `블로그 진단 ${PLAN_LIMITS.free.blogAnalysisDaily}회/일`,
+                    `키워드 검색 ${PLAN_LIMITS.free.keywordSearchDaily}회/일`,
                     '색인률 · 지수 구성 확인',
                     '지수 변화 추이 기록'
                   ].map((item, i) => (
@@ -795,7 +796,7 @@ export default function Home() {
                     </li>
                   ))}
                   {[
-                    '진단 무제한',
+                    `진단 하루 ${PLAN_LIMITS.pro.blogAnalysisDaily}회`,
                     '순위 추적 & 알림',
                     '키워드 경쟁 분석',
                     '결과 내보내기'
@@ -826,8 +827,8 @@ export default function Home() {
                 </div>
                 <ul className="space-y-3">
                   {[
-                    '블로그 진단 무제한',
-                    '키워드 검색 200회/일',
+                    `블로그 진단 ${PLAN_LIMITS.pro.blogAnalysisDaily}회/일`,
+                    `키워드 검색 ${PLAN_LIMITS.pro.keywordSearchDaily}회/일`,
                     '안 잡히는 글 목록까지',
                     '지수 변화 추이 + 발행 활동 분석',
                     '순위 추적 & 알림',
@@ -1060,7 +1061,7 @@ export default function Home() {
                     <div className="flex items-center gap-2 mb-1">
                       <span className="px-2 py-0.5 text-[9px] font-bold bg-green-500 text-white rounded-full">7일 무료</span>
                     </div>
-                    <div className="text-sm font-bold text-gray-900 truncate">진단 무제한 + 순위 추적</div>
+                    <div className="text-sm font-bold text-gray-900 truncate">진단 하루 {PLAN_LIMITS.pro.blogAnalysisDaily}회 + 순위 추적</div>
                     <div className="text-xs text-gray-500">클릭 한 번으로 해지 · 위약금 0원</div>
                   </div>
                   <div className="hidden sm:flex items-center gap-1 px-4 py-2 rounded-xl bg-[#0064FF] text-white text-xs font-bold flex-shrink-0">

@@ -32,16 +32,20 @@ export const CATEGORIES: Record<string, string> = {
 // Plan Info
 export const PLAN_INFO: Record<Plan, { name: string; price: number; priceYearly: number; dailyLimit: number; badge: string }> = {
   guest: { name: '비회원', price: 0, priceYearly: 0, dailyLimit: 5, badge: '' },
-  free: { name: '무료', price: 0, priceYearly: 0, dailyLimit: 10, badge: '' },
-  basic: { name: '베이직', price: 9900, priceYearly: 95000, dailyLimit: 50, badge: 'Basic' },
-  pro: { name: '프로', price: 19900, priceYearly: 191000, dailyLimit: 200, badge: 'Pro' },
+  free: { name: '무료', price: 0, priceYearly: 0, dailyLimit: 3, badge: '' },
+  basic: { name: '베이직', price: 9900, priceYearly: 95000, dailyLimit: 30, badge: 'Basic' },
+  pro: { name: '프로', price: 19900, priceYearly: 191000, dailyLimit: 100, badge: 'Pro' },
   business: { name: '비즈니스', price: 49900, priceYearly: 479000, dailyLimit: -1, badge: 'Business' }
 }
 
 // Plan-level limits (for pricing page display)
+// 숫자의 출처는 백엔드 flyio-backend/database/subscription_db.py PLAN_LIMITS 다.
+// 서버가 실제로 막는 값과 다르면 화면이 거짓말을 한다 — 바꿀 때는 둘을 같이 바꾼다.
 export interface PlanLimits {
   keywordSearchDaily: number
   blogAnalysisDaily: number
+  /** 새 글 감시 블로그 수. 서버 PLAN_LIMITS.post_watch_blogs 와 같아야 한다. */
+  postWatchBlogs: number
   searchResultsCount: number
   historyDays: number
   competitorCompare: number
@@ -53,8 +57,9 @@ export interface PlanLimits {
 
 export const PLAN_LIMITS: Record<Exclude<Plan, 'guest'>, PlanLimits> = {
   free: {
-    keywordSearchDaily: 3,  // P0: 8→3 유료 전환 유도
-    blogAnalysisDaily: 1,   // P0: 2→1 유료 전환 유도
+    keywordSearchDaily: 5,  // 3→5 (2026-10-21) — 서버 PLAN_LIMITS 와 같아야 한다
+    postWatchBlogs: 1,
+    blogAnalysisDaily: 5,   // 1→5 (2026-10-21) — 비회원(1회)보다 커야 가입할 이유가 생긴다
     searchResultsCount: 5,  // P0: 10→5 결과 제한
     historyDays: 0,
     competitorCompare: 0,
@@ -64,20 +69,22 @@ export const PLAN_LIMITS: Record<Exclude<Plan, 'guest'>, PlanLimits> = {
     teamMembers: 1
   },
   basic: {
-    keywordSearchDaily: 50,
-    blogAnalysisDaily: 20,
-    searchResultsCount: 30,
+    keywordSearchDaily: 30,
+    postWatchBlogs: 3,
+    blogAnalysisDaily: 10,
+    searchResultsCount: 10,
     historyDays: 30,
     competitorCompare: 3,
     rankAlert: false,
-    excelExport: true,
+    excelExport: false,
     apiAccess: false,
     teamMembers: 1
   },
   pro: {
-    keywordSearchDaily: 200,
-    blogAnalysisDaily: 100,
-    searchResultsCount: 50,
+    keywordSearchDaily: 100,
+    postWatchBlogs: 10,
+    blogAnalysisDaily: 50,
+    searchResultsCount: 20,
     historyDays: 90,
     competitorCompare: 10,
     rankAlert: true,
@@ -87,8 +94,9 @@ export const PLAN_LIMITS: Record<Exclude<Plan, 'guest'>, PlanLimits> = {
   },
   business: {
     keywordSearchDaily: -1,
+    postWatchBlogs: 30,
     blogAnalysisDaily: -1,
-    searchResultsCount: 100,
+    searchResultsCount: 50,
     historyDays: -1,
     competitorCompare: -1,
     rankAlert: true,
@@ -145,18 +153,21 @@ export const FEATURES: Record<string, FeatureConfig> = {
     category: 'analysis',
     access: { guest: 'limited', free: 'limited', basic: 'full', pro: 'full', business: 'full' }
   },
-  keywordAnalysis: {
-    name: 'keywordAnalysis',
-    displayName: '키워드 분석',
-    description: '키워드별 상위 노출 블로그를 분석합니다',
+  // 키 이름·한도는 백엔드 feature_config/feature_access.py 의 "keywordSearch" 와 같다.
+  // (예전 키 'keywordAnalysis' 는 백엔드에 없고, 화면은 'keywordSearch' 를 찾고 있어
+  //  유료 회원도 '존재하지 않는 기능'으로 잠겼다.)
+  keywordSearch: {
+    name: 'keywordSearch',
+    displayName: '키워드 검색',
+    description: '키워드별 블로그 상위 노출 분석',
     category: 'analysis',
-    access: { guest: 'limited', free: 'limited', basic: 'full', pro: 'full', business: 'full' },
+    access: { guest: 'limited', free: 'limited', basic: 'limited', pro: 'limited', business: 'full' },
     limits: {
       guest: { maxKeywords: 5, treeExpansion: false },
       free: { maxKeywords: 10, treeExpansion: false },
-      basic: { maxKeywords: -1, treeExpansion: true },
-      pro: { maxKeywords: -1, treeExpansion: true },
-      business: { maxKeywords: -1, treeExpansion: true }
+      basic: { maxKeywords: 30, treeExpansion: true },
+      pro: { maxKeywords: 50, treeExpansion: true },
+      business: { maxKeywords: 100, treeExpansion: true }
     }
   },
   ranktrack: {

@@ -14,6 +14,9 @@ import logging
 import re
 import random
 import asyncio
+import os
+import uuid
+from contextvars import ContextVar
 from bs4 import BeautifulSoup
 
 from config import settings
@@ -71,17 +74,27 @@ BLOG_CACHE_TTL = 3600  # 1시간 (4시간 → 1시간 메모리 절약)
 # 글 단위 캐시가 생겨 "성능 제약" 이 사라졌으므로 3 → 15 로 올린다.
 # 15면 하루 6~7개 올리는 블로그도 표본의 절반 이상이 어제와 겹친다.
 FULLPARSE_SAMPLE_SIZE = 15
+# 풀파싱 표본을 읽는 데 쓰는 시간 상한(블로그 1개당). 본문 요청은 서버 전체에서
+# 동시 4개로 묶여 있어서, 캐시가 빈 키워드(블로그 20개 × 15글)는 2026-10-21 운영
+# 실측 278.7초 — 요청 데드라인 180초를 넘겨 사용자는 결과를 못 받는다.
+# 상한 안에 읽힌 글로만 평균을 낸다. 못 읽은 글은 다음 분석 때 캐시 미스로 다시 읽힌다.
+FULLPARSE_BUDGET_S = float(os.getenv("FULLPARSE_BUDGET_S", "45"))
 
 
 def get_cached_blog_analysis(blog_id: str) -> Optional[Dict]:
-    """캐시된 블로그 분석 결과 조회"""
+    """캐시된 블로그 분석 결과 조회 — 메모리 → DB(database/blog_analysis_cache) 순"""
     if blog_id in BLOG_ANALYSIS_CACHE:
         cached = BLOG_ANALYSIS_CACHE[blog_id]
         if time.time() - cached["timestamp"] < BLOG_CACHE_TTL:
             return cached["data"]
         else:
             del BLOG_ANALYSIS_CACHE[blog_id]
-    return None
+    # 메모리는 100개·배포 때 초기화라 금방 빈다. DB 는 PK 조회 한 번(ms 미만)이다.
+    from database import blog_analysis_cache as BAC
+    data = BAC.get(blog_id)
+    if data is not None:
+        set_blog_analysis_cache(blog_id, data)
+    return data
 
 def set_blog_analysis_cache(blog_id: str, data: Dict):
     """블로그 분석 결과 캐시 저장"""
@@ -365,8 +378,13 @@ def estimate_from_successful_results(blog_id: str, successful_results: list) -> 
         if idx.get("level"):
             levels.append(idx["level"])
         if idx.get("score_breakdown"):
-            c_ranks.append(idx["score_breakdown"].get("c_rank", 0))
-            dias.append(idx["score_breakdown"].get("dia", 0))
+            # None(미측정)은 평균에 넣지 않는다 — 0 으로 바꾸면 동료 평균을 끌어내린다
+            _cr = idx["score_breakdown"].get("c_rank")
+            _di = idx["score_breakdown"].get("dia")
+            if _cr is not None:
+                c_ranks.append(_cr)
+            if _di is not None:
+                dias.append(_di)
         st = result.get("stats") or {}
         if st.get("total_posts"):
             posts.append(st["total_posts"])
@@ -483,6 +501,13 @@ class BlogIndex(BaseModel):
     level_category: str = ""
     percentile: Optional[float] = None
     score_breakdown: Optional[Dict[str, Any]] = None
+    # ===== 측정 상태 =====
+    # 화면이 "낮은 등급"과 "이번에 제대로 못 쟀다"를 구분할 수 있어야 한다.
+    # 예전에는 이 정보가 계산만 되고 응답에 실리지 않아 UI 가 알 길이 없었다.
+    measurement_complete: Optional[bool] = None
+    unmeasured_dimensions: Optional[List[str]] = None
+    partial_dimensions: Optional[List[str]] = None
+    unmeasurable_reason: Optional[str] = None
 
 
 class BlogResult(BaseModel):
@@ -573,9 +598,10 @@ class SimpleScoreBreakdown(BaseModel):
     content_factors 가 빠져 있어 "3.1 + 25.9 인데 총점 92.1" 처럼
     합이 맞지 않는 화면이 나갔다.
     """
-    c_rank: float = 0
-    dia: float = 0
-    # 측정 불가일 수 있다 (None = 이 축을 못 쟀다는 뜻, 0점이 아니다)
+    # 세 항 모두 측정 불가일 수 있다 (None = 이 축을 못 쟀다는 뜻, 0점이 아니다).
+    # c_rank/dia 는 예전엔 하위점수가 중립 50 으로 채워져 늘 값이 있었다.
+    c_rank: Optional[float] = None
+    dia: Optional[float] = None
     content_factors: Optional[float] = None
     # 누적 지표 보너스 (글수·이웃수·방문자)
     extra_bonus: float = 0
@@ -675,6 +701,9 @@ class VerifyIndexResponse(BaseModel):
     confidence: str = "low"
     method: str = "multi_signal_v2"
     disclaimer: Optional[str] = None
+    # 체험단 선정 관점의 해석 — 측정값을 시장가로 번역한다.
+    # services/campaign_selection.py 참고. 추가 측정 비용은 없다(같은 결과를 재해석).
+    selection: Optional[Dict[str, Any]] = None
     cached: bool = False
     error: Optional[str] = None
 
@@ -1810,7 +1839,74 @@ async def fetch_display_ranks(keyword: str, blog_results: List[Dict]) -> Dict[st
     return display_info
 
 
+class _PostFetchUnreachable(Exception):
+    """네이버 본문 수집을 시도하지 않고 건너뛴다는 신호(실패가 아니라 회피)."""
+
+
+# 네이버가 서버 IP 를 막으면 연결 자체가 타임아웃된다(connect 3s). 그 상태에서
+# analyze_post 는 글 하나당 폴백 3단계를 다 던지고, 키워드 하나는 SERP 20개 ×
+# 풀파싱 표본까지 100회 넘게 analyze_post 를 부른다. 2026-10-07 실측:
+# 그래서 요청이 180초 데드라인을 넘겨 504 가 됐다(186.8s) — 사용자는 3분을
+# 기다린 끝에 아무것도 받지 못한다.
+# 연결이 막힌 게 확인되면 쿨다운 동안 본문 수집을 건너뛴다. 측정 불가 행이 나오는
+# 건 어쩔 수 없지만, 그건 '등급 보류'로 정직하게 표시되고 결과는 받을 수 있다.
+_POST_FETCH_FAIL_THRESHOLD = 3     # 연속 연결 실패 몇 번에 차단할지
+# 60초는 길었다 — 차단은 수십 초 단위로 풀리는데 그동안 들어온 키워드 결과가
+# 통째로 '부분 측정'이 됐다(2026-10-21 운영). 30초 뒤 다시 시도한다.
+_POST_FETCH_COOLDOWN_S = 30.0      # 차단 유지 시간
+_post_fetch_breaker = {"until": 0.0, "fails": 0}
+
+
+def _post_fetch_blocked() -> bool:
+    return time.time() < _post_fetch_breaker["until"]
+
+
+def _note_post_connect_fail(post_url: str) -> None:
+    _post_fetch_breaker["fails"] += 1
+    if _post_fetch_breaker["fails"] >= _POST_FETCH_FAIL_THRESHOLD:
+        _post_fetch_breaker["until"] = time.time() + _POST_FETCH_COOLDOWN_S
+        _post_fetch_breaker["fails"] = 0
+        logger.warning(
+            f"[post-fetch] 네이버 연결 실패 {_POST_FETCH_FAIL_THRESHOLD}회 연속 — "
+            f"{_POST_FETCH_COOLDOWN_S:.0f}초간 본문 수집을 건너뛴다 (마지막: {post_url})"
+        )
+
+
+def _note_post_connect_ok() -> None:
+    if _post_fetch_breaker["fails"]:
+        _post_fetch_breaker["fails"] = 0
+
+
+# 데스크톱 PostView 만 막히는 구간이 따로 있다. 2026-10-21 실측(Fly 서버):
+#   blog.naver.com/PostView.naver → ReadTimeout(10s)
+#   m.blog.naver.com/{id}/{no}    → 200, 1.1s
+# 예전엔 PostView 타임아웃을 '네이버 전체 불가'로 보고 글을 통째로 포기했고,
+# 그게 위 브레이커까지 열어 키워드 분석 결과가 전부 '측정 불가'가 됐다.
+# PostView 실패는 이 호스트만 쿨다운 동안 건너뛰고 모바일로 넘어간다.
+_postview_breaker = {"until": 0.0}
+
+
+class _PostViewSkip(Exception):
+    """PostView 쿨다운 중 — 모바일로 바로 넘어간다."""
+
+
+# 본문 수집 동시성 상한(서버 전체). 키워드 1회는 SERP 20개 블로그를 동시에 분석하고
+# 블로그마다 풀파싱 표본 15개 + SERP 글 1개를 읽으니, 제한이 없으면 네이버에
+# 한꺼번에 ~320개 요청이 나간다. 2026-10-21 운영 로그: 그 순간 PostView 가 막히고,
+# 모바일로 돌리자 모바일도 연달아 연결 실패 → 브레이커 → 전 행 '측정 불가'.
+# 단건은 멀쩡히 1초에 온다(같은 날 서버에서 실측). 문제는 버스트다.
+# 같은 날 로컬에서도 버스트 직후 m.blog 가 Akamai 403(Access Denied)을 줬다.
+# 6 으로도 같은 날 버스트 구간에 모바일까지 연달아 막혔다(3분에 37개 블로그 부분 측정) → 4.
+_POST_FETCH_SEM = asyncio.Semaphore(int(os.getenv("POST_FETCH_CONCURRENCY", "4")))
+
+
 async def analyze_post(post_url: str, keyword: str) -> Dict:
+    """analyze_post 를 동시성 상한 안에서 실행한다(위 _POST_FETCH_SEM 참고)."""
+    async with _POST_FETCH_SEM:
+        return await _analyze_post_unlimited(post_url, keyword)
+
+
+async def _analyze_post_unlimited(post_url: str, keyword: str) -> Dict:
     """
     개별 블로그 글 분석 - 상위 노출 글의 특성 파악 (강화 버전)
 
@@ -1860,6 +1956,11 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
             logger.warning(f"Could not extract blog_id/post_no from: {post_url}")
             return post_analysis
 
+        # 네이버 연결이 막힌 구간이면 시도 자체를 하지 않는다(타임아웃 적립 방지).
+        if _post_fetch_blocked():
+            post_analysis["skipped_reason"] = "naver_unreachable"
+            raise _PostFetchUnreachable()
+
         # 다양한 User-Agent로 시도
         user_agents = [
             "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
@@ -1871,10 +1972,19 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, limits=httpx.Limits(max_connections=30)) as client:
             content_text = ""
             title_text = ""
+            # PostView HTML 에 본문(se-main-container)이 있으면 아래 공용 파서가 그대로
+            # 읽는다. 2026-10-21 실측: PostView 에는 __PRELOADED_STATE__ 가 더는 없어서
+            # JSON 경로가 늘 비고, 그 탓에 모든 글이 모바일을 한 번 더 불렀다(글당 2요청).
+            postview_has_body = False
+            # 이번 호출에서 PostView 를 실제로 쳐 봤는지(쿨다운으로 건너뛰면 False).
+            postview_tried = False
 
             # ===== 방법 1: PostView API로 직접 접근 =====
             try:
+                if time.time() < _postview_breaker["until"]:
+                    raise _PostViewSkip()
                 postview_url = f"https://blog.naver.com/PostView.naver?blogId={blog_id}&logNo={post_no}&redirect=Dlog"
+                postview_tried = True
                 headers1 = {
                     "User-Agent": user_agents[0],
                     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -1885,6 +1995,7 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
 
                 if resp.status_code == 200:
                     html = resp.text
+                    postview_has_body = "se-main-container" in html
 
                     # JSON 데이터 추출 시도 (네이버 블로그 내부 데이터)
                     json_match = re.search(r'__PRELOADED_STATE__\s*=\s*(\{.+?\});?\s*</script>', html, re.DOTALL)
@@ -1953,11 +2064,23 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
                         except Exception as je:
                             logger.debug(f"JSON parse failed: {je}")
 
+            except _PostViewSkip:
+                pass
+            except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as ce:
+                # PostView 호스트만 막힌 것일 수 있다(모바일은 다른 호스트).
+                # 글을 포기하지 않고 PostView 만 쿨다운에 넣은 뒤 모바일로 간다.
+                # 모바일까지 막히면 그때 아래에서 전체 브레이커가 판단한다.
+                if time.time() >= _postview_breaker["until"]:
+                    logger.warning(
+                        f"[post-fetch] PostView 연결 실패({type(ce).__name__}) — "
+                        f"{_POST_FETCH_COOLDOWN_S:.0f}초간 모바일로만 수집 (마지막: {post_url})"
+                    )
+                _postview_breaker["until"] = time.time() + _POST_FETCH_COOLDOWN_S
             except Exception as e1:
                 logger.debug(f"PostView method failed: {e1}")
 
             # ===== 방법 2: 모바일 버전 (기존 방식 개선) =====
-            if not content_text or len(content_text) < 100:
+            if (not content_text or len(content_text) < 100) and not postview_has_body:
                 mobile_url = f"https://m.blog.naver.com/{blog_id}/{post_no}"
                 headers = {
                     "User-Agent": user_agents[1],
@@ -1965,7 +2088,31 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
                     "Accept-Language": "ko-KR,ko;q=0.9",
                     "Referer": "https://m.search.naver.com/",
                 }
-                resp = await client.get(mobile_url, headers=headers)
+                try:
+                    resp = await client.get(mobile_url, headers=headers)
+                except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as ce:
+                    # 막히는 호스트가 번갈아 바뀐다(2026-10-21 운영: PostView 가 막힌 동안
+                    # 모바일이 되다가, 잠시 뒤엔 반대). PostView 를 쿨다운으로 건너뛰었다면
+                    # 포기하기 전에 한 번만 다시 쳐 본다 — 그새 풀렸을 수 있다.
+                    resp = None
+                    if not postview_tried:
+                        try:
+                            resp = await client.get(
+                                f"https://blog.naver.com/PostView.naver?blogId={blog_id}&logNo={post_no}&redirect=Dlog",
+                                headers={
+                                    "User-Agent": user_agents[0],
+                                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                                    "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+                                    "Referer": "https://search.naver.com/",
+                                },
+                            )
+                            _postview_breaker["until"] = 0.0
+                        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout):
+                            resp = None
+                    if resp is None:
+                        _note_post_connect_fail(post_url)
+                        post_analysis["skipped_reason"] = "naver_unreachable"
+                        raise _PostFetchUnreachable() from ce
 
             if resp.status_code == 200:
                 html = resp.text
@@ -2214,10 +2361,18 @@ async def analyze_post(post_url: str, keyword: str) -> Dict:
             else:
                 logger.warning(f"Failed to fetch post: {blog_id}/{post_no} - status {resp.status_code}")
 
+    except _PostFetchUnreachable:
+        # 실패가 아니라 '시도하지 않음'이다. 트레이스백으로 로그를 채우지 않는다.
+        logger.debug(f"[post-fetch] 건너뜀(네이버 연결 불가): {post_url}")
     except Exception as e:
         logger.error(f"Error analyzing post {post_url}: {e}")
         import traceback
         logger.error(traceback.format_exc())
+
+    # 본문을 실제로 받아왔다면 연속 실패 카운터를 되돌린다 — 일시적 실패 몇 건으로
+    # 브레이커가 열리면 멀쩡한 구간에서도 측정을 건너뛰게 된다.
+    if post_analysis.get("data_fetched"):
+        _note_post_connect_ok()
 
     # ===== 포스트 단위 6신호 점수 (D.I.A.+ 문서 평가 모방) =====
     # 블로그 평균 점수가 SERP 순위와 무관(ρ≈0.04)이라는 검증 결과 → 포스트 단위로 전환
@@ -2408,14 +2563,35 @@ async def resolve_canonical_blog_id(blog_id: str) -> Optional[str]:
     """
     입력값이 실제 블로그 주소가 아닐 때 진짜 주소를 찾아준다.
 
-    네이버 RSS는 계정 ID나 옛 주소로 요청하면 현재 블로그 주소로 302를 준다.
-        rss.blog.naver.com/leegustjr9.xml → http://rss.blog.naver.com/goodspolice
-    사용자가 로그인 ID를 블로그 주소로 착각하는 경우가 잦아 이 힌트가 유용하다.
+    사용자가 로그인 ID를 블로그 주소로 착각하는 경우가 잦다. 블로그 주소를 바꾼
+    계정은 계정 ID로는 블로그가 안 열리지만, 모바일 블로그 API는 계정 ID를 받아
+    그 계정의 현재 블로그 주소를 돌려준다(Referer 없으면 에러).
+        m.blog.naver.com/api/blogs/lhs0609c   → result.blogId = "platonmarketing"
+        m.blog.naver.com/api/blogs/leegustjr9 → result.blogId = "goodspolice"
+        없는 ID → 400 blog_id_invalidate
+    예전엔 RSS가 같은 정보를 302로 줬으나(2026-10 실측) 지금은 빈 XML 200이라
+    API를 먼저 보고 RSS는 예비로만 남긴다.
 
     Returns: 다른 주소를 찾으면 그 blog_id, 아니면 None
     """
+    client = await get_http_client()
     try:
-        client = await get_http_client()
+        resp = await client.get(
+            f"https://m.blog.naver.com/api/blogs/{blog_id}",
+            headers={
+                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
+                "Referer": "https://m.blog.naver.com/",
+            },
+            follow_redirects=False,
+            timeout=5.0,
+        )
+        if resp.status_code == 200:
+            real_id = ((resp.json() or {}).get("result") or {}).get("blogId")
+            if real_id and real_id != blog_id:
+                return real_id
+    except Exception as e:
+        logger.debug(f"canonical id resolve (api) failed for {blog_id}: {e}")
+    try:
         resp = await client.get(
             f"https://rss.blog.naver.com/{blog_id}.xml",
             follow_redirects=False,
@@ -2741,6 +2917,44 @@ async def scrape_blog_stats(blog_id: str) -> Dict:
     return stats
 
 
+def _visible_results_limit(gate) -> Optional[int]:
+    """플랜이 볼 수 있는 검색 결과 행 수. None 이면 제한 없음.
+
+    비회원은 무료 플랜과 같은 칸을 쓴다(가격 페이지의 '무료 5개'가 그 줄이다).
+    내부 파이썬 호출(gate=None)은 파이프라인이므로 자르지 않는다.
+    """
+    if gate is None:
+        return None
+    try:
+        from database.subscription_db import PLAN_LIMITS, PlanType
+    except Exception:
+        return None
+    plan = (getattr(gate, "plan", None) or "guest").lower()
+    if plan in ("guest", ""):
+        plan = "free"
+    for pt, limits in PLAN_LIMITS.items():
+        if (pt.value if hasattr(pt, "value") else str(pt)).lower() == plan:
+            n = limits.get("search_results_count")
+            if isinstance(n, int) and n > 0:
+                return n
+            return None
+    return None
+
+
+def _normalize_measured_parts(parts) -> Optional[float]:
+    """측정된 하위항목만으로 차원 점수를 만든다. 하나도 없으면 None.
+
+    못 쟀을 때 중립 50 을 집어넣으면 그 50 이 점수가 되어 "측정 실패"가
+    "평범한 블로그"로 보인다. content_factors 가 쓰던 방식과 같게 맞춘다.
+    """
+    if not parts:
+        return None
+    w_sum = sum(w for _, w in parts)
+    if w_sum > 0:
+        return sum(s * w for s, w in parts) / w_sum
+    return sum(s for s, _ in parts) / len(parts)
+
+
 async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = False) -> Dict:
     """Analyze a single blog - FAST version using API only (no Playwright)"""
     # 캐시 확인 (성능 개선)
@@ -3029,10 +3243,31 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
                             cached = await asyncio.to_thread(PAC.get_many, post_links)
                             todo = [u for u in post_links if u not in cached]
 
-                            fresh_results = await asyncio.gather(
-                                *[analyze_post(url, post_keyword) for url in todo],
-                                return_exceptions=True,
-                            )
+                            # 블로그당 동시 2개까지만 줄을 세운다. 전역 상한(4)은 선착순이라,
+                            # 키워드 하나가 블로그 20개 × 15글을 한꺼번에 넣으면 앞 블로그 몇 개가
+                            # 상한 시간을 다 쓰고 나머지는 0글이 됐다(2026-10-21 운영: 20개 중 16개).
+                            # 블로그별로 끊어 넣으면 모든 블로그가 돌아가며 몇 글씩 읽힌다.
+                            blog_sem = asyncio.Semaphore(2)
+
+                            async def _fetch_one(url: str) -> Dict:
+                                async with blog_sem:
+                                    return await analyze_post(url, post_keyword)
+
+                            tasks = [asyncio.create_task(_fetch_one(url)) for url in todo]
+                            if tasks:
+                                done, pending = await asyncio.wait(tasks, timeout=FULLPARSE_BUDGET_S)
+                                for t in pending:
+                                    t.cancel()
+                                if pending:
+                                    await asyncio.gather(*pending, return_exceptions=True)
+                                    logger.info(
+                                        f"Fullparse {blog_id}: {FULLPARSE_BUDGET_S:.0f}초 상한 — "
+                                        f"{len(done)}/{len(tasks)}개만 읽음"
+                                    )
+                            fresh_results = [
+                                t.result() if (not t.cancelled() and t.exception() is None) else None
+                                for t in tasks
+                            ]
                             fresh: Dict[str, Any] = {}
                             for url, r in zip(todo, fresh_results):
                                 if isinstance(r, dict) and r.get("data_fetched"):
@@ -3156,7 +3391,13 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
 
         # Context Score (주제 집중도) - 0~100
         # A-2 보강: 카테고리 엔트로피 우선 사용. 엔트로피가 낮을수록 = 한 카테고리에 글이 몰림 = 주제 집중도 ↑
-        context_score = 50  # Base
+        # ⚠️ 아래 하위점수들의 "Base = 50" 은 측정값이 아니라 **못 쟀다는 표시**다.
+        # 예전에는 그 50 이 가중합에 그대로 들어가 c_rank·dia 를 만들어냈고,
+        # 방문자·이웃·글 수가 전부 null 인 블로그가 "준최2 / 50.8점"으로 나갔다
+        # (2026-10-06 프로덕션 실측: 100행 중 34행). 측정된 하위항목만 정규화한다 —
+        # content_factors 가 이미 쓰는 방식 그대로다.
+        context_score = 50  # Base (미측정)
+        context_measured = False
         entropy = analysis_data.get("category_entropy")
         cats = analysis_data.get("category_count") or 0
         if entropy is not None and cats > 0:
@@ -3166,6 +3407,7 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
             normalized = entropy / max_entropy if max_entropy > 0 else 0
             # normalized 0 → 95점, 1 → 35점 (선형)
             context_score = max(35, min(95, round(95 - normalized * 60)))
+            context_measured = True
         elif cats > 0:
             # 엔트로피 못 구한 경우: 기존 카테고리 개수 휴리스틱 폴백
             if cats <= 3:
@@ -3176,10 +3418,14 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
                 context_score = 60
             else:
                 context_score = 40
+            context_measured = True
 
         # Content Score (콘텐츠 품질) - 0~100
         # A-2 보강: 글 길이 + 이미지 개수 + 단어 수를 결합
-        content_score = 50  # Base
+        content_score = 50  # Base (미측정)
+        # RSS 를 못 읽으면 avg_len=0 → length_score 35 가 되는데, 그건 '짧은 글'이
+        # 아니라 '글을 못 봤다'는 뜻이다. 길이 신호가 없으면 측정 안 된 것으로 둔다.
+        content_measured = bool(analysis_data.get("avg_post_length"))
         avg_len = analysis_data.get("avg_post_length") or 0
         if avg_len > 0 and avg_len < 500:
             avg_len = avg_len * 7
@@ -3231,10 +3477,12 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
 
         # Chain Score (연결성/공감 연쇄) - 0~100
         # A-2 보강: 풀파싱 공감/댓글 우선, 없으면 이웃수 폴백
-        chain_score = 50  # Base
+        chain_score = 50  # Base (미측정)
+        chain_measured = False
         avg_likes = analysis_data.get("fullparse_avg_likes")
         avg_comments = analysis_data.get("fullparse_avg_comments")
         if avg_likes is not None or avg_comments is not None:
+            chain_measured = True
             # 진짜 신호: 공감 + 댓글*2 (댓글이 더 강한 engagement 신호)
             engagement = (avg_likes or 0) + (avg_comments or 0) * 2
             if engagement >= 100:
@@ -3252,6 +3500,7 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
             else:
                 chain_score = 30
         elif stats["neighbor_count"]:
+            chain_measured = True
             neighbors = stats["neighbor_count"]
             if neighbors >= 5000:
                 chain_score = 95
@@ -3280,13 +3529,25 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
         else:
             context_w, content_w, chain_w = 0.40, 0.50, 0.10
 
-        c_rank_score = (context_score * context_w + content_score * content_w + chain_score * chain_w)
+        c_rank_parts = []
+        c_rank_detail = {}
+        if context_measured:
+            c_rank_parts.append((context_score, context_w))
+            c_rank_detail["context"] = round(context_score, 1)
+        if content_measured:
+            c_rank_parts.append((content_score, content_w))
+            c_rank_detail["content"] = round(content_score, 1)
+        if chain_measured:
+            c_rank_parts.append((chain_score, chain_w))
+            c_rank_detail["chain"] = round(chain_score, 1)
+        c_rank_score = _normalize_measured_parts(c_rank_parts)
 
         # ===== D.I.A. SCORE CALCULATION =====
         # D.I.A.: Depth(깊이) + Information(정보성) + Accuracy(정확성)
 
         # Depth Score (분석 깊이) - 0~100
-        depth_score = 50  # Base (미측정 시 중립)
+        depth_score = 50  # Base (미측정)
+        depth_measured = stats["total_posts"] is not None
         if stats["total_posts"] is not None:
             posts = stats["total_posts"]
             if posts >= 2000:
@@ -3306,7 +3567,11 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
 
         # Information Score (정보성) - 0~100
         # A-2 보강: 최근 활동일 + 평균 발행 간격을 함께 본다 (꾸준함 측정)
-        info_score = 50  # Base
+        info_score = 50  # Base (미측정)
+        info_measured = (
+            analysis_data["recent_activity"] is not None
+            or analysis_data.get("posting_interval_days") is not None
+        )
         if analysis_data["recent_activity"] is not None:
             days = analysis_data["recent_activity"]
             if days <= 1:
@@ -3351,10 +3616,12 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
             info_score = recency_score
 
         # Accuracy Score (신뢰도/정확성) - 0~100
-        accuracy_score = 50  # Base
+        accuracy_score = 50  # Base (미측정)
+        accuracy_measured = False
         # 우선순위 1: 실측 일별 방문자(NVisitorgp) — 조작값이 아닌 진짜 트래픽 신호
         # 일 방문 기준 컷 (누적 아님): 1000+ 강한 활성, 10 미만 사실상 방치
         if stats.get("visitor_measured") and stats.get("daily_visitors") is not None:
+            accuracy_measured = True
             dv = stats.get("recent_avg_visitors") or stats["daily_visitors"]
             if dv >= 3000:
                 accuracy_score = 95
@@ -3374,6 +3641,7 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
                 accuracy_score = 25
         # 우선순위 2: 스크랩된 누적 방문자(실측 HTML). 조작값(get_consistent_value)은 제외.
         elif stats["total_visitors"] and "scrape" in analysis_data["data_sources"]:
+            accuracy_measured = True
             visitors = stats["total_visitors"]
             if visitors >= 10000000:
                 accuracy_score = 95
@@ -3406,7 +3674,18 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
         else:
             depth_w, info_w, acc_w = 0.20, 0.50, 0.30
 
-        dia_score = (depth_score * depth_w + info_score * info_w + accuracy_score * acc_w)
+        dia_parts = []
+        dia_detail = {}
+        if depth_measured:
+            dia_parts.append((depth_score, depth_w))
+            dia_detail["depth"] = round(depth_score, 1)
+        if info_measured:
+            dia_parts.append((info_score, info_w))
+            dia_detail["information"] = round(info_score, 1)
+        if accuracy_measured:
+            dia_parts.append((accuracy_score, acc_w))
+            dia_detail["accuracy"] = round(accuracy_score, 1)
+        dia_score = _normalize_measured_parts(dia_parts)
 
         # ===== FINAL SCORE — B 검증 결과 기반 가중치 =====
         # 측정 ρ: c_rank +0.032, dia +0.015, content_factors(외부 측정 raw) > 둘
@@ -3512,19 +3791,40 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
         #    블로그가 준최6→준최2로 떨어진 것으로 보였다.
         #    → 어떤 차원을 못 쟀는지 기록하고, 핵심 차원이 빠지면 '불완전 측정'
         #      으로 표시한다. 시계열 적재는 그 표시를 보고 거른다.
-        dimensions = [
-            (c_rank_score, c_rank_weight),
-            (dia_score, dia_weight),
-        ]
+        dimensions = []
         unmeasured_dimensions = []
+        # c_rank·dia 도 하위항목을 하나도 못 쟀으면 None 이다(예전엔 중립 50 의
+        # 가중합이 들어와 언제나 값이 있었다). 못 쟨 차원은 정규화에서 뺀다.
+        if c_rank_score is not None:
+            dimensions.append((c_rank_score, c_rank_weight))
+        else:
+            unmeasured_dimensions.append("c_rank")
+        if dia_score is not None:
+            dimensions.append((dia_score, dia_weight))
+        else:
+            unmeasured_dimensions.append("dia")
+        # 콘텐츠를 '쟀다'와 '제대로 쟀다'는 다르다. 소제목·문단은 본문 풀파싱에서만
+        # 나오고, 풀파싱이 실패하면 content_factors 가 3항목(길이·이미지·최신성)으로
+        # 줄어든 채 완전 측정인 것처럼 재정규화된다.
+        # 2026-10-06 실측(부산맛집, v531→v532 같은 키워드 재호출):
+        #   alik1982  70.3 → 83.2 (준최5 → 최적2)   content_detail 3항목 → 5항목
+        #   autumn_eve 70.2 → 86.2 (준최5 → 최적1+)
+        # 블로그는 그대로인데 등급이 2~3단계 움직인다. 같은 자로 잰 게 아니다.
+        content_fullparsed = "fullparse" in analysis_data["data_sources"]
+        partial_dimensions = []
         if content_factor_score is not None:
             dimensions.append((content_factor_score, content_weight))
+            if not content_fullparsed:
+                partial_dimensions.append("content_factors")
         else:
             unmeasured_dimensions.append("content_factors")
 
         index["unmeasured_dimensions"] = unmeasured_dimensions
-        # 콘텐츠는 가중치 절반이다. 이게 없으면 그 점수는 다른 날과 비교할 수 없다.
-        index["measurement_complete"] = not unmeasured_dimensions
+        index["partial_dimensions"] = partial_dimensions
+        index["content_fullparsed"] = content_fullparsed
+        # 콘텐츠는 가중치 절반이다. 이게 없으면(또는 반만 쟀으면) 그 점수는
+        # 다른 날·다른 블로그와 같은 선에 올릴 수 없다.
+        index["measurement_complete"] = not unmeasured_dimensions and not partial_dimensions
 
         weight_sum = sum(w for _, w in dimensions)
         if weight_sum <= 0:
@@ -3631,21 +3931,68 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
         # 실측 신호가 하나도 없으면 레벨을 만들어내지 않는다.
         # 예전에는 이 경우에도 기본 25점 → 백분위 → "준최1"을 출력해서,
         # 측정 실패를 낮은 등급으로 오인하게 만들었다.
-        measurable = ("scrape" in analysis_data["data_sources"]) or ("rss" in analysis_data["data_sources"])
-        if not measurable:
+        has_source = ("scrape" in analysis_data["data_sources"]) or ("rss" in analysis_data["data_sources"])
+
+        # 출처가 잡혔다고 값을 얻은 것은 아니다.
+        # 2026-10-01 실측: 글 50개가 멀쩡히 있는 blog_id 가 RSS 일시 실패로
+        # total_posts=0 이 됐는데 data_sources 에는 출처가 남아 measurable=True 로
+        # 통과했고 "준최4 / 65.6점" 이 그대로 나갔다. 같은 10분 안에 다른 라우트는
+        # 같은 블로그를 "최적2", 또 다른 라우트는 "level 1" 로 불렀다.
+        # 입력이 비면 0점이 아니라 '측정 못 함' 이어야 한다 — 그래야 사용자가
+        # "지수가 떨어졌다"와 "오늘 못 쟀다"를 구분한다.
+        _core_unmeasured = {"total_posts", "neighbor_count", "total_visitors"} & set(
+            analysis_data.get("unmeasured", [])
+        )
+        collected_nothing = (not stats.get("total_posts")) and bool(_core_unmeasured)
+
+        # 부분 측정(본문 풀파싱 실패)은 예전엔 등급을 통째로 보류했다. 그런데 네이버가
+        # 서버 IP 의 본문 요청을 막는 구간에는 키워드 결과 20행이 전부 '측정 불가'가 돼
+        # 화면이 쓸모없어졌다(2026-10-21 운영: 3분 사이 37개 블로그).
+        # 이제는 절대 기준표로 '추정' 등급을 내되 level_source="estimated" 로 표시하고,
+        # 백분위 모집단에는 넣지 않으며 캐시하지도 않는다(다음 측정이 덮어쓴다).
+        # 흔들릴 수 있는 등급이라는 건 화면에 '추정' 으로 드러낸다.
+        estimated_only = bool(partial_dimensions)
+        measurable = has_source and not collected_nothing and not partial_dimensions
+        if has_source and not collected_nothing and estimated_only:
+            index["unmeasurable_reason"] = (
+                "본문을 끝까지 읽지 못해(소제목·문단 수 누락) 나머지 지표로 추정한 등급입니다. "
+                "잠시 후 다시 분석하면 정확한 등급이 나옵니다."
+            )
+            logger.info(f"Blog {blog_id}: 부분 측정 — 추정 등급 (partial={partial_dimensions})")
+        elif not measurable:
             index["level"] = None
             index["grade"] = "측정 불가"
             index["level_category"] = "측정 불가"
             index["percentile"] = None
             index["level_source"] = "unavailable"
-            index["unmeasurable_reason"] = "네이버에서 블로그 지표를 가져오지 못했습니다."
-            logger.warning(f"Blog {blog_id}: 실측 신호 없음 — 레벨 판정 생략")
+            if collected_nothing:
+                index["unmeasurable_reason"] = (
+                    "글 목록을 가져오지 못해 지수를 계산하지 않았습니다. "
+                    "낮은 점수가 아니라 측정 실패입니다. 잠시 후 다시 시도해 주세요."
+                )
+            else:
+                index["unmeasurable_reason"] = "네이버에서 블로그 지표를 가져오지 못했습니다."
+            logger.warning(
+                f"Blog {blog_id}: 레벨 판정 생략 "
+                f"(has_source={has_source}, collected_nothing={collected_nothing}, "
+                f"partial={partial_dimensions}, unmeasured={sorted(_core_unmeasured)})"
+            )
 
         # ===== 레벨 판정 =====
         # 원칙: 백분위는 '같은 자로 잰' 실측 모집단이 충분할 때만 쓴다.
         # 모집단이 얇으면(초기 운영/스코어링 버전 교체 직후) 절대 기준표로 판정한다.
         try:
+            if not measurable and not (has_source and not collected_nothing and estimated_only):
+                raise _LevelJudgementSkipped()
+
             if not measurable:
+                # 추정 등급: 모집단을 오염시키지 않도록 절대 기준표만 쓴다.
+                level, grade = get_blog_level_from_score(index["total_score"])
+                index["level"], index["grade"] = level, grade
+                index["percentile"] = None
+                index["level_basis"] = "absolute"
+                index["level_source"] = "estimated"
+                index["level_category"] = "최적+" if level >= 12 else "최적" if level >= 9 else "준최" if level >= 2 else "일반"
                 raise _LevelJudgementSkipped()
 
             percentile_db = get_blog_percentile_db()
@@ -3731,7 +4078,7 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
                 index["level_source"] = "heuristic"
 
         except _LevelJudgementSkipped:
-            # 측정 불가 — 위에서 이미 "측정 불가"로 표시했다. 등급을 지어내지 않는다.
+            # 측정 불가(위에서 "측정 불가" 표시) 또는 추정 등급(위에서 기록) — 더 할 일 없다.
             pass
 
         except Exception as percentile_error:
@@ -3749,22 +4096,22 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
         # 총점과 자릿수를 맞추기 위해 정규화된 기여분으로 보고한다
         # (c_rank + dia = base_score 가 성립해야 사용자가 합을 검산할 수 있다)
         index["score_breakdown"] = {
-            "c_rank": round(c_rank_score * c_rank_weight / weight_sum, 1),
-            "dia": round(dia_score * dia_weight / weight_sum, 1),
+            "c_rank": (
+                round(c_rank_score * c_rank_weight / weight_sum, 1)
+                if c_rank_score is not None else None
+            ),
+            "dia": (
+                round(dia_score * dia_weight / weight_sum, 1)
+                if dia_score is not None else None
+            ),
             "content_factors": (
                 round(content_factor_score * content_weight / weight_sum, 1)
                 if content_factor_score is not None else None
             ),
-            "c_rank_detail": {
-                "context": round(context_score, 1),
-                "content": round(content_score, 1),
-                "chain": round(chain_score, 1)
-            },
-            "dia_detail": {
-                "depth": round(depth_score, 1),
-                "information": round(info_score, 1),
-                "accuracy": round(accuracy_score, 1)
-            },
+            # 실제로 측정한 하위항목만 (못 쟨 항목은 아예 키가 없다 — 50 을
+            # 넣으면 화면에서 실측값과 구분이 안 된다)
+            "c_rank_detail": c_rank_detail,
+            "dia_detail": dia_detail,
             # 실제로 측정한 콘텐츠 항목만 (측정 못 한 항목은 아예 키가 없다)
             "content_detail": content_factor_detail,
             "weights_used": {
@@ -3841,8 +4188,15 @@ async def analyze_blog(blog_id: str, keyword: str = None, verify_index: bool = F
         "estimated_fields": estimated_fields,
         "unmeasured": unmeasured,
         "rss_empty": analysis_data.get("rss_empty", False),
+        # 수집이 비었는지 호출부가 한 눈에 보게 한다 (index.grade == "측정 불가" 의 이유).
+        # 추정 등급도 캐시하지 않는다 — 다음 요청이 본문까지 읽어 정확한 등급으로 덮게.
+        "measured": (index or {}).get("level_source") not in ("unavailable", "estimated"),
     }
-    set_blog_analysis_cache(blog_id, result)
+    # 측정 실패본을 캐시에 넣으면 TTL 동안 같은 실패를 재생한다 — 넣지 않는다.
+    if result["measured"]:
+        set_blog_analysis_cache(blog_id, result)
+        from database import blog_analysis_cache as BAC
+        await asyncio.to_thread(BAC.put, blog_id, result)
     return result
 
 
@@ -4245,8 +4599,8 @@ async def analyze_blog_endpoint(
 
         # Get score breakdown — 총점을 검산할 수 있는 모든 항을 그대로 통과시킨다
         score_breakdown = index.get("score_breakdown", {})
-        c_rank = score_breakdown.get("c_rank", 0)
-        dia = score_breakdown.get("dia", 0)
+        c_rank = score_breakdown.get("c_rank")
+        dia = score_breakdown.get("dia")
         content_factors = score_breakdown.get("content_factors")
         weights_used = score_breakdown.get("weights_used")
 
@@ -4271,7 +4625,7 @@ async def analyze_blog_endpoint(
             level=index.get("level"),
             grade=index.get("grade", ""),
             level_category=index.get("level_category", ""),
-            total_score=index.get("total_score", 0),
+            total_score=index.get("total_score") or 0,
             percentile=index.get("percentile"),
             level_basis=index.get("level_basis"),
             level_source=index.get("level_source"),
@@ -4296,7 +4650,7 @@ async def analyze_blog_endpoint(
         recommendations = []
 
         # Add warnings based on score
-        if index.get("total_score", 0) < 30:
+        if index.get("total_score") or 0 < 30:
             warnings.append(WarningResponse(
                 type="low_score",
                 severity="high",
@@ -4521,14 +4875,14 @@ async def get_blog_index(blog_id: str):
                 "posting_frequency": None
             },
             "index": {
-                "level": index.get("level", 0),
+                "level": index.get("level") or 0,
                 "grade": index.get("grade", ""),
                 "level_category": index.get("level_category", ""),
-                "total_score": index.get("total_score", 0),
+                "total_score": index.get("total_score") or 0,
                 "percentile": index.get("percentile", 0),
                 "score_breakdown": {
-                    "c_rank": score_breakdown.get("c_rank", 0),
-                    "dia": score_breakdown.get("dia", 0)
+                    "c_rank": score_breakdown.get("c_rank"),
+                    "dia": score_breakdown.get("dia")
                 }
             },
             "warnings": [],
@@ -4771,8 +5125,15 @@ async def search_keyword_with_tabs(
     except Exception as e:
         logger.debug(f"Could not add user search keyword: {e}")
 
+    # 백그라운드 작업(/search-keyword-with-tabs/start)이면 진행 상황을 여기에 적는다.
+    progress = _KW_PROGRESS.get()
+    _t0 = time.monotonic()
+    _blog_times: List[float] = []
+    _t_blogs = 0.0
+
     # Fetch search results from both VIEW and BLOG tabs
     both_tabs_results = await fetch_naver_search_results_both_tabs(keyword, limit)
+    _t_serp = time.monotonic() - _t0
     view_search_results = both_tabs_results.get("view_results", [])
     blog_search_results = both_tabs_results.get("blog_results", [])
 
@@ -4801,6 +5162,7 @@ async def search_keyword_with_tabs(
     results = []
     total_score = 0
     total_level = 0
+    leveled_count = 0
     total_posts = 0
     total_neighbors = 0
     analyzed_count = 0
@@ -4810,16 +5172,50 @@ async def search_keyword_with_tabs(
 
     if analyze_content:
         # 모든 블로그를 동시에 분석 (병렬 처리 + 재시도)
+        def _report_blog(item, analysis):
+            if progress is None:
+                return
+            _ix = analysis.get("index") or {}
+            progress["blogs"][item["blog_id"]] = {
+                "level": _ix.get("level"),
+                "grade": _ix.get("grade"),
+                "total_score": _ix.get("total_score"),
+                "partial_dimensions": _ix.get("partial_dimensions"),
+                "unmeasurable_reason": _ix.get("unmeasurable_reason"),
+                "stats": analysis.get("stats") or {},
+            }
+
+        async def _serp_post(post_url: str) -> Dict:
+            # 순위에 걸린 글 자체의 분석은 키워드에 따라 달라진다(제목·본문 키워드 수).
+            # url+키워드로 하루 캐시한다 — 2026-10-21 운영 실측: 블로그 분석이 전부 캐시
+            # 적중(0.0s)이어도 이 20건이 동시 4개 줄을 서서 14초가 걸렸다.
+            from database import post_analysis_cache as PAC
+            key = f"{post_url}#kw={keyword}"
+            hit = (await asyncio.to_thread(PAC.get_many, [key], 1)).get(key)
+            if hit is not None:
+                return hit
+            r = await analyze_post(post_url, keyword)
+            if isinstance(r, dict) and r.get("data_fetched"):
+                await asyncio.to_thread(PAC.put_many, item_blog_of.get(post_url, ""), {key: r})
+            return r
+
+        item_blog_of = {it["post_url"]: it["blog_id"] for it in search_results}
+
         async def analyze_single(item, retry_count=0):
             max_retries = 2
+            # 블로그 분석과 글 분석을 동시에 돌리되, 블로그 등급은 끝나는 즉시 화면에
+            # 알린다(글 분석은 등급과 무관 — 기다릴 이유가 없다).
+            blog_task = asyncio.create_task(analyze_blog(item["blog_id"], keyword))
+            post_task = asyncio.create_task(_serp_post(item["post_url"]))
             try:
-                # 블로그 분석 + 포스트 분석을 동시에 실행 (성능 개선)
-                analysis, post_analysis_result = await asyncio.gather(
-                    analyze_blog(item["blog_id"], keyword),
-                    analyze_post(item["post_url"], keyword)
-                )
+                analysis = await blog_task
+                _report_blog(item, analysis)
+                post_analysis_result = await post_task
                 return item, analysis, post_analysis_result
             except Exception as e:
+                for _t in (blog_task, post_task):
+                    if not _t.done():
+                        _t.cancel()
                 if retry_count < max_retries:
                     # 재시도 전 짧은 대기 (지수 백오프)
                     await asyncio.sleep(0.5 * (retry_count + 1))
@@ -4836,15 +5232,33 @@ async def search_keyword_with_tabs(
             async with GLOBAL_SEMAPHORE:
                 async with local_semaphore:
                     # 지연 제거 - 세마포어로 충분히 제어됨 (성능 개선)
-                    return await analyze_single(item)
+                    _bt = time.monotonic()
+                    out = await analyze_single(item)
+                    _blog_times.append(time.monotonic() - _bt)
+                    _report_blog(item, out[1])
+                    return out
 
         # 빠른 모드: 상위 N개만 분석, 나머지는 기본 정보만 표시
         items_to_analyze = search_results[:effective_limit]
         items_to_skip = search_results[effective_limit:]
 
+        if progress is not None:
+            _vis = _visible_results_limit(gate)
+            _rows = items_to_analyze if _vis is None else items_to_analyze[:_vis]
+            progress["preview"] = [
+                {k: it.get(k) for k in (
+                    "rank", "blog_id", "blog_name", "blog_url", "post_title",
+                    "post_url", "post_date", "thumbnail", "tab_type",
+                )}
+                for it in _rows
+            ]
+            # 같은 블로그가 두 순위에 걸리면 진행 칸은 하나다(blogs 는 blog_id 키).
+            progress["total"] = len({it["blog_id"] for it in items_to_analyze})
+
         # 분석 대상 병렬 실행
         analysis_tasks = [analyze_with_limit(item) for item in items_to_analyze]
         analysis_results = await asyncio.gather(*analysis_tasks)
+        _t_blogs = time.monotonic() - _t0 - _t_serp
 
         # 분석 제외 항목은 기본 정보만 추가 (빠른 응답)
         for item in items_to_skip:
@@ -4917,9 +5331,13 @@ async def search_keyword_with_tabs(
             results.append(blog_result)
 
             if index:
-                total_score += index.get("total_score", 0)
-                total_level += index.get("level", 0)
+                total_score += index.get("total_score") or 0
                 analyzed_count += 1
+                # 등급 보류(level=None) 를 0 레벨로 더하면 "평균 레벨"이
+                # 측정 실패 개수에 끌려 내려간다. 레벨이 나온 행만 센다.
+                if index.get("level") is not None:
+                    total_level += index["level"]
+                    leveled_count += 1
 
             if stats:
                 if stats.get("total_posts"):
@@ -4993,10 +5411,11 @@ async def search_keyword_with_tabs(
 
     insights = SearchInsights(
         average_score=round(total_score / analyzed_count, 1) if analyzed_count > 0 else 0,
-        average_level=round(total_level / analyzed_count, 1) if analyzed_count > 0 else 0,
+        average_level=round(total_level / leveled_count, 1) if leveled_count > 0 else 0,
         average_posts=round(total_posts / count, 0) if count > 0 else 0,
         average_neighbors=round(total_neighbors / count, 0) if count > 0 else 0,
-        top_level=max([r.index.level for r in results if r.index], default=0),
+        # level=None(등급 보류) 은 집계에서 뺀다 — 0 으로 바꾸면 평균을 끌어내린다
+        top_level=max([r.index.level for r in results if r.index and r.index.level is not None], default=0),
         top_score=max([r.index.total_score for r in results if r.index], default=0),
         score_distribution={},
         common_patterns=[],
@@ -5012,6 +5431,10 @@ async def search_keyword_with_tabs(
     # KEY: 실제 네이버 검색 순위(rank)를 학습 데이터로 저장
     samples_collected = 0
     for r in results:
+        # 불완전 측정(본문 미파싱 등)은 학습에 넣지 않는다. 등급을 보류한 행을
+        # '정답'으로 쓰면 그 50 들이 다시 가중치를 학습한다.
+        if r.index is not None and r.index.measurement_complete is False:
+            continue
         if r.index and r.stats:
             try:
                 # score_breakdown에서 C-Rank, D.I.A. 세부 점수 추출
@@ -5028,13 +5451,15 @@ async def search_keyword_with_tabs(
                         "c_rank_score": breakdown.get("c_rank", 0),
                         "dia_score": breakdown.get("dia", 0),
                         # C-Rank 세부 점수
-                        "context_score": c_rank_detail.get("context", 50),
-                        "content_score": c_rank_detail.get("content", 50),
-                        "chain_score": c_rank_detail.get("chain", 50),
+                        # 못 쟨 하위점수는 50 으로 메우지 않는다 — 그 50 이
+                        # 학습 입력이 되면 측정 실패가 '평범한 블로그'로 학습된다.
+                        "context_score": c_rank_detail.get("context"),
+                        "content_score": c_rank_detail.get("content"),
+                        "chain_score": c_rank_detail.get("chain"),
                         # D.I.A. 세부 점수
-                        "depth_score": dia_detail.get("depth", 50),
-                        "information_score": dia_detail.get("information", 50),
-                        "accuracy_score": dia_detail.get("accuracy", 50),
+                        "depth_score": dia_detail.get("depth"),
+                        "information_score": dia_detail.get("information"),
+                        "accuracy_score": dia_detail.get("accuracy"),
                         # 기타 요소
                         "post_count": r.stats.total_posts or 0,
                         "neighbor_count": r.stats.neighbor_count or 0,
@@ -5135,20 +5560,49 @@ async def search_keyword_with_tabs(
 
     # VIEW 탭 인사이트 계산
     view_analyzed = [r for r in view_results_final if r.index]
+    # 등급 보류(level=None) 행은 레벨 집계에서 빼야 한다 — sum(None) 은 터지고,
+    # 0 으로 치면 "평균 레벨"이 측정 실패 개수에 끌려 내려간다.
+    _view_leveled = [r for r in view_analyzed if r.index.level is not None]
     view_insights = SearchInsights(
         average_score=round(sum(r.index.total_score for r in view_analyzed) / len(view_analyzed), 1) if view_analyzed else 0,
-        average_level=round(sum(r.index.level for r in view_analyzed) / len(view_analyzed), 1) if view_analyzed else 0,
+        average_level=(
+            round(sum(r.index.level for r in _view_leveled) / len(_view_leveled), 1)
+            if _view_leveled else 0
+        ),
         average_posts=0,
         average_neighbors=0,
-        top_level=max([r.index.level for r in view_analyzed], default=0),
+        top_level=max([r.index.level for r in _view_leveled], default=0),
         top_score=max([r.index.total_score for r in view_analyzed], default=0),
         score_distribution={},
         common_patterns=[],
         monthly_search_volume=monthly_search_volume
     ) if view_results_final else None
 
+    # ===== 플랜별 결과 개수 제한 =====
+    # PLAN_LIMITS 의 search_results_count(무료 5 / 베이직 10 / 프로 20 / 비즈 50)는
+    # 가격 페이지에만 쓰이고 서버에서 자르는 코드가 없었다 — 비회원도 20개를 다 받아
+    # 유료 플랜이 이 축에서 파는 게 없었다(2026-10-06 실측).
+    # 인사이트·학습 수집은 분석한 전체(20개)로 계산한 뒤 **표시만** 자른다.
+    # gate 가 없으면(blue_ocean 등 내부 파이썬 호출) 자르지 않는다.
+    visible = _visible_results_limit(gate)
+    if visible is not None:
+        results = results[:visible]
+        view_results_final = view_results_final[:visible]
+        blog_results_final = blog_results_final[:visible]
+
     # 결과가 실제로 나온 지금 차감한다 (위쪽 '검색 결과 0건' 반환 경로는 안 먹는다).
     consume_usage(gate)
+
+    # 구간별 소요 시간 — 어디를 줄여야 하는지 숫자로 보려고 남긴다.
+    try:
+        _bts = sorted(_blog_times)
+        logger.info(
+            f"[kw-timing] {keyword}: total={time.monotonic() - _t0:.1f}s serp={_t_serp:.1f}s "
+            f"blogs={_t_blogs:.1f}s n={len(_bts)} "
+            f"blog_p50={(_bts[len(_bts) // 2] if _bts else 0):.1f}s blog_max={(_bts[-1] if _bts else 0):.1f}s"
+        )
+    except Exception:
+        pass
 
     return KeywordSearchResponse(
         keyword=keyword,
@@ -5173,6 +5627,100 @@ class ScoreBreakdownResponse(BaseModel):
     grade: str
     breakdown: Dict[str, Any]
     stats: Optional[Dict[str, Any]] = None
+
+
+# ===== 키워드 분석 2단 응답 =====
+# 동기 엔드포인트는 블로그 20개 분석이 다 끝나야 응답한다(캐시가 비면 40~60초, 예전엔
+# 180초 데드라인을 넘기기도 했다). /start 는 바로 작업 번호를 돌려주고 같은 파이프라인을
+# 백그라운드로 돌린다. 화면은 /jobs/{id} 를 폴링해 순위 목록(수 초)부터 그리고,
+# 블로그 등급은 끝나는 대로 채운다. 머신 1대(fly.toml)라 메모리 저장소로 충분하다 —
+# 재시작되면 작업이 사라지고, 화면은 404 를 받아 다시 시도하라고 안내한다.
+_KW_PROGRESS: ContextVar[Optional[Dict[str, Any]]] = ContextVar("_KW_PROGRESS", default=None)
+_KW_JOBS: Dict[str, Dict[str, Any]] = {}
+_KW_JOB_TTL_S = 900
+_KW_JOBS_PER_OWNER = 3
+
+
+def _kw_job_owner(gate: Any) -> str:
+    uid = getattr(gate, "user_id", None)
+    return f"u:{uid}" if uid is not None else f"g:{getattr(gate, 'ip', '')}"
+
+
+def _kw_jobs_gc() -> None:
+    now = time.time()
+    for jid in [j for j, v in _KW_JOBS.items() if now - v["created"] > _KW_JOB_TTL_S]:
+        _KW_JOBS.pop(jid, None)
+
+
+@router.post("/search-keyword-with-tabs/start")
+async def start_keyword_search_job(
+    keyword: str = Query(..., description="검색할 키워드"),
+    limit: int = Query(10, description="결과 개수 (기본 10개)"),
+    analyze_content: bool = Query(True, description="콘텐츠 분석 여부"),
+    quick_mode: bool = Query(False, description="빠른 모드 (상위 10개만 분석)"),
+    gate: UsageGate = Depends(keyword_search_gate),
+):
+    """키워드 분석을 백그라운드로 시작하고 작업 번호를 돌려준다(한도 검사는 여기서, 차감은 완료 시)."""
+    _kw_jobs_gc()
+    owner = _kw_job_owner(gate)
+    running = [
+        (jid, j) for jid, j in _KW_JOBS.items()
+        if j["owner"] == owner and j["status"] == "running"
+    ]
+    # 같은 키워드를 두 번 누르면 같은 작업을 돌려준다(네이버 요청이 두 배가 되지 않게).
+    for jid, j in running:
+        if j["keyword"] == keyword:
+            return {"job_id": jid}
+    if len(running) >= _KW_JOBS_PER_OWNER:
+        raise HTTPException(status_code=429, detail={
+            "error_code": "TOO_MANY_JOBS",
+            "message": "진행 중인 키워드 분석이 끝난 뒤 다시 시도해 주세요.",
+        })
+
+    job_id = uuid.uuid4().hex
+    job: Dict[str, Any] = {
+        "owner": owner, "keyword": keyword, "status": "running", "created": time.time(),
+        "preview": None, "total": 0, "blogs": {}, "result": None, "error": None,
+    }
+    _KW_JOBS[job_id] = job
+
+    async def _run():
+        from fastapi.encoders import jsonable_encoder
+        _KW_PROGRESS.set(job)
+        try:
+            res = await search_keyword_with_tabs(
+                keyword=keyword, limit=limit, analyze_content=analyze_content,
+                quick_mode=quick_mode, gate=gate,
+            )
+            job["result"] = jsonable_encoder(res)
+            job["status"] = "done"
+        except Exception as e:
+            logger.warning(f"[kw-job] {keyword} 실패: {e}")
+            job["error"] = "키워드 분석에 실패했습니다. 잠시 후 다시 시도해 주세요."
+            job["status"] = "error"
+
+    job["task"] = asyncio.create_task(_run())
+    return {"job_id": job_id}
+
+
+@router.get("/search-keyword-with-tabs/jobs/{job_id}")
+async def get_keyword_search_job(job_id: str):
+    """진행 상황. done 이면 result 에 동기 엔드포인트와 같은 응답이 들어 있다."""
+    job = _KW_JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다. 다시 검색해 주세요.")
+    out = {
+        "status": job["status"],
+        "keyword": job["keyword"],
+        "preview": job["preview"],
+        "total": job["total"],
+        "done": len(job["blogs"]),
+        "blogs": job["blogs"],
+        "error": job["error"],
+    }
+    if job["status"] == "done":
+        out["result"] = job["result"]
+    return out
 
 
 @router.get("/{blog_id}/score-breakdown", response_model=ScoreBreakdownResponse)
@@ -5696,6 +6244,63 @@ class DraftCheckRequest(BaseModel):
     content: str
     keyword: str
     image_count: Optional[int] = 0
+    # 의료광고 표현 점검. None 이면 원고에 병·의원 단어가 있을 때 자동으로 켠다.
+    medical: Optional[bool] = None
+
+
+# 학습 샘플에 그 키워드가 없으면 실제 상위 글을 바로 읽어 기준을 만든다.
+# 예전엔 곧장 '전체 평균'으로 떨어졌다 — 맛집 글과 병원 글을 같은 자로 잰 셈이다.
+# draft-check 는 한도가 없는 화면이라 네이버 요청이 남용되지 않게 시간당 상한을 둔다.
+_DRAFT_LIVE = {"window": 0.0, "count": 0}
+_DRAFT_LIVE_PER_HOUR = int(os.getenv("DRAFT_LIVE_BASELINE_PER_HOUR", "30"))
+_DRAFT_LIVE_TOP_N = 7
+
+
+async def _live_keyword_baseline(kw: str) -> Optional[Dict]:
+    now = time.time()
+    if now - _DRAFT_LIVE["window"] > 3600:
+        _DRAFT_LIVE["window"], _DRAFT_LIVE["count"] = now, 0
+    if _DRAFT_LIVE["count"] >= _DRAFT_LIVE_PER_HOUR:
+        return None
+    _DRAFT_LIVE["count"] += 1
+
+    tabs = await fetch_naver_search_results_both_tabs(kw, _DRAFT_LIVE_TOP_N)
+    items = (tabs.get("blog_results") or tabs.get("view_results") or [])[:_DRAFT_LIVE_TOP_N]
+    if not items:
+        return None
+
+    # 키워드 분석(_serp_post)과 같은 캐시 키 — 같은 키워드를 이미 분석했다면 네이버를 다시 안 친다.
+    from database import post_analysis_cache as PAC
+    keys = {it["post_url"]: f"{it['post_url']}#kw={kw}" for it in items if it.get("post_url")}
+    cached = await asyncio.to_thread(PAC.get_many, list(keys.values()), 1)
+
+    async def _one(url: str) -> Optional[Dict]:
+        hit = cached.get(keys[url])
+        if hit is not None:
+            return hit
+        r = await analyze_post(url, kw)
+        if isinstance(r, dict) and r.get("data_fetched"):
+            await asyncio.to_thread(PAC.put_many, "", {keys[url]: r})
+        return r
+
+    tasks = [asyncio.create_task(_one(u)) for u in keys]
+    done, pending = await asyncio.wait(tasks, timeout=40)
+    for t in pending:
+        t.cancel()
+    results = [t.result() for t in done if not t.cancelled() and t.exception() is None]
+    valid = [r for r in results if isinstance(r, dict) and r.get("data_fetched") and r.get("content_length")]
+    if len(valid) < 3:
+        return None
+    n = len(valid)
+    avg = lambda k: sum((r.get(k) or 0) for r in valid) / n
+    return {
+        "keyword": kw,
+        "samples": n,
+        "avg_content_length": round(avg("content_length")),
+        "avg_image_count": round(avg("image_count"), 1),
+        "avg_heading_count": round(avg("heading_count"), 1),
+        "avg_paragraph_count": round(avg("paragraph_count"), 1),
+    }
 
 
 @router.post("/draft-check")
@@ -5723,15 +6328,27 @@ async def draft_check(request: DraftCheckRequest):
 
     baseline = None
     is_global = False
+    source = "none"
     try:
         baseline = get_keyword_content_baseline(kw)
-        if not baseline:
-            baseline = get_global_content_baseline()
-            is_global = baseline is not None
+        if baseline:
+            source = "learning"
+        else:
+            try:
+                baseline = await _live_keyword_baseline(kw)
+            except Exception as e:
+                logger.warning(f"draft-check live baseline failed for {kw}: {e}")
+                baseline = None
+            if baseline:
+                source = "live"
+            else:
+                baseline = get_global_content_baseline()
+                is_global = baseline is not None
+                source = "global" if is_global else "none"
     except Exception as e:
         logger.warning(f"draft-check baseline failed for {kw}: {e}")
 
-    return diagnose_draft(
+    result = diagnose_draft(
         title=request.title or "",
         content=request.content,
         keyword=kw,
@@ -5739,6 +6356,15 @@ async def draft_check(request: DraftCheckRequest):
         baseline=baseline,
         baseline_is_global=is_global,
     )
+    result["baseline_source"] = source
+
+    from services.medical_ad_checker import check_medical_ad, looks_medical
+    medical = request.medical
+    if medical is None:
+        medical = looks_medical(kw, request.title or "", request.content)
+    if medical:
+        result["medical_check"] = check_medical_ad(request.title or "", request.content)
+    return result
 
 
 class SearchHealthRequest(BaseModel):
@@ -5778,6 +6404,9 @@ async def search_health(request: SearchHealthRequest, refresh: bool = Query(Fals
         raise HTTPException(status_code=500, detail=f"진단 실패: {e}")
 
     health = diagnose(result if isinstance(result, dict) else result.dict())
+    # verify 결과에는 blog_id 가 없다 — 여기서 채운다. 비워 두면 응답이
+    # {"blog_id": null} 로 나가 호출부가 어느 블로그의 진단인지 못 가린다.
+    health["blog_id"] = blog_id
 
     # 잰 값을 남긴다. 대시보드 첫 화면은 6초를 기다릴 수 없으므로 여기 남은
     # 것만 읽는다 — 남은 게 없으면 '아직 확인 안 함' 이지 '정상' 이 아니다.
@@ -5819,6 +6448,7 @@ async def verify_blog_index_endpoint(
     호출당 평균 5~15초 소요 (sample_size에 비례).
     """
     from services.blog_index_verifier import verify_blog_index_level
+    from services.campaign_selection import selection_outlook
 
     blog_id = request.blog_id.strip()
     if not blog_id:
@@ -5827,7 +6457,18 @@ async def verify_blog_index_endpoint(
     if not refresh:
         cached = get_cached_verify_index(blog_id)
         if cached:
-            return VerifyIndexResponse(**{**cached, "cached": True})
+            # selection 은 캐시된 값에서 바로 파생되므로, 이 필드가 없던 시절의
+            # 캐시(=대부분)도 여기서 채워 준다. 재측정하지 않는다.
+            return VerifyIndexResponse(**{
+                **cached,
+                "selection": cached.get("selection") or selection_outlook(
+                    cached.get("level_category"),
+                    cached.get("weighted_score"),
+                    cached.get("signal_scores"),
+                    cached.get("confidence", "low"),
+                ),
+                "cached": True,
+            })
 
     # 가능하면 기존 분석 캐시에서 stats 가져와 Signal F (체인) 활성화
     blog_stats = None
@@ -5858,6 +6499,12 @@ async def verify_blog_index_endpoint(
         "confidence": result.get("confidence", "low"),
         "method": result.get("method", "multi_signal_v2"),
         "disclaimer": result.get("disclaimer"),
+        "selection": selection_outlook(
+            result.get("level_category"),
+            result.get("weighted_score"),
+            result.get("signal_scores"),
+            result.get("confidence", "low"),
+        ),
         "cached": False,
         "error": result.get("error"),
     }
@@ -5880,19 +6527,37 @@ async def get_exposure_ceiling(
     직접 던져 몇 위에 뜨는지 확인하고, 1페이지 진입한 키워드들의 검색량 분포를
     낸다. 호출당 검색 API를 여러 번 사용하므로 24h 캐시된다.
     """
-    from services.exposure_ceiling import measure_exposure_ceiling
+    from services.exposure_ceiling import (
+        peek_cached_ceiling, start_ceiling_measurement, ceiling_is_measuring,
+    )
 
     blog_id = (blog_id or "").strip()
     if not blog_id:
         raise HTTPException(status_code=400, detail="blog_id is required")
 
-    try:
-        result = await measure_exposure_ceiling(blog_id, use_cache=not refresh)
-    except Exception as e:
-        logger.exception(f"exposure_ceiling failed for {blog_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"ceiling_measurement_failed: {e}")
+    # ⚠️ 요청 안에서 측정하지 않는다.
+    # 측정 한 번은 playwright 로 키워드 수십 개를 긁는다(키워드당 최대 30 스크롤).
+    # 2026-10-01 실측: 이 라우트가 유휴 상태에서도 280초 안에 응답한 적이 없고,
+    # 클라이언트가 포기한 뒤에도 서버에서 계속 돌아 /health 가 14초가 됐다.
+    # 캐시가 있으면 즉시 주고, 없으면 백그라운드로 돌린 뒤 '측정 중'을 알린다.
+    cached = None if refresh else peek_cached_ceiling(blog_id)
+    if cached is not None:
+        return {"blog_id": blog_id, "status": "ready", **cached}
 
-    return {"blog_id": blog_id, **result}
+    started = start_ceiling_measurement(blog_id)
+    return {
+        "blog_id": blog_id,
+        "status": "measuring",
+        "ok": False,
+        "measuring": True,
+        "started": started,
+        "already_running": not started and ceiling_is_measuring(blog_id),
+        "message": (
+            "노출 천장을 측정하고 있습니다. 키워드 수십 개를 실제로 검색해 보는 작업이라 "
+            "몇 분 걸립니다. 잠시 후 다시 불러 주세요."
+        ),
+        "retry_after_seconds": 60,
+    }
 
 
 @router.get("/serp-difficulty")
@@ -6017,6 +6682,7 @@ async def get_prediction_calibration(
 async def verify_pending_predictions(
     min_age_hours: int = Query(72, ge=0, description="발행 후 색인될 시간 확보(기본 72h)"),
     limit: int = Query(30, ge=1, le=100),
+    reopen_unranked: bool = Query(False, description="옛 채점기의 '순위 없음' 채점을 되돌려 재채점(1회성)"),
     authorization: Optional[str] = Header(None),
 ):
     """대기 중인 예측들을 실제 순위로 검증해 hit/miss 채점.
@@ -6024,6 +6690,11 @@ async def verify_pending_predictions(
     각 예측의 (블로그, 키워드)로 네이버 블로그탭 실제 순위를 조회하고,
     예측이 맞았는지 원장에 기록한다. 정답지 축적 루프의 실측 단계.
     검색 API를 예측 수만큼 호출하므로 limit 로 배치 크기를 제한한다.
+
+    채점하지 않고 미루는 경우(pending 유지, 시도 횟수만 증가):
+      · SERP 조회 실패 / 폴백 파싱 — 실패를 '미노출'로 적으면 정확도가 오염된다
+      · 1페이지 밖인데 RSS 를 못 읽어 글 작성 여부를 모름
+    1페이지 밖이고 그 키워드 글을 쓴 흔적도 없으면 no_attempt (채점 제외).
 
     인증: Authorization: Bearer {CRON_TOKEN} (measure-all 과 동일).
     GitHub Actions cron 이 매일 호출해 예측을 자동 채점 → calibration 축적.
@@ -6039,35 +6710,50 @@ async def verify_pending_predictions(
         raise HTTPException(status_code=403, detail="잘못된 cron 토큰")
 
     from database.rank_tracker_db import get_rank_tracker_db
-    from services.exposure_ceiling import blog_tab_true_rank
+    from services.keyword_verdict import measure_actual_rank, release_browser
 
     db = get_rank_tracker_db()
+    reopened = db.reopen_unranked_predictions() if reopen_unranked else 0
     pending = db.get_pending_predictions(min_age_hours=min_age_hours, limit=limit)
     if not pending:
-        return {"checked": 0, "results": [], "message": "검증 대기 중인 예측이 없습니다"}
+        return {"checked": 0, "reopened": reopened, "results": [],
+                "message": "검증 대기 중인 예측이 없습니다"}
 
-    # ⚠️ 실측 라벨은 예측(천장)과 '동일한 순위 소스(실제 블로그탭 스크래핑)'로 확정해야
-    #    calibration 이 유효하다. openapi(sort=sim)로 채점하면 예측/라벨 소스 불일치로
-    #    Brier/보정 곡선이 왜곡된다. 그래서 blog_tab_true_rank 를 공유한다.
-    sem = asyncio.Semaphore(2)  # 스크래핑은 무거워 동시성 낮춤
+    # ⚠️ 실측 라벨은 예측과 '동일한 순위 소스'로 확정해야 calibration 이 유효하다.
+    #    판정(keyword_verdict)과 같은 SERP 파서·같은 rank 정의(글 위치)를 쓴다.
+    #    예전에 쓰던 blog_tab_true_rank 는 조회 실패와 미노출을 둘 다 None 으로 돌려줘
+    #    실패가 '미노출'로 채점됐다.
+    sem = asyncio.Semaphore(2)  # 브라우저 조회라 동시성 낮춤
 
     async def _verify(p):
         async with sem:
             try:
-                rank = await blog_tab_true_rank(p["keyword"], p["blog_id"], limit=30)
+                m = await measure_actual_rank(p["blog_id"], p["keyword"])
             except Exception as e:
                 logger.warning(f"verify rank failed {p['blog_id']}/{p['keyword']}: {e}")
-                return None
-            return db.record_prediction_actual(p["id"], actual_rank=rank)
+                m = {"measured": False, "reason": f"{type(e).__name__}"}
+            if not m.get("measured"):
+                return db.record_prediction_unmeasured(p["id"], reason=m.get("reason") or "unknown")
+            return db.record_prediction_actual(p["id"], actual_rank=m["rank"],
+                                               attempted=bool(m.get("attempted")))
 
-    results = await asyncio.gather(*[_verify(p) for p in pending])
+    try:
+        results = await asyncio.gather(*[_verify(p) for p in pending])
+    finally:
+        # 이 엔드포인트는 public API 프로세스에서 돈다 — 판정 전용 브라우저를 남겨 두지 않는다.
+        await release_browser()
 
-    graded = [r for r in results if r and r.get("outcome") in ("hit", "miss")]
+    results = [r for r in results if r]
+    graded = [r for r in results if r.get("outcome") in ("hit", "miss")]
     return {
-        "checked": len([r for r in results if r]),
+        "checked": len(results),
+        "reopened": reopened,
         "hits": sum(1 for r in graded if r["outcome"] == "hit"),
         "misses": sum(1 for r in graded if r["outcome"] == "miss"),
-        "results": [r for r in results if r],
+        "no_attempt": sum(1 for r in results if r.get("outcome") == "no_attempt"),
+        "deferred": sum(1 for r in results if r.get("outcome") == "pending"),
+        "unmeasurable": sum(1 for r in results if r.get("outcome") == "unmeasurable"),
+        "results": results,
     }
 
 

@@ -426,6 +426,13 @@ async def verify_blog_index_level(
     finally:
         await checker.close()
 
+    # 글마다 발행 경과 시간을 붙인다 — '아직 색인 전(대기)'과 '누락'을 가르는 유일한 근거다.
+    _now = datetime.now(timezone.utc)
+    for _post, _res in zip(sample, post_results):
+        _pub = _post.get("pubDate")
+        if isinstance(_pub, datetime) and not _res.get("skipped"):
+            _res["age_hours"] = round((_now - _pub).total_seconds() / 3600.0, 1)
+
     valid = [r for r in post_results if not r.get("skipped")]
     if not valid:
         return {

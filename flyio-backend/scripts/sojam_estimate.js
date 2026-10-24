@@ -1,0 +1,11 @@
+const fs=require('fs'),path=require('path');const OUT=path.resolve(__dirname,'../../reports/sojam-20260909/plan');
+(async()=>{const keys=JSON.parse(fs.readFileSync(path.join(OUT,'estimate_keys.json'))),file=path.join(OUT,'estimates.json'),out=fs.existsSync(file)?JSON.parse(fs.readFileSync(file)):[];
+ const jobs=[];for(const device of ['PC','MOBILE'])for(let i=0;i<keys.length;i+=100)if(!out.some(x=>x.device===device&&JSON.stringify(x.keys)===JSON.stringify(keys.slice(i,i+100))))jobs.push({device,i});
+ let cursor=0,next=0;await Promise.all(Array.from({length:4},async()=>{while(cursor<jobs.length){const {device,i}=jobs[cursor++];
+  const at=Math.max(next,Date.now());next=at+400;await new Promise(r=>setTimeout(r,Math.max(0,at-Date.now())));
+  const r=await fetch('https://blog-index-analyzer.fly.dev/api/naver-ad/keyword-pool/debug/naver-raw?user_id=1&customer_id=1858907',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({customer_id:'1858907',path:'/estimate/exposure-minimum-bid/keyword',method:'POST',body:{device,period:'MONTH',items:keys.slice(i,i+100)}}),signal:AbortSignal.timeout(30000)});
+  const d=await r.json();if(!r.ok||!d.success)throw Error('estimate request rejected '+r.status+' '+((d.error||'').match(/(?:detail|message)[^\n]{0,250}/)?.[0]||''));
+  out.push({device,keys:keys.slice(i,i+100),response:d.response});fs.writeFileSync(path.join(OUT,'estimates.json'),JSON.stringify(out));
+  if(i%500===0)console.log(device,i+Math.min(100,keys.length-i),keys.length);
+ }}));console.log('complete',out.length);
+})().catch(e=>{console.error(e.message);process.exitCode=1});

@@ -1080,11 +1080,11 @@ async def run_competitive_analysis(
         )
         comp_total_posts = (
             scraped.get("total_posts")
-            or stats.get("total_posts", 0)
+            or stats.get("total_posts") or 0
         )
         comp_neighbor = (
             scraped.get("neighbor_count")
-            or stats.get("neighbor_count", 0)
+            or stats.get("neighbor_count") or 0
         )
         # naver_level이 None이면 stats에서 추정
         if comp_naver_level is None:
@@ -1097,7 +1097,7 @@ async def run_competitive_analysis(
         competitor_stats.append({
             "naver_level": comp_naver_level,
             "total_posts": comp_total_posts or 0,
-            "total_score": index.get("total_score", 0),
+            "total_score": index.get("total_score") or 0,
         })
 
     logger.info(

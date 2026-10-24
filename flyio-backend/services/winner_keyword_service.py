@@ -497,8 +497,8 @@ class WinnerKeywordService:
         if not my_blog:
             raise ValueError(f"블로그를 찾을 수 없습니다: {my_blog_id}")
 
-        my_level = my_blog.get("level", 0)
-        my_score = my_blog.get("total_score", 0)
+        my_level = my_blog.get("level") or 0
+        my_score = my_blog.get("total_score") or 0
 
         logger.info(f"1위 가능 키워드 분석 시작: blog_id={my_blog_id}, level={my_level}, score={my_score}")
 
