@@ -643,6 +643,9 @@ LONG_JOB_PREFIXES = (
     "/api/supabase/",
     "/api/rank-tracker/admin/",
     "/api/post-watch/admin/",
+    # 매일 GitHub cron 이 부르는 예측 채점. 예측마다 블로그탭을 브라우저로 조회해 50건이면
+    # 수 분이 걸린다 — 60초 상한에 걸려 2026-10-10 부터 매일 504 로 한 건도 채점되지 않았다.
+    "/api/blogs/predictions/verify-pending",
 )
 DEADLINE_EXEMPT_PREFIXES = LONG_JOB_PREFIXES + tuple(
     x.strip() for x in (os.getenv("DEADLINE_EXEMPT_PREFIXES") or "").split(",") if x.strip()

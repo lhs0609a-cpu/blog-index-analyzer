@@ -49,7 +49,7 @@ jobs:
             -X POST "${BACKEND_URL}/api/blogs/predictions/verify-pending?min_age_hours=${MIN_AGE_HOURS}&limit=${LIMIT}&reopen_unranked=${REOPEN_UNRANKED}" \
             -H "Authorization: Bearer ${CRON_TOKEN}" \
             -H "Content-Type: application/json" \
-            --max-time 300)
+            --max-time 900)
 
           body=$(echo "$response" | head -n -1)
           status=$(echo "$response" | tail -n 1)
