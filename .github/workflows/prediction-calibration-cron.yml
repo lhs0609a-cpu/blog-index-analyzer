@@ -21,6 +21,10 @@ on:
         description: "이번 실행에서 채점할 최대 예측 수"
         required: false
         default: "50"
+      reopen_unranked:
+        description: "옛 채점기의 '순위 없음' 채점을 되돌려 재채점 (1회성, 2026-10-24 채점기 교체 후)"
+        required: false
+        default: "false"
 
 jobs:
   calibrate:
@@ -34,6 +38,7 @@ jobs:
           BACKEND_URL: https://blog-index-analyzer.fly.dev
           MIN_AGE_HOURS: ${{ github.event.inputs.min_age_hours || '72' }}
           LIMIT: ${{ github.event.inputs.limit || '50' }}
+          REOPEN_UNRANKED: ${{ github.event.inputs.reopen_unranked || 'false' }}
         run: |
           if [ -z "$CRON_TOKEN" ]; then
             echo "::error::CRON_TOKEN secret 미설정"
@@ -41,7 +46,7 @@ jobs:
           fi
 
           response=$(curl -sS -w "\n%{http_code}" \
-            -X POST "${BACKEND_URL}/api/blogs/predictions/verify-pending?min_age_hours=${MIN_AGE_HOURS}&limit=${LIMIT}" \
+            -X POST "${BACKEND_URL}/api/blogs/predictions/verify-pending?min_age_hours=${MIN_AGE_HOURS}&limit=${LIMIT}&reopen_unranked=${REOPEN_UNRANKED}" \
             -H "Authorization: Bearer ${CRON_TOKEN}" \
             -H "Content-Type: application/json" \
             --max-time 300)
