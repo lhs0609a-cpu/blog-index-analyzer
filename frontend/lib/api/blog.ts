@@ -612,7 +612,12 @@ export interface KeywordFactsResponse {
   serp_source: 'http' | 'mobile' | null
   serp_parse_mode: 'list' | 'regex' | 'none' | null
   serp_cached: boolean
+  serp_measured_at: number | null
   serp_size: number
+  /** 읽어 낸 마지막 글 위치 — 미노출일 때 '상위 N위 밖'의 N */
+  serp_depth?: number
+  /** 계정 ID 를 입력해 서버가 실제 블로그 주소로 바꿨을 때 원래 입력값 */
+  input_blog_id?: string
   page1: SerpRow[]
   error: string | null
 }

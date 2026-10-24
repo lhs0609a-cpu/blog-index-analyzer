@@ -193,7 +193,9 @@ async def run_job(job: Dict) -> None:
 
 
 async def _run_job(job: Dict) -> None:
-    from services.keyword_verdict import stage1_facts, stage2_deep
+    from services.keyword_verdict import (
+        SERP_FRESH_TTL, resolve_my_blog_id, stage1_facts, stage2_deep,
+    )
 
     job_id = job["job_id"]
 
@@ -206,10 +208,15 @@ async def _run_job(job: Dict) -> None:
 
     try:
         _phase("serp")
+        blog_id, moved_from = await resolve_my_blog_id(job["blog_id"])
         # 단계별 하드 타임아웃. 사용자가 기다리는 job 이 무한정 매달리면 안 되고,
         # 어느 단계에서 죽었는지가 그대로 에러 메시지가 돼야 진단이 된다.
+        # 판정 요청은 6시간 묵은 SERP 를 쓰지 않는다(발행 직후 재확인이 과거 순위로 나간다).
         facts = await asyncio.wait_for(
-            stage1_facts(job["blog_id"], job["keyword"]), timeout=STAGE1_TIMEOUT)
+            stage1_facts(blog_id, job["keyword"], serp_max_age=SERP_FRESH_TTL),
+            timeout=STAGE1_TIMEOUT)
+        if moved_from:
+            facts["input_blog_id"] = moved_from
         cur = _read(job_id) or job
         cur["facts"] = facts
         cur["phase"] = "scoring"
@@ -223,9 +230,14 @@ async def _run_job(job: Dict) -> None:
             _write(cur)
 
         result = await asyncio.wait_for(
-            stage2_deep(job["blog_id"], job["keyword"], facts=facts,
+            stage2_deep(blog_id, job["keyword"], facts=facts,
                         on_progress=_on_progress),
             timeout=STAGE2_TIMEOUT)
+        if moved_from:
+            result["input_blog_id"] = moved_from
+            result["reasons"] = ([f"입력하신 '{moved_from}'은(는) 계정 ID라 실제 블로그 주소 "
+                                  f"'{blog_id}' 기준으로 판정했습니다."]
+                                 + list(result.get("reasons") or []))
         cur = _read(job_id) or job
         cur.update(status="done", done_at=time.time(), result=result, error=None)
         _write(cur)

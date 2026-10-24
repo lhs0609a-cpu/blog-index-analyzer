@@ -6682,6 +6682,7 @@ async def get_prediction_calibration(
 async def verify_pending_predictions(
     min_age_hours: int = Query(72, ge=0, description="발행 후 색인될 시간 확보(기본 72h)"),
     limit: int = Query(30, ge=1, le=100),
+    reopen_unranked: bool = Query(False, description="옛 채점기의 '순위 없음' 채점을 되돌려 재채점(1회성)"),
     authorization: Optional[str] = Header(None),
 ):
     """대기 중인 예측들을 실제 순위로 검증해 hit/miss 채점.
@@ -6689,6 +6690,11 @@ async def verify_pending_predictions(
     각 예측의 (블로그, 키워드)로 네이버 블로그탭 실제 순위를 조회하고,
     예측이 맞았는지 원장에 기록한다. 정답지 축적 루프의 실측 단계.
     검색 API를 예측 수만큼 호출하므로 limit 로 배치 크기를 제한한다.
+
+    채점하지 않고 미루는 경우(pending 유지, 시도 횟수만 증가):
+      · SERP 조회 실패 / 폴백 파싱 — 실패를 '미노출'로 적으면 정확도가 오염된다
+      · 1페이지 밖인데 RSS 를 못 읽어 글 작성 여부를 모름
+    1페이지 밖이고 그 키워드 글을 쓴 흔적도 없으면 no_attempt (채점 제외).
 
     인증: Authorization: Bearer {CRON_TOKEN} (measure-all 과 동일).
     GitHub Actions cron 이 매일 호출해 예측을 자동 채점 → calibration 축적.
@@ -6704,35 +6710,50 @@ async def verify_pending_predictions(
         raise HTTPException(status_code=403, detail="잘못된 cron 토큰")
 
     from database.rank_tracker_db import get_rank_tracker_db
-    from services.exposure_ceiling import blog_tab_true_rank
+    from services.keyword_verdict import measure_actual_rank, release_browser
 
     db = get_rank_tracker_db()
+    reopened = db.reopen_unranked_predictions() if reopen_unranked else 0
     pending = db.get_pending_predictions(min_age_hours=min_age_hours, limit=limit)
     if not pending:
-        return {"checked": 0, "results": [], "message": "검증 대기 중인 예측이 없습니다"}
+        return {"checked": 0, "reopened": reopened, "results": [],
+                "message": "검증 대기 중인 예측이 없습니다"}
 
-    # ⚠️ 실측 라벨은 예측(천장)과 '동일한 순위 소스(실제 블로그탭 스크래핑)'로 확정해야
-    #    calibration 이 유효하다. openapi(sort=sim)로 채점하면 예측/라벨 소스 불일치로
-    #    Brier/보정 곡선이 왜곡된다. 그래서 blog_tab_true_rank 를 공유한다.
-    sem = asyncio.Semaphore(2)  # 스크래핑은 무거워 동시성 낮춤
+    # ⚠️ 실측 라벨은 예측과 '동일한 순위 소스'로 확정해야 calibration 이 유효하다.
+    #    판정(keyword_verdict)과 같은 SERP 파서·같은 rank 정의(글 위치)를 쓴다.
+    #    예전에 쓰던 blog_tab_true_rank 는 조회 실패와 미노출을 둘 다 None 으로 돌려줘
+    #    실패가 '미노출'로 채점됐다.
+    sem = asyncio.Semaphore(2)  # 브라우저 조회라 동시성 낮춤
 
     async def _verify(p):
         async with sem:
             try:
-                rank = await blog_tab_true_rank(p["keyword"], p["blog_id"], limit=30)
+                m = await measure_actual_rank(p["blog_id"], p["keyword"])
             except Exception as e:
                 logger.warning(f"verify rank failed {p['blog_id']}/{p['keyword']}: {e}")
-                return None
-            return db.record_prediction_actual(p["id"], actual_rank=rank)
+                m = {"measured": False, "reason": f"{type(e).__name__}"}
+            if not m.get("measured"):
+                return db.record_prediction_unmeasured(p["id"], reason=m.get("reason") or "unknown")
+            return db.record_prediction_actual(p["id"], actual_rank=m["rank"],
+                                               attempted=bool(m.get("attempted")))
 
-    results = await asyncio.gather(*[_verify(p) for p in pending])
+    try:
+        results = await asyncio.gather(*[_verify(p) for p in pending])
+    finally:
+        # 이 엔드포인트는 public API 프로세스에서 돈다 — 판정 전용 브라우저를 남겨 두지 않는다.
+        await release_browser()
 
-    graded = [r for r in results if r and r.get("outcome") in ("hit", "miss")]
+    results = [r for r in results if r]
+    graded = [r for r in results if r.get("outcome") in ("hit", "miss")]
     return {
-        "checked": len([r for r in results if r]),
+        "checked": len(results),
+        "reopened": reopened,
         "hits": sum(1 for r in graded if r["outcome"] == "hit"),
         "misses": sum(1 for r in graded if r["outcome"] == "miss"),
-        "results": [r for r in results if r],
+        "no_attempt": sum(1 for r in results if r.get("outcome") == "no_attempt"),
+        "deferred": sum(1 for r in results if r.get("outcome") == "pending"),
+        "unmeasurable": sum(1 for r in results if r.get("outcome") == "unmeasurable"),
+        "results": results,
     }
 
 

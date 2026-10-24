@@ -30,7 +30,9 @@ class VerdictRequest(BaseModel):
 
 
 def _clean(request: VerdictRequest):
-    blog_id = (request.blog_id or "").strip().replace("blog.naver.com/", "").strip("/")
+    from services.keyword_verdict import normalize_blog_id
+
+    blog_id = normalize_blog_id(request.blog_id)
     keyword = (request.keyword or "").strip()
     if not blog_id or not keyword:
         raise HTTPException(status_code=400, detail="blog_id와 keyword를 입력하세요")

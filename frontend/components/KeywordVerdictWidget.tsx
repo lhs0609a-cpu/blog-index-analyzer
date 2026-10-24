@@ -147,10 +147,14 @@ export default function KeywordVerdictWidget({
 
   const effectiveBlogId = (showBlogInput ? blogInput : fixedBlogId ?? '')
     .trim()
-    .replace(/^https?:\/\//, '')
-    .replace(/^(m\.)?blog\.naver\.com\//, '')
-    .replace(/\/.*$/, '')
+    .replace(/^https?:\/\//i, '')
+    .replace(/^(m\.)?blog\.naver\.com\//i, '')
+    .replace(/[/?#].*$/, '')
+    // 네이버 블로그 ID 는 소문자뿐이고 서버·SERP 도 소문자로 비교한다.
+    .toLowerCase()
 
+  // locked 는 '다음 판정'을 막는 용도다. 결과를 가리는 데 쓰면 무료 사용자는 판정을 누르는
+  // 순간 잠겨 자기 무료 1회 결과를 끝내 못 본다(2026-10-24 로컬 실측).
   const locked = isFreeUser && usedFree
   const busy = phase === 'facts' || phase === 'deep'
 
@@ -180,7 +184,10 @@ export default function KeywordVerdictWidget({
         const cached = await fetchKeywordFacts(effectiveBlogId, kw)
         if (cached?.ok) {
           setFacts(cached)
-          if (cached.already_page1) { setPhase('done'); return }
+          // 캐시는 최대 6시간 묵었을 수 있다. 막 발행하고 재보는 사람에게 과거 순위로
+          // '이미 노출 중'을 확정하면 안 되므로, 서버의 판정용 신선도(20분) 안일 때만 끝낸다.
+          const ageSec = cached.serp_measured_at ? Date.now() / 1000 - cached.serp_measured_at : Infinity
+          if (cached.already_page1 && ageSec < 20 * 60) { setPhase('done'); return }
         }
       } catch { /* 캐시 조회 실패는 무시 — 아래 job 이 어차피 다시 잰다 */ }
 
@@ -286,7 +293,7 @@ export default function KeywordVerdictWidget({
         </button>
       </div>
 
-      {locked && (
+      {locked && !busy && (
         <div className="mt-4 flex items-center justify-between gap-3 p-4 rounded-xl bg-gray-50 border border-gray-200">
           <span className="flex items-center gap-2 text-sm text-gray-600">
             <Lock className="w-4 h-4 gi3d" />무료 1회를 사용했습니다. Pro에서 무제한 판정하세요.
@@ -296,15 +303,17 @@ export default function KeywordVerdictWidget({
       )}
 
       {/* ── 1단 결과: 사실 ── */}
-      {facts && facts.ok && !locked && (
+      {facts && facts.ok && (
         <div className="mt-5 rounded-2xl border border-gray-200 overflow-hidden">
           <div className="px-5 py-3 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
             <span className="font-semibold text-gray-800">
               {facts.my_rank
                 ? `내 블로그 현재 ${facts.my_rank}위`
-                : `내 블로그 미노출 (상위 ${facts.serp_size}위 밖)`}
+                : `내 블로그 미노출 (상위 ${facts.serp_depth ?? facts.serp_size}위 밖)`}
             </span>
-            <span className="text-gray-600">월 검색량 {facts.volume.toLocaleString()}회</span>
+            <span className="text-gray-600">
+              {facts.volume_measured ? `월 검색량 ${facts.volume.toLocaleString()}회` : '월 검색량 미측정'}
+            </span>
             <span className="text-gray-400 text-xs ml-auto">
               실제 블로그탭 조회
               {facts.serp_cached ? ' · 캐시' : ''}
@@ -315,7 +324,8 @@ export default function KeywordVerdictWidget({
           <div className="divide-y divide-gray-100">
             {facts.page1.map((r) => {
               const c = deep?.competitors?.find((x) => x.rank === r.rank)
-              const mine = r.blog_id === effectiveBlogId
+              // 서버가 계정 ID → 실제 블로그 주소로 바꿨을 수 있어 서버 값을 우선한다.
+              const mine = r.blog_id === (facts.blog_id || effectiveBlogId)
               return (
                 <div key={r.rank}
                   className={`px-5 py-2.5 flex items-center gap-3 text-sm ${mine ? 'bg-blue-50' : ''}`}>
@@ -390,7 +400,7 @@ export default function KeywordVerdictWidget({
       })()}
 
       {/* ── 판정 ── */}
-      {v && !locked && phase === 'done' && (
+      {v && phase === 'done' && (
         <div className={`mt-5 p-5 rounded-2xl border ${v.cls}`}>
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <v.Icon className="w-6 h-6" />
