@@ -9,6 +9,7 @@ import {
   type KeywordPage,
 } from '@/lib/seoApi'
 import { absoluteUrl, breadcrumbJsonLd, faqJsonLd, jsonLdScript, pageMetadata, SITE_NAME } from '@/lib/seo'
+import { getKeywordArticle } from '@/lib/keywordArticles'
 
 /**
  * 키워드 상세 페이지 (프로그래매틱 SEO).
@@ -304,6 +305,7 @@ export default async function KeywordDetailPage({ params }: Props) {
   const slug = params.slug
   const page = await fetchKeywordPage(slug)
   if (!page) notFound()
+  const article = getKeywordArticle(page.keyword)
 
   const url = absoluteUrl(`/keyword/${encodeURIComponent(page.slug)}`)
   const measured = new Date(page.measured_at)
@@ -580,6 +582,28 @@ export default async function KeywordDetailPage({ params }: Props) {
               </table>
             </div>
           </>
+        )}
+
+        {article && (
+          <section className="mt-10" aria-label="가이드">
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">{article.title}</h2>
+            <p className="text-gray-700 leading-[1.8] mb-6">{article.intro}</p>
+            {article.sections.map((s) => (
+              <div key={s.heading} className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">{s.heading}</h3>
+                {s.body.map((p, i) => (
+                  <p key={i} className="text-gray-700 leading-[1.8] mb-2">{p}</p>
+                ))}
+              </div>
+            ))}
+            <p className="text-xs text-gray-500 mb-2">{article.data_note}</p>
+            {article.faq.map((f) => (
+              <div key={f.q} className="mb-3">
+                <p className="font-semibold text-gray-900">Q. {f.q}</p>
+                <p className="text-gray-700 leading-[1.8]">A. {f.a}</p>
+              </div>
+            ))}
+          </section>
         )}
 
         {(page.tips?.length ?? 0) > 0 && (
