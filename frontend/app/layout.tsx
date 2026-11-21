@@ -125,6 +125,12 @@ export default function RootLayout({
         <link rel="alternate" type="application/rss+xml" title="블스피" href="/rss.xml" />
         {/* JSON-LD 구조화 데이터 */}
         <script {...jsonLdScript(jsonLd)} />
+        {/* Google AdSense 자동 광고 코드 (사이트 전체 공통) */}
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5173792560899479"
+          crossOrigin="anonymous"
+        />
       </head>
       <body>
         <ClientProviders>
